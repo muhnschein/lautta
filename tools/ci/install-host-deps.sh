@@ -6,7 +6,7 @@
 set -eu
 sudo apt-get update -q
 sudo apt-get install -y -q --no-install-recommends \
-    qtbase5-dev qtdeclarative5-dev qtmultimedia5-dev libsqlite3-dev liblzma-dev libbz2-dev pkg-config
+    qtbase5-dev qttools5-dev-tools qtdeclarative5-dev qtmultimedia5-dev qml-module-qtquick2 qml-module-qtqml-models2 qml-module-qtmultimedia libsqlite3-dev liblzma-dev libbz2-dev pkg-config
 rustup show active-toolchain || rustup toolchain install
 for tool in "$@"; do
     case $tool in

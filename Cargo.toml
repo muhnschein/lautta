@@ -21,6 +21,12 @@ unsafe_code = "deny"
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
 
+# Small build folders: line tables only (backtraces keep file:line), no
+# incremental caches.
+[profile.dev]
+debug = "line-tables-only"
+incremental = false
+
 [profile.release]
 panic = "abort"
 lto = "fat"
@@ -28,3 +34,9 @@ codegen-units = 1
 opt-level = 3
 strip = "symbols"
 debug = false
+
+# qttypes 0.2.12 links QtWidgets unconditionally; Harbour does not allow it
+# (SPEC HBR-2). third_party/qttypes is the released crate with that link
+# behind a feature (see third_party/qttypes/LAUTTA.md).
+[patch.crates-io]
+qttypes = { path = "third_party/qttypes" }
