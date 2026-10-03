@@ -14,7 +14,7 @@ fn host_qml_tests_pass() {
     std::env::set_var("HOME", home.path());
     std::env::set_var("QT_QPA_PLATFORM", "offscreen");
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/qml/host");
-    let mut files: Vec<String> = std::fs::read_dir(&dir)
+    let mut files: Vec<String> = std::fs::read_dir(dir)
         .unwrap()
         .filter_map(|e| e.ok().map(|e| e.path()))
         .filter(|p| {
