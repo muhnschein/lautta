@@ -81,7 +81,12 @@ fi
 # QML on the target (TST-6): every shipped QML file and the QML tests compile
 # and instantiate with the installed binary's engine (Qt 5.6, real Silica,
 # the real Lautta types), without warnings naming them.
-qml_files=$(find "$PWD/tests/qml" -name 'tst_*.qml' | sort)
+# Host-only tests (tests/qml/host) need fixtures and run in `make test`.
+# The tests import "../../qml/…": point that at the installed QML so they
+# exercise what the package ships.
+qml_files=$(find "$PWD/tests/qml" -path '*/host' -prune -o -name 'tst_*.qml' -print | sort)
+rm -rf "$PWD/qml"
+cp -r "/srv/mer/targets/$TARGET/usr/share/harbour-lautta/qml" "$PWD/qml"
 shipped=$(cd "/srv/mer/targets/$TARGET" && find usr/share/harbour-lautta/qml -name '*.qml' | sort | sed 's|^|/|')
 # shellcheck disable=SC2086 # one word per file
 if ! sb2 -t "$TARGET" env QT_QPA_PLATFORM=minimal \
