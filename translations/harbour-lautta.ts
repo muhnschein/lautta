@@ -1675,5 +1675,307 @@
             <numerusform></numerusform>
         </translation>
     </message>
+    <message id="lautta-viewers-goto-accept">
+        <source>Go</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-goto-label">
+        <source>Offset (hexadecimal)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-details">
+        <source>Details</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-exif-camera">
+        <source>Camera</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-exif-lens">
+        <source>Lens</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-exif-exposure">
+        <source>Exposure</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-exif-taken">
+        <source>Taken</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-exif-dimensions">
+        <source>Dimensions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-exif-size">
+        <source>Size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-exif-location">
+        <source>Location</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-exif-orientation">
+        <source>Orientation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-exif-none">
+        <source>This image has no camera details.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-move-to">
+        <source>Move to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-copy-to">
+        <source>Copy to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-move-here">
+        <source>Move here</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-copy-here">
+        <source>Copy here</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-more-copy">
+        <source>Copy to…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-more-move">
+        <source>Move to…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-more-rename">
+        <source>Rename</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-more-info">
+        <source>Info</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-more">
+        <source>More actions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-conflict-continue">
+        <source>Continue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-conflict-deleted">
+        <source>%1 was deleted while you were editing it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-conflict-changed">
+        <source>%1 changed while you were editing it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-conflict-what">
+        <source>What to do</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-conflict-replace">
+        <source>Upload mine and replace</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-conflict-copy">
+        <source>Save mine as copy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-conflict-discard">
+        <source>Discard mine</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-orient-180">
+        <source>Rotated 180° (applied)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-orient-90">
+        <source>Rotated 90° (applied)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-orient-270">
+        <source>Rotated 270° (applied)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-orient-mirrored">
+        <source>Mirrored (applied)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-eol-lf">
+        <source>LF</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-eol-crlf">
+        <source>CRLF</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-eol-cr">
+        <source>CR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-eol-mixed">
+        <source>mixed line endings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-eol-none">
+        <source>no line breaks</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-image-error">
+        <source>Can&apos;t show this image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-getting">
+        <source>Getting %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-retry">
+        <source>Try again</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-open-remote-hint">
+        <source>A copy goes to Downloads/Lautta/Opened so other apps can read it. It&apos;s removed after 24 hours unless pinned.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-hex-goto">
+        <source>Go to offset</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-open-with">
+        <source>Open with</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-hex-size">
+        <source>Hex · %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-hex-lazy">
+        <source>Loaded as you scroll</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-delete-remote">
+        <source>Deleting permanently from %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-delete">
+        <source>Deleting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-image-count">
+        <source>%1 of %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-share">
+        <source>Share</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-view-source">
+        <source>View source</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-truncated-short">
+        <source>Showing the first 1 MiB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-media-downloading">
+        <source>Downloading from %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-media-streaming">
+        <source>Streaming from %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-media-getting">
+        <source>Getting the file before playing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-sqlite-tables" numerus="yes">
+        <source>%n tables · read-only</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-viewers-sqlite-table">
+        <source>Table</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-sqlite-rows-more">
+        <source>more than %1 rows · showing first %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-sqlite-rows">
+        <source>%1 rows · showing first %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-sqlite-more">
+        <source>Show more rows</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-sqlite-none">
+        <source>No tables</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-save">
+        <source>Save</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-ends-newline">
+        <source>ends with newline</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-no-newline">
+        <source>no final newline</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-saving-uploads">
+        <source>saving uploads to %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-cant-edit">
+        <source>Can&apos;t edit this file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-cant-edit-readonly">
+        <source>You can&apos;t change files here.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-cant-edit-large">
+        <source>It is larger than 1 MiB.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-cant-edit-binary">
+        <source>It isn&apos;t valid UTF-8 text.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-saved">
+        <source>Saved</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-unwrap">
+        <source>Don&apos;t wrap lines</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-wrap">
+        <source>Wrap lines</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-edit">
+        <source>Edit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-read-only">
+        <source>Read-only · %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-truncated">
+        <source>Showing the first 1 MiB of %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-not-utf8">
+        <source>This file isn&apos;t valid UTF-8. Some characters are replaced.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

@@ -25,6 +25,8 @@ use std::os::raw::{c_char, c_int};
 cpp! {{
     #include <QtGui/QGuiApplication>
     #include <QtQuick/QQuickView>
+    // Defined in viewers/images.rs (all cpp! blocks share one translation unit).
+    static void lauttaRegisterImageProviders(QQmlEngine *engine);
     #include <QtQml/QQmlEngine>
     #include <QtQml/QQmlContext>
     #include <QtCore/QUrl>
@@ -72,6 +74,7 @@ cpp! {{
         int failures = 0;
         for (const QString &file : files) {
             QQmlEngine engine;
+            lauttaRegisterImageProviders(&engine);
             for (const QString &path : importPaths)
                 engine.addImportPath(path);
             QStringList problems;
@@ -133,11 +136,13 @@ pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
             if (local->load(QLocale(), QStringLiteral("harbour-lautta"), QStringLiteral("-"), translations))
                 app->installTranslator(local);
             QQuickView *view = SailfishApp::createView();
+            lauttaRegisterImageProviders(view->engine());
             view->setSource(SailfishApp::pathToMainQml());
             view->show();
     #else
             QGuiApplication *app = new QGuiApplication(count, argv);
             QQuickView *view = new QQuickView();
+            lauttaRegisterImageProviders(view->engine());
             QByteArray qml = qgetenv("LAUTTA_QML");
             view->setSource(QUrl::fromLocalFile(QString::fromLocal8Bit(qml)));
             view->show();
