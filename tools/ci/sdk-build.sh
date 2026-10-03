@@ -18,13 +18,13 @@ for attempt in 1 2 3 4 5; do
     while kill -0 "$pid" 2>/dev/null; do
         sleep 15
         size=$(stat -c %s build.log)
-        if [ "$size" -ne "$last_size" ]; then
+        if [[ "$size" -ne "$last_size" ]]; then
             last_size=$size
             idle=0
         else
             idle=$((idle + 15))
         fi
-        if [ "$idle" -ge "$stall_limit" ]; then
+        if [[ "$idle" -ge "$stall_limit" ]]; then
             stalled=yes
             echo "attempt $attempt: no build output for $stall_limit s, restarting"
             pkill -f 'cargo build' || true
@@ -34,10 +34,10 @@ for attempt in 1 2 3 4 5; do
     wait "$pid"
     status=$?
     tail -n 40 build.log
-    if [ "$status" -eq 0 ]; then
+    if [[ "$status" -eq 0 ]]; then
         exit 0
     fi
-    [ "$stalled" = yes ] || exit "$status"
+    [[ "$stalled" = yes ]] || exit "$status"
 done
 echo "cargo kept stalling under scratchbox2"
 exit 1
