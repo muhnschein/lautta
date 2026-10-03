@@ -2,6 +2,11 @@
 //! File operations (SPEC §10): planning, conflicts, names, bulk rename.
 //! The types here are shared by the planner and the transfer engine.
 
+pub mod bulkrename;
+pub mod conflict;
+pub mod names;
+pub mod plan;
+
 use crate::entry::Kind;
 use crate::uri::Uri;
 use serde::{Deserialize, Serialize};
