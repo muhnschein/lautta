@@ -12,7 +12,8 @@ CoverBackground {
     // The folder of the page on top, when it is a folder page.
     readonly property var topPage: typeof pageStack !== "undefined" && pageStack ? pageStack.currentPage : null
     readonly property string folderUri: topPage && typeof topPage.uri === "string" ? topPage.uri : ""
-    readonly property bool transferring: Transfers.activeCount > 0
+    // Transferring, paused or pending at close: the transfers cover shows.
+    readonly property bool transferring: transferCover.active
 
     onStatusChanged: if (status === Cover.Active) info.refresh()
 
@@ -21,10 +22,10 @@ CoverBackground {
         uri: cover.folderUri
     }
 
-    Loader {
+    TransferCover {
+        id: transferCover
         anchors.fill: parent
-        active: cover.transferring
-        source: Qt.resolvedUrl("TransferCover.qml")
+        visible: active
     }
 
     Column {
