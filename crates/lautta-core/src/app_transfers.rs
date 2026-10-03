@@ -120,15 +120,16 @@ pub fn split_error(text: &str) -> (String, String) {
     }
 }
 
-/// Engineering names of conflict choices (`answer(id, item, choice, …)`).
+/// Engineering names of conflict choices (`answer(id, item, choice, …)`),
+/// the same as the operations area uses (the enum names).
 pub fn choice_name(c: ConflictChoice) -> &'static str {
     match c {
-        ConflictChoice::Replace => "replace",
-        ConflictChoice::Skip => "skip",
-        ConflictChoice::KeepBoth => "keep_both",
-        ConflictChoice::Merge => "merge",
-        ConflictChoice::ReplaceIfNewer => "replace_if_newer",
-        ConflictChoice::Resume => "resume",
+        ConflictChoice::Replace => "Replace",
+        ConflictChoice::Skip => "Skip",
+        ConflictChoice::KeepBoth => "KeepBoth",
+        ConflictChoice::Merge => "Merge",
+        ConflictChoice::ReplaceIfNewer => "ReplaceIfNewer",
+        ConflictChoice::Resume => "Resume",
     }
 }
 
@@ -163,18 +164,19 @@ pub fn parse_edit_choice(name: &str) -> Option<EditConflictChoice> {
     .find(|c| edit_choice_name(*c) == name)
 }
 
-/// A conflict question as the UI gets it (camelCase, `choices` by name).
+/// A conflict question as the UI gets it: the core `Conflict` fields
+/// (snake_case, as the shared ConflictDialog reads them), `choices` by name.
 pub fn conflict_json(id: TransferId, item: u32, name: &str, c: &Conflict) -> serde_json::Value {
     serde_json::json!({
         "transferId": id,
         "item": item,
         "name": name,
-        "dstIsDir": c.dst_is_dir,
-        "srcIsDir": c.src_is_dir,
-        "srcSize": c.src_size,
-        "dstSize": c.dst_size,
-        "srcMtimeMs": c.src_mtime_ms,
-        "dstMtimeMs": c.dst_mtime_ms,
+        "dst_is_dir": c.dst_is_dir,
+        "src_is_dir": c.src_is_dir,
+        "src_size": c.src_size,
+        "dst_size": c.dst_size,
+        "src_mtime_ms": c.src_mtime_ms,
+        "dst_mtime_ms": c.dst_mtime_ms,
         "resumable": c.resumable,
         "choices": c.choices.iter().map(|x| choice_name(*x)).collect::<Vec<_>>(),
     })
@@ -726,7 +728,7 @@ mod tests {
         assert_eq!(j["name"], "a.txt");
         assert_eq!(j["dstSize"], 4);
         assert!(j["dstMtimeMs"].is_null());
-        assert_eq!(j["choices"], serde_json::json!(["replace", "keep_both"]));
+        assert_eq!(j["choices"], serde_json::json!(["Replace", "KeepBoth"]));
         let e = EditConflict {
             id: 3,
             remote: Uri::parse("lautta://srv/a/b.odt").unwrap(),

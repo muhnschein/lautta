@@ -58,9 +58,9 @@ Item {
         before = failedCount
         check(!Transfers.answer(5, 0, "obliterate", false), "unknown choices are refused")
         check(failedCount === before + 1 && lastKind === "InvalidArgument", "bad choice reports InvalidArgument, got " + lastKind)
-        check(!Transfers.answer(5, -1, "skip", false), "negative items are refused")
+        check(!Transfers.answer(5, -1, "Skip", false), "negative items are refused")
         check(lastKind === "InvalidArgument", "bad item reports InvalidArgument")
-        check(!Transfers.answer(987654, 0, "skip", false), "answering an unknown transfer fails")
+        check(!Transfers.answer(987654, 0, "Skip", false), "answering an unknown transfer fails")
         check(lastKind === "NotFound", "unknown transfer reports NotFound, got " + lastKind)
 
         before = failedCount

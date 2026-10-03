@@ -41,7 +41,7 @@ Item {
         var open = JSON.parse(Transfers.questionsJson(queuedId))
         for (var i = 0; i < open.length; ++i) {
             var c = open[i].choices
-            var choice = c.indexOf("merge") >= 0 ? "merge" : (c.indexOf("skip") >= 0 ? "skip" : c[0])
+            var choice = c.indexOf("Merge") >= 0 ? "Merge" : (c.indexOf("Skip") >= 0 ? "Skip" : c[0])
             check(Transfers.answer(queuedId, open[i].item, choice, false), "answer accepted")
         }
         return open.length
@@ -100,7 +100,7 @@ Item {
             check(Transfers.questionCount === 1 && Transfers.waitingCount === 1, "one transfer waits for an answer")
             check(seenWaiting, "the list showed the waiting transfer")
             if (asked.length > 0)
-                check(asked[0].choices.length > 0 && asked[0].name === "src" && asked[0].dstIsDir, "conflict " + JSON.stringify(asked[0]))
+                check(asked[0].choices.length > 0 && asked[0].name === "src" && asked[0].dst_is_dir, "conflict " + JSON.stringify(asked[0]))
             check(answerOpen() >= 1, "there was a question to answer")
             blockFor(400)
             next()

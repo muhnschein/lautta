@@ -98,12 +98,12 @@ async fn the_list_groups_questions_and_history() {
     let questions = h.core.question_list(id).unwrap();
     assert_eq!(questions.len(), 1);
     assert_eq!(questions[0]["name"], "a.txt");
-    assert_eq!(questions[0]["srcSize"], 11);
+    assert_eq!(questions[0]["src_size"], 11);
     assert_eq!(questions[0]["dstSize"], 3);
 
     let bad = h.core.answer_question(id, 0, "obliterate", false).unwrap_err();
     assert_eq!(bad.kind, ErrorKind::InvalidArgument);
-    h.core.answer_question(id, 0, "replace", false).unwrap();
+    h.core.answer_question(id, 0, "Replace", false).unwrap();
     let done = h
         .core
         .engine
