@@ -3,7 +3,9 @@
 # Developer tool: builds harbour-lautta for the Sailfish OS target in a
 # running SDK container and runs `--qml-check` there on the given QML files
 # (real Silica, real Lautta types, Qt 5.6). Faster than a full RPM build:
-# the container keeps a shared vendor folder and cargo target folder.
+# the container keeps a shared vendor folder and one cargo target folder per
+# checkout (worktrees of one repo give identical crate hashes, so a shared
+# folder would mix their builds).
 #
 #   tools/sdk-qml-check.sh [--no-build] <file.qml|dir>...
 #
@@ -42,7 +44,7 @@ if [[ "$build" == yes ]]; then
         cd '$work/src'
         mkdir -p .cargo-home
         printf '[source.crates-io]\nreplace-with = \"v\"\n[source.v]\ndirectory = \"/home/mersdk/shared/vendor\"\n' > .cargo-home/config.toml
-        export CARGO_HOME=\$PWD/.cargo-home CARGO_TARGET_DIR=/home/mersdk/shared/target QT_INCLUDE_PATH=/usr/include/qt5 QT_LIBRARY_PATH=/usr/lib64 CARGO_INCREMENTAL=0
+        export CARGO_HOME=\$PWD/.cargo-home CARGO_TARGET_DIR=/home/mersdk/shared/target-$name QT_INCLUDE_PATH=/usr/include/qt5 QT_LIBRARY_PATH=/usr/lib64 CARGO_INCREMENTAL=0
         export RUSTFLAGS='-C link-arg=-Wl,--as-needed'
         for attempt in 1 2 3 4; do
             if timeout 1200 sb2 -t '$target' cargo build --frozen --offline --target aarch64-unknown-linux-gnu -p harbour-lautta --features sailfish 2>&1 | grep -E '^(error|warning: unused)|^\s+-->|Finished' ; then
@@ -50,7 +52,7 @@ if [[ "$build" == yes ]]; then
             fi
             echo \"build attempt \$attempt stalled or failed; retrying\"
         done
-        cp /home/mersdk/shared/target/aarch64-unknown-linux-gnu/debug/harbour-lautta '$work/harbour-lautta'
+        cp /home/mersdk/shared/target-$name/aarch64-unknown-linux-gnu/debug/harbour-lautta '$work/harbour-lautta'
     "
 fi
 
