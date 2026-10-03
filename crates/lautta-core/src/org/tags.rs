@@ -254,6 +254,19 @@ impl Tags {
         Ok(out)
     }
 
+    /// Number of assigned items per tag id (missing ones included, ORG-3).
+    pub fn counts(&self) -> Result<Vec<(i64, usize)>> {
+        let conn = self.db.lock();
+        let mut stmt = conn.prepare("SELECT tag_id, count(*) FROM item_tags GROUP BY tag_id")?;
+        let rows = stmt
+            .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows
+            .into_iter()
+            .map(|(id, n)| (id, usize::try_from(n).unwrap_or(0)))
+            .collect())
+    }
+
     /// SEC-5: drop assignments below a removed location. Returns the number
     /// of assignments removed; tags themselves stay.
     pub fn purge_location(&self, location: &str) -> Result<usize> {
