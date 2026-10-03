@@ -116,10 +116,9 @@ body{margin:0}
 </helmet>
 <div class="amb {{amb}}" style="width: 400px; height: 860px">
 <div class="ind-back"><i></i><i></i></div>
-<div class="dlg"><a class="dlg-c" href="Directory.dc.html">Cancel</a><a class="dlg-a" href="Directory.dc.html">Create</a></div><div class="dlg-sub">New in Uni</div>
-<div class="cb"><div class="cb-r"><span class="cb-l">Type</span><span class="cb-v">Folder</span></div><div class="cb-x"><span style="color:var(--hl)">Folder</span> · Empty file</div></div>
-<div class="tf focus"><input value="Chapter 4" readonly aria-label="Name"><label>Name</label></div>
-<div class="small sec" style="padding:0 18px">Created only if no item has this name.</div>
+<div class="dlg"><a class="dlg-c" href="Directory.dc.html">Cancel</a><span class="dlg-a dis" aria-disabled="true">Create</span></div><div class="dlg-sub">New in Uni</div>
+<div class="cb"><div class="cb-r"><span class="cb-l">Type</span><span class="cb-v">Folder</span></div></div>
+<div class="tf focus err"><input value="Thesis" readonly aria-label="Name"><label>A folder named “Thesis” already exists</label></div>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":400,"height":860}}'>
