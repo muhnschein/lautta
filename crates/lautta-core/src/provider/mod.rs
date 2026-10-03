@@ -5,6 +5,7 @@
 
 pub mod archive;
 pub mod local;
+pub mod memory;
 pub mod netvfs;
 
 use crate::entry::{Capabilities, Entry};
