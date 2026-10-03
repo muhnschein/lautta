@@ -4,6 +4,12 @@
 //! (workspace lint) and allowed only in [`sys`] (SPEC RS-5).
 
 pub mod app;
+pub mod app_browse;
+pub mod app_directory;
+pub mod app_operations;
+pub mod app_transfers;
+pub mod app_viewers;
+pub mod app_search;
 pub mod db;
 pub mod entry;
 pub mod error;
