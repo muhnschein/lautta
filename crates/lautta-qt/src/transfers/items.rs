@@ -91,7 +91,7 @@ impl ItemData {
 #[derive(QObject, Default)]
 pub struct TransferItemsModel {
     base: qt_base_class!(trait QAbstractListModel),
-    transferId: qt_property!(i64; NOTIFY transferIdChanged WRITE set_transfer_id),
+    transferId: qt_property!(i32; NOTIFY transferIdChanged WRITE set_transfer_id),
     transferIdChanged: qt_signal!(),
     count: qt_property!(i32; NOTIFY countChanged),
     countChanged: qt_signal!(),
@@ -129,7 +129,7 @@ impl QAbstractListModel for TransferItemsModel {
 }
 
 impl TransferItemsModel {
-    fn set_transfer_id(&mut self, id: i64) {
+    fn set_transfer_id(&mut self, id: i32) {
         if self.transferId == id {
             return;
         }
@@ -158,23 +158,23 @@ impl TransferItemsModel {
                 bytes_done,
                 rate,
                 eta_secs,
-            } if *id == self.transferId => {
+            } if *id == i64::from(self.transferId) => {
                 self.book.update(*id, *bytes_done, *rate, *eta_secs);
                 self.publish_summary();
             }
             TransferEvent::Changed(id) | TransferEvent::Added(id) | TransferEvent::Finished(id)
-                if *id == self.transferId || events::is_reload(ev) =>
+                if *id == i64::from(self.transferId) || events::is_reload(ev) =>
             {
                 self.refresh();
             }
-            TransferEvent::NeedsAnswer { id, .. } if *id == self.transferId => self.refresh(),
+            TransferEvent::NeedsAnswer { id, .. } if *id == i64::from(self.transferId) => self.refresh(),
             _ => {}
         }
     }
 
     fn refresh(&mut self) {
         let Some(core) = core() else { return };
-        let id = self.transferId;
+        let id = i64::from(self.transferId);
         let delete = core
             .engine
             .get(id)
@@ -208,7 +208,7 @@ impl TransferItemsModel {
 
     fn publish_summary(&mut self) {
         let text = core()
-            .and_then(|c| summary_json(&c, self.transferId, &self.book))
+            .and_then(|c| summary_json(&c, i64::from(self.transferId), &self.book))
             .unwrap_or_default();
         if self.summaryJson.to_string() != text {
             self.summaryJson = QString::from(text.as_str());
@@ -313,5 +313,51 @@ mod tests {
             assert!(d.value(r).is_valid(), "{r}");
         }
         assert_eq!(ROLES.len(), 11);
+    }
+
+    #[test]
+    fn summary_describes_a_finished_copy() {
+        use lautta_core::app::{Core, Started};
+        use lautta_core::locations::LocationRegistry;
+        use lautta_core::paths::AppPaths;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        for d in ["Documents", "Downloads"] {
+            std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        std::fs::write(root.join("Documents/a.txt"), b"hello").unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let paths = AppPaths::new(root);
+        let registry = LocationRegistry::with_media_root(paths.clone(), root.join("media"));
+        let text = rt.block_on(async {
+            let core = Core::open_with(paths, registry).await.unwrap();
+            let started = core
+                .copy_or_move(
+                    OperationKind::Copy,
+                    vec![Uri::parse("lautta://user-documents/a.txt").unwrap()],
+                    Uri::parse("lautta://user-downloads/").unwrap(),
+                )
+                .await
+                .unwrap();
+            let Started::Transfer(id) = started else {
+                panic!("starts at once")
+            };
+            core.engine.wait_for(id, |s| s.state.is_finished()).await.unwrap();
+            summary_json(&core, id, &ProgressBook::default())
+        });
+        let v: serde_json::Value = serde_json::from_str(&text.unwrap()).unwrap();
+        assert_eq!(v["kind"], "copy");
+        assert_eq!(v["title"], "a.txt");
+        assert_eq!(v["state"], "completed");
+        assert_eq!(v["direction"], "local");
+        assert_eq!(v["bytesDone"], 5);
+        assert_eq!(v["itemsDone"], 1);
+        assert_eq!(v["eta"], -1);
+        assert!(v["destination"].as_str().unwrap().starts_with("file://"));
+        assert!(v["sourceAddress"].as_str().unwrap().ends_with("/Documents"));
+        assert_eq!(v["verifyChecksums"], false);
     }
 }

@@ -359,6 +359,18 @@ impl Core {
         })
     }
 
+    /// Whether auto-resume may start transfers (XFR-11): false only while a
+    /// bridge is present but unusable (too old, consent denied). Standalone
+    /// mode and a bridge that is still connecting count as reachable; the
+    /// engine parks transfers on bridge locations until it is ready
+    /// (NVB-12).
+    pub fn bridge_reachable(&self) -> bool {
+        use crate::bridge::BridgeStatus;
+        self.bridge.as_ref().map_or(true, |b| {
+            !matches!(b.status(), BridgeStatus::TooOld | BridgeStatus::ConsentDenied)
+        })
+    }
+
     /// Transfers still unfinished when the app closes (XFR-6).
     pub fn pending_at_close(&self) -> usize {
         self.engine.pending_summary()

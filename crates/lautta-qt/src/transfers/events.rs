@@ -43,8 +43,12 @@ pub fn dispatch(ev: &TransferEvent) {
     });
 }
 
+/// Asks every listener to reload, on the next event-loop turn: callers are
+/// often inside a borrow of one of the listeners.
 pub fn reload() {
-    dispatch(&TransferEvent::Changed(RELOAD));
+    qmetaobject::single_shot(std::time::Duration::from_millis(0), || {
+        dispatch(&TransferEvent::Changed(RELOAD));
+    });
 }
 
 /// Starts the single forwarding task (once). Call on the GUI thread.

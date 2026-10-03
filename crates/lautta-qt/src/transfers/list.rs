@@ -222,6 +222,8 @@ pub struct TransfersModel {
 
 impl QAbstractListModel for TransfersModel {
     fn row_count(&self) -> i32 {
+        // Views ask for the row count first, before any role names.
+        self.ensure_registered();
         self.rows.len() as i32
     }
 
@@ -390,6 +392,6 @@ mod tests {
             is_edit: true,
             ..RowData::default()
         };
-        assert_eq!(e.value("transferId").to_int(), -1);
+        assert_eq!(e.value("transferId").to_int() as i32, -1);
     }
 }

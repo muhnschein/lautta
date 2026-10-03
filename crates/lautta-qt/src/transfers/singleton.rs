@@ -69,7 +69,6 @@ pub struct Transfers {
     showRequested: qt_signal!(),
 
     start: qt_method!(fn(&mut self)),
-    setBridgeReachable: qt_method!(fn(&mut self, up: bool)),
     pauseAll: qt_method!(fn(&mut self)),
     resumeAll: qt_method!(fn(&mut self)),
     pause: qt_method!(fn(&self, id: i64) -> bool),
@@ -93,7 +92,6 @@ pub struct Transfers {
     book: ProgressBook,
     notified: HashSet<i64>,
     started: bool,
-    bridge_reachable: Option<bool>,
     watcher: Option<FileWatcher>,
 }
 
@@ -245,7 +243,7 @@ impl Transfers {
         }
         let Some(core) = core() else { return };
         self.started = true;
-        let auto = core.settings().auto_resume && self.bridge_reachable.unwrap_or(true);
+        let auto = core.settings().auto_resume && core.bridge_reachable();
         let me = QPointer::from(&*self);
         spawn_then(async move { core.start_transfers(auto).await }, move |res| {
             if let Some(p) = me.as_pinned() {
@@ -267,16 +265,6 @@ impl Transfers {
         self.recompute();
         self.start_watching();
         events::reload();
-    }
-
-    /// Browse tells whether the bridge is reachable: the engine parks bridge
-    /// transfers while it is not (NVB-12) and `start` reads it for
-    /// auto-resume.
-    fn setBridgeReachable(&mut self, up: bool) {
-        self.bridge_reachable = Some(up);
-        if let Some(core) = core() {
-            core.engine.bridge_available(up);
-        }
     }
 
     fn pauseAll(&mut self) {

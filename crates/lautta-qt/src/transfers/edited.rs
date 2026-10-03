@@ -128,6 +128,8 @@ pub struct WorkingCopiesModel {
 
 impl QAbstractListModel for WorkingCopiesModel {
     fn row_count(&self) -> i32 {
+        // Views ask for the row count first, before any role names.
+        self.ensure_registered();
         self.rows.len() as i32
     }
 
