@@ -9,6 +9,10 @@ publish.workspace = true
 build = "build.rs"
 links = "lautta_qt_glue"
 
+[features]
+# Build against libsailfishapp (the device build); off on the host.
+sailfish = []
+
 [lints.rust]
 # FFI with Qt (SPEC RS-5): the only crate besides lautta-core::sys allowed unsafe code.
 unsafe_code = "allow"

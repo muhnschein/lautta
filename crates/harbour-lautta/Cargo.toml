@@ -18,5 +18,8 @@ all = { level = "deny", priority = -1 }
 name = "harbour-lautta"
 path = "src/main.rs"
 
+[features]
+sailfish = ["lautta-qt/sailfish"]
+
 [dependencies]
 lautta-qt = { path = "../lautta-qt" }
