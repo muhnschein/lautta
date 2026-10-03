@@ -2,7 +2,7 @@
 Type=Application
 X-Nemo-Application-Type=silica-qt5
 Icon=harbour-lautta
-Exec=/usr/bin/harbour-lautta
+Exec=harbour-lautta
 Name=Lautta
 Comment=A file manager for Sailfish OS
 X-Share-Methods=files

@@ -39,12 +39,13 @@ rpm -qp --requires "$rpm" | sed 's/^/  requires: /'
 
 # Harbour validator. Output lines starting with ERROR fail the build;
 # WARNING lines must be documented.
-out=$(cd .validator && ./rpmvalidation.sh -t "$TARGET" "../$rpm" 2>&1) || true
+validator_status=0
+out=$(cd .validator && ./rpmvalidation.sh -c -g . "../$rpm" 2>&1) || validator_status=$?
 echo "$out"
-if echo "$out" | grep -q '^ERROR'; then
+if [ "$validator_status" -ne 0 ] || echo "$out" | grep -q '^ERROR'; then
     fail "rpmvalidator reported errors"
 fi
-echo "$out" | sed -n 's/^WARNING *\[[^]]*\] *//p' | while IFS= read -r warning; do
+echo "$out" | sed -n 's/^WARNING //p' | while IFS= read -r warning; do
     if ! grep -qF -- "$warning" doc/harbour-warnings.md; then
         echo "FAIL: undocumented validator warning: $warning"
         echo undocumented >> /tmp/lautta-undocumented
