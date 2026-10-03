@@ -886,10 +886,13 @@ dependencies = [
 name = "lautta-bridge-proto"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "futures",
  "log",
  "serde",
  "serde_json",
+ "sha2",
+ "tempfile",
  "thiserror",
  "tokio",
  "zbus",
