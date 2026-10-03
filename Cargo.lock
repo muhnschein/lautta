@@ -1297,8 +1297,6 @@ dependencies = [
 [[package]]
 name = "qttypes"
 version = "0.2.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7edf5b38c97ad8900ad2a8418ee44b4adceaa866a4a3405e2f1c909871d7ebd"
 dependencies = [
  "cpp",
  "cpp_build",

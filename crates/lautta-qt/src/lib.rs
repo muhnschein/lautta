@@ -30,6 +30,8 @@ cpp! {{
     #include <QtCore/QUrl>
     #include <QtCore/QCoreApplication>
     #include <QtQml/QQmlComponent>
+    #include <QtCore/QTranslator>
+    #include <QtCore/QLocale>
     #include <cstdio>
     #include <memory>
 #ifdef LAUTTA_SAILFISH
@@ -122,6 +124,14 @@ pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
             count = argc;
     #ifdef LAUTTA_SAILFISH
             QGuiApplication *app = SailfishApp::application(count, argv);
+            // Engineering English first, then the user's language (UI-7).
+            const QString translations = SailfishApp::pathTo(QStringLiteral("translations")).toLocalFile();
+            QTranslator *english = new QTranslator(app);
+            if (english->load(QStringLiteral("harbour-lautta"), translations))
+                app->installTranslator(english);
+            QTranslator *local = new QTranslator(app);
+            if (local->load(QLocale(), QStringLiteral("harbour-lautta"), QStringLiteral("-"), translations))
+                app->installTranslator(local);
             QQuickView *view = SailfishApp::createView();
             view->setSource(SailfishApp::pathToMainQml());
             view->show();
