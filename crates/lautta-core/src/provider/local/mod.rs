@@ -310,7 +310,9 @@ fn upload_blocking(src: OwnedFd, dst: &Path, opts: &WriteOptions, progress: &Pro
     } else {
         0
     };
-    if opts.offset > 0 {
+    // The caller's file offset is irrelevant (netvfs XB-11): regular files
+    // are read from `opts.offset`; pipes are read as they come.
+    if is_regular(&srcf) || opts.offset > 0 {
         srcf.seek(SeekFrom::Start(opts.offset))?;
     }
     let total = opts.size.or_else(|| {
@@ -325,6 +327,10 @@ fn upload_blocking(src: OwnedFd, dst: &Path, opts: &WriteOptions, progress: &Pro
     Ok(())
 }
 
+fn is_regular(f: &File) -> bool {
+    f.metadata().map(|m| m.is_file()).unwrap_or(false)
+}
+
 fn download_blocking(src: &Path, dst: OwnedFd, offset: u64, progress: &ProgressSink) -> Result<()> {
     let mut srcf = File::open(src)?;
     let meta = srcf.metadata()?;
@@ -334,6 +340,8 @@ fn download_blocking(src: &Path, dst: OwnedFd, offset: u64, progress: &ProgressS
     let mut dstf = File::from(dst);
     if offset > 0 {
         srcf.seek(SeekFrom::Start(offset))?;
+    }
+    if is_regular(&dstf) || offset > 0 {
         dstf.seek(SeekFrom::Start(offset))?;
     }
     copy::copy_fd(&srcf, &dstf, offset, Some(meta.len()), offset == 0, progress)?;

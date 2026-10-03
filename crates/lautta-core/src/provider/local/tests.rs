@@ -1162,3 +1162,39 @@ async fn space_reports_free_and_total() {
         ErrorKind::NotFound
     );
 }
+
+#[tokio::test]
+async fn caller_file_offsets_are_ignored() {
+    // netvfs XB-11: regular files are read and written at explicit offsets,
+    // so an fd left at its end (as after a download into it) still uploads
+    // the whole file, and a download fills a reused fd from the start.
+    use std::io::{Read, Seek, SeekFrom, Write};
+    let (d, p) = setup();
+    let mut scratch = tempfile::tempfile().unwrap();
+    scratch.write_all(b"payload").unwrap();
+    p.upload_from(
+        OwnedFd::from(scratch.try_clone().unwrap()),
+        &vp("up"),
+        WriteOptions::default(),
+        no_progress(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(std::fs::read(d.path().join("up")).unwrap(), b"payload");
+
+    std::fs::write(d.path().join("src"), b"abc").unwrap();
+    let mut target = tempfile::tempfile().unwrap();
+    target.write_all(b"zzzzz").unwrap();
+    p.download_into(
+        &vp("src"),
+        OwnedFd::from(target.try_clone().unwrap()),
+        ReadOptions::default(),
+        no_progress(),
+    )
+    .await
+    .unwrap();
+    target.seek(SeekFrom::Start(0)).unwrap();
+    let mut got = Vec::new();
+    target.read_to_end(&mut got).unwrap();
+    assert_eq!(&got[..3], b"abc");
+}

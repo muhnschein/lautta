@@ -3,6 +3,7 @@
 //! testable on the host with `cargo test`. Unsafe code is denied crate-wide
 //! (workspace lint) and allowed only in [`sys`] (SPEC RS-5).
 
+pub mod app;
 pub mod db;
 pub mod entry;
 pub mod error;

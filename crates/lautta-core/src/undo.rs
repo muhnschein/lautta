@@ -144,6 +144,11 @@ impl UndoRecorder {
         matches!(&self.last, Some((_, at)) if now_ms.saturating_sub(*at) < UNDO_WINDOW_MS)
     }
 
+    /// [`is_fresh`](Self::is_fresh) with the recorder's clock.
+    pub fn is_fresh_now(&self) -> bool {
+        self.is_fresh(self.clock.now_ms())
+    }
+
     pub fn peek(&self) -> Option<&UndoAction> {
         self.last.as_ref().map(|(a, _)| a)
     }

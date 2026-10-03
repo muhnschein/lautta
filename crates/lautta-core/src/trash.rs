@@ -35,6 +35,7 @@ pub struct TrashItem {
     pub size: Option<u64>,
 }
 
+#[derive(Clone)]
 pub struct Trash {
     dir: PathBuf,
     db: Db,
