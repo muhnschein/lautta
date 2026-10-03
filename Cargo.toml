@@ -34,3 +34,9 @@ codegen-units = 1
 opt-level = 3
 strip = "symbols"
 debug = false
+
+# qttypes 0.2.12 links QtWidgets unconditionally; Harbour does not allow it
+# (SPEC HBR-2). third_party/qttypes is the released crate with that link
+# behind a feature (see third_party/qttypes/LAUTTA.md).
+[patch.crates-io]
+qttypes = { path = "third_party/qttypes" }
