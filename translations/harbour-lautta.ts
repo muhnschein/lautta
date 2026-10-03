@@ -993,5 +993,687 @@
         <source>About Lautta</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-archive-readonly">
+        <source>Archive contents are read-only.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-archive-extract-all">
+        <source>Extract all</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ops-background">
+        <source>Running in the background</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ops-archive-created">
+        <source>Archive created</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-default-name">
+        <source>Archive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-accept">
+        <source>Compress</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-count" numerus="yes">
+        <source>Compress %n items</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-compress-name">
+        <source>Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-format">
+        <source>Format</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-save-to">
+        <source>Save to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-pick">
+        <source>Save archive to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-pick-accept">
+        <source>Select</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-size">
+        <source>Size before compression</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-merge">
+        <source>Merge</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-merge-hint">
+        <source>Combine the contents of both folders</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-keep-both">
+        <source>Keep both</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-keep-both-hint">
+        <source>Saves as %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-skip">
+        <source>Skip</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-replace">
+        <source>Replace</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-src-newer">
+        <source>Copying is newer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-dst-newer">
+        <source>The existing item is newer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-replace-newer">
+        <source>Replace if newer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-resume">
+        <source>Resume</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-resume-hint">
+        <source>Only for unfinished copies</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-apply">
+        <source>Apply</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-progress" numerus="yes">
+        <source>%n conflicts · %1 of %2</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-conflict-moving">
+        <source>Moving</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-copying">
+        <source>Copying</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-already-in">
+        <source>Already in %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-resolution">
+        <source>Resolution</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-merge-folders">
+        <source>Merge is offered for folders.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-apply-all" numerus="yes">
+        <source>Do this for the remaining %n conflicts</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-extract-files" numerus="yes">
+        <source>%n files</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-extract-folders" numerus="yes">
+        <source>%n folders</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-extract-contents">
+        <source>%1, %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-extract-accept">
+        <source>Extract</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-extract-title">
+        <source>Extract %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-extract-contents-label">
+        <source>Contents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-extract-size">
+        <source>Size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-extract-uncompressed">
+        <source>%1 uncompressed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-extract-into">
+        <source>Into</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-extract-new-folder">
+        <source>New folder &apos;%1&apos;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-extract-here">
+        <source>The destination itself</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-extract-pick">
+        <source>Extract to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-extract-pick-accept">
+        <source>Select</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-extract-destination">
+        <source>Destination</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-extract-open">
+        <source>Open folder when done</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-move-to">
+        <source>Move to %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-extract-to">
+        <source>Extract to %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-copy-to">
+        <source>Copy to %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-files" numerus="yes">
+        <source>%n files</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-plan-folders" numerus="yes">
+        <source>%n folders</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-plan-items">
+        <source>%1 in %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-start">
+        <source>Start</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-items-label">
+        <source>Items</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-size">
+        <source>Size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-free">
+        <source>Free on destination</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-conflicts">
+        <source>Conflicts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-renamed">
+        <source>Names changed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-names">
+        <source>Names that need changing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-use-suggested">
+        <source>Use suggested names for all</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-options">
+        <source>Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-keep-mtime">
+        <source>Keep modification times</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-keep-mode">
+        <source>Keep permissions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-keep-mode-hint">
+        <source>Both sides support it</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-verify">
+        <source>Verify with checksums</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-collision">
+        <source>Same name as another item</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-invalid">
+        <source>Not allowed here</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-accept">
+        <source>Rename</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-count" numerus="yes">
+        <source>Rename %n items</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-rename-rule">
+        <source>Rule</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-rule-find">
+        <source>Find and replace</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-rule-prefix">
+        <source>Add at the start</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-rule-suffix">
+        <source>Add at the end</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-rule-case">
+        <source>Change case</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-rule-extension">
+        <source>Change extension</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-rule-date">
+        <source>Add date</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-find">
+        <source>Find</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-regex">
+        <source>Regular expression</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-replace">
+        <source>Replace with</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-prefix">
+        <source>Text to add</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-case">
+        <source>Case</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-case-lower">
+        <source>lowercase</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-case-upper">
+        <source>UPPERCASE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-case-title">
+        <source>Title Case</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-case-sentence">
+        <source>Sentence case</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-extension">
+        <source>Extension</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-extension-change">
+        <source>Change to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-extension-remove">
+        <source>Remove</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-extension-lower">
+        <source>Make lowercase</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-new-extension">
+        <source>New extension</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-date">
+        <source>Date pattern (YYYY MM DD HH mm ss)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-numbering">
+        <source>Numbering</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-add-number">
+        <source>Add number</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-start">
+        <source>Start at</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-digits">
+        <source>Digits</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-bad-rule">
+        <source>This rule can&apos;t be used.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-rename-preview">
+        <source>Preview</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-folder">
+        <source>Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-symlink">
+        <source>Symbolic link</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-size-bytes">
+        <source>%1 (%2 bytes)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-space">
+        <source>%1 of %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-hard-link-in">
+        <source>Hard link in…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-symlink-in">
+        <source>Symbolic link in…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-create-link">
+        <source>Create link</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-link-made">
+        <source>Link created</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-type">
+        <source>Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-size">
+        <source>Size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-modified">
+        <source>Modified</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-created">
+        <source>Created</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-points-to">
+        <source>Points to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-location">
+        <source>Location</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-copy-address">
+        <source>%1 (Copy)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-permissions">
+        <source>Permissions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-owner">
+        <source>Owner</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-tags">
+        <source>Tags</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-tag-add">
+        <source>+ Add</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-checksums">
+        <source>Checksums</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-calculate">
+        <source>Calculate</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-favourite">
+        <source>Favourite</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-add-favourite">
+        <source>Add parent folder to Favourites</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-filesystem">
+        <source>Filesystem</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-free-space">
+        <source>Free space</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-fs-type">
+        <source>Filesystem</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-hard-link">
+        <source>Hard link…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-info-symbolic-link">
+        <source>Symbolic link…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-perm-unavailable-fs">
+        <source>Not available on %1 (%2).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-perm-unavailable">
+        <source>Not available on %1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-perm-save">
+        <source>Save</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-perm-subtitle">
+        <source>Permissions · %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-perm-read">
+        <source>Read</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-perm-write">
+        <source>Write</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-perm-execute">
+        <source>Execute</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-perm-owner">
+        <source>Owner</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-perm-group">
+        <source>Group</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-perm-others">
+        <source>Others</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-perm-octal">
+        <source>Octal</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-perm-contents">
+        <source>Apply to contents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-perm-recursive">
+        <source>Apply recursively</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-perm-files">
+        <source>Files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-perm-folders">
+        <source>Folders</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-trash-restored">
+        <source>Restored</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-trash-empty">
+        <source>Empty Recently deleted</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-trash-emptying">
+        <source>Emptying Recently deleted</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-trash-title">
+        <source>Recently deleted</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-trash-kept" numerus="yes">
+        <source>Kept for %n days</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-trash-restore">
+        <source>Restore</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-trash-delete-now">
+        <source>Delete now</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-trash-deleting">
+        <source>Deleting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-trash-show-folder">
+        <source>Show original folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-trash-from">
+        <source>From %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-trash-days-left" numerus="yes">
+        <source>%n days</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-trash-footer">
+        <source>Only files deleted from this device&apos;s folders appear here. Deletes on SD cards and servers are permanent.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-trash-placeholder">
+        <source>Nothing deleted recently</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-trash-placeholder-hint">
+        <source>Files you delete from this device&apos;s folders wait here before they are removed for good.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-share-accept">
+        <source>Save here</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-share-count" numerus="yes">
+        <source>Save %n files</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-share-unreadable">
+        <source>This file can&apos;t be read by Lautta</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-share-save-to">
+        <source>Save to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-share-pick">
+        <source>Save to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-share-pick-accept">
+        <source>Select</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-share-other">
+        <source>Another folder…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-share-will-save" numerus="yes">
+        <source>%n files will be saved.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-share-skipped" numerus="yes">
+        <source>%n files are skipped.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
 </context>
 </TS>
