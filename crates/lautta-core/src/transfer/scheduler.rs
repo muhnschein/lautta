@@ -436,6 +436,15 @@ mod tests {
     }
 
     #[test]
+    fn barrier_waits_for_earlier_items_started_in_the_same_batch() {
+        let mut s = Scheduler::new();
+        s.add(1, "a", vec![(0, false), (1, true), (2, false)], false);
+        assert_eq!(s.start_runnable(), vec![r(1, 0)]);
+        s.item_finished(r(1, 0));
+        assert_eq!(s.start_runnable(), vec![r(1, 1)]);
+    }
+
+    #[test]
     fn barrier_in_one_transfer_does_not_block_another() {
         let mut s = Scheduler::new();
         s.add(1, "a", vec![(0, true), (1, false)], false);

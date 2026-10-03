@@ -569,6 +569,8 @@ mod tests {
         assert!(TransferState::Canceled.is_finished());
         assert!(!TransferState::Paused.is_finished());
         assert!(TransferState::Waiting(WaitReason::Volume).is_waiting());
+        assert!(!TransferState::Paused.is_waiting() && !TransferState::Queued.is_waiting());
+        assert!(TransferState::ALL.iter().filter(|s| s.is_waiting()).count() == WaitReason::ALL.len());
         assert!(TransferState::Queued.is_runnable());
         assert!(TransferState::Running.is_runnable());
         assert!(!TransferState::Paused.is_runnable());
@@ -637,6 +639,25 @@ mod tests {
         let s = t.summary();
         assert_eq!((s.id, s.items_done, s.bytes_done), (7, 2, 10));
         assert_eq!(default_title(OperationKind::Delete, 1), "Delete 1 item");
+    }
+
+    #[test]
+    fn default_title_counts_files_and_folders() {
+        let mut p = plan(OperationKind::Move, Vec::new());
+        p.totals.files = 4;
+        p.totals.dirs = 3;
+        let t = Transfer::from_plan(1, p, "", TransferOptions::default(), 0);
+        assert_eq!(t.title, "Move 7 items");
+    }
+
+    #[test]
+    fn settled_items_need_no_more_work() {
+        for s in [ItemState::Done, ItemState::Skipped, ItemState::Failed] {
+            assert!(s.is_settled(), "{s:?}");
+        }
+        for s in [ItemState::Pending, ItemState::Running, ItemState::NeedsAnswer] {
+            assert!(!s.is_settled(), "{s:?}");
+        }
     }
 
     #[test]
