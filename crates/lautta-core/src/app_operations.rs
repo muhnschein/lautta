@@ -1,2 +1,1329 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! User-level actions of the operations area on [`Core`](crate::app::Core).
+//! User-level actions of the operations area on [`Core`](crate::app::Core):
+//! plan summaries and pending plans (OPS-1), conflicts before the run
+//! (OPS-2), compress and extract (PRV-10/11), bulk rename (OPS-11), the
+//! Info page, the permissions editor (OPS-12) and *Recently deleted*
+//! (OPS-8). Everything is Qt-free; the Qt layer only forwards.
+
+use crate::app::{Core, Started};
+use crate::compress::{compress, ArchiveKind, CompressOptions};
+use crate::entry::{cap, ms_to_system_time, system_time_to_ms, Entry, Kind};
+use crate::error::{Error, ErrorKind, Result};
+use crate::mime::{category_of, mime_of};
+use crate::ops::bulkrename::{
+    self, CaseMode, DateRule, ExtensionMode, Numbering, Position, RenameEntry, RenamePreview, Rule, RuleSet,
+};
+use crate::ops::conflict as conflict_ops;
+use crate::ops::names::{keep_both_name, split_extension, NameRules};
+use crate::ops::{Conflict, ConflictChoice, OperationKind, Plan};
+use crate::provider::{
+    list_all, AttributeChanges, Disposition, Lane, ProgressSink, Provider, RenameMode, WriteOptions,
+};
+use crate::settings::Settings;
+use crate::sys;
+use crate::transfer::TransferId;
+use crate::uri::Uri;
+use crate::vpath::{display_name, validate_name, VPath};
+use serde::Serialize;
+use serde_json::Value;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+
+/// Separator of the breadcrumb shown for a folder ("Documents › Uni").
+const CRUMB: &str = " › ";
+/// Names listed in the summary sheet ("Names that need changing").
+const SUMMARY_RENAMES: usize = 50;
+const SECS_PER_DAY: i64 = 86_400;
+
+fn guard<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    match m.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    }
+}
+
+fn join_err(e: tokio::task::JoinError) -> Error {
+    Error::new(ErrorKind::Internal, e.to_string())
+}
+
+// ------------------------------------------------------------ pending plans
+
+/// Large plans wait for the user's confirmation under an id (OPS-1).
+#[derive(Default)]
+pub struct PendingPlans {
+    next: AtomicU64,
+    plans: Mutex<HashMap<u64, Plan>>,
+}
+
+impl PendingPlans {
+    pub fn new() -> PendingPlans {
+        PendingPlans::default()
+    }
+
+    /// Keeps `plan` and returns its id (1, 2, …).
+    pub fn insert(&self, plan: Plan) -> u64 {
+        let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
+        guard(&self.plans).insert(id, plan);
+        id
+    }
+
+    /// Takes the plan out (to start it, or to work on it across awaits).
+    pub fn take(&self, id: u64) -> Option<Plan> {
+        guard(&self.plans).remove(&id)
+    }
+
+    /// Puts a plan taken out with [`take`](Self::take) back under its id.
+    pub fn put_back(&self, id: u64, plan: Plan) {
+        guard(&self.plans).insert(id, plan);
+    }
+
+    pub fn discard(&self, id: u64) -> bool {
+        guard(&self.plans).remove(&id).is_some()
+    }
+
+    pub fn with<R>(&self, id: u64, f: impl FnOnce(&Plan) -> R) -> Option<R> {
+        guard(&self.plans).get(&id).map(f)
+    }
+
+    pub fn len(&self) -> usize {
+        guard(&self.plans).len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+// ------------------------------------------------------------ plan summary
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RenamePair {
+    pub from: String,
+    pub to: String,
+}
+
+/// The options of the summary sheet, seeded from the settings (OPS-5, XFR-4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartOptions {
+    pub verify_checksums: bool,
+    pub preserve_mtime: bool,
+    pub preserve_mode: bool,
+    /// Keep the safe names the planner proposed (OPS-7).
+    pub suggested_names: bool,
+}
+
+impl StartOptions {
+    pub fn from_settings(s: &Settings) -> StartOptions {
+        StartOptions {
+            verify_checksums: s.verify_checksums,
+            preserve_mtime: s.preserve_mtimes,
+            preserve_mode: s.preserve_permissions,
+            suggested_names: true,
+        }
+    }
+
+    /// Reads the options sheet's JSON; missing keys keep `self`.
+    pub fn merged_with_json(self, text: &str) -> StartOptions {
+        let Ok(Value::Object(m)) = serde_json::from_str::<Value>(text) else {
+            return self;
+        };
+        let flag = |key: &str, old: bool| m.get(key).and_then(Value::as_bool).unwrap_or(old);
+        StartOptions {
+            verify_checksums: flag("verifyChecksums", self.verify_checksums),
+            preserve_mtime: flag("preserveMtime", self.preserve_mtime),
+            preserve_mode: flag("preserveMode", self.preserve_mode),
+            suggested_names: flag("suggestedNames", self.suggested_names),
+        }
+    }
+}
+
+/// What the PlanSummary sheet shows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanSummary {
+    pub kind: String,
+    pub files: u64,
+    pub dirs: u64,
+    pub bytes: u64,
+    pub conflicts: u64,
+    pub renamed: u64,
+    pub destination: String,
+    pub destination_name: String,
+    pub free_bytes: Option<u64>,
+    pub renames: Vec<RenamePair>,
+    /// Both sides keep POSIX modes (OPS-5): the option is only offered then.
+    pub permissions_supported: bool,
+    pub options: StartOptions,
+}
+
+pub fn kind_name(kind: OperationKind) -> &'static str {
+    match kind {
+        OperationKind::Copy => "copy",
+        OperationKind::Move => "move",
+        OperationKind::Delete => "delete",
+        OperationKind::Compress => "compress",
+        OperationKind::Extract => "extract",
+        OperationKind::Sync => "sync",
+        OperationKind::WriteBack => "writeback",
+    }
+}
+
+fn rebase(uri: &Uri, old_root: &Uri, new_root: &Uri) -> Uri {
+    match uri.path.strip_prefix(&old_root.path) {
+        Some(rel) if uri.location == old_root.location => {
+            Uri::new(new_root.location.clone(), new_root.path.join_path(&rel))
+        }
+        _ => uri.clone(),
+    }
+}
+
+/// Undoes the planner's safe-name proposals (OPS-7): every renamed item (and
+/// what lies below it) goes back to the source's own name.
+pub fn revert_suggested_names(plan: &mut Plan) {
+    for i in 0..plan.items.len() {
+        if plan.items[i].proposed_name.is_none() {
+            continue;
+        }
+        plan.items[i].proposed_name = None;
+        let old = plan.items[i].dst.clone();
+        let original = plan.items[i].src.name().map(<[u8]>::to_vec);
+        let (Some(parent), Some(name)) = (old.parent(), original) else {
+            continue;
+        };
+        let Ok(new) = parent.join(&name) else { continue };
+        for item in &mut plan.items[i..] {
+            item.dst = rebase(&item.dst, &old, &new);
+        }
+    }
+    plan.totals.renamed = 0;
+}
+
+/// A conflict that waits for an answer before the run (OPS-2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConflictEntry {
+    pub index: usize,
+    pub name: String,
+    /// Where it already exists ("NAS › srv › photos").
+    pub folder: String,
+    pub source: String,
+    pub destination: String,
+    pub conflict: Conflict,
+    /// Never `Replace` (OPS-2).
+    pub default_choice: ConflictChoice,
+}
+
+// ------------------------------------------------------------ compress
+
+/// What the Compress dialog needs to size the job.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct Measure {
+    pub files: u64,
+    pub dirs: u64,
+    pub bytes: u64,
+}
+
+/// Contents of an archive (Extract dialog, ArchiveView header).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveInfo {
+    pub location: String,
+    pub root_uri: String,
+    pub name: String,
+    /// The archive's name without its extension(s): the "new folder".
+    pub folder_name: String,
+    pub files: u64,
+    pub dirs: u64,
+    pub bytes: u64,
+}
+
+impl ArchiveKind {
+    pub fn parse(text: &str) -> Option<ArchiveKind> {
+        match text {
+            "zip" => Some(ArchiveKind::Zip),
+            "tar.gz" | "targz" | "tgz" => Some(ArchiveKind::TarGz),
+            _ => None,
+        }
+    }
+
+    pub fn extension(self) -> &'static str {
+        match self {
+            ArchiveKind::Zip => ".zip",
+            ArchiveKind::TarGz => ".tar.gz",
+        }
+    }
+}
+
+/// `name` with the archive extension (once).
+pub fn archive_file_name(name: &str, kind: ArchiveKind) -> String {
+    let ext = kind.extension();
+    if name.to_lowercase().ends_with(ext) {
+        name.to_owned()
+    } else {
+        format!("{name}{ext}")
+    }
+}
+
+/// The archive's name without extension, for "New folder 'dataset'".
+pub fn archive_folder_name(name: &str) -> String {
+    let (stem, _) = split_extension(name.as_bytes(), false);
+    let stem = String::from_utf8_lossy(stem).into_owned();
+    if stem.is_empty() {
+        name.to_owned()
+    } else {
+        stem
+    }
+}
+
+// ------------------------------------------------------------ bulk rename
+
+/// The folder state a bulk rename previews against (OPS-11).
+#[derive(Debug, Clone)]
+pub struct RenameContext {
+    pub parent: Uri,
+    pub uris: Vec<Uri>,
+    pub entries: Vec<RenameEntry>,
+    pub kinds: Vec<Kind>,
+    /// Every name in the folder, selected ones included.
+    pub existing: Vec<Vec<u8>>,
+    pub name_rules: NameRules,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct BulkOutcome {
+    pub renamed: usize,
+    /// Unchanged, colliding or invalid names, left alone.
+    pub skipped: usize,
+    pub failed: usize,
+    pub first_error: Option<String>,
+}
+
+fn as_str<'a>(m: &'a serde_json::Map<String, Value>, key: &str) -> &'a str {
+    m.get(key).and_then(Value::as_str).unwrap_or("")
+}
+
+fn as_flag(m: &serde_json::Map<String, Value>, key: &str, default: bool) -> bool {
+    m.get(key).and_then(Value::as_bool).unwrap_or(default)
+}
+
+fn position_of(m: &serde_json::Map<String, Value>, default: Position) -> Position {
+    match as_str(m, "position") {
+        "prefix" => Position::Prefix,
+        "suffix" => Position::Suffix,
+        _ => default,
+    }
+}
+
+fn rule_from_json(m: &serde_json::Map<String, Value>) -> Result<Rule> {
+    let int = |key: &str, d: i64| m.get(key).and_then(Value::as_i64).unwrap_or(d);
+    Ok(match as_str(m, "type") {
+        "findReplace" => Rule::FindReplace {
+            find: as_str(m, "find").to_owned(),
+            replace: as_str(m, "replace").to_owned(),
+            regex: as_flag(m, "regex", false),
+            case_sensitive: as_flag(m, "caseSensitive", true),
+        },
+        "prefix" => Rule::Prefix(as_str(m, "text").to_owned()),
+        "suffix" => Rule::Suffix(as_str(m, "text").to_owned()),
+        "numbering" => Rule::Numbering(Numbering {
+            start: int("start", 1),
+            step: int("step", 1),
+            padding: usize::try_from(int("padding", 0).clamp(0, 12)).unwrap_or(0),
+            position: position_of(m, Position::Suffix),
+            separator: m
+                .get("separator")
+                .and_then(Value::as_str)
+                .unwrap_or(" ")
+                .to_owned(),
+        }),
+        "case" => Rule::Case(match as_str(m, "mode") {
+            "lower" => CaseMode::Lower,
+            "upper" => CaseMode::Upper,
+            "title" => CaseMode::Title,
+            "sentence" => CaseMode::Sentence,
+            other => return Err(bad_rule(&format!("unknown case mode {other}"))),
+        }),
+        "extension" => Rule::Extension(match as_str(m, "mode") {
+            "change" => ExtensionMode::Change(as_str(m, "value").to_owned()),
+            "remove" => ExtensionMode::Remove,
+            "lowercase" => ExtensionMode::Lowercase,
+            other => return Err(bad_rule(&format!("unknown extension mode {other}"))),
+        }),
+        "date" => Rule::Date(DateRule {
+            format: as_str(m, "format").to_owned(),
+            position: position_of(m, Position::Prefix),
+            separator: m
+                .get("separator")
+                .and_then(Value::as_str)
+                .unwrap_or(" ")
+                .to_owned(),
+            utc_offset_secs: i32::try_from(int("utcOffsetSecs", 0)).unwrap_or(0),
+        }),
+        other => return Err(bad_rule(&format!("unknown rule {other}"))),
+    })
+}
+
+fn bad_rule(why: &str) -> Error {
+    Error::new(ErrorKind::InvalidArgument, why.to_owned())
+}
+
+/// Reads the rules the BulkRename page edits:
+/// `{ includeExtension, rules: [ { type, … } ] }`.
+pub fn parse_rules(text: &str) -> Result<RuleSet> {
+    let value: Value = serde_json::from_str(text).map_err(|e| bad_rule(&format!("bad rules: {e}")))?;
+    let Value::Object(top) = value else {
+        return Err(bad_rule("rules must be an object"));
+    };
+    let mut set = RuleSet {
+        rules: Vec::new(),
+        include_extension: as_flag(&top, "includeExtension", false),
+    };
+    for rule in top.get("rules").and_then(Value::as_array).into_iter().flatten() {
+        let Value::Object(m) = rule else {
+            return Err(bad_rule("a rule must be an object"));
+        };
+        set.rules.push(rule_from_json(m)?);
+    }
+    Ok(set)
+}
+
+/// The preview for a context (live while the user types).
+pub fn rename_preview(ctx: &RenameContext, rules: &RuleSet) -> Result<Vec<RenamePreview>> {
+    bulkrename::preview_with(&ctx.entries, rules, &ctx.existing, ctx.name_rules)
+}
+
+/// Status names the QML preview shows.
+pub fn status_name(s: bulkrename::RenameStatus) -> &'static str {
+    match s {
+        bulkrename::RenameStatus::Ok => "ok",
+        bulkrename::RenameStatus::Unchanged => "unchanged",
+        bulkrename::RenameStatus::Collision => "collision",
+        bulkrename::RenameStatus::Invalid => "invalid",
+    }
+}
+
+// ------------------------------------------------------------ info
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TagInfo {
+    pub id: i64,
+    pub name: String,
+    pub colour: String,
+}
+
+/// Everything the Info page shows about one item (OPS-12, ORG-3).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InfoData {
+    pub name: String,
+    pub name_is_lossy: bool,
+    pub uri: String,
+    pub parent_uri: String,
+    pub folder_name: String,
+    pub is_dir: bool,
+    pub is_symlink: bool,
+    pub link_target: Option<String>,
+    pub category: String,
+    pub mime_type: String,
+    pub size: Option<u64>,
+    pub modified: Option<i64>,
+    pub created: Option<i64>,
+    /// Permission bits (`0o7777`), when known.
+    pub mode: Option<u32>,
+    pub mode_text: String,
+    pub owner: Option<String>,
+    pub group: Option<String>,
+    pub address: String,
+    pub location_name: String,
+    pub fs_type: Option<String>,
+    pub free_bytes: Option<u64>,
+    pub total_bytes: Option<u64>,
+    pub can_permissions: bool,
+    pub can_symlink: bool,
+    pub can_hardlink: bool,
+    pub can_set_mtime: bool,
+    pub can_checksum: bool,
+    pub tags: Vec<TagInfo>,
+}
+
+/// `rwxr-xr-x` for the permission bits.
+pub fn mode_text(mode: u32) -> String {
+    const BITS: [(u32, char); 9] = [
+        (0o400, 'r'),
+        (0o200, 'w'),
+        (0o100, 'x'),
+        (0o040, 'r'),
+        (0o020, 'w'),
+        (0o010, 'x'),
+        (0o004, 'r'),
+        (0o002, 'w'),
+        (0o001, 'x'),
+    ];
+    BITS.iter()
+        .map(|(bit, c)| if mode & bit != 0 { *c } else { '-' })
+        .collect()
+}
+
+/// `755` or `0755` as permission bits.
+pub fn parse_octal(text: &str) -> Option<u32> {
+    let t = text.trim();
+    if !(3..=4).contains(&t.len()) || !t.bytes().all(|b| (b'0'..=b'7').contains(&b)) {
+        return None;
+    }
+    u32::from_str_radix(t, 8).ok()
+}
+
+/// Name of the file system from `statfs` magic numbers.
+pub fn fs_type_name(magic: u64) -> Option<&'static str> {
+    Some(match magic {
+        0xEF53 => "ext4",
+        0x4d44 => "vfat",
+        0x2011_BAB0 => "exFAT",
+        0x0102_1994 => "tmpfs",
+        0x9123_683E => "btrfs",
+        0xF2F5_2010 => "f2fs",
+        0x5346_544e => "ntfs",
+        0x6573_5546 => "fuse",
+        0x6969 => "nfs",
+        0xFE53_4D42 | 0xFF53_4D42 => "smb",
+        0x794c_7630 => "overlayfs",
+        0x5846_5342 => "xfs",
+        0xE0F5_E1E2 => "erofs",
+        0x7371_7368 => "squashfs",
+        _ => return None,
+    })
+}
+
+/// The permissions editor's data (OPS-12).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionsInfo {
+    pub mode: u32,
+    pub is_dir: bool,
+    pub owner: Option<String>,
+    pub group: Option<String>,
+    /// False on vfat/exFAT and servers that cannot (§10.1).
+    pub supported: bool,
+    pub fs_type: Option<String>,
+    pub location_name: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RecursiveModes {
+    pub files: u32,
+    pub dirs: u32,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct PermissionsOutcome {
+    pub changed: u64,
+    pub failed: u64,
+}
+
+// ------------------------------------------------------------ trash
+
+/// One row of *Recently deleted* (OPS-8).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashEntry {
+    pub id: i64,
+    pub name: String,
+    pub original_uri: String,
+    pub folder_uri: String,
+    pub folder_name: String,
+    pub is_dir: bool,
+    pub size: Option<u64>,
+    /// Unix seconds.
+    pub trashed_at: i64,
+    pub days_left: i64,
+}
+
+/// Whole days left before purge, never negative (OPS-8).
+pub fn days_left(trashed_at: i64, now: i64, retention_days: u32) -> i64 {
+    let ends = trashed_at.saturating_add(i64::from(retention_days) * SECS_PER_DAY);
+    ((ends - now).max(0) + SECS_PER_DAY - 1) / SECS_PER_DAY
+}
+
+// ------------------------------------------------------------ share
+
+/// A file received through the share target (INT-1).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedFile {
+    pub path: String,
+    pub name: String,
+    pub size: u64,
+    pub readable: bool,
+    pub uri: String,
+}
+
+/// A place a shared file can be saved to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Destination {
+    pub uri: String,
+    pub name: String,
+    pub kind: String,
+}
+
+fn location_kind_name(kind: &crate::locations::LocationKind) -> &'static str {
+    use crate::locations::LocationKind as K;
+    match kind {
+        K::UserFolder => "device",
+        K::Android => "android",
+        K::Volume => "volume",
+        K::Server { .. } | K::AdHoc => "server",
+        K::Archive => "archive",
+    }
+}
+
+// ============================================================ Core methods
+
+impl Core {
+    /// `Location › folder › subfolder` for a URI (what the sheets show).
+    pub fn display_path(&self, uri: &Uri) -> String {
+        let mut parts = vec![self
+            .location(&uri.location)
+            .map_or_else(|| uri.location.clone(), |l| l.name)];
+        parts.extend(uri.path.components().map(display_name));
+        parts.join(CRUMB)
+    }
+
+    /// The breadcrumb of the folder that contains `uri`.
+    pub fn display_folder(&self, uri: &Uri) -> String {
+        uri.parent()
+            .map_or_else(|| self.display_path(uri), |p| self.display_path(&p))
+    }
+
+    // -------------------------------------------------------- plans
+
+    /// The numbers and names the summary sheet shows (OPS-1).
+    pub async fn plan_summary(&self, plan: &Plan) -> PlanSummary {
+        let dest = &plan.destination;
+        let free_bytes = match self.provider(&dest.location) {
+            Ok(p) => p.space(&dest.path).await.ok().map(|s| s.free),
+            Err(_) => None,
+        };
+        let has_modes = |location: &str| {
+            self.provider(location)
+                .is_ok_and(|p| p.capabilities().has(cap::PERMISSIONS))
+        };
+        let permissions_supported = has_modes(&dest.location)
+            && plan
+                .items
+                .first()
+                .map_or(true, |first| has_modes(&first.src.location));
+        let renames = plan
+            .items
+            .iter()
+            .filter(|it| it.proposed_name.is_some())
+            .take(SUMMARY_RENAMES)
+            .map(|it| RenamePair {
+                from: it.src.name().map(display_name).unwrap_or_default(),
+                to: it.dst.name().map(display_name).unwrap_or_default(),
+            })
+            .collect();
+        PlanSummary {
+            kind: kind_name(plan.kind).to_owned(),
+            files: plan.totals.files,
+            dirs: plan.totals.dirs,
+            bytes: plan.totals.bytes,
+            conflicts: plan.totals.conflicts,
+            renamed: plan.totals.renamed,
+            destination: dest.to_string(),
+            destination_name: self.display_path(dest),
+            free_bytes,
+            renames,
+            permissions_supported,
+            options: StartOptions::from_settings(&self.settings()),
+        }
+    }
+
+    /// Queues `plan` with the sheet's options (OPS-5, OPS-7, XFR-4). The
+    /// options only differ from the settings for this one start: the settings
+    /// are put back right after the transfer is queued.
+    pub async fn start_plan_with(&self, mut plan: Plan, options: StartOptions) -> Result<TransferId> {
+        if !options.suggested_names {
+            revert_suggested_names(&mut plan);
+        }
+        let saved = self.settings();
+        let wanted = Settings {
+            verify_checksums: options.verify_checksums,
+            preserve_mtimes: options.preserve_mtime,
+            preserve_permissions: options.preserve_mode,
+            ..saved.clone()
+        };
+        if wanted == saved {
+            return self.start_plan(plan).await;
+        }
+        self.apply_settings(wanted.clone());
+        let started = self.start_plan(plan).await;
+        if self.settings() == wanted {
+            self.apply_settings(saved);
+        }
+        started
+    }
+
+    /// The conflicts of a plan that still wait for an answer, in order.
+    pub fn unresolved_conflicts(&self, plan: &Plan) -> Vec<ConflictEntry> {
+        conflict_ops::unresolved(plan)
+            .into_iter()
+            .filter_map(|index| {
+                let item = &plan.items[index];
+                let conflict = item.conflict.clone()?;
+                Some(ConflictEntry {
+                    index,
+                    name: item.dst.name().map(display_name).unwrap_or_default(),
+                    folder: self.display_folder(&item.dst),
+                    source: item.src.to_string(),
+                    destination: item.dst.to_string(),
+                    default_choice: conflict_ops::default_choice(&conflict),
+                    conflict,
+                })
+            })
+            .collect()
+    }
+
+    /// Answers a conflict of a pending plan (OPS-2); returns how many items
+    /// the answer settled.
+    pub async fn resolve_plan_conflict(
+        &self,
+        plan: &mut Plan,
+        index: usize,
+        choice: ConflictChoice,
+        apply_to_all: bool,
+    ) -> Result<usize> {
+        conflict_ops::resolve(plan, index, choice, apply_to_all, &self.locations).await
+    }
+
+    // -------------------------------------------------------- archives
+
+    /// Totals of a selection (Compress: "Size before compression").
+    pub async fn measure(&self, sources: &[Uri]) -> Result<Measure> {
+        let first = sources
+            .first()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "nothing selected"))?;
+        let dest = first.parent().unwrap_or_else(|| first.clone());
+        let plan = self.plan(OperationKind::Delete, sources.to_vec(), dest).await?;
+        Ok(Measure {
+            files: plan.totals.files,
+            dirs: plan.totals.dirs,
+            bytes: plan.totals.bytes,
+        })
+    }
+
+    /// Opens the archive as a location and counts what it holds (PRV-10).
+    pub async fn archive_info(&self, archive: &Uri) -> Result<ArchiveInfo> {
+        let location = self.open_archive(archive).await?;
+        let provider = self.provider(&location)?;
+        let mut info = ArchiveInfo {
+            location: location.clone(),
+            root_uri: Uri::root(location).to_string(),
+            name: String::new(),
+            folder_name: String::new(),
+            files: 0,
+            dirs: 0,
+            bytes: 0,
+        };
+        let name = archive.name().map(display_name).unwrap_or_default();
+        info.folder_name = archive_folder_name(&name);
+        info.name = name;
+        let mut pending = vec![VPath::root()];
+        while let Some(dir) = pending.pop() {
+            for e in list_all(provider.as_ref(), &dir, Lane::Interactive).await? {
+                if e.kind == Kind::Dir {
+                    info.dirs += 1;
+                    pending.push(dir.join(&e.name)?);
+                } else {
+                    info.files += 1;
+                    info.bytes += e.size.unwrap_or(0);
+                }
+            }
+        }
+        Ok(info)
+    }
+
+    /// Extracts the whole archive into `dest` (created when missing): a copy
+    /// plan from the archive's root (XFR-3 "archive → anywhere").
+    pub async fn extract(&self, archive: &Uri, dest: &Uri) -> Result<Started> {
+        let location = self.open_archive(archive).await?;
+        let root = Uri::root(location.clone());
+        let source = self.provider(&location)?;
+        let children = list_all(source.as_ref(), &root.path, Lane::Interactive).await?;
+        if children.is_empty() {
+            return Err(Error::new(ErrorKind::InvalidArgument, "the archive is empty"));
+        }
+        let sources = children
+            .iter()
+            .map(|e| root.join(&e.name))
+            .collect::<Result<Vec<_>>>()?;
+        let target = self.provider(&dest.location)?;
+        target.make_dir(&dest.path, false).await?;
+        if let Some(parent) = dest.parent() {
+            self.invalidate(&parent);
+        }
+        self.copy_or_move(OperationKind::Copy, sources, dest.clone())
+            .await
+    }
+
+    /// Creates a zip or tar.gz of `sources` as `name` in `dest_dir` (PRV-11):
+    /// straight into a local file, or into a pipe that is uploaded while the
+    /// archive is produced. A name that is taken gets "name 2.zip". A failed
+    /// or canceled run leaves no partial file. Returns the archive's URI.
+    pub async fn compress_to(
+        &self,
+        sources: &[Uri],
+        dest_dir: &Uri,
+        name: &str,
+        kind: ArchiveKind,
+        progress: ProgressSink,
+        cancel: Arc<AtomicBool>,
+    ) -> Result<Uri> {
+        let provider = self.provider(&dest_dir.location)?;
+        if !provider.capabilities().writable() {
+            return Err(Error::kind(ErrorKind::ReadOnlyFilesystem));
+        }
+        let file_name = archive_file_name(name.trim(), kind);
+        validate_name(file_name.as_bytes())?;
+        let taken: HashSet<Vec<u8>> = list_all(provider.as_ref(), &dest_dir.path, Lane::Interactive)
+            .await?
+            .into_iter()
+            .map(|e| e.name)
+            .collect();
+        let final_name = free_name(file_name.as_bytes(), &taken);
+        let target = dest_dir.join(&final_name)?;
+        let mut opts = CompressOptions::new(kind);
+        opts.progress = progress;
+        opts.cancel = cancel;
+        opts.total_hint = self.measure(sources).await.ok().map(|m| m.bytes);
+        match self.locations.to_local_path(&target) {
+            Some(path) => self.compress_local(sources, &path, &opts).await?,
+            None => compress_remote(self, sources, provider.as_ref(), &target, &opts).await?,
+        }
+        self.invalidate(dest_dir);
+        Ok(target)
+    }
+
+    async fn compress_local(&self, sources: &[Uri], path: &Path, opts: &CompressOptions) -> Result<()> {
+        let part = part_path(path);
+        let sink = {
+            let part = part.clone();
+            tokio::task::spawn_blocking(move || {
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(part)
+            })
+            .await
+            .map_err(join_err)??
+        };
+        let done = compress(&self.locations, sources, sink, opts).await;
+        let (from, to) = (part.clone(), path.to_path_buf());
+        let failed = done.is_err();
+        let finished = tokio::task::spawn_blocking(move || -> Result<()> {
+            if failed {
+                let _ = std::fs::remove_file(&from);
+                return Ok(());
+            }
+            sys::rename_noreplace(&from, &to).map_err(|e| {
+                let _ = std::fs::remove_file(&from);
+                Error::from(e)
+            })
+        })
+        .await
+        .map_err(join_err)?;
+        done.map(|_| ())?;
+        finished
+    }
+
+    // -------------------------------------------------------- bulk rename
+
+    /// Reads the folder the selection lives in (OPS-11).
+    pub async fn rename_context(&self, uris: &[Uri]) -> Result<RenameContext> {
+        let first = uris
+            .first()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "nothing selected"))?;
+        let parent = first
+            .parent()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "cannot rename a location"))?;
+        if uris.iter().any(|u| u.parent().as_ref() != Some(&parent)) {
+            return Err(Error::new(
+                ErrorKind::InvalidArgument,
+                "the items must be in the same folder",
+            ));
+        }
+        let provider = self.provider(&parent.location)?;
+        let listing = list_all(provider.as_ref(), &parent.path, Lane::Interactive).await?;
+        let by_name: HashMap<&[u8], &Entry> = listing.iter().map(|e| (e.name.as_slice(), e)).collect();
+        let mut entries = Vec::new();
+        let mut kinds = Vec::new();
+        for uri in uris {
+            let name = uri.name().unwrap_or_default();
+            let found = by_name.get(name);
+            entries.push((name.to_vec(), found.and_then(|e| e.modified_ms())));
+            kinds.push(found.map_or(Kind::File, |e| e.kind));
+        }
+        Ok(RenameContext {
+            existing: listing.iter().map(|e| e.name.clone()).collect(),
+            name_rules: NameRules::from_capabilities(&provider.capabilities()),
+            parent,
+            uris: uris.to_vec(),
+            entries,
+            kinds,
+        })
+    }
+
+    /// Renames the selection by `rules` in two phases through temporary
+    /// names, so swaps (`a`→`b`, `b`→`a`) work (OPS-3, OPS-11). Tags and
+    /// favourites follow (ORG-3); nothing is recorded for undo.
+    pub async fn bulk_rename(&self, uris: &[Uri], rules: &RuleSet) -> Result<BulkOutcome> {
+        let ctx = self.rename_context(uris).await?;
+        let previews = rename_preview(&ctx, rules)?;
+        let provider = self.provider(&ctx.parent.location)?;
+        let mut outcome = BulkOutcome::default();
+        let mut staged = Vec::new();
+        let stamp = std::process::id();
+        for (i, p) in previews.iter().enumerate() {
+            if p.status != bulkrename::RenameStatus::Ok {
+                outcome.skipped += 1;
+                continue;
+            }
+            let tmp = ctx
+                .parent
+                .path
+                .join(format!(".lautta-rename-{stamp}-{i}").as_bytes())?;
+            match provider
+                .rename(&ctx.uris[i].path, &tmp, RenameMode::NoReplace)
+                .await
+            {
+                Ok(()) => staged.push((i, tmp)),
+                Err(e) => outcome.fail(e),
+            }
+        }
+        for (i, tmp) in staged {
+            let from = &ctx.uris[i];
+            let result = match ctx.parent.join(&previews[i].new) {
+                Ok(to) => self.finish_rename(provider.as_ref(), &tmp, from, &to).await,
+                Err(e) => Err(e),
+            };
+            match result {
+                Ok(()) => outcome.renamed += 1,
+                Err(e) => {
+                    let _ = provider.rename(&tmp, &from.path, RenameMode::NoReplace).await;
+                    outcome.fail(e);
+                }
+            }
+        }
+        self.invalidate(&ctx.parent);
+        Ok(outcome)
+    }
+
+    async fn finish_rename(&self, provider: &dyn Provider, tmp: &VPath, from: &Uri, to: &Uri) -> Result<()> {
+        provider.rename(tmp, &to.path, RenameMode::NoReplace).await?;
+        let _ = self.tags.on_moved(from, to);
+        let _ = self.favourites.on_moved(from, to);
+        Ok(())
+    }
+
+    // -------------------------------------------------------- info
+
+    /// Everything the Info page shows (OPS-12, ORG-3).
+    pub async fn info(&self, uri: &Uri) -> Result<InfoData> {
+        let provider = self.provider(&uri.location)?;
+        let entry = provider.stat(&uri.path, false, Lane::Interactive).await?;
+        let caps = provider.capabilities();
+        let local = self.locations.to_local_path(uri);
+        let space = provider.space(&uri.path).await.ok();
+        let link_target = if entry.is_symlink() {
+            provider
+                .read_link(&uri.path)
+                .await
+                .ok()
+                .map(|t| String::from_utf8_lossy(&t).into_owned())
+        } else {
+            None
+        };
+        let parent = uri.parent();
+        let tags = self
+            .tags
+            .tags_for(uri)?
+            .into_iter()
+            .map(|t| TagInfo {
+                id: t.id,
+                name: t.name,
+                colour: t.colour,
+            })
+            .collect();
+        let mode = entry.mode.map(|m| m & 0o7777);
+        Ok(InfoData {
+            name: if uri.path.is_root() {
+                self.location(&uri.location).map(|l| l.name).unwrap_or_default()
+            } else {
+                entry.display_name()
+            },
+            name_is_lossy: entry.name_is_lossy(),
+            uri: uri.to_string(),
+            parent_uri: parent.as_ref().map(Uri::to_string).unwrap_or_default(),
+            folder_name: self.display_folder(uri),
+            is_dir: entry.is_dir(),
+            is_symlink: entry.is_symlink(),
+            link_target,
+            category: category_of(&entry).icon_name().to_owned(),
+            mime_type: mime_of(&entry).unwrap_or_default(),
+            size: if entry.is_dir() { None } else { entry.size },
+            modified: entry.modified_ms(),
+            created: entry.created.map(system_time_to_ms),
+            mode_text: mode.map(mode_text).unwrap_or_default(),
+            mode,
+            owner: entry.owner.clone(),
+            group: entry.group.clone(),
+            address: self.locations.display_address(uri),
+            location_name: self.location(&uri.location).map(|l| l.name).unwrap_or_default(),
+            fs_type: local
+                .as_ref()
+                .and_then(|p| sys::fs_magic(p).ok())
+                .and_then(fs_type_name)
+                .map(str::to_owned),
+            free_bytes: space.map(|s| s.free),
+            total_bytes: space.map(|s| s.total),
+            can_permissions: caps.writable() && caps.has(cap::PERMISSIONS),
+            can_symlink: caps.writable() && caps.has(cap::SYMLINKS),
+            can_hardlink: caps.writable() && caps.has(cap::HARDLINKS),
+            can_set_mtime: caps.writable() && caps.has(cap::SET_MTIME),
+            can_checksum: !entry.is_dir(),
+            tags,
+        })
+    }
+
+    /// Hex digest of a file (`md5`, `sha1`, `sha256`): the provider's own
+    /// when it can, otherwise streamed and hashed here (§10.1).
+    pub async fn checksum(&self, uri: &Uri, algorithm: &str) -> Result<String> {
+        let algo = algorithm.to_lowercase().replace('-', "");
+        if !matches!(algo.as_str(), "md5" | "sha1" | "sha256") {
+            return Err(Error::new(
+                ErrorKind::Unsupported,
+                format!("unknown algorithm {algorithm}"),
+            ));
+        }
+        let provider = self.provider(&uri.location)?;
+        match provider.checksum(&uri.path, &algo).await {
+            Ok(digest) => Ok(hex::encode(digest)),
+            Err(e) if e.kind == ErrorKind::Unsupported => {
+                stream_checksum(provider.as_ref(), &uri.path, &algo).await
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Sets the modification time (ms since the epoch), if the location can.
+    pub async fn set_modified(&self, uri: &Uri, ms: i64) -> Result<()> {
+        let changes = AttributeChanges {
+            mode: None,
+            modified: Some(ms_to_system_time(ms)),
+        };
+        self.provider(&uri.location)?
+            .set_attributes(&uri.path, changes)
+            .await?;
+        if let Some(parent) = uri.parent() {
+            self.invalidate(&parent);
+        }
+        Ok(())
+    }
+
+    /// A hard or symbolic link to `target` in `dest_dir`, named like the
+    /// target (numbered when taken).
+    pub async fn make_link(&self, target: &Uri, dest_dir: &Uri, hard: bool) -> Result<Uri> {
+        let provider = self.provider(&dest_dir.location)?;
+        let name = target
+            .name()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "cannot link a location"))?;
+        let taken: HashSet<Vec<u8>> = list_all(provider.as_ref(), &dest_dir.path, Lane::Interactive)
+            .await?
+            .into_iter()
+            .map(|e| e.name)
+            .collect();
+        let link = dest_dir.join(&free_name(name, &taken))?;
+        if hard {
+            if target.location != dest_dir.location {
+                return Err(Error::kind(ErrorKind::CrossesDevice));
+            }
+            provider.make_hardlink(&target.path, &link.path).await?;
+        } else {
+            let bytes = self.symlink_target(target, dest_dir)?;
+            provider.make_symlink(&bytes, &link.path).await?;
+        }
+        self.invalidate(dest_dir);
+        Ok(link)
+    }
+
+    fn symlink_target(&self, target: &Uri, dest_dir: &Uri) -> Result<Vec<u8>> {
+        use std::os::unix::ffi::OsStrExt;
+        if let (Some(real), Some(_)) = (
+            self.locations.to_local_path(target),
+            self.locations.to_local_path(dest_dir),
+        ) {
+            return Ok(real.as_os_str().as_bytes().to_vec());
+        }
+        if target.location != dest_dir.location {
+            return Err(Error::kind(ErrorKind::Unsupported));
+        }
+        let mut bytes = vec![b'/'];
+        bytes.extend_from_slice(target.path.as_bytes());
+        Ok(bytes)
+    }
+
+    // -------------------------------------------------------- permissions
+
+    pub async fn permissions(&self, uri: &Uri) -> Result<PermissionsInfo> {
+        let provider = self.provider(&uri.location)?;
+        let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
+        let caps = provider.capabilities();
+        let fs_type = self
+            .locations
+            .to_local_path(uri)
+            .and_then(|p| sys::fs_magic(&p).ok())
+            .and_then(fs_type_name)
+            .map(str::to_owned);
+        Ok(PermissionsInfo {
+            mode: entry.mode.unwrap_or(0o644) & 0o7777,
+            is_dir: entry.is_dir(),
+            owner: entry.owner,
+            group: entry.group,
+            supported: caps.writable() && caps.has(cap::PERMISSIONS),
+            fs_type,
+            location_name: self.location(&uri.location).map(|l| l.name).unwrap_or_default(),
+        })
+    }
+
+    /// Applies `mode` to the item and, for a folder with `recursive`, `files`
+    /// to every file and `dirs` to every folder below it (symlinks are left
+    /// alone). Failures below the item are counted and the walk goes on.
+    pub async fn set_permissions(
+        &self,
+        uri: &Uri,
+        mode: u32,
+        recursive: Option<RecursiveModes>,
+        cancel: &AtomicBool,
+    ) -> Result<PermissionsOutcome> {
+        let provider = self.provider(&uri.location)?;
+        let change = |m: u32| AttributeChanges {
+            mode: Some(m & 0o7777),
+            modified: None,
+        };
+        let entry = provider.stat(&uri.path, false, Lane::Interactive).await?;
+        provider.set_attributes(&uri.path, change(mode)).await?;
+        let mut outcome = PermissionsOutcome {
+            changed: 1,
+            failed: 0,
+        };
+        let Some(modes) = recursive.filter(|_| entry.is_dir() && !entry.is_symlink()) else {
+            return Ok(outcome);
+        };
+        let mut pending = vec![uri.path.clone()];
+        while let Some(dir) = pending.pop() {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(Error::kind(ErrorKind::Canceled));
+            }
+            let Ok(children) = list_all(provider.as_ref(), &dir, Lane::Bulk).await else {
+                outcome.failed += 1;
+                continue;
+            };
+            for child in children.into_iter().filter(|c| !c.is_symlink()) {
+                let path = dir.join(&child.name)?;
+                let m = if child.is_dir() { modes.dirs } else { modes.files };
+                match provider.set_attributes(&path, change(m)).await {
+                    Ok(()) => outcome.changed += 1,
+                    Err(_) => outcome.failed += 1,
+                }
+                if child.is_dir() {
+                    pending.push(path);
+                }
+            }
+        }
+        self.invalidate_parent(uri);
+        Ok(outcome)
+    }
+
+    fn invalidate_parent(&self, uri: &Uri) {
+        if let Some(p) = uri.parent() {
+            self.invalidate(&p);
+        }
+    }
+
+    // -------------------------------------------------------- trash
+
+    /// *Recently deleted*, newest first (OPS-8).
+    pub fn trash_entries(&self, now_secs: i64) -> Result<Vec<TrashEntry>> {
+        let retention = self.settings().recently_deleted_retention_days;
+        let mut items = self.trash.list()?;
+        items.sort_by(|a, b| b.trashed_at.cmp(&a.trashed_at).then(b.id.cmp(&a.id)));
+        Ok(items
+            .into_iter()
+            .map(|item| {
+                let folder = item.original_uri.parent();
+                TrashEntry {
+                    id: item.id,
+                    name: item.original_uri.name().map(display_name).unwrap_or_default(),
+                    original_uri: item.original_uri.to_string(),
+                    folder_uri: folder.as_ref().map(Uri::to_string).unwrap_or_default(),
+                    folder_name: self.display_folder(&item.original_uri),
+                    is_dir: item.is_dir,
+                    size: item.size,
+                    trashed_at: item.trashed_at,
+                    days_left: days_left(item.trashed_at, now_secs, retention),
+                }
+            })
+            .collect())
+    }
+
+    // -------------------------------------------------------- share
+
+    /// Which received files Lautta can read and where they live (INT-1).
+    /// Only paths inside a location that the app can open are readable.
+    pub fn probe_shared(&self, paths: &[PathBuf]) -> Vec<SharedFile> {
+        paths
+            .iter()
+            .map(|path| {
+                let meta = std::fs::metadata(path).ok().filter(std::fs::Metadata::is_file);
+                let opened = meta.is_some() && std::fs::File::open(path).is_ok();
+                let uri = self.locations.uri_for_local_path(path);
+                SharedFile {
+                    path: path.display().to_string(),
+                    name: path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default(),
+                    size: meta.map_or(0, |m| m.len()),
+                    readable: opened && uri.is_some(),
+                    uri: uri.map(|u| u.to_string()).unwrap_or_default(),
+                }
+            })
+            .collect()
+    }
+
+    /// The writable locations offered as share destinations.
+    pub fn destinations(&self) -> Vec<Destination> {
+        self.locations
+            .locations()
+            .into_iter()
+            .filter(|l| !matches!(l.kind, crate::locations::LocationKind::Archive))
+            .filter(|l| self.provider(&l.id).is_ok_and(|p| p.capabilities().writable()))
+            .map(|l| Destination {
+                uri: Uri::root(l.id.clone()).to_string(),
+                name: l.name.clone(),
+                kind: location_kind_name(&l.kind).to_owned(),
+            })
+            .collect()
+    }
+}
+
+impl BulkOutcome {
+    fn fail(&mut self, e: Error) {
+        self.failed += 1;
+        if self.first_error.is_none() {
+            self.first_error = Some(e.kind.name().to_owned());
+        }
+    }
+}
+
+/// `name` when no item of that name exists, else "name 2.ext", ….
+fn free_name(name: &[u8], taken: &HashSet<Vec<u8>>) -> Vec<u8> {
+    if taken.contains(name) {
+        keep_both_name(name, &|n| taken.contains(n))
+    } else {
+        name.to_vec()
+    }
+}
+
+fn part_path(path: &Path) -> PathBuf {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    path.with_file_name(format!(".{name}.lautta-part"))
+}
+
+/// Archive into a pipe and upload its read end while it is written
+/// (PRV-11). Whichever side fails, the half-written file is removed.
+async fn compress_remote(
+    core: &Core,
+    sources: &[Uri],
+    provider: &dyn Provider,
+    target: &Uri,
+    opts: &CompressOptions,
+) -> Result<()> {
+    let (read_end, write_end) = rustix::pipe::pipe().map_err(|e| Error::from(std::io::Error::from(e)))?;
+    let sink = std::fs::File::from(write_end);
+    let write_opts = WriteOptions {
+        disposition: Disposition::Create,
+        ..WriteOptions::default()
+    };
+    let (packed, uploaded) = tokio::join!(
+        compress(&core.locations, sources, sink, opts),
+        provider.upload_from(read_end, &target.path, write_opts, opts.progress.clone()),
+    );
+    let failure = match (packed, uploaded) {
+        (Ok(_), Ok(())) => return Ok(()),
+        (Err(e), _) | (_, Err(e)) => e,
+    };
+    let _ = provider.remove_file(&target.path).await;
+    Err(failure)
+}
+
+async fn stream_checksum(provider: &dyn Provider, path: &VPath, algo: &str) -> Result<String> {
+    use sha2::Digest;
+    enum Hasher {
+        Md5(md5::Md5),
+        Sha1(sha1::Sha1),
+        Sha256(sha2::Sha256),
+    }
+    impl Hasher {
+        fn update(&mut self, data: &[u8]) {
+            match self {
+                Hasher::Md5(h) => h.update(data),
+                Hasher::Sha1(h) => h.update(data),
+                Hasher::Sha256(h) => h.update(data),
+            }
+        }
+        fn finish(self) -> Vec<u8> {
+            match self {
+                Hasher::Md5(h) => h.finalize().to_vec(),
+                Hasher::Sha1(h) => h.finalize().to_vec(),
+                Hasher::Sha256(h) => h.finalize().to_vec(),
+            }
+        }
+    }
+    let mut hasher = match algo {
+        "md5" => Hasher::Md5(md5::Md5::new()),
+        "sha1" => Hasher::Sha1(sha1::Sha1::new()),
+        _ => Hasher::Sha256(sha2::Sha256::new()),
+    };
+    let handle = provider.open_read(path, Lane::Bulk).await?;
+    let mut offset = 0u64;
+    loop {
+        let chunk = handle.read_at(offset, 256 * 1024).await?;
+        if chunk.is_empty() {
+            return Ok(hex::encode(hasher.finish()));
+        }
+        offset += chunk.len() as u64;
+        hasher.update(&chunk);
+    }
+}
+
+/// The engineering names of conflict choices (QML ⇄ core, OPS-2).
+pub fn parse_choice(name: &str) -> Option<ConflictChoice> {
+    Some(match name {
+        "Replace" => ConflictChoice::Replace,
+        "Skip" => ConflictChoice::Skip,
+        "KeepBoth" => ConflictChoice::KeepBoth,
+        "Merge" => ConflictChoice::Merge,
+        "ReplaceIfNewer" => ConflictChoice::ReplaceIfNewer,
+        "Resume" => ConflictChoice::Resume,
+        _ => return None,
+    })
+}
+
+#[cfg(test)]
+mod tests;
