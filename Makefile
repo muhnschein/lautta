@@ -5,6 +5,7 @@
 #   make coverage   host tests with coverage -> coverage/lcov.info (needs cargo-llvm-cov)
 #   make mutants    mutation check: tests must catch changed code (needs cargo-mutants)
 #   make clippy-report  clippy JSON for SonarCloud -> coverage/clippy.json
+#   make translations  refresh translations/harbour-lautta.ts from the QML (qsTrId ids)
 #   make vendor     vendor dependencies for the offline SDK build
 #   make rpm        aarch64 RPM in the Sailfish SDK container (tools/ci/build-rpm.sh)
 #
@@ -17,9 +18,11 @@ SDK_IMAGE ?= mirror.gcr.io/coderus/sailfishos-platform-sdk-aarch64:5.2.0.15@sha2
 TARGET ?= SailfishOS-5.2.0.15-aarch64
 export SDK_IMAGE TARGET
 
-.PHONY: check fmt-check clippy test coverage mutants clippy-report vendor rpm check-rpm clean
+LUPDATE ?= lupdate
 
-check: fmt-check clippy test
+.PHONY: translations translations-check check fmt-check clippy test coverage mutants clippy-report vendor rpm check-rpm clean
+
+check: fmt-check translations-check clippy test
 
 fmt-check:
 	$(CARGO) fmt --all -- --check
@@ -52,6 +55,15 @@ rpm:
 
 check-rpm:
 	./tools/ci/check-rpm.sh
+
+translations:
+	$(LUPDATE) -silent -locations none -no-obsolete qml -ts translations/harbour-lautta.ts
+
+# The engineering English catalogue must match the QML (UI-7).
+translations-check:
+	cp translations/harbour-lautta.ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
+	$(LUPDATE) -silent -locations none -no-obsolete qml -ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
+	diff -u translations/harbour-lautta.ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
 
 clean:
 	$(CARGO) clean
