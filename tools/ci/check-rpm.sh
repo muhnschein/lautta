@@ -5,7 +5,8 @@
 #     (TST-7); any error fails, warnings must be listed in doc/harbour-warnings.md;
 #   - the binary exports `main` and links __libc_start_main@GLIBC_2.34 (HBR-4),
 #     carries no RPATH and needs only HBR-2 libraries;
-#   - the package installs into the target and every library resolves.
+#   - the package installs into the target and every library resolves;
+#   - every shipped QML file and tests/qml/tst_*.qml load in the target (TST-6).
 # Env: SDK_IMAGE (container image), TARGET (sb2 target name), DOCKER_ARGS.
 set -eu
 : "${SDK_IMAGE:?}" "${TARGET:?}"
@@ -13,15 +14,15 @@ VALIDATOR_COMMIT=7dd7dd5
 
 if [ "${1:-}" != --in-sdk ]; then
     root=$(cd "$(dirname "$0")/../.." && pwd)
-    if [ ! -d "$root/.validator" ]; then
-        git clone -q https://github.com/sailfishos/sdk-harbour-rpmvalidator.git "$root/.validator"
-    fi
-    git -C "$root/.validator" checkout -q "$VALIDATOR_COMMIT"
-    sudo=""; [ "$(id -u)" = 0 ] || sudo=sudo
-    $sudo chown -R 100000:100000 "$root"
-    trap '$sudo chown -R "$(id -u):$(id -g)" "$root"' EXIT
+    work=$(mktemp -d)
+    trap 'rm -rf "$work" 2>/dev/null || sudo rm -rf "$work"' EXIT
+    git clone -q https://github.com/sailfishos/sdk-harbour-rpmvalidator.git "$work/.validator"
+    git -C "$work/.validator" checkout -q "$VALIDATOR_COMMIT"
+    # The SDK runs as mersdk (uid 100000): check a world-writable copy.
+    (cd "$root" && cp -r --parents RPMS tests/qml tools/ci doc/harbour-warnings.md "$work/")
+    chmod -R a+rwX "$work"
     # shellcheck disable=SC2086
-    docker run --rm ${DOCKER_ARGS:-} -e TARGET -e SDK_IMAGE -v "$root:/home/mersdk/src" -w /home/mersdk/src \
+    docker run --rm ${DOCKER_ARGS:-} -e TARGET -e SDK_IMAGE -v "$work:/home/mersdk/src" -w /home/mersdk/src \
         "$SDK_IMAGE" bash -euc "${SDK_PREPARE:-true}; sh tools/ci/check-rpm.sh --in-sdk"
     exit 0
 fi
@@ -74,6 +75,17 @@ size=$(stat -c %s "$bin")
 sb2 -t "$TARGET" -m sdk-install -R zypper --non-interactive in --allow-unsigned-rpm "$rpm"
 if sb2 -t "$TARGET" ldd /usr/bin/harbour-lautta | grep 'not found'; then
     fail "unresolved libraries"
+fi
+
+# QML on the target (TST-6): every shipped QML file and the QML tests compile
+# and instantiate with the installed binary's engine (Qt 5.6, real Silica,
+# the real Lautta types), without warnings naming them.
+qml_files=$(find "$PWD/tests/qml" -name 'tst_*.qml' | sort)
+shipped=$(cd "/srv/mer/targets/$TARGET" && find usr/share/harbour-lautta/qml -name '*.qml' | sort | sed 's|^|/|')
+# shellcheck disable=SC2086 # one word per file
+if ! sb2 -t "$TARGET" env QT_QPA_PLATFORM=minimal \
+        /usr/bin/harbour-lautta --qml-check -I /usr/share/harbour-lautta/qml $shipped $qml_files; then
+    fail "QML check on the target"
 fi
 rm -rf "$work"
 exit $status

@@ -44,11 +44,9 @@ jobs:
         run: ./tools/ci/install-host-deps.sh
       - name: Pull the SDK
         run: docker pull "$SDK_IMAGE"
-      - name: QML on the target (Qt 5.6, real Silica)
-        run: ./tests/qml/run-in-sdk.sh
       - name: Build the RPM in the Sailfish SDK
         run: make rpm
-      - name: Harbour validator and installability
+      - name: Harbour validator, installability, QML on the target
         run: make check-rpm
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

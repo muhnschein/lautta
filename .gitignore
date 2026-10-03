@@ -7,6 +7,5 @@
 mutants.out*
 __pycache__/
 /.cargo-home
-/.validator
 /target-sdk
 /.claude
