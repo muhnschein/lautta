@@ -46,5 +46,6 @@ glob = "0.3"
 tempfile = "3"
 
 [dev-dependencies]
+sevenz-rust = { version = "0.5", default-features = false, features = ["compress"] }
 tokio = { version = "1", features = ["test-util"] }
 lautta-bridge-proto = { path = "../lautta-bridge-proto", features = ["fake"] }
