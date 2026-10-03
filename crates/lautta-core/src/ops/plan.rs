@@ -759,6 +759,17 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn same_location_move_of_files_moves_no_bytes_but_a_copy_does() {
+        let (mem, r) = setup();
+        mem.add_file("s/f", b"12345", 1);
+        mem.add_dir("dst");
+        let p = plan(OperationKind::Move, &["s/f"], "dst", &r).await.unwrap();
+        assert_eq!((p.totals.files, p.totals.bytes), (1, 0));
+        let p = plan(OperationKind::Copy, &["s/f"], "dst", &r).await.unwrap();
+        assert_eq!((p.totals.files, p.totals.bytes), (1, 5));
+    }
+
+    #[tokio::test]
     async fn same_location_move_onto_existing_folder_recurses_to_merge() {
         let (mem, r) = setup();
         mem.add_file("s/d/x", b"1", 1);
@@ -1125,6 +1136,45 @@ mod tests {
         assert_eq!(dsts(&p), vec!["dst/s", "dst/s/l", "dst/s/l/x"]);
         assert_eq!(p.items[1].kind, Kind::Dir);
         assert_eq!(p.items[2].src, uri("m", "real/x"));
+    }
+
+    fn link_to_file() -> (MemoryProvider, StaticResolver) {
+        let (mem, r) = setup();
+        mem.add_file("real/x", b"1", 1);
+        mem.add_file("s/a", b"1", 1);
+        mem.add_symlink("s/l", "/real/x");
+        mem.add_dir("dst");
+        (mem, r)
+    }
+
+    #[tokio::test]
+    async fn a_link_that_vanishes_before_it_is_followed_is_skipped() {
+        let (mem, r) = link_to_file();
+        mem.fail_next("stat", "s/l", Error::kind(ErrorKind::NotFound));
+        let p = plan_with(OperationKind::Copy, &["s"], "dst", &r, &follow())
+            .await
+            .unwrap();
+        assert_eq!(dsts(&p), vec!["dst/s", "dst/s/a"]);
+    }
+
+    #[tokio::test]
+    async fn other_errors_while_following_a_link_fail_the_plan() {
+        let (mem, r) = link_to_file();
+        mem.fail_next("stat", "s/l", Error::kind(ErrorKind::PermissionDenied));
+        let err = plan_with(OperationKind::Copy, &["s"], "dst", &r, &follow())
+            .await
+            .unwrap_err();
+        assert_eq!(err.kind, ErrorKind::PermissionDenied);
+    }
+
+    #[tokio::test]
+    async fn a_failing_destination_lookup_fails_the_plan() {
+        let (mem, r) = setup();
+        mem.add_file("s/a", b"1", 1);
+        mem.add_dir("dst");
+        mem.fail_next("stat", "dst/a", Error::kind(ErrorKind::PermissionDenied));
+        let err = plan(OperationKind::Copy, &["s/a"], "dst", &r).await.unwrap_err();
+        assert_eq!(err.kind, ErrorKind::PermissionDenied);
     }
 
     #[tokio::test]
