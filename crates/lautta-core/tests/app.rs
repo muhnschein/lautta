@@ -120,9 +120,10 @@ async fn delete_to_recently_deleted_and_undo() {
 #[tokio::test]
 async fn delete_permanently_when_recently_deleted_is_off() {
     let h = home().await;
-    let mut s = Settings::default();
-    s.recently_deleted = false;
-    h.core.apply_settings(s);
+    h.core.apply_settings(Settings {
+        recently_deleted: false,
+        ..Settings::default()
+    });
     write(&h.root.join("Documents/gone/f"), b"f");
     let id = h
         .core
@@ -178,9 +179,10 @@ async fn copy_between_locations() {
 #[tokio::test]
 async fn large_plans_need_the_summary() {
     let h = home().await;
-    let mut s = Settings::default();
-    s.large_op_items = 1;
-    h.core.apply_settings(s);
+    h.core.apply_settings(Settings {
+        large_op_items: 1,
+        ..Settings::default()
+    });
     write(&h.root.join("Downloads/a"), b"a");
     write(&h.root.join("Downloads/b"), b"b");
     let started = h
