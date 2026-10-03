@@ -1,0 +1,29 @@
+[package]
+name = "lautta-qt"
+description = "Qt/QML glue for Lautta: list models, QObject facades, image providers, MediaSource"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+build = "build.rs"
+links = "lautta_qt_glue"
+
+[lints.rust]
+# FFI with Qt (SPEC RS-5): the only crate besides lautta-core::sys allowed unsafe code.
+unsafe_code = "allow"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+
+[dependencies]
+lautta-core = { path = "../lautta-core" }
+qmetaobject = { version = "0.2.10", default-features = false, features = ["log"] }
+qttypes = { version = "0.2", default-features = false, features = ["qtquick", "qtmultimedia"] }
+cpp = "0.5"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+log = "0.4"
+
+[build-dependencies]
+cpp_build = "0.5"
+semver = "1"
