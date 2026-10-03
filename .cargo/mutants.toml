@@ -10,4 +10,9 @@ exclude_re = [
     # the cursor is only read back as `cursor % n`, which is unchanged by
     # adding n (the scheduler is `Clone` but never exposes the raw cursor).
     'transfer/scheduler\.rs:289:\d+: replace % with \+ in Scheduler::compute',
+    # ops/conflict.rs apply_one `plan.items[index + 1..end]` -> `index * 1..end`:
+    # the range then also covers the folder itself, but `mark_children` only
+    # touches items without a resolution and `apply_one` has just set the
+    # folder's own resolution, so the slice differs without any effect.
+    'ops/conflict\.rs:217:\d+: replace \+ with \* in apply_one',
 ]
