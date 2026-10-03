@@ -1,0 +1,800 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-10-03T07:30:02Z"
+ },
+ "title": "Lautta UI",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 400,
+   "h": 1640,
+   "title": "Browse (bridge mode)",
+   "is_interactive": true
+  },
+  "BrowsePulley.dc.html": {
+   "x": 480,
+   "y": 0,
+   "w": 400,
+   "h": 860,
+   "title": "Browse \u00b7 pulley open",
+   "is_interactive": true
+  },
+  "BrowseStandalone.dc.html": {
+   "x": 960,
+   "y": 0,
+   "w": 400,
+   "h": 860,
+   "title": "Browse \u00b7 standalone + push-up",
+   "is_interactive": true
+  },
+  "BrowseServerMenu.dc.html": {
+   "x": 1440,
+   "y": 0,
+   "w": 400,
+   "h": 860,
+   "title": "Browse \u00b7 server menu & consent",
+   "is_interactive": true
+  },
+  "BrowseVolume.dc.html": {
+   "x": 1920,
+   "y": 0,
+   "w": 400,
+   "h": 860,
+   "title": "Browse \u00b7 volume menu",
+   "is_interactive": true
+  },
+  "Recents.dc.html": {
+   "x": 2400,
+   "y": 0,
+   "w": 400,
+   "h": 860,
+   "title": "Recents",
+   "is_interactive": true
+  },
+  "ConnectServer.dc.html": {
+   "x": 2880,
+   "y": 0,
+   "w": 400,
+   "h": 860,
+   "title": "Connect to server",
+   "is_interactive": true
+  },
+  "ServerQuestion.dc.html": {
+   "x": 3360,
+   "y": 0,
+   "w": 400,
+   "h": 860,
+   "title": "Ad-hoc server question",
+   "is_interactive": true
+  },
+  "TagPage.dc.html": {
+   "x": 3840,
+   "y": 0,
+   "w": 400,
+   "h": 860,
+   "title": "Tag page",
+   "is_interactive": true
+  },
+  "FavouriteEdit.dc.html": {
+   "x": 4320,
+   "y": 0,
+   "w": 400,
+   "h": 860,
+   "title": "Edit favourite",
+   "is_interactive": true
+  },
+  "ShareTarget.dc.html": {
+   "x": 4800,
+   "y": 0,
+   "w": 400,
+   "h": 860,
+   "title": "Save to Lautta (share target)",
+   "is_interactive": true
+  },
+  "Directory.dc.html": {
+   "x": 0,
+   "y": 2060,
+   "w": 400,
+   "h": 860,
+   "title": "Directory",
+   "is_interactive": true
+  },
+  "DirectoryPulley.dc.html": {
+   "x": 480,
+   "y": 2060,
+   "w": 400,
+   "h": 860,
+   "title": "Directory \u00b7 pulley + paste",
+   "is_interactive": true
+  },
+  "DirectoryContext.dc.html": {
+   "x": 960,
+   "y": 2060,
+   "w": 400,
+   "h": 860,
+   "title": "Directory \u00b7 context menu",
+   "is_interactive": true
+  },
+  "DirectorySelect.dc.html": {
+   "x": 1440,
+   "y": 2060,
+   "w": 400,
+   "h": 860,
+   "title": "Directory \u00b7 selection",
+   "is_interactive": true
+  },
+  "DirectoryGrid.dc.html": {
+   "x": 1920,
+   "y": 2060,
+   "w": 400,
+   "h": 860,
+   "title": "Directory \u00b7 grid",
+   "is_interactive": true
+  },
+  "PathMenu.dc.html": {
+   "x": 2400,
+   "y": 2060,
+   "w": 400,
+   "h": 860,
+   "title": "Path menu & edit path",
+   "is_interactive": true
+  },
+  "DirectoryRemorse.dc.html": {
+   "x": 2880,
+   "y": 2060,
+   "w": 400,
+   "h": 860,
+   "title": "Delete remorse & undo",
+   "is_interactive": true
+  },
+  "ViewOptions.dc.html": {
+   "x": 3360,
+   "y": 2060,
+   "w": 400,
+   "h": 1100,
+   "title": "View options",
+   "is_interactive": true
+  },
+  "NewItem.dc.html": {
+   "x": 3840,
+   "y": 2060,
+   "w": 400,
+   "h": 860,
+   "title": "New folder / file",
+   "is_interactive": true
+  },
+  "Rename.dc.html": {
+   "x": 4320,
+   "y": 2060,
+   "w": 400,
+   "h": 860,
+   "title": "Rename",
+   "is_interactive": true
+  },
+  "StateEmpty.dc.html": {
+   "x": 0,
+   "y": 3580,
+   "w": 400,
+   "h": 860,
+   "title": "Empty folder",
+   "is_interactive": true
+  },
+  "StateNoAccess.dc.html": {
+   "x": 480,
+   "y": 3580,
+   "w": 400,
+   "h": 860,
+   "title": "No permission / sandbox",
+   "is_interactive": true
+  },
+  "StateOffline.dc.html": {
+   "x": 960,
+   "y": 3580,
+   "w": 400,
+   "h": 860,
+   "title": "Offline cached folder",
+   "is_interactive": true
+  },
+  "StateError.dc.html": {
+   "x": 1440,
+   "y": 3580,
+   "w": 400,
+   "h": 860,
+   "title": "Sign-in failed",
+   "is_interactive": true
+  },
+  "StateIdentity.dc.html": {
+   "x": 1920,
+   "y": 3580,
+   "w": 400,
+   "h": 860,
+   "title": "Server identity changed",
+   "is_interactive": true
+  },
+  "StateLarge.dc.html": {
+   "x": 2400,
+   "y": 3580,
+   "w": 400,
+   "h": 860,
+   "title": "Large folder loading",
+   "is_interactive": true
+  },
+  "StateReconnecting.dc.html": {
+   "x": 2880,
+   "y": 3580,
+   "w": 400,
+   "h": 860,
+   "title": "Bridge reconnecting",
+   "is_interactive": true
+  },
+  "FolderPicker.dc.html": {
+   "x": 0,
+   "y": 4860,
+   "w": 400,
+   "h": 860,
+   "title": "Copy to\u2026 picker",
+   "is_interactive": true
+  },
+  "PlanSummary.dc.html": {
+   "x": 480,
+   "y": 4860,
+   "w": 400,
+   "h": 860,
+   "title": "Plan summary",
+   "is_interactive": true
+  },
+  "Conflict.dc.html": {
+   "x": 960,
+   "y": 4860,
+   "w": 400,
+   "h": 860,
+   "title": "Conflict",
+   "is_interactive": true
+  },
+  "BulkRename.dc.html": {
+   "x": 1440,
+   "y": 4860,
+   "w": 400,
+   "h": 1000,
+   "title": "Bulk rename",
+   "is_interactive": true
+  },
+  "Info.dc.html": {
+   "x": 1920,
+   "y": 4860,
+   "w": 400,
+   "h": 1300,
+   "title": "Info",
+   "is_interactive": true
+  },
+  "Permissions.dc.html": {
+   "x": 2400,
+   "y": 4860,
+   "w": 400,
+   "h": 1000,
+   "title": "Permissions",
+   "is_interactive": true
+  },
+  "Compress.dc.html": {
+   "x": 2880,
+   "y": 4860,
+   "w": 400,
+   "h": 860,
+   "title": "Compress",
+   "is_interactive": true
+  },
+  "Extract.dc.html": {
+   "x": 3360,
+   "y": 4860,
+   "w": 400,
+   "h": 860,
+   "title": "Extract archive",
+   "is_interactive": true
+  },
+  "TagAssign.dc.html": {
+   "x": 3840,
+   "y": 4860,
+   "w": 400,
+   "h": 860,
+   "title": "Assign tags",
+   "is_interactive": true
+  },
+  "RecentlyDeleted.dc.html": {
+   "x": 4320,
+   "y": 4860,
+   "w": 400,
+   "h": 860,
+   "title": "Recently deleted",
+   "is_interactive": true
+  },
+  "Transfers.dc.html": {
+   "x": 0,
+   "y": 6580,
+   "w": 400,
+   "h": 1200,
+   "title": "Transfers",
+   "is_interactive": true
+  },
+  "TransfersPulley.dc.html": {
+   "x": 480,
+   "y": 6580,
+   "w": 400,
+   "h": 860,
+   "title": "Transfers \u00b7 pulley",
+   "is_interactive": true
+  },
+  "TransferDetails.dc.html": {
+   "x": 960,
+   "y": 6580,
+   "w": 400,
+   "h": 1000,
+   "title": "Transfer details",
+   "is_interactive": true
+  },
+  "TransfersRestored.dc.html": {
+   "x": 1440,
+   "y": 6580,
+   "w": 400,
+   "h": 860,
+   "title": "Unfinished work at start",
+   "is_interactive": true
+  },
+  "EditConflict.dc.html": {
+   "x": 1920,
+   "y": 6580,
+   "w": 400,
+   "h": 860,
+   "title": "Edit write-back conflict",
+   "is_interactive": true
+  },
+  "Covers.dc.html": {
+   "x": 2400,
+   "y": 6580,
+   "w": 860,
+   "h": 860,
+   "title": "Covers",
+   "is_interactive": true
+  },
+  "Notifications.dc.html": {
+   "x": 3340,
+   "y": 6580,
+   "w": 400,
+   "h": 860,
+   "title": "Notifications",
+   "is_interactive": true
+  },
+  "ImageViewer.dc.html": {
+   "x": 0,
+   "y": 8200,
+   "w": 400,
+   "h": 860,
+   "title": "Image viewer",
+   "is_interactive": true
+  },
+  "ImageExif.dc.html": {
+   "x": 480,
+   "y": 8200,
+   "w": 400,
+   "h": 860,
+   "title": "Image \u00b7 EXIF",
+   "is_interactive": true
+  },
+  "TextViewer.dc.html": {
+   "x": 960,
+   "y": 8200,
+   "w": 400,
+   "h": 860,
+   "title": "Text viewer",
+   "is_interactive": true
+  },
+  "TextEditor.dc.html": {
+   "x": 1440,
+   "y": 8200,
+   "w": 400,
+   "h": 860,
+   "title": "Text editor",
+   "is_interactive": true
+  },
+  "Markdown.dc.html": {
+   "x": 1920,
+   "y": 8200,
+   "w": 400,
+   "h": 860,
+   "title": "Markdown",
+   "is_interactive": true
+  },
+  "VideoPlayer.dc.html": {
+   "x": 2400,
+   "y": 8200,
+   "w": 400,
+   "h": 860,
+   "title": "Video (streaming)",
+   "is_interactive": true
+  },
+  "AudioPlayer.dc.html": {
+   "x": 2880,
+   "y": 8200,
+   "w": 400,
+   "h": 860,
+   "title": "Audio",
+   "is_interactive": true
+  },
+  "ArchiveView.dc.html": {
+   "x": 3360,
+   "y": 8200,
+   "w": 400,
+   "h": 860,
+   "title": "Archive location",
+   "is_interactive": true
+  },
+  "SqliteViewer.dc.html": {
+   "x": 3840,
+   "y": 8200,
+   "w": 400,
+   "h": 860,
+   "title": "SQLite",
+   "is_interactive": true
+  },
+  "HexViewer.dc.html": {
+   "x": 4320,
+   "y": 8200,
+   "w": 400,
+   "h": 860,
+   "title": "Hex view \u00b7 pulley",
+   "is_interactive": true
+  },
+  "OpenRemote.dc.html": {
+   "x": 4800,
+   "y": 8200,
+   "w": 400,
+   "h": 860,
+   "title": "Open remote file",
+   "is_interactive": true
+  },
+  "Search.dc.html": {
+   "x": 0,
+   "y": 9480,
+   "w": 400,
+   "h": 860,
+   "title": "Search here",
+   "is_interactive": true
+  },
+  "SearchFilters.dc.html": {
+   "x": 480,
+   "y": 9480,
+   "w": 400,
+   "h": 860,
+   "title": "Search filters",
+   "is_interactive": true
+  },
+  "CompareSetup.dc.html": {
+   "x": 960,
+   "y": 9480,
+   "w": 400,
+   "h": 860,
+   "title": "Compare folders",
+   "is_interactive": true
+  },
+  "CompareResults.dc.html": {
+   "x": 1440,
+   "y": 9480,
+   "w": 400,
+   "h": 1000,
+   "title": "Compare results / sync",
+   "is_interactive": true
+  },
+  "Settings.dc.html": {
+   "x": 0,
+   "y": 10900,
+   "w": 400,
+   "h": 2100,
+   "title": "Settings",
+   "is_interactive": true
+  },
+  "LocationSettings.dc.html": {
+   "x": 480,
+   "y": 10900,
+   "w": 400,
+   "h": 1000,
+   "title": "Location settings",
+   "is_interactive": true
+  },
+  "About.dc.html": {
+   "x": 960,
+   "y": 10900,
+   "w": 400,
+   "h": 1100,
+   "title": "About",
+   "is_interactive": true
+  },
+  "CrashReport.dc.html": {
+   "x": 1440,
+   "y": 10900,
+   "w": 400,
+   "h": 860,
+   "title": "Crash report",
+   "is_interactive": true
+  },
+  "TwoPane.dc.html": {
+   "x": 0,
+   "y": 13620,
+   "w": 860,
+   "h": 400,
+   "title": "Two-pane (landscape)",
+   "is_interactive": true
+  },
+  "DirectoryLandscape.dc.html": {
+   "x": 940,
+   "y": 13620,
+   "w": 860,
+   "h": 400,
+   "title": "Directory (landscape)",
+   "is_interactive": true
+  },
+  "DirectoryPushUp.dc.html": {
+   "x": 0,
+   "y": 14440,
+   "w": 400,
+   "h": 860,
+   "title": "Directory \u00b7 push-up",
+   "is_interactive": true
+  },
+  "DirectorySelectPulley.dc.html": {
+   "x": 480,
+   "y": 14440,
+   "w": 400,
+   "h": 860,
+   "title": "Selection \u00b7 pulley",
+   "is_interactive": true
+  },
+  "RecentsPulley.dc.html": {
+   "x": 960,
+   "y": 14440,
+   "w": 400,
+   "h": 860,
+   "title": "Recents \u00b7 pulley",
+   "is_interactive": true
+  },
+  "RecentsFilter.dc.html": {
+   "x": 1440,
+   "y": 14440,
+   "w": 400,
+   "h": 860,
+   "title": "Recents \u00b7 filter",
+   "is_interactive": true
+  },
+  "TagPagePulley.dc.html": {
+   "x": 1920,
+   "y": 14440,
+   "w": 400,
+   "h": 860,
+   "title": "Tag \u00b7 pulley",
+   "is_interactive": true
+  },
+  "RecentlyDeletedEmpty.dc.html": {
+   "x": 2400,
+   "y": 14440,
+   "w": 400,
+   "h": 860,
+   "title": "Empty Recently deleted",
+   "is_interactive": true
+  },
+  "FolderPickerPulley.dc.html": {
+   "x": 2880,
+   "y": 14440,
+   "w": 400,
+   "h": 860,
+   "title": "Picker \u00b7 new folder",
+   "is_interactive": true
+  },
+  "TransferDetailsPulley.dc.html": {
+   "x": 3360,
+   "y": 14440,
+   "w": 400,
+   "h": 860,
+   "title": "Transfer \u00b7 pulley",
+   "is_interactive": true
+  },
+  "TextViewerPulley.dc.html": {
+   "x": 3840,
+   "y": 14440,
+   "w": 400,
+   "h": 860,
+   "title": "Text viewer \u00b7 pulley",
+   "is_interactive": true
+  },
+  "ServerAdhocMenu.dc.html": {
+   "x": 4320,
+   "y": 14440,
+   "w": 400,
+   "h": 860,
+   "title": "Ad-hoc server menu",
+   "is_interactive": true
+  },
+  "ImageDeleteRemote.dc.html": {
+   "x": 4800,
+   "y": 14440,
+   "w": 400,
+   "h": 860,
+   "title": "Remote delete remorse",
+   "is_interactive": true
+  },
+  "SearchPulley.dc.html": {
+   "x": 5280,
+   "y": 14440,
+   "w": 400,
+   "h": 860,
+   "title": "Search \u00b7 pulley",
+   "is_interactive": true
+  },
+  "ContextMenuOrder.dc.html": {
+   "x": 5760,
+   "y": 14440,
+   "w": 400,
+   "h": 860,
+   "title": "Context menu order",
+   "is_interactive": true
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "BrowsePulley.dc.html",
+  "BrowseStandalone.dc.html",
+  "BrowseServerMenu.dc.html",
+  "BrowseVolume.dc.html",
+  "Recents.dc.html",
+  "ConnectServer.dc.html",
+  "ServerQuestion.dc.html",
+  "TagPage.dc.html",
+  "FavouriteEdit.dc.html",
+  "ShareTarget.dc.html",
+  "Directory.dc.html",
+  "DirectoryPulley.dc.html",
+  "DirectoryContext.dc.html",
+  "DirectorySelect.dc.html",
+  "DirectoryGrid.dc.html",
+  "PathMenu.dc.html",
+  "DirectoryRemorse.dc.html",
+  "ViewOptions.dc.html",
+  "NewItem.dc.html",
+  "Rename.dc.html",
+  "StateEmpty.dc.html",
+  "StateNoAccess.dc.html",
+  "StateOffline.dc.html",
+  "StateError.dc.html",
+  "StateIdentity.dc.html",
+  "StateLarge.dc.html",
+  "StateReconnecting.dc.html",
+  "FolderPicker.dc.html",
+  "PlanSummary.dc.html",
+  "Conflict.dc.html",
+  "BulkRename.dc.html",
+  "Info.dc.html",
+  "Permissions.dc.html",
+  "Compress.dc.html",
+  "Extract.dc.html",
+  "TagAssign.dc.html",
+  "RecentlyDeleted.dc.html",
+  "Transfers.dc.html",
+  "TransfersPulley.dc.html",
+  "TransferDetails.dc.html",
+  "TransfersRestored.dc.html",
+  "EditConflict.dc.html",
+  "Covers.dc.html",
+  "Notifications.dc.html",
+  "ImageViewer.dc.html",
+  "ImageExif.dc.html",
+  "TextViewer.dc.html",
+  "TextEditor.dc.html",
+  "Markdown.dc.html",
+  "VideoPlayer.dc.html",
+  "AudioPlayer.dc.html",
+  "ArchiveView.dc.html",
+  "SqliteViewer.dc.html",
+  "HexViewer.dc.html",
+  "OpenRemote.dc.html",
+  "Search.dc.html",
+  "SearchFilters.dc.html",
+  "CompareSetup.dc.html",
+  "CompareResults.dc.html",
+  "Settings.dc.html",
+  "LocationSettings.dc.html",
+  "About.dc.html",
+  "CrashReport.dc.html",
+  "TwoPane.dc.html",
+  "DirectoryLandscape.dc.html",
+  "DirectoryPushUp.dc.html",
+  "DirectorySelectPulley.dc.html",
+  "RecentsPulley.dc.html",
+  "RecentsFilter.dc.html",
+  "TagPagePulley.dc.html",
+  "RecentlyDeletedEmpty.dc.html",
+  "FolderPickerPulley.dc.html",
+  "TransferDetailsPulley.dc.html",
+  "TextViewerPulley.dc.html",
+  "ServerAdhocMenu.dc.html",
+  "ImageDeleteRemote.dc.html",
+  "SearchPulley.dc.html",
+  "ContextMenuOrder.dc.html"
+ ],
+ "notes": {
+  "r0": {
+   "x": 0,
+   "y": -300,
+   "text": "Browse & locations",
+   "kind": "title1",
+   "maxW": 5200
+  },
+  "r1": {
+   "x": 0,
+   "y": 1760,
+   "text": "Directory",
+   "kind": "title1",
+   "maxW": 5200
+  },
+  "r2": {
+   "x": 0,
+   "y": 3280,
+   "text": "States & errors",
+   "kind": "title1",
+   "maxW": 5200
+  },
+  "r3": {
+   "x": 0,
+   "y": 4560,
+   "text": "File operations",
+   "kind": "title1",
+   "maxW": 5200
+  },
+  "r4": {
+   "x": 0,
+   "y": 6280,
+   "text": "Transfers & system surfaces",
+   "kind": "title1",
+   "maxW": 5200
+  },
+  "r5": {
+   "x": 0,
+   "y": 7900,
+   "text": "Preview, open & edit",
+   "kind": "title1",
+   "maxW": 5200
+  },
+  "r6": {
+   "x": 0,
+   "y": 9180,
+   "text": "Search & sync",
+   "kind": "title1",
+   "maxW": 5200
+  },
+  "r7": {
+   "x": 0,
+   "y": 10600,
+   "text": "Settings & about",
+   "kind": "title1",
+   "maxW": 5200
+  },
+  "r8": {
+   "x": 0,
+   "y": 13320,
+   "text": "Landscape",
+   "kind": "title1",
+   "maxW": 5200
+  },
+  "r9": {
+   "x": 0,
+   "y": 14140,
+   "text": "Menus & remaining moments",
+   "kind": "title1",
+   "maxW": 5200
+  }
+ },
+ "designSystems": []
+}
