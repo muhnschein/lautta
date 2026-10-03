@@ -5,6 +5,7 @@
 #   make coverage   host tests with coverage -> coverage/lcov.info (needs cargo-llvm-cov)
 #   make mutants    mutation check: tests must catch changed code (needs cargo-mutants)
 #   make clippy-report  clippy JSON for SonarCloud -> coverage/clippy.json
+#   make translations  refresh translations/harbour-lautta.ts from the QML (qsTrId ids)
 #   make vendor     vendor dependencies for the offline SDK build
 #   make rpm        aarch64 RPM in the Sailfish SDK container (tools/ci/build-rpm.sh)
 #
@@ -17,9 +18,11 @@ SDK_IMAGE ?= mirror.gcr.io/coderus/sailfishos-platform-sdk-aarch64:5.2.0.15@sha2
 TARGET ?= SailfishOS-5.2.0.15-aarch64
 export SDK_IMAGE TARGET
 
-.PHONY: check fmt-check clippy test coverage mutants clippy-report vendor rpm check-rpm clean
+LUPDATE ?= lupdate
 
-check: fmt-check clippy test
+.PHONY: translations translations-check check fmt-check clippy test coverage mutants clippy-report vendor rpm check-rpm clean
+
+check: fmt-check translations-check clippy test
 
 fmt-check:
 	$(CARGO) fmt --all -- --check
@@ -38,11 +41,15 @@ clippy-report:
 	mkdir -p coverage
 	$(CARGO) clippy --workspace --all-targets $(HOST_FEATURES) --message-format=json > coverage/clippy.json
 
+# SPEC TST-5: planner, queue and conflict modules. MUTANTS_SHARD=k/n splits
+# the run (CI runs shards in parallel).
+MUTANTS_SHARD ?= 0/1
+MUTANTS_FILES = -f crates/lautta-core/src/ops/plan.rs -f crates/lautta-core/src/ops/conflict.rs \
+	-f crates/lautta-core/src/transfer/scheduler.rs -f crates/lautta-core/src/transfer/model.rs \
+	-f crates/lautta-core/src/transfer/store.rs -f crates/lautta-core/src/transfer/conflict.rs
+
 mutants:
-	$(CARGO) mutants --no-shuffle -j 2 --timeout 120 \
-		-p lautta-core -f 'crates/lautta-core/src/ops/*.rs' -f 'crates/lautta-core/src/transfer/*.rs' \
-		-f crates/lautta-core/src/sort.rs -f crates/lautta-core/src/listing.rs -f crates/lautta-core/src/vpath.rs \
-		-f crates/lautta-core/src/uri.rs
+	$(CARGO) mutants --no-shuffle -j 2 --timeout 300 --shard $(MUTANTS_SHARD) -p lautta-core $(MUTANTS_FILES)
 
 vendor:
 	$(CARGO) +stable vendor --locked --versioned-dirs vendor > /dev/null
@@ -52,6 +59,15 @@ rpm:
 
 check-rpm:
 	./tools/ci/check-rpm.sh
+
+translations:
+	$(LUPDATE) -silent -locations none -no-obsolete qml -ts translations/harbour-lautta.ts
+
+# The engineering English catalogue must match the QML (UI-7).
+translations-check:
+	cp translations/harbour-lautta.ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
+	$(LUPDATE) -silent -locations none -no-obsolete qml -ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
+	diff -u translations/harbour-lautta.ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
 
 clean:
 	$(CARGO) clean

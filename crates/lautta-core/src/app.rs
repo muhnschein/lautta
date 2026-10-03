@@ -4,6 +4,7 @@
 //! actions the UI calls. Everything here is Qt-free; the Qt layer only
 //! forwards to these methods and turns results into model updates.
 
+use crate::bridge::{Attention, BridgeClient, BridgeConfig, BridgeStatus, RemoteKind, RemoteLocation};
 use crate::db::Db;
 use crate::dircache::DirCache;
 use crate::entry::{cap, Entry};
@@ -18,6 +19,7 @@ use crate::org::tags::Tags;
 use crate::paths::AppPaths;
 use crate::provider::archive::{archive_location_id, ArchiveProvider};
 use crate::provider::{list_all, Lane, Provider, ProviderResolver, RenameMode};
+use crate::questions::Questions;
 use crate::search::RecentSearches;
 use crate::settings::{LocationPrefsStore, Settings};
 use crate::sort::SortKey;
@@ -61,6 +63,10 @@ pub struct Core {
     pub recent_searches: RecentSearches,
     pub location_prefs: LocationPrefsStore,
     pub working_copies: WorkingCopies,
+    /// Pending prompts (bridge identity and sign-in questions, NVB-6).
+    pub questions: Arc<Questions>,
+    /// The netvfs bridge client (SPEC §7); `None` only in tests without one.
+    pub bridge: Option<BridgeClient>,
     settings: Mutex<Settings>,
     undo: Mutex<UndoRecorder>,
 }
@@ -114,12 +120,24 @@ impl Core {
     /// Opens the database and the stores, scans the locations and starts the
     /// transfer engine. Must be called inside a tokio runtime.
     pub async fn open(paths: AppPaths) -> Result<Arc<Core>> {
-        Core::open_with(paths.clone(), LocationRegistry::new(paths)).await
+        let bridge = BridgeConfig::for_app(&paths);
+        Core::open_full(paths.clone(), LocationRegistry::new(paths), Some(bridge)).await
     }
 
     /// As [`Core::open`] with a prepared registry (tests use a temporary
-    /// media root).
+    /// media root) and no bridge client.
     pub async fn open_with(paths: AppPaths, locations: LocationRegistry) -> Result<Arc<Core>> {
+        Core::open_full(paths, locations, None).await
+    }
+
+    /// As [`Core::open`] with a prepared registry and an optional bridge
+    /// configuration. Bridge locations join the registry as they come and
+    /// go (NVB-4); transfers wait while the bridge is away (NVB-12).
+    pub async fn open_full(
+        paths: AppPaths,
+        locations: LocationRegistry,
+        bridge: Option<BridgeConfig>,
+    ) -> Result<Arc<Core>> {
         let db_path = paths.database();
         let db = tokio::task::spawn_blocking(move || Db::open(&db_path))
             .await
@@ -137,6 +155,11 @@ impl Core {
         };
         let engine = Engine::new(deps, cfg);
         let settings = Settings::default();
+        let questions = Questions::new();
+        let client = match bridge {
+            Some(cfg) => Some(BridgeClient::start(cfg, questions.clone())?),
+            None => None,
+        };
         let core = Core {
             dircache: DirCache::new(db.clone(), DIRCACHE_ENTRIES)?,
             viewprefs: ViewPrefsStore::new(db.clone(), view_defaults(&settings)),
@@ -147,6 +170,8 @@ impl Core {
             recent_searches: RecentSearches::new(db.clone()),
             location_prefs: LocationPrefsStore::new(db.clone()),
             working_copies: WorkingCopies::new(db.clone(), paths.clone(), Arc::new(SystemClock)),
+            questions: questions.clone(),
+            bridge: client.clone(),
             settings: Mutex::new(settings),
             undo: Mutex::new(UndoRecorder::default()),
             paths,
@@ -155,7 +180,11 @@ impl Core {
             engine,
             trash,
         };
-        Ok(Arc::new(core))
+        let core = Arc::new(core);
+        if let Some(client) = client {
+            spawn_bridge_sync(&core, client);
+        }
+        Ok(core)
     }
 
     pub fn settings(&self) -> Settings {
@@ -414,6 +443,70 @@ impl Core {
     pub fn set_location_status(&self, id: &str, status: LocationStatus, attention: Option<String>) {
         self.locations.set_status(id, status, attention);
     }
+}
+
+/// Keeps the registry's remote locations and the engine's bridge state in
+/// step with the bridge client. Holds only a weak reference to the core.
+fn spawn_bridge_sync(core: &Arc<Core>, client: BridgeClient) {
+    let weak = Arc::downgrade(core);
+    let mut locations = client.watch_locations();
+    let mut status = client.watch_status();
+    tokio::spawn(async move {
+        loop {
+            let Some(core) = weak.upgrade() else { return };
+            let current = *status.borrow_and_update();
+            let ready = current == BridgeStatus::Ready;
+            core.engine.bridge_available(ready);
+            let remote = locations.borrow_and_update().clone();
+            core.locations
+                .set_remote(remote_entries(&client, &remote, current));
+            drop(core);
+            tokio::select! {
+                changed = locations.changed() => if changed.is_err() { return },
+                changed = status.changed() => if changed.is_err() { return },
+            }
+        }
+    });
+}
+
+/// Registry entries for the bridge's locations: hidden unless the bridge
+/// is usable (UI-8), shown as connecting while it reconnects (NVB-12).
+fn remote_entries(
+    client: &BridgeClient,
+    remote: &[RemoteLocation],
+    status: BridgeStatus,
+) -> Vec<(Location, Arc<dyn Provider>)> {
+    let shown = matches!(status, BridgeStatus::Ready | BridgeStatus::Reconnecting);
+    if !shown {
+        return Vec::new();
+    }
+    remote
+        .iter()
+        .map(|r| {
+            let kind = match r.kind {
+                RemoteKind::Account => LocationKind::Server {
+                    provider: r.provider.clone(),
+                },
+                RemoteKind::AdHoc => LocationKind::AdHoc,
+            };
+            let mut location = Location::remote(r.id.clone(), kind, r.name.clone(), r.url.clone());
+            let (status, attention) = match (status, r.attention) {
+                (BridgeStatus::Reconnecting, _) => (LocationStatus::Connecting, None),
+                (_, Attention::AuthFailed) => {
+                    (LocationStatus::NeedsAttention, Some("auth-failed".to_owned()))
+                }
+                (_, Attention::ServerIdentityChanged) => (
+                    LocationStatus::NeedsAttention,
+                    Some("server-identity-changed".to_owned()),
+                ),
+                _ => (LocationStatus::Ready, None),
+            };
+            location.status = status;
+            location.attention = attention;
+            let provider: Arc<dyn Provider> = Arc::new(client.provider(&r.id));
+            (location, provider)
+        })
+        .collect()
 }
 
 fn view_defaults(s: &Settings) -> ViewPrefs {
