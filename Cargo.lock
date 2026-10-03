@@ -946,6 +946,9 @@ dependencies = [
  "qmetaobject",
  "qttypes",
  "semver",
+ "serde",
+ "serde_json",
+ "tempfile",
  "tokio",
 ]
 

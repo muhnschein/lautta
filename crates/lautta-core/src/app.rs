@@ -333,6 +333,16 @@ impl Core {
         lock(&self.undo).is_fresh_now()
     }
 
+    /// The action the undo banner offers, while it is fresh.
+    pub fn undo_kind(&self) -> Option<UndoAction> {
+        let undo = lock(&self.undo);
+        if undo.is_fresh_now() {
+            undo.peek().cloned()
+        } else {
+            None
+        }
+    }
+
     /// Undoes the last rename, same-location move or trash operation.
     pub async fn undo(&self) -> Result<bool> {
         let Some(action) = lock(&self.undo).take() else {

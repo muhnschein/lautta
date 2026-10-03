@@ -3,6 +3,21 @@
 //! models and QObject facades. No business logic lives here.
 // The C++ blocks are large for the `cpp!` macro expansion.
 #![recursion_limit = "1024"]
+// QML-facing names (properties, methods, signals) follow QML's camelCase.
+#![allow(non_snake_case)]
+// The qmetaobject derive macros expand to transmutes clippy flags.
+#![allow(clippy::useless_transmute)]
+
+pub mod app;
+pub mod browse;
+pub mod crash;
+pub mod directory;
+pub mod json;
+pub mod operations;
+pub mod runtime;
+pub mod search;
+pub mod transfers;
+pub mod viewers;
 
 use cpp::cpp;
 use std::os::raw::{c_char, c_int};
@@ -99,6 +114,7 @@ cpp! {{
 /// # Safety
 /// `argc`/`argv` must be the process arguments as passed to `main`.
 pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
+    start();
     cpp!([argc as "int", argv as "char**"] -> c_int as "int" {
             if (argc > 1 && qstrcmp(argv[1], "--qml-check") == 0)
                 return lauttaQmlCheck(argc, argv);
@@ -121,4 +137,56 @@ pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
             delete app;
             return rc;
         })
+}
+
+/// QML module URI of the app's types.
+pub const QML_URI: &str = "Lautta";
+
+/// Opens the core (SPEC §5) and registers the QML types. A failure to open
+/// the core is shown by the start page through `App.startError`.
+fn start() {
+    let paths = lautta_core::paths::AppPaths::from_env();
+    lautta_core::crash::install(paths.crash_dir(), env!("CARGO_PKG_VERSION"));
+    if let Err(e) = runtime::init(paths) {
+        log::error!("cannot open the app data: {e}");
+    }
+    register_types();
+}
+
+/// Registers every QML type under `Lautta 1.0` (doc/QML-API.md).
+pub fn register_types() {
+    qmetaobject::qml_register_singleton_type::<app::App>(&qml_uri(), 1, 0, &cstr("App"));
+    browse::register();
+    directory::register();
+    operations::register();
+    transfers::register();
+    viewers::register();
+    search::register();
+}
+
+/// `QML_URI` as a C string for the registration functions.
+pub fn qml_uri() -> std::ffi::CString {
+    cstr(QML_URI)
+}
+
+/// A C string from a type name literal (no interior NUL in our names).
+pub fn cstr(s: &str) -> std::ffi::CString {
+    std::ffi::CString::new(s).unwrap_or_default()
+}
+
+/// Runs the QML check (see `--qml-check`) in this process with the given
+/// arguments (`-I <path>` and files). Opens the core from `$HOME` and
+/// registers the types first, like the app does. Used by the host QML tests.
+pub fn qml_check(args: &[String]) -> c_int {
+    start();
+    let mut owned: Vec<std::ffi::CString> = vec![cstr("harbour-lautta"), cstr("--qml-check")];
+    owned.extend(args.iter().map(|a| cstr(a)));
+    let mut ptrs: Vec<*mut c_char> = owned.iter().map(|c| c.as_ptr() as *mut c_char).collect();
+    ptrs.push(std::ptr::null_mut());
+    let argc = c_int::try_from(owned.len()).unwrap_or(c_int::MAX);
+    let argv = ptrs.as_mut_ptr();
+    // SAFETY: argv points to NUL-terminated strings that outlive the call.
+    unsafe {
+        cpp!([argc as "int", argv as "char**"] -> c_int as "int" { return lauttaQmlCheck(argc, argv); })
+    }
 }
