@@ -726,8 +726,8 @@ mod tests {
         assert_eq!(j["transferId"], 7);
         assert_eq!(j["item"], 2);
         assert_eq!(j["name"], "a.txt");
-        assert_eq!(j["dstSize"], 4);
-        assert!(j["dstMtimeMs"].is_null());
+        assert_eq!(j["dst_size"], 4);
+        assert!(j["dst_mtime_ms"].is_null());
         assert_eq!(j["choices"], serde_json::json!(["Replace", "KeepBoth"]));
         let e = EditConflict {
             id: 3,

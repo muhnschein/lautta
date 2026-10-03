@@ -3067,5 +3067,553 @@
         <source>Moved or deleted outside Lautta</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-dir-clip-from">
+        <source>from %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-clip-cut" numerus="yes">
+        <source>%n items cut</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-dir-clip-copied" numerus="yes">
+        <source>%n items copied</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-dir-clip-paste">
+        <source>Paste here</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-clip-clear">
+        <source>Clear clipboard</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-open-with">
+        <source>Open with</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-share">
+        <source>Share</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-copy">
+        <source>Copy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-cut">
+        <source>Cut</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-rename">
+        <source>Rename</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-delete">
+        <source>Delete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-copy-to">
+        <source>Copy to…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-move-to">
+        <source>Move to…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-download">
+        <source>Download to…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-upload">
+        <source>Upload to…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-info">
+        <source>Info</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-compress">
+        <source>Compress</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-extract">
+        <source>Extract</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-tags">
+        <source>Tags</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-favourite">
+        <source>Favourite</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-edit">
+        <source>Edit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-open-remote">
+        <source>Open copy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-copy-other">
+        <source>Copy to other pane</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-move-other">
+        <source>Move to other pane</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-rename-all">
+        <source>Rename all</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-permissions">
+        <source>Permissions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-menu-select-all">
+        <source>Select all</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-menu-clear-selection">
+        <source>Clear selection</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-menu-select">
+        <source>Select</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-menu-new">
+        <source>New folder or file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-menu-paste" numerus="yes">
+        <source>Paste %n items</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-dir-menu-search">
+        <source>Search here</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-menu-view-options">
+        <source>View options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-menu-refresh">
+        <source>Refresh</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-picker-move" numerus="yes">
+        <source>Move %n items to</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-dir-picker-move-here">
+        <source>Move here</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-picker-copy" numerus="yes">
+        <source>Copy %n items to</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-dir-picker-copy-here">
+        <source>Copy here</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-picker-download" numerus="yes">
+        <source>Download %n items to</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-dir-picker-download-here">
+        <source>Download here</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-picker-upload" numerus="yes">
+        <source>Upload %n items to</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-dir-picker-upload-here">
+        <source>Upload here</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-deleting-permanently">
+        <source>Deleting permanently</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-deleting">
+        <source>Deleting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-deleting-many-permanently" numerus="yes">
+        <source>Deleting %n items permanently</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-dir-deleting-many" numerus="yes">
+        <source>Deleting %n items</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-dir-noaccess">
+        <source>Not accessible</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-nomatch">
+        <source>Nothing to show</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-empty">
+        <source>No files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-err-auth">
+        <source>Sign-in failed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-err-not-found">
+        <source>Folder not found</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-err-unreachable">
+        <source>Can&apos;t reach this place</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-err-generic">
+        <source>Can&apos;t open this folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-noaccess-hint">
+        <source>This link points outside the folders Lautta may read.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-noaccess-permission">
+        <source>You don&apos;t have permission to open this folder.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-nomatch-hint">
+        <source>No item matches the type filter.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-empty-hint">
+        <source>Pull down to create a folder or paste</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-empty-hint-readonly">
+        <source>This folder is empty</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-show-all">
+        <source>Show all</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-update-sign-in">
+        <source>Update sign-in</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-retry">
+        <source>Retry</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-details">
+        <source>Details</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-selected" numerus="yes">
+        <source>%n selected</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-dir-offline">
+        <source>Offline. Showing the copy from %1. Changes aren&apos;t possible.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-offline-retry">
+        <source>Retry</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-large">
+        <source>%1 loaded · large folder: name order, thumbnails off</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-large-stop">
+        <source>Stop</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-grid-suggested">
+        <source>Shown as grid because most items are photos</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-use-list">
+        <source>Use list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-chips-active">
+        <source>Only some types are shown</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-row-not-accessible">
+        <source>Not accessible</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-yesterday">
+        <source>Yesterday</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-link">
+        <source>Link</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-uploading">
+        <source>Uploading to %1 · %2%</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-downloading">
+        <source>Downloading from %1 · %2%</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-transfer-waiting">
+        <source>Waiting in Transfers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-sel-copy">
+        <source>Copy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-sel-cut">
+        <source>Cut</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-sel-delete">
+        <source>Delete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-sel-share">
+        <source>Share</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-sel-more">
+        <source>More</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-path-copy-address">
+        <source>Copy address</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-path-edit">
+        <source>Edit path</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-path-favourite">
+        <source>Favourite</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-path-info">
+        <source>Info</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-path-label">
+        <source>Path</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-path-from-cache">
+        <source>Folder · from cache</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-picker-new-folder">
+        <source>New folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-picker-locations">
+        <source>Locations</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-picker-in">
+        <source>In %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-picker-empty">
+        <source>No folders</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-picker-empty-hint">
+        <source>You can use this folder or pull down to make one</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-new-exists-folder">
+        <source>A folder named “%1” already exists</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-new-exists-file">
+        <source>A file named “%1” already exists</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-new-create">
+        <source>Create</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-new-title">
+        <source>New in %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-new-type">
+        <source>Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-new-type-folder">
+        <source>Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-new-type-file">
+        <source>File</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-new-name">
+        <source>Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-rename-accept">
+        <source>Rename</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-rename-title">
+        <source>Rename · %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-rename-name">
+        <source>Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-rename-location">
+        <source>Location</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-rename-size">
+        <source>Size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-rename-modified">
+        <source>Modified</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-chip-folders">
+        <source>Folders</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-chip-documents">
+        <source>Documents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-chip-images">
+        <source>Images</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-chip-audio">
+        <source>Audio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-chip-video">
+        <source>Video</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-chip-archives">
+        <source>Archives</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-apply">
+        <source>Apply</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-title">
+        <source>View options · %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-sort">
+        <source>Sort by</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-sort-name">
+        <source>Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-sort-size">
+        <source>Size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-sort-modified">
+        <source>Modified</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-sort-type">
+        <source>Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-descending">
+        <source>Descending</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-folders-first">
+        <source>Folders first</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-hidden">
+        <source>Show hidden files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-hidden-hint">
+        <source>Names starting with a dot and hidden files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-view">
+        <source>View</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-view-list">
+        <source>List</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-view-grid">
+        <source>Grid</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-thumbnails">
+        <source>Thumbnails</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-show-only">
+        <source>Show only</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-apply-to">
+        <source>Apply to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-remember">
+        <source>Remember for</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-remember-folder">
+        <source>This folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-remember-all">
+        <source>All folders</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

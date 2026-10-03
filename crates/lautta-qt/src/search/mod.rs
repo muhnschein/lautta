@@ -18,6 +18,5 @@ pub fn register() {
     qml_register_type::<compare_model::CompareModel>(&uri, 1, 0, &cstr("CompareModel"));
     qml_register_type::<sync_pairs::SyncPairsModel>(&uri, 1, 0, &cstr("SyncPairsModel"));
     qml_register_type::<storage::CacheInfo>(&uri, 1, 0, &cstr("CacheInfo"));
-    qml_register_type::<storage::LocationPrefsModel>(&uri, 1, 0, &cstr("LocationPrefsModel"));
     qml_register_type::<testsupport::SearchTestSupport>(&uri, 1, 0, &cstr("SearchTestSupport"));
 }

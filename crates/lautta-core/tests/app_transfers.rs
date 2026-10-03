@@ -99,7 +99,7 @@ async fn the_list_groups_questions_and_history() {
     assert_eq!(questions.len(), 1);
     assert_eq!(questions[0]["name"], "a.txt");
     assert_eq!(questions[0]["src_size"], 11);
-    assert_eq!(questions[0]["dstSize"], 3);
+    assert_eq!(questions[0]["dst_size"], 3);
 
     let bad = h.core.answer_question(id, 0, "obliterate", false).unwrap_err();
     assert_eq!(bad.kind, ErrorKind::InvalidArgument);

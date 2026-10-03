@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of CacheInfo (SEC-5 Clear cache, location list) and
-// LocationPrefsModel (§18 per-location settings).
+// Host test of CacheInfo (SEC-5 Clear cache, location list).
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -9,17 +8,12 @@ Item {
 
     property real freed: -1
     property string failure: ""
-    property int saves: 0
 
     SearchTestSupport { id: support }
     CacheInfo {
         id: cache
         onCacheCleared: root.freed = freedBytes
         onFailed: root.failure = kind
-    }
-    LocationPrefsModel {
-        id: prefs
-        onSaved: root.saves += 1
     }
 
     function check(cond, what) {
@@ -60,25 +54,5 @@ Item {
         for (var i = 0; i < locations.length; ++i)
             check(["server", "adhoc", "volume"].indexOf(locations[i].kind) >= 0, "only network and volume locations: " + locations[i].kind)
 
-        // Per-location preferences round trip.
-        prefs.locationId = "user-documents"
-        check(until(function () { return prefs.ready }, 3000), "prefs loaded")
-        check(prefs.defaultName === "Documents", "default name " + prefs.defaultName)
-        check(prefs.displayName === "" && !prefs.noListingCache && prefs.laneSize === 0, "defaults")
-        prefs.displayName = "Papers"
-        prefs.noListingCache = true
-        prefs.noThumbCache = true
-        prefs.laneSize = 4
-        prefs.startFolder = "lautta://user-documents/srch_t1"
-        prefs.save()
-        check(until(function () { return root.saves === 1 }, 3000), "prefs saved: " + root.failure)
-        prefs.displayName = "changed in memory"
-        prefs.load()
-        check(until(function () { return prefs.displayName === "Papers" }, 3000), "prefs read back")
-        check(prefs.noListingCache && prefs.noThumbCache && prefs.laneSize === 4, "flags and lanes kept")
-        check(prefs.startFolder === "lautta://user-documents/srch_t1", "start folder kept")
-        prefs.reset()
-        check(until(function () { return root.saves === 2 }, 3000), "reset saved")
-        check(prefs.displayName === "" && !prefs.noListingCache && prefs.laneSize === 0 && prefs.startFolder === "", "reset to defaults")
     }
 }
