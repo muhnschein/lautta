@@ -21,6 +21,12 @@ unsafe_code = "deny"
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
 
+# Small build folders: line tables only (backtraces keep file:line), no
+# incremental caches.
+[profile.dev]
+debug = "line-tables-only"
+incremental = false
+
 [profile.release]
 panic = "abort"
 lto = "fat"
