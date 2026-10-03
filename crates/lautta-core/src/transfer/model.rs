@@ -685,8 +685,23 @@ mod tests {
             (1, ItemState::Pending),
             (1, ItemState::Failed),
         ];
-        for (seq, to) in steps {
+        // (items_done, items_failed, bytes_total, bytes_done) after each step.
+        let expected = [
+            (0, 0, 60, 0),
+            (1, 0, 60, 10),
+            (2, 0, 40, 10),
+            (2, 1, 40, 10),
+            (2, 0, 40, 10),
+            (3, 0, 40, 40),
+            (2, 0, 40, 30),
+            (1, 0, 60, 30),
+            (1, 1, 60, 30),
+        ];
+        for ((seq, to), want) in steps.into_iter().zip(expected) {
             t.set_item_state(seq, to);
+            assert_eq!(t.items[seq as usize].state, to);
+            let got = (t.items_done, t.items_failed, t.bytes_total, t.bytes_done);
+            assert_eq!(got, want, "after {seq} -> {to:?}");
             let mut fresh = t.clone();
             fresh.recount();
             assert_eq!(t, fresh, "after {seq} -> {to:?}");
