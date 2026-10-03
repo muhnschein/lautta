@@ -15,11 +15,9 @@ use lautta_core::org::RecentKind;
 use lautta_core::paths::AppPaths;
 use lautta_core::Uri;
 use qmetaobject::*;
-use std::cell::RefCell;
 use std::sync::Mutex;
 
 static FAKE: Mutex<Option<FakeBridge>> = Mutex::new(None);
-static LOGS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 fn fake() -> FakeBridge {
     FAKE.lock().unwrap().clone().expect("the fake bridge is set up")
@@ -29,16 +27,11 @@ fn run<T>(f: impl std::future::Future<Output = T>) -> T {
     lautta_qt::runtime::handle().block_on(f)
 }
 
-extern "C" fn capture(_: QtMsgType, _: &QMessageLogContext, message: &QString) {
-    let text = message.to_string();
-    println!("{text}");
-    LOGS.lock().unwrap().push(text);
-}
-
 /// What the QML script can do to the world around the app.
 #[derive(QObject, Default)]
-struct Fake {
+struct FakeWorld {
     base: qt_base_class!(trait QObject),
+    pump: qt_method!(fn(&self, ms: i32)),
     grant: qt_method!(fn(&self)),
     consentRequests: qt_method!(fn(&self) -> i32),
     setAttention: qt_method!(fn(&self, id: QString, attention: QString)),
@@ -51,7 +44,11 @@ struct Fake {
     removeFile: qt_method!(fn(&self, relative: QString)),
 }
 
-impl Fake {
+impl FakeWorld {
+    fn pump(&self, ms: i32) {
+        lautta_qt::browse::pump_events(ms);
+    }
+
     fn grant(&self) {
         run(fake().set_consent(Consent::Granted));
     }
@@ -129,6 +126,10 @@ impl Fake {
     }
 }
 
+impl QSingletonInit for FakeWorld {
+    fn init(&mut self) {}
+}
+
 const SCRIPT: &str = include_str!("browse_models.qml");
 
 #[test]
@@ -154,21 +155,23 @@ fn browse_models_follow_the_core_and_the_bridge() {
     *FAKE.lock().unwrap() = Some(bridge);
 
     lautta_qt::runtime::init(paths).unwrap();
-    lautta_qt::register_types();
-    install_message_handler(Some(capture));
+    qml_register_singleton_type::<FakeWorld>(
+        &lautta_qt::cstr("FakeWorld"),
+        1,
+        0,
+        &lautta_qt::cstr("FakeWorld"),
+    );
 
-    let helper = RefCell::new(Fake::default());
-    let mut engine = QmlEngine::new();
-    // SAFETY: `helper` outlives the engine, which is dropped first.
-    engine.set_object_property("Fake".into(), unsafe { QObjectPinned::new(&helper) });
-    let script = format!("import QtQuick 2.6\nimport Lautta 1.0\n{SCRIPT}");
-    engine.load_data(script.into());
-    engine.exec();
-
-    let logs = LOGS.lock().unwrap();
-    let failed: Vec<&String> = logs.iter().filter(|l| l.contains("FAILED")).collect();
-    assert!(failed.is_empty(), "failed steps: {failed:?}");
-    assert!(logs.iter().any(|l| l == "DONE"), "the script did not finish");
-    let passed = logs.iter().filter(|l| l.starts_with("PASS ")).count();
-    assert!(passed >= 20, "only {passed} steps passed");
+    let file = home.path().join("scenario.qml");
+    std::fs::write(
+        &file,
+        format!("import QtQuick 2.6\nimport Lautta 1.0\nimport FakeWorld 1.0\n{SCRIPT}"),
+    )
+    .unwrap();
+    // `qml_check` fails on any console.error, which is how a step fails.
+    assert_eq!(
+        lautta_qt::qml_check(&[file.display().to_string()]),
+        0,
+        "a step of the scenario failed (see output)"
+    );
 }

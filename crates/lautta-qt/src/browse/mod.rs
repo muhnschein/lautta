@@ -11,6 +11,7 @@ mod prefs;
 mod recents;
 mod tags;
 
+use cpp::cpp;
 use qmetaobject::prelude::*;
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -35,6 +36,24 @@ impl Cell {
             Cell::Int(i) => QVariant::from(*i),
             Cell::Bool(b) => QVariant::from(*b),
         }
+    }
+}
+
+cpp! {{
+    #include <QtCore/QCoreApplication>
+    #include <QtCore/QEventLoop>
+}}
+
+/// Runs the Qt event loop for `ms` milliseconds. For tests that drive a
+/// scenario from a synchronous script (the host has no widgets to run an
+/// engine with `exec`).
+pub fn pump_events(ms: i32) {
+    let until = std::time::Instant::now() + std::time::Duration::from_millis(u64::try_from(ms).unwrap_or(0));
+    while std::time::Instant::now() < until {
+        cpp!(unsafe [] {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+        });
+        std::thread::sleep(std::time::Duration::from_millis(2));
     }
 }
 

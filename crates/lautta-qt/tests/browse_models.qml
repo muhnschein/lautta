@@ -89,8 +89,6 @@ Item {
     function tick() {
         var s = steps[stage]
         if (!s) {
-            console.log("DONE")
-            Qt.quit()
             return
         }
         if (!acted) {
@@ -104,17 +102,20 @@ Item {
             acted = false
             waited = 0
         } else if (++waited > 200) {
-            console.log("FAILED: " + s.label)
-            Qt.quit()
+            console.error("FAILED: " + s.label)
             stage = steps.length
         }
     }
 
-    Timer {
-        interval: 25
-        repeat: true
-        running: true
-        onTriggered: root.tick()
+    // Runs the steps one after the other, letting Qt work in between.
+    function run() {
+        while (stage < steps.length) {
+            var before = stage
+            tick()
+            if (stage === before)
+                FakeWorld.pump(25)
+        }
+        console.log("DONE")
     }
 
     Component.onCompleted: {
@@ -140,9 +141,9 @@ Item {
         step("no account without consent", null, function() { return !has("account") && !has("adhocRecent") })
         step("ask again reaches the bridge",
              function() { Bridge.requestConsent() },
-             function() { return Fake.consentRequests() >= 2 })
+             function() { return FakeWorld.consentRequests() >= 2 })
         step("granting shows the server",
-             function() { Fake.grant() },
+             function() { FakeWorld.grant() },
              function() {
                  var nas = row("account", "NAS")
                  return Bridge.ready && nas !== null && nas.rstatus === "ready" && nas.rprovider === "SFTP"
@@ -197,7 +198,7 @@ Item {
              function() { return tagged.count === 2 && tagged.missingCount === 0 && tagged.tagName === "Work" })
         step("a file removed outside shows up as missing",
              function() {
-                 Fake.removeFile("Documents/b.txt")
+                 FakeWorld.removeFile("Documents/b.txt")
                  var id = tagged.tagId
                  tagged.tagId = 0
                  tagged.tagId = id
@@ -215,9 +216,9 @@ Item {
 
         step("recents come newest first with places",
              function() {
-                 Fake.record(a, "a.txt", "opened")
-                 Fake.record(docs + "c.txt", "c.txt", "edited")
-                 Fake.record(docs + "d.zip", "d.zip", "transferred")
+                 FakeWorld.record(a, "a.txt", "opened")
+                 FakeWorld.record(docs + "c.txt", "c.txt", "edited")
+                 FakeWorld.record(docs + "d.zip", "d.zip", "transferred")
                  recents.reload()
              },
              function() {
@@ -242,7 +243,7 @@ Item {
              function() { return recents.count === 0 })
 
         step("attention shows on the server",
-             function() { Fake.setAttention("account:1", "auth-failed") },
+             function() { FakeWorld.setAttention("account:1", "auth-failed") },
              function() {
                  var nas = row("account", "NAS")
                  return nas !== null && nas.rstatus === "attention" && nas.rattention === "auth-failed"
@@ -250,21 +251,21 @@ Item {
 
         step("an ad-hoc server asks about its identity and connects",
              function() {
-                 Fake.scriptQuestion("identity-unknown")
+                 FakeWorld.scriptQuestion("identity-unknown")
                  Bridge.connectAdHoc("sftp://host.example:2222/docs", "pw", JSON.stringify({ "user": "me" }))
              },
              function() {
                  return root.connected === "lautta://nv-adhoc:1/" && root.questionKind === "identity-unknown"
-                        && root.questionHost === "host.example" && hasItem("adhoc", "nv-adhoc:1") && Fake.secrets() === '["pw"]'
-                        && JSON.parse(Fake.answers())[0].accept === true
+                        && root.questionHost === "host.example" && hasItem("adhoc", "nv-adhoc:1") && FakeWorld.secrets() === '["pw"]'
+                        && JSON.parse(FakeWorld.answers())[0].accept === true
              })
         step("sign-in prompts are answered with the typed code",
              function() {
-                 Fake.scriptQuestion("keyboard-interactive")
+                 FakeWorld.scriptQuestion("keyboard-interactive")
                  Bridge.connectAdHoc("sftp://other.example/", "", "{}")
              },
              function() {
-                 var answers = JSON.parse(Fake.answers())
+                 var answers = JSON.parse(FakeWorld.answers())
                  return root.questionKind === "keyboard-interactive" && answers.length === 2
                         && answers[1].answers[0] === "123456"
              })
@@ -281,7 +282,7 @@ Item {
                  Bridge.editAccount("lautta://nv-account:1/")
              },
              function() {
-                 var h = JSON.parse(Fake.handoffs())
+                 var h = JSON.parse(FakeWorld.handoffs())
                  return h.indexOf("add:sftp") >= 0 && h.indexOf("settings:account:1") >= 0
              })
 
@@ -307,7 +308,8 @@ Item {
              },
              function() { return has("favourite", "Photos") && row("tag", "Holiday").rcount === 1 })
         step("the account goes away",
-             function() { Fake.removeAccount("account:1") },
+             function() { FakeWorld.removeAccount("account:1") },
              function() { return !has("account") && !has("favourite", "Photos") && row("tag", "Holiday").rcount === 0 })
+        run()
     }
 }
