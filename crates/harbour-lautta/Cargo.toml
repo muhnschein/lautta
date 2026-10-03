@@ -17,6 +17,8 @@ all = { level = "deny", priority = -1 }
 [[bin]]
 name = "harbour-lautta"
 path = "src/main.rs"
+# no_main binary: the exported C main has no test harness.
+test = false
 
 [features]
 sailfish = ["lautta-qt/sailfish"]

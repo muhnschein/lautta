@@ -11,7 +11,8 @@
 # The Qt crates need Qt 5 development files on the host (qmake in PATH).
 
 CARGO ?= cargo
-HOST_CRATES = -p lautta-core -p lautta-bridge-proto
+HOST_FEATURES = --features lautta-bridge-proto/fake
+# The "sailfish" feature needs libsailfishapp and is only built in the SDK.
 SDK_IMAGE ?= mirror.gcr.io/coderus/sailfishos-platform-sdk-aarch64:5.2.0.15@sha256:e5f7596d14502746b308c3dde36f65fc25d7f76c45a01acaed56a1f55b76f592
 TARGET ?= SailfishOS-5.2.0.15-aarch64
 export SDK_IMAGE TARGET
@@ -24,18 +25,18 @@ fmt-check:
 	$(CARGO) fmt --all -- --check
 
 clippy:
-	$(CARGO) clippy --workspace --all-targets --all-features -- -D warnings
+	$(CARGO) clippy --workspace --all-targets $(HOST_FEATURES) -- -D warnings
 
 test:
-	QT_QPA_PLATFORM=offscreen $(CARGO) test --workspace --all-features
+	QT_QPA_PLATFORM=offscreen $(CARGO) test --workspace $(HOST_FEATURES)
 
 coverage:
 	mkdir -p coverage
-	QT_QPA_PLATFORM=offscreen $(CARGO) llvm-cov --workspace --all-features --lcov --output-path coverage/lcov.info
+	QT_QPA_PLATFORM=offscreen $(CARGO) llvm-cov --workspace $(HOST_FEATURES) --lcov --output-path coverage/lcov.info
 
 clippy-report:
 	mkdir -p coverage
-	$(CARGO) clippy --workspace --all-targets --all-features --message-format=json > coverage/clippy.json
+	$(CARGO) clippy --workspace --all-targets $(HOST_FEATURES) --message-format=json > coverage/clippy.json
 
 mutants:
 	$(CARGO) mutants --no-shuffle -j 2 --timeout 120 \

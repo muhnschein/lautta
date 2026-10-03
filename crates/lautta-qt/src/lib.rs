@@ -25,23 +25,23 @@ cpp! {{
 /// `argc`/`argv` must be the process arguments as passed to `main`.
 pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
     cpp!([argc as "int", argv as "char**"] -> c_int as "int" {
-        static int count = 0;
-        count = argc;
-#ifdef LAUTTA_SAILFISH
-        QGuiApplication *app = SailfishApp::application(count, argv);
-        QQuickView *view = SailfishApp::createView();
-        view->setSource(SailfishApp::pathToMainQml());
-        view->show();
-#else
-        QGuiApplication *app = new QGuiApplication(count, argv);
-        QQuickView *view = new QQuickView();
-        QByteArray qml = qgetenv("LAUTTA_QML");
-        view->setSource(QUrl::fromLocalFile(QString::fromLocal8Bit(qml)));
-        view->show();
-#endif
-        int rc = app->exec();
-        delete view;
-        delete app;
-        return rc;
-    })
+            static int count = 0;
+            count = argc;
+    #ifdef LAUTTA_SAILFISH
+            QGuiApplication *app = SailfishApp::application(count, argv);
+            QQuickView *view = SailfishApp::createView();
+            view->setSource(SailfishApp::pathToMainQml());
+            view->show();
+    #else
+            QGuiApplication *app = new QGuiApplication(count, argv);
+            QQuickView *view = new QQuickView();
+            QByteArray qml = qgetenv("LAUTTA_QML");
+            view->setSource(QUrl::fromLocalFile(QString::fromLocal8Bit(qml)));
+            view->show();
+    #endif
+            int rc = app->exec();
+            delete view;
+            delete app;
+            return rc;
+        })
 }
