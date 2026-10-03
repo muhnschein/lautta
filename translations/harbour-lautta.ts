@@ -111,5 +111,887 @@
         <source>Lautta can&apos;t open its data</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-menuorder-up">
+        <source>Move up</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-menuorder-down">
+        <source>Move down</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-menuorder-to-row">
+        <source>Move to icon row</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-menuorder-to-list">
+        <source>Move to list</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-open-with">
+        <source>Open with</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-share">
+        <source>Share</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-copy">
+        <source>Copy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-cut">
+        <source>Cut</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-rename">
+        <source>Rename</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-delete">
+        <source>Delete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-copy-to">
+        <source>Copy to…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-move-to">
+        <source>Move to…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-download">
+        <source>Download</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-upload-to">
+        <source>Upload to…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-info">
+        <source>Info</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-compress">
+        <source>Compress</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-extract">
+        <source>Extract</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-tags">
+        <source>Tags</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-favourite">
+        <source>Add to favourites</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-edit">
+        <source>Edit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ctx-open-remote">
+        <source>Open a copy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-status-ready">
+        <source>Connected to netvfs bridge</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-status-connecting">
+        <source>Connecting to netvfs…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-status-reconnecting">
+        <source>Reconnecting to netvfs…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-status-too-old">
+        <source>Network locations need a newer netvfs</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-status-consent-unknown">
+        <source>Waiting for your permission</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-status-consent-denied">
+        <source>Access was denied</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-access-denied">
+        <source>Denied</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-access-unknown">
+        <source>Not asked yet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-access-allowed">
+        <source>Allowed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-title">
+        <source>About</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-version">
+        <source>Version %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-tagline">
+        <source>A file manager for Sailfish OS.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-network">
+        <source>Network locations</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-status">
+        <source>Status</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-access">
+        <source>Access</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-reason">
+        <source>Reason</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-permissions">
+        <source>Permissions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-permission-list">
+        <source>Your folders, Removable media, Audio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-no-network">
+        <source>Lautta never opens network connections itself.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-licence">
+        <source>Licence</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-licence-name">
+        <source>LGPL-2.1-or-later</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-source">
+        <source>Source code</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-title">
+        <source>Compare</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-copy-right">
+        <source>Copy to right</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-replace-right">
+        <source>Replace on right</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-delete-right">
+        <source>Delete on right</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-copy-left">
+        <source>Copy to left</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-replace-left">
+        <source>Replace on left</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-delete-left">
+        <source>Delete on left</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-skipped">
+        <source>Differ, not synced</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-not-on-left">
+        <source>Not on left</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-not-on-right">
+        <source>Not on right</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-left-newer">
+        <source>Left newer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-right-newer">
+        <source>Right newer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-differs">
+        <source>Differs</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-syncing" numerus="yes">
+        <source>Syncing, deleting %n items</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-results-again">
+        <source>Compare again</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-compared" numerus="yes">
+        <source>%n items compared</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-results-direction">
+        <source>Direction</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-mirror-lr">
+        <source>Mirror left to right</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-mirror-rl">
+        <source>Mirror right to left</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-update-both">
+        <source>Update both, newer wins, no deletes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-copy">
+        <source>Copy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-replace">
+        <source>Replace</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-delete-value">
+        <source>%1 · Mirror deletes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-same">
+        <source>Same</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-left-out">
+        <source>Left out of this sync</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-excluded">
+        <source>Excluded</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-delete">
+        <source>Delete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-failed">
+        <source>Can&apos;t compare</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-in-sync">
+        <source>Folders are in sync</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-results-sync" numerus="yes">
+        <source>Sync %n items</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-compare-pick-title">
+        <source>Choose a folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-pick-accept">
+        <source>Choose</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-accept">
+        <source>Compare</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-cancel">
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-folders">
+        <source>Folders</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-left">
+        <source>Left</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-right-empty">
+        <source>Choose the folder to compare with</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-right">
+        <source>Right</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-match">
+        <source>Match by</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-match-basic">
+        <source>Size and modification time</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-match-basic-hint">
+        <source>2 s tolerance</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-dst">
+        <source>Ignore 1 hour difference</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-dst-hint">
+        <source>Daylight saving time</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-checksums">
+        <source>Compare checksums</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-checksums-hint">
+        <source>Slower; reads every file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-exclude">
+        <source>Exclude</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-patterns">
+        <source>Patterns</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-save-pair">
+        <source>Save as sync pair</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compare-save-pair-hint">
+        <source>Shown in Favourites</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-menuorder-reset">
+        <source>Restore default order</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-menuorder-title">
+        <source>Context menu</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-menuorder-description">
+        <source>Press and hold an entry to move it</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-menuorder-row">
+        <source>Icon row · up to 5</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-menuorder-list">
+        <source>List</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-menuorder-note">
+        <source>Entries a location doesn&apos;t support are left out automatically.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-crash-copy">
+        <source>Copy report</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-crash-close">
+        <source>Close</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-crash-title">
+        <source>Lautta stopped unexpectedly</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-crash-note">
+        <source>A report was saved. It contains no file names or contents.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-crash-saved">
+        <source>Saved in Lautta&apos;s cache folder.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-accept">
+        <source>Search</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-cancel">
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-in">
+        <source>Search in %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-name">
+        <source>Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-match">
+        <source>Match</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-match-substring">
+        <source>Contains</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-match-glob">
+        <source>Glob</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-type">
+        <source>Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-type-any">
+        <source>Any</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-type-folder">
+        <source>Folders</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-type-image">
+        <source>Images</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-type-video">
+        <source>Videos</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-type-audio">
+        <source>Audio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-type-document">
+        <source>Documents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-type-archive">
+        <source>Archives</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-type-text">
+        <source>Text files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-size">
+        <source>Size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-size-any">
+        <source>Any size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-size-gt1m">
+        <source>Larger than 1 MB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-size-gt10m">
+        <source>Larger than 10 MB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-size-gt100m">
+        <source>Larger than 100 MB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-size-lt100k">
+        <source>Smaller than 100 kB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-size-lt1m">
+        <source>Smaller than 1 MB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-modified">
+        <source>Modified</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-date-any">
+        <source>Any time</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-date-today">
+        <source>Today</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-date-week">
+        <source>Past week</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-date-month">
+        <source>Past month</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-date-year">
+        <source>This year</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-hidden">
+        <source>Include hidden files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-depth-value" numerus="yes">
+        <source>%n folders</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-filters-depth">
+        <source>Search depth on servers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-filters-recent">
+        <source>Recent searches</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-in">
+        <source>In %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-mode-glob">
+        <source>glob</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-mode-substring">
+        <source>contains</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-any-type">
+        <source>any type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-pick-title">
+        <source>Search in</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-pick-accept">
+        <source>Search</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-another-location">
+        <source>Search in another location</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-filters">
+        <source>Filters</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-placeholder">
+        <source>Search</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-none">
+        <source>No matches</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-failed">
+        <source>Search stopped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-idle">
+        <source>Search</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-none-hint">
+        <source>Try another name or loosen the filters</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-idle-hint">
+        <source>Type part of a name, or a pattern such as *.pdf</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-progress" numerus="yes">
+        <source>Searching… %n results</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-search-stop">
+        <source>Stop</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-days" numerus="yes">
+        <source>%n days</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-settings-never">
+        <source>Never</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-up-to-mb">
+        <source>Up to %1 MB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-cache-cleared">
+        <source>Cache cleared</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-busy">
+        <source>Finish or cancel transfers first</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-clear-failed">
+        <source>Couldn&apos;t clear the data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-title">
+        <source>Settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-browsing">
+        <source>Browsing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-view">
+        <source>Default view</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-view-list">
+        <source>List</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-view-grid">
+        <source>Grid</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-sort">
+        <source>Sort by</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-sort-name">
+        <source>Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-sort-size">
+        <source>Size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-sort-modified">
+        <source>Modified</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-sort-type">
+        <source>Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-descending">
+        <source>Sort descending</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-folders-first">
+        <source>Folders first</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-hidden">
+        <source>Show hidden files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-date-format">
+        <source>Date format</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-date-relative">
+        <source>Relative (Today 09:14)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-date-iso">
+        <source>ISO (2026-10-02 09:14)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-date-locale">
+        <source>System format</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-thumbs-local">
+        <source>Thumbnails on this device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-thumbs-remote">
+        <source>Thumbnails from servers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-thumbs-limit">
+        <source>Largest server file with a thumbnail</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-thumbs-metered">
+        <source>On a metered connection</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-thumb-cache">
+        <source>Thumbnail cache</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-mb">
+        <source>%1 MB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-listing-days">
+        <source>Keep stored listings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-deleting">
+        <source>Deleting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-trash">
+        <source>Recently deleted</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-trash-hint">
+        <source>Local deletes can be restored</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-trash-days">
+        <source>Keep deleted items</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-remorse">
+        <source>Undo time (remorse)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-seconds">
+        <source>%1 s</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-transfers">
+        <source>Transfers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-concurrency">
+        <source>Transfers at once on this device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-lanes">
+        <source>Connections per server</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-mtimes">
+        <source>Keep modification times</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-permissions">
+        <source>Keep permissions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-verify">
+        <source>Verify with checksums</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-verify-hint">
+        <source>Always on for moves</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-resume">
+        <source>Resume unfinished transfers at start</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-history">
+        <source>Keep history</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-large">
+        <source>Ask before large operations</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-large-value">
+        <source>Over %1 items or %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-search">
+        <source>Search</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-search-depth">
+        <source>Search depth on servers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-folders" numerus="yes">
+        <source>%n folders</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-settings-menus">
+        <source>Menus</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-menu-order">
+        <source>Context menu order</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-recents">
+        <source>Recents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-recents-on">
+        <source>Remember recent files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-clear-recents">
+        <source>Clear recents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-clearing-recents">
+        <source>Clearing recents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-locations">
+        <source>Locations</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-storage">
+        <source>Storage</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-cache">
+        <source>Cache</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-clear-cache">
+        <source>Clear cache</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-clearing-cache">
+        <source>Clearing cache</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-clear-data">
+        <source>Clear app data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-clearing-data">
+        <source>Clearing app data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-clear-data-hint">
+        <source>Removes queue, history, tags and favourites</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-about">
+        <source>About Lautta</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>
