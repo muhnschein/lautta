@@ -17,7 +17,7 @@ use super::{TransferEvent, Trasher};
 use crate::db::Db;
 use crate::entry::Kind;
 use crate::error::{Error, ErrorKind, Result};
-use crate::ops::{Conflict, ConflictChoice, OperationKind, Plan};
+use crate::ops::{Conflict, ConflictChoice, OperationKind, Plan, PlanItem};
 use crate::provider::{ProgressSink, ProviderResolver};
 use crate::uri::Uri;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -324,6 +324,13 @@ impl Engine {
             .get(&id)
             .map(|l| l.t.items.clone())
             .ok_or_else(|| not_found(id))
+    }
+
+    /// The first item's plan, for the list's direction icon (XFR-8) without
+    /// cloning a 100 000 item plan.
+    pub fn first_item(&self, id: TransferId) -> Option<PlanItem> {
+        let st = self.inner.lock();
+        st.live.get(&id)?.t.items.first().map(|i| i.plan.clone())
     }
 
     /// Unanswered conflicts of a transfer: item index and the question.

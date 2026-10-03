@@ -166,7 +166,8 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T> + Send + 'sta
         .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))?
 }
 
-fn local_stamp(path: &Path) -> Result<(u64, i64)> {
+/// Size and mtime (ms) of a working file as it is now.
+pub fn local_stamp(path: &Path) -> Result<(u64, i64)> {
     let m = std::fs::metadata(path)?;
     let ms = m.modified().map(system_time_to_ms).unwrap_or(0);
     Ok((m.len(), ms))
