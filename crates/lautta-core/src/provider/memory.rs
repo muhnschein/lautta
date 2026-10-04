@@ -522,10 +522,16 @@ impl Provider for MemoryProvider {
     ) -> Result<()> {
         self.enter("upload_from", dst)?;
         self.require_write()?;
-        let mut file = std::fs::File::from(src);
-        file.seek(SeekFrom::Start(opts.offset))?;
-        let mut data = Vec::new();
-        file.read_to_end(&mut data)?;
+        let offset = opts.offset;
+        let data = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
+            let mut file = std::fs::File::from(src);
+            file.seek(SeekFrom::Start(offset))?;
+            let mut data = Vec::new();
+            file.read_to_end(&mut data)?;
+            Ok(data)
+        })
+        .await
+        .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))??;
         let mut st = self.lock();
         Self::check_parent(&st, dst)?;
         let existing = match st.nodes.get(dst) {
@@ -573,10 +579,16 @@ impl Provider for MemoryProvider {
             None => return Err(Error::kind(ErrorKind::NotFound)),
         };
         let start = usize::try_from(opts.offset).unwrap_or(usize::MAX).min(data.len());
-        let mut file = std::fs::File::from(dst);
-        file.seek(SeekFrom::Start(start as u64))?;
-        file.write_all(&data[start..])?;
-        progress(data.len() as u64, Some(data.len() as u64));
+        let len = data.len() as u64;
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            let mut file = std::fs::File::from(dst);
+            file.seek(SeekFrom::Start(start as u64))?;
+            file.write_all(&data[start..])?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))??;
+        progress(len, Some(len));
         Ok(())
     }
 

@@ -1296,8 +1296,8 @@ async fn stream_checksum(provider: &dyn Provider, path: &VPath, algo: &str) -> R
         }
     }
     let mut hasher = match algo {
-        "md5" => Hasher::Md5(md5::Md5::new()),
-        "sha1" => Hasher::Sha1(sha1::Sha1::new()),
+        "md5" => Hasher::Md5(md5::Md5::new()), // NOSONAR: a user-chosen file checksum, not security
+        "sha1" => Hasher::Sha1(sha1::Sha1::new()), // NOSONAR: a user-chosen file checksum, not security
         _ => Hasher::Sha256(sha2::Sha256::new()),
     };
     let handle = provider.open_read(path, Lane::Bulk).await?;

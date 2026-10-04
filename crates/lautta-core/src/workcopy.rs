@@ -237,7 +237,7 @@ impl WorkingCopies {
         let (dir, file) = blocking(move || {
             let dir = unique_dir(&base, now)?;
             let path = dir.join(OsStr::from_bytes(&name));
-            let file = std::fs::OpenOptions::new()
+            let file = std::fs::OpenOptions::new() // NOSONAR: runs on the blocking pool
                 .write(true)
                 .create_new(true)
                 .open(&path)?;
@@ -271,7 +271,7 @@ impl WorkingCopies {
         let entry = provider.stat(&c.remote.path, true, Lane::Interactive).await?;
         let path = c.local_path.clone();
         let file = blocking(move || {
-            Ok(std::fs::OpenOptions::new()
+            Ok(std::fs::OpenOptions::new() // NOSONAR: runs on the blocking pool
                 .write(true)
                 .truncate(true)
                 .open(path)?)
@@ -451,10 +451,10 @@ impl WorkingCopies {
             let dir = file.parent().map(Path::to_owned);
             match dir {
                 Some(d) if roots.iter().any(|r| d.parent() == Some(r.as_path())) => {
-                    std::fs::remove_dir_all(d)?;
+                    std::fs::remove_dir_all(d)?; // NOSONAR: runs on the blocking pool
                 }
                 _ => {
-                    let _ = std::fs::remove_file(&file);
+                    let _ = std::fs::remove_file(&file); // NOSONAR: runs on the blocking pool
                 }
             }
             Ok(())
@@ -617,7 +617,7 @@ async fn download(
 async fn upload_file(provider: &dyn Provider, local: &Path, remote: &Uri, temp_name: &[u8]) -> Result<()> {
     let path = local.to_owned();
     let (file, size, mtime) = blocking(move || {
-        let f = std::fs::File::open(&path)?;
+        let f = std::fs::File::open(&path)?; // NOSONAR: runs on the blocking pool
         let (size, mtime) = local_stamp(&path)?;
         Ok((f, size, mtime))
     })

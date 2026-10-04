@@ -422,7 +422,7 @@ impl Core {
         }
         let source = self.provider(&uri.location)?;
         let cache = self.paths.cache_dir().join("archives");
-        std::fs::create_dir_all(&cache)?;
+        tokio::fs::create_dir_all(&cache).await?;
         let provider = ArchiveProvider::open(source, uri.path.clone(), cache).await?;
         let name = uri
             .path

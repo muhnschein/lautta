@@ -607,7 +607,7 @@ impl Core {
             .download_into(&uri.path, OwnedFd::from(file), ReadOptions::default(), progress)
             .await;
         if done.is_err() {
-            let _ = std::fs::remove_file(&target);
+            let _ = tokio::fs::remove_file(&target).await;
         }
         done.map(|()| target)
     }

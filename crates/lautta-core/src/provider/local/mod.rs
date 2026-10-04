@@ -488,15 +488,21 @@ impl Provider for LocalProvider {
 
     async fn read_link(&self, path: &VPath) -> Result<Vec<u8>> {
         let real = self.real_path(path);
-        blocking(move || Ok(std::fs::read_link(real)?.into_os_string().into_vec())).await
+        let target = blocking(move || Ok(std::fs::read_link(real)?)).await?; // NOSONAR: runs on the blocking pool
+        Ok(target.into_os_string().into_vec())
     }
 
     async fn make_dir(&self, path: &VPath, exclusive: bool) -> Result<()> {
         self.require_write()?;
         let real = self.real_path(path);
-        blocking(move || match std::fs::create_dir(&real) {
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && !exclusive && real.is_dir() => Ok(()),
-            other => Ok(other?),
+        blocking(move || {
+            let made = std::fs::create_dir(&real); // NOSONAR: runs on the blocking pool
+            match made {
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && !exclusive && real.is_dir() => {
+                    Ok(())
+                }
+                other => Ok(other?),
+            }
         })
         .await
     }
@@ -505,7 +511,7 @@ impl Provider for LocalProvider {
         self.require_write()?;
         let real = self.real_path(path);
         blocking(move || {
-            OpenOptions::new().write(true).create_new(true).open(real)?;
+            OpenOptions::new().write(true).create_new(true).open(real)?; // NOSONAR: runs on the blocking pool
             Ok(())
         })
         .await
@@ -517,7 +523,7 @@ impl Provider for LocalProvider {
             return Err(Error::kind(ErrorKind::IsADirectory));
         }
         let real = self.real_path(path);
-        blocking(move || Ok(std::fs::remove_file(real)?)).await
+        blocking(move || Ok(std::fs::remove_file(real)?)).await // NOSONAR: runs on the blocking pool
     }
 
     async fn remove_dir(&self, path: &VPath) -> Result<()> {
@@ -526,7 +532,7 @@ impl Provider for LocalProvider {
             return Err(Error::kind(ErrorKind::PermissionDenied));
         }
         let real = self.real_path(path);
-        blocking(move || Ok(std::fs::remove_dir(real)?)).await
+        blocking(move || Ok(std::fs::remove_dir(real)?)).await // NOSONAR: runs on the blocking pool
     }
 
     async fn rename(&self, from: &VPath, to: &VPath, mode: RenameMode) -> Result<()> {
@@ -553,7 +559,8 @@ impl Provider for LocalProvider {
                 return Err(Error::kind(ErrorKind::Unsupported));
             }
             if let Some(mode) = changes.mode {
-                std::fs::set_permissions(&real, std::fs::Permissions::from_mode(mode & 0o7777))?;
+                let permissions = std::fs::Permissions::from_mode(mode & 0o7777);
+                std::fs::set_permissions(&real, permissions)?; // NOSONAR: runs on the blocking pool
             }
             if let Some(t) = changes.modified {
                 sys::set_mtime(&real, t)?;
@@ -578,14 +585,14 @@ impl Provider for LocalProvider {
         self.require_write()?;
         self.require_cap(cap::HARDLINKS)?;
         let (a, b) = (self.real_path(existing), self.real_path(new_path));
-        blocking(move || Ok(std::fs::hard_link(a, b)?)).await
+        blocking(move || Ok(std::fs::hard_link(a, b)?)).await // NOSONAR: runs on the blocking pool
     }
 
     async fn open_read(&self, path: &VPath, _lane: Lane) -> Result<Box<dyn ReadHandle>> {
         let real = self.real_path(path);
         blocking(move || {
-            let file = File::open(real)?;
-            let meta = file.metadata()?;
+            let file = File::open(real)?; // NOSONAR: runs on the blocking pool
+            let meta = file.metadata()?; // NOSONAR: runs on the blocking pool
             if meta.is_dir() {
                 return Err(Error::kind(ErrorKind::IsADirectory));
             }

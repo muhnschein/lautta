@@ -590,7 +590,7 @@ async fn download_to_cache(source: &dyn Provider, path: &VPath, dir: &Path) -> R
     let handle = source.open_read(path, Lane::Bulk).await?;
     let target = dir.join(unique_name("archive"));
     let guard = CacheFile(target.clone());
-    let file = Arc::new(File::create(&target)?);
+    let file = Arc::new(tokio::fs::File::create(&target).await?.into_std().await);
     let mut offset = 0u64;
     loop {
         let chunk = handle.read_at(offset, 1 << 20).await?;
@@ -837,7 +837,7 @@ impl Provider for ArchiveProvider {
         self.run(move |inner| -> Result<Box<dyn ReadHandle>> {
             if node.size > MEMORY_LIMIT {
                 let file = extract_to_temp(inner, &node)?;
-                let size = file.metadata()?.len();
+                let size = file.metadata()?.len(); // NOSONAR: runs on the blocking pool
                 return Ok(Box::new(TempFileHandle {
                     file: Arc::new(file),
                     size,

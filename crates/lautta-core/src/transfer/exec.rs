@@ -321,7 +321,7 @@ async fn stream_to(
     let plan = &job.plan;
     let dir = env.scratch_dir.clone();
     let scratch = blocking(move || {
-        std::fs::create_dir_all(&dir)?;
+        std::fs::create_dir_all(&dir)?; // NOSONAR: runs on the blocking pool
         tempfile::tempfile_in(dir)
     })
     .await?;
@@ -362,7 +362,7 @@ fn write_path_is_temp(job: &ItemJob, write_path: &VPath) -> bool {
 
 async fn file_len(f: &File) -> Result<u64> {
     let f = f.try_clone().map_err(Error::from)?;
-    blocking(move || f.metadata().map(|m| m.len())).await
+    blocking(move || f.metadata().map(|m| m.len())).await // NOSONAR: runs on the blocking pool
 }
 
 fn wanted_mtime(env: &ItemEnv, plan: &PlanItem, src: &Entry) -> Option<std::time::SystemTime> {

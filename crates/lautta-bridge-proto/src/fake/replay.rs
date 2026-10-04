@@ -564,19 +564,14 @@ pub async fn replay(seq: &Sequence) -> Result<(), String> {
 /// Replays every `*.json` file of `dir` (the contract directory); returns the
 /// names of the sequences that ran.
 pub async fn replay_dir(dir: &Path) -> Result<Vec<String>, String> {
-    let mut files: Vec<_> = std::fs::read_dir(dir)
-        .map_err(|e| format!("{}: {e}", dir.display()))?
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|x| x == "json"))
-        .collect();
-    files.sort();
+    let sources = tokio::task::spawn_blocking({
+        let dir = dir.to_owned();
+        move || read_sequences(&dir)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
     let mut ran = Vec::new();
-    for file in files {
-        let name = file
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let source = std::fs::read_to_string(&file).map_err(|e| format!("{name}: {e}"))?;
+    for (name, source) in sources {
         let seq = parse(&source).map_err(|e| format!("{name}: {e}"))?;
         replay(&seq)
             .await
@@ -584,6 +579,27 @@ pub async fn replay_dir(dir: &Path) -> Result<Vec<String>, String> {
         ran.push(name);
     }
     Ok(ran)
+}
+
+/// The `*.json` files of `dir` in name order, as (file name, contents).
+fn read_sequences(dir: &Path) -> Result<Vec<(String, String)>, String> {
+    let mut files: Vec<_> = std::fs::read_dir(dir)
+        .map_err(|e| format!("{}: {e}", dir.display()))?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x == "json"))
+        .collect();
+    files.sort();
+    files
+        .into_iter()
+        .map(|file| {
+            let name = file
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let source = std::fs::read_to_string(&file).map_err(|e| format!("{name}: {e}"))?;
+            Ok((name, source))
+        })
+        .collect()
 }
 
 #[cfg(test)]
