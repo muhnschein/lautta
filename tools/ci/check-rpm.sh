@@ -73,6 +73,11 @@ done
 size=$(stat -c %s "$bin")
 [ "$size" -le 20971520 ] || fail "binary is $size bytes, over the 20 MB budget (RS-7)"
 
+# The executable's TLS must start past the Android TLS slots that the GL
+# driver writes on libhybris devices (see crates/harbour-lautta/src/main.rs).
+tls_align=$(readelf -lW "$bin" | awk '$1 == "TLS" { print $NF }')
+[ $((tls_align)) -ge 128 ] || fail "TLS segment alignment is ${tls_align:-missing}, needs 128 (libhybris)"
+
 sb2 -t "$TARGET" -m sdk-install -R zypper --non-interactive in --allow-unsigned-rpm "$rpm"
 if sb2 -t "$TARGET" ldd /usr/bin/harbour-lautta | grep 'not found'; then
     fail "unresolved libraries"
