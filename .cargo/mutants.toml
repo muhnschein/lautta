@@ -1,18 +1,21 @@
 # cargo-mutants configuration (SPEC TST-5). Every exclusion must be a mutant
 # that provably changes no observable behaviour; `exclude_re` is matched
-# against "path:line:col: description".
+# against "path:line:col: description". Where a function has several mutants
+# of the same kind, the pattern names the column, not the line, so edits
+# elsewhere in the file do not move it onto a real mutant (the other `% n` in
+# Scheduler::compute, `(start + k) % n`, is at column 38 and must be caught).
 exclude_re = [
     # Scheduler::compute `self.cursor % n` -> `self.cursor + n`: the rotation
     # start is only ever used as `(start + k) % n`, and (c + n + k) % n ==
     # (c % n + k) % n, so every pick is identical.
-    'transfer/scheduler\.rs:255:\d+: replace % with \+ in Scheduler::compute',
+    'transfer/scheduler\.rs:\d+:33: replace % with \+ in Scheduler::compute',
     # Scheduler::compute `(l + 1) % n` -> `(l + 1) + n` for the stored cursor:
     # the cursor is only read back as `cursor % n`, which is unchanged by
     # adding n (the scheduler is `Clone` but never exposes the raw cursor).
-    'transfer/scheduler\.rs:289:\d+: replace % with \+ in Scheduler::compute',
+    'transfer/scheduler\.rs:\d+:55: replace % with \+ in Scheduler::compute',
     # ops/conflict.rs apply_one `plan.items[index + 1..end]` -> `index * 1..end`:
     # the range then also covers the folder itself, but `mark_children` only
     # touches items without a resolution and `apply_one` has just set the
     # folder's own resolution, so the slice differs without any effect.
-    'ops/conflict\.rs:217:\d+: replace \+ with \* in apply_one',
+    'ops/conflict\.rs:\d+:49: replace \+ with \* in apply_one',
 ]
