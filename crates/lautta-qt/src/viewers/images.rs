@@ -291,7 +291,9 @@ type Canceller = Box<dyn FnOnce() + Send>;
 static CANCELLERS: Mutex<Option<HashMap<u64, Canceller>>> = Mutex::new(None);
 
 fn cancellers() -> std::sync::MutexGuard<'static, Option<HashMap<u64, Canceller>>> {
-    CANCELLERS.lock().unwrap_or_else(|p| p.into_inner())
+    CANCELLERS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// The C++ side's shared state of one request; finishing it hands it back.

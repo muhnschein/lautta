@@ -135,7 +135,7 @@ fn list_names(dir: &Path) -> Result<Vec<String>> {
         Err(e) => return Err(e.into()),
     };
     let mut names: Vec<String> = rd
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
         .filter_map(|e| e.file_name().into_string().ok())
         .filter(|n| is_report_name(n))
         .collect();

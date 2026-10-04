@@ -209,7 +209,7 @@ pub fn dir_size(path: &Path) -> u64 {
     let Ok(read) = std::fs::read_dir(path) else {
         return 0;
     };
-    read.filter_map(|e| e.ok())
+    read.filter_map(Result::ok)
         .map(|e| match e.file_type() {
             Ok(t) if t.is_dir() => dir_size(&e.path()),
             Ok(t) if t.is_file() => e.metadata().map(|m| m.len()).unwrap_or(0),

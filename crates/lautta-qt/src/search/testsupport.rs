@@ -143,7 +143,7 @@ impl SearchTestSupport {
         fn total(p: &std::path::Path) -> u64 {
             match std::fs::metadata(p) {
                 Ok(m) if m.is_dir() => std::fs::read_dir(p)
-                    .map(|d| d.filter_map(|e| e.ok()).map(|e| total(&e.path())).sum())
+                    .map(|d| d.filter_map(Result::ok).map(|e| total(&e.path())).sum())
                     .unwrap_or(0),
                 Ok(m) => m.len(),
                 Err(_) => 0,

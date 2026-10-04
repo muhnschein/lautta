@@ -274,7 +274,7 @@ fn clamp_i64(v: u64) -> i64 {
 fn visible_count(path: &std::path::Path) -> Option<i64> {
     let n = std::fs::read_dir(path)
         .ok()?
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
         .filter(|e| !e.file_name().as_encoded_bytes().starts_with(b"."))
         .count();
     Some(clamp_i64(n as u64))

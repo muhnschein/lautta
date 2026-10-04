@@ -94,7 +94,7 @@ async fn bulk_rename_swaps_and_skips() {
     assert!(!h.core.can_undo(), "bulk rename records nothing for undo");
     let leftovers: Vec<_> = std::fs::read_dir(h.root.join("Documents"))
         .unwrap()
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
         .filter(|e| e.file_name().to_string_lossy().starts_with(".lautta-rename"))
         .collect();
     assert!(leftovers.is_empty());
@@ -183,7 +183,7 @@ async fn compress_local_then_extract_round_trip() {
     );
     let parts: Vec<_> = std::fs::read_dir(h.root.join("Downloads"))
         .unwrap()
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
         .filter(|e| e.file_name().to_string_lossy().ends_with(".lautta-part"))
         .collect();
     assert!(parts.is_empty(), "no partial files stay");

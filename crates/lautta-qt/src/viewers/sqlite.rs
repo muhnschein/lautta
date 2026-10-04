@@ -180,7 +180,7 @@ impl SqliteModel {
         blocking_run_then(
             self,
             move || {
-                let guard = db.lock().unwrap_or_else(|p| p.into_inner());
+                let guard = db.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
                 guard.page(&table, offset, PAGE_ROWS)
             },
             move |me, res| {

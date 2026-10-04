@@ -23,7 +23,10 @@ pub fn to_io(err: Error) -> io::Error {
 
 /// Inverse of [`to_io`]; plain I/O errors are mapped by kind.
 pub fn from_io(err: io::Error) -> Error {
-    let inner = err.get_ref().and_then(|e| e.downcast_ref::<Error>()).cloned();
+    let inner = err
+        .get_ref()
+        .and_then(<dyn std::error::Error + Send + Sync>::downcast_ref::<Error>)
+        .cloned();
     match inner {
         Some(e) => e,
         None if err.kind() == io::ErrorKind::InvalidData || err.kind() == io::ErrorKind::UnexpectedEof => {
