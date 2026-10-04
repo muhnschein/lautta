@@ -266,9 +266,10 @@ impl Scheduler {
         let mut picked = Vec::new();
         let mut last = None;
         let mut total: usize = self.entries.iter().map(|e| e.running as usize).sum();
-        // Each round that is not the last picks at least one pending item, so
-        // the rounds are bounded (a mistake here then fails tests, not hangs).
-        let rounds = self.entries.iter().map(|e| e.pending.len()).sum::<usize>() + 1;
+        // A round that picks nothing ends the loop, so each further round
+        // takes a pending item: at most that many rounds (a mistake in the
+        // stop condition then fails tests instead of hanging them).
+        let rounds: usize = self.entries.iter().map(|e| e.pending.len()).sum();
         for _ in 0..rounds {
             let before = picked.len();
             for k in 0..n {
