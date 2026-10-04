@@ -204,7 +204,7 @@ Page {
                 height: width
                 sourceSize.width: width
                 sourceSize.height: height
-                color: model.colour.length > 0 ? model.colour : "transparent"
+                color: model.colour.length > 0 ? model.colour : Theme.primaryColor
                 highlighted: row.highlighted
                 highlightColor: Theme.highlightColor
             }
@@ -269,7 +269,7 @@ Page {
                         source: "image://theme/icon-s-warning"
                         width: Theme.iconSizeExtraSmall
                         height: width
-                        color: "transparent"
+                        color: Theme.primaryColor
                         highlighted: row.highlighted
                     }
                     BusyIndicator {

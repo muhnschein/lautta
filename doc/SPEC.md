@@ -113,7 +113,10 @@ is the authority.
   `/usr/share/harbour-lautta/qml` and use a non-reserved URI (`Lautta.*`).
 - HBR-4: The binary exports `main` (the validator errors otherwise for Silica apps) and
   links `__libc_start_main@GLIBC_2.34` (expected version on aarch64). The desktop file
-  sets `X-Nemo-Application-Type=silica-qt5`.
+  sets `X-Nemo-Application-Type=no-invoker`, so Sailjail runs `/usr/bin/harbour-lautta`
+  itself: the netvfs bridge only serves a peer whose executable is the registered one
+  (netvfs XB-5), and under the silica-qt5 booster the process's executable is the
+  booster. The validator's resulting warning is documented in `doc/harbour-warnings.md`.
 - HBR-5: `[X-Sailjail]` uses only `Permissions`, `OrganizationName`, `ApplicationName`,
   `ExecDBus`. `OrganizationName` must not be `com.jolla` or `org.sailfishos`.
 - HBR-6: No setuid/setgid bits, no debug info in the package, no source-control files.
@@ -263,9 +266,8 @@ against the target rustc.
   the system `liblzma`/`libbz2`. zstd, if used, is linked statically.
 - RS-3: Binary: `#![no_main]`, `#[no_mangle] pub extern "C" fn main(argc, argv)`, linked
   with `-Wl,--export-dynamic-symbol=main`, PIE. Arguments come from `main`'s parameters,
-  not `std::env::args`, so booster launch behaves like a direct launch. If the booster
-  cannot load the binary, the fallback is `X-Nemo-Application-Type=qt5` with direct
-  `SailfishApp` start (validator warning only, documented).
+  not `std::env::args`. The app starts directly (`no-invoker`, HBR-4), not through
+  the booster.
 - RS-4: `panic = "abort"` in release. Every closure invoked from C++ is a thin trampoline
   that cannot unwind. Crashes write a minidump-free text report to the cache folder
   (`panic` hook), shown at the next start with *Copy report*.
@@ -644,7 +646,7 @@ direction icon, title, progress, "1.2 GB of 4.0 GB · 11.4 MB/s · 4 min".
 | PRF-2 | First remote batch rendered ≤ 3 × RTT + 100 ms on a warm bridge connection |
 | PRF-3 | No frame > 32 ms while scrolling a 20 000-entry list (thumbnails off) |
 | PRF-4 | RSS ≤ 150 MB with a 20 000-entry folder open |
-| PRF-5 | Launch to Browse ≤ 1.0 s warm (booster), ≤ 2.0 s cold |
+| PRF-5 | Launch to Browse ≤ 1.0 s warm, ≤ 2.0 s cold (direct start, HBR-4) |
 | PRF-6 | Local copy throughput ≥ 90 % of `cp` on the same storage |
 | PRF-7 | Browsing latency within ± 20 % while 2 bulk transfers run (lane separation) |
 | PRF-8 | 0 % CPU and no timers firing while idle in the background |
@@ -745,7 +747,7 @@ lautta/
   paths.
 - PKG-2: No `Requires:` beyond what rpm's automatic dependency generator derives from the
   allowed libraries and the explicit `sailfishsilica-qt5`, `libsailfishapp`,
-  `mapplauncherd-booster-silica-qt5`, `nemo-qml-plugin-notifications-qt5`,
+  `nemo-qml-plugin-notifications-qt5`,
   `nemo-qml-plugin-thumbnailer-qt5`, `nemo-qml-plugin-configuration-qt5`, `libkeepalive`,
   `qt5-qtdeclarative-import-multimedia`, `qt5-qtmultimedia` (all on the allowed
   `Requires` list). Never a dependency on netvfs.

@@ -38,7 +38,8 @@ HighlightImage {
     height: width
     sourceSize.width: width
     sourceSize.height: height
-    color: "transparent"
+    // Tinted like AppIcon: an uncoloured theme glyph vanishes on a light ambience.
+    color: Theme.primaryColor
     highlighted: highlightedItem
     highlightColor: Theme.highlightColor
 }

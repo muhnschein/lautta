@@ -113,8 +113,7 @@ cpp! {{
 }}
 
 /// Starts the application: Qt, the QML engine and the main page. `argv`
-/// comes from the exported C `main` (SPEC RS-3), so a booster launch behaves
-/// like a direct launch.
+/// comes from the exported C `main` (SPEC RS-3).
 ///
 /// # Safety
 /// `argc`/`argv` must be the process arguments as passed to `main`.
