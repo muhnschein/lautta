@@ -1,0 +1,11 @@
+/target
+/vendor
+/RPMS
+/build*
+/coverage
+*.profraw
+mutants.out*
+__pycache__/
+/.cargo-home
+/target-sdk
+/.claude

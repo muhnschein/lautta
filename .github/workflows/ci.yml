@@ -1,0 +1,64 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+  SDK_IMAGE: mirror.gcr.io/coderus/sailfishos-platform-sdk-aarch64:5.2.0.15@sha256:e5f7596d14502746b308c3dde36f65fc25d7f76c45a01acaed56a1f55b76f592
+  TARGET: SailfishOS-5.2.0.15-aarch64
+jobs:
+  check:
+    name: Format, lint, host tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install dependencies
+        run: ./tools/ci/install-host-deps.sh
+      - name: make check
+        run: make check
+
+  mutation:
+    name: Tests bite (mutation check ${{ matrix.shard }}/8)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install dependencies
+        run: ./tools/ci/install-host-deps.sh mutants
+      - name: Mutation check
+        run: make mutants MUTANTS_SHARD=${{ matrix.shard }}/8
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: mutants-${{ matrix.shard }}
+          path: mutants.out/*.txt
+
+  rpm:
+    name: Sailfish OS 5.2 aarch64 RPM
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install dependencies
+        run: ./tools/ci/install-host-deps.sh
+      - name: Pull the SDK
+        run: docker pull "$SDK_IMAGE"
+      - name: Build the RPM in the Sailfish SDK
+        run: make rpm
+      - name: Harbour validator, installability, QML on the target
+        run: make check-rpm
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: harbour-lautta-aarch64
+          path: RPMS/harbour-lautta-*.rpm

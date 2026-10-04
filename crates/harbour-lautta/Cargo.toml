@@ -1,0 +1,27 @@
+[package]
+name = "harbour-lautta"
+description = "Lautta, a file manager for Sailfish OS"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints.rust]
+# The exported C `main` (SPEC RS-3) needs #[no_mangle].
+unsafe_code = "allow"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+
+[[bin]]
+name = "harbour-lautta"
+path = "src/main.rs"
+# no_main binary: the exported C main has no test harness.
+test = false
+
+[features]
+sailfish = ["lautta-qt/sailfish"]
+
+[dependencies]
+lautta-qt = { path = "../lautta-qt" }

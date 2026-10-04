@@ -1,0 +1,51 @@
+[package]
+name = "lautta-core"
+description = "Lautta file manager core: providers, operations, transfers, persistence (no Qt)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+lautta-bridge-proto = { path = "../lautta-bridge-proto" }
+async-trait = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "fs", "io-util", "net"] }
+futures = "0.3"
+log = "0.4"
+thiserror = "1"
+bitflags = "2"
+rustix = { version = "0.38", features = ["fs", "process", "pipe", "net"] }
+rusqlite = { version = "0.31", features = ["blob"] }
+unicode-normalization = "0.1"
+percent-encoding = "2"
+regex = "1"
+sha2 = "0.10"
+md-5 = "0.10"
+sha1 = "0.10"
+hex = "0.4"
+zeroize = "1"
+notify = { version = "6", default-features = false }
+image = { version = "0.24", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
+kamadak-exif = "0.5"
+pulldown-cmark = { version = "0.9", default-features = false }
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+tar = "0.4"
+xz2 = "0.1"
+bzip2 = "0.4"
+zstd = { version = "0.13", default-features = false }
+sevenz-rust = { version = "0.5", default-features = false }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+glob = "0.3"
+tempfile = "3"
+
+[dev-dependencies]
+sevenz-rust = { version = "0.5", default-features = false, features = ["compress"] }
+tokio = { version = "1", features = ["test-util"] }
+lautta-bridge-proto = { path = "../lautta-bridge-proto", features = ["fake"] }

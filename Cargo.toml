@@ -1,0 +1,42 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/lautta-core",
+    "crates/lautta-bridge-proto",
+    "crates/lautta-qt",
+    "crates/harbour-lautta",
+]
+default-members = ["crates/lautta-core", "crates/lautta-bridge-proto"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "LGPL-2.1-or-later"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+
+# Small build folders: line tables only (backtraces keep file:line), no
+# incremental caches.
+[profile.dev]
+debug = "line-tables-only"
+incremental = false
+
+[profile.release]
+panic = "abort"
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+strip = "symbols"
+debug = false
+
+# qttypes 0.2.12 links QtWidgets unconditionally; Harbour does not allow it
+# (SPEC HBR-2). third_party/qttypes is the released crate with that link
+# behind a feature (see third_party/qttypes/LAUTTA.md).
+[patch.crates-io]
+qttypes = { path = "third_party/qttypes" }

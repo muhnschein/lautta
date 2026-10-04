@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+X-Nemo-Application-Type=no-invoker
+Icon=harbour-lautta
+Exec=harbour-lautta
+Name=Lautta
+Comment=A file manager for Sailfish OS
+X-Share-Methods=files
+
+[X-Share Method files]
+Description=Save to Lautta
+SupportedMimeTypes=*
+
+[X-Sailjail]
+OrganizationName=org.netvfs
+ApplicationName=lautta
+Permissions=UserDirs;RemovableMedia;Audio
+ExecDBus=harbour-lautta
