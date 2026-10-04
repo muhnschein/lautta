@@ -401,6 +401,20 @@ mod tests {
     }
 
     #[test]
+    fn mismatch_never_offers_replace_if_newer_or_resume() {
+        let dir = Side {
+            is_dir: true,
+            size: Some(10),
+            mtime_ms: Some(2),
+        };
+        for (src, dst) in [(file(100, 1), dir), (dir, file(10, 1))] {
+            let c = make_conflict(src, dst, ctx(true));
+            assert!(!c.resumable);
+            assert_eq!(c.choices, vec![KeepBoth, Skip, Replace]);
+        }
+    }
+
+    #[test]
     fn same_item_offers_no_replace() {
         let c = make_conflict(
             file(100, 5),
@@ -625,6 +639,17 @@ mod tests {
         ]);
         resolve(&mut plan, 0, KeepBoth, false, &r).await.unwrap();
         assert_eq!(plan.items[0].dst, uri("gone/a 3"));
+    }
+
+    #[tokio::test]
+    async fn keep_both_reports_a_destination_listing_that_fails() {
+        let mem = MemoryProvider::default();
+        mem.add_file("dst/a", b"x", 0);
+        mem.fail_next("list", "dst", Error::kind(ErrorKind::PermissionDenied));
+        let r = resolver(&mem);
+        let mut plan = plan_of(vec![item("s/a", "dst/a", Kind::File, ff())]);
+        let err = resolve(&mut plan, 0, KeepBoth, false, &r).await.unwrap_err();
+        assert_eq!(err.kind, ErrorKind::PermissionDenied);
     }
 
     #[tokio::test]

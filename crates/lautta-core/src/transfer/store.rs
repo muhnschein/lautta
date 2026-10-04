@@ -370,8 +370,9 @@ mod tests {
         assert!(th.due(1, 2000));
         assert!(!th.due(1, 3999));
         assert!(th.due(2, 3999), "other transfers are independent");
+        assert!(!th.due(1, 3000));
         th.forget(1);
-        assert!(th.due(1, 4000));
+        assert!(th.due(1, 3000), "a forgotten transfer is due at once");
     }
 
     #[test]

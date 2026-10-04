@@ -278,6 +278,13 @@ mod tests {
             decide(&resolved(file(1), ConflictChoice::Replace), Some(&d), None, true),
             Decision::Ask(_)
         ));
+        for choice in [ConflictChoice::ReplaceIfNewer, ConflictChoice::Merge] {
+            // The source is newer, yet a file cannot replace a folder.
+            assert!(matches!(
+                decide(&resolved(file(1), choice), Some(&d), None, true),
+                Decision::Ask(_)
+            ));
+        }
         let dir = plan_item("d", "d", Kind::Dir, 0);
         let f = dst_entry(Kind::File, 1, 0);
         let Decision::Ask(c) = decide(&dir, Some(&f), None, true) else {
