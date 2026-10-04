@@ -26,7 +26,10 @@ thread_local! {
 /// Called by the C runtime (or the booster) with the process arguments.
 #[no_mangle]
 pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
-    // Keeps the gap (and so the alignment) in the binary.
-    HYBRIS_TLS_GAP.with(|g| std::hint::black_box(g.0));
+    // Keeps the gap (and so the alignment) in the binary: its address escapes,
+    // so not even LTO can fold the constant away and drop the variable.
+    HYBRIS_TLS_GAP.with(|g| {
+        std::hint::black_box(g as *const HybrisTlsGap);
+    });
     lautta_qt::run(argc, argv)
 }
