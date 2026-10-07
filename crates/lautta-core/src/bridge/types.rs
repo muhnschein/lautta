@@ -204,6 +204,9 @@ pub struct BridgeConfig {
     pub handshake_timeout: Option<Duration>,
     /// Whether the app is in the foreground at start.
     pub foreground: bool,
+    /// How long nearby servers shown before a restart of the discovery stay
+    /// while it finds them again (LOC-6).
+    pub nearby_settle: Duration,
 }
 
 impl BridgeConfig {
@@ -218,6 +221,7 @@ impl BridgeConfig {
             poll_interval: Some(Duration::from_secs(30)),
             handshake_timeout: Some(Duration::from_secs(10)),
             foreground: true,
+            nearby_settle: Duration::from_secs(3),
         }
     }
 

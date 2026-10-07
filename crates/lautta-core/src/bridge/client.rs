@@ -5,6 +5,7 @@
 
 use super::convert::map_error;
 use super::link::{rpc, Link};
+use super::nearby::Settle;
 use super::types::{
     bridge_id, location_id, AdHocOptions, BridgeConfig, BridgeStatus, Consent, NearbyServer, RemoteLocation,
 };
@@ -27,6 +28,8 @@ pub(super) struct Info {
     pub questions: Vec<String>,
     /// Newest `ListLocations` request that was applied.
     pub applied_refresh: u64,
+    /// Nearby servers while a restarted discovery settles.
+    pub nearby: Settle,
 }
 
 pub(super) struct Inner {
@@ -228,7 +231,12 @@ impl BridgeClient {
     pub async fn discover(&self, on: bool) -> Result<()> {
         self.inner.discover.store(on, Ordering::SeqCst);
         match self.files_link() {
-            Ok(link) => rpc(link.proxy().discover(on).await),
+            Ok(link) => {
+                if on {
+                    super::session::begin_settle(&self.inner);
+                }
+                rpc(link.proxy().discover(on).await)
+            }
             // Applied when the bridge becomes ready.
             Err(_) => Ok(()),
         }

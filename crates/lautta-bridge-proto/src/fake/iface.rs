@@ -430,12 +430,14 @@ impl Iface {
         self.env(&ctxt);
         self.session.with(|s| s.discovering = on);
         if on {
-            let nearby = self.shared.with(|s| s.nearby.clone());
-            if !nearby.is_empty() {
-                // The result is signalled after the reply, as found servers are.
-                let shared = self.shared.clone();
-                tokio::spawn(async move { shared.broadcast_nearby().await });
-            }
+            // As netvfs' NearbyService: a start signals what is known right
+            // away, after the reply, also when that is nothing yet.
+            let shared = self.shared.clone();
+            tokio::spawn(async move { shared.broadcast_nearby().await });
+        } else if !self.shared.any_discovering() {
+            // netvfs halts the discovery when its last client stops and
+            // forgets what it found (Discovery::Private::halt).
+            self.shared.with(|s| s.nearby.clear());
         }
         Ok(())
     }

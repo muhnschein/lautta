@@ -10,6 +10,7 @@
 mod client;
 pub(crate) mod convert;
 pub(crate) mod link;
+mod nearby;
 mod registry;
 mod session;
 mod types;

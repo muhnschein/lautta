@@ -25,11 +25,13 @@ pub struct Rig {
 
 /// The configuration the tests start from: the app's defaults without polling,
 /// so that only starts, pokes and the foreground trigger a check, and without a
-/// handshake timeout, which a paused clock would fire at the first idle moment.
+/// handshake timeout, which a paused clock would fire at the first idle moment,
+/// and with a nearby list that settles quickly after a start of the discovery.
 pub fn config(paths: &AppPaths) -> BridgeConfig {
     BridgeConfig {
         poll_interval: None,
         handshake_timeout: None,
+        nearby_settle: Duration::from_millis(100),
         ..BridgeConfig::for_app(paths)
     }
 }
