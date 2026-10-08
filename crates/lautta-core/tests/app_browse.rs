@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The rows of Browse, recent ad-hoc servers and the purge of removed
-//! accounts (SPEC §15.2, NVB-3, NVB-6, NVB-12, SEC-5, ORG-3).
+//! accounts (SPEC §15.2, NVB-3, NVB-6, NVB-12, SEC-5).
 
 mod bridge_support;
 
