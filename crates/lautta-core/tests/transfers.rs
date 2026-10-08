@@ -1120,40 +1120,6 @@ async fn an_empty_plan_completes_at_once() {
 }
 
 #[tokio::test]
-async fn high_priority_write_backs_run_before_queued_transfers() {
-    let r = rig();
-    for n in ["a", "b", "c", "w"] {
-        r.local.add_file(n, b"hello", 1);
-    }
-    r.engine.volume_present(LOCAL, false);
-    let mut ids = Vec::new();
-    for (n, high) in [("a", false), ("b", false), ("c", false), ("w", true)] {
-        let p = plan(
-            OperationKind::Copy,
-            LOCAL,
-            vec![item(LOCAL, n, LOCAL, &format!("out-{n}"), Kind::File, 5)],
-        );
-        let opts = TransferOptions {
-            high_priority: high,
-            ..TransferOptions::default()
-        };
-        ids.push(r.engine.add(p, "", opts).await.unwrap());
-    }
-    r.engine.volume_present(LOCAL, true);
-    for id in &ids {
-        settled(&r.engine, *id).await;
-    }
-    let first: Vec<String> = r
-        .local
-        .calls()
-        .into_iter()
-        .filter(|c| c.starts_with("stat out-"))
-        .take(2)
-        .collect();
-    assert_eq!(first, vec!["stat out-w", "stat out-a"]);
-}
-
-#[tokio::test]
 async fn the_local_limit_caps_parallel_items_at_two() {
     // Items of one transfer to a local destination start two at a time.
     let r = rig();

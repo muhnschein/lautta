@@ -28,11 +28,6 @@ Item {
 
         transferId: 4242
     }
-    WorkingCopiesModel { id: copies }
-    Repeater {
-        model: copies
-        delegate: Item { }
-    }
 
     Component.onCompleted: {
         // connect() instead of Connections: Qt 5.6 on the target and Qt 5.15
@@ -66,9 +61,6 @@ Item {
         before = failedCount
         Transfers.queueCopy("[]", "not a uri")
         check(failedCount === before + 1 && lastKind === "InvalidArgument", "bad destination reports InvalidArgument")
-        before = failedCount
-        Transfers.resolveEditConflict(1, "bogus")
-        check(failedCount === before + 1 && lastKind === "InvalidArgument", "bad edit choice reports InvalidArgument")
 
         check(Transfers.questionsJson(5) === "[]", "no questions for an unknown transfer")
         check(Transfers.summaryJson(5) === "", "no summary for an unknown transfer")
@@ -87,6 +79,5 @@ Item {
         check(items.count === 0 && items.summaryJson === "", "an unknown transfer has no items and no summary")
         items.transferId = 4243
         check(items.transferId === 4243, "the transfer id can change")
-        check(copies.count >= 0, "working copies have a count")
     }
 }

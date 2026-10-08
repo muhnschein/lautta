@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! `TransfersModel`: the grouped list of the Transfers page (§15.4): active,
-//! waiting, paused, edited files and history.
+//! waiting, paused and history.
 
 use super::events;
-use crate::runtime::{core, spawn_then};
+use crate::runtime::core;
 use lautta_core::app_transfers::ProgressBook;
-use lautta_core::app_transfers::{state_name, wait_reason_name, EditedFile, TransferGroup, TransferRow};
+use lautta_core::app_transfers::{state_name, wait_reason_name, TransferRow};
 use lautta_core::transfer::TransferEvent;
-use lautta_core::workcopy::Purpose;
 use qmetaobject::prelude::*;
 use qmetaobject::QPointer;
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
 /// Role names in role-id order (`Qt::UserRole + 1 + index`).
-const ROLES: [&str; 28] = [
+const ROLES: [&str; 22] = [
     "transferId",
     "group",
     "kind",
@@ -35,12 +34,6 @@ const ROLES: [&str; 28] = [
     "finishedMs",
     "questions",
     "progress",
-    "copyId",
-    "remote",
-    "pinned",
-    "dirty",
-    "localSize",
-    "lastUploadMs",
     "failed",
     "name",
 ];
@@ -49,7 +42,6 @@ const FIRST_ROLE: i32 = 257;
 /// Everything a row shows, flat, so rows can be compared for changes.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub(super) struct RowData {
-    pub is_edit: bool,
     pub id: i64,
     pub group: &'static str,
     pub kind: &'static str,
@@ -69,12 +61,6 @@ pub(super) struct RowData {
     pub created_ms: i64,
     pub finished_ms: i64,
     pub questions: i64,
-    pub copy_id: i64,
-    pub remote: String,
-    pub pinned: bool,
-    pub dirty: bool,
-    pub local_size: i64,
-    pub last_upload_ms: i64,
 }
 
 fn to_i64(v: u64) -> i64 {
@@ -82,10 +68,6 @@ fn to_i64(v: u64) -> i64 {
 }
 
 impl RowData {
-    fn key(&self) -> (bool, i64) {
-        (self.is_edit, if self.is_edit { self.copy_id } else { self.id })
-    }
-
     fn progress(&self) -> f64 {
         if self.bytes_total > 0 {
             (self.bytes_done as f64 / self.bytes_total as f64).clamp(0.0, 1.0)
@@ -97,7 +79,7 @@ impl RowData {
     fn value(&self, role: &str) -> QVariant {
         let s = |v: &str| QVariant::from(QString::from(v));
         match role {
-            "transferId" => QVariant::from(if self.is_edit { -1 } else { self.id }),
+            "transferId" => QVariant::from(self.id),
             "group" => s(self.group),
             "kind" => s(self.kind),
             "title" | "name" => s(&self.title),
@@ -118,12 +100,6 @@ impl RowData {
             "finishedMs" => QVariant::from(self.finished_ms),
             "questions" => QVariant::from(self.questions),
             "progress" => QVariant::from(self.progress()),
-            "copyId" => QVariant::from(self.copy_id),
-            "remote" => s(&self.remote),
-            "pinned" => QVariant::from(self.pinned),
-            "dirty" => QVariant::from(self.dirty),
-            "localSize" => QVariant::from(self.local_size),
-            "lastUploadMs" => QVariant::from(self.last_upload_ms),
             _ => QVariant::default(),
         }
     }
@@ -132,7 +108,6 @@ impl RowData {
 pub(super) fn transfer_row(r: &TransferRow) -> RowData {
     let s = &r.summary;
     RowData {
-        is_edit: false,
         id: s.id,
         group: r.group.name(),
         kind: r.kind_name(),
@@ -152,59 +127,7 @@ pub(super) fn transfer_row(r: &TransferRow) -> RowData {
         created_ms: s.created_ms,
         finished_ms: s.finished_ms.unwrap_or(-1),
         questions: r.questions as i64,
-        ..RowData::default()
     }
-}
-
-/// A working copy as a list row: `state` is `changed` while an upload is
-/// pending and `watching` otherwise (EDT-3).
-pub(super) fn edited_row(e: &EditedFile) -> RowData {
-    let core = core();
-    let c = &e.copy;
-    RowData {
-        is_edit: true,
-        group: TransferGroup::Edited.name(),
-        kind: if c.purpose == Purpose::Edit {
-            "edit"
-        } else {
-            "open"
-        },
-        title: c
-            .remote
-            .name()
-            .map(lautta_core::vpath::display_name)
-            .unwrap_or_default(),
-        state: if e.dirty { "changed" } else { "watching" }.to_owned(),
-        direction: "edit",
-        destination: core
-            .as_ref()
-            .map(|k| k.locations.display_address(&c.remote))
-            .unwrap_or_default(),
-        dest_name: core
-            .as_ref()
-            .and_then(|k| k.location(&c.remote.location))
-            .map(|l| l.name)
-            .unwrap_or_default(),
-        eta: -1,
-        finished_ms: -1,
-        created_ms: -1,
-        copy_id: c.id,
-        remote: c.remote.to_string(),
-        pinned: c.pinned,
-        dirty: e.dirty,
-        local_size: to_i64(e.local_size),
-        last_upload_ms: c.last_upload_ms.unwrap_or(-1),
-        ..RowData::default()
-    }
-}
-
-/// Puts the edited files between paused and history.
-pub(super) fn assemble(mut transfers: Vec<RowData>, edited: &[RowData]) -> Vec<RowData> {
-    let at = transfers.partition_point(|r| r.group != TransferGroup::History.name());
-    let tail = transfers.split_off(at);
-    transfers.extend(edited.iter().cloned());
-    transfers.extend(tail);
-    transfers
 }
 
 #[derive(QObject, Default)]
@@ -215,7 +138,6 @@ pub struct TransfersModel {
     refresh: qt_method!(fn(&mut self)),
 
     rows: Vec<RowData>,
-    edited: Vec<RowData>,
     book: ProgressBook,
     registered: Cell<bool>,
 }
@@ -280,28 +202,11 @@ impl TransfersModel {
         {
             self.book.update(*id, *bytes_done, *rate, *eta_secs);
         }
-        if events::is_reload(ev) {
-            self.reload_edited();
-        }
         self.rebuild();
     }
 
     fn refresh(&mut self) {
-        self.reload_edited();
         self.rebuild();
-    }
-
-    fn reload_edited(&self) {
-        let Some(core) = core() else { return };
-        let me = QPointer::from(self);
-        spawn_then(async move { core.edited_files().await }, move |res| {
-            let (Some(p), Ok(files)) = (me.as_pinned(), res) else {
-                return;
-            };
-            let mut m = p.borrow_mut();
-            m.edited = files.iter().map(edited_row).collect();
-            m.rebuild();
-        });
     }
 
     fn rebuild(&mut self) {
@@ -309,16 +214,13 @@ impl TransfersModel {
         let rows = core.transfer_rows(&self.book);
         let ids: HashSet<i64> = rows.iter().map(|r| r.summary.id).collect();
         self.book.retain(&ids);
-        let data = rows.iter().map(transfer_row).collect();
-        let new = assemble(data, &self.edited);
-        self.apply(new);
+        self.apply(rows.iter().map(transfer_row).collect());
     }
 
     /// Updates changed rows in place when the row order is the same (keeps
     /// the scroll position and open context menus), resets otherwise.
     fn apply(&mut self, new: Vec<RowData>) {
-        let same =
-            new.len() == self.rows.len() && new.iter().zip(&self.rows).all(|(a, b)| a.key() == b.key());
+        let same = new.len() == self.rows.len() && new.iter().zip(&self.rows).all(|(a, b)| a.id == b.id);
         if same {
             for (i, row) in new.into_iter().enumerate() {
                 if self.rows[i] != row {
@@ -341,34 +243,6 @@ impl TransfersModel {
 mod tests {
     use super::*;
 
-    fn row(group: &'static str, id: i64) -> RowData {
-        RowData {
-            group,
-            id,
-            ..RowData::default()
-        }
-    }
-
-    #[test]
-    fn edited_files_sit_between_paused_and_history() {
-        let t = vec![
-            row("active", 1),
-            row("paused", 2),
-            row("history", 3),
-            row("history", 4),
-        ];
-        let e = vec![RowData {
-            is_edit: true,
-            group: "edited",
-            copy_id: 9,
-            ..RowData::default()
-        }];
-        let ids: Vec<(bool, i64)> = assemble(t, &e).iter().map(RowData::key).collect();
-        assert_eq!(ids, [(false, 1), (false, 2), (true, 9), (false, 3), (false, 4)]);
-        assert_eq!(assemble(vec![], &e).len(), 1);
-        assert_eq!(assemble(vec![row("history", 1)], &[]).len(), 1);
-    }
-
     #[test]
     fn progress_is_a_clamped_fraction() {
         let mut r = RowData::default();
@@ -388,10 +262,5 @@ mod tests {
         }
         assert!(!r.value("nonsense").is_valid());
         assert_eq!(r.value("transferId").to_int(), 0);
-        let e = RowData {
-            is_edit: true,
-            ..RowData::default()
-        };
-        assert_eq!(e.value("transferId").to_int() as i32, -1);
     }
 }

@@ -110,23 +110,12 @@ Item {
         note.publish()
     }
 
-    // An edited file's remote changed meanwhile and the user is away (EDT-2).
-    function noteEditConflict(copyId, name) {
-        if (!inBackground)
-            return
-        var note = editComponent.createObject(root, { "copyId": copyId })
-        //% "%1 changed on the server"
-        note.body = qsTrId("lautta-xfr-note-edit-body").arg(name)
-        note.publish()
-    }
-
     Component.onCompleted: closeStale()
 
     Connections {
         target: Transfers
         onFinished: root.noteFinished(id, ok, failures)
         onNeedsAnswer: root.noteQuestion(id)
-        onEditConflict: root.noteEditConflict(copyId, name)
     }
 
     Timer {
@@ -203,21 +192,6 @@ Item {
             summary: qsTrId("lautta-xfr-note-question")
             remoteActions: root.remoteAction("conflict")
             onClicked: root.openRequested("conflict", transferId)
-        }
-    }
-
-    Component {
-        id: editComponent
-
-        Notification {
-            property int copyId
-
-            appName: "Lautta"
-            category: "x-lautta.transfer.question"
-            summary: qsTrId("lautta-xfr-note-question")
-            remoteActions: root.remoteAction("transfers")
-            onClicked: root.openRequested("edit", copyId)
-            onClosed: destroy()
         }
     }
 }

@@ -591,12 +591,8 @@ impl Inner {
     fn register(&self, st: &mut State, t: Transfer) {
         let live = Live::new(t);
         let op = live.t.kind;
-        st.sched.add(
-            live.t.id,
-            &live.t.dest.location,
-            live.pending_items(op),
-            live.t.options.high_priority,
-        );
+        st.sched
+            .add(live.t.id, &live.t.dest.location, live.pending_items(op));
         st.live.insert(live.t.id, live);
     }
 
@@ -778,14 +774,10 @@ impl Inner {
         }
         live.t.error = None;
         live.t.finished_ms = None;
-        let (op, loc, prio) = (
-            live.t.kind,
-            live.t.dest.location.clone(),
-            live.t.options.high_priority,
-        );
+        let (op, loc) = (live.t.kind, live.t.dest.location.clone());
         let pending = live.pending_items(op);
         self.set_state(st, id, TransferState::Queued)?;
-        st.sched.add(id, &loc, pending, prio);
+        st.sched.add(id, &loc, pending);
         self.apply_gates(st);
         self.pump(st);
         self.maybe_finish(st, id);

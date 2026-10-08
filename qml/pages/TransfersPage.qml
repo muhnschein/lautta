@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Transfers (SPEC §15.4): Active, Waiting for you, Paused, Edited files and
-// History, with the prompt for transfers that stopped when the app closed
+// Transfers (SPEC §15.4): Active, Waiting for you, Paused and History, with
+// the prompt for transfers that stopped when the app closed
 // (XFR-11, board TransfersRestored).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -26,9 +26,6 @@ Page {
         case "paused":
             //% "Paused"
             return qsTrId("lautta-xfr-group-paused")
-        case "edited":
-            //% "Edited files"
-            return qsTrId("lautta-xfr-group-edited")
         default:
             //% "History"
             return qsTrId("lautta-xfr-group-history")
@@ -50,14 +47,8 @@ Page {
         return ""
     }
 
-    // What a tap on a row does: details, the unanswered conflict, or the
-    // upload of an edited file.
+    // What a tap on a row does: the unanswered conflict, or details.
     function activate(row) {
-        if (row.group === "edited") {
-            if (row.dirty)
-                workingCopies.uploadNow(row.copyId)
-            return
-        }
         if (row.questions > 0) {
             var asked = JSON.parse(Transfers.questionsJson(row.transferId))
             if (asked.length > 0) {
@@ -71,12 +62,6 @@ Page {
     }
 
     TransfersModel { id: transfers }
-
-    WorkingCopiesModel {
-        id: workingCopies
-
-        onConflict: pageStack.push(Qt.resolvedUrl("../dialogs/EditConflictDialog.qml"), { "copyId": copyId })
-    }
 
     SilicaListView {
         id: list
@@ -148,12 +133,8 @@ Page {
 
         delegate: TransferDelegate {
             row: model
-            copies: workingCopies
             restored: Transfers.pendingAtStart > 0
-            onClicked: page.activate({
-                "group": group, "dirty": dirty, "copyId": copyId,
-                "transferId": transferId, "questions": questions
-            })
+            onClicked: page.activate({ "transferId": transferId, "questions": questions })
         }
 
         footer: Column {

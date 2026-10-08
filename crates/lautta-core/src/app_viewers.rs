@@ -312,7 +312,7 @@ impl Core {
         Ok(Arc::from(handle))
     }
 
-    /// Notes a viewed, opened or edited file in Recents (ORG-2). Failures do
+    /// Notes a viewed or opened file in Recents (ORG-2). Failures do
     /// not matter to the viewer.
     pub fn note_viewed(&self, uri: &Uri, kind: RecentKind) {
         if let Err(e) = self.recents.record(uri, &display(uri), kind) {

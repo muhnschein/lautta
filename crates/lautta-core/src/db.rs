@@ -67,13 +67,9 @@ const MIGRATIONS: &[&str] = &[
         id INTEGER PRIMARY KEY,
         remote_uri TEXT NOT NULL UNIQUE,
         local_path BLOB NOT NULL,
-        base_size INTEGER,
-        base_mtime_ms INTEGER,
-        base_etag BLOB,
-        local_mtime_ms INTEGER,
-        pinned INTEGER NOT NULL DEFAULT 0,
-        last_upload_ms INTEGER,
-        state TEXT NOT NULL
+        local_size INTEGER NOT NULL,
+        local_mtime_ms INTEGER NOT NULL,
+        fetched_ms INTEGER NOT NULL
     );
     CREATE TABLE dircache (
         uri TEXT PRIMARY KEY,

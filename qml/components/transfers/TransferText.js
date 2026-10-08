@@ -142,15 +142,6 @@ function status(r, restored) {
         var paused = qsTrId("lautta-xfr-paused-at").arg(percent(r.bytesDone, r.bytesTotal))
         //% "resumes from where it stopped"
         return restored ? paused + " · " + qsTrId("lautta-xfr-resumes") : paused
-    case "edited":
-        if (r.dirty)
-            //% "Changed · upload pending"
-            return qsTrId("lautta-xfr-edit-changed")
-        if (r.lastUploadMs >= 0)
-            //% "Uploaded %1 · watching"
-            return qsTrId("lautta-xfr-edit-uploaded").arg(when(r.lastUploadMs))
-        //% "Watching for changes"
-        return qsTrId("lautta-xfr-edit-watching")
     default:
         return historyLine(r)
     }
@@ -174,12 +165,6 @@ function historyLine(r) {
     return at.length > 0 ? text + " · " + at : text
 }
 
-// Name of the edited file with where it lives: "budget.ods · Office".
-function editedTitle(r) {
-    //% "%1 · %2"
-    return qsTrId("lautta-xfr-edit-title").arg(r.title).arg(r.destName)
-}
-
 function directionIcon(direction) {
     switch (direction) {
     case "upload":
@@ -188,8 +173,6 @@ function directionIcon(direction) {
         return "image://theme/icon-m-cloud-download"
     case "delete":
         return "image://theme/icon-m-delete"
-    case "edit":
-        return "image://theme/icon-m-edit"
     default:
         return "image://theme/icon-m-transfer"
     }

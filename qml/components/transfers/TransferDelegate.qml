@@ -11,24 +11,20 @@ import "TransferText.js" as TransferText
 ListItem {
     id: item
 
-    // The WorkingCopiesModel the page owns, for the Edited files actions.
-    property var copies
     // Rows of the restored-at-start prompt say where they resume from.
     property bool restored
     // One TransfersModel row (the delegate's `model`).
     property var row: ({
         transferId: 0, group: "active", kind: "copy", title: "", state: "running", waitReason: "",
         bytesDone: 0, bytesTotal: 0, rate: 0, eta: -1, itemsDone: 0, itemsTotal: 0, itemsFailed: 0,
-        direction: "local", destName: "", finishedMs: -1, questions: 0, progress: 0, copyId: 0,
-        pinned: false, dirty: false, lastUploadMs: -1
+        direction: "local", destName: "", finishedMs: -1, questions: 0, progress: 0
     })
-    readonly property bool isEdit: row.group === "edited"
     readonly property bool hasProgress: (row.group === "active" && row.state !== "scanning") || row.group === "paused"
     readonly property var r: ({
         group: row.group, kind: row.kind, state: row.state, title: row.title, direction: row.direction,
         waitReason: row.waitReason, bytesDone: row.bytesDone, bytesTotal: row.bytesTotal, rate: row.rate,
         eta: row.eta, itemsDone: row.itemsDone, itemsTotal: row.itemsTotal, itemsFailed: row.itemsFailed,
-        destName: row.destName, finishedMs: row.finishedMs, dirty: row.dirty, lastUploadMs: row.lastUploadMs
+        destName: row.destName, finishedMs: row.finishedMs
     })
 
     contentHeight: Math.max(Theme.itemSizeMedium, content.height + 2 * Theme.paddingSmall)
@@ -37,60 +33,35 @@ ListItem {
             MenuItem {
                 //% "Pause"
                 text: qsTrId("lautta-xfr-menu-pause")
-                visible: !item.isEdit && (row.group === "active" || (row.group === "waiting" && row.waitReason !== "question"))
+                visible: row.group === "active" || (row.group === "waiting" && row.waitReason !== "question")
                 onClicked: Transfers.pause(row.transferId)
             }
             MenuItem {
                 //% "Resume"
                 text: qsTrId("lautta-xfr-menu-resume")
-                visible: !item.isEdit && row.group === "paused"
+                visible: row.group === "paused"
                 onClicked: Transfers.resume(row.transferId)
             }
             MenuItem {
                 //% "Move to top of the queue"
                 text: qsTrId("lautta-xfr-menu-top")
-                visible: !item.isEdit && row.group !== "history"
+                visible: row.group !== "history"
                 onClicked: Transfers.moveToTop(row.transferId)
             }
             MenuItem {
                 //% "Retry failed"
                 text: qsTrId("lautta-xfr-menu-retry")
-                visible: !item.isEdit && row.group === "history" && row.state === "failed"
+                visible: row.group === "history" && row.state === "failed"
                 onClicked: Transfers.retryFailed(row.transferId)
             }
             MenuItem {
                 //% "Cancel transfer"
                 text: qsTrId("lautta-xfr-menu-cancel")
-                visible: !item.isEdit && row.group !== "history"
+                visible: row.group !== "history"
                 onClicked: item.remorseAction(
                     //% "Canceling transfer"
                     qsTrId("lautta-xfr-remorse-cancel"),
                     function() { Transfers.cancel(row.transferId) },
-                    App.setting("remorse_seconds") * 1000)
-            }
-            MenuItem {
-                //% "Upload now"
-                text: qsTrId("lautta-xfr-menu-upload-now")
-                visible: item.isEdit && row.dirty
-                onClicked: item.copies.uploadNow(row.copyId)
-            }
-            MenuItem {
-                text: row.pinned
-                    //% "Don't keep this copy"
-                    ? qsTrId("lautta-xfr-menu-unpin")
-                    //% "Keep this copy"
-                    : qsTrId("lautta-xfr-menu-pin")
-                visible: item.isEdit
-                onClicked: item.copies.pin(row.copyId, !row.pinned)
-            }
-            MenuItem {
-                //% "Stop editing and discard changes"
-                text: qsTrId("lautta-xfr-menu-discard")
-                visible: item.isEdit
-                onClicked: item.remorseAction(
-                    //% "Discarding the working copy"
-                    qsTrId("lautta-xfr-remorse-discard"),
-                    function() { Transfers.resolveEditConflict(row.copyId, "discard") },
                     App.setting("remorse_seconds") * 1000)
             }
         }
@@ -118,7 +89,7 @@ ListItem {
 
             Label {
                 width: parent.width
-                text: item.isEdit ? TransferText.editedTitle(item.r) : TransferText.title(item.r)
+                text: TransferText.title(item.r)
                 color: item.highlighted ? Theme.highlightColor : Theme.primaryColor
                 truncationMode: TruncationMode.Fade
             }

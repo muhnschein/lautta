@@ -1,20 +1,16 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! inotify watching with debouncing (SPEC BRW-6, EDT-3).
+//! inotify watching with debouncing (SPEC BRW-6).
 //!
-//! * [`DirWatcher`] watches a set of local folders (not recursively) while
-//!   they are open in the browser and sends one [`WatchEvent::Changed`] per
-//!   folder after changes have been quiet for the debounce time.
-//! * [`FileWatcher`] watches individual files of edit-in-place working
-//!   copies and sends [`FileEvent::Written`] once a file was closed after
-//!   writing (`IN_CLOSE_WRITE`) or replaced by a rename (atomic save), after
-//!   a 2 s quiet period by default.
+//! [`DirWatcher`] watches a set of local folders (not recursively) while
+//! they are open in the browser and sends one [`WatchEvent::Changed`] per
+//! folder after changes have been quiet for the debounce time.
 //!
 //! Raw `notify` events are handled on a small worker thread that owns the
 //! debounce state; consumers get events through an unbounded tokio channel.
-//! Both watchers stop their thread when dropped.
+//! The watcher stops its thread when dropped.
 
 use crate::error::{Error, ErrorKind, Result};
-use notify::event::{AccessKind, AccessMode, ModifyKind, RenameMode};
+use notify::event::{AccessKind, AccessMode};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
@@ -23,12 +19,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 /// Quiet time before a folder change is reported.
 pub const DIR_DEBOUNCE: Duration = Duration::from_millis(250);
-/// Quiet time before a written working copy is reported (EDT-3).
-pub const FILE_DEBOUNCE: Duration = Duration::from_secs(2);
 /// How often the worker checks whether it should stop.
 const STOP_POLL: Duration = Duration::from_millis(100);
 
@@ -36,12 +30,6 @@ const STOP_POLL: Duration = Duration::from_millis(100);
 pub enum WatchEvent {
     /// Something in this folder was created, removed, renamed or modified.
     Changed(PathBuf),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FileEvent {
-    /// The file was closed after writing, or replaced by a rename.
-    Written(PathBuf),
 }
 
 /// Collapses bursts: a key is due once no new event for it arrived for `delay`.
@@ -270,106 +258,10 @@ fn dirs_touched(watched: &HashSet<PathBuf>, ev: &Event) -> Vec<PathBuf> {
     out
 }
 
-/// Watches individual files for completed writes (working copies, EDT-3).
-/// The parent folder is watched, so atomic saves (write a temp file, rename
-/// it over the original) are noticed too.
-pub struct FileWatcher {
-    watcher: Mutex<RecommendedWatcher>,
-    files: Arc<Mutex<HashSet<PathBuf>>>,
-    _stop: StopOnDrop,
-}
-
-impl FileWatcher {
-    pub fn new(debounce: Duration) -> Result<(FileWatcher, UnboundedReceiver<FileEvent>)> {
-        let (watcher, raw) = raw_watcher()?;
-        let (tx, rx) = unbounded_channel();
-        let files: Arc<Mutex<HashSet<PathBuf>>> = Arc::default();
-        let stop = Arc::new(AtomicBool::new(false));
-        let shared = files.clone();
-        spawn_worker(
-            raw,
-            debounce,
-            stop.clone(),
-            move |ev| files_written(&lock(&shared), ev),
-            move |file: PathBuf| send_written(&tx, file),
-        );
-        Ok((
-            FileWatcher {
-                watcher: Mutex::new(watcher),
-                files,
-                _stop: StopOnDrop(stop),
-            },
-            rx,
-        ))
-    }
-
-    /// Starts watching `file`, which must have an existing parent folder.
-    pub fn watch_file(&self, file: &Path) -> Result<()> {
-        let parent = parent_of(file)?;
-        let mut files = lock(&self.files);
-        if files.contains(file) {
-            return Ok(());
-        }
-        let parent_known = files.iter().any(|f| f.parent() == Some(parent));
-        if !parent_known {
-            lock(&self.watcher)
-                .watch(parent, RecursiveMode::NonRecursive)
-                .map_err(map_notify_error)?;
-        }
-        files.insert(file.to_path_buf());
-        Ok(())
-    }
-
-    /// Stops watching `file`; the parent folder watch goes when no other
-    /// file needs it.
-    pub fn unwatch_file(&self, file: &Path) -> Result<()> {
-        let parent = parent_of(file)?;
-        let mut files = lock(&self.files);
-        if !files.remove(file) || files.iter().any(|f| f.parent() == Some(parent)) {
-            return Ok(());
-        }
-        match lock(&self.watcher).unwatch(parent) {
-            Err(e) if matches!(e.kind, notify::ErrorKind::WatchNotFound) => Ok(()),
-            other => other.map_err(map_notify_error),
-        }
-    }
-
-    pub fn watched_files(&self) -> Vec<PathBuf> {
-        let mut v: Vec<PathBuf> = lock(&self.files).iter().cloned().collect();
-        v.sort();
-        v
-    }
-}
-
-fn send_written(tx: &UnboundedSender<FileEvent>, file: PathBuf) -> bool {
-    tx.send(FileEvent::Written(file)).is_ok()
-}
-
-fn parent_of(file: &Path) -> Result<&Path> {
-    file.parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "file has no parent folder"))
-}
-
-/// The watched files a raw event reports as completely written.
-fn files_written(files: &HashSet<PathBuf>, ev: &Event) -> Vec<PathBuf> {
-    let candidates: &[PathBuf] = match ev.kind {
-        EventKind::Access(AccessKind::Close(AccessMode::Write)) => &ev.paths,
-        // Only the destination of a rename is a new file; `Both` repeats it.
-        EventKind::Modify(ModifyKind::Name(RenameMode::To)) => &ev.paths,
-        _ => &[],
-    };
-    candidates
-        .iter()
-        .filter(|p| files.contains(*p))
-        .cloned()
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use notify::event::{CreateKind, DataChange, RemoveKind};
+    use notify::event::{CreateKind, DataChange, ModifyKind, RemoveKind, RenameMode};
     use std::io::Write;
 
     const SHORT: Duration = Duration::from_millis(80);
@@ -488,29 +380,6 @@ mod tests {
         assert_eq!(got, [PathBuf::from("/w/a"), PathBuf::from("/w/b")]);
     }
 
-    #[test]
-    fn file_events_need_a_completed_write() {
-        let files: HashSet<PathBuf> = [PathBuf::from("/w/doc.txt")].into();
-        let written = |e: Event| files_written(&files, &e);
-        let close = EventKind::Access(AccessKind::Close(AccessMode::Write));
-        assert_eq!(written(ev(close, &["/w/doc.txt"])), [PathBuf::from("/w/doc.txt")]);
-        assert!(written(ev(close, &["/w/other.txt"])).is_empty());
-        // plain modifications are not "done writing"
-        assert!(written(ev(
-            EventKind::Modify(ModifyKind::Data(DataChange::Any)),
-            &["/w/doc.txt"]
-        ))
-        .is_empty());
-        assert!(written(ev(EventKind::Create(CreateKind::File), &["/w/doc.txt"])).is_empty());
-        // atomic save: the rename destination counts, the source does not
-        let to = EventKind::Modify(ModifyKind::Name(RenameMode::To));
-        let from = EventKind::Modify(ModifyKind::Name(RenameMode::From));
-        assert_eq!(written(ev(to, &["/w/doc.txt"])), [PathBuf::from("/w/doc.txt")]);
-        assert!(written(ev(from, &["/w/doc.txt"])).is_empty());
-        let access = EventKind::Access(AccessKind::Close(AccessMode::Read));
-        assert!(written(ev(access, &["/w/doc.txt"])).is_empty());
-    }
-
     // ---- real inotify ----------------------------------------------------
 
     #[tokio::test]
@@ -608,90 +477,5 @@ mod tests {
         std::fs::write(d.path().join("x"), "x").unwrap();
         tokio::time::sleep(Duration::from_millis(300)).await;
         std::fs::write(d.path().join("y"), "x").unwrap();
-    }
-
-    #[tokio::test]
-    async fn file_watcher_reports_close_after_write_once() {
-        let d = tempfile::tempdir().unwrap();
-        let file = d.path().join("doc.txt");
-        std::fs::write(&file, "v0").unwrap();
-        let (w, mut rx) = FileWatcher::new(Duration::from_millis(250)).unwrap();
-        w.watch_file(&file).unwrap();
-        w.watch_file(&file).unwrap();
-        assert_eq!(w.watched_files(), [file.clone()]);
-        let start = Instant::now();
-        for i in 0..5 {
-            std::fs::write(&file, format!("v{i}")).unwrap();
-            tokio::time::sleep(Duration::from_millis(30)).await;
-        }
-        let got = next(&mut rx, 5).await.unwrap();
-        assert_eq!(got, FileEvent::Written(file.clone()));
-        assert!(start.elapsed() >= Duration::from_millis(250), "debounce honoured");
-        assert!(silent(&mut rx, 500).await, "one event per burst of saves");
-    }
-
-    #[tokio::test]
-    async fn file_watcher_ignores_open_for_write_until_closed() {
-        let d = tempfile::tempdir().unwrap();
-        let file = d.path().join("doc.txt");
-        std::fs::write(&file, "v0").unwrap();
-        let (w, mut rx) = FileWatcher::new(SHORT).unwrap();
-        w.watch_file(&file).unwrap();
-        let mut f = std::fs::OpenOptions::new().write(true).open(&file).unwrap();
-        f.write_all(b"partial").unwrap();
-        assert!(silent(&mut rx, 400).await, "still open: not done writing");
-        drop(f);
-        assert_eq!(next(&mut rx, 5).await, Some(FileEvent::Written(file)));
-    }
-
-    #[tokio::test]
-    async fn file_watcher_notices_atomic_saves() {
-        let d = tempfile::tempdir().unwrap();
-        let file = d.path().join("doc.txt");
-        std::fs::write(&file, "v0").unwrap();
-        let (w, mut rx) = FileWatcher::new(SHORT).unwrap();
-        w.watch_file(&file).unwrap();
-        let tmp = d.path().join(".doc.txt.swp");
-        std::fs::write(&tmp, "v1").unwrap();
-        assert!(silent(&mut rx, 300).await, "the temp file is not watched");
-        std::fs::rename(&tmp, &file).unwrap();
-        assert_eq!(next(&mut rx, 5).await, Some(FileEvent::Written(file.clone())));
-        assert_eq!(std::fs::read(&file).unwrap(), b"v1");
-    }
-
-    #[tokio::test]
-    async fn file_watcher_only_reports_watched_files_and_can_unwatch() {
-        let d = tempfile::tempdir().unwrap();
-        let (a, b) = (d.path().join("a"), d.path().join("b"));
-        std::fs::write(&a, "x").unwrap();
-        std::fs::write(&b, "x").unwrap();
-        let (w, mut rx) = FileWatcher::new(SHORT).unwrap();
-        w.watch_file(&a).unwrap();
-        std::fs::write(&b, "changed").unwrap();
-        assert!(silent(&mut rx, 400).await);
-        w.watch_file(&b).unwrap();
-        w.unwatch_file(&a).unwrap();
-        std::fs::write(&a, "changed").unwrap();
-        assert!(silent(&mut rx, 400).await, "unwatched file");
-        std::fs::write(&b, "again").unwrap();
-        assert_eq!(next(&mut rx, 5).await, Some(FileEvent::Written(b.clone())));
-        w.unwatch_file(&b).unwrap();
-        w.unwatch_file(&b).unwrap();
-        assert!(w.watched_files().is_empty());
-    }
-
-    #[tokio::test]
-    async fn file_watcher_rejects_bad_paths() {
-        let d = tempfile::tempdir().unwrap();
-        let (w, _rx) = FileWatcher::new(SHORT).unwrap();
-        let err = w.watch_file(&d.path().join("nodir/file")).unwrap_err();
-        assert_eq!(err.kind, ErrorKind::NotFound);
-        assert!(w.watched_files().is_empty());
-        let err = w.watch_file(Path::new("/")).unwrap_err();
-        assert_eq!(err.kind, ErrorKind::InvalidArgument);
-        assert_eq!(
-            w.watch_file(Path::new("bare")).unwrap_err().kind,
-            ErrorKind::InvalidArgument
-        );
     }
 }

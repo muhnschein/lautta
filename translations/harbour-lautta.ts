@@ -1237,7 +1237,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-open-remote-hint">
-        <source>A copy goes to Downloads/Lautta/Opened so other apps can read it. It&apos;s removed after 24 hours unless pinned.</source>
+        <source>A copy goes to Downloads/Lautta/Opened so other apps can read it. It&apos;s removed after 24 hours.</source>
+        <oldsource>A copy goes to Downloads/Lautta/Opened so other apps can read it. It&apos;s removed after 24 hours unless pinned.</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-open-with">
@@ -1328,10 +1329,6 @@
             <numerusform></numerusform>
         </translation>
     </message>
-    <message id="lautta-xfr-note-edit-body">
-        <source>%1 changed on the server</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-xfr-note-finished">
         <source>Transfers finished</source>
         <translation type="unfinished"></translation>
@@ -1372,26 +1369,6 @@
     </message>
     <message id="lautta-xfr-remorse-cancel">
         <source>Canceling transfer</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-menu-upload-now">
-        <source>Upload now</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-menu-unpin">
-        <source>Don&apos;t keep this copy</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-menu-pin">
-        <source>Keep this copy</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-menu-discard">
-        <source>Stop editing and discard changes</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-remorse-discard">
-        <source>Discarding the working copy</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-title-upload-one">
@@ -1518,18 +1495,6 @@
         <source>resumes from where it stopped</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-xfr-edit-changed">
-        <source>Changed · upload pending</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-uploaded">
-        <source>Uploaded %1 · watching</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-watching">
-        <source>Watching for changes</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-xfr-canceled">
         <source>Canceled</source>
         <translation type="unfinished"></translation>
@@ -1546,10 +1511,6 @@
     </message>
     <message id="lautta-xfr-completed">
         <source>Completed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-title">
-        <source>%1 · %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-item-uploading">
@@ -1589,74 +1550,6 @@
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
-    </message>
-    <message id="lautta-xfr-edit-apply">
-        <source>Apply</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-changed-on">
-        <source>%1 changed on %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-gone">
-        <source>%1 was removed from the server after you started editing.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-explain">
-        <source>Someone changed %1 on the server after you started editing.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-yours">
-        <source>Yours</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-server">
-        <source>On server</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-what">
-        <source>What to do</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-upload-replace">
-        <source>Upload mine and replace</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-upload-recreate">
-        <source>The file is created again on the server.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-upload-overwrite">
-        <source>The version on the server is overwritten.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-save-copy">
-        <source>Save mine as a copy</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-save-copy-hint">
-        <source>Saved next to the original, under a free name.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-discard">
-        <source>Discard mine</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-discard-gone">
-        <source>Forget the changes.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-discard-hint">
-        <source>Keep the version on the server.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-none">
-        <source>Nothing to resolve</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-edit-none-hint">
-        <source>The file is up to date.</source>
-        <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-from">
         <source>From %1</source>
@@ -1708,10 +1601,6 @@
     </message>
     <message id="lautta-xfr-group-paused">
         <source>Paused</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-group-edited">
-        <source>Edited files</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-group-history">

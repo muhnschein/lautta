@@ -1,30 +1,19 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The `Transfers` singleton (doc/QML-API.md): queue summary and control,
-//! cover data, keep-alive state, start-up restore (XFR-11) and the watching
-//! of working copies while the app runs (EDT-1..3).
+//! cover data, keep-alive state and start-up restore (XFR-11).
 
-use super::edited::conflict_text;
 use super::events;
 use crate::json::to_json;
-use crate::runtime::{core, handle, spawn_then};
+use crate::runtime::{core, spawn_then};
 use lautta_core::app::Started;
-use lautta_core::app_transfers::{
-    copy_for_path, sync_watches, Aggregate, ProgressBook, StartReport, WriteBack,
-};
+use lautta_core::app_transfers::{Aggregate, ProgressBook, StartReport};
 use lautta_core::ops::OperationKind;
 use lautta_core::transfer::{TransferEvent, TransferState};
-use lautta_core::watch::{FileEvent, FileWatcher, FILE_DEBOUNCE};
-use lautta_core::workcopy::Purpose;
 use lautta_core::{Error, Result, Uri};
 use qmetaobject::prelude::*;
 use qmetaobject::{QPointer, QSingletonInit};
 use std::collections::HashSet;
-use std::path::PathBuf;
 use std::time::Duration;
-
-/// How often the set of watched working copies is brought up to date, so
-/// copies made by other pages are watched without them telling us (EDT-1).
-const WATCH_SYNC: Duration = Duration::from_secs(5);
 
 #[derive(QObject, Default)]
 pub struct Transfers {
@@ -58,13 +47,6 @@ pub struct Transfers {
     failed: qt_signal!(kind: QString, message: QString),
     /// A queued transfer got its id (`queueCopy`).
     queued: qt_signal!(id: i64),
-    /// An edited file was uploaded after its change was noticed.
-    editUploaded: qt_signal!(copyId: i64, name: QString),
-    /// The remote changed meanwhile; the user must choose (EDT-2).
-    editConflict: qt_signal!(copyId: i64, name: QString, conflictJson: QString),
-    /// Answer to `resolveEditConflict`: `result` is `uploaded`, `savedCopy`
-    /// (`detail` is the copy's URI) or `discarded`.
-    editResolved: qt_signal!(copyId: i64, result: QString, detail: QString),
     /// Someone (the cover) asks to show the Transfers page.
     showRequested: qt_signal!(),
 
@@ -85,14 +67,11 @@ pub struct Transfers {
     noteClosing: qt_method!(fn(&mut self)),
     requestShow: qt_method!(fn(&self)),
     queueCopy: qt_method!(fn(&self, uris_json: QString, dest: QString)),
-    watchWorkingCopies: qt_method!(fn(&self)),
-    resolveEditConflict: qt_method!(fn(&self, copy_id: i64, choice: QString)),
     summaryJson: qt_method!(fn(&self, id: i64) -> QString),
 
     book: ProgressBook,
     notified: HashSet<i64>,
     started: bool,
-    watcher: Option<FileWatcher>,
 }
 
 impl QSingletonInit for Transfers {
@@ -263,7 +242,6 @@ impl Transfers {
             }
         }
         self.recompute();
-        self.start_watching();
         events::reload();
     }
 
@@ -401,140 +379,5 @@ impl Transfers {
     fn summaryJson(&self, id: i64) -> QString {
         let text = core().and_then(|c| super::items::summary_json(&c, id, &self.book));
         QString::from(text.unwrap_or_default().as_str())
-    }
-
-    // ------------------------------------------------- working copies
-
-    /// Answers an edit conflict (EDT-2); the dialog that asked is gone by
-    /// the time the answer is known, so the result comes back here.
-    fn resolveEditConflict(&self, copy_id: i64, choice: QString) {
-        let Some(core) = core() else { return };
-        let Some(choice) = lautta_core::app_transfers::parse_edit_choice(&choice.to_string()) else {
-            self.report(Err(Error::new(
-                lautta_core::ErrorKind::InvalidArgument,
-                "unknown choice",
-            )));
-            return;
-        };
-        let me = QPointer::from(self);
-        spawn_then(
-            async move { core.resolve_edit_conflict(copy_id, choice).await },
-            move |res| {
-                events::reload();
-                let Some(p) = me.as_pinned() else { return };
-                let p = p.borrow();
-                match res {
-                    Ok(r) => {
-                        let (what, detail) = match r {
-                            lautta_core::workcopy::Resolution::Uploaded(_) => ("uploaded", String::new()),
-                            lautta_core::workcopy::Resolution::SavedCopy(u) => ("savedCopy", u.to_string()),
-                            lautta_core::workcopy::Resolution::Discarded => ("discarded", String::new()),
-                        };
-                        p.editResolved(copy_id, QString::from(what), QString::from(detail.as_str()));
-                    }
-                    Err(e) => {
-                        p.report(Err(e));
-                    }
-                }
-            },
-        );
-    }
-
-    /// Starts the file watcher for working copies (EDT-1/2) and keeps it in
-    /// step with the copies.
-    fn start_watching(&mut self) {
-        if self.watcher.is_some() {
-            return;
-        }
-        let (watcher, mut rx) = match FileWatcher::new(FILE_DEBOUNCE) {
-            Ok(w) => w,
-            Err(e) => {
-                log::warn!("cannot watch working copies: {e}");
-                return;
-            }
-        };
-        self.watcher = Some(watcher);
-        let me = QPointer::from(&*self);
-        let to_gui = qmetaobject::queued_callback(move |path: PathBuf| {
-            if let Some(p) = me.as_pinned() {
-                p.borrow().on_written(path);
-            }
-        });
-        handle().spawn(async move {
-            while let Some(FileEvent::Written(path)) = rx.recv().await {
-                to_gui(path);
-            }
-        });
-        self.watchWorkingCopies();
-        self.schedule_watch_sync();
-    }
-
-    fn schedule_watch_sync(&self) {
-        let me = QPointer::from(self);
-        qmetaobject::single_shot(WATCH_SYNC, move || {
-            if let Some(p) = me.as_pinned() {
-                let p = p.borrow();
-                p.watchWorkingCopies();
-                p.schedule_watch_sync();
-            }
-        });
-    }
-
-    fn watchWorkingCopies(&self) {
-        let Some(core) = core() else { return };
-        let me = QPointer::from(self);
-        spawn_then(
-            async move { core.working_copies.list(Some(Purpose::Edit)).await },
-            move |res| {
-                if let (Some(p), Ok(copies)) = (me.as_pinned(), res) {
-                    if let Some(w) = &p.borrow().watcher {
-                        sync_watches(w, &copies);
-                    }
-                }
-            },
-        );
-    }
-
-    /// A working copy was written (close-after-write, 2 s debounce): upload
-    /// it or ask (EDT-2).
-    fn on_written(&self, path: PathBuf) {
-        let Some(core) = core() else { return };
-        let me = QPointer::from(self);
-        spawn_then(
-            async move {
-                let copies = core.working_copies.list(Some(Purpose::Edit)).await?;
-                let Some(id) = copy_for_path(&copies, &path) else {
-                    return Ok(None);
-                };
-                let name = copies
-                    .iter()
-                    .find(|c| c.id == id)
-                    .map(|c| core.working_copy_name(c))
-                    .unwrap_or_default();
-                let out = core.write_back(id).await?;
-                let json = match &out {
-                    WriteBack::Conflict(c) => conflict_text(&core, c),
-                    _ => String::new(),
-                };
-                Ok::<_, Error>(Some((id, name, out, json)))
-            },
-            move |res| {
-                events::reload();
-                let Some(p) = me.as_pinned() else { return };
-                let p = p.borrow();
-                match res {
-                    Ok(Some((id, name, WriteBack::Uploaded(_), _))) => {
-                        p.editUploaded(id, QString::from(name.as_str()))
-                    }
-                    Ok(Some((id, name, WriteBack::Conflict(_), json))) => {
-                        p.editConflict(id, QString::from(name.as_str()), QString::from(json.as_str()))
-                    }
-                    Ok(_) => {}
-                    Err(e) => {
-                        p.report(Err(e));
-                    }
-                }
-            },
-        );
     }
 }

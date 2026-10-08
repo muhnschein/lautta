@@ -161,7 +161,6 @@ pub fn kind_name(kind: OperationKind) -> &'static str {
         OperationKind::Delete => "delete",
         OperationKind::Compress => "compress",
         OperationKind::Extract => "extract",
-        OperationKind::WriteBack => "writeback",
     }
 }
 

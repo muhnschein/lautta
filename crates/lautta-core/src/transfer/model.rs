@@ -204,8 +204,6 @@ pub struct TransferOptions {
     pub resolve_all: Option<ConflictChoice>,
     /// Deletes go through the caller's [`super::Trasher`] (OPS-8).
     pub trash: bool,
-    /// Write-backs run before ordinary transfers (EDT-2).
-    pub high_priority: bool,
 }
 
 impl Default for TransferOptions {
@@ -216,7 +214,6 @@ impl Default for TransferOptions {
             preserve_mode: false,
             resolve_all: None,
             trash: false,
-            high_priority: false,
         }
     }
 }
@@ -286,7 +283,6 @@ pub fn operation_name(k: OperationKind) -> &'static str {
         OperationKind::Delete => "delete",
         OperationKind::Compress => "compress",
         OperationKind::Extract => "extract",
-        OperationKind::WriteBack => "writeback",
     }
 }
 
@@ -296,7 +292,6 @@ pub fn operation_from_name(s: &str) -> OperationKind {
         OperationKind::Delete,
         OperationKind::Compress,
         OperationKind::Extract,
-        OperationKind::WriteBack,
     ]
     .into_iter()
     .find(|k| operation_name(*k) == s)
@@ -501,7 +496,6 @@ fn default_title(kind: OperationKind, count: u64) -> String {
         OperationKind::Delete => "Delete",
         OperationKind::Compress => "Compress",
         OperationKind::Extract => "Extract",
-        OperationKind::WriteBack => "Save",
     };
     if count == 1 {
         format!("{verb} 1 item")
@@ -597,7 +591,6 @@ mod tests {
             OperationKind::Delete,
             OperationKind::Compress,
             OperationKind::Extract,
-            OperationKind::WriteBack,
         ] {
             assert_eq!(operation_from_name(operation_name(k)), k);
         }

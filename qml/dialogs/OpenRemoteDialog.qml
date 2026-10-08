@@ -101,7 +101,7 @@ Page {
         anchors.bottom: parent.bottom
         opacity: hint.value ? 0 : 1
         visible: opacity > 0
-        //% "A copy goes to Downloads/Lautta/Opened so other apps can read it. It's removed after 24 hours unless pinned."
+        //% "A copy goes to Downloads/Lautta/Opened so other apps can read it. It's removed after 24 hours."
         text: qsTrId("lautta-viewers-open-remote-hint")
         Behavior on opacity { FadeAnimation { } }
     }

@@ -154,14 +154,6 @@
       "x": 480,
       "y": 14440
     },
-    "EditConflict.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Edit write-back conflict",
-      "w": 400,
-      "x": 1920,
-      "y": 6580
-    },
     "Extract.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -575,7 +567,7 @@
     "r5": {
       "kind": "title1",
       "maxW": 5200,
-      "text": "Preview, open & edit",
+      "text": "Preview & open",
       "w": 240,
       "x": 0,
       "y": 7900
@@ -652,7 +644,6 @@
     "TransfersPulley.dc.html",
     "TransferDetails.dc.html",
     "TransfersRestored.dc.html",
-    "EditConflict.dc.html",
     "Covers.dc.html",
     "Notifications.dc.html",
     "ImageViewer.dc.html",

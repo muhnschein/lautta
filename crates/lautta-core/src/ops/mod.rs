@@ -18,8 +18,6 @@ pub enum OperationKind {
     Delete,
     Compress,
     Extract,
-    /// Write-back of a working copy (EDT-2).
-    WriteBack,
 }
 
 /// Conflict resolution choices (OPS-2). The default is never `Replace`.
