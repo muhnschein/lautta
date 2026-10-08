@@ -59,10 +59,6 @@ impl AppPaths {
         self.cache_dir().join("dircache")
     }
 
-    pub fn crash_dir(&self) -> PathBuf {
-        self.cache_dir().join("crash")
-    }
-
     /// Remote files opened in other apps (PRV-6).
     pub fn opened_dir(&self) -> PathBuf {
         self.home.join("Downloads/Lautta/Opened")

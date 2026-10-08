@@ -55,7 +55,6 @@ pub mod org;
 pub mod search;
 
 // App-wide
-pub mod crash;
 pub mod messages;
 pub mod settings;
 

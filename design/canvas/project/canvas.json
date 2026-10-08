@@ -122,14 +122,6 @@
       "x": 2400,
       "y": 6580
     },
-    "CrashReport.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Crash report",
-      "w": 400,
-      "x": 1440,
-      "y": 10900
-    },
     "Directory.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -773,7 +765,6 @@
     "Settings.dc.html",
     "LocationSettings.dc.html",
     "About.dc.html",
-    "CrashReport.dc.html",
     "DirectoryLandscape.dc.html",
     "DirectorySelectPulley.dc.html",
     "RecentsPulley.dc.html",

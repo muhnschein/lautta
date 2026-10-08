@@ -225,7 +225,7 @@ async fn clear_cache_empties_thumbnails_listings_and_archives_only() {
     let paths = AppPaths::new(&h.root);
     write(&paths.thumbs_dir().join("k.thumb"), &[0u8; 100]);
     write(&paths.cache_dir().join("archives/x/file"), &[0u8; 50]);
-    write(&paths.crash_dir().join("crash-1.txt"), b"report");
+    write(&paths.cache_dir().join("other/keep"), b"other");
     write(&h.root.join("Documents/keep.txt"), b"mine");
     let docs = uri("lautta://user-documents/");
     h.core.list(&docs, |_| {}).await.unwrap();
@@ -239,8 +239,8 @@ async fn clear_cache_empties_thumbnails_listings_and_archives_only() {
     assert_eq!(h.core.cache_sizes().total(), 0);
     assert!(paths.thumbs_dir().is_dir(), "the folder stays");
     assert!(
-        paths.crash_dir().join("crash-1.txt").is_file(),
-        "crash reports stay"
+        paths.cache_dir().join("other/keep").is_file(),
+        "other cache files stay"
     );
     assert!(h.root.join("Documents/keep.txt").is_file());
     assert!(h.core.dircache.get(&docs).unwrap().is_none());

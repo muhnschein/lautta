@@ -509,26 +509,6 @@
         <source>Entries a location doesn&apos;t support are left out automatically.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-crash-copy">
-        <source>Copy report</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-crash-close">
-        <source>Close</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-crash-title">
-        <source>Lautta stopped unexpectedly</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-crash-note">
-        <source>A report was saved. It contains no file names or contents.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-crash-saved">
-        <source>Saved in Lautta&apos;s cache folder.</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-filters-accept">
         <source>Search</source>
         <translation type="unfinished"></translation>

@@ -347,7 +347,7 @@ impl Core {
     }
 
     /// *Clear cache* (SEC-5): thumbnails, stored listings and extracted
-    /// archives. Crash reports and all user data stay. Returns bytes freed.
+    /// archives. All user data stays. Returns bytes freed.
     pub fn clear_cache(&self) -> Result<u64> {
         let before = self.cache_sizes();
         remove_contents(&self.paths.thumbs_dir())?;
