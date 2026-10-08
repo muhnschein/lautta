@@ -7,10 +7,11 @@ mod bridge_support;
 use bridge_support::{eventually, Rig, ACCOUNT};
 use lautta_bridge_proto::fake::{Consent, FakeBridge};
 use lautta_bridge_proto::WireNearby;
-use lautta_core::bridge::{AdHocOptions, Attention, BridgeStatus, RemoteKind};
+use lautta_core::bridge::{AdHocOptions, Attention, BridgeConfig, BridgeStatus, RemoteKind};
 use lautta_core::error::ErrorKind;
 use lautta_core::provider::{Lane, Provider};
 use lautta_core::vpath::VPath;
+use std::sync::Arc;
 use std::time::Duration;
 use zeroize::Zeroizing;
 
@@ -225,6 +226,84 @@ async fn nearby_servers_come_from_discovery() {
     rig.fake.set_nearby(vec![server]).await;
     tokio::time::sleep(Duration::from_millis(50)).await;
     assert!(rig.client.nearby().is_empty(), "stopped discovery stays quiet");
+}
+
+fn nearby_server(name: &str, host: &str) -> WireNearby {
+    WireNearby {
+        name: name.into(),
+        provider: "smb".into(),
+        host: host.into(),
+        port: 445,
+        path: b"share".to_vec(),
+    }
+}
+
+/// Every length the nearby list takes from now on.
+fn record_nearby_lengths(rig: &Rig) -> Arc<std::sync::Mutex<Vec<usize>>> {
+    let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut rx = rig.client.watch_nearby();
+    let log = seen.clone();
+    tokio::spawn(async move {
+        while rx.changed().await.is_ok() {
+            let len = rx.borrow_and_update().len();
+            log.lock().unwrap().push(len);
+        }
+    });
+    seen
+}
+
+#[tokio::test]
+async fn nearby_servers_stay_while_a_restarted_discovery_settles() {
+    let rig = Rig::ready_with(|c| BridgeConfig {
+        nearby_settle: Duration::from_secs(30),
+        ..c
+    })
+    .await;
+    rig.client.discover(true).await.unwrap();
+    rig.fake.set_nearby(vec![nearby_server("NAS", "nas.local")]).await;
+    eventually("the server", || rig.client.nearby().len() == 1).await;
+
+    // Browse is left and shown again: netvfs forgets what it found and
+    // reports its empty cache before the servers answer again.
+    let seen = record_nearby_lengths(&rig);
+    rig.client.discover(false).await.unwrap();
+    rig.client.discover(true).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    rig.fake.set_nearby(vec![nearby_server("Mac", "mac.local")]).await;
+    eventually("the second server", || rig.client.nearby().len() == 2).await;
+    let names: Vec<String> = rig.client.nearby().iter().map(|n| n.name.clone()).collect();
+    assert_eq!(names, ["NAS", "Mac"], "rows keep their places");
+    assert!(
+        !seen.lock().unwrap().contains(&0),
+        "the Nearby section never empties: {:?}",
+        seen.lock().unwrap()
+    );
+}
+
+#[tokio::test]
+async fn a_settled_discovery_drops_servers_that_did_not_answer() {
+    let rig = Rig::ready().await;
+    rig.client.discover(true).await.unwrap();
+    rig.fake
+        .set_nearby(vec![
+            nearby_server("NAS", "nas.local"),
+            nearby_server("Mac", "mac.local"),
+        ])
+        .await;
+    eventually("the servers", || rig.client.nearby().len() == 2).await;
+
+    rig.client.discover(false).await.unwrap();
+    rig.client.discover(true).await.unwrap();
+    rig.fake.set_nearby(vec![nearby_server("Mac", "mac.local")]).await;
+    eventually("the list of the settled discovery", || {
+        rig.client.nearby().iter().map(|n| n.name.as_str()).eq(["Mac"])
+    })
+    .await;
+
+    // Nothing answers at all: the list empties once the discovery settled.
+    rig.client.discover(false).await.unwrap();
+    rig.client.discover(true).await.unwrap();
+    eventually("the empty list", || rig.client.nearby().is_empty()).await;
 }
 
 #[tokio::test]

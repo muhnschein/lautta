@@ -116,7 +116,10 @@ is the authority.
   sets `X-Nemo-Application-Type=no-invoker`, so Sailjail runs `/usr/bin/harbour-lautta`
   itself: the netvfs bridge only serves a peer whose executable is the registered one
   (netvfs XB-5), and under the silica-qt5 booster the process's executable is the
-  booster. The validator's resulting warning is documented in `doc/harbour-warnings.md`.
+  booster. Sailjail's `private-bin` (HBR-7) runs a *copy* of the binary from a tmpfs, so
+  the bridge must compare the executable by content, not by inode (netvfs XB-5); with a
+  netvfs that compares inodes only, the app runs standalone when started from the app grid.
+  The validator's resulting warning is documented in `doc/harbour-warnings.md`.
 - HBR-5: `[X-Sailjail]` uses only `Permissions`, `OrganizationName`, `ApplicationName`,
   `ExecDBus`. `OrganizationName` must not be `com.jolla` or `org.sailfishos`.
 - HBR-6: No setuid/setgid bits, no debug info in the package, no source-control files.
@@ -346,7 +349,10 @@ what the app does.
 - LOC-4: netvfs accounts and ad-hoc servers (NVB-4, NVB-6).
 - LOC-5: Archives opened as read-only locations (PRV-11).
 - LOC-6: Nearby servers from the bridge's discovery; tapping prefills *Connect to
-  server*; nothing connects automatically.
+  server*; nothing connects automatically. Discovery runs while Browse is shown. netvfs
+  forgets its results when discovery stops and reports an empty list right after a
+  restart, so for 3 s after each start the servers already shown stay and new ones join
+  them; after that the bridge's list is shown as it is.
 - LOC-7: Internal URI `lautta://<locationId>/<path>` (path bytes percent-encoded).
   `locationId`: `user-documents`, …, `android-dcim`, `vol-<uuid>`, `nv-<bridge id>`,
   `arc-<hash>`. Display/copy address: `file://` for local, the netvfs URL from the bridge

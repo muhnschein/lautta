@@ -106,6 +106,7 @@ async fn wait_or_wake(inner: &Inner, wait: Duration) {
 }
 
 fn clear_lists(inner: &Inner) {
+    inner.info().nearby.cancel();
     inner.locations.send_if_modified(|l| {
         let changed = !l.is_empty();
         if changed {
@@ -191,6 +192,7 @@ fn teardown(inner: &Arc<Inner>, link: &Arc<Link>) {
     let questions = {
         let mut info = inner.info();
         info.link = None;
+        info.nearby.cancel();
         std::mem::take(&mut info.questions)
     };
     for id in questions {
@@ -217,7 +219,9 @@ fn handle_signal(inner: &Arc<Inner>, link: &Arc<Link>, signal: Signal) {
         Signal::NearbyChanged(list) => {
             if consent_granted(inner) {
                 let list: Vec<NearbyServer> = list.iter().map(NearbyServer::from_wire).collect();
-                inner.nearby.send_replace(Arc::new(list));
+                let shown = inner.nearby.borrow().clone();
+                let show = inner.info().nearby.receive(&shown, list);
+                show_nearby(inner, show);
             }
         }
         Signal::Question { id, kind, details } => spawn_question(inner, link, id, &kind, &details),
@@ -250,6 +254,7 @@ fn apply_consent(inner: &Arc<Inner>, link: &Arc<Link>, consent: Consent) {
                 }
             });
             if inner.discover.load(Ordering::SeqCst) {
+                begin_settle(inner);
                 let link = link.clone();
                 tokio::spawn(async move {
                     // Discovery is a convenience; a failure only leaves Nearby empty.
@@ -268,6 +273,30 @@ fn apply_consent(inner: &Arc<Inner>, link: &Arc<Link>, consent: Consent) {
     }
 }
 
+fn show_nearby(inner: &Inner, list: Vec<NearbyServer>) {
+    inner.nearby.send_if_modified(|n| {
+        let changed = **n != list;
+        if changed {
+            *n = Arc::new(list);
+        }
+        changed
+    });
+}
+
+/// The discovery is about to (re)start: the servers shown stay until it has
+/// settled (see [`super::nearby`]).
+pub(super) fn begin_settle(inner: &Arc<Inner>) {
+    let generation = inner.info().nearby.begin();
+    let inner = inner.clone();
+    tokio::spawn(async move {
+        sleep(inner.config.nearby_settle).await;
+        let settled = inner.info().nearby.finish(generation);
+        if let Some(list) = settled {
+            show_nearby(&inner, list);
+        }
+    });
+}
+
 fn spawn_refresh(inner: &Arc<Inner>, link: &Arc<Link>) {
     let inner = inner.clone();
     let link = link.clone();
@@ -277,8 +306,13 @@ fn spawn_refresh(inner: &Arc<Inner>, link: &Arc<Link>) {
 /// `ListLocations`; of overlapping refreshes the newest request wins.
 async fn refresh_locations(inner: &Arc<Inner>, link: &Arc<Link>) {
     let generation = inner.refreshes.fetch_add(1, Ordering::SeqCst) + 1;
-    let Ok(wire) = rpc(link.proxy().list_locations().await) else {
-        return;
+    let wire = match rpc(link.proxy().list_locations().await) {
+        Ok(wire) => wire,
+        Err(e) => {
+            // The Servers section stays as it is; say why, for the journal.
+            log::warn!("bridge locations not listed: {e}");
+            return;
+        }
     };
     let list: Vec<RemoteLocation> = wire.iter().map(RemoteLocation::from_wire).collect();
     {

@@ -447,6 +447,11 @@ impl Shared {
         self.with(|s| s.sessions.clone())
     }
 
+    /// True while any client looks for servers nearby.
+    pub fn any_discovering(&self) -> bool {
+        self.sessions_snapshot().iter().any(|s| s.with(|s| s.discovering))
+    }
+
     pub fn record_accept(&self) {
         self.with(|s| s.accepts.push(Instant::now()));
     }
