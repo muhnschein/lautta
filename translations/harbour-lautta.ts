@@ -3411,21 +3411,5 @@
         <source>Thumbnails</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-opts-apply-to">
-        <source>Apply to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-opts-remember">
-        <source>Remember for</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-opts-remember-folder">
-        <source>This folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-opts-remember-all">
-        <source>All folders</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 </TS>

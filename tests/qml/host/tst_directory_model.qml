@@ -177,14 +177,16 @@ Item {
         check(path.resolve("nowhere") === "", "resolve refuses")
     }
 
-    function testPrefsPersist() {
+    function testPrefsAreGlobal() {
         dir.setViewPrefs(JSON.stringify({ viewMode: "grid", thumbnails: false }))
-        var again = Qt.createQmlObject('import Lautta 1.0; DirectoryModel { uri: "' + root.docs + '" }', root)
-        check(again.viewMode === "grid" && !again.thumbnails, "folder view settings are stored")
         check(row(rep, "Beta.png").thumb === "", "thumbnail role follows the setting")
-        check(dir.setViewPrefs(JSON.stringify({ scope: "all" })), "forget the folder's own settings")
-        var third = Qt.createQmlObject('import Lautta 1.0; DirectoryModel { uri: "' + root.docs + '" }', root)
-        check(third.viewMode === "list", "inherits again")
+        var again = Qt.createQmlObject('import Lautta 1.0; DirectoryModel { uri: "' + root.docs + '" }', root)
+        check(again.viewMode === "list" && again.thumbnails, "setViewPrefs stores nothing")
+        check(App.setSetting("view_mode", JSON.stringify("grid")), "global view mode")
+        var other = Qt.createQmlObject('import Lautta 1.0; DirectoryModel { uri: "' + root.docs + 'Zeta" }', root)
+        check(other.viewMode === "grid", "every folder uses the global settings")
+        App.setSetting("view_mode", JSON.stringify("list"))
+        dir.setViewPrefs(JSON.stringify({ viewMode: "list", thumbnails: true }))
     }
 
     function testPicker() {
@@ -199,7 +201,7 @@ Item {
         testRename()
         testLiveUpdate()
         testStates()
-        testPrefsPersist()
+        testPrefsAreGlobal()
         testPicker()
     }
 }

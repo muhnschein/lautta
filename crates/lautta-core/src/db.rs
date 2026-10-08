@@ -11,15 +11,6 @@ use std::sync::{Arc, Mutex, MutexGuard};
 const MIGRATIONS: &[&str] = &[
     // 1: DAT-2 tables.
     r#"
-    CREATE TABLE view_prefs (
-        uri TEXT PRIMARY KEY,
-        sort_key TEXT,
-        sort_desc INTEGER,
-        folders_first INTEGER,
-        show_hidden INTEGER,
-        view_mode TEXT,
-        thumbnails INTEGER
-    );
     CREATE TABLE favourites (
         id INTEGER PRIMARY KEY,
         uri TEXT NOT NULL UNIQUE,
@@ -231,13 +222,13 @@ mod tests {
             .lock()
             .query_row(
                 "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN \
-                 ('view_prefs','favourites','recents','tags','item_tags','transfers',\
+                 ('favourites','recents','tags','item_tags','transfers',\
                  'transfer_items','working_copies','sync_pairs','dircache','trash_items')",
                 [],
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(n, 11);
+        assert_eq!(n, 10);
     }
 
     #[test]

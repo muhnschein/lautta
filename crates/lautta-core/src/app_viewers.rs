@@ -527,12 +527,12 @@ impl Core {
         })
     }
 
-    /// The folder's images in the folder's own sort order (PRV-4: swipe
-    /// through the folder).
+    /// The folder's images in the folders' sort order (PRV-4: swipe through
+    /// the folder).
     pub async fn list_images(&self, folder: &Uri) -> Result<Vec<ImageItem>> {
         let provider = self.provider(&folder.location)?;
         let all = list_all(provider.as_ref(), &folder.path, Lane::Interactive).await?;
-        let prefs = self.viewprefs.get(folder).unwrap_or_default();
+        let prefs = self.view_prefs();
         let hidden = prefs.show_hidden;
         let images: Vec<Entry> = all
             .into_iter()

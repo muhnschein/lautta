@@ -28,7 +28,7 @@ use crate::transfer::{Engine, EngineConfig, EngineDeps, TransferId, TransferOpti
 use crate::trash::Trash;
 use crate::undo::{UndoAction, UndoRecorder, UndoStep};
 use crate::uri::Uri;
-use crate::viewprefs::{ViewMode, ViewPrefs, ViewPrefsStore};
+use crate::viewprefs::{ViewMode, ViewPrefs};
 use crate::workcopy::WorkingCopies;
 use async_trait::async_trait;
 use std::sync::atomic::AtomicBool;
@@ -55,7 +55,6 @@ pub struct Core {
     pub engine: Engine,
     pub trash: Trash,
     pub dircache: DirCache,
-    pub viewprefs: ViewPrefsStore,
     pub favourites: Favourites,
     pub recents: Recents,
     pub tags: Tags,
@@ -162,7 +161,6 @@ impl Core {
         };
         let core = Core {
             dircache: DirCache::new(db.clone(), DIRCACHE_ENTRIES)?,
-            viewprefs: ViewPrefsStore::new(db.clone(), view_defaults(&settings)),
             favourites: Favourites::new(db.clone()),
             recents: Recents::new(db.clone()),
             tags: Tags::new(db.clone()),
@@ -194,9 +192,13 @@ impl Core {
     /// Applies settings stored by the UI (dconf, SPEC §18).
     pub fn apply_settings(&self, settings: Settings) {
         let settings = settings.sanitised();
-        self.viewprefs.set_defaults(view_defaults(&settings));
         self.recents.set_enabled(settings.recents_enabled);
         *lock(&self.settings) = settings;
+    }
+
+    /// The view settings every folder uses (BRW-4).
+    pub fn view_prefs(&self) -> ViewPrefs {
+        view_defaults(&self.settings())
     }
 
     pub fn provider(&self, location: &str) -> Result<Arc<dyn Provider>> {
