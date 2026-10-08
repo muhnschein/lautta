@@ -106,14 +106,6 @@
       "x": 2880,
       "y": 0
     },
-    "ContextMenuOrder.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Context menu order",
-      "w": 400,
-      "x": 5760,
-      "y": 14440
-    },
     "Covers.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -776,8 +768,7 @@
     "TextViewerPulley.dc.html",
     "ServerAdhocMenu.dc.html",
     "ImageDeleteRemote.dc.html",
-    "SearchPulley.dc.html",
-    "ContextMenuOrder.dc.html"
+    "SearchPulley.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"

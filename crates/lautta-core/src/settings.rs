@@ -21,28 +21,6 @@ const RETENTION_DAYS_MAX: u32 = 365;
 const MB: u64 = 1_000_000;
 const GB: u64 = 1_000_000_000;
 
-/// Context menu action ids in their default order; unknown ids from newer
-/// versions are kept, missing known ones are appended.
-pub const DEFAULT_CONTEXT_MENU: [&str; 17] = [
-    "open_with",
-    "share",
-    "copy",
-    "cut",
-    "rename",
-    "delete",
-    "copy_to",
-    "move_to",
-    "download",
-    "upload_to",
-    "info",
-    "compress",
-    "extract",
-    "tags",
-    "favourite",
-    "edit",
-    "open_remote",
-];
-
 pub const SORT_KEYS: [&str; 4] = ["name", "size", "modified", "type"];
 pub const VIEW_MODES: [&str; 2] = ["list", "grid"];
 
@@ -92,7 +70,6 @@ pub struct Settings {
     pub large_op_items: u64,
     pub large_op_bytes: u64,
 
-    pub context_menu: Vec<String>,
     pub date_format: DateFormat,
     pub recents_enabled: bool,
     /// SRC-3: depth limit of remote searches.
@@ -125,7 +102,6 @@ impl Default for Settings {
             history_retention_days: 30,
             large_op_items: 1_000,
             large_op_bytes: GB,
-            context_menu: DEFAULT_CONTEXT_MENU.iter().map(|s| (*s).to_owned()).collect(),
             date_format: DateFormat::Relative,
             recents_enabled: true,
             search_remote_depth: 8,
@@ -135,22 +111,6 @@ impl Default for Settings {
 
 fn clamp<T: Ord>(v: T, range: (T, T)) -> T {
     v.clamp(range.0, range.1)
-}
-
-/// Drops blanks and duplicates, keeps unknown ids, appends missing known ones.
-fn normalise_menu(menu: &[String]) -> Vec<String> {
-    let mut out: Vec<String> = Vec::with_capacity(menu.len());
-    for id in menu.iter().map(|s| s.trim()).filter(|s| !s.is_empty()) {
-        if !out.iter().any(|x| x == id) {
-            out.push(id.to_owned());
-        }
-    }
-    for known in DEFAULT_CONTEXT_MENU {
-        if !out.iter().any(|x| x == known) {
-            out.push(known.to_owned());
-        }
-    }
-    out
 }
 
 impl Settings {
@@ -176,7 +136,6 @@ impl Settings {
         self.large_op_items = self.large_op_items.max(1);
         self.large_op_bytes = self.large_op_bytes.max(MB);
         self.search_remote_depth = self.search_remote_depth.clamp(1, 64);
-        self.context_menu = normalise_menu(&self.context_menu);
     }
 
     pub fn sanitised(mut self) -> Settings {
@@ -405,8 +364,6 @@ mod tests {
         assert_eq!(s.date_format, DateFormat::Relative);
         assert!(s.recents_enabled);
         assert_eq!(s.search_remote_depth, 8);
-        assert_eq!(s.context_menu.len(), DEFAULT_CONTEXT_MENU.len());
-        assert_eq!(s.context_menu[0], "open_with");
         assert_eq!(s.clone().sanitised(), s, "defaults are already valid");
     }
 
@@ -443,25 +400,6 @@ mod tests {
     }
 
     #[test]
-    fn context_menu_is_deduped_and_completed() {
-        let mut s = Settings {
-            context_menu: vec![
-                "delete".into(),
-                " ".into(),
-                "future_action".into(),
-                "delete".into(),
-                "copy".into(),
-            ],
-            ..Settings::default()
-        };
-        s.sanitise();
-        assert_eq!(&s.context_menu[..3], ["delete", "future_action", "copy"]);
-        assert_eq!(s.context_menu.len(), DEFAULT_CONTEXT_MENU.len() + 1);
-        assert_eq!(s.context_menu.iter().filter(|x| *x == "delete").count(), 1);
-        assert!(s.context_menu.contains(&"open_remote".to_owned()));
-    }
-
-    #[test]
     fn json_and_map_round_trip() {
         let s = Settings {
             sort_key: "size".into(),
@@ -469,7 +407,6 @@ mod tests {
             show_hidden: true,
             date_format: DateFormat::Iso,
             remote_lanes: 5,
-            context_menu: vec!["share".into(), "open_with".into()],
             ..Settings::default()
         }
         .sanitised();

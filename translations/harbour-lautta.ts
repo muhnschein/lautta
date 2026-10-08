@@ -111,90 +111,6 @@
         <source>Lautta can&apos;t open its data</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-menuorder-up">
-        <source>Move up</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-menuorder-down">
-        <source>Move down</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-menuorder-to-row">
-        <source>Move to icon row</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-menuorder-to-list">
-        <source>Move to list</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-open-with">
-        <source>Open with</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-share">
-        <source>Share</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-copy">
-        <source>Copy</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-cut">
-        <source>Cut</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-rename">
-        <source>Rename</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-delete">
-        <source>Delete</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-copy-to">
-        <source>Copy to…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-move-to">
-        <source>Move to…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-download">
-        <source>Download</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-upload-to">
-        <source>Upload to…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-info">
-        <source>Info</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-compress">
-        <source>Compress</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-extract">
-        <source>Extract</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-tags">
-        <source>Tags</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-favourite">
-        <source>Add to favourites</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-edit">
-        <source>Edit</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-ctx-open-remote">
-        <source>Open a copy</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-about-status-ready">
         <source>Connected to netvfs bridge</source>
         <translation type="unfinished"></translation>
@@ -483,30 +399,6 @@
     </message>
     <message id="lautta-compare-save-pair-hint">
         <source>Shown in Favourites</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-menuorder-reset">
-        <source>Restore default order</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-menuorder-title">
-        <source>Context menu</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-menuorder-description">
-        <source>Press and hold an entry to move it</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-menuorder-row">
-        <source>Icon row · up to 5</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-menuorder-list">
-        <source>List</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-menuorder-note">
-        <source>Entries a location doesn&apos;t support are left out automatically.</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-filters-accept">
@@ -912,14 +804,6 @@
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
-    </message>
-    <message id="lautta-settings-menus">
-        <source>Menus</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-menu-order">
-        <source>Context menu order</source>
-        <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-recents">
         <source>Recents</source>

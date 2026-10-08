@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Which actions the context menu offers and in what order (SPEC §15.3,
-// boards DirectoryContext and ContextMenuOrder): the order is the
-// `context_menu` setting, the five icon-row actions go to the icon row, the
+// board DirectoryContext): the five icon-row actions go to the icon row, the
 // rest to the list below it, and capabilities decide what is applicable.
 .pragma library
 
@@ -97,8 +96,13 @@ function applicable(id, ctx) {
     return false
 }
 
-// { row: [{ id, icon, text }], list: [{ id, text }] } for the setting's order.
-function split(order, ctx) {
+// The context menu's actions in display order.
+var order = ["open_with", "share", "copy", "cut", "rename", "delete", "copy_to", "move_to",
+             "download", "upload_to", "info", "compress", "extract", "tags", "favourite", "edit", "open_remote"]
+
+// { row: [{ id, icon, text }], list: [{ id, text }] } of the actions that
+// apply, in `order`.
+function split(ctx) {
     var row = []
     var list = []
     for (var i = 0; i < order.length; ++i) {
@@ -111,19 +115,6 @@ function split(order, ctx) {
             list.push({ "id": id, "text": text(id) })
     }
     return { "row": row, "list": list }
-}
-
-// The order from App.setting("context_menu") (JSON text); the default order
-// when the setting is missing or unreadable.
-function order(settingValue) {
-    try {
-        var parsed = JSON.parse(settingValue)
-        if (parsed && parsed.length)
-            return parsed
-    } catch (e) {
-    }
-    return ["open_with", "share", "copy", "cut", "rename", "delete", "copy_to", "move_to",
-            "download", "upload_to", "info", "compress", "extract", "tags", "favourite", "edit", "open_remote"]
 }
 
 // Actions of the selection panel's "more" row (board DirectorySelect).
