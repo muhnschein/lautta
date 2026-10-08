@@ -1,22 +1,16 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! User-level actions of the search area on [`Core`](crate::app::Core):
-//! recursive search (SRC-2..4), folder compare and sync (SYN-1..3), cache and
-//! app-data clearing (SEC-5, DAT-3) and per-location preferences (§18).
+//! recursive search (SRC-2..4), cache and app-data clearing (SEC-5, DAT-3)
+//! and per-location preferences (§18).
 
 use crate::app::Core;
-use crate::compare::{
-    build_plans, compare_trees, preview, sync_plan, CompareOptions, CompareResult, LargeOpLimits, SyncAction,
-    SyncMode, SyncPreview, MTIME_TOLERANCE_MS,
-};
 use crate::error::{Error, ErrorKind, Result};
-use crate::org::syncpairs::SyncPairSpec;
 use crate::search::{
     self, classify_by_extension, MatchMode, SearchHit, SearchOptions, SearchQuery, SearchSummary,
 };
 use crate::settings::LocationPrefs;
-use crate::transfer::TransferId;
 use crate::uri::Uri;
-use crate::vpath::{display_name, VPath};
+use crate::vpath::display_name;
 use chrono::{DateTime, Datelike, Duration, Local, TimeZone};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -144,52 +138,6 @@ pub fn section_label(root: &Uri, root_name: &str, folder: &Uri) -> String {
     parts.join(" \u{203a} ")
 }
 
-/// Exclusion patterns typed as "*.tmp, .thumbnails/" (SYN-2): separated by
-/// commas or new lines, blanks and repeats dropped.
-pub fn parse_excludes(text: &str) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    for piece in text.split(|c| c == ',' || c == '\n') {
-        let piece = piece.trim();
-        if !piece.is_empty() && !out.iter().any(|p| p == piece) {
-            out.push(piece.to_owned());
-        }
-    }
-    out
-}
-
-pub fn excludes_text(excludes: &[String]) -> String {
-    excludes.join(", ")
-}
-
-/// Compare options of a saved pair.
-pub fn options_of(spec: &SyncPairSpec) -> CompareOptions {
-    CompareOptions {
-        mtime_tolerance_ms: MTIME_TOLERANCE_MS,
-        dst_tolerance: spec.dst_tolerance,
-        checksums: spec.checksums,
-        excludes: spec.excludes.clone(),
-    }
-}
-
-/// The pair to store for a compare setup (SYN-3).
-pub fn pair_spec(
-    label: &str,
-    left: &Uri,
-    right: &Uri,
-    mode: SyncMode,
-    options: &CompareOptions,
-) -> SyncPairSpec {
-    SyncPairSpec {
-        label: label.to_owned(),
-        left: left.clone(),
-        right: right.clone(),
-        mode,
-        excludes: options.excludes.clone(),
-        checksums: options.checksums,
-        dst_tolerance: options.dst_tolerance,
-    }
-}
-
 /// What the app's caches occupy, in bytes (Settings → Storage).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct CacheSizes {
@@ -290,44 +238,6 @@ impl Core {
         self.recent_searches.list(&root.location).unwrap_or_default()
     }
 
-    /// Compares two folders (SYN-1).
-    pub async fn compare_folders(
-        &self,
-        left: &Uri,
-        right: &Uri,
-        options: &CompareOptions,
-        cancel: &AtomicBool,
-    ) -> Result<CompareResult> {
-        compare_trees(&self.locations, left, right, options, cancel).await
-    }
-
-    /// The preview counts of a sync run (SYN-2).
-    pub fn sync_preview(result: &CompareResult, mode: SyncMode, excluded: &BTreeSet<VPath>) -> SyncPreview {
-        preview(&sync_plan(result, mode, excluded))
-    }
-
-    /// Runs a sync as ordinary transfers (SYN-3): one copy plan per
-    /// destination side, then the deletes. Returns the transfer ids.
-    pub async fn run_sync(
-        &self,
-        result: &CompareResult,
-        mode: SyncMode,
-        excluded: &BTreeSet<VPath>,
-    ) -> Result<Vec<TransferId>> {
-        let actions: Vec<SyncAction> = sync_plan(result, mode, excluded);
-        let settings = self.settings();
-        let limits = LargeOpLimits {
-            items: settings.large_op_items,
-            bytes: settings.large_op_bytes,
-        };
-        let plans = build_plans(&actions, &result.left, &result.right, limits);
-        let mut ids = Vec::new();
-        for plan in plans.copies.into_iter().chain(plans.deletes) {
-            ids.push(self.start_plan(plan).await?);
-        }
-        Ok(ids)
-    }
-
     /// Sizes of the thumbnail, listing and archive caches.
     pub fn cache_sizes(&self) -> CacheSizes {
         let listings: i64 = self
@@ -347,7 +257,7 @@ impl Core {
     }
 
     /// *Clear cache* (SEC-5): thumbnails, stored listings and extracted
-    /// archives. Crash reports and all user data stay. Returns bytes freed.
+    /// archives. All user data stays. Returns bytes freed.
     pub fn clear_cache(&self) -> Result<u64> {
         let before = self.cache_sizes();
         remove_contents(&self.paths.thumbs_dir())?;
@@ -504,34 +414,6 @@ mod tests {
         assert_eq!(section_label(&root, "Documents", &root), "Documents");
         let sub = Uri::parse("lautta://user-documents/Uni").unwrap();
         assert_eq!(section_label(&sub, "Uni", &deep), "Uni \u{203a} Thesis b");
-    }
-
-    #[test]
-    fn excludes_parse_and_print() {
-        assert_eq!(
-            parse_excludes("*.tmp, .thumbnails/ ,\n*.tmp,,  x "),
-            ["*.tmp", ".thumbnails/", "x"]
-        );
-        assert!(parse_excludes(" , ").is_empty());
-        assert_eq!(excludes_text(&["a".to_owned(), "b/".to_owned()]), "a, b/");
-    }
-
-    #[test]
-    fn pairs_round_trip_options() {
-        let l = Uri::parse("lautta://user-pictures/").unwrap();
-        let r = Uri::parse("lautta://user-downloads/x").unwrap();
-        let opts = CompareOptions {
-            dst_tolerance: true,
-            checksums: true,
-            excludes: vec!["*.tmp".to_owned()],
-            ..CompareOptions::default()
-        };
-        let spec = pair_spec("Camera", &l, &r, SyncMode::MirrorLeftToRight, &opts);
-        assert_eq!(
-            (spec.label.as_str(), spec.mode),
-            ("Camera", SyncMode::MirrorLeftToRight)
-        );
-        assert_eq!(options_of(&spec), opts);
     }
 
     #[test]

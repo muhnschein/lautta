@@ -1,19 +1,16 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The search area's core actions on a temporary home folder: streaming
-//! search with recents and depth, compare + sync + re-compare, cache and
-//! app-data clearing, per-location preferences.
+//! search with recents and depth, cache and app-data clearing, per-location
+//! preferences.
 
 use lautta_core::app::Core;
 use lautta_core::app_search::SearchRequest;
-use lautta_core::compare::{CompareOptions, ItemStatus, SyncMode};
 use lautta_core::locations::LocationRegistry;
 use lautta_core::ops::OperationKind;
 use lautta_core::paths::AppPaths;
 use lautta_core::search::MatchMode;
 use lautta_core::settings::{LocationPrefs, Settings};
-use lautta_core::transfer::TransferState;
-use lautta_core::{ErrorKind, Uri, VPath};
-use std::collections::BTreeSet;
+use lautta_core::{ErrorKind, Uri};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -136,96 +133,13 @@ async fn search_depth_is_unlimited_locally_and_a_setting_remotely() {
     assert_eq!(h.core.search_depth(&uri("lautta://nv-nas/srv")), Some(3));
 }
 
-async fn finish(h: &Home, ids: Vec<lautta_core::transfer::TransferId>) {
-    for id in ids {
-        let done = h
-            .core
-            .engine
-            .wait_for(id, |s| s.state.is_finished())
-            .await
-            .unwrap();
-        assert_eq!(done.state, TransferState::Completed);
-    }
-}
-
-#[tokio::test]
-async fn compare_then_sync_makes_both_sides_the_same() {
-    let h = home().await;
-    write(&h.root.join("Pictures/a.jpg"), b"aaa");
-    write(&h.root.join("Pictures/sub/b.jpg"), b"bbb");
-    write(&h.root.join("Pictures/skip.tmp"), b"t");
-    write(&h.root.join("Downloads/c.jpg"), b"ccc");
-    let (l, r) = (uri("lautta://user-pictures/"), uri("lautta://user-downloads/"));
-    let opts = CompareOptions {
-        excludes: vec!["*.tmp".to_owned()],
-        ..CompareOptions::default()
-    };
-    let cancel = AtomicBool::new(false);
-    let result = h.core.compare_folders(&l, &r, &opts, &cancel).await.unwrap();
-    let c = result.counts();
-    assert_eq!((c.left_only, c.right_only, c.same), (3, 1, 0));
-    let p = Core::sync_preview(&result, SyncMode::UpdateBoth, &BTreeSet::new());
-    assert_eq!((p.copy_files, p.new_dirs, p.deletes), (3, 1, 0));
-    let excluded: BTreeSet<VPath> = [VPath::parse(b"sub").unwrap()].into_iter().collect();
-    let p = Core::sync_preview(&result, SyncMode::UpdateBoth, &excluded);
-    assert_eq!(
-        (p.copy_files, p.new_dirs),
-        (2, 0),
-        "an excluded folder skips its children"
-    );
-
-    let ids = h
-        .core
-        .run_sync(&result, SyncMode::UpdateBoth, &BTreeSet::new())
-        .await
-        .unwrap();
-    assert_eq!(ids.len(), 2, "one plan per destination side");
-    finish(&h, ids).await;
-    let again = h.core.compare_folders(&l, &r, &opts, &cancel).await.unwrap();
-    assert!(
-        again.items.iter().all(|i| i.status == ItemStatus::Same),
-        "{:?}",
-        again.items
-    );
-    assert_eq!(again.items.len(), 4);
-    assert!(h.root.join("Downloads/sub/b.jpg").is_file());
-    assert!(h.root.join("Pictures/c.jpg").is_file());
-    assert!(!h.root.join("Downloads/skip.tmp").exists(), "excluded stays out");
-}
-
-#[tokio::test]
-async fn mirror_deletes_extras_on_the_target() {
-    let h = home().await;
-    h.core.apply_settings(Settings {
-        recently_deleted: false,
-        ..Settings::default()
-    });
-    write(&h.root.join("Pictures/keep"), b"k");
-    write(&h.root.join("Downloads/extra"), b"e");
-    let (l, r) = (uri("lautta://user-pictures/"), uri("lautta://user-downloads/"));
-    let cancel = AtomicBool::new(false);
-    let opts = CompareOptions::default();
-    let result = h.core.compare_folders(&l, &r, &opts, &cancel).await.unwrap();
-    let p = Core::sync_preview(&result, SyncMode::MirrorLeftToRight, &BTreeSet::new());
-    assert_eq!((p.copy_files, p.deletes), (1, 1));
-    let ids = h
-        .core
-        .run_sync(&result, SyncMode::MirrorLeftToRight, &BTreeSet::new())
-        .await
-        .unwrap();
-    assert_eq!(ids.len(), 2, "a copy plan and a delete plan");
-    finish(&h, ids).await;
-    assert!(!h.root.join("Downloads/extra").exists());
-    assert!(h.root.join("Downloads/keep").is_file());
-}
-
 #[tokio::test]
 async fn clear_cache_empties_thumbnails_listings_and_archives_only() {
     let h = home().await;
     let paths = AppPaths::new(&h.root);
     write(&paths.thumbs_dir().join("k.thumb"), &[0u8; 100]);
     write(&paths.cache_dir().join("archives/x/file"), &[0u8; 50]);
-    write(&paths.crash_dir().join("crash-1.txt"), b"report");
+    write(&paths.cache_dir().join("other/keep"), b"other");
     write(&h.root.join("Documents/keep.txt"), b"mine");
     let docs = uri("lautta://user-documents/");
     h.core.list(&docs, |_| {}).await.unwrap();
@@ -239,8 +153,8 @@ async fn clear_cache_empties_thumbnails_listings_and_archives_only() {
     assert_eq!(h.core.cache_sizes().total(), 0);
     assert!(paths.thumbs_dir().is_dir(), "the folder stays");
     assert!(
-        paths.crash_dir().join("crash-1.txt").is_file(),
-        "crash reports stay"
+        paths.cache_dir().join("other/keep").is_file(),
+        "other cache files stay"
     );
     assert!(h.root.join("Documents/keep.txt").is_file());
     assert!(h.core.dircache.get(&docs).unwrap().is_none());

@@ -10,8 +10,8 @@ without it.
 
 Requirement prefixes: `HBR` Harbour compliance, `ARC` architecture, `RS` Rust,
 `NVB` netvfs bridge integration, `LOC` locations, `BRW` browsing, `OPS` file operations,
-`XFR` transfers, `PRV` preview, `EDT` editing, `SRC` search, `SYN` sync, `ORG`
-favourites/recents/tags, `INT` system integration, `UI` interface, `SEC` security,
+`XFR` transfers, `PRV` preview, `SRC` search, `ORG` favourites/recents, `INT` system
+integration, `UI` interface, `SEC` security,
 `PRF` performance, `DAT` persistence, `TST` testing, `PKG` packaging. "Must" is a
 requirement, "should" a default that may be revisited with a recorded reason, "may"
 optional.
@@ -36,8 +36,8 @@ capabilities of Transmit or Cyberduck. On its own it manages the user's files: D
 Downloads, Pictures, Music, Videos, Public, the Android storage folders Sailjail exposes, SD
 cards and USB drives. When netvfs v2 with its bridge is installed, the same app also
 browses every SFTP, SMB, WebDAV and FTP/FTPS server configured in Settings → Accounts.
-Those servers become ordinary locations: browse, preview, stream, edit in place, copy and
-move between any two of them, with a persistent, resumable queue.
+Those servers become ordinary locations: browse, preview, stream, open in other apps, copy
+and move between any two of them, with a persistent, resumable queue.
 
 The app is a Rust program with a Silica QML UI. It is a single sandboxed process.
 
@@ -47,11 +47,10 @@ The app is a Rust program with a Silica QML UI. It is a single sandboxed process
 
 1. Pass Harbour intake with no exceptions, warnings only where unavoidable and documented
    (§3).
-2. Feature parity with Harbour File Browser inside the same sandbox (Appendix A).
+2. The everyday features of Harbour File Browser inside the same sandbox (Appendix A).
 3. When netvfs v2 is present: remote locations as first-class as local ones, with a
    desktop-class transfer engine.
-4. Edit remote files in other apps with write-back; preview and play media without
-   leaving the app.
+4. Open remote files in other apps; preview and play media without leaving the app.
 5. Never lose data; never fail open on security; never show the user a decision the
    platform could make safely.
 
@@ -176,7 +175,7 @@ network locations provided by netvfs, if installed") and never as the main featu
 | Ad-hoc location | A server opened via *Connect to server*; lives in the bridge for this app only. |
 | Operation | A user-level action (copy 37 items to X), planned into steps. |
 | Transfer | An operation that moves bytes; persisted in the queue. |
-| Working copy | A local copy of a remote file opened in another app, watched for write-back. |
+| Working copy | A local copy of a remote file opened in another app; it expires (PRV-6). |
 
 ## 5. Architecture
 
@@ -190,7 +189,7 @@ flowchart LR
     CORE --> LP[local provider]
     CORE --> AP[archive provider]
     CORE --> NP[netvfs provider<br/>zbus p2p client]
-    CORE --> DB[(SQLite: queue, caches,<br/>prefs, recents, tags)]
+    CORE --> DB[(SQLite: queue, caches,<br/>prefs, recents)]
   end
   NP <-- "unix socket in app data dir<br/>p2p D-Bus + fd passing" --> BR[netvfs-bridge<br/>(not part of this app)]
   BR --> NV[(libnetvfs v2 + backends)]
@@ -234,7 +233,7 @@ flowchart LR
 | `DirCache` | memory LRU + SQLite listing cache, stale-while-revalidate |
 | `Thumbs` | local thumbnails via `Nemo.Thumbnailer`; remote thumbnails decoded in Rust |
 | `MediaSource` | random-access byte source for the player (PRV-9) |
-| `WorkingCopies` | edit-in-place copies, inotify watches, write-back |
+| `WorkingCopies` | copies of remote files opened in other apps, expiry (PRV-6) |
 | `Trash` | app-private *Recently deleted* for local files |
 | `Questions` | blocking prompts (conflicts, ad-hoc identity, keyboard-interactive) |
 
@@ -272,8 +271,7 @@ against the target rustc.
   not `std::env::args`. The app starts directly (`no-invoker`, HBR-4), not through
   the booster.
 - RS-4: `panic = "abort"` in release. Every closure invoked from C++ is a thin trampoline
-  that cannot unwind. Crashes write a minidump-free text report to the cache folder
-  (`panic` hook), shown at the next start with *Copy report*.
+  that cannot unwind.
 - RS-5: `unsafe` is allowed only in `lautta-qt` (FFI) and in a single `sys` module of
   `lautta-core` (fd passing, `statx`, `renameat2`). `#![forbid(unsafe_code)]` elsewhere.
 - RS-6: Dependencies are vendored (`cargo vendor`) and `Cargo.lock` is committed;
@@ -368,9 +366,9 @@ what the app does.
   lowercased NFC text with a byte-order tiebreak; full ICU collation is not worth its size
   in the binary), size, modified, type; folders first toggle; stable.
 - BRW-3: Instant filter (substring, case- and diacritics-insensitive), hidden files
-  toggle (dot names and the hidden attribute), type chips.
-- BRW-4: Per-folder view settings persisted per URI, inheriting location then global
-  defaults (File Browser parity).
+  toggle (dot names and the hidden attribute).
+- BRW-4: View settings (sort, folders first, hidden files, list or grid) are global: the
+  same for every folder and location.
 - BRW-5: Stale-while-revalidate: cached listing shown immediately (≤ 7 days old, marked
   stale), refresh on the interactive lane, diff applied in place without losing scroll
   or selection.
@@ -391,15 +389,13 @@ what the app does.
 | Operation | Local (sandbox) | netvfs location | Notes |
 |---|---|---|---|
 | New folder / empty file | ✓ | ✓ | exclusive create |
-| Rename, bulk rename | ✓ | ✓ | no-replace by default |
+| Rename | ✓ | ✓ | no-replace by default |
 | Copy / move within location | ✓ (reflink/`copy_file_range`, rename) | server copy if capable, else via bridge | |
 | Copy / move across locations | ✓ | ✓ | queue |
 | Delete | ✓ to *Recently deleted* | ✓ remorse, permanent | |
 | Symlink / hard link | ✓ (same volume, not on vfat/exFAT) | if capable | |
-| Permissions | ✓ (not on vfat/exFAT) | if capable | |
 | Set modification time | ✓ | if capable | |
 | Compress / extract | ✓ | ✓ streamed through pipes (NVB-9) | |
-| Checksums | ✓ | if capable, else streamed and hashed locally | |
 
 The UI reads capabilities (local: per filesystem type via `statfs`; remote: from the
 bridge).
@@ -430,10 +426,7 @@ bridge).
   for 10 s.
 - OPS-10: Clipboard (cut/copy, docked paste bar) and *Copy to…*/*Move to…* folder picker
   across all locations.
-- OPS-11: Bulk rename: find/replace (plain, regex), prefix/suffix, numbering, case,
-  extension, date patterns; live preview with collision and validity checks.
-- OPS-12: Info page and permissions editor (rwx grid, octal, recursive with separate
-  file/folder masks).
+- OPS-12: Info page: details, with permissions shown read-only.
 
 ## 11. Transfers
 
@@ -477,7 +470,7 @@ bridge).
   `Upload(disposition=Resume)` when capable, otherwise restart that file. Downloads
   always resume.
 
-## 12. Preview, open, stream, edit
+## 12. Preview, open, stream
 
 - PRV-1: Local thumbnails via `Nemo.Thumbnailer` (`image://nemoThumbnail/` and the
   `Thumbnail` item), covering images and videos the system can thumbnail.
@@ -490,14 +483,14 @@ bridge).
   visible delegates only, canceled on scroll.
 - PRV-4: Viewers: images (zoom, swipe through the folder, EXIF panel), text/code (read-
   only up to 1 MiB, then a notice), Markdown (pulldown-cmark → Qt rich text subset), audio
-  and video (QtMultimedia), archives (as locations), SQLite (local files, read-only,
-  tables and first rows), hex view (ranged reads). No PDF viewer: poppler is not allowed;
-  PDFs go to *Open with*.
+  and video (QtMultimedia), archives (as locations). No PDF viewer: poppler is not
+  allowed; PDFs go to *Open with*, as do databases, packages and other binary files.
 - PRV-5: *Open with* for local files uses the system handler as Harbour File Browser
   does (mechanism to verify in the sandbox, §24.1).
 - PRV-6: Remote files opened in another app must be readable by that sandboxed app, so
   the copy goes to `~/Downloads/Lautta/Opened/` (UserDirs), not to the private cache.
-  Copies are removed after 24 h unless pinned; the first use explains this in one line.
+  Copies are removed 24 h after the last download unless another app changed them; the
+  first use explains this in one line.
 - PRV-7: Share out: `ShareAction` (`Sailfish.Share`) for local files; remote files are
   first copied to the PRV-6 folder.
 - PRV-8: Remote media play without a full download through `MediaSource`: a
@@ -513,20 +506,8 @@ bridge).
   (central directory first); other remote archives are downloaded to the cache first.
 - PRV-11: Create zip or tar.gz from any selection; when the destination is remote the
   archive is written into a pipe that is uploaded as it is produced.
-- EDT-1: *Edit* on a writable remote file downloads to `~/Downloads/Lautta/Editing/`,
-  records the baseline (size, mtime, etag), opens it externally, and watches it with
-  inotify (close-after-write, 2 s debounce).
-- EDT-2: On change: stat remote; unchanged since baseline → upload (high priority) and
-  update the baseline; changed → conflict dialog (*Upload mine and replace*, *Save mine as
-  copy*, *Discard mine*).
-- EDT-3: Working copies listed in Transfers → *Edited files*; they survive restarts;
-  removed 24 h after the last successful upload unless pinned. Watching only happens while
-  the app runs; at start, changed working copies are detected by mtime and offered for
-  upload.
-- EDT-4: Built-in text editor for files ≤ 1 MiB that are valid UTF-8; preserves line
-  endings and final newline; saves through EDT-2.
 
-## 13. Search, sync, organisation
+## 13. Search and organisation
 
 - SRC-1: Instant filter in the current view (BRW-3).
 - SRC-2: *Search here*: recursive name search (substring or glob, type, size, date),
@@ -536,16 +517,9 @@ bridge).
 - SRC-4: Recent searches per location (10).
 - SRC-5: Later: full-text and global search via Tracker with the `MediaIndexing`
   permission. Not in 1.0 (keeps the permission set minimal).
-- SYN-1: Compare two folders in any two locations (size + mtime with 2 s tolerance and an
-  optional 1 h DST tolerance; optional checksums).
-- SYN-2: Mirror left → right, mirror right → left, update both (newer wins, no deletes).
-  Preview, per-item exclusion, exclusion patterns per pair.
-- SYN-3: Runs as an ordinary transfer. Saved sync pairs under Favourites; manual only.
 - ORG-1: Favourites: any folder, local or remote, reorderable, with label and colour.
-- ORG-2: Recents: files opened, previewed, edited or transferred; filterable; clearable;
-  can be switched off.
-- ORG-3: Tags: colour and named tags stored in the app database by URI; follow moves and
-  renames done by the app; external changes leave orphans in *Missing*.
+- ORG-2: Recents: files opened, previewed or transferred; filterable; clearable; can be
+  switched off.
 
 ## 14. System integration
 
@@ -578,11 +552,10 @@ flowchart TD
   B --> CS[Connect to server<br/>bridge only]
   B --> S[Settings / About]
   D --> D
-  D --> I[Info / permissions]
+  D --> I[Info]
   D --> V[Viewers]
   D --> P[Folder picker]
   D --> SR[Search results]
-  D --> BR[Bulk rename]
   T --> TD[Transfer details]
 ```
 
@@ -590,7 +563,7 @@ flowchart TD
 
 Sections: *Favourites*, *On this device* (user folders), *Android*, *Volumes* (when
 present), *Servers* (bridge only: accounts, recent ad-hoc servers, status dot,
-attention badge), *Nearby* (bridge only, hidden when empty), *Tags*.
+attention badge), *Nearby* (bridge only, hidden when empty).
 
 Pulley: *Settings*, *Connect to server* (bridge only), *Add server* (bridge only, NVB-5),
 *Transfers* (live count). Push-up: *Recents*. Long-press server: *Disconnect*, *Edit
@@ -603,13 +576,13 @@ or receiving transfers. List view with icon or thumbnail and "size · modified";
 for media folders (suggested when > 60 % images). Pulley: *Select*, *New folder/file*,
 *Paste* (with clipboard), *Search here*, *View options*, *Refresh*. Push-up: *Info*,
 *Add to favourites*. Context menu: *Open with*, *Share*, *Copy*, *Cut*, *Rename*,
-*Delete*, *Copy to…*, *Move to…*, *Download*/*Upload to…*, *Info*; order configurable,
+*Delete*, *Copy to…*, *Move to…*, *Download*/*Upload to…*, *Info*; fixed order,
 capability-filtered. Selection by tapping icons, actions in a `DockedPanel`.
 Placeholders: empty, no permission, offline, error with *Retry*/*Details*.
 
 ### 15.4 Transfers page
 
-Groups: *Active*, *Waiting for you*, *Paused*, *Edited files*, *History*. Rows with
+Groups: *Active*, *Waiting for you*, *Paused*, *History*. Rows with
 direction icon, title, progress, "1.2 GB of 4.0 GB · 11.4 MB/s · 4 min".
 
 ### 15.5 Rules
@@ -634,12 +607,12 @@ direction icon, title, progress, "1.2 GB of 4.0 GB · 11.4 MB/s · 4 min".
   are preserved by construction.
 - SEC-3: Only the bridge socket in the app's own data folder is used; the app does not
   attempt to reach other D-Bus names or sockets.
-- SEC-4: Copies that leave the sandbox (PRV-6, EDT-1) live in `~/Downloads/Lautta/` and
+- SEC-4: Copies that leave the sandbox (PRV-6) live in `~/Downloads/Lautta/` and
   are therefore readable by other apps with the Downloads permission while they exist;
   this is stated in the UI and the copies expire.
 - SEC-5: Caches (listings, thumbnails) are in the app's private folders, 0700/0600, with
   *Clear cache* and per-location opt-outs. Removing an account in Settings purges its
-  caches, recents, tags and favourites at the next `LocationsChanged`.
+  caches, recents and favourites at the next `LocationsChanged`.
 - SEC-6: Logging: `log` crate, default `warn`; paths and host names only at `debug`;
   never secrets or file contents.
 - SEC-7: No telemetry. The app opens no network sockets.
@@ -665,7 +638,7 @@ copies through the app for local↔remote).
 Global: default view options, hidden files, folders first, thumbnail limits, cache sizes,
 *Recently deleted* on/off and retention, remorse duration, local transfer concurrency,
 preserve mtimes/permissions, verify with checksums, auto-resume, history retention,
-context menu order, date format, large-operation threshold.
+date format, large-operation threshold.
 
 Per location (app DB): lane sizes (remote), start folder, listing/thumbnail cache opt-out,
 display name override.
@@ -676,13 +649,12 @@ SQLite for everything structured.
 ## 19. Persistence
 
 - DAT-1: `~/.local/share/org.netvfs/lautta/lautta.db` (SQLite, WAL) and `.../trash/`;
-  `~/.cache/org.netvfs/lautta/` (thumbs, dircache blobs, crash reports). Simple
+  `~/.cache/org.netvfs/lautta/` (thumbs, dircache blobs). Simple
   preferences live in dconf via `Nemo.Configuration`; `~/.config/org.netvfs/lautta/` is
   unused.
-- DAT-2: Schema with `PRAGMA user_version`, forward migrations only: `view_prefs`,
-  `favourites`, `recents`, `tags`, `item_tags`, `transfers`, `transfer_items`,
-  `working_copies`, `sync_pairs`, `dircache`, `trash_items(id, original_uri, trashed_at,
-  stored_name)`.
+- DAT-2: Schema with `PRAGMA user_version`, forward migrations only: `favourites`,
+  `recents`, `transfers`, `transfer_items`, `working_copies`, `dircache`,
+  `trash_items(id, original_uri, trashed_at, stored_name)`.
 - DAT-3: The netvfs socket directory `~/.local/share/org.netvfs/lautta/netvfs/` belongs
   to netvfs; the app only reads it. *Clear app data* in Settings deletes it along with
   everything else; netvfs recreates it (netvfs XB-4).
@@ -716,7 +688,7 @@ One table for all providers (RS-8); examples:
   container servers (OpenSSH, Samba, Apache mod_dav, vsftpd), running the cross-location
   copy matrix, resume after a bridge kill, conflict flows, 10 000-entry folders.
 - TST-4: Fuzzing (`cargo fuzz`): bridge message decoding in the client, archive readers'
-  adapters, bulk-rename pattern parser, Markdown rendering subset.
+  adapters, Markdown rendering subset.
 - TST-5: Mutation testing (`cargo-mutants`) on planner, queue and conflict modules;
   `clippy -D warnings`; `miri` for the `sys` module tests that can run under it.
 - TST-6: QML tests (`TestCase` in the SDK target) for page logic; load test of every QML
@@ -766,8 +738,8 @@ lautta/
 | M0 – skeleton | workspace, SailfishApp bootstrap from Rust, booster check, rpmvalidator in CI, Browse page with user folders | validator clean; launches via booster on device |
 | M1 – local MVP | directory page, sorting/filter, cache, file operations, clipboard, folder picker, Recently deleted, image/text viewers, local thumbnails, transfers for local copies, cover | Harbour submission of a standalone 1.0 candidate; PRF-1/3/5 met |
 | M2 – bridge | netvfs provider, consent flow, accounts and ad-hoc servers, remote browse and operations, local↔remote transfers with resume, remote thumbnails | contract tests with netvfs green; device test with SFTP and SMB |
-| M3 – depth | MediaSource streaming, edit and write-back, share target, search, bulk rename, permissions editor, archives, Nearby | Appendix A complete |
-| M4 – power | compare and sync, tags, server copy everywhere available, two-pane landscape | — |
+| M3 – depth | MediaSource streaming, share target, search, archives, Nearby | Appendix A complete |
+| M4 – power | server copy everywhere available | — |
 
 Standalone releases ship to Harbour from M1 on; bridge features appear in a release only
 when the netvfs bridge they depend on is released.
@@ -813,18 +785,18 @@ when the netvfs bridge they depend on is released.
 ## Appendix A — Parity checklist
 
 Harbour File Browser (in-sandbox scope): browse ✓; search ✓ SRC; share/open externally ✓
-PRV-5/7; previews of images, audio, video, archives, databases ✓ PRV-4/10; multi-select
-by tapping icons ✓; copy/link/move in bulk ✓; bulk rename ✓ OPS-11; permissions ✓ OPS-12;
-new files/folders ✓; hidden files ✓; edit/enter paths ✓ BRW-9; quick filter ✓;
-per-folder view settings ✓ BRW-4; shortcuts ✓ ORG-1; multiple windows ✗ (single process;
-revisit); root mode ✗ (out of scope).
+PRV-5/7; previews of images, audio, video, archives ✓ PRV-4/10; database previews ✗
+(*Open with*); multi-select by tapping icons ✓; copy/link/move in bulk ✓; bulk rename ✗;
+permissions shown ✓ OPS-12, editing ✗; new files/folders ✓; hidden files ✓; edit/enter
+paths ✓ BRW-9; quick filter ✓; per-folder view settings ✗ (global, BRW-4); shortcuts ✓
+ORG-1; multiple windows ✗ (single process; revisit); root mode ✗ (out of scope).
 
 Transmit/Cyberduck (bridge mode): saved servers ✓ (Settings); quick connect ✓; dual-
-location copy ✓; queue with concurrency ✓; resume ✓; external edit with auto-upload ✓;
-sync/compare ✓; server-side copy ✓; recursive permissions ✓; preserve timestamps ✓;
+location copy ✓; queue with concurrency ✓; resume ✓; external edit with auto-upload ✗;
+sync/compare ✗; server-side copy ✓; recursive permissions ✗; preserve timestamps ✓;
 Bonjour discovery ✓ (via bridge).
 
-iOS Files: Browse/Recents ✓; Favourites ✓; Tags ✓; Connect to server ✓; quick look ✓;
+iOS Files: Browse/Recents ✓; Favourites ✓; Tags ✗; Connect to server ✓; quick look ✓;
 Recently deleted ✓ OPS-8; compress/uncompress ✓.
 
 ## Appendix B — Core provider trait (sketch)

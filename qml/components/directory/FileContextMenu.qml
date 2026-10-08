@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The long-press menu of one item (SPEC §15.3, board DirectoryContext): an
-// icon row first, then a short list. Order from the `context_menu` setting,
-// filtered by what this item and folder can do. `owner` is the DirectoryView.
+// icon row first, then a short list, filtered by what this item and folder
+// can do. `owner` is the DirectoryView.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -15,13 +15,12 @@ ContextMenu {
     // The list row, to run its remorse timer in place.
     property Item listItem
     property var info: ({})
-    readonly property var spec: Actions.split(Actions.order(App.setting("context_menu")), {
+    readonly property var spec: Actions.split({
         "isDir": info.isDir,
         "isLocal": App.isLocal(info.uri),
         "writable": owner ? owner.model.writable : false,
         "hasRemote": owner ? owner.hasRemote : false,
-        "category": info.category,
-        "otherPane": owner ? owner.otherUri.length > 0 : false
+        "category": info.category
     })
 
     IconRow {

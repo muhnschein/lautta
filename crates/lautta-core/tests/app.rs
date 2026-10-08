@@ -91,16 +91,15 @@ async fn rename_never_replaces() {
 }
 
 #[tokio::test]
-async fn tags_follow_renames() {
+async fn favourites_follow_renames() {
     let h = home().await;
-    write(&h.root.join("Documents/x.txt"), b"x");
-    let tag = h.core.tags.create("Work", "#ff0000").unwrap().id;
-    let x = uri("lautta://user-documents/x.txt");
-    h.core.tags.assign(tag, &[x.clone()]).unwrap();
-    let y = h.core.rename(&x, b"y.txt").await.unwrap();
-    let items = h.core.tags.items_for(tag).unwrap();
-    assert_eq!(items.len(), 1);
-    assert_eq!(items[0].uri, y);
+    std::fs::create_dir_all(h.root.join("Documents/x")).unwrap();
+    let x = uri("lautta://user-documents/x");
+    h.core.favourites.add(&x, "x", None).unwrap();
+    let y = h.core.rename(&x, b"y").await.unwrap();
+    let favourites = h.core.favourites.list().unwrap();
+    assert_eq!(favourites.len(), 1);
+    assert_eq!(favourites[0].uri, y);
 }
 
 #[tokio::test]

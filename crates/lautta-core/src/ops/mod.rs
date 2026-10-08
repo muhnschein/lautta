@@ -2,7 +2,6 @@
 //! File operations (SPEC §10): planning, conflicts, names, bulk rename.
 //! The types here are shared by the planner and the transfer engine.
 
-pub mod bulkrename;
 pub mod conflict;
 pub mod names;
 pub mod plan;
@@ -19,10 +18,6 @@ pub enum OperationKind {
     Delete,
     Compress,
     Extract,
-    /// Sync run from Compare (SYN-3).
-    Sync,
-    /// Write-back of a working copy (EDT-2).
-    WriteBack,
 }
 
 /// Conflict resolution choices (OPS-2). The default is never `Replace`.

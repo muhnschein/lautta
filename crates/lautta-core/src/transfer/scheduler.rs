@@ -29,7 +29,6 @@ struct Entry {
     id: TransferId,
     location: String,
     runnable: bool,
-    priority: bool,
     /// Items not yet started, in plan order, each with its barrier flag.
     pending: VecDeque<(u32, bool)>,
     running: u32,
@@ -82,33 +81,19 @@ impl Scheduler {
             .unwrap_or(DEFAULT_REMOTE_LIMIT)
     }
 
-    /// Queues a transfer. A `high_priority` one (write-back, EDT-2) goes
-    /// ahead of ordinary transfers but behind earlier high-priority ones.
-    /// `items` are `(seq, barrier)`: a barrier (folder, link, delete) runs
-    /// alone, after everything before it, and blocks what follows until done.
-    pub fn add(
-        &mut self,
-        id: TransferId,
-        location: &str,
-        items: impl IntoIterator<Item = (u32, bool)>,
-        high_priority: bool,
-    ) {
+    /// Queues a transfer at the end. `items` are `(seq, barrier)`: a barrier
+    /// (folder, link, delete) runs alone, after everything before it, and
+    /// blocks what follows until done.
+    pub fn add(&mut self, id: TransferId, location: &str, items: impl IntoIterator<Item = (u32, bool)>) {
         self.remove(id);
-        let entry = Entry {
+        self.entries.push(Entry {
             id,
             location: location.to_owned(),
             runnable: true,
-            priority: high_priority,
             pending: items.into_iter().collect(),
             running: 0,
             barrier_running: false,
-        };
-        let at = if high_priority {
-            self.entries.iter().take_while(|e| e.priority).count()
-        } else {
-            self.entries.len()
-        };
-        self.entries.insert(at, entry);
+        });
     }
 
     pub fn remove(&mut self, id: TransferId) {
@@ -331,7 +316,7 @@ mod tests {
     #[test]
     fn local_limit_is_two() {
         let mut s = Scheduler::new();
-        s.add(1, "user-documents", files(5), false);
+        s.add(1, "user-documents", files(5));
         assert_eq!(s.start_runnable(), vec![r(1, 0), r(1, 1)]);
         assert!(s.start_runnable().is_empty());
         s.item_finished(r(1, 0));
@@ -344,7 +329,7 @@ mod tests {
     #[test]
     fn remote_limit_default_override_and_clamp() {
         let mut s = Scheduler::new();
-        s.add(1, "nv-a", files(10), false);
+        s.add(1, "nv-a", files(10));
         assert_eq!(s.limit_for("nv-a"), 2);
         assert_eq!(s.next_runnable().len(), 2);
         s.set_remote_limit("nv-a", 4);
@@ -361,7 +346,7 @@ mod tests {
     #[test]
     fn next_runnable_does_not_mutate() {
         let mut s = Scheduler::new();
-        s.add(1, "a", files(3), false);
+        s.add(1, "a", files(3));
         let first = s.next_runnable();
         assert_eq!(first, s.next_runnable());
         assert_eq!(s.running_count(1), 0);
@@ -371,8 +356,8 @@ mod tests {
     #[test]
     fn fifo_within_a_location() {
         let mut s = Scheduler::new();
-        s.add(1, "a", files(1), false);
-        s.add(2, "a", files(3), false);
+        s.add(1, "a", files(1));
+        s.add(2, "a", files(3));
         assert_eq!(s.start_runnable(), vec![r(1, 0), r(2, 0)]);
         s.item_finished(r(1, 0));
         assert_eq!(s.start_runnable(), vec![r(2, 1)]);
@@ -381,9 +366,9 @@ mod tests {
     #[test]
     fn round_robin_across_locations() {
         let mut s = Scheduler::new();
-        s.add(1, "a", files(4), false);
-        s.add(2, "nv-b", files(4), false);
-        s.add(3, "c", files(4), false);
+        s.add(1, "a", files(4));
+        s.add(2, "nv-b", files(4));
+        s.add(3, "c", files(4));
         let order: Vec<TransferId> = s.start_runnable().iter().map(|i| i.transfer).collect();
         assert_eq!(order, vec![1, 2, 3, 1, 2, 3]);
     }
@@ -391,8 +376,8 @@ mod tests {
     #[test]
     fn busy_location_does_not_starve_others() {
         let mut s = Scheduler::new();
-        s.add(1, "a", files(10), false);
-        s.add(2, "nv-b", files(10), false);
+        s.add(1, "a", files(10));
+        s.add(2, "nv-b", files(10));
         assert_eq!(s.start_runnable().len(), 4);
         s.item_finished(r(1, 0));
         assert_eq!(s.start_runnable(), vec![r(1, 2)]);
@@ -404,8 +389,8 @@ mod tests {
     fn global_cap_rotates_the_first_served_location() {
         let mut s = Scheduler::new();
         s.set_global_limit(Some(3));
-        s.add(1, "a", files(9), false);
-        s.add(2, "c", files(9), false);
+        s.add(1, "a", files(9));
+        s.add(2, "c", files(9));
         let first: Vec<TransferId> = s.start_runnable().iter().map(|i| i.transfer).collect();
         assert_eq!(first, vec![1, 2, 1]);
         s.item_finished(r(1, 0));
@@ -424,7 +409,6 @@ mod tests {
             1,
             "a",
             vec![(0, true), (1, false), (2, false), (3, true), (4, false)],
-            false,
         );
         assert_eq!(s.start_runnable(), vec![r(1, 0)]);
         assert!(s.start_runnable().is_empty());
@@ -442,7 +426,7 @@ mod tests {
     #[test]
     fn barrier_waits_for_earlier_items_started_in_the_same_batch() {
         let mut s = Scheduler::new();
-        s.add(1, "a", vec![(0, false), (1, true), (2, false)], false);
+        s.add(1, "a", vec![(0, false), (1, true), (2, false)]);
         assert_eq!(s.start_runnable(), vec![r(1, 0)]);
         s.item_finished(r(1, 0));
         assert_eq!(s.start_runnable(), vec![r(1, 1)]);
@@ -451,16 +435,16 @@ mod tests {
     #[test]
     fn barrier_in_one_transfer_does_not_block_another() {
         let mut s = Scheduler::new();
-        s.add(1, "a", vec![(0, true), (1, false)], false);
-        s.add(2, "a", files(2), false);
+        s.add(1, "a", vec![(0, true), (1, false)]);
+        s.add(2, "a", files(2));
         assert_eq!(s.start_runnable(), vec![r(1, 0), r(2, 0)]);
     }
 
     #[test]
     fn not_runnable_transfers_are_skipped() {
         let mut s = Scheduler::new();
-        s.add(1, "a", files(2), false);
-        s.add(2, "a", files(2), false);
+        s.add(1, "a", files(2));
+        s.add(2, "a", files(2));
         s.set_runnable(1, false);
         assert_eq!(s.start_runnable(), vec![r(2, 0), r(2, 1)]);
         s.set_runnable(1, true);
@@ -472,7 +456,7 @@ mod tests {
     fn reorder_changes_service_order() {
         let mut s = Scheduler::new();
         for id in 1..=3 {
-            s.add(id, "a", files(1), false);
+            s.add(id, "a", files(1));
         }
         assert!(s.move_to_top(3));
         assert_eq!(s.order(), vec![3, 1, 2]);
@@ -489,18 +473,9 @@ mod tests {
     }
 
     #[test]
-    fn high_priority_goes_first_but_keeps_its_own_order() {
-        let mut s = Scheduler::new();
-        s.add(5, "a", files(1), false);
-        s.add(6, "a", files(1), true);
-        s.add(7, "a", files(1), true);
-        assert_eq!(s.order(), vec![6, 7, 5]);
-    }
-
-    #[test]
     fn requeue_keeps_plan_order_and_ignores_duplicates() {
         let mut s = Scheduler::new();
-        s.add(1, "a", vec![(5, false)], false);
+        s.add(1, "a", vec![(5, false)]);
         s.requeue(1, vec![(2, false), (9, false), (5, false), (7, false)]);
         s.set_remote_limit("a", 1);
         assert_eq!(s.pending_count(1), 4);
@@ -512,7 +487,7 @@ mod tests {
     #[test]
     fn drop_pending_and_remove() {
         let mut s = Scheduler::new();
-        s.add(1, "a", files(4), false);
+        s.add(1, "a", files(4));
         s.drop_pending(1, |seq| seq >= 2);
         assert_eq!(s.pending_count(1), 2);
         assert!(s.contains(1));
@@ -526,8 +501,8 @@ mod tests {
     #[test]
     fn readding_replaces_the_entry() {
         let mut s = Scheduler::new();
-        s.add(1, "a", files(1), false);
-        s.add(1, "a", files(3), false);
+        s.add(1, "a", files(1));
+        s.add(1, "a", files(3));
         assert_eq!(s.order(), vec![1]);
         assert_eq!(s.pending_count(1), 3);
     }
@@ -536,7 +511,7 @@ mod tests {
     fn finishing_unknown_item_is_harmless() {
         let mut s = Scheduler::new();
         s.item_finished(r(1, 1));
-        s.add(1, "a", files(1), false);
+        s.add(1, "a", files(1));
         s.item_finished(r(1, 0));
         assert_eq!(s.running_count(1), 0);
         assert_eq!(s.start_runnable(), vec![r(1, 0)]);

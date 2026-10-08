@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Where the app keeps things (SPEC §3.3, DAT-1, PRV-6, EDT-1).
+//! Where the app keeps things (SPEC §3.3, DAT-1, PRV-6).
 
 use std::path::{Path, PathBuf};
 
@@ -59,18 +59,9 @@ impl AppPaths {
         self.cache_dir().join("dircache")
     }
 
-    pub fn crash_dir(&self) -> PathBuf {
-        self.cache_dir().join("crash")
-    }
-
     /// Remote files opened in other apps (PRV-6).
     pub fn opened_dir(&self) -> PathBuf {
         self.home.join("Downloads/Lautta/Opened")
-    }
-
-    /// Working copies for edit-in-place (EDT-1).
-    pub fn editing_dir(&self) -> PathBuf {
-        self.home.join("Downloads/Lautta/Editing")
     }
 
     /// Removable media mount root (LOC-3).
@@ -105,10 +96,6 @@ mod tests {
         assert_eq!(
             p.opened_dir(),
             Path::new("/home/defaultuser/Downloads/Lautta/Opened")
-        );
-        assert_eq!(
-            p.editing_dir(),
-            Path::new("/home/defaultuser/Downloads/Lautta/Editing")
         );
         assert_eq!(p.media_root("defaultuser"), Path::new("/run/media/defaultuser"));
     }

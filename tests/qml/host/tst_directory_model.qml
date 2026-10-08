@@ -113,12 +113,10 @@ Item {
         dir.filterText = "ALPHA"
         same(names(rep), ["alpha.txt"], "filter ignores case")
         dir.filterText = ""
-        dir.chips = JSON.stringify(["images"])
-        same(names(rep), ["Beta.png"], "type chip")
-        dir.chips = JSON.stringify(["folders", "documents"])
-        same(names(rep), ["Zeta", "alpha.txt", "notes.md"], "two chips")
-        dir.chips = "[]"
-        check(dir.count === 4, "chips cleared")
+        dir.foldersOnly = true
+        same(names(rep), ["Zeta"], "folders only")
+        dir.foldersOnly = false
+        check(dir.count === 4, "files back")
         check(dir.setViewPrefs(JSON.stringify({ sortKey: "type" })) && dir.sortKey === "type", "sort key")
         dir.setViewPrefs(JSON.stringify({ sortKey: "name" }))
     }
@@ -179,14 +177,16 @@ Item {
         check(path.resolve("nowhere") === "", "resolve refuses")
     }
 
-    function testPrefsPersist() {
+    function testPrefsAreGlobal() {
         dir.setViewPrefs(JSON.stringify({ viewMode: "grid", thumbnails: false }))
-        var again = Qt.createQmlObject('import Lautta 1.0; DirectoryModel { uri: "' + root.docs + '" }', root)
-        check(again.viewMode === "grid" && !again.thumbnails, "folder view settings are stored")
         check(row(rep, "Beta.png").thumb === "", "thumbnail role follows the setting")
-        check(dir.setViewPrefs(JSON.stringify({ scope: "all" })), "forget the folder's own settings")
-        var third = Qt.createQmlObject('import Lautta 1.0; DirectoryModel { uri: "' + root.docs + '" }', root)
-        check(third.viewMode === "list", "inherits again")
+        var again = Qt.createQmlObject('import Lautta 1.0; DirectoryModel { uri: "' + root.docs + '" }', root)
+        check(again.viewMode === "list" && again.thumbnails, "setViewPrefs stores nothing")
+        check(App.setSetting("view_mode", JSON.stringify("grid")), "global view mode")
+        var other = Qt.createQmlObject('import Lautta 1.0; DirectoryModel { uri: "' + root.docs + 'Zeta" }', root)
+        check(other.viewMode === "grid", "every folder uses the global settings")
+        App.setSetting("view_mode", JSON.stringify("list"))
+        dir.setViewPrefs(JSON.stringify({ viewMode: "list", thumbnails: true }))
     }
 
     function testPicker() {
@@ -201,7 +201,7 @@ Item {
         testRename()
         testLiveUpdate()
         testStates()
-        testPrefsPersist()
+        testPrefsAreGlobal()
         testPicker()
     }
 }

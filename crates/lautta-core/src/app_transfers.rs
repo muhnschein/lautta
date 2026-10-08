@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! User-level actions of the transfers area on [`Core`](crate::app::Core):
-//! the grouped transfer list with live progress (XFR-8, §15.4), start-up
-//! restore (XFR-11), working copies and their write-back (EDT-1..3).
-//! Everything here is Qt-free; the Qt layer turns it into models.
+//! the grouped transfer list with live progress (XFR-8, §15.4) and start-up
+//! restore (XFR-11). Everything here is Qt-free; the Qt layer turns it into
+//! models.
 
 use crate::app::Core;
 use crate::error::{Error, ErrorKind, Result};
@@ -11,12 +11,7 @@ use crate::ops::{Conflict, ConflictChoice, OperationKind};
 use crate::transfer::model::operation_name;
 use crate::transfer::{TransferId, TransferState, TransferSummary, WaitReason};
 use crate::uri::Uri;
-use crate::watch::FileWatcher;
-use crate::workcopy::{
-    locally_changed, EditConflict, EditConflictChoice, Purpose, Resolution, WorkingCopy, WorkingCopyId,
-};
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
 
 /// The groups of the Transfers page (§15.4), in display order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -25,17 +20,14 @@ pub enum TransferGroup {
     /// Waiting for the user, the network, the bridge or a card.
     Waiting,
     Paused,
-    /// Working copies (EDT-3); never a transfer.
-    Edited,
     History,
 }
 
 impl TransferGroup {
-    pub const ALL: [TransferGroup; 5] = [
+    pub const ALL: [TransferGroup; 4] = [
         TransferGroup::Active,
         TransferGroup::Waiting,
         TransferGroup::Paused,
-        TransferGroup::Edited,
         TransferGroup::History,
     ];
 
@@ -44,7 +36,6 @@ impl TransferGroup {
             TransferGroup::Active => "active",
             TransferGroup::Waiting => "waiting",
             TransferGroup::Paused => "paused",
-            TransferGroup::Edited => "edited",
             TransferGroup::History => "history",
         }
     }
@@ -146,24 +137,6 @@ pub fn parse_choice(name: &str) -> Option<ConflictChoice> {
     .find(|c| choice_name(*c) == name)
 }
 
-pub fn edit_choice_name(c: EditConflictChoice) -> &'static str {
-    match c {
-        EditConflictChoice::UploadMineAndReplace => "upload_replace",
-        EditConflictChoice::SaveMineAsCopy => "save_copy",
-        EditConflictChoice::DiscardMine => "discard",
-    }
-}
-
-pub fn parse_edit_choice(name: &str) -> Option<EditConflictChoice> {
-    [
-        EditConflictChoice::UploadMineAndReplace,
-        EditConflictChoice::SaveMineAsCopy,
-        EditConflictChoice::DiscardMine,
-    ]
-    .into_iter()
-    .find(|c| edit_choice_name(*c) == name)
-}
-
 /// A conflict question as the UI gets it: the core `Conflict` fields
 /// (snake_case, as the shared ConflictDialog reads them), `choices` by name.
 pub fn conflict_json(id: TransferId, item: u32, name: &str, c: &Conflict) -> serde_json::Value {
@@ -179,21 +152,6 @@ pub fn conflict_json(id: TransferId, item: u32, name: &str, c: &Conflict) -> ser
         "dst_mtime_ms": c.dst_mtime_ms,
         "resumable": c.resumable,
         "choices": c.choices.iter().map(|x| choice_name(*x)).collect::<Vec<_>>(),
-    })
-}
-
-/// An edit conflict as the UI gets it.
-pub fn edit_conflict_json(c: &EditConflict, name: &str, address: &str) -> serde_json::Value {
-    serde_json::json!({
-        "copyId": c.id,
-        "name": name,
-        "remote": c.remote.to_string(),
-        "address": address,
-        "localSize": c.local_size,
-        "remoteSize": c.remote_size,
-        "remoteMtimeMs": c.remote_mtime_ms,
-        "remoteGone": c.remote_size.is_none() && c.remote_mtime_ms.is_none(),
-        "choices": c.choices.iter().map(|x| edit_choice_name(*x)).collect::<Vec<_>>(),
     })
 }
 
@@ -300,32 +258,13 @@ impl TransferRow {
     }
 }
 
-/// A working copy of the *Edited files* group with what the list needs.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EditedFile {
-    pub copy: WorkingCopy,
-    /// The local file changed since the last upload (upload pending).
-    pub dirty: bool,
-    pub local_size: u64,
-}
-
-/// What start-up found (XFR-11, EDT-3).
+/// What start-up found (XFR-11).
 #[derive(Debug, Clone, Default)]
 pub struct StartReport {
     /// Unfinished transfers that came back; paused unless auto-resumed.
     pub restored: usize,
     /// Of those, how many are paused now.
     pub paused: usize,
-    /// Edited files changed while the app was closed.
-    pub dirty_edits: Vec<WorkingCopy>,
-}
-
-/// The outcome of [`Core::write_back`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WriteBack {
-    Unchanged,
-    Uploaded(WorkingCopy),
-    Conflict(EditConflict),
 }
 
 /// Orders the list for display: transfers by group, history newest first.
@@ -341,8 +280,8 @@ fn order_rows(rows: &mut [TransferRow]) {
 }
 
 impl Core {
-    /// Brings back the persisted queue (XFR-11) and looks at the working
-    /// copies (EDT-3). `auto_resume` is the setting AND the bridge being
+    /// Brings back the persisted queue (XFR-11) and removes expired working
+    /// copies (PRV-6). `auto_resume` is the setting AND the bridge being
     /// reachable; otherwise transfers wait paused with *Resume*.
     pub async fn start_transfers(&self, auto_resume: bool) -> Result<StartReport> {
         let restored = self.engine.load(auto_resume).await?;
@@ -353,12 +292,7 @@ impl Core {
             .filter(|s| s.state == TransferState::Paused)
             .count();
         let _ = self.working_copies.expire().await;
-        let dirty_edits = self.working_copies.scan_at_start().await.unwrap_or_default();
-        Ok(StartReport {
-            restored,
-            paused,
-            dirty_edits,
-        })
+        Ok(StartReport { restored, paused })
     }
 
     /// Whether auto-resume may start transfers (XFR-11): false only while a
@@ -451,113 +385,6 @@ impl Core {
             .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "unknown conflict choice"))?;
         self.engine.answer(id, item, choice, apply_all)
     }
-
-    // ---------------------------------------------------- working copies
-
-    /// The *Edited files* group: edit copies, with whether an upload is
-    /// pending (EDT-3). Newest first.
-    pub async fn edited_files(&self) -> Result<Vec<EditedFile>> {
-        let copies = self.working_copies.list(Some(Purpose::Edit)).await?;
-        tokio::task::spawn_blocking(move || {
-            let mut out: Vec<EditedFile> = copies.into_iter().map(edited_file).collect();
-            out.sort_by_key(|e| std::cmp::Reverse(e.copy.id));
-            out
-        })
-        .await
-        .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))
-    }
-
-    /// EDT-2: the local file changed. Uploads when the remote is unchanged,
-    /// reports a conflict otherwise.
-    pub async fn write_back(&self, id: WorkingCopyId) -> Result<WriteBack> {
-        let copy = self.working_copies.get(id).await?;
-        let provider = self.provider(&copy.remote.location)?;
-        match self.working_copies.on_local_change(provider.as_ref(), id).await? {
-            crate::workcopy::Decision::Unchanged => Ok(WriteBack::Unchanged),
-            crate::workcopy::Decision::Upload(_) => self
-                .working_copies
-                .upload(provider.as_ref(), id)
-                .await
-                .map(WriteBack::Uploaded),
-            crate::workcopy::Decision::Conflict(c) => Ok(WriteBack::Conflict(c)),
-        }
-    }
-
-    /// The conflict of a working copy, when it has one (the dialog asks).
-    pub async fn edit_conflict(&self, id: WorkingCopyId) -> Result<Option<EditConflict>> {
-        let copy = self.working_copies.get(id).await?;
-        let provider = self.provider(&copy.remote.location)?;
-        Ok(
-            match self.working_copies.on_local_change(provider.as_ref(), id).await? {
-                crate::workcopy::Decision::Conflict(c) => Some(c),
-                _ => None,
-            },
-        )
-    }
-
-    /// Answers an edit conflict (EDT-2).
-    pub async fn resolve_edit_conflict(
-        &self,
-        id: WorkingCopyId,
-        choice: EditConflictChoice,
-    ) -> Result<Resolution> {
-        let copy = self.working_copies.get(id).await?;
-        let provider = self.provider(&copy.remote.location)?;
-        self.working_copies.resolve(provider.as_ref(), id, choice).await
-    }
-
-    /// Display name of a working copy's remote file.
-    pub fn working_copy_name(&self, c: &WorkingCopy) -> String {
-        c.remote
-            .name()
-            .map(crate::vpath::display_name)
-            .unwrap_or_default()
-    }
-}
-
-fn edited_file(copy: WorkingCopy) -> EditedFile {
-    match crate::workcopy::local_stamp(&copy.local_path) {
-        Ok((size, mtime)) => EditedFile {
-            dirty: locally_changed(&copy, size, mtime),
-            local_size: size,
-            copy,
-        },
-        Err(_) => EditedFile {
-            dirty: false,
-            local_size: 0,
-            copy,
-        },
-    }
-}
-
-/// Makes the watcher follow the edit copies (EDT-3): new files are watched,
-/// files of removed copies are not. Files whose folder is gone are skipped.
-pub fn sync_watches(watcher: &FileWatcher, copies: &[WorkingCopy]) {
-    let wanted: HashSet<PathBuf> = copies
-        .iter()
-        .filter(|c| c.purpose == Purpose::Edit)
-        .map(|c| c.local_path.clone())
-        .collect();
-    for gone in watcher
-        .watched_files()
-        .into_iter()
-        .filter(|f| !wanted.contains(f))
-    {
-        let _ = watcher.unwatch_file(&gone);
-    }
-    for file in &wanted {
-        if let Err(e) = watcher.watch_file(file) {
-            log::debug!("not watching a working copy: {e}");
-        }
-    }
-}
-
-/// The working copy a written file belongs to.
-pub fn copy_for_path(copies: &[WorkingCopy], path: &Path) -> Option<WorkingCopyId> {
-    copies
-        .iter()
-        .find(|c| c.purpose == Purpose::Edit && c.local_path == path)
-        .map(|c| c.id)
 }
 
 #[cfg(test)]
@@ -606,7 +433,7 @@ mod tests {
         }
         assert_eq!(
             TransferGroup::ALL.map(TransferGroup::name),
-            ["active", "waiting", "paused", "edited", "history"]
+            ["active", "waiting", "paused", "history"]
         );
         assert_eq!(state_name(Waiting(WaitReason::Volume)), "waiting");
         assert_eq!(wait_reason_name(Waiting(WaitReason::Volume)), "volume");
@@ -639,14 +466,6 @@ mod tests {
             assert_eq!(parse_choice(choice_name(c)), Some(c));
         }
         assert_eq!(parse_choice("nope"), None);
-        for c in [
-            EditConflictChoice::UploadMineAndReplace,
-            EditConflictChoice::SaveMineAsCopy,
-            EditConflictChoice::DiscardMine,
-        ] {
-            assert_eq!(parse_edit_choice(edit_choice_name(c)), Some(c));
-        }
-        assert_eq!(parse_edit_choice("x"), None);
     }
 
     #[test]
@@ -711,7 +530,7 @@ mod tests {
     }
 
     #[test]
-    fn conflict_and_edit_conflict_json() {
+    fn conflict_json_carries_choice_names() {
         let c = Conflict {
             dst_is_dir: false,
             src_is_dir: false,
@@ -729,19 +548,6 @@ mod tests {
         assert_eq!(j["dst_size"], 4);
         assert!(j["dst_mtime_ms"].is_null());
         assert_eq!(j["choices"], serde_json::json!(["Replace", "KeepBoth"]));
-        let e = EditConflict {
-            id: 3,
-            remote: Uri::parse("lautta://srv/a/b.odt").unwrap(),
-            local_size: 84,
-            remote_size: None,
-            remote_mtime_ms: None,
-            choices: vec![EditConflictChoice::DiscardMine],
-        };
-        let j = edit_conflict_json(&e, "b.odt", "sftp://srv/a/b.odt");
-        assert_eq!(j["copyId"], 3);
-        assert_eq!(j["remoteGone"], true);
-        assert_eq!(j["choices"], serde_json::json!(["discard"]));
-        assert_eq!(j["remote"], "lautta://srv/a/b.odt");
     }
 
     #[test]
@@ -759,69 +565,5 @@ mod tests {
         assert_eq!(d(OperationKind::Move, &remote, &local), "download");
         assert_eq!(d(OperationKind::Copy, &remote, &remote), "remote");
         assert_eq!(d(OperationKind::Delete, &local, &local), "delete");
-    }
-
-    fn copy(id: i64, path: &str, purpose: Purpose) -> WorkingCopy {
-        WorkingCopy {
-            id,
-            remote: Uri::parse("lautta://srv/x").unwrap(),
-            local_path: PathBuf::from(path),
-            base_size: Some(1),
-            base_mtime_ms: None,
-            base_etag: None,
-            local_mtime_ms: Some(0),
-            pinned: false,
-            last_upload_ms: None,
-            purpose,
-        }
-    }
-
-    #[test]
-    fn copies_are_found_by_path_and_only_edit_copies() {
-        let copies = vec![copy(1, "/a/x", Purpose::Open), copy(2, "/a/y", Purpose::Edit)];
-        assert_eq!(copy_for_path(&copies, Path::new("/a/y")), Some(2));
-        assert_eq!(copy_for_path(&copies, Path::new("/a/x")), None);
-        assert_eq!(copy_for_path(&copies, Path::new("/a/z")), None);
-    }
-
-    #[test]
-    fn watches_follow_the_edit_copies() {
-        let dir = tempfile::tempdir().unwrap();
-        let (a, b, open) = (dir.path().join("a"), dir.path().join("b"), dir.path().join("o"));
-        for f in [&a, &b, &open] {
-            std::fs::write(f, b"x").unwrap();
-        }
-        let (watcher, _rx) = FileWatcher::new(std::time::Duration::from_millis(50)).unwrap();
-        let path = |p: &Path| p.to_str().unwrap().to_owned();
-        let both = vec![
-            copy(1, &path(&a), Purpose::Edit),
-            copy(2, &path(&b), Purpose::Edit),
-            copy(3, &path(&open), Purpose::Open),
-        ];
-        sync_watches(&watcher, &both);
-        assert_eq!(watcher.watched_files(), vec![a.clone(), b.clone()]);
-        sync_watches(&watcher, &both[1..]);
-        assert_eq!(watcher.watched_files(), vec![b.clone()]);
-        sync_watches(&watcher, &[]);
-        assert!(watcher.watched_files().is_empty());
-    }
-
-    #[test]
-    fn edited_file_notices_local_changes() {
-        let dir = tempfile::tempdir().unwrap();
-        let f = dir.path().join("f");
-        std::fs::write(&f, b"abc").unwrap();
-        let (size, mtime) = crate::workcopy::local_stamp(&f).unwrap();
-        let mut c = copy(1, f.to_str().unwrap(), Purpose::Edit);
-        c.base_size = Some(size);
-        c.local_mtime_ms = Some(mtime);
-        let clean = edited_file(c.clone());
-        assert!(!clean.dirty);
-        assert_eq!(clean.local_size, 3);
-        std::fs::write(&f, b"abcdef").unwrap();
-        assert!(edited_file(c.clone()).dirty);
-        std::fs::remove_file(&f).unwrap();
-        let gone = edited_file(c);
-        assert!(!gone.dirty && gone.local_size == 0);
     }
 }

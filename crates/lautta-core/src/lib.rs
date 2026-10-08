@@ -49,13 +49,11 @@ pub mod compress;
 pub mod preview;
 pub mod thumbs;
 
-// Search, sync, organisation
-pub mod compare;
+// Search, organisation
 pub mod org;
 pub mod search;
 
 // App-wide
-pub mod crash;
 pub mod messages;
 pub mod settings;
 

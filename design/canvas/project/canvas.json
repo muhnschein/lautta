@@ -58,30 +58,6 @@
       "x": 1920,
       "y": 0
     },
-    "BulkRename.dc.html": {
-      "h": 1000,
-      "is_interactive": true,
-      "title": "Bulk rename",
-      "w": 400,
-      "x": 1440,
-      "y": 4860
-    },
-    "CompareResults.dc.html": {
-      "h": 1000,
-      "is_interactive": true,
-      "title": "Compare results / sync",
-      "w": 400,
-      "x": 1440,
-      "y": 9480
-    },
-    "CompareSetup.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Compare folders",
-      "w": 400,
-      "x": 960,
-      "y": 9480
-    },
     "Compress.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -106,14 +82,6 @@
       "x": 2880,
       "y": 0
     },
-    "ContextMenuOrder.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Context menu order",
-      "w": 400,
-      "x": 5760,
-      "y": 14440
-    },
     "Covers.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -121,14 +89,6 @@
       "w": 860,
       "x": 2400,
       "y": 6580
-    },
-    "CrashReport.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Crash report",
-      "w": 400,
-      "x": 1440,
-      "y": 10900
     },
     "Directory.dc.html": {
       "h": 860,
@@ -194,14 +154,6 @@
       "x": 480,
       "y": 14440
     },
-    "EditConflict.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Edit write-back conflict",
-      "w": 400,
-      "x": 1920,
-      "y": 6580
-    },
     "Extract.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -233,14 +185,6 @@
       "w": 400,
       "x": 2880,
       "y": 14440
-    },
-    "HexViewer.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Hex view \u00b7 pulley",
-      "w": 400,
-      "x": 4320,
-      "y": 8200
     },
     "ImageDeleteRemote.dc.html": {
       "h": 860,
@@ -329,14 +273,6 @@
       "w": 400,
       "x": 2400,
       "y": 2060
-    },
-    "Permissions.dc.html": {
-      "h": 1000,
-      "is_interactive": true,
-      "title": "Permissions",
-      "w": 400,
-      "x": 2400,
-      "y": 4860
     },
     "PlanSummary.dc.html": {
       "h": 860,
@@ -450,14 +386,6 @@
       "x": 4800,
       "y": 0
     },
-    "SqliteViewer.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "SQLite",
-      "w": 400,
-      "x": 3840,
-      "y": 8200
-    },
     "StateEmpty.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -514,38 +442,6 @@
       "x": 2880,
       "y": 3580
     },
-    "TagAssign.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Assign tags",
-      "w": 400,
-      "x": 3840,
-      "y": 4860
-    },
-    "TagPage.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Tag page",
-      "w": 400,
-      "x": 3840,
-      "y": 0
-    },
-    "TagPagePulley.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Tag \u00b7 pulley",
-      "w": 400,
-      "x": 1920,
-      "y": 14440
-    },
-    "TextEditor.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Text editor",
-      "w": 400,
-      "x": 1440,
-      "y": 8200
-    },
     "TextViewer.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -601,14 +497,6 @@
       "w": 400,
       "x": 1440,
       "y": 6580
-    },
-    "TwoPane.dc.html": {
-      "h": 400,
-      "is_interactive": true,
-      "title": "Two-pane (landscape)",
-      "w": 860,
-      "x": 0,
-      "y": 13620
     },
     "VideoPlayer.dc.html": {
       "h": 860,
@@ -679,7 +567,7 @@
     "r5": {
       "kind": "title1",
       "maxW": 5200,
-      "text": "Preview, open & edit",
+      "text": "Preview & open",
       "w": 240,
       "x": 0,
       "y": 7900
@@ -687,7 +575,7 @@
     "r6": {
       "kind": "title1",
       "maxW": 5200,
-      "text": "Search & sync",
+      "text": "Search",
       "w": 240,
       "x": 0,
       "y": 9180
@@ -726,7 +614,6 @@
     "Recents.dc.html",
     "ConnectServer.dc.html",
     "ServerQuestion.dc.html",
-    "TagPage.dc.html",
     "FavouriteEdit.dc.html",
     "ShareTarget.dc.html",
     "Directory.dc.html",
@@ -749,53 +636,40 @@
     "FolderPicker.dc.html",
     "PlanSummary.dc.html",
     "Conflict.dc.html",
-    "BulkRename.dc.html",
     "Info.dc.html",
-    "Permissions.dc.html",
     "Compress.dc.html",
     "Extract.dc.html",
-    "TagAssign.dc.html",
     "RecentlyDeleted.dc.html",
     "Transfers.dc.html",
     "TransfersPulley.dc.html",
     "TransferDetails.dc.html",
     "TransfersRestored.dc.html",
-    "EditConflict.dc.html",
     "Covers.dc.html",
     "Notifications.dc.html",
     "ImageViewer.dc.html",
     "ImageExif.dc.html",
     "TextViewer.dc.html",
-    "TextEditor.dc.html",
     "Markdown.dc.html",
     "VideoPlayer.dc.html",
     "AudioPlayer.dc.html",
     "ArchiveView.dc.html",
-    "SqliteViewer.dc.html",
-    "HexViewer.dc.html",
     "OpenRemote.dc.html",
     "Search.dc.html",
     "SearchFilters.dc.html",
-    "CompareSetup.dc.html",
-    "CompareResults.dc.html",
     "Settings.dc.html",
     "LocationSettings.dc.html",
     "About.dc.html",
-    "CrashReport.dc.html",
-    "TwoPane.dc.html",
     "DirectoryLandscape.dc.html",
     "DirectorySelectPulley.dc.html",
     "RecentsPulley.dc.html",
     "RecentsFilter.dc.html",
-    "TagPagePulley.dc.html",
     "RecentlyDeletedEmpty.dc.html",
     "FolderPickerPulley.dc.html",
     "TransferDetailsPulley.dc.html",
     "TextViewerPulley.dc.html",
     "ServerAdhocMenu.dc.html",
     "ImageDeleteRemote.dc.html",
-    "SearchPulley.dc.html",
-    "ContextMenuOrder.dc.html"
+    "SearchPulley.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"

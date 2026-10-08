@@ -9,9 +9,7 @@ var viewerPages = {
     "text": "../viewers/TextViewer.qml",
     "markdown": "../viewers/MarkdownViewer.qml",
     "audio": "../viewers/MediaPlayer.qml",
-    "video": "../viewers/MediaPlayer.qml",
-    "sqlite": "../viewers/SqliteViewer.qml",
-    "hex": "../viewers/HexViewer.qml"
+    "video": "../viewers/MediaPlayer.qml"
 }
 
 // pageStack: the window's page stack; app: the App singleton;
@@ -34,10 +32,6 @@ function open(pageStack, app, operations, uri, isDir, mimeType, folderUri) {
             props.folderUri = folderUri || app.parentUri(uri)
         if (viewer === "audio" || viewer === "video")
             props.video = viewer === "video"
-        if (viewer === "sqlite" && !app.isLocal(uri)) {
-            pageStack.push(Qt.resolvedUrl("../dialogs/OpenRemoteDialog.qml"), { "uri": uri })
-            return "external"
-        }
         pageStack.push(Qt.resolvedUrl(page), props)
         return viewer
     }

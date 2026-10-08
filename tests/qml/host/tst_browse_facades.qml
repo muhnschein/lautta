@@ -14,8 +14,6 @@ QtObject {
 
     property var favourites: FavouritesModel { }
     property var locations: LocationsModel { }
-    property var tags: TagsModel { }
-    property var items: TaggedItemsModel { }
     property var recents: RecentsModel { }
     property var prefs: LocationPrefsModel { }
     property var folder: FolderInfo { }
@@ -46,15 +44,10 @@ QtObject {
         check(locations.recentCount === 0 && locations.nearbyCount === 0, "no recent or nearby servers")
         locations.refresh()
 
-        check(tags.count === 0, "no tags")
-        check(items.tagId === 0 && items.count === 0 && items.missingCount === 0, "tag page starts empty")
-        items.tagId = 3
-        check(items.tagId === 3, "tag id is set")
-
         check(recents.count === 0 && !recents.enabled && !recents.loaded, "recents start empty")
-        recents.kindFilter = "edited"
+        recents.kindFilter = "previewed"
         recents.text = "notes"
-        check(recents.kindFilter === "edited" && recents.text === "notes", "recents filter is kept")
+        check(recents.kindFilter === "previewed" && recents.text === "notes", "recents filter is kept")
 
         check(prefs.locationName === "" && prefs.bulkLanes === 0, "prefs start empty")
         prefs.locationId = "user-documents"

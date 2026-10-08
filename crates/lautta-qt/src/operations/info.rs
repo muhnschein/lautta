@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `InfoModel { uri }`: the details of one item, tags, checksums (OPS-12,
-//! ORG-3). The details are one JSON object (`InfoData`, camelCase keys).
+//! `InfoModel { uri }`: the details of one item (OPS-12) as one JSON object
+//! (`InfoData`, camelCase keys).
 
 use super::{error_parts, parse_uri};
 use crate::json::to_json;
@@ -15,20 +15,15 @@ pub struct InfoModel {
     uri: qt_property!(QString; WRITE set_uri NOTIFY uri_changed),
     uri_changed: qt_signal!(),
     infoJson: qt_property!(QString; NOTIFY info_changed),
-    tagsJson: qt_property!(QString; NOTIFY info_changed),
     loaded: qt_property!(bool; NOTIFY info_changed),
     errorKind: qt_property!(QString; NOTIFY info_changed),
     errorMessage: qt_property!(QString; NOTIFY info_changed),
     info_changed: qt_signal!(),
-    checksumBusy: qt_property!(bool; NOTIFY checksum_changed),
-    checksum_changed: qt_signal!(),
 
     reload: qt_method!(fn(&mut self)),
-    computeChecksum: qt_method!(fn(&mut self, algo: QString)),
     setModified: qt_method!(fn(&mut self, ms: i64)),
     makeLink: qt_method!(fn(&mut self, dest_uri: QString, hard: bool)),
 
-    checksumReady: qt_signal!(algo: QString, hex: QString),
     modifiedSet: qt_signal!(),
     linkMade: qt_signal!(uri: QString),
     failed: qt_signal!(kind: QString, message: QString),
@@ -59,7 +54,6 @@ impl InfoModel {
             match res {
                 Ok(info) => {
                     this.infoJson = QString::from(to_json(&info).as_str());
-                    this.tagsJson = QString::from(to_json(&info.tags).as_str());
                     this.loaded = true;
                     this.errorKind = QString::default();
                     this.errorMessage = QString::default();
@@ -77,30 +71,6 @@ impl InfoModel {
     fn emit_failed(&self, e: &Error) {
         let (kind, message) = error_parts(e);
         self.failed(kind, message);
-    }
-
-    /// Hashes the file in the background (large files take a while).
-    fn computeChecksum(&mut self, algo: QString) {
-        let (Some(core), Some(uri)) = (core(), parse_uri(&self.uri)) else {
-            return;
-        };
-        if self.checksumBusy {
-            return;
-        }
-        self.checksumBusy = true;
-        self.checksum_changed();
-        let me = QPointer::from(&*self);
-        let name = algo.to_string();
-        spawn_then(async move { core.checksum(&uri, &name).await }, move |res| {
-            let Some(p) = me.as_pinned() else { return };
-            p.borrow_mut().checksumBusy = false;
-            let this = p.borrow();
-            this.checksum_changed();
-            match res {
-                Ok(hex) => this.checksumReady(algo, QString::from(hex.as_str())),
-                Err(e) => this.emit_failed(&e),
-            }
-        });
     }
 
     fn setModified(&mut self, ms: i64) {

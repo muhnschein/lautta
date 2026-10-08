@@ -77,31 +77,3 @@ function camera(info) {
         return model
     return (make + " " + model).trim()
 }
-
-function lineEndingText(kind) {
-    switch (kind) {
-    case "lf":
-        //% "LF"
-        return qsTrId("lautta-viewers-eol-lf")
-    case "crlf":
-        //% "CRLF"
-        return qsTrId("lautta-viewers-eol-crlf")
-    case "cr":
-        //% "CR"
-        return qsTrId("lautta-viewers-eol-cr")
-    case "mixed":
-        //% "mixed line endings"
-        return qsTrId("lautta-viewers-eol-mixed")
-    default:
-        //% "no line breaks"
-        return qsTrId("lautta-viewers-eol-none")
-    }
-}
-
-// Pads a number to a hex offset of `digits` digits.
-function hexOffset(value, digits) {
-    var s = Math.floor(value).toString(16)
-    while (s.length < digits)
-        s = "0" + s
-    return s
-}

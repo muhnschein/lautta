@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! User-level actions of the browse area on [`Core`](crate::app::Core): the
 //! rows of the Browse page (SPEC §15.2), recent ad-hoc servers (NVB-6),
-//! volume space (LOC-3), tag upkeep (ORG-3) and the purge of what the app
-//! remembers about a removed account (SEC-5).
+//! volume space (LOC-3) and the purge of what the app remembers about a
+//! removed account (SEC-5).
 //!
 //! Everything blocking here runs in `spawn_blocking`; the Qt layer only
 //! turns the returned values into model rows.
@@ -11,15 +11,13 @@ use crate::app::Core;
 use crate::bridge::{AdHocOptions, BridgeStatus, NearbyServer, RemoteKind};
 use crate::error::{Error, ErrorKind, Result};
 use crate::locations::{Location, LocationKind, LocationStatus};
-use crate::org::{self, Recent, RecentsFilter, TaggedItem};
-use crate::provider::Lane;
+use crate::org::{self, Recent, RecentsFilter};
 use crate::settings::LocationPrefs;
 use crate::uri::Uri;
 use crate::vpath::{display_name, VPath};
 use rusqlite::params;
-use std::collections::HashMap;
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::{Arc, Mutex, OnceLock, Weak};
+use std::sync::{Arc, Weak};
 use zeroize::Zeroizing;
 
 /// Separator of the "Location › folder" lines.
@@ -29,10 +27,10 @@ const PLACE_SEPARATOR: &str = " › ";
 /// them to model roles; QML turns engineering values into translated text).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Row {
-    /// `favourites`, `device`, `android`, `volumes`, `servers`, `nearby`, `tags`.
+    /// `favourites`, `device`, `android`, `volumes`, `servers`, `nearby`.
     pub section: &'static str,
-    /// `favourite`, `syncpair`, `folder`, `deleted`, `volume`, `account`,
-    /// `adhoc`, `adhocRecent`, `consent`, `unavailable`, `nearby`, `tag`.
+    /// `favourite`, `folder`, `deleted`, `volume`, `account`, `adhoc`,
+    /// `adhocRecent`, `consent`, `unavailable`, `nearby`.
     pub kind: &'static str,
     pub uri: String,
     pub name: String,
@@ -42,9 +40,9 @@ pub struct Row {
     /// `auth-failed`, `server-identity-changed` or empty.
     pub attention: String,
     pub colour: String,
-    /// Items in the folder or tag, `-1` when not shown.
+    /// Items in the folder, `-1` when not shown.
     pub count: i64,
-    /// Favourite, pair, tag or location id; the nearby index.
+    /// Favourite or location id; the nearby index.
     pub item_id: String,
     /// `Location › folder` for favourites, the address for servers.
     pub place: String,
@@ -54,10 +52,6 @@ pub struct Row {
     pub free: i64,
     pub total: i64,
     pub fs: String,
-    pub left_uri: String,
-    pub right_uri: String,
-    /// Sync mode, engineering name.
-    pub mode: String,
 }
 
 impl Row {
@@ -87,29 +81,6 @@ pub struct VolumeInfo {
     pub fs: String,
 }
 
-/// A row of a tag page (ORG-3).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TaggedRow {
-    pub uri: String,
-    pub name: String,
-    /// The folder the item is (or was) in, `Location › folder`.
-    pub place: String,
-    pub missing: bool,
-    /// Known to be a folder (local items, and remote ones once seen).
-    pub is_dir: bool,
-}
-
-/// What the tag assignment dialog changes (ORG-3).
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TagChanges {
-    /// Tags to assign to every item.
-    pub add: Vec<i64>,
-    /// Tags to take off every item.
-    pub remove: Vec<i64>,
-    /// A tag to create (name, colour) and assign to every item.
-    pub new_tag: Option<(String, String)>,
-}
-
 /// A recent ad-hoc server, shown in Servers while not connected (NVB-6).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdHocRecent {
@@ -130,27 +101,6 @@ pub struct RecentRow {
     pub place: String,
     pub at_ms: i64,
     pub day: &'static str,
-}
-
-/// Which tagged items were last seen as folders. Tags store only URIs; the
-/// kind is learned when the page looks at the items, and remembered here.
-fn dir_kinds() -> &'static Mutex<HashMap<String, bool>> {
-    static KINDS: OnceLock<Mutex<HashMap<String, bool>>> = OnceLock::new();
-    KINDS.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-fn remember_kind(uri: &Uri, is_dir: bool) {
-    let mut kinds = dir_kinds()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    kinds.insert(uri.to_string(), is_dir);
-}
-
-fn known_dir(uri: &Uri) -> bool {
-    let kinds = dir_kinds()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    kinds.get(&uri.to_string()).copied().unwrap_or(false)
 }
 
 /// The name of the file system with `statfs` magic `magic`, for the volume
@@ -352,7 +302,6 @@ impl Core {
         rows.extend(self.volume_rows().await);
         rows.extend(self.server_rows(&blocking.prefs).await);
         rows.extend(self.nearby_rows());
-        rows.extend(blocking.tags);
         rows
     }
 
@@ -375,7 +324,6 @@ impl Core {
             favourites: self.favourite_rows(),
             device,
             android: self.folder_rows("android", &LocationKind::Android, &prefs),
-            tags: self.tag_rows(),
             prefs,
         }
     }
@@ -414,34 +362,7 @@ impl Core {
             row.item_id = f.id.to_string();
             rows.push(row);
         }
-        for p in self.sync_pairs.list().unwrap_or_default() {
-            let mut row = Row::new("favourites", "syncpair");
-            row.name = p.spec.label;
-            row.left_uri = p.spec.left.to_string();
-            row.right_uri = p.spec.right.to_string();
-            row.mode = p.spec.mode.as_str().to_owned();
-            row.icon = "image://theme/icon-m-sync".to_owned();
-            row.item_id = p.id.to_string();
-            rows.push(row);
-        }
         rows
-    }
-
-    fn tag_rows(&self) -> Vec<Row> {
-        let counts: BTreeMap<i64, usize> = self.tags.counts().unwrap_or_default().into_iter().collect();
-        self.tags
-            .list()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|t| {
-                let mut row = Row::new("tags", "tag");
-                row.count = clamp_i64(counts.get(&t.id).copied().unwrap_or(0) as u64);
-                row.item_id = t.id.to_string();
-                row.name = t.name;
-                row.colour = t.colour;
-                row
-            })
-            .collect()
     }
 
     async fn volume_rows(&self) -> Vec<Row> {
@@ -647,7 +568,7 @@ impl Core {
     // ---- purge (SEC-5) ------------------------------------------------------
 
     /// Removes everything remembered about a location: favourites, recents,
-    /// tags, sync pairs, preferences and cached listings (SEC-5).
+    /// preferences and cached listings (SEC-5).
     pub fn purge_location_data(&self, location: &str) -> Result<()> {
         org::purge_location(&self.db, location)?;
         self.location_prefs.remove(location)?;
@@ -655,23 +576,15 @@ impl Core {
         Ok(())
     }
 
-    /// Remote account ids that favourites, tags, recents, sync pairs or
-    /// preferences refer to.
+    /// Remote account ids that favourites, recents or preferences refer to.
     pub fn remembered_accounts(&self) -> Result<BTreeSet<String>> {
         let conn = self.db.lock();
         let mut found = BTreeSet::new();
-        for sql in [
-            "SELECT uri FROM favourites",
-            "SELECT uri FROM item_tags",
-            "SELECT left_uri FROM sync_pairs",
-            "SELECT right_uri FROM sync_pairs",
-        ] {
-            let mut stmt = conn.prepare(sql)?;
-            let uris = stmt
-                .query_map([], |r| r.get::<_, String>(0))?
-                .collect::<std::result::Result<Vec<_>, _>>()?;
-            found.extend(uris.iter().filter_map(|u| location_of(u)).map(str::to_owned));
-        }
+        let mut stmt = conn.prepare("SELECT uri FROM favourites")?;
+        let uris = stmt
+            .query_map([], |r| r.get::<_, String>(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        found.extend(uris.iter().filter_map(|u| location_of(u)).map(str::to_owned));
         for sql in [
             "SELECT DISTINCT location_id FROM recents",
             "SELECT location_id FROM location_prefs",
@@ -719,92 +632,6 @@ impl Core {
         });
     }
 
-    // ---- tags (ORG-3) -------------------------------------------------------
-
-    /// Rows of a tag page: present items, then the missing ones.
-    pub fn tagged_rows(&self, tag_id: i64) -> Result<Vec<TaggedRow>> {
-        let mut rows: Vec<TaggedRow> = self
-            .tags
-            .items_for(tag_id)?
-            .into_iter()
-            .map(|i| self.tagged_row(&i))
-            .collect();
-        rows.sort_by_key(|r| r.missing);
-        Ok(rows)
-    }
-
-    fn tagged_row(&self, item: &TaggedItem) -> TaggedRow {
-        let folder = item.uri.parent().unwrap_or_else(|| item.uri.clone());
-        TaggedRow {
-            uri: item.uri.to_string(),
-            name: item
-                .uri
-                .name()
-                .map(display_name)
-                .unwrap_or_else(|| self.place_of(&item.uri)),
-            place: self.place_of(&folder),
-            missing: item.missing,
-            is_dir: known_dir(&item.uri)
-                || self
-                    .locations
-                    .to_local_path(&item.uri)
-                    .is_some_and(|p| p.is_dir()),
-        }
-    }
-
-    /// Re-checks tagged items and flags the ones that are gone (ORG-3).
-    /// An item counts as gone only when its location answers "not found";
-    /// an unreachable server never flags anything. Returns the number of
-    /// missing items.
-    pub async fn check_tag_missing(self: &Arc<Self>) -> Result<usize> {
-        let core = self.clone();
-        let handle = tokio::runtime::Handle::current();
-        tokio::task::spawn_blocking(move || {
-            core.tags.check_missing(|uri| {
-                let Ok(provider) = core.provider(&uri.location) else {
-                    return true;
-                };
-                match handle.block_on(provider.stat(&uri.path, true, Lane::Interactive)) {
-                    Ok(entry) => {
-                        remember_kind(uri, entry.is_dir());
-                        true
-                    }
-                    Err(e) => e.kind != ErrorKind::NotFound,
-                }
-            })
-        })
-        .await
-        .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))?
-    }
-
-    /// How many of `uris` carry each tag (the "1 of 3 items" line), sorted
-    /// by tag id; tags carried by none are left out.
-    pub fn tag_usage(&self, uris: &[Uri]) -> Result<Vec<(i64, usize)>> {
-        let mut counts: BTreeMap<i64, usize> = BTreeMap::new();
-        for uri in uris {
-            for tag in self.tags.tags_for(uri)? {
-                *counts.entry(tag.id).or_default() += 1;
-            }
-        }
-        Ok(counts.into_iter().collect())
-    }
-
-    /// Applies the choices of the tag dialog; a new tag is created first so
-    /// that a name clash changes nothing.
-    pub fn apply_tag_changes(&self, uris: &[Uri], changes: &TagChanges) -> Result<()> {
-        if let Some((name, colour)) = &changes.new_tag {
-            let tag = self.tags.create(name, colour)?;
-            self.tags.assign(tag.id, uris)?;
-        }
-        for id in &changes.add {
-            self.tags.assign(*id, uris)?;
-        }
-        for id in &changes.remove {
-            self.tags.unassign(*id, uris)?;
-        }
-        Ok(())
-    }
-
     // ---- recents (ORG-2) ----------------------------------------------------
 
     /// Recents for the page, newest first, with their day sections.
@@ -843,7 +670,6 @@ struct LocalRows {
     favourites: Vec<Row>,
     device: Vec<Row>,
     android: Vec<Row>,
-    tags: Vec<Row>,
     prefs: BTreeMap<String, LocationPrefs>,
 }
 
@@ -988,7 +814,7 @@ mod tests {
 
     #[test]
     fn row_keys_tell_rows_apart() {
-        let mut a = Row::new("tags", "tag");
+        let mut a = Row::new("favourites", "favourite");
         a.item_id = "1".into();
         let mut b = a.clone();
         assert_eq!(a.key(), b.key());

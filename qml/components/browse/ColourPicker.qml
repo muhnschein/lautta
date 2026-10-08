@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// A row of colour dots (favourites and tags, ORG-1, ORG-3). `colour` is the
+// A row of colour dots (favourites, ORG-1). `colour` is the
 // chosen one ("#rrggbb"); tapping a dot sets it and emits `picked`.
 import QtQuick 2.6
 import Sailfish.Silica 1.0

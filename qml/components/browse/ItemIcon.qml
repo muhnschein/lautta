@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The icon of a file in the lists of this area (recents, tagged items): a
-// theme icon for the file's category (UI-2).
+// The icon of a file in the lists of this area (recents): a theme icon for
+// the file's category (UI-2).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0

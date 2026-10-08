@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The icon of a search or compare row: a theme file icon by category
+// The icon of a search row: a theme file icon by category
 // (the core's FileCategory icon name, `App.categoryOf`).
 import QtQuick 2.6
 import "../"

@@ -10,7 +10,6 @@
 
 pub mod app;
 pub mod browse;
-pub mod crash;
 pub mod directory;
 pub mod json;
 pub mod operations;
@@ -160,7 +159,6 @@ pub const QML_URI: &str = "Lautta";
 /// the core is shown by the start page through `App.startError`.
 fn start() {
     let paths = lautta_core::paths::AppPaths::from_env();
-    lautta_core::crash::install(paths.crash_dir(), env!("CARGO_PKG_VERSION"));
     if let Err(e) = runtime::init(paths) {
         log::error!("cannot open the app data: {e}");
     }

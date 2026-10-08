@@ -41,7 +41,6 @@ struct FakeWorld {
     answers: qt_method!(fn(&self) -> QString),
     handoffs: qt_method!(fn(&self) -> QString),
     record: qt_method!(fn(&self, uri: QString, name: QString, kind: QString)),
-    removeFile: qt_method!(fn(&self, relative: QString)),
 }
 
 impl FakeWorld {
@@ -119,11 +118,6 @@ impl FakeWorld {
         let kind = RecentKind::parse(&kind.to_string()).unwrap();
         core.recents.record(&uri, &name.to_string(), kind).unwrap();
     }
-
-    fn removeFile(&self, relative: QString) {
-        let home = std::env::var("HOME").unwrap();
-        std::fs::remove_file(std::path::Path::new(&home).join(relative.to_string())).unwrap();
-    }
 }
 
 impl QSingletonInit for FakeWorld {
@@ -139,7 +133,6 @@ fn browse_models_follow_the_core_and_the_bridge() {
         std::fs::create_dir_all(home.path().join(d)).unwrap();
     }
     std::fs::write(home.path().join("Documents/a.txt"), "a").unwrap();
-    std::fs::write(home.path().join("Documents/b.txt"), "b").unwrap();
     std::fs::write(home.path().join("Documents/.hidden"), "h").unwrap();
     std::env::set_var("HOME", home.path());
     std::env::set_var("QT_QPA_PLATFORM", "offscreen");

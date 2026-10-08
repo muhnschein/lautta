@@ -14,8 +14,6 @@ use crate::ops::plan::{PlanOptions, Planner};
 use crate::ops::{OperationKind, Plan};
 use crate::org::favourites::Favourites;
 use crate::org::recents::Recents;
-use crate::org::syncpairs::SyncPairs;
-use crate::org::tags::Tags;
 use crate::paths::AppPaths;
 use crate::provider::archive::{archive_location_id, ArchiveProvider};
 use crate::provider::{list_all, Lane, Provider, ProviderResolver, RenameMode};
@@ -28,7 +26,7 @@ use crate::transfer::{Engine, EngineConfig, EngineDeps, TransferId, TransferOpti
 use crate::trash::Trash;
 use crate::undo::{UndoAction, UndoRecorder, UndoStep};
 use crate::uri::Uri;
-use crate::viewprefs::{ViewMode, ViewPrefs, ViewPrefsStore};
+use crate::viewprefs::{ViewMode, ViewPrefs};
 use crate::workcopy::WorkingCopies;
 use async_trait::async_trait;
 use std::sync::atomic::AtomicBool;
@@ -55,11 +53,8 @@ pub struct Core {
     pub engine: Engine,
     pub trash: Trash,
     pub dircache: DirCache,
-    pub viewprefs: ViewPrefsStore,
     pub favourites: Favourites,
     pub recents: Recents,
-    pub tags: Tags,
-    pub sync_pairs: SyncPairs,
     pub recent_searches: RecentSearches,
     pub location_prefs: LocationPrefsStore,
     pub working_copies: WorkingCopies,
@@ -162,11 +157,8 @@ impl Core {
         };
         let core = Core {
             dircache: DirCache::new(db.clone(), DIRCACHE_ENTRIES)?,
-            viewprefs: ViewPrefsStore::new(db.clone(), view_defaults(&settings)),
             favourites: Favourites::new(db.clone()),
             recents: Recents::new(db.clone()),
-            tags: Tags::new(db.clone()),
-            sync_pairs: SyncPairs::new(db.clone()),
             recent_searches: RecentSearches::new(db.clone()),
             location_prefs: LocationPrefsStore::new(db.clone()),
             working_copies: WorkingCopies::new(db.clone(), paths.clone(), Arc::new(SystemClock)),
@@ -194,9 +186,13 @@ impl Core {
     /// Applies settings stored by the UI (dconf, SPEC §18).
     pub fn apply_settings(&self, settings: Settings) {
         let settings = settings.sanitised();
-        self.viewprefs.set_defaults(view_defaults(&settings));
         self.recents.set_enabled(settings.recents_enabled);
         *lock(&self.settings) = settings;
+    }
+
+    /// The view settings every folder uses (BRW-4).
+    pub fn view_prefs(&self) -> ViewPrefs {
+        view_defaults(&self.settings())
     }
 
     pub fn provider(&self, location: &str) -> Result<Arc<dyn Provider>> {
@@ -241,8 +237,8 @@ impl Core {
         Ok(uri)
     }
 
-    /// Renames without replacing (§10 table); tags and favourites follow
-    /// (ORG-3) and the rename can be undone for 10 s (OPS-9).
+    /// Renames without replacing (§10 table); favourites follow and the
+    /// rename can be undone for 10 s (OPS-9).
     pub async fn rename(&self, uri: &Uri, new_name: &[u8]) -> Result<Uri> {
         let parent = uri
             .parent()
@@ -264,7 +260,6 @@ impl Core {
     }
 
     fn after_move(&self, from: &Uri, to: &Uri) {
-        let _ = self.tags.on_moved(from, to);
         let _ = self.favourites.on_moved(from, to);
     }
 

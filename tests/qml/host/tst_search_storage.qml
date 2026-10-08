@@ -32,7 +32,7 @@ Item {
         var dir = ".cache/org.netvfs/lautta/"
         support.write(dir + "thumbs/a.thumb", new Array(1001).join("x"), 0)
         support.write(dir + "archives/x/file", new Array(501).join("y"), 0)
-        support.write(dir + "crash/keep.txt", "report", 0)
+        support.write(dir + "other/keep.txt", "other", 0)
         support.write("Documents/srch_storage_keep.txt", "mine", 0)
 
         cache.refresh()
@@ -45,7 +45,7 @@ Item {
         check(root.freed >= 1500, "freed bytes " + root.freed)
         check(!support.exists(dir + "thumbs/a.thumb"), "thumbnails removed")
         check(!support.exists(dir + "archives/x/file"), "archive cache removed")
-        check(support.exists(dir + "crash/keep.txt"), "crash reports are kept")
+        check(support.exists(dir + "other/keep.txt"), "other cache files are kept")
         check(support.exists("Documents/srch_storage_keep.txt"), "user files are kept")
         check(until(function () { return cache.thumbnailBytes === 0 && !cache.busy }, 3000), "sizes refreshed after clearing")
 

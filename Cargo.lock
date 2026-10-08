@@ -919,7 +919,6 @@ dependencies = [
  "notify",
  "percent-encoding",
  "pulldown-cmark",
- "regex",
  "rusqlite",
  "rustix 0.38.44",
  "serde",

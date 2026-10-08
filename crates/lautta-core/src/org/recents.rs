@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Recents (ORG-2): files opened, previewed, edited or transferred;
+//! Recents (ORG-2): files opened, previewed or transferred;
 //! filterable, clearable, can be switched off.
 
 use super::{location_prefix, now_ms, parse_uri};
@@ -16,7 +16,6 @@ pub const MAX_RECENTS: usize = 500;
 pub enum RecentKind {
     Opened,
     Previewed,
-    Edited,
     Transferred,
 }
 
@@ -25,7 +24,6 @@ impl RecentKind {
         match self {
             RecentKind::Opened => "opened",
             RecentKind::Previewed => "previewed",
-            RecentKind::Edited => "edited",
             RecentKind::Transferred => "transferred",
         }
     }
@@ -34,7 +32,6 @@ impl RecentKind {
         Some(match s {
             "opened" => RecentKind::Opened,
             "previewed" => RecentKind::Previewed,
-            "edited" => RecentKind::Edited,
             "transferred" => RecentKind::Transferred,
             _ => return None,
         })
@@ -208,7 +205,7 @@ mod tests {
         r.record_at(&u("lautta://x/b.txt"), "b.txt", RecentKind::Opened, 200)
             .unwrap();
         r.record_at(&a, "a.txt", RecentKind::Opened, 300).unwrap();
-        r.record_at(&a, "a.txt", RecentKind::Edited, 150).unwrap();
+        r.record_at(&a, "a.txt", RecentKind::Previewed, 150).unwrap();
         let list = r.list(&RecentsFilter::default()).unwrap();
         let seen: Vec<(String, RecentKind, i64)> =
             list.iter().map(|x| (x.name.clone(), x.kind, x.at_ms)).collect();
@@ -217,7 +214,7 @@ mod tests {
             [
                 ("a.txt".to_owned(), RecentKind::Opened, 300),
                 ("b.txt".to_owned(), RecentKind::Opened, 200),
-                ("a.txt".to_owned(), RecentKind::Edited, 150),
+                ("a.txt".to_owned(), RecentKind::Previewed, 150),
             ]
         );
         assert_eq!(list[0].location, "x");
@@ -233,7 +230,7 @@ mod tests {
             1,
         )
         .unwrap();
-        r.record_at(&u("lautta://x/notes.txt"), "notes.txt", RecentKind::Edited, 2)
+        r.record_at(&u("lautta://x/notes.txt"), "notes.txt", RecentKind::Opened, 2)
             .unwrap();
         r.record_at(
             &u("lautta://x/photo.jpg"),
@@ -243,7 +240,7 @@ mod tests {
         )
         .unwrap();
         let by_kind = RecentsFilter {
-            kinds: vec![RecentKind::Edited, RecentKind::Transferred],
+            kinds: vec![RecentKind::Opened, RecentKind::Transferred],
             ..RecentsFilter::default()
         };
         assert_eq!(r.list(&by_kind).unwrap().len(), 2);
@@ -311,12 +308,7 @@ mod tests {
 
     #[test]
     fn kind_names_round_trip() {
-        for k in [
-            RecentKind::Opened,
-            RecentKind::Previewed,
-            RecentKind::Edited,
-            RecentKind::Transferred,
-        ] {
+        for k in [RecentKind::Opened, RecentKind::Previewed, RecentKind::Transferred] {
             assert_eq!(RecentKind::parse(k.as_str()), Some(k));
         }
         assert_eq!(RecentKind::parse("nope"), None);

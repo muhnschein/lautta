@@ -13,12 +13,9 @@ Item {
     property string connected: ""
     property string failedKind: ""
     property string failedSubject: ""
-    property int removedSignals: 0
 
     LocationsModel { id: locs }
     FavouritesModel { id: favs }
-    TagsModel { id: tagsModel }
-    TaggedItemsModel { id: tagged; onRemoved: root.removedSignals++ }
     RecentsModel { id: recents }
     LocationPrefsModel { id: prefs }
 
@@ -133,7 +130,6 @@ Item {
 
         var docs = "lautta://user-documents/"
         var a = docs + "a.txt"
-        var b = docs + "b.txt"
 
         step("consent row while the user has not decided",
              function() { locs.refresh() },
@@ -153,7 +149,7 @@ Item {
              null,
              function() {
                  var d = row("folder", "Documents")
-                 return d !== null && d.rcount === 2 && has("folder", "Music") && has("deleted")
+                 return d !== null && d.rcount === 1 && has("folder", "Music") && has("deleted")
              })
 
         step("add a favourite",
@@ -180,44 +176,10 @@ Item {
              },
              function() { return !has("favourite") })
 
-        step("create a tag",
-             function() { tagsModel.create("Work", "#e5604f") },
-             function() { var t = row("tag", "Work"); return t !== null && t.rcount === 0 })
-        step("assign tags and create another in one go",
-             function() {
-                 var id = parseInt(row("tag", "Work").ritem)
-                 tagsModel.apply(JSON.stringify([a, b]), JSON.stringify([id]), "[]", "Taxes", "#4fa3e5")
-             },
-             function() {
-                 var w = row("tag", "Work")
-                 var t = row("tag", "Taxes")
-                 return w !== null && w.rcount === 2 && t !== null && t.rcount === 2
-             })
-        step("tag page lists the items",
-             function() { tagged.tagId = parseInt(row("tag", "Work").ritem) },
-             function() { return tagged.count === 2 && tagged.missingCount === 0 && tagged.tagName === "Work" })
-        step("a file removed outside shows up as missing",
-             function() {
-                 FakeWorld.removeFile("Documents/b.txt")
-                 var id = tagged.tagId
-                 tagged.tagId = 0
-                 tagged.tagId = id
-             },
-             function() { return tagged.count === 1 && tagged.missingCount === 1 })
-        step("rename and recolour the tag",
-             function() { tagged.rename("Job") },
-             function() { return has("tag", "Job") && tagged.tagName === "Job" && !has("tag", "Work") })
-        step("recolour the tag",
-             function() { tagged.setColour("#9bd26a") },
-             function() { var t = row("tag", "Job"); return t !== null && t.rcolour === "#9bd26a" })
-        step("delete the tag",
-             function() { tagged.deleteTag() },
-             function() { return !has("tag", "Job") && root.removedSignals === 1 && has("tag", "Taxes") })
-
         step("recents come newest first with places",
              function() {
                  FakeWorld.record(a, "a.txt", "opened")
-                 FakeWorld.record(docs + "c.txt", "c.txt", "edited")
+                 FakeWorld.record(docs + "c.txt", "c.txt", "previewed")
                  FakeWorld.record(docs + "d.zip", "d.zip", "transferred")
                  recents.reload()
              },
@@ -227,7 +189,7 @@ Item {
                         && recentRows.itemAt(0).rday === "today"
              })
         step("filter recents by kind",
-             function() { recents.kindFilter = "edited" },
+             function() { recents.kindFilter = "previewed" },
              function() { return recents.count === 1 && recentRows.itemAt(0).rname === "c.txt" })
         step("filter recents by text",
              function() { recents.kindFilter = ""; recents.text = "A.T" },
@@ -302,14 +264,11 @@ Item {
              function() { return has("account", "Home NAS") })
 
         step("an account removed in Settings is forgotten",
-             function() {
-                 favs.add("lautta://nv-account:1/photos", "Photos", "")
-                 tagsModel.apply(JSON.stringify(["lautta://nv-account:1/photos/a.jpg"]), "[]", "[]", "Holiday", "#9bd26a")
-             },
-             function() { return has("favourite", "Photos") && row("tag", "Holiday").rcount === 1 })
+             function() { favs.add("lautta://nv-account:1/photos", "Photos", "") },
+             function() { return has("favourite", "Photos") })
         step("the account goes away",
              function() { FakeWorld.removeAccount("account:1") },
-             function() { return !has("account") && !has("favourite", "Photos") && row("tag", "Holiday").rcount === 0 })
+             function() { return !has("account") && !has("favourite", "Photos") })
         run()
     }
 }

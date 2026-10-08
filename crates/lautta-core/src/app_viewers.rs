@@ -1,29 +1,23 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! User-level actions of the viewers area on [`Core`](crate::app::Core):
-//! loading and saving text (PRV-4, EDT-4, EDT-2), Markdown, hex, EXIF and
-//! SQLite sources, the folder's images, remote thumbnails and full images
-//! (PRV-2, PRV-3), media for playback (PRV-8, PRV-9) and recents (ORG-2).
+//! loading text (PRV-4), Markdown and EXIF sources, the folder's images,
+//! remote thumbnails and full images (PRV-2, PRV-3), media for playback
+//! (PRV-8, PRV-9) and recents (ORG-2).
 //! Everything is Qt-free; the Qt layer forwards to these functions.
 
 use crate::app::Core;
-use crate::entry::{ms_to_system_time, Entry};
+use crate::entry::Entry;
 use crate::error::{Error, ErrorKind, Result};
 use crate::mime::{category_of, FileCategory};
-use crate::ops::names::keep_both_name;
 use crate::org::recents::RecentKind;
 use crate::preview::exif::{self, ExifInfo};
-use crate::preview::hex::HexView;
 use crate::preview::markdown;
-use crate::preview::text::{self as ptext, TextDoc, TextMeta};
-use crate::provider::{
-    list_all, no_progress, Disposition, Lane, ProgressSink, Provider, ReadHandle, ReadOptions, RenameMode,
-    WriteOptions,
-};
+use crate::preview::text::{self as ptext, TextDoc};
+use crate::provider::{list_all, Lane, ProgressSink, ReadHandle, ReadOptions};
 use crate::sort::sort_permutation;
 use crate::thumbs::{remote_thumbnail, thumb_key, ThumbJobs, ThumbnailCache};
 use crate::uri::Uri;
-use crate::vpath::VPath;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::os::fd::OwnedFd;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -39,72 +33,11 @@ pub const EXIF_HEAD_BYTES: u64 = 512 * 1024;
 pub const MIN_THUMB: u32 = 16;
 pub const MAX_THUMB: u32 = 1024;
 
-/// What identifies a file's content for the EDT-2 conflict check.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Stamp {
-    pub size: Option<u64>,
-    pub mtime_ms: Option<i64>,
-    pub etag: Option<Vec<u8>>,
-}
-
-impl Stamp {
-    pub fn of(e: &Entry) -> Stamp {
-        Stamp {
-            size: e.size,
-            mtime_ms: e.modified_ms(),
-            etag: e.etag.clone(),
-        }
-    }
-
-    /// ETags decide when both sides have one, otherwise size and mtime.
-    pub fn differs(&self, now: &Stamp) -> bool {
-        if let (Some(a), Some(b)) = (&self.etag, &now.etag) {
-            return a != b;
-        }
-        self.size != now.size || self.mtime_ms != now.mtime_ms
-    }
-}
-
-/// A text file as the viewer and the editor see it.
+/// A text file as the viewer sees it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoadedText {
     pub doc: TextDoc,
     pub size: Option<u64>,
-    pub stamp: Stamp,
-    /// The location and the file accept writes.
-    pub writable: bool,
-}
-
-impl LoadedText {
-    /// EDT-4: complete, valid UTF-8, and writable.
-    pub fn editable(&self) -> bool {
-        self.doc.editable() && self.writable
-    }
-}
-
-/// How `save_text` treats the file on disk.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SaveMode {
-    /// Write only when the file still matches this baseline (EDT-2).
-    Checked(Stamp),
-    /// Write over whatever is there (*Upload mine and replace*).
-    Replace,
-    /// Write next to the original under a free name (*Save mine as copy*).
-    AsCopy,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SaveConflict {
-    /// The file is gone.
-    pub deleted: bool,
-    pub size: Option<u64>,
-    pub mtime_ms: Option<i64>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SaveOutcome {
-    Saved { uri: Uri, stamp: Stamp },
-    Conflict(SaveConflict),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -137,19 +70,6 @@ pub struct FullImage {
     pub orientation: u8,
 }
 
-/// Parses the *Go to offset* input: hexadecimal, with or without `0x`.
-pub fn parse_offset(text: &str) -> Option<u64> {
-    let t = text.trim().replace([' ', '_'], "");
-    let digits = t
-        .strip_prefix("0x")
-        .or_else(|| t.strip_prefix("0X"))
-        .unwrap_or(&t);
-    if digits.is_empty() {
-        return None;
-    }
-    u64::from_str_radix(digits, 16).ok()
-}
-
 /// Splits `<uri>?size=N` of the thumbnail provider; the size is clamped.
 /// The URI may arrive percent-encoded once more (QML helpers).
 pub fn parse_thumb_id(id: &str) -> Option<(Uri, u32)> {
@@ -176,29 +96,6 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 
 fn display(uri: &Uri) -> String {
     uri.name().map(crate::vpath::display_name).unwrap_or_default()
-}
-
-/// The unlinked file holding `bytes`, as an fd positioned at its start.
-fn temp_fd(dir: &std::path::Path, bytes: &[u8]) -> Result<OwnedFd> {
-    use std::io::{Seek, Write};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    std::fs::create_dir_all(dir)?;
-    let name = format!(
-        "save-{}-{}",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    );
-    let path = dir.join(name);
-    let mut file = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create_new(true)
-        .open(&path)?;
-    // The data only has to live as long as the descriptor.
-    std::fs::remove_file(&path)?;
-    file.write_all(bytes)?;
-    file.rewind()?;
-    Ok(OwnedFd::from(file))
 }
 
 /// Window the media reader keeps ahead of the player (PRV-8).
@@ -415,7 +312,7 @@ impl Core {
         Ok(Arc::from(handle))
     }
 
-    /// Notes a viewed, opened or edited file in Recents (ORG-2). Failures do
+    /// Notes a viewed or opened file in Recents (ORG-2). Failures do
     /// not matter to the viewer.
     pub fn note_viewed(&self, uri: &Uri, kind: RecentKind) {
         if let Err(e) = self.recents.record(uri, &display(uri), kind) {
@@ -423,7 +320,7 @@ impl Core {
         }
     }
 
-    /// Reads a text file for the viewer or the editor (PRV-4, EDT-4).
+    /// Reads a text file for the viewer (PRV-4).
     pub async fn load_text(&self, uri: &Uri) -> Result<LoadedText> {
         let provider = self.provider(&uri.location)?;
         let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
@@ -435,54 +332,7 @@ impl Core {
         Ok(LoadedText {
             doc,
             size: entry.size,
-            stamp: Stamp::of(&entry),
-            writable: provider.capabilities().writable()
-                && !entry.flags.contains(crate::entry::EntryFlags::READONLY),
         })
-    }
-
-    /// Saves edited text with the file's own conventions (EDT-4) through the
-    /// provider, replacing the file only after the new content is complete.
-    /// A file that changed since `SaveMode::Checked`'s baseline is reported
-    /// as a conflict instead of being overwritten (EDT-2).
-    pub async fn save_text(
-        &self,
-        uri: &Uri,
-        text: &str,
-        meta: &TextMeta,
-        mode: SaveMode,
-    ) -> Result<SaveOutcome> {
-        let bytes = ptext::save_text(text, meta);
-        let provider = self.provider(&uri.location)?;
-        let outcome = match mode {
-            SaveMode::AsCopy => {
-                let copy = free_sibling(provider.as_ref(), uri).await?;
-                write_new(self, provider.as_ref(), &copy, &bytes).await?;
-                saved(provider.as_ref(), copy).await?
-            }
-            SaveMode::Replace => {
-                let mode = current_mode(provider.as_ref(), uri).await;
-                replace_file(self, provider.as_ref(), uri, &bytes, mode).await?;
-                saved(provider.as_ref(), uri.clone()).await?
-            }
-            SaveMode::Checked(base) => {
-                let now = match provider.stat(&uri.path, true, Lane::Interactive).await {
-                    Ok(e) => Some(e),
-                    Err(e) if e.kind == ErrorKind::NotFound => None,
-                    Err(e) => return Err(e),
-                };
-                match now {
-                    None => return Ok(conflict(true, None)),
-                    Some(e) if base.differs(&Stamp::of(&e)) => return Ok(conflict(false, Some(&e))),
-                    Some(e) => {
-                        replace_file(self, provider.as_ref(), uri, &bytes, e.mode).await?;
-                        saved(provider.as_ref(), uri.clone()).await?
-                    }
-                }
-            }
-        };
-        self.note_viewed(uri, RecentKind::Edited);
-        Ok(outcome)
     }
 
     /// Markdown as Qt rich text; only the first MiB is rendered (PRV-4).
@@ -492,11 +342,6 @@ impl Core {
             html: markdown::render(&loaded.doc.text),
             truncated: loaded.doc.truncated,
         })
-    }
-
-    /// The hex view of a file (ranged reads, PRV-4).
-    pub async fn open_hex(&self, uri: &Uri) -> Result<HexView> {
-        HexView::new(self.open_reader(uri).await?)
     }
 
     /// EXIF fields of an image for the details panel (PRV-4).
@@ -516,23 +361,12 @@ impl Core {
         })
     }
 
-    /// The path of a local SQLite file; remote files must be copied first
-    /// (PRV-4, *Open remote*).
-    pub fn sqlite_file(&self, uri: &Uri) -> Result<PathBuf> {
-        self.locations.to_local_path(uri).ok_or_else(|| {
-            Error::new(
-                ErrorKind::Unsupported,
-                "databases are only shown from local files",
-            )
-        })
-    }
-
-    /// The folder's images in the folder's own sort order (PRV-4: swipe
-    /// through the folder).
+    /// The folder's images in the folders' sort order (PRV-4: swipe through
+    /// the folder).
     pub async fn list_images(&self, folder: &Uri) -> Result<Vec<ImageItem>> {
         let provider = self.provider(&folder.location)?;
         let all = list_all(provider.as_ref(), &folder.path, Lane::Interactive).await?;
-        let prefs = self.viewprefs.get(folder).unwrap_or_default();
+        let prefs = self.view_prefs();
         let hidden = prefs.show_hidden;
         let images: Vec<Entry> = all
             .into_iter()
@@ -618,101 +452,6 @@ impl Core {
     }
 }
 
-fn conflict(deleted: bool, now: Option<&Entry>) -> SaveOutcome {
-    SaveOutcome::Conflict(SaveConflict {
-        deleted,
-        size: now.and_then(|e| e.size),
-        mtime_ms: now.and_then(Entry::modified_ms),
-    })
-}
-
-async fn saved(provider: &dyn Provider, uri: Uri) -> Result<SaveOutcome> {
-    let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
-    Ok(SaveOutcome::Saved {
-        stamp: Stamp::of(&entry),
-        uri,
-    })
-}
-
-async fn current_mode(provider: &dyn Provider, uri: &Uri) -> Option<u32> {
-    provider
-        .stat(&uri.path, true, Lane::Interactive)
-        .await
-        .ok()
-        .and_then(|e| e.mode)
-}
-
-/// `name 2.ext`, `name 3.ext`, … next to `uri` (the first free one).
-async fn free_sibling(provider: &dyn Provider, uri: &Uri) -> Result<Uri> {
-    let parent = uri
-        .parent()
-        .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "no parent folder"))?;
-    let name = uri
-        .name()
-        .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "the location root is not a file"))?;
-    let taken: HashSet<Vec<u8>> = list_all(provider, &parent.path, Lane::Interactive)
-        .await?
-        .into_iter()
-        .map(|e| e.name)
-        .collect();
-    parent.join(&keep_both_name(name, &|n| taken.contains(n)))
-}
-
-fn write_options(disposition: Disposition, bytes: &[u8], mode: Option<u32>) -> WriteOptions {
-    WriteOptions {
-        disposition,
-        size: Some(bytes.len() as u64),
-        modified: Some(ms_to_system_time(crate::entry::system_time_to_ms(
-            std::time::SystemTime::now(),
-        ))),
-        mode,
-        ..WriteOptions::default()
-    }
-}
-
-/// A new file; fails when the name is taken.
-async fn write_new(core: &Core, provider: &dyn Provider, uri: &Uri, bytes: &[u8]) -> Result<()> {
-    let fd = temp_fd(&core.paths.cache_dir().join("save"), bytes)?;
-    let opts = write_options(Disposition::Create, bytes, None);
-    provider.upload_from(fd, &uri.path, opts, no_progress()).await
-}
-
-/// Replaces `uri`: the content goes to a temporary sibling first and is
-/// renamed over the file, so a failed upload never leaves half a file.
-async fn replace_file(
-    core: &Core,
-    provider: &dyn Provider,
-    uri: &Uri,
-    bytes: &[u8],
-    mode: Option<u32>,
-) -> Result<()> {
-    let parent = uri
-        .parent()
-        .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "no parent folder"))?;
-    let name = uri
-        .name()
-        .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "the location root is not a file"))?;
-    let mut temp_name = b".".to_vec();
-    temp_name.extend_from_slice(name);
-    temp_name.extend_from_slice(b".lautta-save");
-    let temp: VPath = parent.path.join(&temp_name)?;
-    // A leftover from an earlier failed save.
-    match provider.remove_file(&temp).await {
-        Err(e) if e.kind != ErrorKind::NotFound => return Err(e),
-        _ => {}
-    }
-    let fd = temp_fd(&core.paths.cache_dir().join("save"), bytes)?;
-    let opts = write_options(Disposition::Create, bytes, mode);
-    let done = match provider.upload_from(fd, &temp, opts, no_progress()).await {
-        Ok(()) => provider.rename(&temp, &uri.path, RenameMode::Replace).await,
-        Err(e) => Err(e),
-    };
-    if done.is_err() {
-        let _ = provider.remove_file(&temp).await;
-    }
-    done
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -796,17 +535,6 @@ mod tests {
     }
 
     #[test]
-    fn offsets_are_hexadecimal() {
-        assert_eq!(parse_offset("1F40"), Some(0x1f40));
-        assert_eq!(parse_offset(" 0x10 "), Some(16));
-        assert_eq!(parse_offset("ff ff"), Some(0xffff));
-        assert_eq!(parse_offset(""), None);
-        assert_eq!(parse_offset("0x"), None);
-        assert_eq!(parse_offset("xyz"), None);
-        assert_eq!(parse_offset("-1"), None);
-    }
-
-    #[test]
     fn thumb_ids_parse_and_clamp() {
         let (u, s) = parse_thumb_id("lautta://nv-a/p/a%20b.jpg?size=128").unwrap();
         assert_eq!(u.to_string(), "lautta://nv-a/p/a%20b.jpg");
@@ -827,29 +555,5 @@ mod tests {
         let wrapped = parse_image_uri("lautta%3A%2F%2Fuser-pictures%2Fa%2520b.jpg").unwrap();
         assert_eq!(plain, wrapped);
         assert!(parse_image_uri("nonsense").is_none());
-    }
-
-    #[test]
-    fn stamps_prefer_etags() {
-        let a = Stamp {
-            size: Some(1),
-            mtime_ms: Some(1),
-            etag: Some(b"x".to_vec()),
-        };
-        let mut b = a.clone();
-        b.size = Some(2);
-        assert!(!a.differs(&b), "equal etags win over size");
-        b.etag = Some(b"y".to_vec());
-        assert!(a.differs(&b));
-        let c = Stamp {
-            size: Some(1),
-            mtime_ms: Some(1),
-            etag: None,
-        };
-        assert!(!c.differs(&c.clone()));
-        assert!(c.differs(&Stamp {
-            mtime_ms: Some(2),
-            ..c.clone()
-        }));
     }
 }

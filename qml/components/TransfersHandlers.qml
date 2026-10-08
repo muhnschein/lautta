@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // App-wide reactions of the transfers area: keep the device awake while
 // transfers run (XFR-5), notifications (INT-2), conflict questions
-// (OPS-2), the restored-transfers prompt (XFR-11) and edit write-back
-// results (EDT-2).
+// (OPS-2) and the restored-transfers prompt (XFR-11).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.KeepAlive 1.2
@@ -67,15 +66,9 @@ Item {
     function openFromNotification(page, transferId) {
         if (page === "conflict")
             askFirstOpen(transferId)
-        else if (page === "edit")
-            openEditConflict(transferId)
         else
             showTransfers()
         __silica_applicationwindow_instance.activate()
-    }
-
-    function openEditConflict(copyId) {
-        pageStack.push(Qt.resolvedUrl("../dialogs/EditConflictDialog.qml"), { "copyId": copyId })
     }
 
     KeepAlive {
@@ -93,10 +86,6 @@ Item {
 
         onNeedsAnswer: root.ask(id, item, JSON.parse(conflictJson))
         onShowRequested: root.showTransfers()
-        onEditConflict: {
-            if (Qt.application.state === Qt.ApplicationActive)
-                root.openEditConflict(copyId)
-        }
         onChanged: {
             if (Transfers.pendingAtStart > 0 && !root.restoredShown) {
                 root.restoredShown = true

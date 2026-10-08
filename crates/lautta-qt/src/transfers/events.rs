@@ -18,8 +18,8 @@ thread_local! {
 
 static FORWARDER: Once = Once::new();
 
-/// The id of a synthetic "something else changed, reload" event (working
-/// copies changed, or events were missed).
+/// The id of a synthetic "something else changed, reload" event (history
+/// cleared, start-up restore, or events were missed).
 pub const RELOAD: i64 = 0;
 
 pub fn is_reload(ev: &TransferEvent) -> bool {

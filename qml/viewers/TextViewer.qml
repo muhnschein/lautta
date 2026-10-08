@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Text and code viewer (PRV-4, boards TextViewer, TextViewerPulley): read-only
-// up to 1 MiB with line numbers; Edit when the file may be edited (EDT-4).
+// up to 1 MiB with line numbers.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -13,8 +13,6 @@ Page {
 
     property string uri
     property bool wrap: false
-    // The text of the save in flight, kept for the conflict choices (EDT-2).
-    property string pendingText
 
     readonly property string fileName: App.nameOf(uri)
     readonly property var lines: doc.loaded ? doc.text.split("\n") : []
@@ -29,14 +27,6 @@ Page {
 
     allowedOrientations: Orientation.All
 
-    function edit() {
-        var editor = pageStack.push(Qt.resolvedUrl("TextEditor.qml"), { "uri": uri, "document": doc })
-        editor.saveRequested.connect(function (text) {
-            page.pendingText = text
-            doc.save(text)
-        })
-    }
-
     function say(kind, message) {
         notice.text = ErrorText.message(kind, { "item": fileName, "location": App.locationName(uri) })
         notice.show()
@@ -45,23 +35,6 @@ Page {
     TextDocument {
         id: doc
         uri: page.uri
-        onSaved: {
-            doc.reload()
-            //% "Saved"
-            notice.text = qsTrId("lautta-viewers-saved")
-            notice.show()
-        }
-        onConflicted: {
-            var dialog = pageStack.push(Qt.resolvedUrl("../components/viewers/SaveConflictDialog.qml"),
-                                        { "fileName": page.fileName, "deleted": deleted })
-            dialog.accepted.connect(function () {
-                if (dialog.choice === "replace")
-                    doc.saveReplace(page.pendingText)
-                else if (dialog.choice === "copy")
-                    doc.saveAsCopy(page.pendingText)
-            })
-        }
-        onSaveFailed: page.say(kind, message)
     }
 
     ExternalActions {
@@ -107,12 +80,6 @@ Page {
                       //% "Wrap lines"
                       : qsTrId("lautta-viewers-wrap")
                 onClicked: page.wrap = !page.wrap
-            }
-            MenuItem {
-                visible: doc.editable
-                //% "Edit"
-                text: qsTrId("lautta-viewers-edit")
-                onClicked: page.edit()
             }
         }
 
@@ -197,6 +164,6 @@ Page {
     BusyIndicator {
         anchors.centerIn: parent
         size: BusyIndicatorSize.Large
-        running: doc.loading || doc.saving || external.busy
+        running: doc.loading || external.busy
     }
 }

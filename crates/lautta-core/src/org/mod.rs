@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Favourites, recents, tags and saved sync pairs (ORG-1..3, SYN-3). All
+//! Favourites and recents (ORG-1, ORG-2). All
 //! stores wrap [`Db`] and are blocking: call them from `spawn_blocking`
 //! (ARC-6).
 
 pub mod favourites;
 pub mod recents;
-pub mod syncpairs;
-pub mod tags;
 
 use crate::db::Db;
 use crate::error::{Error, ErrorKind, Result};
@@ -16,8 +14,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 pub use favourites::{Favourite, Favourites};
 pub use recents::{Recent, RecentKind, Recents, RecentsFilter};
-pub use syncpairs::{SyncPair, SyncPairSpec, SyncPairs};
-pub use tags::{Tag, TaggedItem, Tags};
 
 pub(crate) fn now_ms() -> i64 {
     match SystemTime::now().duration_since(UNIX_EPOCH) {
@@ -131,8 +127,6 @@ fn select_below(
 pub struct PurgeCounts {
     pub favourites: usize,
     pub recents: usize,
-    pub tags: usize,
-    pub sync_pairs: usize,
 }
 
 /// Removes everything the app remembers about `location` (SEC-5).
@@ -140,8 +134,6 @@ pub fn purge_location(db: &Db, location: &str) -> Result<PurgeCounts> {
     Ok(PurgeCounts {
         favourites: Favourites::new(db.clone()).remove_location(location)?,
         recents: Recents::new(db.clone()).purge_location(location)?,
-        tags: Tags::new(db.clone()).purge_location(location)?,
-        sync_pairs: SyncPairs::new(db.clone()).remove_location(location)?,
     })
 }
 
@@ -168,28 +160,17 @@ mod tests {
         let rec = Recents::new(db.clone());
         rec.record(&gone, "g", RecentKind::Opened).unwrap();
         rec.record(&kept, "k", RecentKind::Opened).unwrap();
-        let tags = Tags::new(db.clone());
-        let t = tags.create("Work", "#f00").unwrap();
-        tags.assign(t.id, &[gone.clone(), kept.clone()]).unwrap();
-        let pairs = SyncPairs::new(db.clone());
-        let spec = |l: &Uri, r: &Uri| SyncPairSpec::new("p", l.clone(), r.clone());
-        pairs.add(&spec(&gone, &kept)).unwrap();
-        pairs.add(&spec(&kept, &kept)).unwrap();
 
         let counts = purge_location(&db, "nv-1").unwrap();
         assert_eq!(
             counts,
             PurgeCounts {
                 favourites: 1,
-                recents: 1,
-                tags: 1,
-                sync_pairs: 1
+                recents: 1
             }
         );
         assert_eq!(fav.list().unwrap().len(), 1);
         assert_eq!(rec.list(&RecentsFilter::default()).unwrap().len(), 1);
-        assert_eq!(tags.items_for(t.id).unwrap().len(), 1);
-        assert_eq!(pairs.list().unwrap().len(), 1);
     }
 
     #[test]

@@ -1,24 +1,19 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! User-level actions of the operations area on [`Core`](crate::app::Core):
 //! plan summaries and pending plans (OPS-1), conflicts before the run
-//! (OPS-2), compress and extract (PRV-10/11), bulk rename (OPS-11), the
-//! Info page, the permissions editor (OPS-12) and *Recently deleted*
-//! (OPS-8). Everything is Qt-free; the Qt layer only forwards.
+//! (OPS-2), compress and extract (PRV-10/11), the Info page (OPS-12) and
+//! *Recently deleted* (OPS-8). Everything is Qt-free; the Qt layer only
+//! forwards.
 
 use crate::app::{Core, Started};
 use crate::compress::{compress, ArchiveKind, CompressOptions};
-use crate::entry::{cap, ms_to_system_time, system_time_to_ms, Entry, Kind};
+use crate::entry::{cap, ms_to_system_time, system_time_to_ms, Kind};
 use crate::error::{Error, ErrorKind, Result};
 use crate::mime::{category_of, mime_of};
-use crate::ops::bulkrename::{
-    self, CaseMode, DateRule, ExtensionMode, Numbering, Position, RenameEntry, RenamePreview, Rule, RuleSet,
-};
 use crate::ops::conflict as conflict_ops;
-use crate::ops::names::{keep_both_name, split_extension, NameRules};
+use crate::ops::names::{keep_both_name, split_extension};
 use crate::ops::{Conflict, ConflictChoice, OperationKind, Plan};
-use crate::provider::{
-    list_all, AttributeChanges, Disposition, Lane, ProgressSink, Provider, RenameMode, WriteOptions,
-};
+use crate::provider::{list_all, AttributeChanges, Disposition, Lane, ProgressSink, Provider, WriteOptions};
 use crate::settings::Settings;
 use crate::sys;
 use crate::transfer::TransferId;
@@ -166,8 +161,6 @@ pub fn kind_name(kind: OperationKind) -> &'static str {
         OperationKind::Delete => "delete",
         OperationKind::Compress => "compress",
         OperationKind::Extract => "extract",
-        OperationKind::Sync => "sync",
-        OperationKind::WriteBack => "writeback",
     }
 }
 
@@ -278,143 +271,9 @@ pub fn archive_folder_name(name: &str) -> String {
     }
 }
 
-// ------------------------------------------------------------ bulk rename
-
-/// The folder state a bulk rename previews against (OPS-11).
-#[derive(Debug, Clone)]
-pub struct RenameContext {
-    pub parent: Uri,
-    pub uris: Vec<Uri>,
-    pub entries: Vec<RenameEntry>,
-    pub kinds: Vec<Kind>,
-    /// Every name in the folder, selected ones included.
-    pub existing: Vec<Vec<u8>>,
-    pub name_rules: NameRules,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
-pub struct BulkOutcome {
-    pub renamed: usize,
-    /// Unchanged, colliding or invalid names, left alone.
-    pub skipped: usize,
-    pub failed: usize,
-    pub first_error: Option<String>,
-}
-
-fn as_str<'a>(m: &'a serde_json::Map<String, Value>, key: &str) -> &'a str {
-    m.get(key).and_then(Value::as_str).unwrap_or("")
-}
-
-fn as_flag(m: &serde_json::Map<String, Value>, key: &str, default: bool) -> bool {
-    m.get(key).and_then(Value::as_bool).unwrap_or(default)
-}
-
-fn position_of(m: &serde_json::Map<String, Value>, default: Position) -> Position {
-    match as_str(m, "position") {
-        "prefix" => Position::Prefix,
-        "suffix" => Position::Suffix,
-        _ => default,
-    }
-}
-
-fn rule_from_json(m: &serde_json::Map<String, Value>) -> Result<Rule> {
-    let int = |key: &str, d: i64| m.get(key).and_then(Value::as_i64).unwrap_or(d);
-    Ok(match as_str(m, "type") {
-        "findReplace" => Rule::FindReplace {
-            find: as_str(m, "find").to_owned(),
-            replace: as_str(m, "replace").to_owned(),
-            regex: as_flag(m, "regex", false),
-            case_sensitive: as_flag(m, "caseSensitive", true),
-        },
-        "prefix" => Rule::Prefix(as_str(m, "text").to_owned()),
-        "suffix" => Rule::Suffix(as_str(m, "text").to_owned()),
-        "numbering" => Rule::Numbering(Numbering {
-            start: int("start", 1),
-            step: int("step", 1),
-            padding: usize::try_from(int("padding", 0).clamp(0, 12)).unwrap_or(0),
-            position: position_of(m, Position::Suffix),
-            separator: m
-                .get("separator")
-                .and_then(Value::as_str)
-                .unwrap_or(" ")
-                .to_owned(),
-        }),
-        "case" => Rule::Case(match as_str(m, "mode") {
-            "lower" => CaseMode::Lower,
-            "upper" => CaseMode::Upper,
-            "title" => CaseMode::Title,
-            "sentence" => CaseMode::Sentence,
-            other => return Err(bad_rule(&format!("unknown case mode {other}"))),
-        }),
-        "extension" => Rule::Extension(match as_str(m, "mode") {
-            "change" => ExtensionMode::Change(as_str(m, "value").to_owned()),
-            "remove" => ExtensionMode::Remove,
-            "lowercase" => ExtensionMode::Lowercase,
-            other => return Err(bad_rule(&format!("unknown extension mode {other}"))),
-        }),
-        "date" => Rule::Date(DateRule {
-            format: as_str(m, "format").to_owned(),
-            position: position_of(m, Position::Prefix),
-            separator: m
-                .get("separator")
-                .and_then(Value::as_str)
-                .unwrap_or(" ")
-                .to_owned(),
-            utc_offset_secs: i32::try_from(int("utcOffsetSecs", 0)).unwrap_or(0),
-        }),
-        other => return Err(bad_rule(&format!("unknown rule {other}"))),
-    })
-}
-
-fn bad_rule(why: &str) -> Error {
-    Error::new(ErrorKind::InvalidArgument, why.to_owned())
-}
-
-/// Reads the rules the BulkRename page edits:
-/// `{ includeExtension, rules: [ { type, … } ] }`.
-pub fn parse_rules(text: &str) -> Result<RuleSet> {
-    let value: Value = serde_json::from_str(text).map_err(|e| bad_rule(&format!("bad rules: {e}")))?;
-    let Value::Object(top) = value else {
-        return Err(bad_rule("rules must be an object"));
-    };
-    let mut set = RuleSet {
-        rules: Vec::new(),
-        include_extension: as_flag(&top, "includeExtension", false),
-    };
-    for rule in top.get("rules").and_then(Value::as_array).into_iter().flatten() {
-        let Value::Object(m) = rule else {
-            return Err(bad_rule("a rule must be an object"));
-        };
-        set.rules.push(rule_from_json(m)?);
-    }
-    Ok(set)
-}
-
-/// The preview for a context (live while the user types).
-pub fn rename_preview(ctx: &RenameContext, rules: &RuleSet) -> Result<Vec<RenamePreview>> {
-    bulkrename::preview_with(&ctx.entries, rules, &ctx.existing, ctx.name_rules)
-}
-
-/// Status names the QML preview shows.
-pub fn status_name(s: bulkrename::RenameStatus) -> &'static str {
-    match s {
-        bulkrename::RenameStatus::Ok => "ok",
-        bulkrename::RenameStatus::Unchanged => "unchanged",
-        bulkrename::RenameStatus::Collision => "collision",
-        bulkrename::RenameStatus::Invalid => "invalid",
-    }
-}
-
 // ------------------------------------------------------------ info
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct TagInfo {
-    pub id: i64,
-    pub name: String,
-    pub colour: String,
-}
-
-/// Everything the Info page shows about one item (OPS-12, ORG-3).
+/// Everything the Info page shows about one item (OPS-12).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InfoData {
@@ -441,12 +300,9 @@ pub struct InfoData {
     pub fs_type: Option<String>,
     pub free_bytes: Option<u64>,
     pub total_bytes: Option<u64>,
-    pub can_permissions: bool,
     pub can_symlink: bool,
     pub can_hardlink: bool,
     pub can_set_mtime: bool,
-    pub can_checksum: bool,
-    pub tags: Vec<TagInfo>,
 }
 
 /// `rwxr-xr-x` for the permission bits.
@@ -465,15 +321,6 @@ pub fn mode_text(mode: u32) -> String {
     BITS.iter()
         .map(|(bit, c)| if mode & bit != 0 { *c } else { '-' })
         .collect()
-}
-
-/// `755` or `0755` as permission bits.
-pub fn parse_octal(text: &str) -> Option<u32> {
-    let t = text.trim();
-    if !(3..=4).contains(&t.len()) || !t.bytes().all(|b| (b'0'..=b'7').contains(&b)) {
-        return None;
-    }
-    u32::from_str_radix(t, 8).ok()
 }
 
 /// Name of the file system from `statfs` magic numbers.
@@ -495,32 +342,6 @@ pub fn fs_type_name(magic: u64) -> Option<&'static str> {
         0x7371_7368 => "squashfs",
         _ => return None,
     })
-}
-
-/// The permissions editor's data (OPS-12).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PermissionsInfo {
-    pub mode: u32,
-    pub is_dir: bool,
-    pub owner: Option<String>,
-    pub group: Option<String>,
-    /// False on vfat/exFAT and servers that cannot (§10.1).
-    pub supported: bool,
-    pub fs_type: Option<String>,
-    pub location_name: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RecursiveModes {
-    pub files: u32,
-    pub dirs: u32,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
-pub struct PermissionsOutcome {
-    pub changed: u64,
-    pub failed: u64,
 }
 
 // ------------------------------------------------------------ trash
@@ -838,98 +659,9 @@ impl Core {
         finished
     }
 
-    // -------------------------------------------------------- bulk rename
-
-    /// Reads the folder the selection lives in (OPS-11).
-    pub async fn rename_context(&self, uris: &[Uri]) -> Result<RenameContext> {
-        let first = uris
-            .first()
-            .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "nothing selected"))?;
-        let parent = first
-            .parent()
-            .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "cannot rename a location"))?;
-        if uris.iter().any(|u| u.parent().as_ref() != Some(&parent)) {
-            return Err(Error::new(
-                ErrorKind::InvalidArgument,
-                "the items must be in the same folder",
-            ));
-        }
-        let provider = self.provider(&parent.location)?;
-        let listing = list_all(provider.as_ref(), &parent.path, Lane::Interactive).await?;
-        let by_name: HashMap<&[u8], &Entry> = listing.iter().map(|e| (e.name.as_slice(), e)).collect();
-        let mut entries = Vec::new();
-        let mut kinds = Vec::new();
-        for uri in uris {
-            let name = uri.name().unwrap_or_default();
-            let found = by_name.get(name);
-            entries.push((name.to_vec(), found.and_then(|e| e.modified_ms())));
-            kinds.push(found.map_or(Kind::File, |e| e.kind));
-        }
-        Ok(RenameContext {
-            existing: listing.iter().map(|e| e.name.clone()).collect(),
-            name_rules: NameRules::from_capabilities(&provider.capabilities()),
-            parent,
-            uris: uris.to_vec(),
-            entries,
-            kinds,
-        })
-    }
-
-    /// Renames the selection by `rules` in two phases through temporary
-    /// names, so swaps (`a`→`b`, `b`→`a`) work (OPS-3, OPS-11). Tags and
-    /// favourites follow (ORG-3); nothing is recorded for undo.
-    pub async fn bulk_rename(&self, uris: &[Uri], rules: &RuleSet) -> Result<BulkOutcome> {
-        let ctx = self.rename_context(uris).await?;
-        let previews = rename_preview(&ctx, rules)?;
-        let provider = self.provider(&ctx.parent.location)?;
-        let mut outcome = BulkOutcome::default();
-        let mut staged = Vec::new();
-        let stamp = std::process::id();
-        for (i, p) in previews.iter().enumerate() {
-            if p.status != bulkrename::RenameStatus::Ok {
-                outcome.skipped += 1;
-                continue;
-            }
-            let tmp = ctx
-                .parent
-                .path
-                .join(format!(".lautta-rename-{stamp}-{i}").as_bytes())?;
-            match provider
-                .rename(&ctx.uris[i].path, &tmp, RenameMode::NoReplace)
-                .await
-            {
-                Ok(()) => staged.push((i, tmp)),
-                Err(e) => outcome.fail(e),
-            }
-        }
-        for (i, tmp) in staged {
-            let from = &ctx.uris[i];
-            let result = match ctx.parent.join(&previews[i].new) {
-                Ok(to) => self.finish_rename(provider.as_ref(), &tmp, from, &to).await,
-                Err(e) => Err(e),
-            };
-            match result {
-                Ok(()) => outcome.renamed += 1,
-                Err(e) => {
-                    let _ = provider.rename(&tmp, &from.path, RenameMode::NoReplace).await;
-                    outcome.fail(e);
-                }
-            }
-        }
-        self.invalidate(&ctx.parent);
-        Ok(outcome)
-    }
-
-    async fn finish_rename(&self, provider: &dyn Provider, tmp: &VPath, from: &Uri, to: &Uri) -> Result<()> {
-        provider.rename(tmp, &to.path, RenameMode::NoReplace).await?;
-        let _ = self.tags.on_moved(from, to);
-        let _ = self.favourites.on_moved(from, to);
-        Ok(())
-    }
-
     // -------------------------------------------------------- info
 
-    /// Everything the Info page shows (OPS-12, ORG-3).
+    /// Everything the Info page shows (OPS-12).
     pub async fn info(&self, uri: &Uri) -> Result<InfoData> {
         let provider = self.provider(&uri.location)?;
         let entry = provider.stat(&uri.path, false, Lane::Interactive).await?;
@@ -946,16 +678,6 @@ impl Core {
             None
         };
         let parent = uri.parent();
-        let tags = self
-            .tags
-            .tags_for(uri)?
-            .into_iter()
-            .map(|t| TagInfo {
-                id: t.id,
-                name: t.name,
-                colour: t.colour,
-            })
-            .collect();
         let mode = entry.mode.map(|m| m & 0o7777);
         Ok(InfoData {
             name: if uri.path.is_root() {
@@ -988,33 +710,10 @@ impl Core {
                 .map(str::to_owned),
             free_bytes: space.map(|s| s.free),
             total_bytes: space.map(|s| s.total),
-            can_permissions: caps.writable() && caps.has(cap::PERMISSIONS),
             can_symlink: caps.writable() && caps.has(cap::SYMLINKS),
             can_hardlink: caps.writable() && caps.has(cap::HARDLINKS),
             can_set_mtime: caps.writable() && caps.has(cap::SET_MTIME),
-            can_checksum: !entry.is_dir(),
-            tags,
         })
-    }
-
-    /// Hex digest of a file (`md5`, `sha1`, `sha256`): the provider's own
-    /// when it can, otherwise streamed and hashed here (§10.1).
-    pub async fn checksum(&self, uri: &Uri, algorithm: &str) -> Result<String> {
-        let algo = algorithm.to_lowercase().replace('-', "");
-        if !matches!(algo.as_str(), "md5" | "sha1" | "sha256") {
-            return Err(Error::new(
-                ErrorKind::Unsupported,
-                format!("unknown algorithm {algorithm}"),
-            ));
-        }
-        let provider = self.provider(&uri.location)?;
-        match provider.checksum(&uri.path, &algo).await {
-            Ok(digest) => Ok(hex::encode(digest)),
-            Err(e) if e.kind == ErrorKind::Unsupported => {
-                stream_checksum(provider.as_ref(), &uri.path, &algo).await
-            }
-            Err(e) => Err(e),
-        }
     }
 
     /// Sets the modification time (ms since the epoch), if the location can.
@@ -1072,84 +771,6 @@ impl Core {
         let mut bytes = vec![b'/'];
         bytes.extend_from_slice(target.path.as_bytes());
         Ok(bytes)
-    }
-
-    // -------------------------------------------------------- permissions
-
-    pub async fn permissions(&self, uri: &Uri) -> Result<PermissionsInfo> {
-        let provider = self.provider(&uri.location)?;
-        let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
-        let caps = provider.capabilities();
-        let fs_type = self
-            .locations
-            .to_local_path(uri)
-            .and_then(|p| sys::fs_magic(&p).ok())
-            .and_then(fs_type_name)
-            .map(str::to_owned);
-        Ok(PermissionsInfo {
-            mode: entry.mode.unwrap_or(0o644) & 0o7777,
-            is_dir: entry.is_dir(),
-            owner: entry.owner,
-            group: entry.group,
-            supported: caps.writable() && caps.has(cap::PERMISSIONS),
-            fs_type,
-            location_name: self.location(&uri.location).map(|l| l.name).unwrap_or_default(),
-        })
-    }
-
-    /// Applies `mode` to the item and, for a folder with `recursive`, `files`
-    /// to every file and `dirs` to every folder below it (symlinks are left
-    /// alone). Failures below the item are counted and the walk goes on.
-    pub async fn set_permissions(
-        &self,
-        uri: &Uri,
-        mode: u32,
-        recursive: Option<RecursiveModes>,
-        cancel: &AtomicBool,
-    ) -> Result<PermissionsOutcome> {
-        let provider = self.provider(&uri.location)?;
-        let change = |m: u32| AttributeChanges {
-            mode: Some(m & 0o7777),
-            modified: None,
-        };
-        let entry = provider.stat(&uri.path, false, Lane::Interactive).await?;
-        provider.set_attributes(&uri.path, change(mode)).await?;
-        let mut outcome = PermissionsOutcome {
-            changed: 1,
-            failed: 0,
-        };
-        let Some(modes) = recursive.filter(|_| entry.is_dir() && !entry.is_symlink()) else {
-            return Ok(outcome);
-        };
-        let mut pending = vec![uri.path.clone()];
-        while let Some(dir) = pending.pop() {
-            if cancel.load(Ordering::Relaxed) {
-                return Err(Error::kind(ErrorKind::Canceled));
-            }
-            let Ok(children) = list_all(provider.as_ref(), &dir, Lane::Bulk).await else {
-                outcome.failed += 1;
-                continue;
-            };
-            for child in children.into_iter().filter(|c| !c.is_symlink()) {
-                let path = dir.join(&child.name)?;
-                let m = if child.is_dir() { modes.dirs } else { modes.files };
-                match provider.set_attributes(&path, change(m)).await {
-                    Ok(()) => outcome.changed += 1,
-                    Err(_) => outcome.failed += 1,
-                }
-                if child.is_dir() {
-                    pending.push(path);
-                }
-            }
-        }
-        self.invalidate_parent(uri);
-        Ok(outcome)
-    }
-
-    fn invalidate_parent(&self, uri: &Uri) {
-        if let Some(p) = uri.parent() {
-            self.invalidate(&p);
-        }
     }
 
     // -------------------------------------------------------- trash
@@ -1219,15 +840,6 @@ impl Core {
     }
 }
 
-impl BulkOutcome {
-    fn fail(&mut self, e: Error) {
-        self.failed += 1;
-        if self.first_error.is_none() {
-            self.first_error = Some(e.kind.name().to_owned());
-        }
-    }
-}
-
 /// `name` when no item of that name exists, else "name 2.ext", ….
 fn free_name(name: &[u8], taken: &HashSet<Vec<u8>>) -> Vec<u8> {
     if taken.contains(name) {
@@ -1270,46 +882,6 @@ async fn compress_remote(
     };
     let _ = provider.remove_file(&target.path).await;
     Err(failure)
-}
-
-async fn stream_checksum(provider: &dyn Provider, path: &VPath, algo: &str) -> Result<String> {
-    use sha2::Digest;
-    enum Hasher {
-        Md5(md5::Md5),
-        Sha1(sha1::Sha1),
-        Sha256(sha2::Sha256),
-    }
-    impl Hasher {
-        fn update(&mut self, data: &[u8]) {
-            match self {
-                Hasher::Md5(h) => h.update(data),
-                Hasher::Sha1(h) => h.update(data),
-                Hasher::Sha256(h) => h.update(data),
-            }
-        }
-        fn finish(self) -> Vec<u8> {
-            match self {
-                Hasher::Md5(h) => h.finalize().to_vec(),
-                Hasher::Sha1(h) => h.finalize().to_vec(),
-                Hasher::Sha256(h) => h.finalize().to_vec(),
-            }
-        }
-    }
-    let mut hasher = match algo {
-        "md5" => Hasher::Md5(md5::Md5::new()), // NOSONAR: a user-chosen file checksum, not security
-        "sha1" => Hasher::Sha1(sha1::Sha1::new()), // NOSONAR: a user-chosen file checksum, not security
-        _ => Hasher::Sha256(sha2::Sha256::new()),
-    };
-    let handle = provider.open_read(path, Lane::Bulk).await?;
-    let mut offset = 0u64;
-    loop {
-        let chunk = handle.read_at(offset, 256 * 1024).await?;
-        if chunk.is_empty() {
-            return Ok(hex::encode(hasher.finish()));
-        }
-        offset += chunk.len() as u64;
-        hasher.update(&chunk);
-    }
 }
 
 /// The engineering names of conflict choices (QML ⇄ core, OPS-2).

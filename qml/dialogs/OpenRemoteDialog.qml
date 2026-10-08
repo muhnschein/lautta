@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Opening a remote file in another app (PRV-5, PRV-6, board OpenRemote): the
 // file is copied to ~/Downloads/Lautta/Opened so the sandboxed app can read
-// it, then handed to the system. Databases are shown in the SQLite viewer
-// from that copy (PRV-4). The first use explains the copy in one line
-// (SEC-4).
+// it, then handed to the system. The first use explains the copy in one
+// line (SEC-4).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.Configuration 1.0
@@ -30,13 +29,6 @@ Page {
         working = false
         tools.noteOpened(uri)
         hint.value = true
-        if (App.viewerFor(uri, "") === "sqlite") {
-            var local = tools.uriForFileUrl(fileUrl)
-            if (local !== "") {
-                pageStack.replace(Qt.resolvedUrl("../viewers/SqliteViewer.qml"), { "uri": local })
-                return
-            }
-        }
         Qt.openUrlExternally(fileUrl)
         pageStack.pop()
     }
@@ -109,7 +101,7 @@ Page {
         anchors.bottom: parent.bottom
         opacity: hint.value ? 0 : 1
         visible: opacity > 0
-        //% "A copy goes to Downloads/Lautta/Opened so other apps can read it. It's removed after 24 hours unless pinned."
+        //% "A copy goes to Downloads/Lautta/Opened so other apps can read it. It's removed after 24 hours."
         text: qsTrId("lautta-viewers-open-remote-hint")
         Behavior on opacity { FadeAnimation { } }
     }

@@ -2,15 +2,15 @@
 //! `DirectoryModel { uri }` (doc/QML-API.md, SPEC §9): a folder listing on
 //! top of `lautta_core::listing::ListingState`. Listings stream in from the
 //! core (cached copy first, BRW-5), diffs become row inserts/removes/updates,
-//! local folders are watched (BRW-6) and the view settings are per folder
-//! (BRW-4).
+//! local folders are watched (BRW-6) and the view settings are the global
+//! ones (BRW-4).
 
 use crate::json::from_json;
 use crate::runtime::{self, core, spawn_then};
 use lautta_core::app_directory::{file_url, ListEvent};
 use lautta_core::entry::{cap, Entry, EntryFlags};
 use lautta_core::error::ErrorKind;
-use lautta_core::filter::{FilterOptions, TypeChip};
+use lautta_core::filter::FilterOptions;
 use lautta_core::listing::{ListChange, ListingState};
 use lautta_core::locations::LocationStatus;
 use lautta_core::mime::{self, FileCategory};
@@ -63,30 +63,6 @@ fn is_connectivity(kind: ErrorKind) -> bool {
     )
 }
 
-fn chip_name(c: TypeChip) -> &'static str {
-    match c {
-        TypeChip::Images => "images",
-        TypeChip::Videos => "videos",
-        TypeChip::Audio => "audio",
-        TypeChip::Documents => "documents",
-        TypeChip::Archives => "archives",
-        TypeChip::Folders => "folders",
-    }
-}
-
-fn chip_from_name(s: &str) -> Option<TypeChip> {
-    [
-        TypeChip::Images,
-        TypeChip::Videos,
-        TypeChip::Audio,
-        TypeChip::Documents,
-        TypeChip::Archives,
-        TypeChip::Folders,
-    ]
-    .into_iter()
-    .find(|c| chip_name(*c) == s)
-}
-
 fn qs(s: &str) -> QString {
     QString::from(s)
 }
@@ -126,8 +102,8 @@ pub struct DirectoryModel {
     prefsChanged: qt_signal!(),
 
     filterText: qt_property!(QString; NOTIFY filterChanged WRITE set_filter_text),
-    /// JSON array of chip names: folders, documents, images, audio, videos, archives.
-    chips: qt_property!(QString; NOTIFY filterChanged WRITE set_chips),
+    /// Hide files (the folder picker).
+    foldersOnly: qt_property!(bool; NOTIFY filterChanged WRITE set_folders_only),
     filterChanged: qt_signal!(),
 
     refresh: qt_method!(fn(&mut self)),
@@ -154,7 +130,8 @@ pub struct DirectoryModel {
     local_dir: Option<PathBuf>,
     state: ListingState,
     prefs: ViewPrefs,
-    own_prefs: bool,
+    /// The view was set here (`setViewPrefs`): no grid suggestion.
+    prefs_set: bool,
     filter: FilterOptions,
     flags: Vec<String>,
     remote_thumbs: bool,
@@ -188,8 +165,8 @@ impl DirectoryModel {
             self.fail(&Error::new(ErrorKind::InvalidArgument, "bad folder address"));
             return;
         };
-        self.prefs = core.viewprefs.get(&dir).unwrap_or_default();
-        self.own_prefs = matches!(core.viewprefs.get_exact(&dir), Ok(Some(_)));
+        self.prefs = core.view_prefs();
+        self.prefs_set = false;
         self.remote_thumbs = core.settings().thumbnails_remote;
         self.apply_prefs_state();
         self.flags = core.capability_flags(&dir.location);
@@ -361,7 +338,7 @@ impl DirectoryModel {
     }
 
     fn maybe_suggest_grid(&mut self) {
-        if self.own_prefs || self.prefs.view_mode != ViewMode::List || self.state.is_large() {
+        if self.prefs_set || self.prefs.view_mode != ViewMode::List || self.state.is_large() {
             return;
         }
         let entries: Vec<Entry> = self.state.visible_entries().cloned().collect();
@@ -508,10 +485,12 @@ impl DirectoryModel {
         self.prefsChanged();
     }
 
+    /// Shows the folder with other view settings. Storing them for every
+    /// folder is `App.setSetting`'s job.
     fn setViewPrefs(&mut self, prefs_json: QString) -> bool {
-        let (Some(core), Some(dir)) = (core(), self.dir.clone()) else {
+        if self.dir.is_none() {
             return false;
-        };
+        }
         let Some(map) = from_json::<serde_json::Map<String, serde_json::Value>>(&prefs_json.to_string())
         else {
             return false;
@@ -540,21 +519,8 @@ impl DirectoryModel {
         {
             p.view_mode = m;
         }
-        let everywhere = map.get("scope").and_then(|v| v.as_str()) == Some("all");
-        let stored = if everywhere {
-            core.viewprefs.clear(&dir)
-        } else {
-            core.viewprefs.set(&dir, &p)
-        };
-        if stored.is_err() {
-            return false;
-        }
-        self.own_prefs = !everywhere;
-        self.prefs = if everywhere {
-            core.viewprefs.get(&dir).unwrap_or(p)
-        } else {
-            p
-        };
+        self.prefs_set = true;
+        self.prefs = p;
         self.suggestGrid = false;
         self.apply_prefs_state();
         let mut changes = self.state.set_sort(self.prefs.sort_options());
@@ -580,10 +546,9 @@ impl DirectoryModel {
         self.refilter();
     }
 
-    fn set_chips(&mut self, json: QString) {
-        self.chips = json;
-        let names: Vec<String> = from_json(&self.chips.to_string()).unwrap_or_default();
-        self.filter.chips = names.iter().filter_map(|n| chip_from_name(n)).collect();
+    fn set_folders_only(&mut self, value: bool) {
+        self.foldersOnly = value;
+        self.filter.folders_only = value;
         self.refilter();
     }
 

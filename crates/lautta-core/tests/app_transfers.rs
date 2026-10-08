@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The transfers area on a temporary home folder: the grouped list with
-//! questions and history, restore at start (XFR-11), working copies and
-//! their write-back (EDT-1..3).
+//! questions and history, and restore at start (XFR-11).
 
 use lautta_core::app::{Core, Started};
-use lautta_core::app_transfers::{ProgressBook, TransferGroup, WriteBack};
+use lautta_core::app_transfers::{ProgressBook, TransferGroup};
 use lautta_core::locations::LocationRegistry;
 use lautta_core::ops::OperationKind;
 use lautta_core::paths::AppPaths;
 use lautta_core::transfer::{TransferState, WaitReason};
-use lautta_core::workcopy::{EditConflictChoice, Resolution};
 use lautta_core::{ErrorKind, Uri};
 use std::path::Path;
 use std::sync::Arc;
@@ -146,108 +144,6 @@ async fn unfinished_transfers_come_back_paused_or_resumed() {
         .wait_for(id, |s| s.state == TransferState::Waiting(WaitReason::Question))
         .await
         .unwrap();
-}
-
-#[tokio::test]
-async fn working_copies_upload_conflict_and_resolve() {
-    let h = home().await;
-    let remote_file = h.root.join("Documents/r.txt");
-    write(&remote_file, b"one");
-    let remote = uri("lautta://user-documents/r.txt");
-    let provider = h.core.provider("user-documents").unwrap();
-    let copy = h
-        .core
-        .working_copies
-        .open_for_edit(provider.as_ref(), &remote)
-        .await
-        .unwrap();
-
-    let edited = h.core.edited_files().await.unwrap();
-    assert_eq!(edited.len(), 1);
-    assert!(!edited[0].dirty, "nothing changed yet");
-    assert_eq!(h.core.working_copy_name(&edited[0].copy), "r.txt");
-    assert_eq!(h.core.write_back(copy.id).await.unwrap(), WriteBack::Unchanged);
-
-    std::fs::write(&copy.local_path, b"two two").unwrap();
-    assert!(h.core.edited_files().await.unwrap()[0].dirty, "upload pending");
-    match h.core.write_back(copy.id).await.unwrap() {
-        WriteBack::Uploaded(c) => assert_eq!(c.id, copy.id),
-        other => panic!("expected an upload, got {other:?}"),
-    }
-    assert_eq!(std::fs::read(&remote_file).unwrap(), b"two two");
-    assert!(!h.core.edited_files().await.unwrap()[0].dirty);
-    assert!(h.core.edit_conflict(copy.id).await.unwrap().is_none());
-
-    std::fs::write(&copy.local_path, b"mine, longer").unwrap();
-    std::fs::write(&remote_file, b"theirs").unwrap();
-    let WriteBack::Conflict(conflict) = h.core.write_back(copy.id).await.unwrap() else {
-        panic!("the remote changed meanwhile")
-    };
-    assert_eq!(conflict.remote_size, Some(6));
-    assert_eq!(conflict.local_size, 12);
-    assert_eq!(
-        h.core.edit_conflict(copy.id).await.unwrap().map(|c| c.local_size),
-        Some(12)
-    );
-    assert_eq!(
-        std::fs::read(&remote_file).unwrap(),
-        b"theirs",
-        "never overwritten unasked"
-    );
-
-    let res = h
-        .core
-        .resolve_edit_conflict(copy.id, EditConflictChoice::SaveMineAsCopy)
-        .await
-        .unwrap();
-    let Resolution::SavedCopy(saved) = res else {
-        panic!("saved as a copy")
-    };
-    let saved_path = h.core.locations.to_local_path(&saved).unwrap();
-    assert_eq!(std::fs::read(saved_path).unwrap(), b"mine, longer");
-    assert_eq!(std::fs::read(&remote_file).unwrap(), b"theirs");
-    assert!(
-        h.core.edited_files().await.unwrap().is_empty(),
-        "the copy is gone"
-    );
-}
-
-#[tokio::test]
-async fn start_reports_edits_changed_while_closed() {
-    let h = home().await;
-    write(&h.root.join("Documents/r.txt"), b"one");
-    let provider = h.core.provider("user-documents").unwrap();
-    let copy = h
-        .core
-        .working_copies
-        .open_for_edit(provider.as_ref(), &uri("lautta://user-documents/r.txt"))
-        .await
-        .unwrap();
-    std::fs::write(&copy.local_path, b"edited while closed").unwrap();
-
-    let second = open(&h.paths, &h.root).await;
-    let report = second.start_transfers(true).await.unwrap();
-    assert_eq!(report.restored, 0);
-    assert_eq!(report.dirty_edits.len(), 1);
-    assert_eq!(report.dirty_edits[0].id, copy.id);
-}
-
-#[tokio::test]
-async fn unknown_working_copies_are_not_found() {
-    let h = home().await;
-    assert_eq!(h.core.write_back(99).await.unwrap_err().kind, ErrorKind::NotFound);
-    assert_eq!(
-        h.core.edit_conflict(99).await.unwrap_err().kind,
-        ErrorKind::NotFound
-    );
-    assert_eq!(
-        h.core
-            .resolve_edit_conflict(99, EditConflictChoice::DiscardMine)
-            .await
-            .unwrap_err()
-            .kind,
-        ErrorKind::NotFound
-    );
 }
 
 #[tokio::test]

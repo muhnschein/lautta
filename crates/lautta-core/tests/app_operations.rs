@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The operations area on a temporary home: bulk rename, compress and extract
-//! through the engine, remote compress through a pipe, info, permissions,
-//! links, Recently deleted and the share probe.
+//! The operations area on a temporary home: compress and extract through the
+//! engine, remote compress through a pipe, info, permissions, links,
+//! Recently deleted and the share probe.
 
 use lautta_core::app::{Core, Started};
 use lautta_core::app_operations::*;
@@ -61,83 +61,6 @@ async fn finish(h: &Home, started: Started) {
         .await
         .unwrap();
     assert_eq!(s.state, TransferState::Completed, "{s:?}");
-}
-
-#[tokio::test]
-async fn bulk_rename_swaps_and_skips() {
-    let h = home().await;
-    for n in ["a.txt", "b.txt", "c.txt"] {
-        write(&h.root.join("Documents").join(n), n.as_bytes());
-    }
-    let docs = uri("lautta://user-documents/");
-    let uris: Vec<Uri> = ["a.txt", "b.txt"]
-        .iter()
-        .map(|n| docs.join(n.as_bytes()).unwrap())
-        .collect();
-    let rules = parse_rules(
-        r#"{"rules":[{"type":"findReplace","find":"a","replace":"B","regex":false,"caseSensitive":true}]}"#,
-    )
-    .unwrap();
-    let ctx = h.core.rename_context(&uris).await.unwrap();
-    assert_eq!(ctx.existing.len(), 3);
-    let preview = rename_preview(&ctx, &rules).unwrap();
-    assert_eq!(preview[0].new, b"B.txt");
-    assert_eq!(
-        preview[1].status,
-        lautta_core::ops::bulkrename::RenameStatus::Unchanged
-    );
-
-    let out = h.core.bulk_rename(&uris, &rules).await.unwrap();
-    assert_eq!((out.renamed, out.skipped, out.failed), (1, 1, 0));
-    assert_eq!(std::fs::read(h.root.join("Documents/B.txt")).unwrap(), b"a.txt");
-    assert!(!h.root.join("Documents/a.txt").exists());
-    assert!(!h.core.can_undo(), "bulk rename records nothing for undo");
-    let leftovers: Vec<_> = std::fs::read_dir(h.root.join("Documents"))
-        .unwrap()
-        .filter_map(Result::ok)
-        .filter(|e| e.file_name().to_string_lossy().starts_with(".lautta-rename"))
-        .collect();
-    assert!(leftovers.is_empty());
-}
-
-#[tokio::test]
-async fn bulk_rename_swaps_names_through_temporaries() {
-    let h = home().await;
-    write(&h.root.join("Documents/1.txt"), b"one");
-    write(&h.root.join("Documents/2.txt"), b"two");
-    let docs = uri("lautta://user-documents/");
-    let uris = vec![docs.join(b"1.txt").unwrap(), docs.join(b"2.txt").unwrap()];
-    // Numbering from 2 downwards maps 1 -> 2 and 2 -> 1.
-    let rules = parse_rules(
-        r#"{"includeExtension":false,"rules":[
-        {"type":"findReplace","find":"^.*$","replace":"","regex":true,"caseSensitive":true},
-        {"type":"numbering","start":2,"step":-1,"padding":0,"position":"prefix","separator":""}]}"#,
-    )
-    .unwrap();
-    let out = h.core.bulk_rename(&uris, &rules).await.unwrap();
-    assert_eq!((out.renamed, out.failed), (2, 0), "{out:?}");
-    assert_eq!(std::fs::read(h.root.join("Documents/2.txt")).unwrap(), b"one");
-    assert_eq!(std::fs::read(h.root.join("Documents/1.txt")).unwrap(), b"two");
-}
-
-#[tokio::test]
-async fn bulk_rename_moves_tags_and_needs_one_folder() {
-    let h = home().await;
-    write(&h.root.join("Documents/x.txt"), b"x");
-    write(&h.root.join("Downloads/y.txt"), b"y");
-    let x = uri("lautta://user-documents/x.txt");
-    let tag = h.core.tags.create("Work", "#e5604f").unwrap();
-    h.core.tags.assign(tag.id, &[x.clone()]).unwrap();
-    let rules = parse_rules(r#"{"rules":[{"type":"prefix","text":"new-"}]}"#).unwrap();
-    h.core.bulk_rename(&[x.clone()], &rules).await.unwrap();
-    let moved = uri("lautta://user-documents/new-x.txt");
-    assert_eq!(h.core.tags.tags_for(&moved).unwrap().len(), 1);
-
-    let mixed = vec![moved, uri("lautta://user-downloads/y.txt")];
-    let err = h.core.bulk_rename(&mixed, &rules).await.unwrap_err();
-    assert_eq!(err.kind, ErrorKind::InvalidArgument);
-    let err = h.core.bulk_rename(&[], &rules).await.unwrap_err();
-    assert_eq!(err.kind, ErrorKind::InvalidArgument);
 }
 
 #[tokio::test]
@@ -417,37 +340,20 @@ async fn summary_conflicts_and_start_with_options() {
 }
 
 #[tokio::test]
-async fn info_checksum_and_links() {
+async fn info_and_links() {
     let h = home().await;
     write(&h.root.join("Documents/doc.txt"), b"abc");
     let u = uri("lautta://user-documents/doc.txt");
-    let tag = h.core.tags.create("Work", "#e5604f").unwrap();
-    h.core.tags.assign(tag.id, &[u.clone()]).unwrap();
 
     let info = h.core.info(&u).await.unwrap();
     assert_eq!(info.name, "doc.txt");
     assert_eq!(info.size, Some(3));
     assert_eq!(info.category, "text");
     assert_eq!(info.folder_name, "Documents");
-    assert_eq!(info.tags.len(), 1);
-    assert_eq!(info.tags[0].name, "Work");
     assert!(info.mode_text.len() == 9 && info.mode.is_some());
-    assert!(info.can_checksum && info.can_permissions && info.can_symlink);
+    assert!(info.can_symlink);
     assert!(info.free_bytes.is_some());
     assert!(!info.is_dir);
-
-    assert_eq!(
-        h.core.checksum(&u, "SHA-256").await.unwrap(),
-        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-    );
-    assert_eq!(
-        h.core.checksum(&u, "md5").await.unwrap(),
-        "900150983cd24fb0d6963f7d28e17f72"
-    );
-    assert_eq!(
-        h.core.checksum(&u, "crc32").await.unwrap_err().kind,
-        ErrorKind::Unsupported
-    );
 
     let dl = uri("lautta://user-downloads/");
     let hard = h.core.make_link(&u, &dl, true).await;
@@ -467,68 +373,12 @@ async fn info_checksum_and_links() {
 }
 
 #[tokio::test]
-async fn checksum_falls_back_to_streaming() {
-    let h = home().await;
-    let mem = MemoryProvider::new(Capabilities::with(&[cap::WRITE]));
-    mem.add_file("f", b"abc", 0);
-    h.core.locations.register(
-        Location::remote("nas", LocationKind::AdHoc, "NAS", None),
-        Arc::new(mem),
-    );
-    // The in-memory provider hashes itself; compare against a provider that cannot.
-    let sum = h.core.checksum(&uri("lautta://nas/f"), "sha1").await.unwrap();
-    assert_eq!(sum, "a9993e364706816aba3e25717850c26c9cd0d89d");
-}
-
-#[tokio::test]
 async fn set_modified_changes_the_time() {
     let h = home().await;
     write(&h.root.join("Documents/t.txt"), b"x");
     let u = uri("lautta://user-documents/t.txt");
     h.core.set_modified(&u, 1_000_000_000_000).await.unwrap();
     assert_eq!(h.core.info(&u).await.unwrap().modified, Some(1_000_000_000_000));
-}
-
-#[tokio::test]
-async fn permissions_apply_recursively_with_separate_masks() {
-    use std::os::unix::fs::PermissionsExt;
-    let h = home().await;
-    write(&h.root.join("Documents/d/f.txt"), b"x");
-    write(&h.root.join("Documents/d/s/g.txt"), b"y");
-    let d = uri("lautta://user-documents/d");
-    let info = h.core.permissions(&d).await.unwrap();
-    assert!(info.supported && info.is_dir);
-    assert_eq!(info.location_name, "Documents");
-
-    let cancel = AtomicBool::new(false);
-    let modes = RecursiveModes {
-        files: 0o600,
-        dirs: 0o750,
-    };
-    let out = h
-        .core
-        .set_permissions(&d, 0o700, Some(modes), &cancel)
-        .await
-        .unwrap();
-    assert_eq!((out.changed, out.failed), (4, 0));
-    let mode = |p: &str| std::fs::metadata(h.root.join(p)).unwrap().permissions().mode() & 0o7777;
-    assert_eq!(mode("Documents/d"), 0o700, "the item itself gets the grid's mode");
-    assert_eq!(mode("Documents/d/s"), 0o750);
-    assert_eq!(mode("Documents/d/f.txt"), 0o600);
-    assert_eq!(mode("Documents/d/s/g.txt"), 0o600);
-
-    let out = h.core.set_permissions(&d, 0o755, None, &cancel).await.unwrap();
-    assert_eq!(out.changed, 1);
-    assert_eq!(mode("Documents/d"), 0o755);
-    assert_eq!(mode("Documents/d/f.txt"), 0o600, "not recursive: contents stay");
-
-    let stop = AtomicBool::new(true);
-    let err = h
-        .core
-        .set_permissions(&d, 0o755, Some(modes), &stop)
-        .await
-        .unwrap_err();
-    assert_eq!(err.kind, ErrorKind::Canceled);
 }
 
 #[tokio::test]

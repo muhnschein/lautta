@@ -31,8 +31,6 @@ pub struct App {
     clipboardCount: qt_property!(i32; NOTIFY clipboard_changed),
     clipboardCut: qt_property!(bool; NOTIFY clipboard_changed),
     clipboard_changed: qt_signal!(),
-    crashReports: qt_property!(i32; NOTIFY crash_changed),
-    crash_changed: qt_signal!(),
 
     loadSettings: qt_method!(fn(&mut self, json: QString)),
     setting: qt_method!(fn(&self, key: QString) -> QVariant),
@@ -63,9 +61,6 @@ pub struct App {
     externalReady: qt_signal!(uri: QString, fileUrl: QString),
     externalFailed: qt_signal!(uri: QString, kind: QString, message: QString),
 
-    crashReport: qt_method!(fn(&self) -> QString),
-    dismissCrashReports: qt_method!(fn(&mut self)),
-
     clipboard: Clipboard,
     undo_generation: u64,
 }
@@ -77,7 +72,6 @@ impl QSingletonInit for App {
             Some(core) => {
                 self.ready = true;
                 self.settingsJson = QString::from(to_json(&core.settings().to_map()).as_str());
-                self.crashReports = crate::crash::pending_count(&core.paths) as i32;
             }
             None => {
                 self.startError = QString::from(crate::runtime::start_error().as_str());
@@ -104,8 +98,6 @@ pub fn viewer_name(v: Viewer) -> &'static str {
         Viewer::Audio => "audio",
         Viewer::Video => "video",
         Viewer::Archive => "archive",
-        Viewer::Sqlite => "sqlite",
-        Viewer::Hex => "hex",
         Viewer::External => "external",
     }
 }
@@ -364,19 +356,5 @@ impl App {
                 }
             },
         );
-    }
-
-    fn crashReport(&self) -> QString {
-        core()
-            .map(|c| QString::from(crate::crash::latest(&c.paths).as_str()))
-            .unwrap_or_default()
-    }
-
-    fn dismissCrashReports(&mut self) {
-        if let Some(c) = core() {
-            crate::crash::dismiss_all(&c.paths);
-        }
-        self.crashReports = 0;
-        self.crash_changed();
     }
 }

@@ -23,33 +23,9 @@ function sectionTitle(section) {
     case "nearby":
         //% "Nearby"
         return qsTrId("lautta-browse-section-nearby")
-    case "tags":
-        //% "Tags"
-        return qsTrId("lautta-browse-section-tags")
     default:
         return ""
     }
-}
-
-// "Sync pair · mirror left to right" (SYN-3).
-function syncPairLine(mode) {
-    var what
-    switch (mode) {
-    case "mirror_lr":
-        //% "mirror left to right"
-        what = qsTrId("lautta-browse-sync-mirror-lr")
-        break
-    case "mirror_rl":
-        //% "mirror right to left"
-        what = qsTrId("lautta-browse-sync-mirror-rl")
-        break
-    default:
-        //% "update both ways"
-        what = qsTrId("lautta-browse-sync-both")
-        break
-    }
-    //% "Sync pair · %1"
-    return qsTrId("lautta-browse-sync-pair").arg(what)
 }
 
 // "58.2 GB free of 128 GB · exFAT" (LOC-3); empty when the space is unknown.
@@ -112,10 +88,6 @@ function recentKindLine(kind, place) {
         //% "Previewed"
         what = qsTrId("lautta-recents-previewed")
         break
-    case "edited":
-        //% "Edited"
-        what = qsTrId("lautta-recents-edited")
-        break
     case "transferred":
         if (place.length > 0)
             //% "Transferred to %1"
@@ -155,9 +127,6 @@ function recentFilterTitle(kind) {
     case "previewed":
         //% "Previewed"
         return qsTrId("lautta-recents-previewed")
-    case "edited":
-        //% "Edited"
-        return qsTrId("lautta-recents-edited")
     case "transferred":
         //% "Transferred"
         return qsTrId("lautta-recents-transferred")
@@ -167,7 +136,7 @@ function recentFilterTitle(kind) {
     }
 }
 
-// Colours offered for favourites and tags.
+// Colours offered for favourites.
 var colours = ["#e7a33c", "#7ec97a", "#e5604f", "#4fa3e5", "#9bd26a", "#b57edc", "#e57fb0", "#8a9aa6"]
 
 function colourName(colour) {

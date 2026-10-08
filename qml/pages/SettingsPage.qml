@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Settings (SPEC §18; design: Settings): every global preference, the
-// context menu order, recents, per-location settings and storage. Values are
+// Settings (SPEC §18; design: Settings): every global preference, recents,
+// per-location settings and storage. Values are
 // persisted through App.setSetting; QML keeps no copy.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/search"
-import "../components/search/ContextMenuLabels.js" as ContextMenuLabels
 
 Page {
     id: page
@@ -34,16 +33,6 @@ Page {
     function setting(key) {
         var dependency = App.settingsJson
         return App.setting(key)
-    }
-
-    function menuSummary() {
-        var order = []
-        try {
-            order = JSON.parse(setting("context_menu") || "[]")
-        } catch (e) {
-            order = []
-        }
-        return order.slice(0, 4).map(function (id) { return ContextMenuLabels.label(id) }).join(", ") + "…"
     }
 
     function clearAppData() {
@@ -314,40 +303,6 @@ Page {
             }
 
             SectionHeader {
-                //% "Menus"
-                text: qsTrId("lautta-settings-menus")
-            }
-            BackgroundItem {
-                width: column.width
-                height: Theme.itemSizeMedium
-                onClicked: pageStack.push(Qt.resolvedUrl("ContextMenuOrderPage.qml"))
-
-                Column {
-                    anchors {
-                        left: parent.left
-                        right: parent.right
-                        leftMargin: Theme.horizontalPageMargin
-                        rightMargin: Theme.horizontalPageMargin
-                        verticalCenter: parent.verticalCenter
-                    }
-
-                    Label {
-                        width: parent.width
-                        //% "Context menu order"
-                        text: qsTrId("lautta-settings-menu-order")
-                        color: parent.parent.highlighted ? Theme.highlightColor : Theme.primaryColor
-                    }
-                    Label {
-                        width: parent.width
-                        text: page.menuSummary()
-                        truncationMode: TruncationMode.Fade
-                        color: parent.parent.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
-                        font.pixelSize: Theme.fontSizeExtraSmall
-                    }
-                }
-            }
-
-            SectionHeader {
                 //% "Recents"
                 text: qsTrId("lautta-settings-recents")
             }
@@ -438,7 +393,7 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                //% "Removes queue, history, tags and favourites"
+                //% "Removes queue, history and favourites"
                 text: qsTrId("lautta-settings-clear-data-hint")
             }
 

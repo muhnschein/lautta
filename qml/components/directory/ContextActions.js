@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Which actions the context menu offers and in what order (SPEC §15.3,
-// boards DirectoryContext and ContextMenuOrder): the order is the
-// `context_menu` setting, the five icon-row actions go to the icon row, the
+// board DirectoryContext): the five icon-row actions go to the icon row, the
 // rest to the list below it, and capabilities decide what is applicable.
 .pragma library
 
@@ -56,29 +55,17 @@ function text(id) {
     case "extract":
         //% "Extract"
         return qsTrId("lautta-dir-act-extract")
-    case "tags":
-        //% "Tags"
-        return qsTrId("lautta-dir-act-tags")
     case "favourite":
         //% "Favourite"
         return qsTrId("lautta-dir-act-favourite")
-    case "edit":
-        //% "Edit"
-        return qsTrId("lautta-dir-act-edit")
     case "open_remote":
         //% "Open copy"
         return qsTrId("lautta-dir-act-open-remote")
-    case "copy_other":
-        //% "Copy to other pane"
-        return qsTrId("lautta-dir-act-copy-other")
-    case "move_other":
-        //% "Move to other pane"
-        return qsTrId("lautta-dir-act-move-other")
     }
     return id
 }
 
-// ctx: { isDir, isLocal, writable, hasRemote, category, otherPane }
+// ctx: { isDir, isLocal, writable, hasRemote, category }
 function applicable(id, ctx) {
     var file = !ctx.isDir
     switch (id) {
@@ -95,16 +82,19 @@ function applicable(id, ctx) {
     case "info": return true
     case "compress": return true
     case "extract": return ctx.category === "archive"
-    case "tags": return true
     case "favourite": return ctx.isDir
-    case "edit": return ctx.writable && (ctx.category === "text" || ctx.category === "code" || ctx.category === "markdown")
     case "open_remote": return file && !ctx.isLocal
     }
     return false
 }
 
-// { row: [{ id, icon, text }], list: [{ id, text }] } for the setting's order.
-function split(order, ctx) {
+// The context menu's actions in display order.
+var order = ["open_with", "share", "copy", "cut", "rename", "delete", "copy_to", "move_to",
+             "download", "upload_to", "info", "compress", "extract", "favourite", "open_remote"]
+
+// { row: [{ id, icon, text }], list: [{ id, text }] } of the actions that
+// apply, in `order`.
+function split(ctx) {
     var row = []
     var list = []
     for (var i = 0; i < order.length; ++i) {
@@ -116,39 +106,5 @@ function split(order, ctx) {
         else
             list.push({ "id": id, "text": text(id) })
     }
-    if (ctx.otherPane) {
-        list.push({ "id": "copy_other", "text": text("copy_other") })
-        if (ctx.writable)
-            list.push({ "id": "move_other", "text": text("move_other") })
-    }
     return { "row": row, "list": list }
-}
-
-// The order from App.setting("context_menu") (JSON text); the default order
-// when the setting is missing or unreadable.
-function order(settingValue) {
-    try {
-        var parsed = JSON.parse(settingValue)
-        if (parsed && parsed.length)
-            return parsed
-    } catch (e) {
-    }
-    return ["open_with", "share", "copy", "cut", "rename", "delete", "copy_to", "move_to",
-            "download", "upload_to", "info", "compress", "extract", "tags", "favourite", "edit", "open_remote"]
-}
-
-// Actions of the selection panel's "more" row (board DirectorySelect).
-function moreActions(single, hasPermissions, otherPane) {
-    var out = [
-        { "id": "compress", "icon": "image://theme/icon-m-file-compressed", "text": text("compress") },
-        //% "Rename all"
-        { "id": "rename_all", "icon": "dir-rename-all", "text": qsTrId("lautta-dir-act-rename-all") },
-        { "id": "tags", "icon": "dir-tag", "text": text("tags") }
-    ]
-    if (single && hasPermissions)
-        //% "Permissions"
-        out.push({ "id": "permissions", "icon": "dir-lock", "text": qsTrId("lautta-dir-act-permissions") })
-    if (otherPane)
-        out.push({ "id": "copy_other", "icon": "dir-copy", "text": text("copy_other") })
-    return out
 }

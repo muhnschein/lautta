@@ -3,8 +3,7 @@
 //!
 //! Roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
 //! `colour`, `count`, `itemId`, `place`, `provider`, `host`, `free`,
-//! `total`, `fs`, `leftUri`, `rightUri`, `mode` (see
-//! `lautta_core::app_browse::Row` for the values).
+//! `total`, `fs` (see `lautta_core::app_browse::Row` for the values).
 
 use super::{cell_data, role_names, store_subscribe, Cell, Guard};
 use crate::runtime::{core, handle, spawn_then};
@@ -16,7 +15,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-const COLUMNS: [&str; 19] = [
+const COLUMNS: [&str; 16] = [
     "section",
     "uri",
     "name",
@@ -33,9 +32,6 @@ const COLUMNS: [&str; 19] = [
     "free",
     "total",
     "fs",
-    "leftUri",
-    "rightUri",
-    "mode",
 ];
 
 /// Changes that arrive together are applied together.
@@ -59,9 +55,6 @@ fn cells(r: &Row) -> Vec<Cell> {
         Cell::Int(r.free),
         Cell::Int(r.total),
         Cell::s(&r.fs),
-        Cell::s(&r.left_uri),
-        Cell::s(&r.right_uri),
-        Cell::s(&r.mode),
     ]
 }
 
@@ -217,7 +210,7 @@ mod tests {
     #[test]
     fn keys_tell_rows_apart() {
         let a = Row {
-            kind: "tag",
+            kind: "favourite",
             item_id: "1".into(),
             ..Row::default()
         };

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `RecentsModel` (ORG-2): files opened, previewed, edited or transferred,
+//! `RecentsModel` (ORG-2): files opened, previewed or transferred,
 //! newest first, filtered by kind and name. Roles: `id`, `uri`, `name`,
 //! `kind`, `place`, `at` (ms since the epoch), `day` (`today`, `yesterday`,
 //! `week`, `earlier`).
@@ -40,7 +40,7 @@ fn cells(r: RecentRow) -> Vec<Cell> {
 #[derive(QObject, Default)]
 pub struct RecentsModel {
     base: qt_base_class!(trait QAbstractListModel),
-    /// `""` (everything), `opened`, `previewed`, `edited` or `transferred`.
+    /// `""` (everything), `opened`, `previewed` or `transferred`.
     kindFilter: qt_property!(QString; NOTIFY filterChanged WRITE set_kind_filter),
     text: qt_property!(QString; NOTIFY filterChanged WRITE set_text),
     filterChanged: qt_signal!(),
@@ -156,8 +156,8 @@ mod tests {
 
     #[test]
     fn filters_read_kind_and_text() {
-        let f = filter_of("edited", "  Notes ");
-        assert_eq!(f.kinds, vec![RecentKind::Edited]);
+        let f = filter_of("previewed", "  Notes ");
+        assert_eq!(f.kinds, vec![RecentKind::Previewed]);
         assert_eq!(f.text.as_deref(), Some("Notes"));
         let all = filter_of("", "");
         assert!(all.kinds.is_empty());

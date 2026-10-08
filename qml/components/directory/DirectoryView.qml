@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The folder view used by DirectoryPage and by each side of TwoPanePage
-// (SPEC §9, §15.3): header with the path menu, list or grid, pulley,
+// The folder view of DirectoryPage (SPEC §9, §15.3): header with the path menu, list or grid, pulley,
 // context menu, selection mode with a docked panel, paste bar, remorse and
 // the placeholders for empty, not accessible, offline, large and error.
 import QtQuick 2.6
@@ -17,10 +16,6 @@ Item {
     id: view
 
     property string uri
-    // Narrow rows for one side of the two-pane page.
-    property bool compact
-    // The other pane's folder in the two-pane page (copy/move across).
-    property string otherUri
     property bool selectionMode
     property bool detailsShown
     property alias model: dir
@@ -32,8 +27,7 @@ Item {
     property string pendingName
     property string pendingShare
 
-    // Asks the host to open a folder: the page stack pushes a page, a
-    // two-pane side navigates in place.
+    // Asks the host page to open a folder.
     signal openFolder(string uri)
 
     function endSelection() {
@@ -181,14 +175,10 @@ Item {
         case "move_to": pickFolder(uris, "move"); break
         case "download": pickFolder(uris, "download"); break
         case "upload_to": pickFolder(uris, "upload"); break
-        case "copy_other": Operations.copyTo(JSON.stringify(uris), otherUri); break
-        case "move_other": Operations.moveTo(JSON.stringify(uris), otherUri); break
         case "info": pageStack.push(Qt.resolvedUrl("../../pages/InfoPage.qml"), { "uri": uris[0] }); break
         case "compress": pageStack.push(Qt.resolvedUrl("../../dialogs/CompressDialog.qml"), { "uris": JSON.stringify(uris) }); break
         case "extract": pageStack.push(Qt.resolvedUrl("../../dialogs/ExtractDialog.qml"), { "archiveUri": uris[0] }); break
-        case "tags": pageStack.push(Qt.resolvedUrl("../../dialogs/TagAssignDialog.qml"), { "uris": JSON.stringify(uris) }); break
         case "favourite": pageStack.push(Qt.resolvedUrl("../../dialogs/FavouriteDialog.qml"), { "uri": uris[0], "favouriteId": "" }); break
-        case "edit": pageStack.push(Qt.resolvedUrl("../../viewers/TextEditor.qml"), { "uri": uris[0] }); break
         case "open_remote": pageStack.push(Qt.resolvedUrl("../../dialogs/OpenRemoteDialog.qml"), { "uri": uris[0] }); break
         }
     }
@@ -198,12 +188,7 @@ Item {
         var uris = dir.selectedUris()
         if (uris.length === 0)
             return
-        var info = { "uri": uris[0], "mimeType": "", "isDir": false }
-        switch (id) {
-        case "rename_all": pageStack.push(Qt.resolvedUrl("../../pages/BulkRenamePage.qml"), { "uris": JSON.stringify(uris) }); break
-        case "permissions": pageStack.push(Qt.resolvedUrl("../../pages/PermissionsPage.qml"), { "uri": uris[0] }); break
-        default: runAction(id, uris, info, null)
-        }
+        runAction(id, uris, { "uri": uris[0], "mimeType": "", "isDir": false }, null)
     }
 
     function placeholderKind() {
@@ -213,7 +198,7 @@ Item {
             return "noaccess"
         if (dir.errorKind.length > 0)
             return "error"
-        return dir.chips !== "[]" && dir.chips.length > 0 ? "nomatch" : "empty"
+        return "empty"
     }
 
     function placeholderTitle(kind) {
@@ -221,9 +206,6 @@ Item {
         case "noaccess":
             //% "Not accessible"
             return qsTrId("lautta-dir-noaccess")
-        case "nomatch":
-            //% "Nothing to show"
-            return qsTrId("lautta-dir-nomatch")
         case "empty":
             //% "No files"
             return qsTrId("lautta-dir-empty")
@@ -254,9 +236,6 @@ Item {
                    ? qsTrId("lautta-dir-noaccess-hint")
                    //% "You don't have permission to open this folder."
                    : qsTrId("lautta-dir-noaccess-permission")
-        case "nomatch":
-            //% "No item matches the type filter."
-            return qsTrId("lautta-dir-nomatch-hint")
         case "empty":
             return dir.writable
                    //% "Pull down to create a folder or paste"
@@ -269,9 +248,6 @@ Item {
     }
 
     function placeholderButtons(kind) {
-        if (kind === "nomatch")
-            //% "Show all"
-            return [{ "text": qsTrId("lautta-dir-show-all"), "action": "showAll" }]
         if (kind !== "error")
             return []
         var buttons = []
@@ -290,7 +266,6 @@ Item {
         switch (action) {
         case "retry": dir.refresh(); break
         case "details": detailsShown = !detailsShown; break
-        case "showAll": dir.chips = "[]"; break
         case "signIn":
             pageStack.push(Qt.resolvedUrl("../../pages/LocationSettingsPage.qml"), { "locationId": uri.split("/")[2] })
             break
@@ -444,15 +419,6 @@ Item {
                 actionText: qsTrId("lautta-dir-retry")
                 onAction: dir.refresh()
             }
-
-            InfoBanner {
-                visible: dir.count > 0 && dir.chips !== "[]" && dir.chips.length > 0
-                height: visible ? implicitHeight : 0
-                //% "Only some types are shown"
-                text: qsTrId("lautta-dir-chips-active")
-                actionText: qsTrId("lautta-dir-show-all")
-                onAction: dir.chips = "[]"
-            }
         }
     }
 
@@ -479,7 +445,7 @@ Item {
                 }
             }
 
-            contentHeight: view.compact ? Theme.itemSizeSmall : Theme.itemSizeMedium
+            contentHeight: Theme.itemSizeMedium
             menu: view.selecting || model.inaccessible ? null : contextMenu
             enabled: !model.inaccessible
             opacity: model.inaccessible ? Theme.opacityLow : 1
@@ -505,7 +471,7 @@ Item {
 
                 x: Theme.horizontalPageMargin
                 anchors.verticalCenter: parent.verticalCenter
-                size: view.compact ? Theme.iconSizeSmall + Theme.paddingSmall : Theme.iconSizeMedium
+                size: Theme.iconSizeMedium
                 category: model.category
                 isDir: model.isDir
                 isSymlink: model.isSymlink
@@ -543,7 +509,7 @@ Item {
                         width: parent.width - (lossyBadge.visible ? lossyBadge.width + parent.spacing : 0)
                         text: model.name
                         truncationMode: TruncationMode.Fade
-                        font.pixelSize: view.compact ? Theme.fontSizeSmall : Theme.fontSizeMedium
+                        font.pixelSize: Theme.fontSizeMedium
                         color: item.highlighted || model.selected ? Theme.highlightColor : Theme.primaryColor
                     }
                     Rectangle {

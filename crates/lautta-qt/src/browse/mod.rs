@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! browse area facades (doc/QML-API.md): the Browse page's locations, the
-//! `Bridge` singleton, favourites, tags, recents and per-location settings.
+//! `Bridge` singleton, favourites, recents and per-location settings.
 //! Logic lives in `lautta_core::app_browse`; this layer maps it to QML.
 
 mod bridge;
@@ -9,7 +9,6 @@ mod folderinfo;
 mod locations;
 mod prefs;
 mod recents;
-mod tags;
 
 use cpp::cpp;
 use qmetaobject::prelude::*;
@@ -17,12 +16,11 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 use tokio::sync::watch;
 
-/// A model cell; QML sees plain strings, numbers and booleans.
+/// A model cell; QML sees plain strings and numbers.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Cell {
     Str(String),
     Int(i64),
-    Bool(bool),
 }
 
 impl Cell {
@@ -34,7 +32,6 @@ impl Cell {
         match self {
             Cell::Str(s) => QVariant::from(QString::from(s.as_str())),
             Cell::Int(i) => QVariant::from(*i),
-            Cell::Bool(b) => QVariant::from(*b),
         }
     }
 }
@@ -106,7 +103,7 @@ fn store_channel() -> &'static watch::Sender<u64> {
     STORE.get_or_init(|| watch::channel(0).0)
 }
 
-/// Tells the models of this area that favourites, tags or recents changed
+/// Tells the models of this area that favourites or recents changed
 /// (the stores have no change notification of their own).
 pub(crate) fn store_changed() {
     store_channel().send_modify(|g| *g += 1);
@@ -132,8 +129,6 @@ pub fn register() {
         0,
         &crate::cstr("FavouritesModel"),
     );
-    qmetaobject::qml_register_type::<tags::TagsModel>(&uri, 1, 0, &crate::cstr("TagsModel"));
-    qmetaobject::qml_register_type::<tags::TaggedItemsModel>(&uri, 1, 0, &crate::cstr("TaggedItemsModel"));
     qmetaobject::qml_register_type::<recents::RecentsModel>(&uri, 1, 0, &crate::cstr("RecentsModel"));
     qmetaobject::qml_register_type::<folderinfo::FolderInfo>(&uri, 1, 0, &crate::cstr("FolderInfo"));
     qmetaobject::qml_register_type::<prefs::LocationPrefsModel>(
@@ -157,12 +152,11 @@ mod tests {
 
     #[test]
     fn cells_become_plain_values() {
-        let rows = vec![vec![Cell::s("x"), Cell::Int(7), Cell::Bool(true)]];
+        let rows = vec![vec![Cell::s("x"), Cell::Int(7)]];
         assert_eq!(cell_data(&rows, 0, FIRST_ROLE).to_qstring().to_string(), "x");
         assert_eq!(cell_data(&rows, 0, FIRST_ROLE + 1).to_int(), 7);
-        assert!(cell_data(&rows, 0, FIRST_ROLE + 2).to_bool());
         assert!(!cell_data(&rows, 1, FIRST_ROLE).is_valid());
-        assert!(!cell_data(&rows, 0, FIRST_ROLE + 3).is_valid());
+        assert!(!cell_data(&rows, 0, FIRST_ROLE + 2).is_valid());
         assert!(!cell_data(&rows, -1, FIRST_ROLE).is_valid());
         assert!(!cell_data(&rows, 0, 3).is_valid());
     }
