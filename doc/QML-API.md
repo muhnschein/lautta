@@ -71,7 +71,7 @@ Methods:
 
 Each area owns its types and pages. Names are fixed here so areas can use each other.
 
-### Browse (boards: Main, BrowsePulley, BrowseStandalone, BrowseServerMenu, BrowseVolume, ConnectServer, ServerQuestion, ServerAdhocMenu, FavouriteEdit, Recents, RecentsPulley, RecentsFilter, StateReconnecting, StateIdentity, LocationSettings, Covers)
+### Browse (boards: Main, BrowsePulley, BrowseStandalone, BrowseServerMenu, BrowseVolume, BrowseFavouriteMenu, ConnectServer, ServerQuestion, ServerQuestionSignIn, ServerQuestionInsecure, ServerAdhocMenu, FavouriteEdit, Recents, RecentsPulley, RecentsFilter, StateReconnecting, StateIdentity, LocationSettings, Covers)
 
 - `LocationsModel` — sections `favourites`, `device`, `android`, `volumes`, `servers`,
   `nearby` (roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
@@ -87,7 +87,7 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `dialogs/FavouriteDialog.qml { uri, favouriteId }`,
   `pages/LocationSettingsPage.qml { locationId }`, `cover/CoverPage.qml`.
 
-### Directory (boards: Directory, DirectoryPulley, DirectoryContext, DirectorySelect, DirectorySelectPulley, DirectoryGrid, DirectoryLandscape, PathMenu, DirectoryRemorse, ImageDeleteRemote, ViewOptions, NewItem, Rename, FolderPicker, FolderPickerPulley, StateEmpty, StateNoAccess, StateOffline, StateError, StateLarge)
+### Directory (boards: Directory, DirectoryPulley, DirectoryContext, DirectorySelect, DirectorySelectPulley, DirectoryGrid, DirectoryLandscape, PathMenu, DirectoryRemorse, ImageDeleteRemote, ViewOptions, NewItem, Rename, FolderPicker, FolderPickerPulley, StateEmpty, StateNoAccess, StateOffline, StateError, StateLarge, StartError)
 
 - `DirectoryModel { uri }` — roles per BRW-1 (`name`, `nameIsLossy`, `uri`, `isDir`,
   `isSymlink`, `size`, `modified`, `created`, `mode`, `owner`, `group`, `hidden`,
@@ -107,7 +107,7 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   short list; the order is fixed in `components/directory/ContextActions.js`, filtered by
   capabilities.
 
-### Operations (boards: PlanSummary, Conflict, Info, Compress, Extract, RecentlyDeleted, RecentlyDeletedEmpty, ShareTarget, ArchiveView (open as location))
+### Operations (boards: PlanSummary, Conflict, Info, Compress, Extract, RecentlyDeleted, RecentlyDeletedPulley, RecentlyDeletedEmpty, RecentlyDeletedPlaceholder, ShareTarget, ArchiveView (open as location))
 
 - `Operations` singleton: `copyTo(uris, destUri)`, `moveTo(uris, destUri)`,
   `remove(uris)` (after remorse; signal `removed(trashedCount, transferId)`),
@@ -124,7 +124,7 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `dialogs/ExtractDialog.qml { archiveUri }`, `pages/RecentlyDeletedPage.qml`,
   `pages/ShareTargetPage.qml { resources }` (Sailfish.Share `ShareProvider`, INT-1).
 
-### Transfers (boards: Transfers, TransfersPulley, TransferDetails, TransferDetailsPulley, TransfersRestored, Notifications, Covers (transfer cover))
+### Transfers (boards: Transfers, TransfersPulley, TransferDetails, TransferDetailsPulley, TransfersRestored, TransfersContext, TransfersEmpty, Notifications, Covers (transfer cover))
 
 - `Transfers` singleton: `activeCount`, `busy` (drives `KeepAlive`, XFR-5),
   `bytesDone`, `bytesTotal`, `rate`, `eta`, `pendingAtStart`, `pauseAll()`, `resumeAll()`,
@@ -140,7 +140,7 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   (Nemo.Notifications, INT-2), cover content for transfers inside `cover/CoverPage.qml`
   (browse owns the file; transfers provides `cover/TransferCover.qml`).
 
-### Viewers (boards: ImageViewer, ImageExif, TextViewer, TextViewerPulley, Markdown, VideoPlayer, AudioPlayer, OpenRemote)
+### Viewers (boards: ImageViewer, ImageExif, ImageMore, TextViewer, TextViewerPulley, TextViewerTruncated, Markdown, MarkdownPulley, VideoPlayer, AudioPlayer, OpenRemote)
 
 - `TextDocument { uri }` (text, truncated, validUtf8, size; read-only),
   `MarkdownDocument { uri }` (html), `ExifModel { uri }`, `MediaSource { uri }` (QIODevice for QtMultimedia, PRV-8),
