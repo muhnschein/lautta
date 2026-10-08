@@ -52,9 +52,9 @@ QtObject {
         check(items.tagId === 3, "tag id is set")
 
         check(recents.count === 0 && !recents.enabled && !recents.loaded, "recents start empty")
-        recents.kindFilter = "edited"
+        recents.kindFilter = "previewed"
         recents.text = "notes"
-        check(recents.kindFilter === "edited" && recents.text === "notes", "recents filter is kept")
+        check(recents.kindFilter === "previewed" && recents.text === "notes", "recents filter is kept")
 
         check(prefs.locationName === "" && prefs.bulkLanes === 0, "prefs start empty")
         prefs.locationId = "user-documents"

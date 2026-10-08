@@ -1,16 +1,13 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The viewers' core actions end to end: text load/save with the EDT-2
-//! conflict check, Markdown, EXIF, the folder's images, remote
-//! thumbnails (PRV-2/3), playback copies and Recents (ORG-2).
+//! The viewers' core actions end to end: text, Markdown, EXIF, the folder's
+//! images, remote thumbnails (PRV-2/3), playback copies and Recents (ORG-2).
 
 use lautta_core::app::Core;
-use lautta_core::app_viewers::{SaveMode, SaveOutcome};
-use lautta_core::entry::Capabilities;
 use lautta_core::locations::{Location, LocationKind, LocationRegistry};
 use lautta_core::org::recents::{RecentKind, RecentsFilter};
 use lautta_core::paths::AppPaths;
 use lautta_core::provider::memory::MemoryProvider;
-use lautta_core::{Error, ErrorKind, Uri};
+use lautta_core::{ErrorKind, Uri};
 use std::sync::Arc;
 
 struct Home {
@@ -77,174 +74,28 @@ fn exif_jpeg(orientation: u16) -> Vec<u8> {
 }
 
 #[tokio::test]
-async fn local_text_round_trip_keeps_line_endings() {
+async fn local_text_is_loaded_with_lf_breaks() {
     let h = home().await;
-    let path = h.root.join("Documents/notes.txt");
-    std::fs::write(&path, b"one\r\ntwo\r\n").unwrap();
-    let u = uri("lautta://user-documents/notes.txt");
-    let loaded = h.core.load_text(&u).await.unwrap();
+    std::fs::write(h.root.join("Documents/notes.txt"), b"one\r\ntwo\r\n").unwrap();
+    let loaded = h
+        .core
+        .load_text(&uri("lautta://user-documents/notes.txt"))
+        .await
+        .unwrap();
     assert_eq!(loaded.doc.text, "one\ntwo");
-    assert!(loaded.editable());
     assert_eq!(loaded.size, Some(10));
-
-    let out = h
-        .core
-        .save_text(
-            &u,
-            "one\ntwo\nthree",
-            &loaded.doc.meta,
-            SaveMode::Checked(loaded.stamp.clone()),
-        )
-        .await
-        .unwrap();
-    assert!(matches!(out, SaveOutcome::Saved { .. }));
-    assert_eq!(std::fs::read(&path).unwrap(), b"one\r\ntwo\r\nthree\r\n");
-    let names: Vec<_> = std::fs::read_dir(h.root.join("Documents"))
-        .unwrap()
-        .map(|e| e.unwrap().file_name())
-        .collect();
-    assert_eq!(names.len(), 1, "no temporary file stays: {names:?}");
-    let recents = h.core.recents.list(&RecentsFilter::default()).unwrap();
-    assert_eq!(recents[0].kind, RecentKind::Edited, "ORG-2");
 }
 
 #[tokio::test]
-async fn local_save_keeps_the_mode() {
-    use std::os::unix::fs::PermissionsExt;
+async fn large_and_binary_files_are_flagged() {
     let h = home().await;
-    let path = h.root.join("Documents/run.sh");
-    std::fs::write(&path, b"echo\n").unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o750)).unwrap();
-    let u = uri("lautta://user-documents/run.sh");
-    let l = h.core.load_text(&u).await.unwrap();
-    h.core
-        .save_text(&u, "echo hi", &l.doc.meta, SaveMode::Replace)
-        .await
-        .unwrap();
-    let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
-    assert_eq!(mode, 0o750);
-}
-
-#[tokio::test]
-async fn a_changed_file_is_a_conflict_and_nothing_is_written() {
-    let h = home().await;
-    let path = h.root.join("Documents/a.txt");
-    std::fs::write(&path, b"mine\n").unwrap();
-    let u = uri("lautta://user-documents/a.txt");
-    let l = h.core.load_text(&u).await.unwrap();
-    std::fs::write(&path, b"someone else wrote a longer text\n").unwrap();
-
-    let out = h
-        .core
-        .save_text(&u, "edited", &l.doc.meta, SaveMode::Checked(l.stamp.clone()))
-        .await
-        .unwrap();
-    let SaveOutcome::Conflict(c) = out else {
-        panic!("expected a conflict")
-    };
-    assert!(!c.deleted);
-    assert_eq!(c.size, Some(33));
-    assert_eq!(
-        std::fs::read(&path).unwrap(),
-        b"someone else wrote a longer text\n"
-    );
-
-    // Save mine as copy: next to the original under a free name.
-    let SaveOutcome::Saved { uri: copy, .. } = h
-        .core
-        .save_text(&u, "edited", &l.doc.meta, SaveMode::AsCopy)
-        .await
-        .unwrap()
-    else {
-        panic!("copy not saved")
-    };
-    assert_eq!(copy, uri("lautta://user-documents/a%202.txt"));
-    assert_eq!(
-        std::fs::read(h.root.join("Documents/a 2.txt")).unwrap(),
-        b"edited\n"
-    );
-
-    // Upload mine and replace.
-    h.core
-        .save_text(&u, "final", &l.doc.meta, SaveMode::Replace)
-        .await
-        .unwrap();
-    assert_eq!(std::fs::read(&path).unwrap(), b"final\n");
-}
-
-#[tokio::test]
-async fn a_deleted_file_is_a_conflict_too() {
-    let h = home().await;
-    let path = h.root.join("Documents/gone.txt");
-    std::fs::write(&path, b"x").unwrap();
-    let u = uri("lautta://user-documents/gone.txt");
-    let l = h.core.load_text(&u).await.unwrap();
-    std::fs::remove_file(&path).unwrap();
-    let out = h
-        .core
-        .save_text(&u, "y", &l.doc.meta, SaveMode::Checked(l.stamp))
-        .await
-        .unwrap();
-    assert!(matches!(out, SaveOutcome::Conflict(c) if c.deleted));
-    assert!(!path.exists());
-}
-
-#[tokio::test]
-async fn remote_text_saves_through_a_temporary_name() {
-    let h = home().await;
-    h.nas.add_file("docs/n.md", b"# Title\n", 1_000);
-    let u = uri("lautta://nv-nas/docs/n.md");
-    let l = h.core.load_text(&u).await.unwrap();
-    assert!(l.writable && l.editable());
-    let out = h
-        .core
-        .save_text(
-            &u,
-            "# Title\nmore",
-            &l.doc.meta,
-            SaveMode::Checked(l.stamp.clone()),
-        )
-        .await
-        .unwrap();
-    assert!(matches!(out, SaveOutcome::Saved { .. }));
-    assert_eq!(h.nas.read_file("docs/n.md").unwrap(), b"# Title\nmore\n");
-    assert!(!h.nas.exists("docs/.n.md.lautta-save"), "temporary name is gone");
-
-    // A failing upload leaves the original untouched and no temporary file.
-    h.nas.fail_next(
-        "upload_from",
-        "docs/.n.md.lautta-save",
-        Error::new(ErrorKind::ConnectionLost, "gone"),
-    );
-    let l = h.core.load_text(&u).await.unwrap();
-    let err = h
-        .core
-        .save_text(&u, "lost", &l.doc.meta, SaveMode::Checked(l.stamp))
-        .await
-        .unwrap_err();
-    assert_eq!(err.kind, ErrorKind::ConnectionLost);
-    assert_eq!(h.nas.read_file("docs/n.md").unwrap(), b"# Title\nmore\n");
-    assert!(!h.nas.exists("docs/.n.md.lautta-save"));
-}
-
-#[tokio::test]
-async fn read_only_locations_and_large_files_are_not_editable() {
-    let h = home().await;
-    let ro = MemoryProvider::new(Capabilities::default());
-    ro.add_file("a.txt", b"hi", 0);
-    let loc = Location::remote("nv-ro", LocationKind::AdHoc, "RO", None);
-    h.core.locations.register(loc, Arc::new(ro));
-    let l = h.core.load_text(&uri("lautta://nv-ro/a.txt")).await.unwrap();
-    assert!(!l.writable && !l.editable());
-
     h.nas.add_file("big.txt", &vec![b'a'; 1024 * 1024 + 10], 0);
     let l = h.core.load_text(&uri("lautta://nv-nas/big.txt")).await.unwrap();
     assert!(l.doc.truncated, "1 MiB notice (PRV-4)");
-    assert!(!l.editable());
 
     h.nas.add_file("bin.dat", &[0xff, 0xfe, 0x00, 0x80], 0);
     let l = h.core.load_text(&uri("lautta://nv-nas/bin.dat")).await.unwrap();
-    assert!(!l.doc.valid_utf8 && !l.editable());
+    assert!(!l.doc.valid_utf8);
 
     let err = h.core.load_text(&uri("lautta://nv-nas/")).await.unwrap_err();
     assert_eq!(err.kind, ErrorKind::IsADirectory);

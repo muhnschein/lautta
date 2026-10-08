@@ -498,14 +498,6 @@
       "x": 1920,
       "y": 14440
     },
-    "TextEditor.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Text editor",
-      "w": 400,
-      "x": 1440,
-      "y": 8200
-    },
     "TextViewer.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -717,7 +709,6 @@
     "ImageViewer.dc.html",
     "ImageExif.dc.html",
     "TextViewer.dc.html",
-    "TextEditor.dc.html",
     "Markdown.dc.html",
     "VideoPlayer.dc.html",
     "AudioPlayer.dc.html",

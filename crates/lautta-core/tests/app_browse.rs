@@ -161,7 +161,7 @@ async fn recents_rows_say_where_and_when() {
     let f = uri("lautta://user-documents/Uni/notes.txt");
     e.core
         .recents
-        .record(&f, "notes.txt", RecentKind::Edited)
+        .record(&f, "notes.txt", RecentKind::Previewed)
         .unwrap();
     e.core
         .recents
@@ -174,7 +174,7 @@ async fn recents_rows_say_where_and_when() {
     let rows = e.core.recent_rows(&RecentsFilter::default()).unwrap();
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[1].place, "Documents › Uni");
-    assert_eq!((rows[1].kind, rows[1].day), ("edited", "today"));
+    assert_eq!((rows[1].kind, rows[1].day), ("previewed", "today"));
     assert_eq!(rows[0].place, "Documents", "transfers name the location");
     let only = RecentsFilter {
         text: Some("NOTES".into()),

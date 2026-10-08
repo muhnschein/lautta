@@ -61,9 +61,6 @@ function text(id) {
     case "favourite":
         //% "Favourite"
         return qsTrId("lautta-dir-act-favourite")
-    case "edit":
-        //% "Edit"
-        return qsTrId("lautta-dir-act-edit")
     case "open_remote":
         //% "Open copy"
         return qsTrId("lautta-dir-act-open-remote")
@@ -90,7 +87,6 @@ function applicable(id, ctx) {
     case "extract": return ctx.category === "archive"
     case "tags": return true
     case "favourite": return ctx.isDir
-    case "edit": return ctx.writable && (ctx.category === "text" || ctx.category === "code" || ctx.category === "markdown")
     case "open_remote": return file && !ctx.isLocal
     }
     return false
@@ -98,7 +94,7 @@ function applicable(id, ctx) {
 
 // The context menu's actions in display order.
 var order = ["open_with", "share", "copy", "cut", "rename", "delete", "copy_to", "move_to",
-             "download", "upload_to", "info", "compress", "extract", "tags", "favourite", "edit", "open_remote"]
+             "download", "upload_to", "info", "compress", "extract", "tags", "favourite", "open_remote"]
 
 // { row: [{ id, icon, text }], list: [{ id, text }] } of the actions that
 // apply, in `order`.

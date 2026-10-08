@@ -180,7 +180,6 @@ Item {
         case "extract": pageStack.push(Qt.resolvedUrl("../../dialogs/ExtractDialog.qml"), { "archiveUri": uris[0] }); break
         case "tags": pageStack.push(Qt.resolvedUrl("../../dialogs/TagAssignDialog.qml"), { "uris": JSON.stringify(uris) }); break
         case "favourite": pageStack.push(Qt.resolvedUrl("../../dialogs/FavouriteDialog.qml"), { "uri": uris[0], "favouriteId": "" }); break
-        case "edit": pageStack.push(Qt.resolvedUrl("../../viewers/TextEditor.qml"), { "uri": uris[0] }); break
         case "open_remote": pageStack.push(Qt.resolvedUrl("../../dialogs/OpenRemoteDialog.qml"), { "uri": uris[0] }); break
         }
     }

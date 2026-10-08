@@ -112,10 +112,6 @@ function recentKindLine(kind, place) {
         //% "Previewed"
         what = qsTrId("lautta-recents-previewed")
         break
-    case "edited":
-        //% "Edited"
-        what = qsTrId("lautta-recents-edited")
-        break
     case "transferred":
         if (place.length > 0)
             //% "Transferred to %1"
@@ -155,9 +151,6 @@ function recentFilterTitle(kind) {
     case "previewed":
         //% "Previewed"
         return qsTrId("lautta-recents-previewed")
-    case "edited":
-        //% "Edited"
-        return qsTrId("lautta-recents-edited")
     case "transferred":
         //% "Transferred"
         return qsTrId("lautta-recents-transferred")

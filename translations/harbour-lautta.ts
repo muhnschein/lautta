@@ -1547,34 +1547,6 @@
         <source>More actions</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-viewers-conflict-continue">
-        <source>Continue</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-conflict-deleted">
-        <source>%1 was deleted while you were editing it.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-conflict-changed">
-        <source>%1 changed while you were editing it.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-conflict-what">
-        <source>What to do</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-conflict-replace">
-        <source>Upload mine and replace</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-conflict-copy">
-        <source>Save mine as copy</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-conflict-discard">
-        <source>Discard mine</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-viewers-orient-180">
         <source>Rotated 180° (applied)</source>
         <translation type="unfinished"></translation>
@@ -1589,26 +1561,6 @@
     </message>
     <message id="lautta-viewers-orient-mirrored">
         <source>Mirrored (applied)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-eol-lf">
-        <source>LF</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-eol-crlf">
-        <source>CRLF</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-eol-cr">
-        <source>CR</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-eol-mixed">
-        <source>mixed line endings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-eol-none">
-        <source>no line breaks</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-image-error">
@@ -1667,52 +1619,12 @@
         <source>Getting the file before playing</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-viewers-save">
-        <source>Save</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-ends-newline">
-        <source>ends with newline</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-no-newline">
-        <source>no final newline</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-saving-uploads">
-        <source>saving uploads to %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-cant-edit">
-        <source>Can&apos;t edit this file</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-cant-edit-readonly">
-        <source>You can&apos;t change files here.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-cant-edit-large">
-        <source>It is larger than 1 MiB.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-cant-edit-binary">
-        <source>It isn&apos;t valid UTF-8 text.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-saved">
-        <source>Saved</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-viewers-unwrap">
         <source>Don&apos;t wrap lines</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-wrap">
         <source>Wrap lines</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-edit">
-        <source>Edit</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-read-only">
@@ -2279,10 +2191,6 @@
     </message>
     <message id="lautta-recents-previewed">
         <source>Previewed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-edited">
-        <source>Edited</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-recents-transferred-to">
@@ -2899,10 +2807,6 @@
     </message>
     <message id="lautta-dir-act-favourite">
         <source>Favourite</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-act-edit">
-        <source>Edit</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-act-open-remote">

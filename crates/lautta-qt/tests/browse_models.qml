@@ -217,7 +217,7 @@ Item {
         step("recents come newest first with places",
              function() {
                  FakeWorld.record(a, "a.txt", "opened")
-                 FakeWorld.record(docs + "c.txt", "c.txt", "edited")
+                 FakeWorld.record(docs + "c.txt", "c.txt", "previewed")
                  FakeWorld.record(docs + "d.zip", "d.zip", "transferred")
                  recents.reload()
              },
@@ -227,7 +227,7 @@ Item {
                         && recentRows.itemAt(0).rday === "today"
              })
         step("filter recents by kind",
-             function() { recents.kindFilter = "edited" },
+             function() { recents.kindFilter = "previewed" },
              function() { return recents.count === 1 && recentRows.itemAt(0).rname === "c.txt" })
         step("filter recents by text",
              function() { recents.kindFilter = ""; recents.text = "A.T" },

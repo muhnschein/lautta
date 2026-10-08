@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Recents (ORG-2): files opened, previewed, edited or transferred, newest
+// Recents (ORG-2): files opened, previewed or transferred, newest
 // first. Filterable by kind, clearable, and can be switched off.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -55,7 +55,7 @@ Page {
                 //% "Show"
                 label: qsTrId("lautta-recents-show")
                 currentIndex: kinds.indexOf(recents.kindFilter)
-                readonly property var kinds: ["", "opened", "previewed", "edited", "transferred"]
+                readonly property var kinds: ["", "opened", "previewed", "transferred"]
 
                 menu: ContextMenu {
                     Repeater {
