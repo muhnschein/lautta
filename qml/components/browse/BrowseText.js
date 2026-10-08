@@ -23,9 +23,6 @@ function sectionTitle(section) {
     case "nearby":
         //% "Nearby"
         return qsTrId("lautta-browse-section-nearby")
-    case "tags":
-        //% "Tags"
-        return qsTrId("lautta-browse-section-tags")
     default:
         return ""
     }
@@ -160,7 +157,7 @@ function recentFilterTitle(kind) {
     }
 }
 
-// Colours offered for favourites and tags.
+// Colours offered for favourites.
 var colours = ["#e7a33c", "#7ec97a", "#e5604f", "#4fa3e5", "#9bd26a", "#b57edc", "#e57fb0", "#8a9aa6"]
 
 function colourName(colour) {

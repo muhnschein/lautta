@@ -344,16 +344,12 @@ async fn info_and_links() {
     let h = home().await;
     write(&h.root.join("Documents/doc.txt"), b"abc");
     let u = uri("lautta://user-documents/doc.txt");
-    let tag = h.core.tags.create("Work", "#e5604f").unwrap();
-    h.core.tags.assign(tag.id, &[u.clone()]).unwrap();
 
     let info = h.core.info(&u).await.unwrap();
     assert_eq!(info.name, "doc.txt");
     assert_eq!(info.size, Some(3));
     assert_eq!(info.category, "text");
     assert_eq!(info.folder_name, "Documents");
-    assert_eq!(info.tags.len(), 1);
-    assert_eq!(info.tags[0].name, "Work");
     assert!(info.mode_text.len() == 9 && info.mode.is_some());
     assert!(info.can_symlink);
     assert!(info.free_bytes.is_some());

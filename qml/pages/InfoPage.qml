@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Info of one file or folder (OPS-12): details, tags (ORG-3), favourite,
-// file system and links.
+// Info of one file or folder (OPS-12): details, favourite, file system and
+// links.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -15,7 +15,6 @@ Page {
     property string uri
 
     readonly property var info: Json.value(infoModel.infoJson, {})
-    readonly property var tags: Json.value(infoModel.tagsJson, [])
 
     allowedOrientations: Orientation.All
 
@@ -159,65 +158,6 @@ Page {
                 //% "Owner"
                 label: qsTrId("lautta-info-owner")
                 value: page.info.owner || ""
-            }
-
-            SectionHeader {
-                //% "Tags"
-                text: qsTrId("lautta-info-tags")
-            }
-            Flow {
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                spacing: Theme.paddingMedium
-                layoutDirection: Qt.RightToLeft
-
-                BackgroundItem {
-                    width: addLabel.width + Theme.paddingLarge
-                    height: Theme.itemSizeExtraSmall
-                    onClicked: {
-                        var dialog = pageStack.push(Qt.resolvedUrl("../dialogs/TagAssignDialog.qml"), {
-                            "uris": [page.uri]
-                        })
-                        dialog.accepted.connect(function() { infoModel.reload() })
-                    }
-
-                    Label {
-                        id: addLabel
-                        anchors.centerIn: parent
-                        color: Theme.highlightColor
-                        font.pixelSize: Theme.fontSizeSmall
-                        //% "+ Add"
-                        text: qsTrId("lautta-info-tag-add")
-                    }
-                }
-                Repeater {
-                    model: page.tags
-
-                    Rectangle {
-                        width: tagRow.width + Theme.paddingLarge
-                        height: Theme.itemSizeExtraSmall * 0.7
-                        radius: height / 2
-                        color: Theme.rgba(Theme.primaryColor, Theme.opacityFaint)
-
-                        Row {
-                            id: tagRow
-                            anchors.centerIn: parent
-                            spacing: Theme.paddingSmall
-
-                            Rectangle {
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: Theme.paddingMedium
-                                height: width
-                                radius: width / 2
-                                color: modelData.colour
-                            }
-                            Label {
-                                text: modelData.name
-                                font.pixelSize: Theme.fontSizeSmall
-                            }
-                        }
-                    }
-                }
             }
 
             SectionHeader {

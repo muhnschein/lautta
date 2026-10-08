@@ -275,14 +275,7 @@ pub fn archive_folder_name(name: &str) -> String {
 
 // ------------------------------------------------------------ info
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct TagInfo {
-    pub id: i64,
-    pub name: String,
-    pub colour: String,
-}
-
-/// Everything the Info page shows about one item (OPS-12, ORG-3).
+/// Everything the Info page shows about one item (OPS-12).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InfoData {
@@ -312,7 +305,6 @@ pub struct InfoData {
     pub can_symlink: bool,
     pub can_hardlink: bool,
     pub can_set_mtime: bool,
-    pub tags: Vec<TagInfo>,
 }
 
 /// `rwxr-xr-x` for the permission bits.
@@ -671,7 +663,7 @@ impl Core {
 
     // -------------------------------------------------------- info
 
-    /// Everything the Info page shows (OPS-12, ORG-3).
+    /// Everything the Info page shows (OPS-12).
     pub async fn info(&self, uri: &Uri) -> Result<InfoData> {
         let provider = self.provider(&uri.location)?;
         let entry = provider.stat(&uri.path, false, Lane::Interactive).await?;
@@ -688,16 +680,6 @@ impl Core {
             None
         };
         let parent = uri.parent();
-        let tags = self
-            .tags
-            .tags_for(uri)?
-            .into_iter()
-            .map(|t| TagInfo {
-                id: t.id,
-                name: t.name,
-                colour: t.colour,
-            })
-            .collect();
         let mode = entry.mode.map(|m| m & 0o7777);
         Ok(InfoData {
             name: if uri.path.is_root() {
@@ -733,7 +715,6 @@ impl Core {
             can_symlink: caps.writable() && caps.has(cap::SYMLINKS),
             can_hardlink: caps.writable() && caps.has(cap::HARDLINKS),
             can_set_mtime: caps.writable() && caps.has(cap::SET_MTIME),
-            tags,
         })
     }
 

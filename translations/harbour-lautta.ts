@@ -850,7 +850,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-clear-data-hint">
-        <source>Removes queue, history, tags and favourites</source>
+        <source>Removes queue, history and favourites</source>
+        <oldsource>Removes queue, history, tags and favourites</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-about">
@@ -1201,14 +1202,6 @@
     </message>
     <message id="lautta-info-owner">
         <source>Owner</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-tags">
-        <source>Tags</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-tag-add">
-        <source>+ Add</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-info-favourite">
@@ -2011,10 +2004,6 @@
         <source>Nearby</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-browse-section-tags">
-        <source>Tags</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-browse-sync-mirror-lr">
         <source>mirror left to right</source>
         <translation type="unfinished"></translation>
@@ -2141,26 +2130,6 @@
     </message>
     <message id="lautta-attention-update">
         <source>Update sign-in</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-tag-colour-accept">
-        <source>Change</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-tag-colour-title">
-        <source>Change colour</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-tag-rename-accept">
-        <source>Rename</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-tag-rename-title">
-        <source>Rename tag</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-tags-name">
-        <source>Name</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-cover-items" numerus="yes">
@@ -2307,28 +2276,6 @@
     </message>
     <message id="lautta-question-problems">
         <source>Problems</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-tags-done">
-        <source>Done</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-tags-for-items" numerus="yes">
-        <source>Tags for %n items</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message id="lautta-tags-partial">
-        <source>%1 of %2 items</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-tags-new">
-        <source>New tag</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-tags-note">
-        <source>Tags are kept by Lautta and follow moves made in Lautta.</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-browse-title">
@@ -2561,40 +2508,6 @@
         <source>Pull down to turn them on</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-tag-description" numerus="yes">
-        <source>Tag · %n items</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message id="lautta-tag-missing">
-        <source>Missing</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-tag-delete">
-        <source>Delete tag</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-tag-deleting">
-        <source>Deleting tag</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-tag-change-colour">
-        <source>Change colour</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-tag-rename">
-        <source>Rename tag</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-tag-was-in">
-        <source>Was in %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-tag-missing-hint">
-        <source>Moved or deleted outside Lautta</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-clip-from">
         <source>from %1</source>
         <translation type="unfinished"></translation>
@@ -2669,10 +2582,6 @@
     </message>
     <message id="lautta-dir-act-extract">
         <source>Extract</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-act-tags">
-        <source>Tags</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-act-favourite">
@@ -2899,10 +2808,6 @@
         <source>Share</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-sel-more">
-        <source>More</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-path-copy-address">
         <source>Copy address</source>
         <translation type="unfinished"></translation>
@@ -3061,6 +2966,10 @@
     </message>
     <message id="lautta-dir-opts-thumbnails">
         <source>Thumbnails</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-sel-compress">
+        <source>Compress</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

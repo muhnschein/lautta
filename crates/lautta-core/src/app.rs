@@ -15,7 +15,6 @@ use crate::ops::{OperationKind, Plan};
 use crate::org::favourites::Favourites;
 use crate::org::recents::Recents;
 use crate::org::syncpairs::SyncPairs;
-use crate::org::tags::Tags;
 use crate::paths::AppPaths;
 use crate::provider::archive::{archive_location_id, ArchiveProvider};
 use crate::provider::{list_all, Lane, Provider, ProviderResolver, RenameMode};
@@ -57,7 +56,6 @@ pub struct Core {
     pub dircache: DirCache,
     pub favourites: Favourites,
     pub recents: Recents,
-    pub tags: Tags,
     pub sync_pairs: SyncPairs,
     pub recent_searches: RecentSearches,
     pub location_prefs: LocationPrefsStore,
@@ -163,7 +161,6 @@ impl Core {
             dircache: DirCache::new(db.clone(), DIRCACHE_ENTRIES)?,
             favourites: Favourites::new(db.clone()),
             recents: Recents::new(db.clone()),
-            tags: Tags::new(db.clone()),
             sync_pairs: SyncPairs::new(db.clone()),
             recent_searches: RecentSearches::new(db.clone()),
             location_prefs: LocationPrefsStore::new(db.clone()),
@@ -243,8 +240,8 @@ impl Core {
         Ok(uri)
     }
 
-    /// Renames without replacing (§10 table); tags and favourites follow
-    /// (ORG-3) and the rename can be undone for 10 s (OPS-9).
+    /// Renames without replacing (§10 table); favourites follow and the
+    /// rename can be undone for 10 s (OPS-9).
     pub async fn rename(&self, uri: &Uri, new_name: &[u8]) -> Result<Uri> {
         let parent = uri
             .parent()
@@ -266,7 +263,6 @@ impl Core {
     }
 
     fn after_move(&self, from: &Uri, to: &Uri) {
-        let _ = self.tags.on_moved(from, to);
         let _ = self.favourites.on_moved(from, to);
     }
 

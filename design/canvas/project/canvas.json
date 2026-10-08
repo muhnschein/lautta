@@ -466,30 +466,6 @@
       "x": 2880,
       "y": 3580
     },
-    "TagAssign.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Assign tags",
-      "w": 400,
-      "x": 3840,
-      "y": 4860
-    },
-    "TagPage.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Tag page",
-      "w": 400,
-      "x": 3840,
-      "y": 0
-    },
-    "TagPagePulley.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Tag \u00b7 pulley",
-      "w": 400,
-      "x": 1920,
-      "y": 14440
-    },
     "TextViewer.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -662,7 +638,6 @@
     "Recents.dc.html",
     "ConnectServer.dc.html",
     "ServerQuestion.dc.html",
-    "TagPage.dc.html",
     "FavouriteEdit.dc.html",
     "ShareTarget.dc.html",
     "Directory.dc.html",
@@ -688,7 +663,6 @@
     "Info.dc.html",
     "Compress.dc.html",
     "Extract.dc.html",
-    "TagAssign.dc.html",
     "RecentlyDeleted.dc.html",
     "Transfers.dc.html",
     "TransfersPulley.dc.html",
@@ -716,7 +690,6 @@
     "DirectorySelectPulley.dc.html",
     "RecentsPulley.dc.html",
     "RecentsFilter.dc.html",
-    "TagPagePulley.dc.html",
     "RecentlyDeletedEmpty.dc.html",
     "FolderPickerPulley.dc.html",
     "TransferDetailsPulley.dc.html",

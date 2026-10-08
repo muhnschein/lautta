@@ -117,35 +117,6 @@ async fn volumes_have_space_and_favourites_have_places() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn tags_come_with_counts_and_missing_items() {
-    let e = env(None, &["Documents"]).await;
-    let a = uri("lautta://user-documents/a.txt");
-    let b = uri("lautta://user-documents/b.txt");
-    std::fs::write(e.home.path().join("Documents/a.txt"), "x").unwrap();
-    std::fs::write(e.home.path().join("Documents/b.txt"), "x").unwrap();
-    let work = e.core.tags.create("Work", "#e5604f").unwrap();
-    e.core.tags.create("Empty", "#4fa3e5").unwrap();
-    e.core.tags.assign(work.id, &[a.clone(), b.clone()]).unwrap();
-    // A server that is not there says nothing about its items.
-    let far = uri("lautta://nv-account:5/x.txt");
-    e.core.tags.assign(work.id, std::slice::from_ref(&far)).unwrap();
-    let rows = e.core.browse_rows().await;
-    let tags = of(&rows, "tags");
-    assert_eq!((tags[0].name.as_str(), tags[0].count), ("Work", 3));
-    assert_eq!((tags[1].name.as_str(), tags[1].count), ("Empty", 0));
-
-    std::fs::remove_file(e.home.path().join("Documents/b.txt")).unwrap();
-    assert_eq!(e.core.check_tag_missing().await.unwrap(), 1);
-    let items = e.core.tagged_rows(work.id).unwrap();
-    assert_eq!(items.len(), 3);
-    assert!(!items[0].missing && !items[1].missing);
-    assert_eq!(
-        (items[2].name.as_str(), items[2].place.as_str(), items[2].missing),
-        ("b.txt", "Documents", true)
-    );
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn location_display_names_apply() {
     let e = env(None, &["Documents"]).await;
     let mut prefs = LocationPrefs::new("user-documents");
@@ -347,8 +318,6 @@ async fn a_failed_connect_stores_nothing() {
 fn remember_account(core: &Core, n: i32) -> Uri {
     let u = uri(&format!("lautta://nv-account:{n}/photos"));
     core.favourites.add(&u, "Photos", None).unwrap();
-    let tag = core.tags.create(&format!("t{n}"), "#fff").unwrap();
-    core.tags.assign(tag.id, std::slice::from_ref(&u)).unwrap();
     core.recents.record(&u, "photos", RecentKind::Opened).unwrap();
     core.location_prefs
         .set(&LocationPrefs {
@@ -368,7 +337,6 @@ fn remembered(core: &Core, n: i32) -> bool {
             .unwrap()
             .iter()
             .any(|r| r.uri == u)
-        || !core.tags.tags_for(&u).unwrap().is_empty()
         || core
             .location_prefs
             .get(&format!("nv-account:{n}"))
@@ -432,50 +400,6 @@ async fn accounts_removed_while_the_app_was_closed_are_purged_at_start() {
     eventually("purge", || !remembered(&e.core, 9)).await;
     assert!(remembered(&e.core, 1));
     assert!(e.core.favourites.is_favourite(&adhoc).unwrap());
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn tag_dialog_changes_apply_together() {
-    use lautta_core::app_browse::TagChanges;
-    let e = env(None, &["Documents"]).await;
-    let a = uri("lautta://user-documents/a.txt");
-    let b = uri("lautta://user-documents/b.txt");
-    let work = e.core.tags.create("Work", "#e5604f").unwrap();
-    let old = e.core.tags.create("Old", "#4fa3e5").unwrap();
-    e.core.tags.assign(old.id, &[a.clone(), b.clone()]).unwrap();
-    e.core.tags.assign(work.id, std::slice::from_ref(&a)).unwrap();
-    let both = [a.clone(), b.clone()];
-    assert_eq!(
-        e.core.tag_usage(&both).unwrap(),
-        vec![(work.id, 1), (old.id, 2)],
-        "partly carried tags show a count"
-    );
-    let changes = TagChanges {
-        add: vec![work.id],
-        remove: vec![old.id],
-        new_tag: Some(("Fresh".into(), "#9bd26a".into())),
-    };
-    e.core.apply_tag_changes(&both, &changes).unwrap();
-    let names = |u: &Uri| -> Vec<String> {
-        e.core
-            .tags
-            .tags_for(u)
-            .unwrap()
-            .into_iter()
-            .map(|t| t.name)
-            .collect()
-    };
-    assert_eq!(names(&a), ["Work", "Fresh"]);
-    assert_eq!(names(&b), ["Work", "Fresh"]);
-    // A name that exists changes nothing at all.
-    let clash = TagChanges {
-        remove: vec![work.id],
-        new_tag: Some(("Work".into(), "#000".into())),
-        ..TagChanges::default()
-    };
-    let err = e.core.apply_tag_changes(&both, &clash).unwrap_err();
-    assert_eq!(err.kind, lautta_core::ErrorKind::AlreadyExists);
-    assert_eq!(names(&a), ["Work", "Fresh"]);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

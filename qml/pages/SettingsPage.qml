@@ -393,7 +393,7 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                //% "Removes queue, history, tags and favourites"
+                //% "Removes queue, history and favourites"
                 text: qsTrId("lautta-settings-clear-data-hint")
             }
 

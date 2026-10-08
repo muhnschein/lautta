@@ -24,7 +24,6 @@ ApplicationWindow {
         ListElement { section: "servers"; uri: "lautta://nv-adhoc:1/"; name: "host.example"; kind: "adhoc"; icon: "image://theme/icon-m-file-folder"; status: "ready"; attention: ""; colour: ""; count: -1; itemId: "nv-adhoc:1"; place: ""; provider: "SFTP"; host: "host.example"; free: -1; total: -1; fs: ""; leftUri: ""; rightUri: ""; mode: "" }
         ListElement { section: "servers"; uri: "ftps://ftp.kotisivu.fi/"; name: "ftp.kotisivu.fi"; kind: "adhocRecent"; icon: "image://theme/icon-m-file-folder"; status: "offline"; attention: ""; colour: ""; count: -1; itemId: "nv-adhoc:9"; place: "ftps://ftp.kotisivu.fi/"; provider: "FTPS"; host: ""; free: -1; total: -1; fs: ""; leftUri: ""; rightUri: ""; mode: "" }
         ListElement { section: "nearby"; uri: "sftp://raspberrypi.local/"; name: "raspberrypi"; kind: "nearby"; icon: "image://theme/icon-m-wlan"; status: "ready"; attention: ""; colour: ""; count: -1; itemId: "0"; place: ""; provider: "SFTP"; host: "raspberrypi.local"; free: -1; total: -1; fs: ""; leftUri: ""; rightUri: ""; mode: "" }
-        ListElement { section: "tags"; uri: ""; name: "Work"; kind: "tag"; icon: "image://theme/icon-m-file-folder"; status: "ready"; attention: ""; colour: "#e5604f"; count: 12; itemId: "1"; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: ""; leftUri: ""; rightUri: ""; mode: "" }
             }
         }
     }

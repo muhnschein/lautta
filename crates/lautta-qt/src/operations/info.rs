@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `InfoModel { uri }`: the details of one item and its tags (OPS-12,
-//! ORG-3). The details are one JSON object (`InfoData`, camelCase keys).
+//! `InfoModel { uri }`: the details of one item (OPS-12) as one JSON object
+//! (`InfoData`, camelCase keys).
 
 use super::{error_parts, parse_uri};
 use crate::json::to_json;
@@ -15,7 +15,6 @@ pub struct InfoModel {
     uri: qt_property!(QString; WRITE set_uri NOTIFY uri_changed),
     uri_changed: qt_signal!(),
     infoJson: qt_property!(QString; NOTIFY info_changed),
-    tagsJson: qt_property!(QString; NOTIFY info_changed),
     loaded: qt_property!(bool; NOTIFY info_changed),
     errorKind: qt_property!(QString; NOTIFY info_changed),
     errorMessage: qt_property!(QString; NOTIFY info_changed),
@@ -55,7 +54,6 @@ impl InfoModel {
             match res {
                 Ok(info) => {
                     this.infoJson = QString::from(to_json(&info).as_str());
-                    this.tagsJson = QString::from(to_json(&info.tags).as_str());
                     this.loaded = true;
                     this.errorKind = QString::default();
                     this.errorMessage = QString::default();

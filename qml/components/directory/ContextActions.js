@@ -55,9 +55,6 @@ function text(id) {
     case "extract":
         //% "Extract"
         return qsTrId("lautta-dir-act-extract")
-    case "tags":
-        //% "Tags"
-        return qsTrId("lautta-dir-act-tags")
     case "favourite":
         //% "Favourite"
         return qsTrId("lautta-dir-act-favourite")
@@ -85,7 +82,6 @@ function applicable(id, ctx) {
     case "info": return true
     case "compress": return true
     case "extract": return ctx.category === "archive"
-    case "tags": return true
     case "favourite": return ctx.isDir
     case "open_remote": return file && !ctx.isLocal
     }
@@ -94,7 +90,7 @@ function applicable(id, ctx) {
 
 // The context menu's actions in display order.
 var order = ["open_with", "share", "copy", "cut", "rename", "delete", "copy_to", "move_to",
-             "download", "upload_to", "info", "compress", "extract", "tags", "favourite", "open_remote"]
+             "download", "upload_to", "info", "compress", "extract", "favourite", "open_remote"]
 
 // { row: [{ id, icon, text }], list: [{ id, text }] } of the actions that
 // apply, in `order`.
@@ -111,12 +107,4 @@ function split(ctx) {
             list.push({ "id": id, "text": text(id) })
     }
     return { "row": row, "list": list }
-}
-
-// Actions of the selection panel's "more" row (board DirectorySelect).
-function moreActions() {
-    return [
-        { "id": "compress", "icon": "image://theme/icon-m-file-compressed", "text": text("compress") },
-        { "id": "tags", "icon": "dir-tag", "text": text("tags") }
-    ]
 }

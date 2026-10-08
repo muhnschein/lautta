@@ -28,19 +28,6 @@ const MIGRATIONS: &[&str] = &[
         UNIQUE(uri, kind)
     );
     CREATE INDEX recents_at ON recents(at_ms DESC);
-    CREATE TABLE tags (
-        id INTEGER PRIMARY KEY,
-        name TEXT NOT NULL UNIQUE,
-        colour TEXT NOT NULL,
-        position INTEGER NOT NULL
-    );
-    CREATE TABLE item_tags (
-        tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-        uri TEXT NOT NULL,
-        missing INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (tag_id, uri)
-    );
-    CREATE INDEX item_tags_uri ON item_tags(uri);
     CREATE TABLE transfers (
         id INTEGER PRIMARY KEY,
         kind TEXT NOT NULL,
@@ -222,13 +209,13 @@ mod tests {
             .lock()
             .query_row(
                 "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN \
-                 ('favourites','recents','tags','item_tags','transfers',\
-                 'transfer_items','working_copies','sync_pairs','dircache','trash_items')",
+                 ('favourites','recents','transfers','transfer_items','working_copies',\
+                 'sync_pairs','dircache','trash_items')",
                 [],
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(n, 10);
+        assert_eq!(n, 8);
     }
 
     #[test]
@@ -260,15 +247,20 @@ mod tests {
         let db = Db::open_in_memory().unwrap();
         let c = db.lock();
         c.execute(
-            "INSERT INTO tags(id,name,colour,position) VALUES (1,'Work','#f00',0)",
+            "INSERT INTO transfers(id,kind,title,state,dest_location,dest_uri,position,created_ms) \
+             VALUES (1,'copy','t','queued','x','lautta://x/',0,0)",
             [],
         )
         .unwrap();
-        c.execute("INSERT INTO item_tags(tag_id,uri) VALUES (1,'lautta://x/a')", [])
-            .unwrap();
-        c.execute("DELETE FROM tags WHERE id=1", []).unwrap();
+        c.execute(
+            "INSERT INTO transfer_items(transfer_id,seq,src_uri,dst_uri,kind,state) \
+             VALUES (1,0,'lautta://x/a','lautta://y/a','file','pending')",
+            [],
+        )
+        .unwrap();
+        c.execute("DELETE FROM transfers WHERE id=1", []).unwrap();
         let n: i64 = c
-            .query_row("SELECT count(*) FROM item_tags", [], |r| r.get(0))
+            .query_row("SELECT count(*) FROM transfer_items", [], |r| r.get(0))
             .unwrap();
         assert_eq!(n, 0);
     }

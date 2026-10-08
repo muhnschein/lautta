@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Browse: favourites, the device, volumes, servers, nearby servers and tags
+// Browse: favourites, the device, volumes, servers and nearby servers
 // (SPEC §15.2). Standalone it shows no trace of the bridge (UI-8): the
 // Servers and Nearby sections and the bridge's pulley entries only exist
 // while the bridge is usable.
@@ -55,9 +55,6 @@ Page {
             break
         case "deleted":
             pageStack.push(Qt.resolvedUrl("RecentlyDeletedPage.qml"))
-            break
-        case "tag":
-            pageStack.push(Qt.resolvedUrl("TagPage.qml"), { "tagId": parseInt(row.itemId) })
             break
         case "nearby":
         case "adhocRecent":
@@ -191,9 +188,8 @@ Page {
 
             onClicked: if (!banner) page.openRow(model)
 
-            // Icon, or the colour of a tag.
             HighlightImage {
-                visible: !row.banner && row.kind !== "tag"
+                visible: !row.banner
                 anchors {
                     left: parent.left
                     leftMargin: Theme.horizontalPageMargin
@@ -207,18 +203,6 @@ Page {
                 color: model.colour.length > 0 ? model.colour : Theme.primaryColor
                 highlighted: row.highlighted
                 highlightColor: Theme.highlightColor
-            }
-            Rectangle {
-                visible: row.kind === "tag"
-                anchors {
-                    left: parent.left
-                    leftMargin: Theme.horizontalPageMargin + (Theme.iconSizeMedium - width) / 2
-                    verticalCenter: parent.verticalCenter
-                }
-                width: Theme.iconSizeSmall - Theme.paddingSmall
-                height: width
-                radius: width / 2
-                color: model.colour
             }
 
             Column {

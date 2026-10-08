@@ -217,7 +217,7 @@ mod tests {
     #[test]
     fn keys_tell_rows_apart() {
         let a = Row {
-            kind: "tag",
+            kind: "favourite",
             item_id: "1".into(),
             ..Row::default()
         };
