@@ -18,8 +18,6 @@ pub enum OperationKind {
     Delete,
     Compress,
     Extract,
-    /// Sync run from Compare (SYN-3).
-    Sync,
     /// Write-back of a working copy (EDT-2).
     WriteBack,
 }

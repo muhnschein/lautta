@@ -28,27 +28,6 @@ function sectionTitle(section) {
     }
 }
 
-// "Sync pair · mirror left to right" (SYN-3).
-function syncPairLine(mode) {
-    var what
-    switch (mode) {
-    case "mirror_lr":
-        //% "mirror left to right"
-        what = qsTrId("lautta-browse-sync-mirror-lr")
-        break
-    case "mirror_rl":
-        //% "mirror right to left"
-        what = qsTrId("lautta-browse-sync-mirror-rl")
-        break
-    default:
-        //% "update both ways"
-        what = qsTrId("lautta-browse-sync-both")
-        break
-    }
-    //% "Sync pair · %1"
-    return qsTrId("lautta-browse-sync-pair").arg(what)
-}
-
 // "58.2 GB free of 128 GB · exFAT" (LOC-3); empty when the space is unknown.
 function volumeLine(free, total, fs) {
     if (free < 0 || total < 0)

@@ -72,9 +72,6 @@ function title(r) {
     case "extract":
         //% "Extract %1 to %2"
         return qsTrId("lautta-xfr-title-extract").arg(r.title).arg(r.destName)
-    case "sync":
-        //% "Sync %n item(s) to %1"
-        return qsTrId("lautta-xfr-title-sync", r.itemsTotal).arg(r.destName)
     default:
         //% "Upload %1 to %2"
         return qsTrId("lautta-xfr-title-upload-one").arg(r.title).arg(r.destName)

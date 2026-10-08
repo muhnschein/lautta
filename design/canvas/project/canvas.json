@@ -58,22 +58,6 @@
       "x": 1920,
       "y": 0
     },
-    "CompareResults.dc.html": {
-      "h": 1000,
-      "is_interactive": true,
-      "title": "Compare results / sync",
-      "w": 400,
-      "x": 1440,
-      "y": 9480
-    },
-    "CompareSetup.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Compare folders",
-      "w": 400,
-      "x": 960,
-      "y": 9480
-    },
     "Compress.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -599,7 +583,7 @@
     "r6": {
       "kind": "title1",
       "maxW": 5200,
-      "text": "Search & sync",
+      "text": "Search",
       "w": 240,
       "x": 0,
       "y": 9180
@@ -681,8 +665,6 @@
     "OpenRemote.dc.html",
     "Search.dc.html",
     "SearchFilters.dc.html",
-    "CompareSetup.dc.html",
-    "CompareResults.dc.html",
     "Settings.dc.html",
     "LocationSettings.dc.html",
     "About.dc.html",

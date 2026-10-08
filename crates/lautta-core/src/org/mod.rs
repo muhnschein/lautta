@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Favourites, recents and saved sync pairs (ORG-1, ORG-2, SYN-3). All
+//! Favourites and recents (ORG-1, ORG-2). All
 //! stores wrap [`Db`] and are blocking: call them from `spawn_blocking`
 //! (ARC-6).
 
 pub mod favourites;
 pub mod recents;
-pub mod syncpairs;
 
 use crate::db::Db;
 use crate::error::{Error, ErrorKind, Result};
@@ -15,7 +14,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 pub use favourites::{Favourite, Favourites};
 pub use recents::{Recent, RecentKind, Recents, RecentsFilter};
-pub use syncpairs::{SyncPair, SyncPairSpec, SyncPairs};
 
 pub(crate) fn now_ms() -> i64 {
     match SystemTime::now().duration_since(UNIX_EPOCH) {
@@ -129,7 +127,6 @@ fn select_below(
 pub struct PurgeCounts {
     pub favourites: usize,
     pub recents: usize,
-    pub sync_pairs: usize,
 }
 
 /// Removes everything the app remembers about `location` (SEC-5).
@@ -137,7 +134,6 @@ pub fn purge_location(db: &Db, location: &str) -> Result<PurgeCounts> {
     Ok(PurgeCounts {
         favourites: Favourites::new(db.clone()).remove_location(location)?,
         recents: Recents::new(db.clone()).purge_location(location)?,
-        sync_pairs: SyncPairs::new(db.clone()).remove_location(location)?,
     })
 }
 
@@ -164,23 +160,17 @@ mod tests {
         let rec = Recents::new(db.clone());
         rec.record(&gone, "g", RecentKind::Opened).unwrap();
         rec.record(&kept, "k", RecentKind::Opened).unwrap();
-        let pairs = SyncPairs::new(db.clone());
-        let spec = |l: &Uri, r: &Uri| SyncPairSpec::new("p", l.clone(), r.clone());
-        pairs.add(&spec(&gone, &kept)).unwrap();
-        pairs.add(&spec(&kept, &kept)).unwrap();
 
         let counts = purge_location(&db, "nv-1").unwrap();
         assert_eq!(
             counts,
             PurgeCounts {
                 favourites: 1,
-                recents: 1,
-                sync_pairs: 1
+                recents: 1
             }
         );
         assert_eq!(fav.list().unwrap().len(), 1);
         assert_eq!(rec.list(&RecentsFilter::default()).unwrap().len(), 1);
-        assert_eq!(pairs.list().unwrap().len(), 1);
     }
 
     #[test]

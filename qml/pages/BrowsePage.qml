@@ -46,13 +46,6 @@ Page {
 
     function openRow(row) {
         switch (row.kind) {
-        case "syncpair":
-            pageStack.push(Qt.resolvedUrl("CompareResultsPage.qml"), {
-                               "leftUri": row.leftUri,
-                               "rightUri": row.rightUri,
-                               "pairId": parseInt(row.itemId)
-                           })
-            break
         case "deleted":
             pageStack.push(Qt.resolvedUrl("RecentlyDeletedPage.qml"))
             break
@@ -159,8 +152,6 @@ Page {
                 switch (kind) {
                 case "favourite":
                     return model.place
-                case "syncpair":
-                    return BrowseText.syncPairLine(model.mode)
                 case "volume":
                     return BrowseText.volumeLine(model.free, model.total, model.fs)
                 case "nearby":

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Text helpers of the search and compare pages.
+// Text helpers of the search page.
 .pragma library
 .import Sailfish.Silica 1.0 as Silica
 
@@ -25,9 +25,4 @@ function sizeAndDate(size, modified, isDir) {
     if (modified >= 0)
         parts.push(Silica.Format.formatDate(new Date(modified), Silica.Formatter.DateMedium))
     return parts.join(" · ")
-}
-
-// Sizes in the preview lines, "82 MB".
-function bytes(n) {
-    return Silica.Format.formatFileSize(n)
 }

@@ -75,17 +75,6 @@ const MIGRATIONS: &[&str] = &[
         last_upload_ms INTEGER,
         state TEXT NOT NULL
     );
-    CREATE TABLE sync_pairs (
-        id INTEGER PRIMARY KEY,
-        label TEXT NOT NULL,
-        left_uri TEXT NOT NULL,
-        right_uri TEXT NOT NULL,
-        mode TEXT NOT NULL,
-        excludes TEXT NOT NULL DEFAULT '[]',
-        checksums INTEGER NOT NULL DEFAULT 0,
-        dst_tolerance INTEGER NOT NULL DEFAULT 0,
-        position INTEGER NOT NULL
-    );
     CREATE TABLE dircache (
         uri TEXT PRIMARY KEY,
         location_id TEXT NOT NULL,
@@ -210,12 +199,12 @@ mod tests {
             .query_row(
                 "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN \
                  ('favourites','recents','transfers','transfer_items','working_copies',\
-                 'sync_pairs','dircache','trash_items')",
+                 'dircache','trash_items')",
                 [],
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(n, 8);
+        assert_eq!(n, 7);
     }
 
     #[test]

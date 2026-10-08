@@ -14,7 +14,6 @@ use crate::ops::plan::{PlanOptions, Planner};
 use crate::ops::{OperationKind, Plan};
 use crate::org::favourites::Favourites;
 use crate::org::recents::Recents;
-use crate::org::syncpairs::SyncPairs;
 use crate::paths::AppPaths;
 use crate::provider::archive::{archive_location_id, ArchiveProvider};
 use crate::provider::{list_all, Lane, Provider, ProviderResolver, RenameMode};
@@ -56,7 +55,6 @@ pub struct Core {
     pub dircache: DirCache,
     pub favourites: Favourites,
     pub recents: Recents,
-    pub sync_pairs: SyncPairs,
     pub recent_searches: RecentSearches,
     pub location_prefs: LocationPrefsStore,
     pub working_copies: WorkingCopies,
@@ -161,7 +159,6 @@ impl Core {
             dircache: DirCache::new(db.clone(), DIRCACHE_ENTRIES)?,
             favourites: Favourites::new(db.clone()),
             recents: Recents::new(db.clone()),
-            sync_pairs: SyncPairs::new(db.clone()),
             recent_searches: RecentSearches::new(db.clone()),
             location_prefs: LocationPrefsStore::new(db.clone()),
             working_copies: WorkingCopies::new(db.clone(), paths.clone(), Arc::new(SystemClock)),

@@ -29,8 +29,8 @@ const PLACE_SEPARATOR: &str = " › ";
 pub struct Row {
     /// `favourites`, `device`, `android`, `volumes`, `servers`, `nearby`.
     pub section: &'static str,
-    /// `favourite`, `syncpair`, `folder`, `deleted`, `volume`, `account`,
-    /// `adhoc`, `adhocRecent`, `consent`, `unavailable`, `nearby`.
+    /// `favourite`, `folder`, `deleted`, `volume`, `account`, `adhoc`,
+    /// `adhocRecent`, `consent`, `unavailable`, `nearby`.
     pub kind: &'static str,
     pub uri: String,
     pub name: String,
@@ -42,7 +42,7 @@ pub struct Row {
     pub colour: String,
     /// Items in the folder, `-1` when not shown.
     pub count: i64,
-    /// Favourite, pair or location id; the nearby index.
+    /// Favourite or location id; the nearby index.
     pub item_id: String,
     /// `Location › folder` for favourites, the address for servers.
     pub place: String,
@@ -52,10 +52,6 @@ pub struct Row {
     pub free: i64,
     pub total: i64,
     pub fs: String,
-    pub left_uri: String,
-    pub right_uri: String,
-    /// Sync mode, engineering name.
-    pub mode: String,
 }
 
 impl Row {
@@ -366,16 +362,6 @@ impl Core {
             row.item_id = f.id.to_string();
             rows.push(row);
         }
-        for p in self.sync_pairs.list().unwrap_or_default() {
-            let mut row = Row::new("favourites", "syncpair");
-            row.name = p.spec.label;
-            row.left_uri = p.spec.left.to_string();
-            row.right_uri = p.spec.right.to_string();
-            row.mode = p.spec.mode.as_str().to_owned();
-            row.icon = "image://theme/icon-m-sync".to_owned();
-            row.item_id = p.id.to_string();
-            rows.push(row);
-        }
         rows
     }
 
@@ -582,7 +568,7 @@ impl Core {
     // ---- purge (SEC-5) ------------------------------------------------------
 
     /// Removes everything remembered about a location: favourites, recents,
-    /// sync pairs, preferences and cached listings (SEC-5).
+    /// preferences and cached listings (SEC-5).
     pub fn purge_location_data(&self, location: &str) -> Result<()> {
         org::purge_location(&self.db, location)?;
         self.location_prefs.remove(location)?;
@@ -590,22 +576,15 @@ impl Core {
         Ok(())
     }
 
-    /// Remote account ids that favourites, recents, sync pairs or
-    /// preferences refer to.
+    /// Remote account ids that favourites, recents or preferences refer to.
     pub fn remembered_accounts(&self) -> Result<BTreeSet<String>> {
         let conn = self.db.lock();
         let mut found = BTreeSet::new();
-        for sql in [
-            "SELECT uri FROM favourites",
-            "SELECT left_uri FROM sync_pairs",
-            "SELECT right_uri FROM sync_pairs",
-        ] {
-            let mut stmt = conn.prepare(sql)?;
-            let uris = stmt
-                .query_map([], |r| r.get::<_, String>(0))?
-                .collect::<std::result::Result<Vec<_>, _>>()?;
-            found.extend(uris.iter().filter_map(|u| location_of(u)).map(str::to_owned));
-        }
+        let mut stmt = conn.prepare("SELECT uri FROM favourites")?;
+        let uris = stmt
+            .query_map([], |r| r.get::<_, String>(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        found.extend(uris.iter().filter_map(|u| location_of(u)).map(str::to_owned));
         for sql in [
             "SELECT DISTINCT location_id FROM recents",
             "SELECT location_id FROM location_prefs",

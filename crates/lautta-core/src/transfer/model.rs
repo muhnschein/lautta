@@ -286,7 +286,6 @@ pub fn operation_name(k: OperationKind) -> &'static str {
         OperationKind::Delete => "delete",
         OperationKind::Compress => "compress",
         OperationKind::Extract => "extract",
-        OperationKind::Sync => "sync",
         OperationKind::WriteBack => "writeback",
     }
 }
@@ -297,7 +296,6 @@ pub fn operation_from_name(s: &str) -> OperationKind {
         OperationKind::Delete,
         OperationKind::Compress,
         OperationKind::Extract,
-        OperationKind::Sync,
         OperationKind::WriteBack,
     ]
     .into_iter()
@@ -503,7 +501,6 @@ fn default_title(kind: OperationKind, count: u64) -> String {
         OperationKind::Delete => "Delete",
         OperationKind::Compress => "Compress",
         OperationKind::Extract => "Extract",
-        OperationKind::Sync => "Sync",
         OperationKind::WriteBack => "Save",
     };
     if count == 1 {
@@ -600,7 +597,6 @@ mod tests {
             OperationKind::Delete,
             OperationKind::Compress,
             OperationKind::Extract,
-            OperationKind::Sync,
             OperationKind::WriteBack,
         ] {
             assert_eq!(operation_from_name(operation_name(k)), k);

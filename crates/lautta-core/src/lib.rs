@@ -49,8 +49,7 @@ pub mod compress;
 pub mod preview;
 pub mod thumbs;
 
-// Search, sync, organisation
-pub mod compare;
+// Search, organisation
 pub mod org;
 pub mod search;
 

@@ -97,14 +97,6 @@ async fn volumes_have_space_and_favourites_have_places() {
     assert!(volume[0].total > 0 && volume[0].free >= 0 && volume[0].free <= volume[0].total);
     let uni = uri("lautta://user-documents/Uni");
     e.core.favourites.add(&uni, "Thesis", Some("#e7a33c")).unwrap();
-    e.core
-        .sync_pairs
-        .add(&lautta_core::org::SyncPairSpec::new(
-            "Camera → NAS",
-            uri("lautta://user-documents/"),
-            uni.clone(),
-        ))
-        .unwrap();
     let rows = e.core.browse_rows().await;
     let fav = of(&rows, "favourites");
     assert_eq!(
@@ -112,8 +104,6 @@ async fn volumes_have_space_and_favourites_have_places() {
         ("favourite", "Thesis", "Documents › Uni")
     );
     assert_eq!(fav[0].colour, "#e7a33c");
-    assert_eq!((fav[1].kind, fav[1].mode.as_str()), ("syncpair", "update_both"));
-    assert_eq!(fav[1].right_uri, uni.to_string());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
