@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! operations area facades (doc/QML-API.md): the `Operations` singleton and
-//! the models behind BulkRename, Info, Permissions and Recently deleted.
+//! the models behind BulkRename, Info and Recently deleted.
 
 mod bulkrename;
 mod info;
-mod permissions;
 mod singleton;
 mod trash;
 
@@ -14,7 +13,6 @@ use qmetaobject::prelude::*;
 
 pub use bulkrename::BulkRenameModel;
 pub use info::InfoModel;
-pub use permissions::PermissionsModel;
 pub use singleton::Operations;
 pub use trash::TrashModel;
 
@@ -24,7 +22,6 @@ pub fn register() {
     qmetaobject::qml_register_singleton_type::<Operations>(&uri, 1, 0, &crate::cstr("Operations"));
     qmetaobject::qml_register_type::<BulkRenameModel>(&uri, 1, 0, &crate::cstr("BulkRenameModel"));
     qmetaobject::qml_register_type::<InfoModel>(&uri, 1, 0, &crate::cstr("InfoModel"));
-    qmetaobject::qml_register_type::<PermissionsModel>(&uri, 1, 0, &crate::cstr("PermissionsModel"));
     qmetaobject::qml_register_type::<TrashModel>(&uri, 1, 0, &crate::cstr("TrashModel"));
 }
 

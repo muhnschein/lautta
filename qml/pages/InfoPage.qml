@@ -159,18 +159,10 @@ Page {
                     value: qsTrId("lautta-info-copy-address").arg(page.info.address || "")
                 }
             }
-            BackgroundItem {
-                width: parent.width
-                height: permissionsItem.height
-                enabled: page.info.canPermissions === true
-                onClicked: pageStack.push(Qt.resolvedUrl("PermissionsPage.qml"), { "uri": page.uri })
-
-                DetailItem {
-                    id: permissionsItem
-                    //% "Permissions"
-                    label: qsTrId("lautta-info-permissions")
-                    value: page.info.modeText || ""
-                }
+            DetailItem {
+                //% "Permissions"
+                label: qsTrId("lautta-info-permissions")
+                value: page.info.modeText || ""
             }
             DetailItem {
                 visible: value.length > 0

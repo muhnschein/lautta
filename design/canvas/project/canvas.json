@@ -314,14 +314,6 @@
       "x": 2400,
       "y": 2060
     },
-    "Permissions.dc.html": {
-      "h": 1000,
-      "is_interactive": true,
-      "title": "Permissions",
-      "w": 400,
-      "x": 2400,
-      "y": 4860
-    },
     "PlanSummary.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -727,7 +719,6 @@
     "Conflict.dc.html",
     "BulkRename.dc.html",
     "Info.dc.html",
-    "Permissions.dc.html",
     "Compress.dc.html",
     "Extract.dc.html",
     "TagAssign.dc.html",

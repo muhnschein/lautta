@@ -173,12 +173,7 @@ fn numbering_defaults_and_clamps() {
 }
 
 #[test]
-fn octal_and_text() {
-    assert_eq!(parse_octal("755"), Some(0o755));
-    assert_eq!(parse_octal(" 0644 "), Some(0o644));
-    assert_eq!(parse_octal("75"), None);
-    assert_eq!(parse_octal("758"), None);
-    assert_eq!(parse_octal("07555"), None);
+fn mode_as_text() {
     assert_eq!(mode_text(0o644), "rw-r--r--");
     assert_eq!(mode_text(0o755), "rwxr-xr-x");
     assert_eq!(mode_text(0), "---------");

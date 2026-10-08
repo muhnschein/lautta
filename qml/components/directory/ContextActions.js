@@ -118,15 +118,11 @@ function split(ctx) {
 }
 
 // Actions of the selection panel's "more" row (board DirectorySelect).
-function moreActions(single, hasPermissions) {
-    var out = [
+function moreActions() {
+    return [
         { "id": "compress", "icon": "image://theme/icon-m-file-compressed", "text": text("compress") },
         //% "Rename all"
         { "id": "rename_all", "icon": "dir-rename-all", "text": qsTrId("lautta-dir-act-rename-all") },
         { "id": "tags", "icon": "dir-tag", "text": text("tags") }
     ]
-    if (single && hasPermissions)
-        //% "Permissions"
-        out.push({ "id": "permissions", "icon": "dir-lock", "text": qsTrId("lautta-dir-act-permissions") })
-    return out
 }

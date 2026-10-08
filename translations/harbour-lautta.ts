@@ -1377,66 +1377,6 @@
         <source>Symbolic link…</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-perm-unavailable-fs">
-        <source>Not available on %1 (%2).</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-perm-unavailable">
-        <source>Not available on %1.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-perm-save">
-        <source>Save</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-perm-subtitle">
-        <source>Permissions · %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-perm-read">
-        <source>Read</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-perm-write">
-        <source>Write</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-perm-execute">
-        <source>Execute</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-perm-owner">
-        <source>Owner</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-perm-group">
-        <source>Group</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-perm-others">
-        <source>Others</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-perm-octal">
-        <source>Octal</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-perm-contents">
-        <source>Apply to contents</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-perm-recursive">
-        <source>Apply recursively</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-perm-files">
-        <source>Files</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-perm-folders">
-        <source>Folders</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-trash-restored">
         <source>Restored</source>
         <translation type="unfinished"></translation>
@@ -3025,10 +2965,6 @@
     </message>
     <message id="lautta-dir-act-rename-all">
         <source>Rename all</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-act-permissions">
-        <source>Permissions</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-menu-select-all">

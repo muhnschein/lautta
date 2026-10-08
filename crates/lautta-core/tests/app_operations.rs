@@ -432,7 +432,7 @@ async fn info_checksum_and_links() {
     assert_eq!(info.tags.len(), 1);
     assert_eq!(info.tags[0].name, "Work");
     assert!(info.mode_text.len() == 9 && info.mode.is_some());
-    assert!(info.can_checksum && info.can_permissions && info.can_symlink);
+    assert!(info.can_checksum && info.can_symlink);
     assert!(info.free_bytes.is_some());
     assert!(!info.is_dir);
 
@@ -487,48 +487,6 @@ async fn set_modified_changes_the_time() {
     let u = uri("lautta://user-documents/t.txt");
     h.core.set_modified(&u, 1_000_000_000_000).await.unwrap();
     assert_eq!(h.core.info(&u).await.unwrap().modified, Some(1_000_000_000_000));
-}
-
-#[tokio::test]
-async fn permissions_apply_recursively_with_separate_masks() {
-    use std::os::unix::fs::PermissionsExt;
-    let h = home().await;
-    write(&h.root.join("Documents/d/f.txt"), b"x");
-    write(&h.root.join("Documents/d/s/g.txt"), b"y");
-    let d = uri("lautta://user-documents/d");
-    let info = h.core.permissions(&d).await.unwrap();
-    assert!(info.supported && info.is_dir);
-    assert_eq!(info.location_name, "Documents");
-
-    let cancel = AtomicBool::new(false);
-    let modes = RecursiveModes {
-        files: 0o600,
-        dirs: 0o750,
-    };
-    let out = h
-        .core
-        .set_permissions(&d, 0o700, Some(modes), &cancel)
-        .await
-        .unwrap();
-    assert_eq!((out.changed, out.failed), (4, 0));
-    let mode = |p: &str| std::fs::metadata(h.root.join(p)).unwrap().permissions().mode() & 0o7777;
-    assert_eq!(mode("Documents/d"), 0o700, "the item itself gets the grid's mode");
-    assert_eq!(mode("Documents/d/s"), 0o750);
-    assert_eq!(mode("Documents/d/f.txt"), 0o600);
-    assert_eq!(mode("Documents/d/s/g.txt"), 0o600);
-
-    let out = h.core.set_permissions(&d, 0o755, None, &cancel).await.unwrap();
-    assert_eq!(out.changed, 1);
-    assert_eq!(mode("Documents/d"), 0o755);
-    assert_eq!(mode("Documents/d/f.txt"), 0o600, "not recursive: contents stay");
-
-    let stop = AtomicBool::new(true);
-    let err = h
-        .core
-        .set_permissions(&d, 0o755, Some(modes), &stop)
-        .await
-        .unwrap_err();
-    assert_eq!(err.kind, ErrorKind::Canceled);
 }
 
 #[tokio::test]

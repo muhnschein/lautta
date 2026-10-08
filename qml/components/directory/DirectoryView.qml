@@ -193,7 +193,6 @@ Item {
         var info = { "uri": uris[0], "mimeType": "", "isDir": false }
         switch (id) {
         case "rename_all": pageStack.push(Qt.resolvedUrl("../../pages/BulkRenamePage.qml"), { "uris": JSON.stringify(uris) }); break
-        case "permissions": pageStack.push(Qt.resolvedUrl("../../pages/PermissionsPage.qml"), { "uri": uris[0] }); break
         default: runAction(id, uris, info, null)
         }
     }

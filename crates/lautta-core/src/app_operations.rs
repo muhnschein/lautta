@@ -2,8 +2,7 @@
 //! User-level actions of the operations area on [`Core`](crate::app::Core):
 //! plan summaries and pending plans (OPS-1), conflicts before the run
 //! (OPS-2), compress and extract (PRV-10/11), bulk rename (OPS-11), the
-//! Info page, the permissions editor (OPS-12) and *Recently deleted*
-//! (OPS-8). Everything is Qt-free; the Qt layer only forwards.
+//! Info page (OPS-12) and *Recently deleted* (OPS-8). Everything is Qt-free; the Qt layer only forwards.
 
 use crate::app::{Core, Started};
 use crate::compress::{compress, ArchiveKind, CompressOptions};
@@ -441,7 +440,6 @@ pub struct InfoData {
     pub fs_type: Option<String>,
     pub free_bytes: Option<u64>,
     pub total_bytes: Option<u64>,
-    pub can_permissions: bool,
     pub can_symlink: bool,
     pub can_hardlink: bool,
     pub can_set_mtime: bool,
@@ -467,15 +465,6 @@ pub fn mode_text(mode: u32) -> String {
         .collect()
 }
 
-/// `755` or `0755` as permission bits.
-pub fn parse_octal(text: &str) -> Option<u32> {
-    let t = text.trim();
-    if !(3..=4).contains(&t.len()) || !t.bytes().all(|b| (b'0'..=b'7').contains(&b)) {
-        return None;
-    }
-    u32::from_str_radix(t, 8).ok()
-}
-
 /// Name of the file system from `statfs` magic numbers.
 pub fn fs_type_name(magic: u64) -> Option<&'static str> {
     Some(match magic {
@@ -495,32 +484,6 @@ pub fn fs_type_name(magic: u64) -> Option<&'static str> {
         0x7371_7368 => "squashfs",
         _ => return None,
     })
-}
-
-/// The permissions editor's data (OPS-12).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PermissionsInfo {
-    pub mode: u32,
-    pub is_dir: bool,
-    pub owner: Option<String>,
-    pub group: Option<String>,
-    /// False on vfat/exFAT and servers that cannot (§10.1).
-    pub supported: bool,
-    pub fs_type: Option<String>,
-    pub location_name: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RecursiveModes {
-    pub files: u32,
-    pub dirs: u32,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
-pub struct PermissionsOutcome {
-    pub changed: u64,
-    pub failed: u64,
 }
 
 // ------------------------------------------------------------ trash
@@ -988,7 +951,6 @@ impl Core {
                 .map(str::to_owned),
             free_bytes: space.map(|s| s.free),
             total_bytes: space.map(|s| s.total),
-            can_permissions: caps.writable() && caps.has(cap::PERMISSIONS),
             can_symlink: caps.writable() && caps.has(cap::SYMLINKS),
             can_hardlink: caps.writable() && caps.has(cap::HARDLINKS),
             can_set_mtime: caps.writable() && caps.has(cap::SET_MTIME),
@@ -1072,84 +1034,6 @@ impl Core {
         let mut bytes = vec![b'/'];
         bytes.extend_from_slice(target.path.as_bytes());
         Ok(bytes)
-    }
-
-    // -------------------------------------------------------- permissions
-
-    pub async fn permissions(&self, uri: &Uri) -> Result<PermissionsInfo> {
-        let provider = self.provider(&uri.location)?;
-        let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
-        let caps = provider.capabilities();
-        let fs_type = self
-            .locations
-            .to_local_path(uri)
-            .and_then(|p| sys::fs_magic(&p).ok())
-            .and_then(fs_type_name)
-            .map(str::to_owned);
-        Ok(PermissionsInfo {
-            mode: entry.mode.unwrap_or(0o644) & 0o7777,
-            is_dir: entry.is_dir(),
-            owner: entry.owner,
-            group: entry.group,
-            supported: caps.writable() && caps.has(cap::PERMISSIONS),
-            fs_type,
-            location_name: self.location(&uri.location).map(|l| l.name).unwrap_or_default(),
-        })
-    }
-
-    /// Applies `mode` to the item and, for a folder with `recursive`, `files`
-    /// to every file and `dirs` to every folder below it (symlinks are left
-    /// alone). Failures below the item are counted and the walk goes on.
-    pub async fn set_permissions(
-        &self,
-        uri: &Uri,
-        mode: u32,
-        recursive: Option<RecursiveModes>,
-        cancel: &AtomicBool,
-    ) -> Result<PermissionsOutcome> {
-        let provider = self.provider(&uri.location)?;
-        let change = |m: u32| AttributeChanges {
-            mode: Some(m & 0o7777),
-            modified: None,
-        };
-        let entry = provider.stat(&uri.path, false, Lane::Interactive).await?;
-        provider.set_attributes(&uri.path, change(mode)).await?;
-        let mut outcome = PermissionsOutcome {
-            changed: 1,
-            failed: 0,
-        };
-        let Some(modes) = recursive.filter(|_| entry.is_dir() && !entry.is_symlink()) else {
-            return Ok(outcome);
-        };
-        let mut pending = vec![uri.path.clone()];
-        while let Some(dir) = pending.pop() {
-            if cancel.load(Ordering::Relaxed) {
-                return Err(Error::kind(ErrorKind::Canceled));
-            }
-            let Ok(children) = list_all(provider.as_ref(), &dir, Lane::Bulk).await else {
-                outcome.failed += 1;
-                continue;
-            };
-            for child in children.into_iter().filter(|c| !c.is_symlink()) {
-                let path = dir.join(&child.name)?;
-                let m = if child.is_dir() { modes.dirs } else { modes.files };
-                match provider.set_attributes(&path, change(m)).await {
-                    Ok(()) => outcome.changed += 1,
-                    Err(_) => outcome.failed += 1,
-                }
-                if child.is_dir() {
-                    pending.push(path);
-                }
-            }
-        }
-        self.invalidate_parent(uri);
-        Ok(outcome)
-    }
-
-    fn invalidate_parent(&self, uri: &Uri) {
-        if let Some(p) = uri.parent() {
-            self.invalidate(&p);
-        }
     }
 
     // -------------------------------------------------------- trash
