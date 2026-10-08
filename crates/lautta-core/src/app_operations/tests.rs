@@ -102,77 +102,6 @@ fn reverting_names_moves_the_whole_subtree() {
 }
 
 #[test]
-fn rules_parse_every_kind() {
-    let set = parse_rules(
-        r#"{"includeExtension":true,"rules":[
-        {"type":"findReplace","find":"a","replace":"b","regex":true,"caseSensitive":false},
-        {"type":"prefix","text":"p-"},{"type":"suffix","text":"-s"},
-        {"type":"numbering","start":5,"step":2,"padding":3,"position":"prefix","separator":"_"},
-        {"type":"case","mode":"title"},{"type":"extension","mode":"change","value":"txt"},
-        {"type":"extension","mode":"remove"},{"type":"extension","mode":"lowercase"},
-        {"type":"date","format":"YYYY","position":"suffix","separator":"-","utcOffsetSecs":3600}]}"#,
-    )
-    .unwrap();
-    assert!(set.include_extension);
-    assert_eq!(set.rules.len(), 9);
-    assert_eq!(
-        set.rules[0],
-        Rule::FindReplace {
-            find: "a".into(),
-            replace: "b".into(),
-            regex: true,
-            case_sensitive: false
-        }
-    );
-    assert_eq!(
-        set.rules[3],
-        Rule::Numbering(Numbering {
-            start: 5,
-            step: 2,
-            padding: 3,
-            position: Position::Prefix,
-            separator: "_".into()
-        })
-    );
-    assert_eq!(set.rules[4], Rule::Case(CaseMode::Title));
-    assert_eq!(set.rules[5], Rule::Extension(ExtensionMode::Change("txt".into())));
-    assert!(
-        matches!(&set.rules[8], Rule::Date(d) if d.utc_offset_secs == 3600 && d.position == Position::Suffix)
-    );
-}
-
-#[test]
-fn bad_rules_are_invalid_arguments() {
-    for text in [
-        "not json",
-        "[]",
-        r#"{"rules":[1]}"#,
-        r#"{"rules":[{"type":"nope"}]}"#,
-        r#"{"rules":[{"type":"case","mode":"x"}]}"#,
-        r#"{"rules":[{"type":"extension","mode":"x"}]}"#,
-    ] {
-        assert_eq!(
-            parse_rules(text).unwrap_err().kind,
-            ErrorKind::InvalidArgument,
-            "{text}"
-        );
-    }
-    assert_eq!(parse_rules("{}").unwrap(), RuleSet::default());
-}
-
-#[test]
-fn numbering_defaults_and_clamps() {
-    let set = parse_rules(r#"{"rules":[{"type":"numbering","padding":99}]}"#).unwrap();
-    assert_eq!(
-        set.rules[0],
-        Rule::Numbering(Numbering {
-            padding: 12,
-            ..Numbering::default()
-        })
-    );
-}
-
-#[test]
 fn mode_as_text() {
     assert_eq!(mode_text(0o644), "rw-r--r--");
     assert_eq!(mode_text(0o755), "rwxr-xr-x");
@@ -219,11 +148,9 @@ fn conflict_choice_names() {
 }
 
 #[test]
-fn names_of_kinds_status_and_filesystems() {
+fn names_of_kinds_and_filesystems() {
     assert_eq!(kind_name(OperationKind::Copy), "copy");
     assert_eq!(kind_name(OperationKind::Move), "move");
-    assert_eq!(status_name(bulkrename::RenameStatus::Collision), "collision");
-    assert_eq!(status_name(bulkrename::RenameStatus::Ok), "ok");
     assert_eq!(fs_type_name(0xEF53), Some("ext4"));
     assert_eq!(fs_type_name(0x2011_BAB0), Some("exFAT"));
     assert_eq!(fs_type_name(1), None);

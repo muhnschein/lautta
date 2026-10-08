@@ -1,23 +1,19 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! User-level actions of the operations area on [`Core`](crate::app::Core):
 //! plan summaries and pending plans (OPS-1), conflicts before the run
-//! (OPS-2), compress and extract (PRV-10/11), bulk rename (OPS-11), the
-//! Info page (OPS-12) and *Recently deleted* (OPS-8). Everything is Qt-free; the Qt layer only forwards.
+//! (OPS-2), compress and extract (PRV-10/11), the Info page (OPS-12) and
+//! *Recently deleted* (OPS-8). Everything is Qt-free; the Qt layer only
+//! forwards.
 
 use crate::app::{Core, Started};
 use crate::compress::{compress, ArchiveKind, CompressOptions};
-use crate::entry::{cap, ms_to_system_time, system_time_to_ms, Entry, Kind};
+use crate::entry::{cap, ms_to_system_time, system_time_to_ms, Kind};
 use crate::error::{Error, ErrorKind, Result};
 use crate::mime::{category_of, mime_of};
-use crate::ops::bulkrename::{
-    self, CaseMode, DateRule, ExtensionMode, Numbering, Position, RenameEntry, RenamePreview, Rule, RuleSet,
-};
 use crate::ops::conflict as conflict_ops;
-use crate::ops::names::{keep_both_name, split_extension, NameRules};
+use crate::ops::names::{keep_both_name, split_extension};
 use crate::ops::{Conflict, ConflictChoice, OperationKind, Plan};
-use crate::provider::{
-    list_all, AttributeChanges, Disposition, Lane, ProgressSink, Provider, RenameMode, WriteOptions,
-};
+use crate::provider::{list_all, AttributeChanges, Disposition, Lane, ProgressSink, Provider, WriteOptions};
 use crate::settings::Settings;
 use crate::sys;
 use crate::transfer::TransferId;
@@ -274,133 +270,6 @@ pub fn archive_folder_name(name: &str) -> String {
         name.to_owned()
     } else {
         stem
-    }
-}
-
-// ------------------------------------------------------------ bulk rename
-
-/// The folder state a bulk rename previews against (OPS-11).
-#[derive(Debug, Clone)]
-pub struct RenameContext {
-    pub parent: Uri,
-    pub uris: Vec<Uri>,
-    pub entries: Vec<RenameEntry>,
-    pub kinds: Vec<Kind>,
-    /// Every name in the folder, selected ones included.
-    pub existing: Vec<Vec<u8>>,
-    pub name_rules: NameRules,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
-pub struct BulkOutcome {
-    pub renamed: usize,
-    /// Unchanged, colliding or invalid names, left alone.
-    pub skipped: usize,
-    pub failed: usize,
-    pub first_error: Option<String>,
-}
-
-fn as_str<'a>(m: &'a serde_json::Map<String, Value>, key: &str) -> &'a str {
-    m.get(key).and_then(Value::as_str).unwrap_or("")
-}
-
-fn as_flag(m: &serde_json::Map<String, Value>, key: &str, default: bool) -> bool {
-    m.get(key).and_then(Value::as_bool).unwrap_or(default)
-}
-
-fn position_of(m: &serde_json::Map<String, Value>, default: Position) -> Position {
-    match as_str(m, "position") {
-        "prefix" => Position::Prefix,
-        "suffix" => Position::Suffix,
-        _ => default,
-    }
-}
-
-fn rule_from_json(m: &serde_json::Map<String, Value>) -> Result<Rule> {
-    let int = |key: &str, d: i64| m.get(key).and_then(Value::as_i64).unwrap_or(d);
-    Ok(match as_str(m, "type") {
-        "findReplace" => Rule::FindReplace {
-            find: as_str(m, "find").to_owned(),
-            replace: as_str(m, "replace").to_owned(),
-            regex: as_flag(m, "regex", false),
-            case_sensitive: as_flag(m, "caseSensitive", true),
-        },
-        "prefix" => Rule::Prefix(as_str(m, "text").to_owned()),
-        "suffix" => Rule::Suffix(as_str(m, "text").to_owned()),
-        "numbering" => Rule::Numbering(Numbering {
-            start: int("start", 1),
-            step: int("step", 1),
-            padding: usize::try_from(int("padding", 0).clamp(0, 12)).unwrap_or(0),
-            position: position_of(m, Position::Suffix),
-            separator: m
-                .get("separator")
-                .and_then(Value::as_str)
-                .unwrap_or(" ")
-                .to_owned(),
-        }),
-        "case" => Rule::Case(match as_str(m, "mode") {
-            "lower" => CaseMode::Lower,
-            "upper" => CaseMode::Upper,
-            "title" => CaseMode::Title,
-            "sentence" => CaseMode::Sentence,
-            other => return Err(bad_rule(&format!("unknown case mode {other}"))),
-        }),
-        "extension" => Rule::Extension(match as_str(m, "mode") {
-            "change" => ExtensionMode::Change(as_str(m, "value").to_owned()),
-            "remove" => ExtensionMode::Remove,
-            "lowercase" => ExtensionMode::Lowercase,
-            other => return Err(bad_rule(&format!("unknown extension mode {other}"))),
-        }),
-        "date" => Rule::Date(DateRule {
-            format: as_str(m, "format").to_owned(),
-            position: position_of(m, Position::Prefix),
-            separator: m
-                .get("separator")
-                .and_then(Value::as_str)
-                .unwrap_or(" ")
-                .to_owned(),
-            utc_offset_secs: i32::try_from(int("utcOffsetSecs", 0)).unwrap_or(0),
-        }),
-        other => return Err(bad_rule(&format!("unknown rule {other}"))),
-    })
-}
-
-fn bad_rule(why: &str) -> Error {
-    Error::new(ErrorKind::InvalidArgument, why.to_owned())
-}
-
-/// Reads the rules the BulkRename page edits:
-/// `{ includeExtension, rules: [ { type, … } ] }`.
-pub fn parse_rules(text: &str) -> Result<RuleSet> {
-    let value: Value = serde_json::from_str(text).map_err(|e| bad_rule(&format!("bad rules: {e}")))?;
-    let Value::Object(top) = value else {
-        return Err(bad_rule("rules must be an object"));
-    };
-    let mut set = RuleSet {
-        rules: Vec::new(),
-        include_extension: as_flag(&top, "includeExtension", false),
-    };
-    for rule in top.get("rules").and_then(Value::as_array).into_iter().flatten() {
-        let Value::Object(m) = rule else {
-            return Err(bad_rule("a rule must be an object"));
-        };
-        set.rules.push(rule_from_json(m)?);
-    }
-    Ok(set)
-}
-
-/// The preview for a context (live while the user types).
-pub fn rename_preview(ctx: &RenameContext, rules: &RuleSet) -> Result<Vec<RenamePreview>> {
-    bulkrename::preview_with(&ctx.entries, rules, &ctx.existing, ctx.name_rules)
-}
-
-/// Status names the QML preview shows.
-pub fn status_name(s: bulkrename::RenameStatus) -> &'static str {
-    match s {
-        bulkrename::RenameStatus::Ok => "ok",
-        bulkrename::RenameStatus::Unchanged => "unchanged",
-        bulkrename::RenameStatus::Collision => "collision",
-        bulkrename::RenameStatus::Invalid => "invalid",
     }
 }
 
@@ -800,95 +669,6 @@ impl Core {
         finished
     }
 
-    // -------------------------------------------------------- bulk rename
-
-    /// Reads the folder the selection lives in (OPS-11).
-    pub async fn rename_context(&self, uris: &[Uri]) -> Result<RenameContext> {
-        let first = uris
-            .first()
-            .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "nothing selected"))?;
-        let parent = first
-            .parent()
-            .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "cannot rename a location"))?;
-        if uris.iter().any(|u| u.parent().as_ref() != Some(&parent)) {
-            return Err(Error::new(
-                ErrorKind::InvalidArgument,
-                "the items must be in the same folder",
-            ));
-        }
-        let provider = self.provider(&parent.location)?;
-        let listing = list_all(provider.as_ref(), &parent.path, Lane::Interactive).await?;
-        let by_name: HashMap<&[u8], &Entry> = listing.iter().map(|e| (e.name.as_slice(), e)).collect();
-        let mut entries = Vec::new();
-        let mut kinds = Vec::new();
-        for uri in uris {
-            let name = uri.name().unwrap_or_default();
-            let found = by_name.get(name);
-            entries.push((name.to_vec(), found.and_then(|e| e.modified_ms())));
-            kinds.push(found.map_or(Kind::File, |e| e.kind));
-        }
-        Ok(RenameContext {
-            existing: listing.iter().map(|e| e.name.clone()).collect(),
-            name_rules: NameRules::from_capabilities(&provider.capabilities()),
-            parent,
-            uris: uris.to_vec(),
-            entries,
-            kinds,
-        })
-    }
-
-    /// Renames the selection by `rules` in two phases through temporary
-    /// names, so swaps (`a`→`b`, `b`→`a`) work (OPS-3, OPS-11). Tags and
-    /// favourites follow (ORG-3); nothing is recorded for undo.
-    pub async fn bulk_rename(&self, uris: &[Uri], rules: &RuleSet) -> Result<BulkOutcome> {
-        let ctx = self.rename_context(uris).await?;
-        let previews = rename_preview(&ctx, rules)?;
-        let provider = self.provider(&ctx.parent.location)?;
-        let mut outcome = BulkOutcome::default();
-        let mut staged = Vec::new();
-        let stamp = std::process::id();
-        for (i, p) in previews.iter().enumerate() {
-            if p.status != bulkrename::RenameStatus::Ok {
-                outcome.skipped += 1;
-                continue;
-            }
-            let tmp = ctx
-                .parent
-                .path
-                .join(format!(".lautta-rename-{stamp}-{i}").as_bytes())?;
-            match provider
-                .rename(&ctx.uris[i].path, &tmp, RenameMode::NoReplace)
-                .await
-            {
-                Ok(()) => staged.push((i, tmp)),
-                Err(e) => outcome.fail(e),
-            }
-        }
-        for (i, tmp) in staged {
-            let from = &ctx.uris[i];
-            let result = match ctx.parent.join(&previews[i].new) {
-                Ok(to) => self.finish_rename(provider.as_ref(), &tmp, from, &to).await,
-                Err(e) => Err(e),
-            };
-            match result {
-                Ok(()) => outcome.renamed += 1,
-                Err(e) => {
-                    let _ = provider.rename(&tmp, &from.path, RenameMode::NoReplace).await;
-                    outcome.fail(e);
-                }
-            }
-        }
-        self.invalidate(&ctx.parent);
-        Ok(outcome)
-    }
-
-    async fn finish_rename(&self, provider: &dyn Provider, tmp: &VPath, from: &Uri, to: &Uri) -> Result<()> {
-        provider.rename(tmp, &to.path, RenameMode::NoReplace).await?;
-        let _ = self.tags.on_moved(from, to);
-        let _ = self.favourites.on_moved(from, to);
-        Ok(())
-    }
-
     // -------------------------------------------------------- info
 
     /// Everything the Info page shows (OPS-12, ORG-3).
@@ -1078,15 +858,6 @@ impl Core {
                 kind: location_kind_name(&l.kind).to_owned(),
             })
             .collect()
-    }
-}
-
-impl BulkOutcome {
-    fn fail(&mut self, e: Error) {
-        self.failed += 1;
-        if self.first_error.is_none() {
-            self.first_error = Some(e.kind.name().to_owned());
-        }
     }
 }
 

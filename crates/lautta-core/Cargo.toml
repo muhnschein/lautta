@@ -22,7 +22,6 @@ rustix = { version = "0.38", features = ["fs", "process", "pipe", "net"] }
 rusqlite = { version = "0.31", features = ["blob"] }
 unicode-normalization = "0.1"
 percent-encoding = "2"
-regex = "1"
 sha2 = "0.10"
 md-5 = "0.10"
 sha1 = "0.10"

@@ -189,11 +189,7 @@ Item {
         var uris = dir.selectedUris()
         if (uris.length === 0)
             return
-        var info = { "uri": uris[0], "mimeType": "", "isDir": false }
-        switch (id) {
-        case "rename_all": pageStack.push(Qt.resolvedUrl("../../pages/BulkRenamePage.qml"), { "uris": JSON.stringify(uris) }); break
-        default: runAction(id, uris, info, null)
-        }
+        runAction(id, uris, { "uri": uris[0], "mimeType": "", "isDir": false }, null)
     }
 
     function placeholderKind() {

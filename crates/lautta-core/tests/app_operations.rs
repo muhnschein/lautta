@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The operations area on a temporary home: bulk rename, compress and extract
-//! through the engine, remote compress through a pipe, info, permissions,
-//! links, Recently deleted and the share probe.
+//! The operations area on a temporary home: compress and extract through the
+//! engine, remote compress through a pipe, info, permissions, links,
+//! Recently deleted and the share probe.
 
 use lautta_core::app::{Core, Started};
 use lautta_core::app_operations::*;
@@ -61,83 +61,6 @@ async fn finish(h: &Home, started: Started) {
         .await
         .unwrap();
     assert_eq!(s.state, TransferState::Completed, "{s:?}");
-}
-
-#[tokio::test]
-async fn bulk_rename_swaps_and_skips() {
-    let h = home().await;
-    for n in ["a.txt", "b.txt", "c.txt"] {
-        write(&h.root.join("Documents").join(n), n.as_bytes());
-    }
-    let docs = uri("lautta://user-documents/");
-    let uris: Vec<Uri> = ["a.txt", "b.txt"]
-        .iter()
-        .map(|n| docs.join(n.as_bytes()).unwrap())
-        .collect();
-    let rules = parse_rules(
-        r#"{"rules":[{"type":"findReplace","find":"a","replace":"B","regex":false,"caseSensitive":true}]}"#,
-    )
-    .unwrap();
-    let ctx = h.core.rename_context(&uris).await.unwrap();
-    assert_eq!(ctx.existing.len(), 3);
-    let preview = rename_preview(&ctx, &rules).unwrap();
-    assert_eq!(preview[0].new, b"B.txt");
-    assert_eq!(
-        preview[1].status,
-        lautta_core::ops::bulkrename::RenameStatus::Unchanged
-    );
-
-    let out = h.core.bulk_rename(&uris, &rules).await.unwrap();
-    assert_eq!((out.renamed, out.skipped, out.failed), (1, 1, 0));
-    assert_eq!(std::fs::read(h.root.join("Documents/B.txt")).unwrap(), b"a.txt");
-    assert!(!h.root.join("Documents/a.txt").exists());
-    assert!(!h.core.can_undo(), "bulk rename records nothing for undo");
-    let leftovers: Vec<_> = std::fs::read_dir(h.root.join("Documents"))
-        .unwrap()
-        .filter_map(Result::ok)
-        .filter(|e| e.file_name().to_string_lossy().starts_with(".lautta-rename"))
-        .collect();
-    assert!(leftovers.is_empty());
-}
-
-#[tokio::test]
-async fn bulk_rename_swaps_names_through_temporaries() {
-    let h = home().await;
-    write(&h.root.join("Documents/1.txt"), b"one");
-    write(&h.root.join("Documents/2.txt"), b"two");
-    let docs = uri("lautta://user-documents/");
-    let uris = vec![docs.join(b"1.txt").unwrap(), docs.join(b"2.txt").unwrap()];
-    // Numbering from 2 downwards maps 1 -> 2 and 2 -> 1.
-    let rules = parse_rules(
-        r#"{"includeExtension":false,"rules":[
-        {"type":"findReplace","find":"^.*$","replace":"","regex":true,"caseSensitive":true},
-        {"type":"numbering","start":2,"step":-1,"padding":0,"position":"prefix","separator":""}]}"#,
-    )
-    .unwrap();
-    let out = h.core.bulk_rename(&uris, &rules).await.unwrap();
-    assert_eq!((out.renamed, out.failed), (2, 0), "{out:?}");
-    assert_eq!(std::fs::read(h.root.join("Documents/2.txt")).unwrap(), b"one");
-    assert_eq!(std::fs::read(h.root.join("Documents/1.txt")).unwrap(), b"two");
-}
-
-#[tokio::test]
-async fn bulk_rename_moves_tags_and_needs_one_folder() {
-    let h = home().await;
-    write(&h.root.join("Documents/x.txt"), b"x");
-    write(&h.root.join("Downloads/y.txt"), b"y");
-    let x = uri("lautta://user-documents/x.txt");
-    let tag = h.core.tags.create("Work", "#e5604f").unwrap();
-    h.core.tags.assign(tag.id, &[x.clone()]).unwrap();
-    let rules = parse_rules(r#"{"rules":[{"type":"prefix","text":"new-"}]}"#).unwrap();
-    h.core.bulk_rename(&[x.clone()], &rules).await.unwrap();
-    let moved = uri("lautta://user-documents/new-x.txt");
-    assert_eq!(h.core.tags.tags_for(&moved).unwrap().len(), 1);
-
-    let mixed = vec![moved, uri("lautta://user-downloads/y.txt")];
-    let err = h.core.bulk_rename(&mixed, &rules).await.unwrap_err();
-    assert_eq!(err.kind, ErrorKind::InvalidArgument);
-    let err = h.core.bulk_rename(&[], &rules).await.unwrap_err();
-    assert_eq!(err.kind, ErrorKind::InvalidArgument);
 }
 
 #[tokio::test]

@@ -117,8 +117,6 @@ function split(ctx) {
 function moreActions() {
     return [
         { "id": "compress", "icon": "image://theme/icon-m-file-compressed", "text": text("compress") },
-        //% "Rename all"
-        { "id": "rename_all", "icon": "dir-rename-all", "text": qsTrId("lautta-dir-act-rename-all") },
         { "id": "tags", "icon": "dir-tag", "text": text("tags") }
     ]
 }

@@ -58,14 +58,6 @@
       "x": 1920,
       "y": 0
     },
-    "BulkRename.dc.html": {
-      "h": 1000,
-      "is_interactive": true,
-      "title": "Bulk rename",
-      "w": 400,
-      "x": 1440,
-      "y": 4860
-    },
     "CompareResults.dc.html": {
       "h": 1000,
       "is_interactive": true,
@@ -693,7 +685,6 @@
     "FolderPicker.dc.html",
     "PlanSummary.dc.html",
     "Conflict.dc.html",
-    "BulkRename.dc.html",
     "Info.dc.html",
     "Compress.dc.html",
     "Extract.dc.html",
