@@ -58,8 +58,6 @@ pub enum Viewer {
     Audio,
     Video,
     Archive,
-    Sqlite,
-    Hex,
     External,
 }
 
@@ -341,12 +339,12 @@ pub fn viewer_for(category: FileCategory, mime: &str) -> Viewer {
         FileCategory::Markdown => Viewer::Markdown,
         FileCategory::Audio => Viewer::Audio,
         FileCategory::Video => Viewer::Video,
-        FileCategory::Database => Viewer::Sqlite,
         FileCategory::Archive => archive_viewer(mime),
         FileCategory::Package if mime == "application/vnd.android.package-archive" => Viewer::Archive,
-        FileCategory::Package => Viewer::Hex,
         FileCategory::Other => other_viewer(mime),
         FileCategory::Folder
+        | FileCategory::Database
+        | FileCategory::Package
         | FileCategory::Pdf
         | FileCategory::Document
         | FileCategory::Spreadsheet
@@ -366,7 +364,7 @@ fn archive_viewer(mime: &str) -> Viewer {
 fn other_viewer(mime: &str) -> Viewer {
     match category_from_mime(mime) {
         FileCategory::Text | FileCategory::Code => Viewer::Text,
-        _ => Viewer::Hex,
+        _ => Viewer::External,
     }
 }
 
@@ -559,20 +557,20 @@ mod tests {
         assert_eq!(viewer_for(Markdown, "text/markdown"), Viewer::Markdown);
         assert_eq!(viewer_for(Audio, "audio/mpeg"), Viewer::Audio);
         assert_eq!(viewer_for(Video, "video/mp4"), Viewer::Video);
-        assert_eq!(viewer_for(Database, "application/vnd.sqlite3"), Viewer::Sqlite);
+        assert_eq!(viewer_for(Database, "application/vnd.sqlite3"), Viewer::External);
         assert_eq!(viewer_for(Archive, "application/zip"), Viewer::Archive);
         assert_eq!(viewer_for(Archive, "application/vnd.rar"), Viewer::External);
         assert_eq!(
             viewer_for(Package, "application/vnd.android.package-archive"),
             Viewer::Archive
         );
-        assert_eq!(viewer_for(Package, "application/x-rpm"), Viewer::Hex);
+        assert_eq!(viewer_for(Package, "application/x-rpm"), Viewer::External);
         assert_eq!(viewer_for(Pdf, "application/pdf"), Viewer::External);
         assert_eq!(viewer_for(Document, ""), Viewer::External);
         assert_eq!(viewer_for(Spreadsheet, ""), Viewer::External);
         assert_eq!(viewer_for(Presentation, ""), Viewer::External);
         assert_eq!(viewer_for(Folder, ""), Viewer::External);
-        assert_eq!(viewer_for(Other, "application/octet-stream"), Viewer::Hex);
+        assert_eq!(viewer_for(Other, "application/octet-stream"), Viewer::External);
         assert_eq!(viewer_for(Other, "text/plain"), Viewer::Text);
         assert_eq!(viewer_for(Other, "text/x-foo"), Viewer::Text);
     }

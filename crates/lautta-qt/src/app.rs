@@ -98,8 +98,6 @@ pub fn viewer_name(v: Viewer) -> &'static str {
         Viewer::Audio => "audio",
         Viewer::Video => "video",
         Viewer::Archive => "archive",
-        Viewer::Sqlite => "sqlite",
-        Viewer::Hex => "hex",
         Viewer::External => "external",
     }
 }

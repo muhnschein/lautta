@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Opening a remote file in another app (PRV-5, PRV-6, board OpenRemote): the
 // file is copied to ~/Downloads/Lautta/Opened so the sandboxed app can read
-// it, then handed to the system. Databases are shown in the SQLite viewer
-// from that copy (PRV-4). The first use explains the copy in one line
-// (SEC-4).
+// it, then handed to the system. The first use explains the copy in one
+// line (SEC-4).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.Configuration 1.0
@@ -30,13 +29,6 @@ Page {
         working = false
         tools.noteOpened(uri)
         hint.value = true
-        if (App.viewerFor(uri, "") === "sqlite") {
-            var local = tools.uriForFileUrl(fileUrl)
-            if (local !== "") {
-                pageStack.replace(Qt.resolvedUrl("../viewers/SqliteViewer.qml"), { "uri": local })
-                return
-            }
-        }
         Qt.openUrlExternally(fileUrl)
         pageStack.pop()
     }

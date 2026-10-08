@@ -218,14 +218,6 @@
       "x": 2880,
       "y": 14440
     },
-    "HexViewer.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Hex view \u00b7 pulley",
-      "w": 400,
-      "x": 4320,
-      "y": 8200
-    },
     "ImageDeleteRemote.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -425,14 +417,6 @@
       "w": 400,
       "x": 4800,
       "y": 0
-    },
-    "SqliteViewer.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "SQLite",
-      "w": 400,
-      "x": 3840,
-      "y": 8200
     },
     "StateEmpty.dc.html": {
       "h": 860,
@@ -738,8 +722,6 @@
     "VideoPlayer.dc.html",
     "AudioPlayer.dc.html",
     "ArchiveView.dc.html",
-    "SqliteViewer.dc.html",
-    "HexViewer.dc.html",
     "OpenRemote.dc.html",
     "Search.dc.html",
     "SearchFilters.dc.html",

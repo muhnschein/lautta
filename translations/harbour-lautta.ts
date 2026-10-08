@@ -1471,14 +1471,6 @@
             <numerusform></numerusform>
         </translation>
     </message>
-    <message id="lautta-viewers-goto-accept">
-        <source>Go</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-goto-label">
-        <source>Offset (hexadecimal)</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-viewers-details">
         <source>Details</source>
         <translation type="unfinished"></translation>
@@ -1635,20 +1627,8 @@
         <source>A copy goes to Downloads/Lautta/Opened so other apps can read it. It&apos;s removed after 24 hours unless pinned.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-viewers-hex-goto">
-        <source>Go to offset</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-viewers-open-with">
         <source>Open with</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-hex-size">
-        <source>Hex · %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-hex-lazy">
-        <source>Loaded as you scroll</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-delete-remote">
@@ -1685,32 +1665,6 @@
     </message>
     <message id="lautta-viewers-media-getting">
         <source>Getting the file before playing</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-sqlite-tables" numerus="yes">
-        <source>%n tables · read-only</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message id="lautta-viewers-sqlite-table">
-        <source>Table</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-sqlite-rows-more">
-        <source>more than %1 rows · showing first %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-sqlite-rows">
-        <source>%1 rows · showing first %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-sqlite-more">
-        <source>Show more rows</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-sqlite-none">
-        <source>No tables</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-save">

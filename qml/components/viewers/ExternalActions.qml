@@ -55,7 +55,6 @@ Item {
         case "markdown": return "text/markdown"
         case "audio": return "audio/*"
         case "video": return "video/*"
-        case "sqlite": return "application/vnd.sqlite3"
         default: return "application/octet-stream"
         }
     }

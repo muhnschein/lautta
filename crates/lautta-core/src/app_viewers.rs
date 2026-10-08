@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! User-level actions of the viewers area on [`Core`](crate::app::Core):
-//! loading and saving text (PRV-4, EDT-4, EDT-2), Markdown, hex, EXIF and
-//! SQLite sources, the folder's images, remote thumbnails and full images
+//! loading and saving text (PRV-4, EDT-4, EDT-2), Markdown and EXIF
+//! sources, the folder's images, remote thumbnails and full images
 //! (PRV-2, PRV-3), media for playback (PRV-8, PRV-9) and recents (ORG-2).
 //! Everything is Qt-free; the Qt layer forwards to these functions.
 
@@ -12,7 +12,6 @@ use crate::mime::{category_of, FileCategory};
 use crate::ops::names::keep_both_name;
 use crate::org::recents::RecentKind;
 use crate::preview::exif::{self, ExifInfo};
-use crate::preview::hex::HexView;
 use crate::preview::markdown;
 use crate::preview::text::{self as ptext, TextDoc, TextMeta};
 use crate::provider::{
@@ -135,19 +134,6 @@ pub struct FullImage {
     pub bytes: Vec<u8>,
     /// EXIF orientation 1-8 the decoder must apply (1 = none).
     pub orientation: u8,
-}
-
-/// Parses the *Go to offset* input: hexadecimal, with or without `0x`.
-pub fn parse_offset(text: &str) -> Option<u64> {
-    let t = text.trim().replace([' ', '_'], "");
-    let digits = t
-        .strip_prefix("0x")
-        .or_else(|| t.strip_prefix("0X"))
-        .unwrap_or(&t);
-    if digits.is_empty() {
-        return None;
-    }
-    u64::from_str_radix(digits, 16).ok()
 }
 
 /// Splits `<uri>?size=N` of the thumbnail provider; the size is clamped.
@@ -494,11 +480,6 @@ impl Core {
         })
     }
 
-    /// The hex view of a file (ranged reads, PRV-4).
-    pub async fn open_hex(&self, uri: &Uri) -> Result<HexView> {
-        HexView::new(self.open_reader(uri).await?)
-    }
-
     /// EXIF fields of an image for the details panel (PRV-4).
     pub async fn exif_report(&self, uri: &Uri) -> Result<ExifReport> {
         let provider = self.provider(&uri.location)?;
@@ -513,17 +494,6 @@ impl Core {
             size: entry.size,
             modified_ms: entry.modified_ms(),
             info,
-        })
-    }
-
-    /// The path of a local SQLite file; remote files must be copied first
-    /// (PRV-4, *Open remote*).
-    pub fn sqlite_file(&self, uri: &Uri) -> Result<PathBuf> {
-        self.locations.to_local_path(uri).ok_or_else(|| {
-            Error::new(
-                ErrorKind::Unsupported,
-                "databases are only shown from local files",
-            )
         })
     }
 
@@ -793,17 +763,6 @@ mod tests {
         }
         let err = ReadAhead::new(Arc::new(Unsized)).err().unwrap();
         assert_eq!(err.kind, ErrorKind::Unsupported);
-    }
-
-    #[test]
-    fn offsets_are_hexadecimal() {
-        assert_eq!(parse_offset("1F40"), Some(0x1f40));
-        assert_eq!(parse_offset(" 0x10 "), Some(16));
-        assert_eq!(parse_offset("ff ff"), Some(0xffff));
-        assert_eq!(parse_offset(""), None);
-        assert_eq!(parse_offset("0x"), None);
-        assert_eq!(parse_offset("xyz"), None);
-        assert_eq!(parse_offset("-1"), None);
     }
 
     #[test]

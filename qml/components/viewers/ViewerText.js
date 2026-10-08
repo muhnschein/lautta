@@ -97,11 +97,3 @@ function lineEndingText(kind) {
         return qsTrId("lautta-viewers-eol-none")
     }
 }
-
-// Pads a number to a hex offset of `digits` digits.
-function hexOffset(value, digits) {
-    var s = Math.floor(value).toString(16)
-    while (s.length < digits)
-        s = "0" + s
-    return s
-}

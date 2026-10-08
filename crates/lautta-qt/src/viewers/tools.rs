@@ -26,9 +26,6 @@ pub struct ViewerTools {
     noteViewed: qt_method!(fn(&self, uri: QString)),
     /// Notes a file handed to another app in Recents (opened).
     noteOpened: qt_method!(fn(&self, uri: QString)),
-    /// The `lautta://` URI of a local `file://` URL ("" when no location
-    /// covers it): the copy made for OpenRemote lives in Downloads.
-    uriForFileUrl: qt_method!(fn(&self, file_url: QString) -> QString),
     /// Test support: runs the event loop for `ms` milliseconds so async
     /// results of the viewer types arrive while a test is running.
     pump: qt_method!(fn(&self, ms: i32)),
@@ -50,15 +47,6 @@ impl ViewerTools {
 
     fn noteOpened(&self, uri: QString) {
         self.note(uri, RecentKind::Opened);
-    }
-
-    fn uriForFileUrl(&self, file_url: QString) -> QString {
-        let url = file_url.to_string();
-        let path = url.strip_prefix("file://");
-        let uri = core()
-            .zip(path)
-            .and_then(|(c, p)| c.locations.uri_for_local_path(std::path::Path::new(p)));
-        QString::from(uri.map(|u| u.to_string()).unwrap_or_default().as_str())
     }
 
     fn pump(&self, ms: i32) {

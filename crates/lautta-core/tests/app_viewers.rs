@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The viewers' core actions end to end: text load/save with the EDT-2
-//! conflict check, Markdown, hex, EXIF, the folder's images, remote
+//! conflict check, Markdown, EXIF, the folder's images, remote
 //! thumbnails (PRV-2/3), playback copies and Recents (ORG-2).
 
 use lautta_core::app::Core;
@@ -265,20 +265,6 @@ async fn markdown_is_rendered_and_truncation_is_reported() {
 }
 
 #[tokio::test]
-async fn hex_view_reads_ranges_of_remote_files() {
-    let h = home().await;
-    let data: Vec<u8> = (0..=255u8).cycle().take(5000).collect();
-    h.nas.add_file("f.bin", &data, 0);
-    let mut view = h.core.open_hex(&uri("lautta://nv-nas/f.bin")).await.unwrap();
-    assert_eq!(view.size(), 5000);
-    let rows = view.rows(0, 2).await.unwrap();
-    assert_eq!(rows[1].offset_text, "00000010");
-    let row = view.goto_offset(0x1000).unwrap();
-    assert_eq!(row, 256);
-    assert!(view.goto_offset(5000).is_err());
-}
-
-#[tokio::test]
 async fn exif_report_reads_the_head_of_the_file() {
     let h = home().await;
     h.nas.add_file("p/a.jpg", &exif_jpeg(6), 5_000);
@@ -291,19 +277,6 @@ async fn exif_report_reads_the_head_of_the_file() {
     assert_eq!(r.modified_ms, Some(5_000));
     let plain = h.core.exif_report(&uri("lautta://nv-nas/p/b.jpg")).await.unwrap();
     assert!(plain.info.is_none());
-}
-
-#[tokio::test]
-async fn sqlite_files_must_be_local() {
-    let h = home().await;
-    std::fs::write(h.root.join("Documents/d.sqlite"), b"x").unwrap();
-    let p = h
-        .core
-        .sqlite_file(&uri("lautta://user-documents/d.sqlite"))
-        .unwrap();
-    assert!(p.ends_with("Documents/d.sqlite"));
-    let err = h.core.sqlite_file(&uri("lautta://nv-nas/d.sqlite")).unwrap_err();
-    assert_eq!(err.kind, ErrorKind::Unsupported);
 }
 
 #[tokio::test]
