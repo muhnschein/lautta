@@ -443,7 +443,6 @@ pub struct InfoData {
     pub can_symlink: bool,
     pub can_hardlink: bool,
     pub can_set_mtime: bool,
-    pub can_checksum: bool,
     pub tags: Vec<TagInfo>,
 }
 
@@ -954,29 +953,8 @@ impl Core {
             can_symlink: caps.writable() && caps.has(cap::SYMLINKS),
             can_hardlink: caps.writable() && caps.has(cap::HARDLINKS),
             can_set_mtime: caps.writable() && caps.has(cap::SET_MTIME),
-            can_checksum: !entry.is_dir(),
             tags,
         })
-    }
-
-    /// Hex digest of a file (`md5`, `sha1`, `sha256`): the provider's own
-    /// when it can, otherwise streamed and hashed here (§10.1).
-    pub async fn checksum(&self, uri: &Uri, algorithm: &str) -> Result<String> {
-        let algo = algorithm.to_lowercase().replace('-', "");
-        if !matches!(algo.as_str(), "md5" | "sha1" | "sha256") {
-            return Err(Error::new(
-                ErrorKind::Unsupported,
-                format!("unknown algorithm {algorithm}"),
-            ));
-        }
-        let provider = self.provider(&uri.location)?;
-        match provider.checksum(&uri.path, &algo).await {
-            Ok(digest) => Ok(hex::encode(digest)),
-            Err(e) if e.kind == ErrorKind::Unsupported => {
-                stream_checksum(provider.as_ref(), &uri.path, &algo).await
-            }
-            Err(e) => Err(e),
-        }
     }
 
     /// Sets the modification time (ms since the epoch), if the location can.
@@ -1154,46 +1132,6 @@ async fn compress_remote(
     };
     let _ = provider.remove_file(&target.path).await;
     Err(failure)
-}
-
-async fn stream_checksum(provider: &dyn Provider, path: &VPath, algo: &str) -> Result<String> {
-    use sha2::Digest;
-    enum Hasher {
-        Md5(md5::Md5),
-        Sha1(sha1::Sha1),
-        Sha256(sha2::Sha256),
-    }
-    impl Hasher {
-        fn update(&mut self, data: &[u8]) {
-            match self {
-                Hasher::Md5(h) => h.update(data),
-                Hasher::Sha1(h) => h.update(data),
-                Hasher::Sha256(h) => h.update(data),
-            }
-        }
-        fn finish(self) -> Vec<u8> {
-            match self {
-                Hasher::Md5(h) => h.finalize().to_vec(),
-                Hasher::Sha1(h) => h.finalize().to_vec(),
-                Hasher::Sha256(h) => h.finalize().to_vec(),
-            }
-        }
-    }
-    let mut hasher = match algo {
-        "md5" => Hasher::Md5(md5::Md5::new()), // NOSONAR: a user-chosen file checksum, not security
-        "sha1" => Hasher::Sha1(sha1::Sha1::new()), // NOSONAR: a user-chosen file checksum, not security
-        _ => Hasher::Sha256(sha2::Sha256::new()),
-    };
-    let handle = provider.open_read(path, Lane::Bulk).await?;
-    let mut offset = 0u64;
-    loop {
-        let chunk = handle.read_at(offset, 256 * 1024).await?;
-        if chunk.is_empty() {
-            return Ok(hex::encode(hasher.finish()));
-        }
-        offset += chunk.len() as u64;
-        hasher.update(&chunk);
-    }
 }
 
 /// The engineering names of conflict choices (QML ⇄ core, OPS-2).

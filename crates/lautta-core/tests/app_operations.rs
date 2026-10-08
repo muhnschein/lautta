@@ -417,7 +417,7 @@ async fn summary_conflicts_and_start_with_options() {
 }
 
 #[tokio::test]
-async fn info_checksum_and_links() {
+async fn info_and_links() {
     let h = home().await;
     write(&h.root.join("Documents/doc.txt"), b"abc");
     let u = uri("lautta://user-documents/doc.txt");
@@ -432,22 +432,9 @@ async fn info_checksum_and_links() {
     assert_eq!(info.tags.len(), 1);
     assert_eq!(info.tags[0].name, "Work");
     assert!(info.mode_text.len() == 9 && info.mode.is_some());
-    assert!(info.can_checksum && info.can_symlink);
+    assert!(info.can_symlink);
     assert!(info.free_bytes.is_some());
     assert!(!info.is_dir);
-
-    assert_eq!(
-        h.core.checksum(&u, "SHA-256").await.unwrap(),
-        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-    );
-    assert_eq!(
-        h.core.checksum(&u, "md5").await.unwrap(),
-        "900150983cd24fb0d6963f7d28e17f72"
-    );
-    assert_eq!(
-        h.core.checksum(&u, "crc32").await.unwrap_err().kind,
-        ErrorKind::Unsupported
-    );
 
     let dl = uri("lautta://user-downloads/");
     let hard = h.core.make_link(&u, &dl, true).await;
@@ -464,20 +451,6 @@ async fn info_checksum_and_links() {
     let hard = h.core.make_link(&u, &same, true).await.unwrap();
     assert_eq!(hard, uri("lautta://user-documents/doc 2.txt"));
     assert_eq!(std::fs::read(h.root.join("Documents/doc 2.txt")).unwrap(), b"abc");
-}
-
-#[tokio::test]
-async fn checksum_falls_back_to_streaming() {
-    let h = home().await;
-    let mem = MemoryProvider::new(Capabilities::with(&[cap::WRITE]));
-    mem.add_file("f", b"abc", 0);
-    h.core.locations.register(
-        Location::remote("nas", LocationKind::AdHoc, "NAS", None),
-        Arc::new(mem),
-    );
-    // The in-memory provider hashes itself; compare against a provider that cannot.
-    let sum = h.core.checksum(&uri("lautta://nas/f"), "sha1").await.unwrap();
-    assert_eq!(sum, "a9993e364706816aba3e25717850c26c9cd0d89d");
 }
 
 #[tokio::test]

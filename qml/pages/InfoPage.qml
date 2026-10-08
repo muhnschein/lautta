@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Info of one file or folder (OPS-12): details, tags (ORG-3), checksums,
-// favourite, file system and links.
+// Info of one file or folder (OPS-12): details, tags (ORG-3), favourite,
+// file system and links.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -16,13 +16,8 @@ Page {
 
     readonly property var info: Json.value(infoModel.infoJson, {})
     readonly property var tags: Json.value(infoModel.tagsJson, [])
-    property var checksums: ({})
 
     allowedOrientations: Orientation.All
-
-    function hex(algo) {
-        return checksums[algo] || ""
-    }
 
     function typeText() {
         if (info.isDir)
@@ -69,11 +64,6 @@ Page {
     InfoModel {
         id: infoModel
         uri: page.uri
-        onChecksumReady: {
-            var copy = page.checksums
-            copy[algo] = hex
-            page.checksums = copy
-        }
         onLinkMade: {
             //% "Link created"
             notice.text = qsTrId("lautta-info-link-made")
@@ -226,45 +216,6 @@ Page {
                                 font.pixelSize: Theme.fontSizeSmall
                             }
                         }
-                    }
-                }
-            }
-
-            SectionHeader {
-                visible: page.info.canChecksum === true
-                //% "Checksums"
-                text: qsTrId("lautta-info-checksums")
-            }
-            Repeater {
-                model: page.info.canChecksum === true ? ["sha256", "md5"] : []
-
-                Column {
-                    width: column.width
-
-                    Label {
-                        x: Theme.horizontalPageMargin
-                        width: parent.width - 2 * Theme.horizontalPageMargin
-                        color: Theme.secondaryHighlightColor
-                        font.pixelSize: Theme.fontSizeExtraSmall
-                        text: modelData === "sha256" ? "SHA-256" : "MD5"
-                    }
-                    Label {
-                        x: Theme.horizontalPageMargin
-                        width: parent.width - 2 * Theme.horizontalPageMargin
-                        visible: page.hex(modelData).length > 0
-                        text: page.hex(modelData)
-                        font.family: "monospace"
-                        font.pixelSize: Theme.fontSizeExtraSmall
-                        wrapMode: Text.WrapAnywhere
-                    }
-                    Button {
-                        anchors.right: parent.right
-                        anchors.rightMargin: Theme.horizontalPageMargin
-                        visible: page.hex(modelData).length === 0
-                        enabled: !infoModel.checksumBusy
-                        //% "Calculate"
-                        text: qsTrId("lautta-info-calculate")
-                        onClicked: infoModel.computeChecksum(modelData)
                     }
                 }
             }

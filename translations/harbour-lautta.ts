@@ -1341,14 +1341,6 @@
         <source>+ Add</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-info-checksums">
-        <source>Checksums</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-calculate">
-        <source>Calculate</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-info-favourite">
         <source>Favourite</source>
         <translation type="unfinished"></translation>
