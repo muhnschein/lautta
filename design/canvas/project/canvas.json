@@ -602,14 +602,6 @@
       "x": 1440,
       "y": 6580
     },
-    "TwoPane.dc.html": {
-      "h": 400,
-      "is_interactive": true,
-      "title": "Two-pane (landscape)",
-      "w": 860,
-      "x": 0,
-      "y": 13620
-    },
     "VideoPlayer.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -782,7 +774,6 @@
     "LocationSettings.dc.html",
     "About.dc.html",
     "CrashReport.dc.html",
-    "TwoPane.dc.html",
     "DirectoryLandscape.dc.html",
     "DirectorySelectPulley.dc.html",
     "RecentsPulley.dc.html",

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The folder view used by DirectoryPage and by each side of TwoPanePage
-// (SPEC §9, §15.3): header with the path menu, list or grid, pulley,
+// The folder view of DirectoryPage (SPEC §9, §15.3): header with the path menu, list or grid, pulley,
 // context menu, selection mode with a docked panel, paste bar, remorse and
 // the placeholders for empty, not accessible, offline, large and error.
 import QtQuick 2.6
@@ -17,10 +16,6 @@ Item {
     id: view
 
     property string uri
-    // Narrow rows for one side of the two-pane page.
-    property bool compact
-    // The other pane's folder in the two-pane page (copy/move across).
-    property string otherUri
     property bool selectionMode
     property bool detailsShown
     property alias model: dir
@@ -32,8 +27,7 @@ Item {
     property string pendingName
     property string pendingShare
 
-    // Asks the host to open a folder: the page stack pushes a page, a
-    // two-pane side navigates in place.
+    // Asks the host page to open a folder.
     signal openFolder(string uri)
 
     function endSelection() {
@@ -181,8 +175,6 @@ Item {
         case "move_to": pickFolder(uris, "move"); break
         case "download": pickFolder(uris, "download"); break
         case "upload_to": pickFolder(uris, "upload"); break
-        case "copy_other": Operations.copyTo(JSON.stringify(uris), otherUri); break
-        case "move_other": Operations.moveTo(JSON.stringify(uris), otherUri); break
         case "info": pageStack.push(Qt.resolvedUrl("../../pages/InfoPage.qml"), { "uri": uris[0] }); break
         case "compress": pageStack.push(Qt.resolvedUrl("../../dialogs/CompressDialog.qml"), { "uris": JSON.stringify(uris) }); break
         case "extract": pageStack.push(Qt.resolvedUrl("../../dialogs/ExtractDialog.qml"), { "archiveUri": uris[0] }); break
@@ -479,7 +471,7 @@ Item {
                 }
             }
 
-            contentHeight: view.compact ? Theme.itemSizeSmall : Theme.itemSizeMedium
+            contentHeight: Theme.itemSizeMedium
             menu: view.selecting || model.inaccessible ? null : contextMenu
             enabled: !model.inaccessible
             opacity: model.inaccessible ? Theme.opacityLow : 1
@@ -505,7 +497,7 @@ Item {
 
                 x: Theme.horizontalPageMargin
                 anchors.verticalCenter: parent.verticalCenter
-                size: view.compact ? Theme.iconSizeSmall + Theme.paddingSmall : Theme.iconSizeMedium
+                size: Theme.iconSizeMedium
                 category: model.category
                 isDir: model.isDir
                 isSymlink: model.isSymlink
@@ -543,7 +535,7 @@ Item {
                         width: parent.width - (lossyBadge.visible ? lossyBadge.width + parent.spacing : 0)
                         text: model.name
                         truncationMode: TruncationMode.Fade
-                        font.pixelSize: view.compact ? Theme.fontSizeSmall : Theme.fontSizeMedium
+                        font.pixelSize: Theme.fontSizeMedium
                         color: item.highlighted || model.selected ? Theme.highlightColor : Theme.primaryColor
                     }
                     Rectangle {

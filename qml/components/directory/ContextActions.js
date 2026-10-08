@@ -68,17 +68,11 @@ function text(id) {
     case "open_remote":
         //% "Open copy"
         return qsTrId("lautta-dir-act-open-remote")
-    case "copy_other":
-        //% "Copy to other pane"
-        return qsTrId("lautta-dir-act-copy-other")
-    case "move_other":
-        //% "Move to other pane"
-        return qsTrId("lautta-dir-act-move-other")
     }
     return id
 }
 
-// ctx: { isDir, isLocal, writable, hasRemote, category, otherPane }
+// ctx: { isDir, isLocal, writable, hasRemote, category }
 function applicable(id, ctx) {
     var file = !ctx.isDir
     switch (id) {
@@ -116,11 +110,6 @@ function split(order, ctx) {
         else
             list.push({ "id": id, "text": text(id) })
     }
-    if (ctx.otherPane) {
-        list.push({ "id": "copy_other", "text": text("copy_other") })
-        if (ctx.writable)
-            list.push({ "id": "move_other", "text": text("move_other") })
-    }
     return { "row": row, "list": list }
 }
 
@@ -138,7 +127,7 @@ function order(settingValue) {
 }
 
 // Actions of the selection panel's "more" row (board DirectorySelect).
-function moreActions(single, hasPermissions, otherPane) {
+function moreActions(single, hasPermissions) {
     var out = [
         { "id": "compress", "icon": "image://theme/icon-m-file-compressed", "text": text("compress") },
         //% "Rename all"
@@ -148,7 +137,5 @@ function moreActions(single, hasPermissions, otherPane) {
     if (single && hasPermissions)
         //% "Permissions"
         out.push({ "id": "permissions", "icon": "dir-lock", "text": qsTrId("lautta-dir-act-permissions") })
-    if (otherPane)
-        out.push({ "id": "copy_other", "icon": "dir-copy", "text": text("copy_other") })
     return out
 }

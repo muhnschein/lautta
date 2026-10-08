@@ -14,7 +14,6 @@ DockedPanel {
     readonly property bool writable: owner ? owner.model.writable : false
     readonly property int count: owner ? owner.model.selectedCount : 0
     readonly property bool hasPermissions: owner ? owner.model.hasCapability("Permissions") : false
-    readonly property bool otherPane: owner ? owner.otherUri.length > 0 : false
 
     function _run(id) {
         moreOpen = false
@@ -37,7 +36,7 @@ DockedPanel {
             visible: panel.moreOpen
             height: visible ? Theme.itemSizeLarge : 0
             menu: null
-            actions: Actions.moreActions(panel.count === 1, panel.hasPermissions, panel.otherPane)
+            actions: Actions.moreActions(panel.count === 1, panel.hasPermissions)
             onTriggered: panel._run(actionId)
         }
 

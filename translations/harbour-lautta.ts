@@ -3159,14 +3159,6 @@
         <source>Open copy</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-act-copy-other">
-        <source>Copy to other pane</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-act-move-other">
-        <source>Move to other pane</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-act-rename-all">
         <source>Rename all</source>
         <translation type="unfinished"></translation>

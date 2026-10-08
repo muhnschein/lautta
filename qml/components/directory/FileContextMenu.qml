@@ -20,8 +20,7 @@ ContextMenu {
         "isLocal": App.isLocal(info.uri),
         "writable": owner ? owner.model.writable : false,
         "hasRemote": owner ? owner.hasRemote : false,
-        "category": info.category,
-        "otherPane": owner ? owner.otherUri.length > 0 : false
+        "category": info.category
     })
 
     IconRow {
