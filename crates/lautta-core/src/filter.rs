@@ -1,39 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Instant filter (BRW-3): substring match that ignores case and diacritics,
-//! hidden-files toggle (dot names and the hidden attribute) and type chips.
+//! and the hidden-files toggle (dot names and the hidden attribute). The
+//! folder picker also hides files.
 
 use crate::entry::Entry;
-use crate::mime::{self, FileCategory};
-use std::collections::BTreeSet;
 use unicode_normalization::char::is_combining_mark;
 use unicode_normalization::UnicodeNormalization;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum TypeChip {
-    Images,
-    Videos,
-    Audio,
-    Documents,
-    Archives,
-    Folders,
-}
-
-impl TypeChip {
-    pub fn matches(self, category: FileCategory) -> bool {
-        use FileCategory as C;
-        match self {
-            TypeChip::Images => category == C::Image,
-            TypeChip::Videos => category == C::Video,
-            TypeChip::Audio => category == C::Audio,
-            TypeChip::Archives => category == C::Archive,
-            TypeChip::Folders => category == C::Folder,
-            TypeChip::Documents => matches!(
-                category,
-                C::Text | C::Code | C::Markdown | C::Pdf | C::Document | C::Spreadsheet | C::Presentation
-            ),
-        }
-    }
-}
 
 /// Case- and diacritics-insensitive form used for matching.
 pub fn fold_text(s: &str) -> String {
@@ -47,13 +19,12 @@ pub fn fold_text(s: &str) -> String {
 pub struct FilterOptions {
     needle: String,
     pub show_hidden: bool,
-    /// Empty means every type; otherwise an entry must match one of the
-    /// chips (folders included only with [`TypeChip::Folders`]).
-    pub chips: BTreeSet<TypeChip>,
+    /// Only folders pass (the folder picker, OPS-10).
+    pub folders_only: bool,
 }
 
 impl FilterOptions {
-    /// No text, no chips; only the hidden-files toggle set.
+    /// No text, files and folders; only the hidden-files toggle set.
     pub fn with_hidden(show_hidden: bool) -> FilterOptions {
         FilterOptions {
             show_hidden,
@@ -72,23 +43,17 @@ impl FilterOptions {
 
     /// True when nothing but the hidden toggle could exclude an entry.
     pub fn is_inactive(&self) -> bool {
-        self.needle.is_empty() && self.chips.is_empty()
+        self.needle.is_empty() && !self.folders_only
     }
 
     pub fn matches(&self, entry: &Entry) -> bool {
-        (self.show_hidden || !entry.is_hidden()) && self.matches_text(entry) && self.matches_chips(entry)
+        (self.show_hidden || !entry.is_hidden())
+            && (!self.folders_only || entry.is_dir())
+            && self.matches_text(entry)
     }
 
     fn matches_text(&self, entry: &Entry) -> bool {
         self.needle.is_empty() || fold_text(&String::from_utf8_lossy(&entry.name)).contains(&self.needle)
-    }
-
-    fn matches_chips(&self, entry: &Entry) -> bool {
-        if self.chips.is_empty() {
-            return true;
-        }
-        let category = mime::category_of(entry);
-        self.chips.iter().any(|c| c.matches(category))
     }
 }
 
@@ -151,37 +116,24 @@ mod tests {
     }
 
     #[test]
-    fn chips_select_categories() {
+    fn folders_only_hides_files() {
         let mut o = opts("");
-        o.chips.insert(TypeChip::Images);
         assert!(o.matches(&file("a.png")));
-        assert!(!o.matches(&file("a.mp4")));
-        assert!(!o.matches(&Entry::new(b"dir", Kind::Dir)));
-        o.chips.insert(TypeChip::Folders);
-        assert!(o.matches(&Entry::new(b"dir", Kind::Dir)));
-        o.chips.clear();
-        o.chips.insert(TypeChip::Documents);
-        for n in ["a.txt", "a.rs", "a.md", "a.pdf", "a.docx", "a.xlsx", "a.pptx"] {
-            assert!(o.matches(&file(n)), "{n}");
-        }
-        assert!(!o.matches(&file("a.zip")));
-        o.chips = [TypeChip::Videos, TypeChip::Audio, TypeChip::Archives]
-            .into_iter()
-            .collect();
-        assert!(o.matches(&file("a.mkv")));
-        assert!(o.matches(&file("a.flac")));
-        assert!(o.matches(&file("a.7z")));
+        o.folders_only = true;
         assert!(!o.matches(&file("a.png")));
+        assert!(o.matches(&Entry::new(b"dir", Kind::Dir)));
     }
 
     #[test]
-    fn text_and_chips_combine() {
+    fn text_and_folders_only_combine() {
         let mut o = opts("holiday");
-        o.chips.insert(TypeChip::Images);
-        assert!(o.matches(&file("Holiday.jpg")));
-        assert!(!o.matches(&file("Holiday.txt")));
-        assert!(!o.matches(&file("work.jpg")));
         assert!(!o.is_inactive());
+        o.folders_only = true;
+        assert!(o.matches(&Entry::new(b"Holiday", Kind::Dir)));
+        assert!(!o.matches(&file("Holiday.jpg")));
+        assert!(!o.matches(&Entry::new(b"Work", Kind::Dir)));
+        o.set_text("");
+        assert!(!o.is_inactive(), "folders only filters");
         assert!(FilterOptions::default().is_inactive());
     }
 }

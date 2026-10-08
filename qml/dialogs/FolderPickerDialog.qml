@@ -32,7 +32,7 @@ Dialog {
         id: folders
 
         uri: dialog.currentUri
-        chips: JSON.stringify(["folders"])
+        foldersOnly: true
     }
 
     PathModel {

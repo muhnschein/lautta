@@ -10,7 +10,7 @@ use crate::runtime::{self, core, spawn_then};
 use lautta_core::app_directory::{file_url, ListEvent};
 use lautta_core::entry::{cap, Entry, EntryFlags};
 use lautta_core::error::ErrorKind;
-use lautta_core::filter::{FilterOptions, TypeChip};
+use lautta_core::filter::FilterOptions;
 use lautta_core::listing::{ListChange, ListingState};
 use lautta_core::locations::LocationStatus;
 use lautta_core::mime::{self, FileCategory};
@@ -63,30 +63,6 @@ fn is_connectivity(kind: ErrorKind) -> bool {
     )
 }
 
-fn chip_name(c: TypeChip) -> &'static str {
-    match c {
-        TypeChip::Images => "images",
-        TypeChip::Videos => "videos",
-        TypeChip::Audio => "audio",
-        TypeChip::Documents => "documents",
-        TypeChip::Archives => "archives",
-        TypeChip::Folders => "folders",
-    }
-}
-
-fn chip_from_name(s: &str) -> Option<TypeChip> {
-    [
-        TypeChip::Images,
-        TypeChip::Videos,
-        TypeChip::Audio,
-        TypeChip::Documents,
-        TypeChip::Archives,
-        TypeChip::Folders,
-    ]
-    .into_iter()
-    .find(|c| chip_name(*c) == s)
-}
-
 fn qs(s: &str) -> QString {
     QString::from(s)
 }
@@ -126,8 +102,8 @@ pub struct DirectoryModel {
     prefsChanged: qt_signal!(),
 
     filterText: qt_property!(QString; NOTIFY filterChanged WRITE set_filter_text),
-    /// JSON array of chip names: folders, documents, images, audio, videos, archives.
-    chips: qt_property!(QString; NOTIFY filterChanged WRITE set_chips),
+    /// Hide files (the folder picker).
+    foldersOnly: qt_property!(bool; NOTIFY filterChanged WRITE set_folders_only),
     filterChanged: qt_signal!(),
 
     refresh: qt_method!(fn(&mut self)),
@@ -580,10 +556,9 @@ impl DirectoryModel {
         self.refilter();
     }
 
-    fn set_chips(&mut self, json: QString) {
-        self.chips = json;
-        let names: Vec<String> = from_json(&self.chips.to_string()).unwrap_or_default();
-        self.filter.chips = names.iter().filter_map(|n| chip_from_name(n)).collect();
+    fn set_folders_only(&mut self, value: bool) {
+        self.foldersOnly = value;
+        self.filter.folders_only = value;
         self.refilter();
     }
 

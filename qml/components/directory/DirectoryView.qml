@@ -205,7 +205,7 @@ Item {
             return "noaccess"
         if (dir.errorKind.length > 0)
             return "error"
-        return dir.chips !== "[]" && dir.chips.length > 0 ? "nomatch" : "empty"
+        return "empty"
     }
 
     function placeholderTitle(kind) {
@@ -213,9 +213,6 @@ Item {
         case "noaccess":
             //% "Not accessible"
             return qsTrId("lautta-dir-noaccess")
-        case "nomatch":
-            //% "Nothing to show"
-            return qsTrId("lautta-dir-nomatch")
         case "empty":
             //% "No files"
             return qsTrId("lautta-dir-empty")
@@ -246,9 +243,6 @@ Item {
                    ? qsTrId("lautta-dir-noaccess-hint")
                    //% "You don't have permission to open this folder."
                    : qsTrId("lautta-dir-noaccess-permission")
-        case "nomatch":
-            //% "No item matches the type filter."
-            return qsTrId("lautta-dir-nomatch-hint")
         case "empty":
             return dir.writable
                    //% "Pull down to create a folder or paste"
@@ -261,9 +255,6 @@ Item {
     }
 
     function placeholderButtons(kind) {
-        if (kind === "nomatch")
-            //% "Show all"
-            return [{ "text": qsTrId("lautta-dir-show-all"), "action": "showAll" }]
         if (kind !== "error")
             return []
         var buttons = []
@@ -282,7 +273,6 @@ Item {
         switch (action) {
         case "retry": dir.refresh(); break
         case "details": detailsShown = !detailsShown; break
-        case "showAll": dir.chips = "[]"; break
         case "signIn":
             pageStack.push(Qt.resolvedUrl("../../pages/LocationSettingsPage.qml"), { "locationId": uri.split("/")[2] })
             break
@@ -435,15 +425,6 @@ Item {
                 text: ErrorText.message(dir.errorKind, { "location": dir.locationName, "item": dir.title })
                 actionText: qsTrId("lautta-dir-retry")
                 onAction: dir.refresh()
-            }
-
-            InfoBanner {
-                visible: dir.count > 0 && dir.chips !== "[]" && dir.chips.length > 0
-                height: visible ? implicitHeight : 0
-                //% "Only some types are shown"
-                text: qsTrId("lautta-dir-chips-active")
-                actionText: qsTrId("lautta-dir-show-all")
-                onAction: dir.chips = "[]"
             }
         }
     }

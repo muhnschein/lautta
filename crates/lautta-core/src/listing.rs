@@ -585,9 +585,7 @@ mod tests {
     fn random_filter(rng: &mut Rng) -> FilterOptions {
         let mut f = FilterOptions::with_hidden(rng.chance(50));
         f.set_text(["", "a", "e", "1", "file"][rng.below(5)]);
-        if rng.chance(20) {
-            f.chips.insert(crate::filter::TypeChip::Images);
-        }
+        f.folders_only = rng.chance(20);
         f
     }
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // View options of a folder (board ViewOptions, SPEC BRW-3/BRW-4): sort,
-// view, thumbnails, type filter, and whether to remember them for this
+// view, thumbnails, and whether to remember them for this
 // folder or for all folders. `model` is the folder's DirectoryModel.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -10,30 +10,7 @@ Dialog {
     id: dialog
 
     property var model
-    property var chipNames: ["folders", "documents", "images", "audio", "videos", "archives"]
     readonly property var sortKeys: ["name", "size", "modified", "type"]
-
-    function _chipsOn() {
-        var on = {}
-        var current = []
-        try {
-            current = JSON.parse(model.chips)
-        } catch (e) {
-            current = []
-        }
-        for (var i = 0; i < chipNames.length; ++i)
-            on[chipNames[i]] = current.length === 0 || current.indexOf(chipNames[i]) >= 0
-        return on
-    }
-
-    function _chosenChips() {
-        var chosen = []
-        for (var i = 0; i < chipRepeater.count; ++i)
-            if (chipRepeater.itemAt(i).checked)
-                chosen.push(chipNames[i])
-        // Everything on (or nothing on) means no type filter.
-        return chosen.length === chipNames.length || chosen.length === 0 ? [] : chosen
-    }
 
     function _apply() {
         var everywhere = scopeBox.currentIndex === 1
@@ -55,30 +32,6 @@ Dialog {
             prefs = { "scope": "all" }
         }
         model.setViewPrefs(JSON.stringify(prefs))
-        model.chips = JSON.stringify(_chosenChips())
-    }
-
-    function _chipText(name) {
-        switch (name) {
-        case "folders":
-            //% "Folders"
-            return qsTrId("lautta-dir-chip-folders")
-        case "documents":
-            //% "Documents"
-            return qsTrId("lautta-dir-chip-documents")
-        case "images":
-            //% "Images"
-            return qsTrId("lautta-dir-chip-images")
-        case "audio":
-            //% "Audio"
-            return qsTrId("lautta-dir-chip-audio")
-        case "videos":
-            //% "Video"
-            return qsTrId("lautta-dir-chip-video")
-        default:
-            //% "Archives"
-            return qsTrId("lautta-dir-chip-archives")
-        }
     }
 
     allowedOrientations: Orientation.All
@@ -176,28 +129,6 @@ Dialog {
                 checked: dialog.model ? dialog.model.thumbnails : true
                 //% "Thumbnails"
                 text: qsTrId("lautta-dir-opts-thumbnails")
-            }
-
-            SectionHeader {
-                //% "Show only"
-                text: qsTrId("lautta-dir-opts-show-only")
-            }
-
-            Grid {
-                width: parent.width
-                columns: 2
-
-                Repeater {
-                    id: chipRepeater
-
-                    model: dialog.chipNames
-
-                    TextSwitch {
-                        width: column.width / 2
-                        checked: dialog._chipsOn()[modelData]
-                        text: dialog._chipText(modelData)
-                    }
-                }
             }
 
             SectionHeader {

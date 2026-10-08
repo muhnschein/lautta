@@ -3129,10 +3129,6 @@
         <source>Not accessible</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-nomatch">
-        <source>Nothing to show</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-empty">
         <source>No files</source>
         <translation type="unfinished"></translation>
@@ -3161,20 +3157,12 @@
         <source>You don&apos;t have permission to open this folder.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-nomatch-hint">
-        <source>No item matches the type filter.</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-empty-hint">
         <source>Pull down to create a folder or paste</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-empty-hint-readonly">
         <source>This folder is empty</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-show-all">
-        <source>Show all</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-update-sign-in">
@@ -3217,10 +3205,6 @@
     </message>
     <message id="lautta-dir-use-list">
         <source>Use list</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-chips-active">
-        <source>Only some types are shown</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-row-not-accessible">
@@ -3367,30 +3351,6 @@
         <source>Modified</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-chip-folders">
-        <source>Folders</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-chip-documents">
-        <source>Documents</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-chip-images">
-        <source>Images</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-chip-audio">
-        <source>Audio</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-chip-video">
-        <source>Video</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-chip-archives">
-        <source>Archives</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-opts-apply">
         <source>Apply</source>
         <translation type="unfinished"></translation>
@@ -3449,10 +3409,6 @@
     </message>
     <message id="lautta-dir-opts-thumbnails">
         <source>Thumbnails</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-opts-show-only">
-        <source>Show only</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-opts-apply-to">
