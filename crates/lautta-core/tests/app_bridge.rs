@@ -6,8 +6,9 @@
 mod bridge_support;
 
 use bridge_support::{config, eventually};
-use lautta_bridge_proto::fake::FakeBridge;
+use lautta_bridge_proto::fake::{Consent, FakeBridge};
 use lautta_core::app::{Core, Started};
+use lautta_core::bridge::BridgeStatus;
 use lautta_core::locations::{LocationRegistry, LocationStatus};
 use lautta_core::ops::OperationKind;
 use lautta_core::paths::AppPaths;
@@ -41,6 +42,19 @@ async fn fake_with_files() -> FakeBridge {
     fake.add_account(1, "sftp", "NAS", "nas.home").await;
     fake.put_file("account:1", b"photos/a.jpg", b"jpeg bytes");
     fake
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn transfers_wait_for_the_bridge_only_while_consent_is_denied() {
+    let fake = fake_with_files().await;
+    fake.set_consent(Consent::Denied).await;
+    let (_home, core, _l) = core_with(&fake, true).await;
+    let bridge = core.bridge.clone().unwrap();
+    bridge.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
+    assert!(!core.bridge_reachable());
+    fake.set_consent(Consent::Granted).await;
+    bridge.wait_status(|s| s == BridgeStatus::Ready).await;
+    assert!(core.bridge_reachable());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

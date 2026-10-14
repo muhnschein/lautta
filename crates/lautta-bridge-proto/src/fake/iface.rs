@@ -952,6 +952,7 @@ mod tests {
         assert!(info.contains(&("user".to_owned(), InfoValue::Str("other".into()))));
         assert!(!info.iter().any(|(k, _)| k == "port"));
         assert_eq!(parse_adhoc("smb://h/", &plain()).unwrap().provider, "smb");
+        assert_eq!(parse_adhoc("fake://h/", &plain()).unwrap().provider, "fake");
     }
 
     #[test]

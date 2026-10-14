@@ -37,6 +37,17 @@ async fn connects_to_a_socket_path_without_a_bus() {
 }
 
 #[tokio::test]
+async fn hello_answers_the_bridge_version_for_a_client_name_of_up_to_256_bytes() {
+    let fake = fake_with_account().await;
+    fake.set_hello("0.6.0");
+    let conn = fake.connect().await.unwrap();
+    let e = BridgeError::from(conn.proxy().hello(&"x".repeat(257)).await.unwrap_err());
+    assert_eq!(e, BridgeError::InvalidArgs("Argument 1 is too long".into()));
+    let version = conn.proxy().hello(&"x".repeat(256)).await.unwrap();
+    assert_eq!(version, "0.6.0");
+}
+
+#[tokio::test]
 async fn a_missing_socket_is_a_disconnect() {
     let dir = tempfile::tempdir().unwrap();
     let e = connect(&dir.path().join("none.sock")).await.err().unwrap();
