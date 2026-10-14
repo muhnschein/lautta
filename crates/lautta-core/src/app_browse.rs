@@ -125,19 +125,8 @@ pub fn provider_label(provider: &str) -> String {
     match provider {
         "sftp" | "ssh" => "SFTP".to_owned(),
         "smb" | "cifs" => "SMB".to_owned(),
-        "webdav" | "dav" | "davs" => "WebDAV".to_owned(),
-        "ftp" => "FTP".to_owned(),
-        "ftps" => "FTPS".to_owned(),
         "nfs" => "NFS".to_owned(),
         other => other.to_uppercase(),
-    }
-}
-
-/// The URL scheme `Connect to server` understands for a netvfs provider.
-fn scheme_for(provider: &str) -> &str {
-    match provider {
-        "webdav" | "dav" => "davs",
-        other => other,
     }
 }
 
@@ -146,8 +135,6 @@ pub fn nearby_url(n: &NearbyServer) -> String {
     let default_port = match n.provider.as_str() {
         "sftp" | "ssh" => 22,
         "smb" | "cifs" => 445,
-        "ftp" => 21,
-        "webdav" | "dav" | "davs" => 443,
         _ => 0,
     };
     let port = if n.port == 0 || n.port == default_port {
@@ -155,8 +142,7 @@ pub fn nearby_url(n: &NearbyServer) -> String {
     } else {
         format!(":{}", n.port)
     };
-    let path = n.path.display();
-    format!("{}://{}{port}/{path}", scheme_for(&n.provider), n.host)
+    format!("{}://{}{port}/", n.provider, n.host)
 }
 
 /// `scheme://user@host/path` without password, query or fragment.
@@ -747,8 +733,7 @@ mod tests {
     #[test]
     fn provider_labels() {
         assert_eq!(provider_label("sftp"), "SFTP");
-        assert_eq!(provider_label("webdav"), "WebDAV");
-        assert_eq!(provider_label("ftps"), "FTPS");
+        assert_eq!(provider_label("smb"), "SMB");
         assert_eq!(provider_label("weird"), "WEIRD");
     }
 
@@ -759,15 +744,17 @@ mod tests {
             provider: "smb".into(),
             host: "mac-mini.local".into(),
             port: 445,
-            path: VPath::parse(b"share/x").unwrap(),
         };
-        assert_eq!(nearby_url(&n), "smb://mac-mini.local/share/x");
+        assert_eq!(nearby_url(&n), "smb://mac-mini.local/");
         n.port = 4445;
-        assert_eq!(nearby_url(&n), "smb://mac-mini.local:4445/share/x");
-        n.provider = "webdav".into();
-        n.port = 443;
-        n.path = VPath::root();
-        assert_eq!(nearby_url(&n), "davs://mac-mini.local/");
+        assert_eq!(nearby_url(&n), "smb://mac-mini.local:4445/");
+        n.port = 0;
+        assert_eq!(nearby_url(&n), "smb://mac-mini.local/");
+        n.provider = "sftp".into();
+        n.port = 22;
+        assert_eq!(nearby_url(&n), "sftp://mac-mini.local/");
+        n.port = 2222;
+        assert_eq!(nearby_url(&n), "sftp://mac-mini.local:2222/");
     }
 
     #[test]

@@ -46,7 +46,7 @@ crates/lautta-bridge-proto   org.netvfs.Bridge1 types + zbus proxy + fake bridge
 crates/lautta-qt             qmetaobject models/facades, C++ glue (SailfishApp, MediaSource)
 crates/harbour-lautta        the binary (exported C main, SPEC RS-3)
 qml/                         pages/, components/, dialogs/, viewers/, cover/
-tests/bridge-contract        netvfs's protocol contract (copied from netvfs f94006e)
+tests/bridge-contract        netvfs's protocol contract (copied from netvfs a025b1f)
 ```
 
 Shared core types: `Error`/`ErrorKind` (error.rs), `VPath` (vpath.rs), `Entry`/`Kind`/

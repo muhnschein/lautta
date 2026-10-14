@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Questions of the bridge (identity, keyboard-interactive, insecure
+//! Questions of the bridge (identity, keyboard-interactive, insecure SMB
 //! connection) travel to the app's hub and the answers travel back (SPEC NVB-6,
 //! §5.3), and secrets are wiped (SEC-1).
 
@@ -23,6 +23,14 @@ fn question(kind: &str, details: &[(&str, InfoValue)]) -> ScriptedQuestion {
     }
 }
 
+/// SMB's `guest` profile, which the bridge asks `insecure-consent` for.
+fn guest() -> AdHocOptions {
+    AdHocOptions {
+        security_profile: Some("guest".into()),
+        ..AdHocOptions::default()
+    }
+}
+
 fn s(v: &str) -> InfoValue {
     InfoValue::Str(v.to_owned())
 }
@@ -31,15 +39,13 @@ fn identity() -> ScriptedQuestion {
     question(
         "identity-unknown",
         &[
+            ("location", s("adhoc:1")),
             ("host", s("nas.example")),
-            ("fingerprint", s("SHA256:abc")),
-            ("algorithm", s("ssh-ed25519")),
             ("port", InfoValue::Int(22)),
-            ("systemTrusted", InfoValue::Bool(false)),
-            (
-                "problems",
-                InfoValue::Strings(vec!["self-signed".into(), "expired".into()]),
-            ),
+            ("provider", s("sftp")),
+            ("algorithm", s("ssh-ed25519")),
+            ("fingerprint", s("SHA256:abc")),
+            ("publicKey", InfoValue::Bytes(vec![0x00, 0x0b, 0xfe])),
         ],
     )
 }
@@ -82,8 +88,10 @@ async fn an_unknown_identity_is_asked_and_accepted() {
     assert_eq!(q.details["host"], "nas.example");
     assert_eq!(q.details["fingerprint"], "SHA256:abc");
     assert_eq!(q.details["port"], "22");
-    assert_eq!(q.details["systemTrusted"], "false");
-    assert_eq!(q.details["problems"], "self-signed\nexpired");
+    assert_eq!(q.details["provider"], "sftp");
+    assert_eq!(q.details["algorithm"], "ssh-ed25519");
+    assert_eq!(q.details["publicKey"], "000bfe");
+    assert_eq!(q.details.len(), 7);
     assert!(!connect.is_finished(), "the connection waits for the answer");
 
     rig.questions.answer(&q.id, Answer::Accept).unwrap();
@@ -156,13 +164,13 @@ async fn keyboard_interactive_answers_reach_the_bridge_unchanged() {
 }
 
 #[tokio::test]
-async fn an_insecure_connection_needs_consent() {
+async fn an_insecure_smb_profile_needs_consent() {
     let rig = Rig::ready().await;
     rig.fake.script_adhoc_questions(vec![question(
         "insecure-consent",
         &[
-            ("url", s("ftp://old.example/")),
-            ("provider", s("ftp")),
+            ("url", s("smb://old.example/share")),
+            ("provider", s("smb")),
             ("host", s("old.example")),
         ],
     )]);
@@ -170,16 +178,13 @@ async fn an_insecure_connection_needs_consent() {
     let client = rig.client.clone();
     let connect = tokio::spawn(async move {
         client
-            .connect_adhoc(
-                "ftp://old.example/",
-                Zeroizing::new(Vec::new()),
-                AdHocOptions::default(),
-            )
+            .connect_adhoc("smb://old.example/share", Zeroizing::new(Vec::new()), guest())
             .await
     });
     let q = next_question(&rig, &mut events).await;
     assert_eq!(q.kind, QuestionKind::InsecureConsent);
     assert_eq!(q.details["host"], "old.example");
+    assert_eq!(q.details["provider"], "smb");
     rig.questions.answer(&q.id, Answer::Decline).unwrap();
     assert_eq!(
         connect.await.unwrap().unwrap_err().kind,
@@ -198,7 +203,7 @@ async fn several_questions_come_one_after_the_other() {
     let client = rig.client.clone();
     let connect = tokio::spawn(async move {
         client
-            .connect_adhoc("ftp://h/", Zeroizing::new(Vec::new()), AdHocOptions::default())
+            .connect_adhoc("smb://h/share", Zeroizing::new(Vec::new()), guest())
             .await
     });
     let first = next_question(&rig, &mut events).await;

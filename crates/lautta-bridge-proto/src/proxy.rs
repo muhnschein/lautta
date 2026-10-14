@@ -15,7 +15,8 @@ use zbus::zvariant::{Fd, OwnedValue};
 )]
 pub trait Bridge1 {
     // Session
-    fn hello(&self, protocol: u32, client: &str) -> zbus::Result<(u32, String, Vec<String>)>;
+    /// `Hello(client)` → bridge version. The first call.
+    fn hello(&self, client: &str) -> zbus::Result<String>;
     fn get_consent(&self) -> zbus::Result<String>;
     fn request_consent(&self) -> zbus::Result<()>;
     #[zbus(signal)]

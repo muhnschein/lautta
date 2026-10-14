@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Bridge errors: `org.netvfs.Error.<Name>` D-Bus errors with the message as
-//! first argument and an optional `a{sv}` (`detail`, `retryAfterMs`) as second
+//! first argument and an `a{sv}` (`detail`, `retryAfterMs`) as second
 //! (netvfs XB-9, XC-24).
 
 use crate::wire::{value_i64, value_str};
@@ -147,7 +147,7 @@ mod tests {
             "RateLimited",
             "slow down",
             &extra(vec![
-                ("detail", Value::from("429")),
+                ("detail", Value::from("server busy")),
                 ("retryAfterMs", Value::from(1500i64)),
             ]),
         )
@@ -162,7 +162,7 @@ mod tests {
             } => {
                 assert_eq!(name, "org.netvfs.Error.RateLimited");
                 assert_eq!(message, "slow down");
-                assert_eq!(detail.as_deref(), Some("429"));
+                assert_eq!(detail.as_deref(), Some("server busy"));
                 assert_eq!(retry_after_ms, Some(1500));
             }
             other => panic!("unexpected {other:?}"),

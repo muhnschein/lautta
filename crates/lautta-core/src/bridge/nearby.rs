@@ -80,13 +80,12 @@ fn merge(shown: &[NearbyServer], list: &[NearbyServer]) -> Vec<NearbyServer> {
 
 /// The same service: a renamed one stays one row.
 fn same_server(a: &NearbyServer, b: &NearbyServer) -> bool {
-    a.provider == b.provider && a.host == b.host && a.port == b.port && a.path == b.path
+    a.provider == b.provider && a.host == b.host && a.port == b.port
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vpath::VPath;
 
     fn server(name: &str, host: &str) -> NearbyServer {
         NearbyServer {
@@ -94,7 +93,6 @@ mod tests {
             provider: "smb".into(),
             host: host.into(),
             port: 445,
-            path: VPath::default(),
         }
     }
 

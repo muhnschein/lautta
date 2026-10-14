@@ -56,8 +56,8 @@ where
 }
 
 /// Decodes a message into a [`Signal`]. `Ok(None)` for messages that are not
-/// signals of `org.netvfs.Bridge1` (and for signals of a newer protocol that
-/// this client does not know, which are ignored).
+/// signals of `org.netvfs.Bridge1` (and for signals this client does not
+/// know, which are ignored).
 pub fn decode_signal(msg: &Message) -> Result<Option<Signal>, BridgeError> {
     let header = msg.header();
     if header.primary().msg_type() != MessageType::Signal {

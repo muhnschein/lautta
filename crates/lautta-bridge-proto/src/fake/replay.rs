@@ -713,7 +713,7 @@ mod tests {
     async fn a_failing_expectation_is_reported() {
         let seq = parse(
             r#"{"description":"d","consent":"granted","steps":[
-                {"call":"Hello","sig":"us","args":[1,"t"],"reply":[2,"*","*"]}]}"#,
+                {"call":"Hello","sig":"s","args":["t"],"reply":["another version"]}]}"#,
         )
         .unwrap();
         let err = replay(&seq).await.unwrap_err();

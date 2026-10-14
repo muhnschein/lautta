@@ -77,8 +77,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `nearby` (roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
   `colour`, `count`, `itemId`).
 - `FavouritesModel`, `RecentsModel { filter }`.
-- `Bridge` singleton: `status` (`absent`, `connecting`, `tooOld`, `consentUnknown`,
-  `consentDenied`, `ready`, `reconnecting`), `requestConsent()`, `addServer(provider)`,
+- `Bridge` singleton: `status` (`absent`, `connecting`, `consentUnknown`, `consentDenied`,
+  `ready`, `reconnecting`), `requestConsent()`, `addServer(provider)`,
   `editAccount(locationUri)`, `connectAdHoc(url, secret, options)`, `forgetAdHoc(id)`,
   `disconnect(id)`, signal `question(id, kind, details)`, `answer(id, answer)`.
 - Pages: `pages/BrowsePage.qml` (initial page), `pages/RecentsPage.qml`,

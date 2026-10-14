@@ -123,10 +123,6 @@
         <source>Reconnecting to netvfs…</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-about-status-too-old">
-        <source>Network locations need a newer netvfs</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-about-status-consent-unknown">
         <source>Waiting for your permission</source>
         <translation type="unfinished"></translation>

@@ -16,8 +16,6 @@ pub enum BridgeStatus {
     Absent,
     /// A connection and the handshake are in progress.
     Connecting,
-    /// The bridge speaks an older protocol than the app needs (NVB-2).
-    TooOld,
     /// Waiting for the user's decision in netvfs' notification (NVB-3).
     ConsentUnknown,
     ConsentDenied,
@@ -124,7 +122,7 @@ pub fn bridge_id(location: &str) -> &str {
 
 impl RemoteLocation {
     /// Reads a `ListLocations` element. A location with an odd `info` still
-    /// appears (a newer bridge may add keys; missing ones are unknown).
+    /// appears (unknown keys are ignored; missing ones are unknown).
     pub fn from_wire(w: &WireLocation) -> RemoteLocation {
         let str_of = |k: &str| w.info.get(k).and_then(|v| value_str(v));
         let int_of = |k: &str| w.info.get(k).and_then(|v| value_i64(v));
@@ -162,8 +160,8 @@ pub struct NearbyServer {
     pub name: String,
     pub provider: String,
     pub host: String,
+    /// 0 for the provider's default.
     pub port: u16,
-    pub path: VPath,
 }
 
 impl NearbyServer {
@@ -173,7 +171,6 @@ impl NearbyServer {
             provider: w.provider.clone(),
             host: w.host.clone(),
             port: w.port,
-            path: VPath::parse(&w.path).unwrap_or_default(),
         }
     }
 }
@@ -192,8 +189,6 @@ pub struct BridgeConfig {
     pub socket: PathBuf,
     /// Sent in `Hello`.
     pub client_name: String,
-    /// Oldest bridge protocol the app can work with (NVB-2).
-    pub required_protocol: u32,
     /// Waits before reconnect attempts after a loss; the last repeats (NVB-12).
     pub backoff: Vec<Duration>,
     /// Re-checks for a missing socket this often while in the foreground, in
@@ -216,7 +211,6 @@ impl BridgeConfig {
         BridgeConfig {
             socket: paths.bridge_socket(),
             client_name: format!("lautta {}", env!("CARGO_PKG_VERSION")),
-            required_protocol: lautta_bridge_proto::PROTOCOL_VERSION,
             backoff: [1, 2, 4, 8, 15].map(Duration::from_secs).to_vec(),
             poll_interval: Some(Duration::from_secs(30)),
             handshake_timeout: Some(Duration::from_secs(10)),
@@ -332,9 +326,10 @@ mod tests {
             provider: "smb".into(),
             host: "nas".into(),
             port: 445,
-            path: b"share/x".to_vec(),
         });
-        assert_eq!(n.port, 445);
-        assert_eq!(n.path.as_bytes(), b"share/x");
+        assert_eq!(
+            (n.name.as_str(), n.provider.as_str(), n.host.as_str(), n.port),
+            ("NAS", "smb", "nas", 445)
+        );
     }
 }

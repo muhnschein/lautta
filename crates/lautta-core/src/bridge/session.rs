@@ -22,7 +22,6 @@ use tokio::time::{sleep, timeout};
 enum Attempt {
     /// Connected and served until the connection ended.
     Ended,
-    TooOld,
     Failed,
 }
 
@@ -50,12 +49,6 @@ pub(super) async fn supervise(inner: Arc<Inner>) {
                 inner.wake.notified().now_or_never();
                 inner.set_status(BridgeStatus::Reconnecting);
                 wait_or_wake(&inner, inner.config.backoff_for(0)).await;
-            }
-            Attempt::TooOld => {
-                lost = false;
-                inner.set_status(BridgeStatus::TooOld);
-                clear_lists(&inner);
-                idle(&inner).await;
             }
             Attempt::Failed if lost => {
                 attempt += 1;
@@ -157,19 +150,12 @@ async fn attempt_session(inner: &Arc<Inner>, lost: bool) -> Attempt {
 /// `Hello` (NVB-2), then the consent (NVB-3). Failure is an `Attempt`.
 async fn handshake(inner: &Arc<Inner>, link: &Arc<Link>) -> Result<(), Attempt> {
     let proxy = link.proxy();
-    let (protocol, version, features) = rpc(proxy
-        .hello(inner.config.required_protocol, &inner.config.client_name)
-        .await)
-    .map_err(|_| Attempt::Failed)?;
-    if protocol < inner.config.required_protocol {
-        return Err(Attempt::TooOld);
-    }
+    let version = rpc(proxy.hello(&inner.config.client_name).await).map_err(|_| Attempt::Failed)?;
     let consent = rpc(proxy.get_consent().await).map_err(|_| Attempt::Failed)?;
     {
         let mut info = inner.info();
         info.link = Some(link.clone());
         info.bridge_version = Some(version);
-        info.features = features;
     }
     apply_consent(inner, link, Consent::from_wire(&consent));
     Ok(())
@@ -388,12 +374,12 @@ mod tests {
         let o = OptsBuilder::new()
             .str("host", "nas")
             .int("port", 22)
-            .bool("systemTrusted", false)
+            .bool("guest", false)
             .bytes("publicKey", &[0xde, 0xad])
             .build();
         assert_eq!(show(&o["host"]), "nas");
         assert_eq!(show(&o["port"]), "22");
-        assert_eq!(show(&o["systemTrusted"]), "false");
+        assert_eq!(show(&o["guest"]), "false");
         assert_eq!(show(&o["publicKey"]), "dead");
         assert_eq!(show(&Value::from(vec!["a".to_owned(), "b".to_owned()])), "a\nb");
         assert_eq!(show(&Value::from(1.5f64)), "");

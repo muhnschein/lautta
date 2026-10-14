@@ -51,26 +51,36 @@ async fn hello_names_the_app_and_reports_the_bridge() {
     assert_eq!(hello.len(), 1);
     assert!(hello[0].target.starts_with("lautta "), "{:?}", hello[0]);
     assert_eq!(rig.client.bridge_version().as_deref(), Some("0.2.0-fake"));
-    assert!(rig.client.features().contains(&"error-details".to_owned()));
     assert_eq!(rig.client.consent(), Some(lautta_core::bridge::Consent::Granted));
 }
 
 #[tokio::test]
-async fn a_bridge_with_an_older_protocol_keeps_locations_hidden() {
+async fn any_bridge_version_is_taken_as_it_is() {
     let fake = FakeBridge::new();
     fake.add_account(1, "fake", "Fake 1", "fake.example").await;
-    fake.set_hello(0, "0.0.1");
+    fake.set_hello("0.0.1");
     let rig = Rig::with_fake(fake, true, |c| c).await;
-    rig.client.wait_status(|s| s == BridgeStatus::TooOld).await;
+    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    assert_eq!(rig.client.bridge_version().as_deref(), Some("0.0.1"));
+    assert_eq!(rig.client.locations().len(), 1);
+}
+
+#[tokio::test]
+async fn a_refused_hello_keeps_locations_hidden_until_a_poke() {
+    let fake = FakeBridge::new();
+    fake.add_account(1, "fake", "Fake 1", "fake.example").await;
+    fake.fail_next("Hello", "ProtocolError", "not now");
+    let rig = Rig::with_fake(fake, true, |c| c).await;
+    eventually("the refused Hello", || rig.fake.calls_of("Hello").len() == 1).await;
+    rig.client.wait_status(|s| s == BridgeStatus::Absent).await;
     assert!(rig.client.locations().is_empty());
+    assert_eq!(rig.client.bridge_version(), None);
     let e = rig
         .provider()
         .stat(&VPath::root(), true, Lane::Interactive)
         .await
         .unwrap_err();
     assert_eq!(e.kind, ErrorKind::BridgeUnavailable);
-    // netvfs gets updated; a poke finds the new protocol.
-    rig.fake.set_hello(1, "0.2.0");
     rig.client.poke();
     rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
     assert_eq!(rig.client.locations().len(), 1);
@@ -203,7 +213,6 @@ async fn nearby_servers_come_from_discovery() {
         provider: "smb".into(),
         host: "nas.local".into(),
         port: 445,
-        path: b"share".to_vec(),
     };
     // Nothing is delivered before the app asks (LOC-6).
     rig.fake.set_nearby(vec![server.clone()]).await;
@@ -217,7 +226,7 @@ async fn nearby_servers_come_from_discovery() {
         (n[0].name.as_str(), n[0].host.as_str(), n[0].port),
         ("NAS", "nas.local", 445)
     );
-    assert_eq!(n[0].path.as_bytes(), b"share");
+    assert_eq!(n[0].provider, "smb");
 
     rig.fake.set_nearby(vec![]).await;
     eventually("the list to empty", || rig.client.nearby().is_empty()).await;
@@ -234,7 +243,6 @@ fn nearby_server(name: &str, host: &str) -> WireNearby {
         provider: "smb".into(),
         host: host.into(),
         port: 445,
-        path: b"share".to_vec(),
     }
 }
 
@@ -404,6 +412,37 @@ async fn adhoc_refusals_keep_their_names() {
         .unwrap_err();
     assert_eq!(e.kind, ErrorKind::InvalidArgument, "a profile is for SMB only");
     assert!(rig.client.locations().len() == 1);
+}
+
+#[tokio::test]
+async fn only_sftp_and_smb_urls_connect() {
+    let rig = Rig::ready().await;
+    for url in ["dav://h/", "davs://h/", "ftp://h/", "ftps://h/", "https://h/"] {
+        let e = rig
+            .client
+            .connect_adhoc(url, secret(b"pw"), AdHocOptions::default())
+            .await
+            .unwrap_err();
+        assert_eq!(e.kind, ErrorKind::Unsupported, "{url}");
+    }
+    let e = rig
+        .client
+        .connect_adhoc("davs://h/", secret(b""), AdHocOptions::default())
+        .await
+        .unwrap_err();
+    assert_eq!(e.message, "davs URLs are no longer supported");
+    assert_eq!(rig.client.locations().len(), 1, "nothing was added");
+    for url in ["sftp://h/", "smb://h/share"] {
+        let id = rig
+            .client
+            .connect_adhoc(url, secret(b""), AdHocOptions::default())
+            .await
+            .unwrap();
+        eventually("the ad-hoc server in the list", || {
+            rig.client.location(&id).is_some()
+        })
+        .await;
+    }
 }
 
 #[tokio::test]

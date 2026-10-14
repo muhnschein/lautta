@@ -236,7 +236,6 @@ async fn nearby_servers_prefill_the_connect_form() {
         provider: "sftp".into(),
         host: "raspberrypi.local".into(),
         port: 22,
-        path: Vec::new(),
     }])
     .await;
     eventually("nearby", || !client.nearby().is_empty()).await;

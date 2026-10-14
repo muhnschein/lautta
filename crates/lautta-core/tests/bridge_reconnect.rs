@@ -67,7 +67,6 @@ async fn a_lost_connection_is_re_established() {
             provider: "smb".into(),
             host: "nas".into(),
             port: 445,
-            path: vec![],
         }])
         .await;
     eventually("nearby after the reconnect", || rig.client.nearby().len() == 1).await;
