@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // A question of the bridge about an ad-hoc server (NVB-6): an unknown
-// identity, an unencrypted connection, or sign-in prompts. Answered in the
+// identity, an unencrypted SMB connection (the `legacy` or `guest` profile),
+// or sign-in prompts. Answered in the
 // app; for accounts these questions never come here (NVB-5). `kind` is the
 // bridge's name of the question, `details` its display strings.
 import QtQuick 2.6
@@ -150,12 +151,6 @@ Dialog {
                 //% "Fingerprint"
                 label: qsTrId("lautta-question-fingerprint")
                 value: dialog.details.fingerprint || ""
-            }
-            DetailItem {
-                visible: dialog.identity && !!dialog.details.problems
-                //% "Problems"
-                label: qsTrId("lautta-question-problems")
-                value: dialog.details.problems || ""
             }
 
             Repeater {

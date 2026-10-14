@@ -1812,7 +1812,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-connect-schemes">
-        <source>sftp://, smb://, davs://, ftps:// …</source>
+        <source>sftp:// or smb://</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-connect-user">
@@ -1933,10 +1933,6 @@
     </message>
     <message id="lautta-question-fingerprint">
         <source>Fingerprint</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-problems">
-        <source>Problems</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-browse-title">
