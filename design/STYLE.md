@@ -259,7 +259,7 @@ pin `<path d="M9 3h6l-1 6 4 4H6l4-4zM12 13v8"/>`
 
 ## Content conventions
 - App name "Lautta". Sample data: realistic, no lorem ipsum. Servers: "NAS" (SFTP,
-  nas.home), "Office" (WebDAV), ad-hoc "ftp.kotisivu.fi". Volume "SD card".
+  nas.home), "Office" (SMB), ad-hoc "files.kotisivu.fi" (SFTP). Volume "SD card".
 - Sizes "4.2 MB", times "Today 09:14", "Yesterday", "12 Sep".
 - Everything Finnish-flavoured is fine but English UI copy.
 - Never show bridge features in artboards labelled "standalone".
