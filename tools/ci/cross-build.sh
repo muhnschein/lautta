@@ -15,9 +15,11 @@ triple=aarch64-unknown-linux-gnu
 gcc="$sdk/bin/aarch64-meego-linux-gnu-gcc"
 
 export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER="$gcc"
-export CC_aarch64_unknown_linux_gnu="$gcc"
-export CXX_aarch64_unknown_linux_gnu="$sdk/bin/aarch64-meego-linux-gnu-g++"
-export AR_aarch64_unknown_linux_gnu="$sdk/bin/aarch64-meego-linux-gnu-ar"
+# cc and pkg-config read TARGET_* for the target only; build scripts
+# themselves still build with the host's compiler.
+export TARGET_CC="$gcc"
+export TARGET_CXX="$sdk/bin/aarch64-meego-linux-gnu-g++"
+export TARGET_AR="$sdk/bin/aarch64-meego-linux-gnu-ar"
 # Qt and libsailfishapp of the target (crates/lautta-qt/build.rs).
 export QT_INCLUDE_PATH="$sdk/sysroot/usr/include/qt5"
 export QT_LIBRARY_PATH="$sdk/sysroot/usr/lib64"
@@ -25,7 +27,7 @@ export SAILFISHAPP_INCLUDE_PATH="$sdk/sysroot/usr/include/sailfishapp"
 # The system libraries Harbour allows (HBR-2), found through lift-sdk.sh's
 # pkg-config files; libsqlite3-sys uses its shipped bindings.
 export PKG_CONFIG_ALLOW_CROSS=1
-export PKG_CONFIG_LIBDIR_aarch64_unknown_linux_gnu="$sdk/linklib/pkgconfig"
+export TARGET_PKG_CONFIG_LIBDIR="$sdk/linklib/pkgconfig"
 export SQLITE3_LIB_DIR="$sdk/linklib"
 export SQLITE3_STATIC=0
 export LIBSQLITE3_SYS_USE_PKG_CONFIG=1
