@@ -101,18 +101,28 @@ Page {
         anchors.fill: parent
         itemWidth: width
         model: page.inFolder ? images : single
+        // Zoomed in or pinching, drags pan the image instead of swiping.
+        interactive: !(currentItem && currentItem.holdsGestures)
 
         delegate: Item {
             readonly property string imageUri: page.inFolder ? model.uri : page.uri
+            readonly property bool holdsGestures: zoomImage.holdsGestures
 
             width: slideshow.itemWidth
             height: slideshow.height
 
             ZoomImage {
+                id: zoomImage
                 anchors.fill: parent
                 // Only the shown image and its neighbours load.
                 source: Math.abs(index - slideshow.currentIndex) <= 1 ? page.sourceFor(parent.imageUri) : ""
                 onTapped: page.chrome = !page.chrome
+            }
+
+            // Swiped away: back to the fitted size for when it returns.
+            Connections {
+                target: slideshow
+                onCurrentIndexChanged: if (index !== slideshow.currentIndex) zoomImage.resetZoom()
             }
         }
     }
