@@ -3,7 +3,7 @@
 //! questions and history, and restore at start (XFR-11).
 
 use lautta_core::app::{Core, Started};
-use lautta_core::app_transfers::{ProgressBook, TransferGroup};
+use lautta_core::app_transfers::{CoverRoute, ProgressBook, TransferGroup};
 use lautta_core::locations::LocationRegistry;
 use lautta_core::ops::OperationKind;
 use lautta_core::paths::AppPaths;
@@ -120,6 +120,22 @@ async fn the_list_groups_questions_and_history() {
     assert_eq!(h.core.clear_history(), 1);
     assert!(h.core.transfer_rows(&book).is_empty());
     assert_eq!(h.core.clear_history(), 0);
+}
+
+#[tokio::test]
+async fn the_cover_route_names_the_ends_until_the_transfer_finishes() {
+    let h = home().await;
+    assert_eq!(h.core.cover_route(), CoverRoute::default());
+    let id = conflicting_copy(&h).await;
+    let route = h.core.cover_route();
+    assert_eq!(route.kind, Some(OperationKind::Copy));
+    assert_eq!(route.from, h.core.location("user-documents").unwrap().name);
+    assert_eq!(route.to, h.core.location("user-downloads").unwrap().name);
+    assert_ne!(route.from, route.to);
+
+    h.core.answer_question(id, 0, "Skip", false).unwrap();
+    h.core.engine.wait_for(id, |s| s.state.is_finished()).await.unwrap();
+    assert_eq!(h.core.cover_route(), CoverRoute::default(), "history is not on the cover");
 }
 
 #[tokio::test]

@@ -6,8 +6,9 @@ use super::events;
 use crate::json::to_json;
 use crate::runtime::{core, spawn_then};
 use lautta_core::app::Started;
-use lautta_core::app_transfers::{Aggregate, ProgressBook, StartReport};
+use lautta_core::app_transfers::{Aggregate, CoverRoute, ProgressBook, StartReport};
 use lautta_core::ops::OperationKind;
+use lautta_core::transfer::model::operation_name;
 use lautta_core::transfer::{TransferEvent, TransferState};
 use lautta_core::{Error, Result, Uri};
 use qmetaobject::prelude::*;
@@ -39,6 +40,12 @@ pub struct Transfers {
     pendingAtStart: qt_property!(i32; NOTIFY changed),
     /// The app is closing with work pending (XFR-6).
     closing: qt_property!(bool; NOTIFY changed),
+    /// What the cover says (INT-3): the kind ("copy", "move", …) of every
+    /// unfinished transfer and the locations they go from and to, each empty
+    /// when transfers differ.
+    coverKind: qt_property!(QString; NOTIFY changed),
+    coverFrom: qt_property!(QString; NOTIFY changed),
+    coverTo: qt_property!(QString; NOTIFY changed),
     changed: qt_signal!(),
 
     finished: qt_signal!(id: i64, ok: bool, failures: i32),
@@ -133,9 +140,24 @@ impl Transfers {
             .filter(|s| s.state == TransferState::Waiting(lautta_core::transfer::WaitReason::Question))
             .count();
         let busy = core.engine.is_busy();
-        if self.apply_summary(&agg, questions, busy) {
+        let summary_changed = self.apply_summary(&agg, questions, busy);
+        let route_changed = self.apply_route(&core.cover_route());
+        if summary_changed || route_changed {
             self.changed();
         }
+    }
+
+    fn apply_route(&mut self, r: &CoverRoute) -> bool {
+        let next = (
+            QString::from(r.kind.map_or("", operation_name)),
+            QString::from(r.from.as_str()),
+            QString::from(r.to.as_str()),
+        );
+        if (&self.coverKind, &self.coverFrom, &self.coverTo) == (&next.0, &next.1, &next.2) {
+            return false;
+        }
+        (self.coverKind, self.coverFrom, self.coverTo) = next;
+        true
     }
 
     fn apply_summary(&mut self, a: &Aggregate, questions: usize, busy: bool) -> bool {

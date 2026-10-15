@@ -236,6 +236,50 @@ impl ProgressBook {
     }
 }
 
+/// What the cover says about the unfinished work (INT-3): its kind and the
+/// locations it goes from and to, each only when every transfer agrees.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CoverRoute {
+    pub kind: Option<OperationKind>,
+    /// Name of the source location, empty when transfers differ.
+    pub from: String,
+    /// Name of the destination location, empty when transfers differ and
+    /// for deletions.
+    pub to: String,
+}
+
+/// One unfinished transfer as the cover sees it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoverLeg {
+    pub kind: OperationKind,
+    pub from: String,
+    pub to: String,
+}
+
+impl CoverLeg {
+    /// Deletions go nowhere: their destination is the parent folder, not a
+    /// place the items arrive at.
+    pub fn new(kind: OperationKind, from: String, dest: String) -> CoverLeg {
+        let to = if kind == OperationKind::Delete { String::new() } else { dest };
+        CoverLeg { kind, from, to }
+    }
+}
+
+/// The one value all `values` share, if there is one.
+fn shared<T: PartialEq>(mut values: impl Iterator<Item = T>) -> Option<T> {
+    let first = values.next()?;
+    values.all(|v| v == first).then_some(first)
+}
+
+pub fn cover_route(legs: &[CoverLeg]) -> CoverRoute {
+    let name = |pick: fn(&CoverLeg) -> &str| shared(legs.iter().map(pick)).unwrap_or_default().to_owned();
+    CoverRoute {
+        kind: shared(legs.iter().map(|l| l.kind)),
+        from: name(|l| l.from.as_str()),
+        to: name(|l| l.to.as_str()),
+    }
+}
+
 /// One row of the grouped list.
 #[derive(Debug, Clone)]
 pub struct TransferRow {
@@ -350,6 +394,26 @@ impl Core {
             dest_address: self.locations.display_address(&s.dest),
             summary: s,
         }
+    }
+
+    /// The cover's route over the unfinished transfers (INT-3).
+    pub fn cover_route(&self) -> CoverRoute {
+        let location_name = |u: &Uri| self.location(&u.location).map(|l| l.name).unwrap_or_default();
+        let legs: Vec<CoverLeg> = self
+            .engine
+            .list()
+            .into_iter()
+            .filter(|s| !s.state.is_finished())
+            .map(|s| {
+                let from = self
+                    .engine
+                    .first_item(s.id)
+                    .map(|i| location_name(&i.src))
+                    .unwrap_or_default();
+                CoverLeg::new(s.kind, from, location_name(&s.dest))
+            })
+            .collect();
+        cover_route(&legs)
     }
 
     /// Removes finished transfers from the history; returns how many.
@@ -565,5 +629,53 @@ mod tests {
         assert_eq!(d(OperationKind::Move, &remote, &local), "download");
         assert_eq!(d(OperationKind::Copy, &remote, &remote), "remote");
         assert_eq!(d(OperationKind::Delete, &local, &local), "delete");
+    }
+
+    fn leg(kind: OperationKind, from: &str, to: &str) -> CoverLeg {
+        CoverLeg::new(kind, from.into(), to.into())
+    }
+
+    #[test]
+    fn deletions_have_no_destination_on_the_cover() {
+        let d = leg(OperationKind::Delete, "Phone", "Phone");
+        assert_eq!((d.from.as_str(), d.to.as_str()), ("Phone", ""));
+        for kind in [OperationKind::Copy, OperationKind::Move, OperationKind::Compress, OperationKind::Extract] {
+            assert_eq!(leg(kind, "Phone", "SD card").to, "SD card", "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn the_cover_route_is_what_every_transfer_shares() {
+        assert_eq!(cover_route(&[]), CoverRoute::default());
+        let one = [leg(OperationKind::Copy, "Phone", "nas.home")];
+        assert_eq!(
+            cover_route(&one),
+            CoverRoute {
+                kind: Some(OperationKind::Copy),
+                from: "Phone".into(),
+                to: "nas.home".into(),
+            }
+        );
+        let same_ends = [
+            leg(OperationKind::Copy, "Phone", "nas.home"),
+            leg(OperationKind::Move, "Phone", "nas.home"),
+        ];
+        let r = cover_route(&same_ends);
+        assert_eq!(r.kind, None, "mixed kinds have no kind");
+        assert_eq!((r.from.as_str(), r.to.as_str()), ("Phone", "nas.home"));
+        let other_source = [
+            leg(OperationKind::Copy, "Phone", "nas.home"),
+            leg(OperationKind::Copy, "SD card", "nas.home"),
+        ];
+        let r = cover_route(&other_source);
+        assert_eq!(r.kind, Some(OperationKind::Copy));
+        assert_eq!((r.from.as_str(), r.to.as_str()), ("", "nas.home"));
+        let other_target = [
+            leg(OperationKind::Copy, "Phone", "nas.home"),
+            leg(OperationKind::Copy, "Phone", "Downloads"),
+            leg(OperationKind::Copy, "Phone", "nas.home"),
+        ];
+        let r = cover_route(&other_target);
+        assert_eq!((r.from.as_str(), r.to.as_str()), ("Phone", ""));
     }
 }

@@ -127,7 +127,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 ### Transfers (boards: Transfers, TransfersPulley, TransferDetails, TransferDetailsPulley, TransfersRestored, Notifications, Covers (transfer cover))
 
 - `Transfers` singleton: `activeCount`, `busy` (drives `KeepAlive`, XFR-5),
-  `bytesDone`, `bytesTotal`, `rate`, `eta`, `pendingAtStart`, `pauseAll()`, `resumeAll()`,
+  `bytesDone`, `bytesTotal`, `rate`, `eta`, `pendingAtStart`, `questionCount`,
+  `coverKind`, `coverFrom`, `coverTo` (the cover's route, INT-3), `pauseAll()`, `resumeAll()`,
   `pause(id)`, `resume(id)`, `cancel(id)`, `retryFailed(id)`, `moveUp(id)`,
   `moveDown(id)`, `moveToTop(id)`, `answer(id, item, choice, applyToAll)`,
   `clearHistory()`; signals `finished(id, ok, failures)`, `needsAnswer(id, item, conflict)`.
