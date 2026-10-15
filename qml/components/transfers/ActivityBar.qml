@@ -23,6 +23,8 @@ Item {
     property var summary: null
     readonly property bool problem: mode === "failed"
     readonly property bool asking: mode === "question"
+    // Open conflicts of the lead transfer.
+    property int questions
 
     // Hidden keeps the last summary so the bar fades out with its text.
     function reload() {
@@ -30,6 +32,7 @@ Item {
             return
         var text = Transfers.summaryJson(Transfers.barTransferId)
         summary = text.length > 0 ? JSON.parse(text) : null
+        questions = Transfers.barMode === "question" ? JSON.parse(Transfers.questionsJson(Transfers.barTransferId)).length : 0
     }
 
     function activate() {
@@ -147,7 +150,7 @@ Item {
             Label {
                 width: parent.width
                 text: bar.summary ? TransferText.barDetail(bar.mode, bar.summary, Transfers.barUnfinished - 1,
-                                                           Transfers.questionCount) : ""
+                                                           bar.questions) : ""
                 textFormat: Text.PlainText
                 truncationMode: TruncationMode.Fade
                 font.pixelSize: Theme.fontSizeExtraSmall

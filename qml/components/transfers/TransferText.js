@@ -21,134 +21,132 @@ function percent(done, total) {
     return total > 0 ? Math.min(100, Math.floor(done * 100 / total)) : 0
 }
 
+// The three forms of a task's name: what to do, what runs, what ended.
+var IMPERATIVE = 0
+var ONGOING = 1
+var ENDED = 2
+
+function withArgs(texts, first, second) {
+    return texts.map(function (text) {
+        var t = first === undefined ? text : text.arg(first)
+        return second === undefined ? t : t.arg(second)
+    })
+}
+
+// r: { kind, direction, title, itemsTotal, destName }
+function forms(r) {
+    var one = r.itemsTotal <= 1
+    var n = r.itemsTotal
+    switch (r.kind) {
+    case "copy":
+        if (one && r.direction === "download")
+            return withArgs([
+                //% "Download %1"
+                qsTrId("lautta-xfr-title-download-one"),
+                //% "Downloading %1"
+                qsTrId("lautta-xfr-title-downloading-one"),
+                //% "Downloaded %1"
+                qsTrId("lautta-xfr-title-downloaded-one")], r.title)
+        if (one && r.direction !== "upload")
+            return withArgs([
+                //% "Copy %1 to %2"
+                qsTrId("lautta-xfr-title-copy-one"),
+                //% "Copying %1 to %2"
+                qsTrId("lautta-xfr-title-copying-one"),
+                //% "Copied %1 to %2"
+                qsTrId("lautta-xfr-title-copied-one")], r.title, r.destName)
+        if (!one)
+            return withArgs([
+                //% "Copy %n item(s) to %1"
+                qsTrId("lautta-xfr-title-copy-many", n),
+                //% "Copying %n item(s) to %1"
+                qsTrId("lautta-xfr-title-copying-many", n),
+                //% "Copied %n item(s) to %1"
+                qsTrId("lautta-xfr-title-copied-many", n)], r.destName)
+        break
+    case "move":
+        if (one)
+            return withArgs([
+                //% "Move %1 to %2"
+                qsTrId("lautta-xfr-title-move-one"),
+                //% "Moving %1 to %2"
+                qsTrId("lautta-xfr-title-moving-one"),
+                //% "Moved %1 to %2"
+                qsTrId("lautta-xfr-title-moved-one")], r.title, r.destName)
+        return withArgs([
+            //% "Move %n item(s) to %1"
+            qsTrId("lautta-xfr-title-move-many", n),
+            //% "Moving %n item(s) to %1"
+            qsTrId("lautta-xfr-title-moving-many", n),
+            //% "Moved %n item(s) to %1"
+            qsTrId("lautta-xfr-title-moved-many", n)], r.destName)
+    case "delete":
+        if (one)
+            return withArgs([
+                //% "Delete %1"
+                qsTrId("lautta-xfr-title-delete-one"),
+                //% "Deleting %1"
+                qsTrId("lautta-xfr-title-deleting-one"),
+                //% "Deleted %1"
+                qsTrId("lautta-xfr-title-deleted-one")], r.title)
+        return [
+            //% "Delete %n item(s)"
+            qsTrId("lautta-xfr-title-delete-many", n),
+            //% "Deleting %n item(s)"
+            qsTrId("lautta-xfr-title-deleting-many", n),
+            //% "Deleted %n item(s)"
+            qsTrId("lautta-xfr-title-deleted-many", n)]
+    case "compress":
+        if (one)
+            return withArgs([
+                //% "Compress %1"
+                qsTrId("lautta-xfr-title-compress-one"),
+                //% "Compressing %1"
+                qsTrId("lautta-xfr-title-compressing-one"),
+                //% "Compressed %1"
+                qsTrId("lautta-xfr-title-compressed-one")], r.title)
+        return [
+            //% "Compress %n item(s)"
+            qsTrId("lautta-xfr-title-compress-many", n),
+            //% "Compressing %n item(s)"
+            qsTrId("lautta-xfr-title-compressing-many", n),
+            //% "Compressed %n item(s)"
+            qsTrId("lautta-xfr-title-compressed-many", n)]
+    case "extract":
+        return withArgs([
+            //% "Extract %1 to %2"
+            qsTrId("lautta-xfr-title-extract"),
+            //% "Extracting %1 to %2"
+            qsTrId("lautta-xfr-title-extracting"),
+            //% "Extracted %1 to %2"
+            qsTrId("lautta-xfr-title-extracted")], r.title, r.destName)
+    default:
+        break
+    }
+    return withArgs([
+        //% "Upload %1 to %2"
+        qsTrId("lautta-xfr-title-upload-one"),
+        //% "Uploading %1 to %2"
+        qsTrId("lautta-xfr-title-uploading-one"),
+        //% "Uploaded %1 to %2"
+        qsTrId("lautta-xfr-title-uploaded-one")], r.title, r.destName)
+}
+
 // "Copy 37 items to NAS", "Upload figure-3.png to NAS", "Download holiday.mp4";
 // completed ones in the past tense ("Deleted 4 items").
 // r: { kind, direction, state, title, itemsTotal, destName }
 function title(r) {
-    if (r.state === "completed")
-        return ended(r)
-    var one = r.itemsTotal <= 1
-    switch (r.kind) {
-    case "copy":
-        if (one && r.direction === "upload")
-            //% "Upload %1 to %2"
-            return qsTrId("lautta-xfr-title-upload-one").arg(r.title).arg(r.destName)
-        if (one && r.direction === "download")
-            //% "Download %1"
-            return qsTrId("lautta-xfr-title-download-one").arg(r.title)
-        if (one)
-            //% "Copy %1 to %2"
-            return qsTrId("lautta-xfr-title-copy-one").arg(r.title).arg(r.destName)
-        //% "Copy %n item(s) to %1"
-        return qsTrId("lautta-xfr-title-copy-many", r.itemsTotal).arg(r.destName)
-    case "move":
-        if (one)
-            //% "Move %1 to %2"
-            return qsTrId("lautta-xfr-title-move-one").arg(r.title).arg(r.destName)
-        //% "Move %n item(s) to %1"
-        return qsTrId("lautta-xfr-title-move-many", r.itemsTotal).arg(r.destName)
-    case "delete":
-        if (one)
-            //% "Delete %1"
-            return qsTrId("lautta-xfr-title-delete-one").arg(r.title)
-        //% "Delete %n item(s)"
-        return qsTrId("lautta-xfr-title-delete-many", r.itemsTotal)
-    case "compress":
-        if (one)
-            //% "Compress %1"
-            return qsTrId("lautta-xfr-title-compress-one").arg(r.title)
-        //% "Compress %n item(s)"
-        return qsTrId("lautta-xfr-title-compress-many", r.itemsTotal)
-    case "extract":
-        //% "Extract %1 to %2"
-        return qsTrId("lautta-xfr-title-extract").arg(r.title).arg(r.destName)
-    default:
-        return qsTrId("lautta-xfr-title-upload-one").arg(r.title).arg(r.destName)
-    }
+    return forms(r)[r.state === "completed" ? ENDED : IMPERATIVE]
 }
 
 // "Copied 37 items to NAS", "Deleted notes.md", "Extracted dataset.tar.gz".
 function ended(r) {
-    var one = r.itemsTotal <= 1
-    switch (r.kind) {
-    case "copy":
-        if (one && r.direction === "upload")
-            //% "Uploaded %1 to %2"
-            return qsTrId("lautta-xfr-title-uploaded-one").arg(r.title).arg(r.destName)
-        if (one && r.direction === "download")
-            //% "Downloaded %1"
-            return qsTrId("lautta-xfr-title-downloaded-one").arg(r.title)
-        if (one)
-            //% "Copied %1 to %2"
-            return qsTrId("lautta-xfr-title-copied-one").arg(r.title).arg(r.destName)
-        //% "Copied %n item(s) to %1"
-        return qsTrId("lautta-xfr-title-copied-many", r.itemsTotal).arg(r.destName)
-    case "move":
-        if (one)
-            //% "Moved %1 to %2"
-            return qsTrId("lautta-xfr-title-moved-one").arg(r.title).arg(r.destName)
-        //% "Moved %n item(s) to %1"
-        return qsTrId("lautta-xfr-title-moved-many", r.itemsTotal).arg(r.destName)
-    case "delete":
-        if (one)
-            //% "Deleted %1"
-            return qsTrId("lautta-xfr-title-deleted-one").arg(r.title)
-        //% "Deleted %n item(s)"
-        return qsTrId("lautta-xfr-title-deleted-many", r.itemsTotal)
-    case "compress":
-        if (one)
-            //% "Compressed %1"
-            return qsTrId("lautta-xfr-title-compressed-one").arg(r.title)
-        //% "Compressed %n item(s)"
-        return qsTrId("lautta-xfr-title-compressed-many", r.itemsTotal)
-    case "extract":
-        //% "Extracted %1 to %2"
-        return qsTrId("lautta-xfr-title-extracted").arg(r.title).arg(r.destName)
-    default:
-        return qsTrId("lautta-xfr-title-uploaded-one").arg(r.title).arg(r.destName)
-    }
+    return forms(r)[ENDED]
 }
 
 // "Copying 37 items to NAS", "Deleting notes.md": what runs now.
 function ongoing(r) {
-    var one = r.itemsTotal <= 1
-    switch (r.kind) {
-    case "copy":
-        if (one && r.direction === "upload")
-            //% "Uploading %1 to %2"
-            return qsTrId("lautta-xfr-title-uploading-one").arg(r.title).arg(r.destName)
-        if (one && r.direction === "download")
-            //% "Downloading %1"
-            return qsTrId("lautta-xfr-title-downloading-one").arg(r.title)
-        if (one)
-            //% "Copying %1 to %2"
-            return qsTrId("lautta-xfr-title-copying-one").arg(r.title).arg(r.destName)
-        //% "Copying %n item(s) to %1"
-        return qsTrId("lautta-xfr-title-copying-many", r.itemsTotal).arg(r.destName)
-    case "move":
-        if (one)
-            //% "Moving %1 to %2"
-            return qsTrId("lautta-xfr-title-moving-one").arg(r.title).arg(r.destName)
-        //% "Moving %n item(s) to %1"
-        return qsTrId("lautta-xfr-title-moving-many", r.itemsTotal).arg(r.destName)
-    case "delete":
-        if (one)
-            //% "Deleting %1"
-            return qsTrId("lautta-xfr-title-deleting-one").arg(r.title)
-        //% "Deleting %n item(s)"
-        return qsTrId("lautta-xfr-title-deleting-many", r.itemsTotal)
-    case "compress":
-        if (one)
-            //% "Compressing %1"
-            return qsTrId("lautta-xfr-title-compressing-one").arg(r.title)
-        //% "Compressing %n item(s)"
-        return qsTrId("lautta-xfr-title-compressing-many", r.itemsTotal)
-    case "extract":
-        //% "Extracting %1 to %2"
-        return qsTrId("lautta-xfr-title-extracting").arg(r.title).arg(r.destName)
-    default:
-        return qsTrId("lautta-xfr-title-uploading-one").arg(r.title).arg(r.destName)
-    }
+    return forms(r)[ONGOING]
 }
 
 // "1.2 GB of 4.0 GB · 11.4 MB/s · 4 min"
