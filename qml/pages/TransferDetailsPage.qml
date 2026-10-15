@@ -210,7 +210,7 @@ Page {
 
         ViewPlaceholder {
             enabled: page.s === null
-            //% "This transfer is gone"
+            //% "This task is gone"
             text: qsTrId("lautta-xfr-gone")
         }
 

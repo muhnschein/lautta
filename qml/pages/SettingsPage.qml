@@ -63,7 +63,7 @@ Page {
         }
         onFailed: {
             notice.text = kind === "Locked"
-                          //% "Finish or cancel transfers first"
+                          //% "Finish or cancel running tasks first"
                           ? qsTrId("lautta-settings-busy")
                           //% "Couldn't clear the data"
                           : qsTrId("lautta-settings-clear-failed")
@@ -251,7 +251,7 @@ Page {
                 settingKey: "verify_checksums"
             }
             SettingSwitch {
-                //% "Resume unfinished transfers at start"
+                //% "Resume unfinished tasks at start"
                 text: qsTrId("lautta-settings-resume")
                 settingKey: "auto_resume"
             }

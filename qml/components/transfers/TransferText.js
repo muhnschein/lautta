@@ -21,11 +21,13 @@ function percent(done, total) {
     return total > 0 ? Math.min(100, Math.floor(done * 100 / total)) : 0
 }
 
-// "Copy 37 items to NAS", "Upload figure-3.png to NAS", "Download holiday.mp4".
+// "Copy 37 items to NAS", "Upload figure-3.png to NAS", "Download holiday.mp4";
+// completed ones in the past tense ("Deleted 4 items").
 // r: { kind, direction, state, title, itemsTotal, destName }
 function title(r) {
+    if (r.state === "completed")
+        return ended(r)
     var one = r.itemsTotal <= 1
-    var past = r.state === "completed"
     switch (r.kind) {
     case "copy":
         if (one && r.direction === "upload")
@@ -35,28 +37,16 @@ function title(r) {
             //% "Download %1"
             return qsTrId("lautta-xfr-title-download-one").arg(r.title)
         if (one)
-            return past
-                //% "Copied %1 to %2"
-                ? qsTrId("lautta-xfr-title-copied-one").arg(r.title).arg(r.destName)
-                //% "Copy %1 to %2"
-                : qsTrId("lautta-xfr-title-copy-one").arg(r.title).arg(r.destName)
-        return past
-            //% "Copied %n item(s) to %1"
-            ? qsTrId("lautta-xfr-title-copied-many", r.itemsTotal).arg(r.destName)
-            //% "Copy %n item(s) to %1"
-            : qsTrId("lautta-xfr-title-copy-many", r.itemsTotal).arg(r.destName)
+            //% "Copy %1 to %2"
+            return qsTrId("lautta-xfr-title-copy-one").arg(r.title).arg(r.destName)
+        //% "Copy %n item(s) to %1"
+        return qsTrId("lautta-xfr-title-copy-many", r.itemsTotal).arg(r.destName)
     case "move":
         if (one)
-            return past
-                //% "Moved %1 to %2"
-                ? qsTrId("lautta-xfr-title-moved-one").arg(r.title).arg(r.destName)
-                //% "Move %1 to %2"
-                : qsTrId("lautta-xfr-title-move-one").arg(r.title).arg(r.destName)
-        return past
-            //% "Moved %n item(s) to %1"
-            ? qsTrId("lautta-xfr-title-moved-many", r.itemsTotal).arg(r.destName)
-            //% "Move %n item(s) to %1"
-            : qsTrId("lautta-xfr-title-move-many", r.itemsTotal).arg(r.destName)
+            //% "Move %1 to %2"
+            return qsTrId("lautta-xfr-title-move-one").arg(r.title).arg(r.destName)
+        //% "Move %n item(s) to %1"
+        return qsTrId("lautta-xfr-title-move-many", r.itemsTotal).arg(r.destName)
     case "delete":
         if (one)
             //% "Delete %1"
@@ -73,8 +63,91 @@ function title(r) {
         //% "Extract %1 to %2"
         return qsTrId("lautta-xfr-title-extract").arg(r.title).arg(r.destName)
     default:
-        //% "Upload %1 to %2"
         return qsTrId("lautta-xfr-title-upload-one").arg(r.title).arg(r.destName)
+    }
+}
+
+// "Copied 37 items to NAS", "Deleted notes.md", "Extracted dataset.tar.gz".
+function ended(r) {
+    var one = r.itemsTotal <= 1
+    switch (r.kind) {
+    case "copy":
+        if (one && r.direction === "upload")
+            //% "Uploaded %1 to %2"
+            return qsTrId("lautta-xfr-title-uploaded-one").arg(r.title).arg(r.destName)
+        if (one && r.direction === "download")
+            //% "Downloaded %1"
+            return qsTrId("lautta-xfr-title-downloaded-one").arg(r.title)
+        if (one)
+            //% "Copied %1 to %2"
+            return qsTrId("lautta-xfr-title-copied-one").arg(r.title).arg(r.destName)
+        //% "Copied %n item(s) to %1"
+        return qsTrId("lautta-xfr-title-copied-many", r.itemsTotal).arg(r.destName)
+    case "move":
+        if (one)
+            //% "Moved %1 to %2"
+            return qsTrId("lautta-xfr-title-moved-one").arg(r.title).arg(r.destName)
+        //% "Moved %n item(s) to %1"
+        return qsTrId("lautta-xfr-title-moved-many", r.itemsTotal).arg(r.destName)
+    case "delete":
+        if (one)
+            //% "Deleted %1"
+            return qsTrId("lautta-xfr-title-deleted-one").arg(r.title)
+        //% "Deleted %n item(s)"
+        return qsTrId("lautta-xfr-title-deleted-many", r.itemsTotal)
+    case "compress":
+        if (one)
+            //% "Compressed %1"
+            return qsTrId("lautta-xfr-title-compressed-one").arg(r.title)
+        //% "Compressed %n item(s)"
+        return qsTrId("lautta-xfr-title-compressed-many", r.itemsTotal)
+    case "extract":
+        //% "Extracted %1 to %2"
+        return qsTrId("lautta-xfr-title-extracted").arg(r.title).arg(r.destName)
+    default:
+        return qsTrId("lautta-xfr-title-uploaded-one").arg(r.title).arg(r.destName)
+    }
+}
+
+// "Copying 37 items to NAS", "Deleting notes.md": what runs now.
+function ongoing(r) {
+    var one = r.itemsTotal <= 1
+    switch (r.kind) {
+    case "copy":
+        if (one && r.direction === "upload")
+            //% "Uploading %1 to %2"
+            return qsTrId("lautta-xfr-title-uploading-one").arg(r.title).arg(r.destName)
+        if (one && r.direction === "download")
+            //% "Downloading %1"
+            return qsTrId("lautta-xfr-title-downloading-one").arg(r.title)
+        if (one)
+            //% "Copying %1 to %2"
+            return qsTrId("lautta-xfr-title-copying-one").arg(r.title).arg(r.destName)
+        //% "Copying %n item(s) to %1"
+        return qsTrId("lautta-xfr-title-copying-many", r.itemsTotal).arg(r.destName)
+    case "move":
+        if (one)
+            //% "Moving %1 to %2"
+            return qsTrId("lautta-xfr-title-moving-one").arg(r.title).arg(r.destName)
+        //% "Moving %n item(s) to %1"
+        return qsTrId("lautta-xfr-title-moving-many", r.itemsTotal).arg(r.destName)
+    case "delete":
+        if (one)
+            //% "Deleting %1"
+            return qsTrId("lautta-xfr-title-deleting-one").arg(r.title)
+        //% "Deleting %n item(s)"
+        return qsTrId("lautta-xfr-title-deleting-many", r.itemsTotal)
+    case "compress":
+        if (one)
+            //% "Compressing %1"
+            return qsTrId("lautta-xfr-title-compressing-one").arg(r.title)
+        //% "Compressing %n item(s)"
+        return qsTrId("lautta-xfr-title-compressing-many", r.itemsTotal)
+    case "extract":
+        //% "Extracting %1 to %2"
+        return qsTrId("lautta-xfr-title-extracting").arg(r.title).arg(r.destName)
+    default:
+        return qsTrId("lautta-xfr-title-uploading-one").arg(r.title).arg(r.destName)
     }
 }
 
@@ -226,4 +299,58 @@ function itemStatus(state, kind, sizeBytes, direction) {
         label = qsTrId("lautta-xfr-queued")
     }
     return kind === "dir" || sizeBytes <= 0 ? label : label + " · " + size(sizeBytes)
+}
+
+// The activity bar (XFR-13). mode is Transfers.barMode, s the lead transfer's
+// summary (Transfers.summaryJson), others how many more are unfinished.
+function barTitle(mode, s) {
+    if (mode === "done")
+        return ended(s)
+    if (mode === "failed")
+        return title(s)
+    var text = ongoing(s)
+    return mode === "running" && s.bytesTotal > 0 ? text + " · " + percent(s.bytesDone, s.bytesTotal) + "%" : text
+}
+
+// "120 MB of 290 MB · 1 min · 2 more", "Waiting for your answer", "Completed with 1 failure".
+function barDetail(mode, s, others, questions) {
+    var text
+    switch (mode) {
+    case "question":
+        text = needsAnswer(Math.max(1, questions))
+        break
+    case "waiting":
+        text = waitReason(s.waitReason)
+        break
+    case "paused":
+        text = qsTrId("lautta-xfr-paused-at").arg(percent(s.bytesDone, s.bytesTotal))
+        break
+    case "running":
+        if (s.state === "scanning")
+            text = qsTrId("lautta-xfr-scanning", s.itemsTotal)
+        else if (s.bytesTotal > 0)
+            text = progressLine(s.bytesDone, s.bytesTotal, s.rate, s.eta)
+        else
+            //% "%1 of %2 items"
+            text = qsTrId("lautta-xfr-items-progress").arg(s.itemsDone).arg(s.itemsTotal)
+        break
+    default:
+        return historyLine({ "state": s.state, "itemsFailed": s.itemsFailed, "itemsDone": s.itemsDone, "finishedMs": -1 })
+    }
+    //% "%n more"
+    return others > 0 ? text + " · " + qsTrId("lautta-xfr-bar-more", others) : text
+}
+
+function barIcon(mode, direction) {
+    switch (mode) {
+    case "done":
+        return "image://theme/icon-m-acknowledge"
+    case "failed":
+    case "question":
+        return "image://theme/icon-m-warning"
+    case "paused":
+        return "image://theme/icon-m-pause"
+    default:
+        return directionIcon(direction)
+    }
 }
