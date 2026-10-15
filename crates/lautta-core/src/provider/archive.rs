@@ -206,9 +206,9 @@ fn sanitize(raw: &[u8]) -> Option<VPath> {
     if comps.clone().any(|c| c == b"..") {
         return None;
     }
-    let drive = comps.next().map_or(false, |c| {
-        c.len() == 2 && c[0].is_ascii_alphabetic() && c[1] == b':'
-    });
+    let drive = comps
+        .next()
+        .is_some_and(|c| c.len() == 2 && c[0].is_ascii_alphabetic() && c[1] == b':');
     if drive {
         return None;
     }

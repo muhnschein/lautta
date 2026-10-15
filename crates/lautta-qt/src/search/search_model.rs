@@ -314,7 +314,7 @@ impl SearchModel {
             .iter()
             .map(|h| row_of(h, &root, &root_name, &text, mode))
             .collect();
-        rows.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        rows.sort_by_key(|a| a.name.to_lowercase());
         let first = self.rows.len() as i32;
         self.begin_insert_rows(first, first + rows.len() as i32 - 1);
         self.rows.extend(rows);

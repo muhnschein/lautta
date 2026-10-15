@@ -246,7 +246,7 @@ Rust was chosen unless a strong reason spoke against it. The candidates were che
 | Concern | Finding | Verdict |
 |---|---|---|
 | Qt 5.6 bindings | `qmetaobject-rs` supports Qt ≥ 5.6 (build script refuses older), is maintained (2026 commits), and has been used for Silica apps | fine; pin a commit |
-| Toolchain in the SDK | Sailfish packages rustc/cargo with scratchbox2 patches (`sailfishos/rust`, tags 1.75 and 1.95) | fine; MSRV = the 5.2 target's rustc (verify which, §24.1) |
+| Toolchain in the SDK | Sailfish packages rustc/cargo with scratchbox2 patches (`sailfishos/rust`, tags 1.75 and 1.95); the 5.2 target ships 1.75 | MSRV 1.95; until a target ships it, the binary is cross-built with host cargo against the SDK's gcc, Qt and sysroot (RS-6) |
 | Harbour ELF checks | Rust binaries link only libc/libm/libpthread/libdl/librt/libgcc_s; need an exported `main` | fine with RS-3 |
 | netvfs is C++/Qt | the app no longer links netvfs (Harbour forbids its dependencies); the boundary is a socket protocol | Rust is no worse than C++ here |
 | C++ glue needed | SailfishApp bootstrap, `QMediaPlayer` with a `QIODevice`; both small, via the `cpp` crate inside `lautta-qt` | acceptable, contained |
@@ -274,8 +274,11 @@ against the target rustc.
   that cannot unwind.
 - RS-5: `unsafe` is allowed only in `lautta-qt` (FFI) and in a single `sys` module of
   `lautta-core` (fd passing, `statx`, `renameat2`). `#![forbid(unsafe_code)]` elsewhere.
-- RS-6: Dependencies are vendored (`cargo vendor`) and `Cargo.lock` is committed;
-  builds inside sfdk never touch the network.
+- RS-6: `Cargo.lock` is committed. The binary is cross-built with the pinned host
+  toolchain against the SDK target's gcc, Qt and sysroot, lifted from the pinned SDK
+  image (`tools/ci/lift-sdk.sh`, `cross-build.sh`); the spec installs it from
+  `prebuilt/` and `mb2` never touches the network. Once an SDK target ships rustc
+  1.95, the spec builds it again with vendored crates.
 - RS-7: Release profile: `lto = "fat"`, `codegen-units = 1`, `opt-level = 3`, `strip =
   "symbols"` (the validator rejects debug info). Binary size budget: ≤ 20 MB stripped.
 - RS-8: Error model: `lautta_core::Error` mirrors the netvfs v2 taxonomy one-to-one
@@ -712,9 +715,9 @@ lautta/
   qml/                       pages/, components/, dialogs/, viewers/, cover/
   translations/
   icons/
-  rpm/harbour-lautta.spec    ExclusiveArch: aarch64; cargo build in %build
+  rpm/harbour-lautta.spec    ExclusiveArch: aarch64; installs prebuilt/
   harbour-lautta.desktop
-  vendor/                    cargo vendor output
+  prebuilt/                  cross-built binary the spec installs (RS-6)
   tests/                     fake bridge contract tests, qml tests
   tools/ci/                  sfdk build, rpmvalidator gate, cargo-deny
   doc/harbour-warnings.md

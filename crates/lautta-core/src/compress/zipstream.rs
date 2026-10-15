@@ -190,7 +190,7 @@ impl<W: Write> ZipStream<W> {
         if descriptor {
             flags |= FLAG_DESCRIPTOR;
         }
-        let large = meta.size.map_or(true, |s| s >= U32_MAX);
+        let large = meta.size.is_none_or(|s| s >= U32_MAX);
         let mtime = meta
             .mtime
             .unwrap_or(SystemTime::UNIX_EPOCH + Duration::from_secs(0));

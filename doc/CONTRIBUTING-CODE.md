@@ -6,14 +6,15 @@ screen; `design/STYLE.md` is the Silica style kit).
 
 ## Toolchain
 
-- Rust **1.75** everywhere (`rust-toolchain.toml`): the Sailfish OS 5.2 SDK target ships
-  rustc 1.75, so nothing newer may be used (no `let … else` is fine, it is 1.65; no
-  `LazyLock`, no `#[diagnostic]`, no inline `const {}` blocks, no async fn in traits — use
-  `async-trait`).
+- Rust **1.95** everywhere (`rust-toolchain.toml`), the release `sailfishos/rust` carries
+  next. The 5.2 SDK target still ships rustc 1.75, so the RPM's binary is cross-built
+  with the host's cargo against the SDK's gcc, Qt and sysroot (`tools/ci/lift-sdk.sh`,
+  `tools/ci/cross-build.sh`); `mb2` only packages it. Once a target ships 1.95 the spec
+  can run cargo again.
 - `Cargo.lock` is generated with a current stable cargo honouring
   `.cargo/config.toml`'s `incompatible-rust-versions = "fallback"`:
-  `cargo +stable update -p <crate>` / `cargo +stable generate-lockfile`. Never let cargo
-  1.75 re-resolve (it would pick crates needing newer Rust).
+  `cargo +stable update -p <crate>` / `cargo +stable generate-lockfile`, so no crate
+  newer than the workspace's `rust-version` allows is picked.
 - New dependencies: pure Rust preferred (SPEC RS-2). Native links only to HBR-2 libraries.
 
 ## Rules

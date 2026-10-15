@@ -118,11 +118,7 @@ impl Recents {
         let mut out: Vec<Recent> = all
             .into_iter()
             .filter(|r| filter.kinds.is_empty() || filter.kinds.contains(&r.kind))
-            .filter(|r| {
-                needle
-                    .as_ref()
-                    .map_or(true, |n| r.name.to_lowercase().contains(n))
-            })
+            .filter(|r| needle.as_ref().is_none_or(|n| r.name.to_lowercase().contains(n)))
             .collect();
         if let Some(limit) = filter.limit {
             out.truncate(limit);

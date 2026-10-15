@@ -315,7 +315,7 @@ mod tests {
         assert!(is_flag_unsupported(&e));
         let e = io::Error::from_raw_os_error(Errno::EXIST.raw_os_error());
         assert!(!is_flag_unsupported(&e));
-        assert!(!is_flag_unsupported(&io::Error::new(io::ErrorKind::Other, "x")));
+        assert!(!is_flag_unsupported(&io::Error::other("x")));
     }
 
     #[test]

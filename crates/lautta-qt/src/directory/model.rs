@@ -610,7 +610,7 @@ impl DirectoryModel {
 
     fn hasCapability(&self, flag: QString) -> bool {
         let flag = flag.to_string();
-        self.flags.iter().any(|f| *f == flag)
+        self.flags.contains(&flag)
     }
 
     /// "folder", "file" or "" for what is called `name` here (before filtering).
