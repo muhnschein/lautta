@@ -48,8 +48,8 @@ impl FileCategory {
     }
 }
 
-/// Which built-in viewer opens a file (PRV-4). PDFs and office documents go
-/// to *Open with* (`External`); poppler is not allowed.
+/// Which built-in viewer opens a file (PRV-4, PRV-12). Office documents go
+/// to *Open with* (`External`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Viewer {
     Image,
@@ -58,6 +58,7 @@ pub enum Viewer {
     Audio,
     Video,
     Archive,
+    Pdf,
     External,
 }
 
@@ -339,13 +340,13 @@ pub fn viewer_for(category: FileCategory, mime: &str) -> Viewer {
         FileCategory::Markdown => Viewer::Markdown,
         FileCategory::Audio => Viewer::Audio,
         FileCategory::Video => Viewer::Video,
+        FileCategory::Pdf => Viewer::Pdf,
         FileCategory::Archive => archive_viewer(mime),
         FileCategory::Package if mime == "application/vnd.android.package-archive" => Viewer::Archive,
         FileCategory::Other => other_viewer(mime),
         FileCategory::Folder
         | FileCategory::Database
         | FileCategory::Package
-        | FileCategory::Pdf
         | FileCategory::Document
         | FileCategory::Spreadsheet
         | FileCategory::Presentation => Viewer::External,
@@ -565,7 +566,7 @@ mod tests {
             Viewer::Archive
         );
         assert_eq!(viewer_for(Package, "application/x-rpm"), Viewer::External);
-        assert_eq!(viewer_for(Pdf, "application/pdf"), Viewer::External);
+        assert_eq!(viewer_for(Pdf, "application/pdf"), Viewer::Pdf);
         assert_eq!(viewer_for(Document, ""), Viewer::External);
         assert_eq!(viewer_for(Spreadsheet, ""), Viewer::External);
         assert_eq!(viewer_for(Presentation, ""), Viewer::External);

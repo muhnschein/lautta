@@ -41,15 +41,17 @@ clippy-report:
 	mkdir -p coverage
 	$(CARGO) clippy --workspace --all-targets $(HOST_FEATURES) --message-format=json > coverage/clippy.json
 
-# SPEC TST-5: planner, queue and conflict modules. MUTANTS_SHARD=k/n splits
+# SPEC TST-5: planner, queue and conflict modules, and the PDF viewer's
+# document handling (PRV-12). MUTANTS_SHARD=k/n splits
 # the run (CI runs shards in parallel).
 MUTANTS_SHARD ?= 0/1
 MUTANTS_FILES = -f crates/lautta-core/src/ops/plan.rs -f crates/lautta-core/src/ops/conflict.rs \
 	-f crates/lautta-core/src/transfer/scheduler.rs -f crates/lautta-core/src/transfer/model.rs \
-	-f crates/lautta-core/src/transfer/store.rs -f crates/lautta-core/src/transfer/conflict.rs
+	-f crates/lautta-core/src/transfer/store.rs -f crates/lautta-core/src/transfer/conflict.rs \
+	-f crates/lautta-core/src/app_pdf.rs -f crates/lautta-pdf/src/lib.rs
 
 mutants:
-	$(CARGO) mutants --no-shuffle -j 2 --timeout 300 --shard $(MUTANTS_SHARD) -p lautta-core $(MUTANTS_FILES)
+	$(CARGO) mutants --no-shuffle -j 2 --timeout 300 --shard $(MUTANTS_SHARD) -p lautta-core -p lautta-pdf $(MUTANTS_FILES)
 
 rpm:
 	./tools/ci/build-rpm.sh

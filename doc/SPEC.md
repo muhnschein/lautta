@@ -486,8 +486,8 @@ bridge).
   visible delegates only, canceled on scroll.
 - PRV-4: Viewers: images (zoom, swipe through the folder, EXIF panel), text/code (read-
   only up to 1 MiB, then a notice), Markdown (pulldown-cmark → Qt rich text subset), audio
-  and video (QtMultimedia), archives (as locations). No PDF viewer: poppler is not
-  allowed; PDFs go to *Open with*, as do databases, packages and other binary files.
+  and video (QtMultimedia), archives (as locations), PDFs (PRV-12). Office documents,
+  databases, packages and other binary files go to *Open with*.
 - PRV-5: *Open with* for local files uses the system handler as Harbour File Browser
   does (mechanism to verify in the sandbox, §24.1).
 - PRV-6: Remote files opened in another app must be readable by that sandboxed app, so
@@ -509,6 +509,14 @@ bridge).
   (central directory first); other remote archives are downloaded to the cache first.
 - PRV-11: Create zip or tar.gz from any selection; when the destination is remote the
   archive is written into a pipe that is uploaded as it is produced.
+- PRV-12: PDF viewer, from any location: pages one below the other fitted to the width,
+  pinch and double-tap zoom (sharper rendering once a pinch settles), the page number
+  while scrolling, *Open with* and *Share* in the pulley. Rendering is `hayro` (pure
+  Rust, `lautta-pdf`; poppler is not allowed): it sees only the file's bytes, has no
+  file, network or process access, runs no JavaScript and follows no links, actions or
+  form submissions; links are drawn but not clickable. The app's sandbox has no
+  `Internet` permission either. Files up to 200 MB; pages at most 4096 px on an edge.
+  Password-protected PDFs are refused with a message (the empty user password opens).
 
 ## 13. Search and organisation
 
@@ -692,7 +700,7 @@ One table for all providers (RS-8); examples:
   copy matrix, resume after a bridge kill, conflict flows, 10 000-entry folders.
 - TST-4: Fuzzing (`cargo fuzz`): bridge message decoding in the client, archive readers'
   adapters, Markdown rendering subset.
-- TST-5: Mutation testing (`cargo-mutants`) on planner, queue and conflict modules;
+- TST-5: Mutation testing (`cargo-mutants`) on planner, queue and conflict modules and the PDF document handling (PRV-12);
   `clippy -D warnings`; `miri` for the `sys` module tests that can run under it.
 - TST-6: QML tests (`TestCase` in the SDK target) for page logic; load test of every QML
   file; screenshot checklist (light/dark/landscape, standalone/bridge modes).
@@ -711,6 +719,7 @@ lautta/
   crates/lautta-core/
   crates/lautta-qt/          qmetaobject-rs, cpp glue (SailfishApp, MediaSource)
   crates/lautta-bridge-proto/
+  crates/lautta-pdf/         PDF pages as pixels (hayro, PRV-12)
   crates/harbour-lautta/     binary (no_main, exported main)
   qml/                       pages/, components/, dialogs/, viewers/, cover/
   translations/
@@ -788,7 +797,7 @@ when the netvfs bridge they depend on is released.
 ## Appendix A — Parity checklist
 
 Harbour File Browser (in-sandbox scope): browse ✓; search ✓ SRC; share/open externally ✓
-PRV-5/7; previews of images, audio, video, archives ✓ PRV-4/10; database previews ✗
+PRV-5/7; previews of images, audio, video, archives, PDFs ✓ PRV-4/10/12; database previews ✗
 (*Open with*); multi-select by tapping icons ✓; copy/link/move in bulk ✓; bulk rename ✗;
 permissions shown ✓ OPS-12, editing ✗; new files/folders ✓; hidden files ✓; edit/enter
 paths ✓ BRW-9; quick filter ✓; per-folder view settings ✗ (global, BRW-4); shortcuts ✓
