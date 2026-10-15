@@ -175,6 +175,37 @@ Item {
                  favs.remove(favs.idOf("lautta://user-music/"))
              },
              function() { return !has("favourite") })
+        // The favourite dialog: opened on a folder, it saves by URI, adds
+        // a second favourite next to the first and removes by URI.
+        step("dialog adds a first favourite",
+             function() { favs.save(docs, "Docs", "") },
+             function() { return favouriteNames() === "Docs" })
+        step("dialog adds a second favourite",
+             function() { favs.save("lautta://user-music/", "Tunes", "#4fa3e5") },
+             function() { return favouriteNames() === "Docs,Tunes" })
+        step("dialog relabels a favourite",
+             function() { favs.save(docs, "Papers", "") },
+             function() { return favouriteNames() === "Papers,Tunes" })
+        step("dialog removes favourites",
+             function() {
+                 favs.removeUri(docs)
+                 favs.removeUri("lautta://user-music/")
+             },
+             function() { return !has("favourite") && favs.idOf(docs) === -1 })
+        step("a closed dialog's change still reaches Browse",
+             function() {
+                 var gone = Qt.createQmlObject("import Lautta 1.0; FavouritesModel { }", root)
+                 gone.save(docs, "Gone", "")
+                 gone.destroy()
+             },
+             function() { return favouriteNames() === "Gone" })
+        step("and its removal too",
+             function() {
+                 var gone = Qt.createQmlObject("import Lautta 1.0; FavouritesModel { }", root)
+                 gone.removeUri(docs)
+                 gone.destroy()
+             },
+             function() { return !has("favourite") })
 
         step("recents come newest first with places",
              function() {

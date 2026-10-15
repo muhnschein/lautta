@@ -74,8 +74,8 @@ Page {
         pageStack.push(Qt.resolvedUrl("../dialogs/ConnectServerDialog.qml"), { "url": url })
     }
 
-    function addFavourite(uri) {
-        pageStack.push(Qt.resolvedUrl("../dialogs/FavouriteDialog.qml"), { "uri": uri, "favouriteId": -1 })
+    function openFavourite(uri) {
+        pageStack.push(Qt.resolvedUrl("../dialogs/FavouriteDialog.qml"), { "uri": uri })
     }
 
     function copyAddress(text) {
@@ -336,10 +336,7 @@ Page {
                         visible: row.kind === "favourite"
                         //% "Edit favourite"
                         text: qsTrId("lautta-browse-edit-favourite")
-                        onClicked: pageStack.push(Qt.resolvedUrl("../dialogs/FavouriteDialog.qml"), {
-                                                      "uri": model.uri,
-                                                      "favouriteId": parseInt(model.itemId)
-                                                  })
+                        onClicked: page.openFavourite(model.uri)
                     }
                     MenuItem {
                         visible: row.kind === "favourite"
@@ -359,10 +356,14 @@ Page {
                         text: qsTrId("lautta-browse-remove-favourite")
                         onClicked: {
                             var id = parseInt(model.itemId)
-                            //% "Removing favourite"
-                            row.remorseAction(qsTrId("lautta-browse-removing-favourite"), function() {
-                                favourites.remove(id)
-                            }, App.setting("remorse_seconds") * 1000)
+                            // A page remorse: the row is rebuilt whenever
+                            // the Browse rows change (a nearby server comes
+                            // or goes), which would cancel a row remorse.
+                            Remorse.popupAction(page,
+                                                //% "Removing favourite"
+                                                qsTrId("lautta-browse-removing-favourite"),
+                                                function() { favourites.remove(id) },
+                                                Number(App.setting("remorse_seconds")) * 1000)
                         }
                     }
 
@@ -403,7 +404,7 @@ Page {
                         visible: row.kind === "folder" || row.kind === "volume"
                         //% "Add to favourites"
                         text: qsTrId("lautta-browse-add-favourite")
-                        onClicked: page.addFavourite(model.uri)
+                        onClicked: page.openFavourite(model.uri)
                     }
                     MenuItem {
                         visible: row.kind !== "favourite"

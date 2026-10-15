@@ -2629,5 +2629,9 @@
         <source>Compress</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-favourite-remove">
+        <source>Remove from favourites</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>
