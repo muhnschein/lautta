@@ -435,16 +435,16 @@ async fn bridge_errors_keep_their_name_message_detail_and_retry_hint() {
 
     rig.fake.fail(
         lautta_bridge_proto::fake::Failure::new("Stat", "Locked", "busy")
-            .detail("HTTP 423")
+            .detail("sharing violation")
             .retry_after(2500)
             .times(1),
     );
     let e = provider.stat(&p("f"), true, Lane::Interactive).await.unwrap_err();
     assert_eq!(e.kind, ErrorKind::Locked);
-    assert_eq!(e.detail.as_deref(), Some("HTTP 423"));
+    assert_eq!(e.detail.as_deref(), Some("sharing violation"));
     assert_eq!(e.retry_after_ms, Some(2500));
 
-    // A name from a newer bridge is a protocol error, never a success.
+    // A name the app does not know is a protocol error, never a success.
     rig.fake.fail_next("Stat", "Brandnew", "?");
     let e = provider.stat(&p("f"), true, Lane::Interactive).await.unwrap_err();
     assert_eq!(e.kind, ErrorKind::ProtocolError);

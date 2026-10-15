@@ -123,10 +123,6 @@
         <source>Reconnecting to netvfs…</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-about-status-too-old">
-        <source>Network locations need a newer netvfs</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-about-status-consent-unknown">
         <source>Waiting for your permission</source>
         <translation type="unfinished"></translation>
@@ -1816,7 +1812,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-connect-schemes">
-        <source>sftp://, smb://, davs://, ftps:// …</source>
+        <source>sftp:// or smb://</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-connect-user">
@@ -1937,10 +1933,6 @@
     </message>
     <message id="lautta-question-fingerprint">
         <source>Fingerprint</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-problems">
-        <source>Problems</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-browse-title">

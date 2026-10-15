@@ -104,12 +104,12 @@ mod tests {
         let e = map_error(BridgeError::Remote {
             name: "org.netvfs.Error.RateLimited".into(),
             message: "slow".into(),
-            detail: Some("429".into()),
+            detail: Some("server busy".into()),
             retry_after_ms: Some(900),
         });
         assert_eq!(e.kind, ErrorKind::RateLimited);
         assert_eq!(e.message, "slow");
-        assert_eq!(e.detail.as_deref(), Some("429"));
+        assert_eq!(e.detail.as_deref(), Some("server busy"));
         assert_eq!(e.retry_after_ms, Some(900));
         assert_eq!(
             map_error(BridgeError::remote("Brandnew", "")).kind,

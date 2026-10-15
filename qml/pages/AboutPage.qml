@@ -26,9 +26,6 @@ Page {
         case "reconnecting":
             //% "Reconnecting to netvfs…"
             return qsTrId("lautta-about-status-reconnecting")
-        case "tooOld":
-            //% "Network locations need a newer netvfs"
-            return qsTrId("lautta-about-status-too-old")
         case "consentUnknown":
             //% "Waiting for your permission"
             return qsTrId("lautta-about-status-consent-unknown")
@@ -49,7 +46,6 @@ Page {
             //% "Not asked yet"
             return qsTrId("lautta-about-access-unknown")
         case "connecting":
-        case "tooOld":
             return ""
         default:
             //% "Allowed"

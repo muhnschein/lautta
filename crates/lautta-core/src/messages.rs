@@ -135,7 +135,6 @@ fn text_for_other(kind: ErrorKind, ctx: &MessageContext) -> String {
             format!("{loc} has too many connections open. Trying again shortly.")
         }
         ErrorKind::RateLimited => format!("{loc} asked Lautta to slow down. Trying again shortly."),
-        ErrorKind::NotModified => format!("{it} hasn't changed."),
         ErrorKind::CrossesDevice => format!("{it} can't be moved to {loc} directly."),
         ErrorKind::Io => format!("Something went wrong while accessing {it}."),
         ErrorKind::Internal => "Something went wrong inside Lautta.".to_owned(),

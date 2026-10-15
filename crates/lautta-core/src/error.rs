@@ -33,7 +33,6 @@ pub enum ErrorKind {
     Locked,
     TooManyConnections,
     RateLimited,
-    NotModified,
     /// The bridge socket is gone or not answering (SPEC §20 "bridge gone").
     BridgeUnavailable,
     /// The sandbox does not let the app read the path (SPEC §20 "sandbox").
@@ -45,7 +44,7 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
-    pub const ALL: [ErrorKind; 29] = [
+    pub const ALL: [ErrorKind; 28] = [
         ErrorKind::NotFound,
         ErrorKind::AlreadyExists,
         ErrorKind::PermissionDenied,
@@ -69,7 +68,6 @@ impl ErrorKind {
         ErrorKind::Locked,
         ErrorKind::TooManyConnections,
         ErrorKind::RateLimited,
-        ErrorKind::NotModified,
         ErrorKind::BridgeUnavailable,
         ErrorKind::Sandbox,
         ErrorKind::CrossesDevice,
@@ -102,7 +100,6 @@ impl ErrorKind {
             ErrorKind::Locked => "Locked",
             ErrorKind::TooManyConnections => "TooManyConnections",
             ErrorKind::RateLimited => "RateLimited",
-            ErrorKind::NotModified => "NotModified",
             ErrorKind::BridgeUnavailable => "BridgeUnavailable",
             ErrorKind::Sandbox => "Sandbox",
             ErrorKind::CrossesDevice => "CrossesDevice",
@@ -112,8 +109,8 @@ impl ErrorKind {
     }
 
     /// Maps a netvfs error name (with or without the `org.netvfs.Error.`
-    /// prefix). Unknown names become [`ErrorKind::ProtocolError`] so a newer
-    /// bridge never makes the app misreport an error as success.
+    /// prefix). Unknown names become [`ErrorKind::ProtocolError`] so an
+    /// unexpected name never makes the app misreport an error as success.
     pub fn from_name(name: &str) -> ErrorKind {
         let bare = name.strip_prefix("org.netvfs.Error.").unwrap_or(name);
         ErrorKind::ALL

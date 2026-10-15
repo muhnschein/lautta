@@ -6,7 +6,7 @@
 
 use futures::StreamExt;
 use lautta_bridge_proto::fake::{Failure, FakeBridge};
-use lautta_bridge_proto::{connect, BridgeError, OptsBuilder, Signal, Zeroizing, PROTOCOL_VERSION};
+use lautta_bridge_proto::{connect, BridgeError, OptsBuilder, Signal, Zeroizing};
 use std::time::Duration;
 
 async fn fake_with_account() -> FakeBridge {
@@ -16,7 +16,7 @@ async fn fake_with_account() -> FakeBridge {
 }
 
 async fn hello(conn: &lautta_bridge_proto::Connection) {
-    conn.proxy().hello(PROTOCOL_VERSION, "test").await.unwrap();
+    conn.proxy().hello("test").await.unwrap();
 }
 
 #[tokio::test]
@@ -26,16 +26,25 @@ async fn connects_to_a_socket_path_without_a_bus() {
     let fake = fake_with_account().await;
     let _listener = fake.listen(&path).unwrap();
     let conn = connect(&path).await.unwrap();
-    let (protocol, version, features) = conn.proxy().hello(PROTOCOL_VERSION, "test").await.unwrap();
-    assert_eq!(protocol, 1);
+    let version = conn.proxy().hello("test").await.unwrap();
     assert_eq!(version, "0.2.0-fake");
-    assert_eq!(features, vec!["error-details".to_owned()]);
     let locations = conn.proxy().list_locations().await.unwrap();
     assert_eq!(locations.len(), 1);
     assert_eq!(
         (locations[0].id.as_str(), locations[0].provider.as_str()),
         ("account:1", "fake")
     );
+}
+
+#[tokio::test]
+async fn hello_answers_the_bridge_version_for_a_client_name_of_up_to_256_bytes() {
+    let fake = fake_with_account().await;
+    fake.set_hello("0.6.0");
+    let conn = fake.connect().await.unwrap();
+    let e = BridgeError::from(conn.proxy().hello(&"x".repeat(257)).await.unwrap_err());
+    assert_eq!(e, BridgeError::InvalidArgs("Argument 1 is too long".into()));
+    let version = conn.proxy().hello(&"x".repeat(256)).await.unwrap();
+    assert_eq!(version, "0.6.0");
 }
 
 #[tokio::test]
@@ -54,7 +63,7 @@ async fn errors_carry_name_message_detail_and_retry_hint() {
 
     fake.fail(
         Failure::new("Stat", "RateLimited", "slow down")
-            .detail("HTTP 429")
+            .detail("server busy")
             .retry_after(1500)
             .times(1),
     );
@@ -68,7 +77,7 @@ async fn errors_carry_name_message_detail_and_retry_hint() {
         } => {
             assert_eq!(name, "org.netvfs.Error.RateLimited");
             assert_eq!(message, "slow down");
-            assert_eq!(detail.as_deref(), Some("HTTP 429"));
+            assert_eq!(detail.as_deref(), Some("server busy"));
             assert_eq!(retry_after_ms, Some(1500));
         }
         other => panic!("unexpected {other:?}"),

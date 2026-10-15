@@ -22,7 +22,6 @@ use tokio::task::JoinHandle;
 pub(super) struct Info {
     pub link: Option<Arc<Link>>,
     pub bridge_version: Option<String>,
-    pub features: Vec<String>,
     pub consent: Option<Consent>,
     /// Hub ids of questions the bridge asked on the current connection.
     pub questions: Vec<String>,
@@ -174,11 +173,6 @@ impl BridgeClient {
     /// The bridge's own version, for *About*.
     pub fn bridge_version(&self) -> Option<String> {
         self.inner.info().bridge_version.clone()
-    }
-
-    /// Feature strings of the bridge (`error-details`, …).
-    pub fn features(&self) -> Vec<String> {
-        self.inner.info().features.clone()
     }
 
     // ---- lifecycle -------------------------------------------------------
@@ -341,10 +335,6 @@ mod tests {
         );
         assert_eq!(
             unavailable(BridgeStatus::Absent).kind,
-            ErrorKind::BridgeUnavailable
-        );
-        assert_eq!(
-            unavailable(BridgeStatus::TooOld).kind,
             ErrorKind::BridgeUnavailable
         );
         assert_eq!(

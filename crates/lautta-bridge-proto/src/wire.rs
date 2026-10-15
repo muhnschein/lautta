@@ -9,8 +9,6 @@ use zbus::zvariant::{OwnedValue, Type, Value};
 /// Object path and interface of the bridge (XB-8).
 pub const OBJECT_PATH: &str = "/org/netvfs/Bridge";
 pub const INTERFACE: &str = "org.netvfs.Bridge1";
-/// Protocol version this app speaks (`Hello`).
-pub const PROTOCOL_VERSION: u32 = 1;
 /// Largest `Read` the bridge accepts (XB-17).
 pub const MAX_READ_BYTES: u32 = 1 << 20;
 /// Largest `ListBatch` size the bridge accepts (XB-17).
@@ -81,14 +79,13 @@ pub struct WireLocation {
     pub info: HashMap<String, OwnedValue>,
 }
 
-/// `(sssqay)`: a discovered server.
+/// `(sssq)`: a discovered server; port 0 is the provider's default.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct WireNearby {
     pub name: String,
     pub provider: String,
     pub host: String,
     pub port: u16,
-    pub path: Vec<u8>,
 }
 
 /// `(ay(ayyyxxxxixxssqays))` of `WalkBatch`.
@@ -220,7 +217,7 @@ mod tests {
         assert_eq!(WireEntry::signature().as_str(), "(ayyyxxxxixxssqays)");
         assert_eq!(WireCapabilities::signature().as_str(), "(asasx)");
         assert_eq!(WireLocation::signature().as_str(), "(sssa{sv})");
-        assert_eq!(WireNearby::signature().as_str(), "(sssqay)");
+        assert_eq!(WireNearby::signature().as_str(), "(sssq)");
         assert_eq!(WireWalkItem::signature().as_str(), "(ay(ayyyxxxxixxssqays))");
     }
 

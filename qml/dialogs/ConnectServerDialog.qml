@@ -58,7 +58,7 @@ Dialog {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * x
                 wrapMode: Text.Wrap
-                //% "sftp://, smb://, davs://, ftps:// …"
+                //% "sftp:// or smb://"
                 text: qsTrId("lautta-connect-schemes")
                 font.pixelSize: Theme.fontSizeExtraSmall
                 color: Theme.secondaryColor

@@ -888,7 +888,7 @@ mod tests {
         e.reg.set_remote(vec![
             loc("a", "sftp://me:hunter2@nas.local:2222/share?token=abc#frag"),
             loc("b", "smb://nas/media/"),
-            loc("c", "https://user@dav.example.com"),
+            loc("c", "smb://user@files.example.com"),
         ]);
         let at = |id: &str, path: &str| {
             e.reg
@@ -897,7 +897,7 @@ mod tests {
         assert_eq!(at("a", ""), "sftp://me@nas.local:2222/share");
         assert_eq!(at("a", "x/y z.txt"), "sftp://me@nas.local:2222/share/x/y%20z.txt");
         assert_eq!(at("b", "Movies/a.mkv"), "smb://nas/media/Movies/a.mkv");
-        assert_eq!(at("c", "d"), "https://user@dav.example.com/d");
+        assert_eq!(at("c", "d"), "smb://user@files.example.com/d");
         for id in ["a", "b", "c"] {
             let shown = at(id, "p");
             assert!(!shown.contains("hunter2") && !shown.contains("token") && !shown.contains("frag"));
@@ -919,10 +919,10 @@ mod tests {
 
     #[test]
     fn secrets_are_stripped_from_urls() {
-        assert_eq!(strip_secrets("ftp://u:p@h/x"), "ftp://u@h/x");
-        assert_eq!(strip_secrets("ftp://:p@h"), "ftp://@h");
-        assert_eq!(strip_secrets("ftp://h/x?a=b"), "ftp://h/x");
-        assert_eq!(strip_secrets("ftp://h/a@b"), "ftp://h/a@b");
+        assert_eq!(strip_secrets("smb://u:p@h/x"), "smb://u@h/x");
+        assert_eq!(strip_secrets("smb://:p@h"), "smb://@h");
+        assert_eq!(strip_secrets("smb://h/x?a=b"), "smb://h/x");
+        assert_eq!(strip_secrets("smb://h/a@b"), "smb://h/a@b");
         assert_eq!(strip_secrets("not a url"), "not a url");
     }
 

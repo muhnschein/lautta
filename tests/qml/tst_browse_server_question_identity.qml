@@ -9,7 +9,7 @@ ApplicationWindow {
         ServerQuestionDialog {
             questionId: "q1"
             kind: "identity-unknown"
-            details: ({ "host": "raspberrypi.local", "port": "22", "algorithm": "ssh-ed25519", "fingerprint": "SHA256:k3Vx9T2mQpL0aZr8uYw1cNfB6eHd4Jq7sOg5Xt+Ea0", "problems": "" })
+            details: ({ "host": "raspberrypi.local", "port": "22", "algorithm": "ssh-ed25519", "fingerprint": "SHA256:k3Vx9T2mQpL0aZr8uYw1cNfB6eHd4Jq7sOg5Xt+Ea0" })
         }
     }
 }

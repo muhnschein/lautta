@@ -6,7 +6,7 @@
 use futures::StreamExt;
 use lautta_bridge_proto::fake::FakeBridge;
 use lautta_bridge_proto::{
-    value_i64, BridgeError, Connection, OptsBuilder, Signal, SignalStream, WireNearby, PROTOCOL_VERSION,
+    value_i64, BridgeError, Connection, OptsBuilder, Signal, SignalStream, WireNearby,
 };
 use std::collections::HashMap;
 use std::time::Duration;
@@ -17,7 +17,7 @@ async fn setup() -> (FakeBridge, Connection, SignalStream) {
     fake.add_account(2, "fake", "Fake 2", "other.example").await;
     let conn = fake.connect().await.unwrap();
     let signals = conn.signals();
-    conn.proxy().hello(PROTOCOL_VERSION, "test").await.unwrap();
+    conn.proxy().hello("test").await.unwrap();
     (fake, conn, signals)
 }
 
@@ -199,7 +199,6 @@ async fn discovery_results_arrive_as_signals() {
         provider: "smb".into(),
         host: "nas".into(),
         port: 445,
-        path: b"share".to_vec(),
     };
     fake.set_nearby(vec![server.clone()]).await;
     conn.proxy().discover(true).await.unwrap();

@@ -2,7 +2,7 @@
 //! The `Bridge` singleton: netvfs bridge status, consent, hand-offs,
 //! ad-hoc servers and the questions the bridge asks (SPEC §7).
 //!
-//! `status` is one of `absent`, `connecting`, `tooOld`, `consentUnknown`,
+//! `status` is one of `absent`, `connecting`, `consentUnknown`,
 //! `consentDenied`, `ready`, `reconnecting`.
 //!
 //! Secrets (SEC-1): the secret of *Connect to server* and the answers of a
@@ -30,7 +30,6 @@ pub fn status_name(s: BridgeStatus) -> &'static str {
     match s {
         BridgeStatus::Absent => "absent",
         BridgeStatus::Connecting => "connecting",
-        BridgeStatus::TooOld => "tooOld",
         BridgeStatus::ConsentUnknown => "consentUnknown",
         BridgeStatus::ConsentDenied => "consentDenied",
         BridgeStatus::Ready => "ready",
@@ -366,7 +365,6 @@ mod tests {
     #[test]
     fn status_names_are_the_documented_ones() {
         assert_eq!(status_name(BridgeStatus::Absent), "absent");
-        assert_eq!(status_name(BridgeStatus::TooOld), "tooOld");
         assert_eq!(status_name(BridgeStatus::ConsentUnknown), "consentUnknown");
         assert_eq!(status_name(BridgeStatus::ConsentDenied), "consentDenied");
         assert_eq!(status_name(BridgeStatus::Ready), "ready");

@@ -9,7 +9,7 @@ ApplicationWindow {
         ServerQuestionDialog {
             questionId: "q3"
             kind: "insecure-consent"
-            details: ({ "host": "old.example", "url": "ftp://old.example/" })
+            details: ({ "host": "old.example", "url": "smb://old.example/share", "provider": "smb" })
         }
     }
 }

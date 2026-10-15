@@ -35,7 +35,7 @@ A file manager for Sailfish OS in the spirit of the iOS Files app with the trans
 capabilities of Transmit or Cyberduck. On its own it manages the user's files: Documents,
 Downloads, Pictures, Music, Videos, Public, the Android storage folders Sailjail exposes, SD
 cards and USB drives. When netvfs v2 with its bridge is installed, the same app also
-browses every SFTP, SMB, WebDAV and FTP/FTPS server configured in Settings → Accounts.
+browses every SFTP and SMB server configured in Settings → Accounts.
 Those servers become ordinary locations: browse, preview, stream, open in other apps, copy
 and move between any two of them, with a persistent, resumable queue.
 
@@ -193,7 +193,7 @@ flowchart LR
   end
   NP <-- "unix socket in app data dir<br/>p2p D-Bus + fd passing" --> BR[netvfs-bridge<br/>(not part of this app)]
   BR --> NV[(libnetvfs v2 + backends)]
-  NV <--> S[(SFTP / SMB / WebDAV / FTP servers)]
+  NV <--> S[(SFTP / SMB servers)]
   LP --> FS[(user folders, /run/media)]
 ```
 
@@ -292,9 +292,8 @@ what the app does.
   foreground, and when inotify reports it created. Absent socket → standalone mode
   without any message. The app never creates that directory or file.
 - NVB-2: Connection: peer-to-peer D-Bus (`zbus`, unix socket transport with fd passing),
-  interface `org.netvfs.Bridge1`. First call `Hello(protocol, clientVersion)`; if the
-  bridge's protocol is older than the app needs, network locations stay hidden and
-  *About* says "Network locations need a newer netvfs".
+  interface `org.netvfs.Bridge1`. First call `Hello(clientVersion)`, which answers the
+  bridge's version.
 - NVB-3: Consent: until the bridge reports consent `granted`, the *Servers* section shows
   one row "Allow access in the notification from netvfs" with *Ask again*
   (`RequestConsent`). `denied` hides the section and shows the reason in *About*.
@@ -304,10 +303,11 @@ what the app does.
 - NVB-5: Account management is handed off: *Add server* → `AddAccount(provider)`;
   *Edit*, *Update sign-in*, *Review server identity* → `OpenAccountSettings(id)`. The bridge
   opens Settings; the app never edits accounts, pins or secrets.
-- NVB-6: Ad-hoc servers: *Connect to server* collects a URL and, when needed, a secret,
-  and calls `ConnectAdHoc`. The secret buffer is zeroized (`zeroize`) immediately after
-  the call. Identity prompts for ad-hoc servers arrive as `Question` signals and are
-  answered in the app; for accounts they never are (NVB-5).
+- NVB-6: Ad-hoc servers: *Connect to server* collects an `sftp://` or `smb://` URL and,
+  when needed, a secret, and calls `ConnectAdHoc`. The secret buffer is zeroized
+  (`zeroize`) immediately after the call. Identity prompts for ad-hoc servers and the
+  consent to an unencrypted connection (SMB's `legacy` and `guest` profiles) arrive as
+  `Question` signals and are answered in the app; for accounts they never are (NVB-5).
 - NVB-7: Requests: namespace operations, stat, list (batched signals), handles, server
   copy, checksums and space info map one-to-one to bridge methods. Every request carries
   a lane hint (`interactive`, `bulk`, `stream`); the bridge owns connection pools.
@@ -326,7 +326,7 @@ what the app does.
   starting a job, so a crash or bridge restart never loses track of a transfer.
 - NVB-11: Temporary names: `.<name>.lautta-<shortid>.part` for both local and remote
   destinations, passed to the bridge as the upload target; the final rename is a separate
-  `Rename(NoReplace or Replace)` call. Backends reporting `AtomicPut` (WebDAV) are written
+  `Rename(NoReplace or Replace)` call. Backends reporting `AtomicPut` are written
   directly.
 - NVB-12: Failure handling: socket EOF or `ConnectionLost` → all bridge locations show
   "Reconnecting…"; the app reconnects with backoff (1, 2, 4, 8 s, then 15 s) while in the
@@ -685,7 +685,7 @@ One table for all providers (RS-8); examples:
   socketpair) with scripted latency, failures, capability sets and disconnects; contract
   tests shared with netvfs's bridge tests so both sides agree on the protocol.
 - TST-3: Interop (CI, optional job): the real `netvfs-bridge` built from netvfs with its
-  container servers (OpenSSH, Samba, Apache mod_dav, vsftpd), running the cross-location
+  container servers (OpenSSH, Samba), running the cross-location
   copy matrix, resume after a bridge kill, conflict flows, 10 000-entry folders.
 - TST-4: Fuzzing (`cargo fuzz`): bridge message decoding in the client, archive readers'
   adapters, Markdown rendering subset.
@@ -775,7 +775,7 @@ when the netvfs bridge they depend on is released.
 - Q-1: Name and organisation id (placeholders). Changing `OrganizationName` or
   `ApplicationName` after release moves the app's data folder and the bridge socket path;
   decide before M2.
-- Q-2: Register as handler for `sftp://`, `smb://`, `davs://` links (desktop
+- Q-2: Register as handler for `sftp://` and `smb://` links (desktop
   `MimeType`)? Allowed by the validator as far as checked, but only useful with the
   bridge; revisit after M2.
 - Q-3: Licence (GPL-3.0-or-later or LGPL to match netvfs).
