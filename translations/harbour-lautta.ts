@@ -2279,10 +2279,6 @@
         <source>View options</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-menu-refresh">
-        <source>Refresh</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-picker-move" numerus="yes">
         <source>Move %n items to</source>
         <translation type="unfinished">

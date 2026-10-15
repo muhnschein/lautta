@@ -381,6 +381,11 @@ what the app does.
   completion from the cache.
 - BRW-10: Symlinks in local folders that point outside the sandbox show as "Not
   accessible" rather than as empty folders.
+- BRW-11: There is no *Refresh*. A folder that is not watched (remote folders, local
+  ones whose watch failed) is listed again whenever its page comes back on screen:
+  returning from a subfolder or viewer, or switching back to the app. The rows on
+  screen stay until the fresh listing replaces them (BRW-5). Archives are not listed
+  again.
 
 ## 10. File operations
 
@@ -574,7 +579,7 @@ account* (NVB-5), *Copy address*, *Remove from recents* (ad-hoc). Swipe left: Tr
 Header with folder name and location; tap → path menu. Slim progress line while listing
 or receiving transfers. List view with icon or thumbnail and "size · modified"; grid view
 for media folders (suggested when > 60 % images). Pulley: *Select*, *New folder/file*,
-*Paste* (with clipboard), *Search here*, *View options*, *Refresh*. Push-up: *Info*,
+*Paste* (with clipboard), *Search here*, *View options* (no *Refresh*, BRW-11). Push-up: *Info*,
 *Add to favourites*. Context menu: *Open with*, *Share*, *Copy*, *Cut*, *Rename*,
 *Delete*, *Copy to…*, *Move to…*, *Download*/*Upload to…*, *Info*; fixed order,
 capability-filtered. Selection by tapping icons, actions in a `DockedPanel`.

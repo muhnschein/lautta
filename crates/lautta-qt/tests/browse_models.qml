@@ -13,11 +13,14 @@ Item {
     property string connected: ""
     property string failedKind: ""
     property string failedSubject: ""
+    property bool relisted: false
 
     LocationsModel { id: locs }
     FavouritesModel { id: favs }
     RecentsModel { id: recents }
     LocationPrefsModel { id: prefs }
+    DirectoryModel { id: remoteDir }
+    DirectoryModel { id: localDir }
 
     Repeater {
         id: rows
@@ -151,6 +154,29 @@ Item {
                  var d = row("folder", "Documents")
                  return d !== null && d.rcount === 1 && has("folder", "Music") && has("deleted")
              })
+
+        step("a remote folder lists",
+             function() {
+                 FakeWorld.putFile("account:1", "r1.txt")
+                 remoteDir.uri = "lautta://nv-account:1/"
+             },
+             function() { return !remoteDir.loading && remoteDir.count === 1 })
+        step("coming back to a remote folder lists it again",
+             function() {
+                 FakeWorld.putFile("account:1", "r2.txt")
+                 remoteDir.revisit()
+                 root.relisted = remoteDir.loading
+             },
+             function() { return root.relisted && !remoteDir.loading && remoteDir.count === 2 })
+        step("a local folder lists",
+             function() { localDir.uri = docs },
+             function() { return !localDir.loading && localDir.count === 1 })
+        step("coming back to a watched local folder does not list it again",
+             function() {
+                 localDir.revisit()
+                 root.relisted = localDir.loading
+             },
+             function() { return !root.relisted })
 
         step("add a favourite",
              function() { favs.add(docs, "Docs", "#e7a33c") },
