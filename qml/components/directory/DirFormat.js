@@ -50,7 +50,7 @@ function transferText(state, locationName) {
         //% "Downloading from %1 · %2%"
         return qsTrId("lautta-dir-downloading").arg(locationName).arg(percent)
     default:
-        //% "Waiting in Transfers"
+        //% "Waiting in Activity"
         return qsTrId("lautta-dir-transfer-waiting")
     }
 }

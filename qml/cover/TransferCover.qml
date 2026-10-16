@@ -46,7 +46,7 @@ Item {
             text: root.mode === "paused"
                 //% "%n paused"
                 ? qsTrId("lautta-xfr-header-paused", Transfers.pausedCount)
-                //% "%n transfer(s)"
+                //% "%n task(s)"
                 : qsTrId("lautta-xfr-cover-count", Transfers.activeCount)
         }
         Label {
@@ -96,7 +96,7 @@ Item {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
-            //% "%n transfer(s) will resume when you open Lautta again"
+            //% "%n task(s) will resume when you open Lautta again"
             text: qsTrId("lautta-xfr-cover-pending", Transfers.pendingCount)
         }
     }
