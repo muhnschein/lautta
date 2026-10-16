@@ -108,6 +108,15 @@ const MIGRATIONS: &[&str] = &[
         last_used_ms INTEGER NOT NULL
     );
     "#,
+    // 2: where reading stopped in a viewer (PRV-12), forgotten with recents.
+    r#"
+    CREATE TABLE reading_positions (
+        uri TEXT PRIMARY KEY,
+        location_id TEXT NOT NULL,
+        page INTEGER NOT NULL,
+        at_ms INTEGER NOT NULL
+    );
+    "#,
 ];
 
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -195,12 +204,12 @@ mod tests {
             .query_row(
                 "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN \
                  ('favourites','recents','transfers','transfer_items','working_copies',\
-                 'dircache','trash_items')",
+                 'dircache','trash_items','reading_positions')",
                 [],
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(n, 7);
+        assert_eq!(n, 8);
     }
 
     #[test]

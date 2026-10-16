@@ -3,15 +3,16 @@ resolver = "2"
 members = [
     "crates/lautta-core",
     "crates/lautta-bridge-proto",
+    "crates/lautta-pdf",
     "crates/lautta-qt",
     "crates/harbour-lautta",
 ]
-default-members = ["crates/lautta-core", "crates/lautta-bridge-proto"]
+default-members = ["crates/lautta-core", "crates/lautta-bridge-proto", "crates/lautta-pdf"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.95"
 license = "LGPL-2.1-or-later"
 publish = false
 

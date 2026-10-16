@@ -209,7 +209,7 @@ impl<'q> Matcher<'q> {
         let q = self.query;
         let size_ok = match entry.size {
             _ if q.min_size.is_none() && q.max_size.is_none() => true,
-            Some(s) => q.min_size.map_or(true, |m| s >= m) && q.max_size.map_or(true, |m| s <= m),
+            Some(s) => q.min_size.is_none_or(|m| s >= m) && q.max_size.is_none_or(|m| s <= m),
             None => false,
         };
         size_ok && self.dates_match(entry)
@@ -223,7 +223,7 @@ impl<'q> Matcher<'q> {
         let Some(t) = entry.modified else {
             return false;
         };
-        q.modified_after.map_or(true, |a| t >= a) && q.modified_before.map_or(true, |b| t <= b)
+        q.modified_after.is_none_or(|a| t >= a) && q.modified_before.is_none_or(|b| t <= b)
     }
 
     fn matches(&self, entry: &Entry, classify: &(dyn Fn(&Entry) -> String + Send + Sync)) -> bool {

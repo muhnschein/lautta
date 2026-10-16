@@ -1,0 +1,21 @@
+[package]
+name = "lautta-pdf"
+description = "PDF pages as pixels for the Lautta viewer (hayro, pure Rust, no I/O)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+# Test PDFs built in code (sample module), for other crates' tests.
+sample = []
+
+[dependencies]
+# Pure Rust and no I/O of its own: it only sees the bytes it is given
+# (PRV-10). The standard 14 fonts and CMaps are compiled in, so nothing is
+# looked up on the device either.
+hayro = { version = "0.8", default-features = false, features = ["embed-fonts", "embed-cmaps"] }

@@ -229,6 +229,20 @@ cpp! {{
             QMetaObject::invokeMethod(s->response, "finished", Qt::QueuedConnection);
     }
 
+    // Called by the Rust job with a rendered PDF page: premultiplied RGBA,
+    // `w` x `h`, copied before the call returns. Takes over `handle`.
+    static void lauttaImageDoneRgba(void *handle, const uchar *data, int w, int h)
+    {
+        std::unique_ptr<std::shared_ptr<LauttaImageState>> owner(
+            static_cast<std::shared_ptr<LauttaImageState> *>(handle));
+        LauttaImageState *s = owner->get();
+        QImage image = QImage(data, w, h, w * 4, QImage::Format_RGBA8888_Premultiplied).copy();
+        QMutexLocker lock(&s->mutex);
+        s->image = image;
+        if (!s->canceled && s->response)
+            QMetaObject::invokeMethod(s->response, "finished", Qt::QueuedConnection);
+    }
+
     class LauttaImageProvider : public QQuickAsyncImageProvider {
     public:
         explicit LauttaImageProvider(int kind) : m_kind(kind) {}
@@ -270,10 +284,12 @@ cpp! {{
     {
         engine->addImageProvider(QStringLiteral("lautta-thumb"), new LauttaImageProvider(0));
         engine->addImageProvider(QStringLiteral("lautta-file"), new LauttaImageProvider(1));
+        engine->addImageProvider(QStringLiteral("lautta-pdf"), new LauttaImageProvider(2));
     }
 }}
 
-/// Adds `image://lautta-thumb/` and `image://lautta-file/` to a
+/// Adds `image://lautta-thumb/`, `image://lautta-file/` and
+/// `image://lautta-pdf/` (PRV-12, see [`super::pdf`]) to a
 /// `QQmlEngine` (the engine takes ownership). Call once per engine, e.g.
 /// `viewers::images::register_image_providers(view->engine())`.
 ///
@@ -284,9 +300,10 @@ pub unsafe fn register_image_providers(engine: *mut c_void) {
 }
 
 const KIND_THUMB: i32 = 0;
+const KIND_PDF: i32 = 2;
 
 /// What cancels a request: the thumbnail ticket or the fetch task.
-type Canceller = Box<dyn FnOnce() + Send>;
+pub(crate) type Canceller = Box<dyn FnOnce() + Send>;
 
 static CANCELLERS: Mutex<Option<HashMap<u64, Canceller>>> = Mutex::new(None);
 
@@ -297,7 +314,7 @@ fn cancellers() -> std::sync::MutexGuard<'static, Option<HashMap<u64, Canceller>
 }
 
 /// The C++ side's shared state of one request; finishing it hands it back.
-struct Reply(*mut c_void);
+pub(crate) struct Reply(*mut c_void);
 
 // SAFETY: the pointer is an owning handle only used to call
 // `lauttaImageDone` once, which locks internally.
@@ -317,7 +334,27 @@ impl Reply {
         }
     }
 
-    fn fail(self, message: &str) {
+    /// Hands over a rendered page (premultiplied RGBA, `w * h * 4` bytes).
+    pub(crate) fn done_rgba(self, rgba: &[u8], w: u32, h: u32) {
+        let (Ok(w), Ok(h)) = (i32::try_from(w), i32::try_from(h)) else {
+            return self.fail("page too large");
+        };
+        if rgba.len() != (w as usize) * (h as usize) * 4 {
+            return self.fail("bad page buffer");
+        }
+        let handle = self.take();
+        let data = rgba.as_ptr();
+        // SAFETY: `handle` came from `requestImageResponse` and is consumed
+        // here; `data` holds `w * h * 4` bytes (checked above), which the
+        // C++ side copies before returning.
+        unsafe {
+            cpp!([handle as "void*", data as "const uchar*", w as "int", h as "int"] {
+                lauttaImageDoneRgba(handle, data, w, h);
+            })
+        }
+    }
+
+    pub(crate) fn fail(self, message: &str) {
         let handle = self.take();
         let (data, len) = (message.as_ptr(), message.len());
         // SAFETY: as in `done`.
@@ -342,6 +379,18 @@ impl Drop for Reply {
     }
 }
 
+/// Remembers how to cancel request `id` (the provider's `cancel`).
+pub(crate) fn on_cancel(id: u64, canceller: Canceller) {
+    cancellers()
+        .get_or_insert_with(HashMap::new)
+        .insert(id, canceller);
+}
+
+/// Forgets request `id`'s canceller once it has finished.
+pub(crate) fn finished(id: u64) {
+    cancellers().get_or_insert_with(HashMap::new).remove(&id);
+}
+
 fn finish_error(reply: Reply, id: u64, e: &lautta_core::Error) {
     cancellers().get_or_insert_with(HashMap::new).remove(&id);
     reply.fail(&format!("{}: {}", e.kind.name(), e.message));
@@ -358,6 +407,8 @@ fn request(kind: i32, id_data: *const u8, id_len: usize, w: i32, h: i32, req: u6
     };
     if kind == KIND_THUMB {
         thumb_request(core, &id, req, reply);
+    } else if kind == KIND_PDF {
+        super::pdf::page_request(core, &id, w, req, reply);
     } else {
         file_request(core, &id, (w, h), req, reply);
     }
@@ -535,7 +586,7 @@ mod tests {
             "NAS",
             None,
         );
-        core.locations.register(loc, Arc::new(nas));
+        core.locations.register(loc, Arc::new(nas.clone()));
 
         let (e, w, h) = probe("lautta-thumb", "lautta://nv-qt-images/p/a.jpg?size=64", (0, 0));
         assert_eq!(
@@ -568,5 +619,32 @@ mod tests {
         assert!(e.contains("bad thumbnail id"), "{e}");
         let (e, ..) = probe("lautta-file", "garbage", (0, 0));
         assert!(e.contains("bad image id"), "{e}");
+
+        // PDF pages (PRV-12).
+        nas.add_file(
+            "p/two.pdf",
+            &lautta_pdf::sample::build(&[
+                lautta_pdf::sample::page(100, 200, lautta_pdf::sample::RED_SQUARE),
+                lautta_pdf::sample::page(300, 150, ""),
+            ]),
+            1,
+        );
+        nas.add_file("p/fake.pdf", b"not a pdf", 1);
+        let (e, w, h) = probe("lautta-pdf", "lautta://nv-qt-images/p/two.pdf?page=0", (50, 0));
+        assert_eq!((e.as_str(), w, h), ("", 50, 100), "page at the asked width");
+        let (e, w, h) = probe("lautta-pdf", "lautta://nv-qt-images/p/two.pdf?page=1", (0, 0));
+        assert_eq!(
+            (e.as_str(), w, h),
+            ("", 1080, 540),
+            "the default width without a request"
+        );
+        let (e, ..) = probe("lautta-pdf", "lautta://nv-qt-images/p/two.pdf?page=2", (50, 0));
+        assert_eq!(e, "no such page");
+        let (e, ..) = probe("lautta-pdf", "lautta://nv-qt-images/p/fake.pdf?page=0", (50, 0));
+        assert_eq!(e, "not a readable PDF");
+        let (e, ..) = probe("lautta-pdf", "lautta://nv-qt-images/p/gone.pdf?page=0", (50, 0));
+        assert!(e.starts_with("NotFound"), "{e}");
+        let (e, ..) = probe("lautta-pdf", "lautta://nv-qt-images/p/two.pdf", (50, 0));
+        assert_eq!(e, "bad page id");
     }
 }

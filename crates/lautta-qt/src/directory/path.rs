@@ -19,8 +19,6 @@ pub struct PathModel {
     /// Text for the path editor: `~/Documents/Uni` or `/srv/photos`.
     address: qt_property!(QString; NOTIFY uriChanged),
     count: qt_property!(i32; NOTIFY uriChanged),
-    /// Names above the folder joined with " › " (header description).
-    breadcrumb: qt_property!(QString; NOTIFY uriChanged),
     /// All names down to the folder joined with " › ".
     fullPath: qt_property!(QString; NOTIFY uriChanged),
 
@@ -50,8 +48,6 @@ impl PathModel {
         self.count = self.steps.len() as i32;
         let names: Vec<&str> = self.steps.iter().map(|(_, n)| n.as_str()).collect();
         self.fullPath = QString::from(names.join(" \u{203a} ").as_str());
-        let above = names.len().saturating_sub(1);
-        self.breadcrumb = QString::from(names[..above].join(" \u{203a} ").as_str());
         self.end_reset_model();
         self.uriChanged();
     }

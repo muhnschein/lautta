@@ -197,18 +197,14 @@ fn handle_signal(inner: &Arc<Inner>, link: &Arc<Link>, signal: Signal) {
     };
     match signal {
         Signal::ConsentChanged(consent) => apply_consent(inner, link, Consent::from_wire(&consent)),
-        Signal::LocationsChanged => {
-            if consent_granted(inner) {
-                spawn_refresh(inner, link);
-            }
+        Signal::LocationsChanged if consent_granted(inner) => {
+            spawn_refresh(inner, link);
         }
-        Signal::NearbyChanged(list) => {
-            if consent_granted(inner) {
-                let list: Vec<NearbyServer> = list.iter().map(NearbyServer::from_wire).collect();
-                let shown = inner.nearby.borrow().clone();
-                let show = inner.info().nearby.receive(&shown, list);
-                show_nearby(inner, show);
-            }
+        Signal::NearbyChanged(list) if consent_granted(inner) => {
+            let list: Vec<NearbyServer> = list.iter().map(NearbyServer::from_wire).collect();
+            let shown = inner.nearby.borrow().clone();
+            let show = inner.info().nearby.receive(&shown, list);
+            show_nearby(inner, show);
         }
         Signal::Question { id, kind, details } => spawn_question(inner, link, id, &kind, &details),
         _ => {}

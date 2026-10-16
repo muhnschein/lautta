@@ -55,10 +55,4 @@ PullDownMenu {
         text: qsTrId("lautta-dir-menu-view-options")
         onClicked: menu.owner.viewOptions()
     }
-    MenuItem {
-        visible: !menu.selecting
-        //% "Refresh"
-        text: qsTrId("lautta-dir-menu-refresh")
-        onClicked: menu.owner.model.refresh()
-    }
 }

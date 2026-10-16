@@ -312,7 +312,8 @@ Item {
                            //% "%n selected"
                            ? qsTrId("lautta-dir-selected", dir.selectedCount)
                            : dir.title
-                    description: view.selecting ? dir.title : path.breadcrumb
+                    // No breadcrumb (as in iOS Files): the path menu shows the way up.
+                    description: view.selecting ? dir.title : ""
                 }
                 MouseArea {
                     anchors.fill: parent

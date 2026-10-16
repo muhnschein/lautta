@@ -545,6 +545,14 @@
       "w": 400,
       "x": 3360,
       "y": 2060
+    },
+    "PdfViewer.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "PDF viewer",
+      "w": 400,
+      "x": 1440,
+      "y": 8200
     }
   },
   "createdOnFiles": {
@@ -683,6 +691,7 @@
     "ImageExif.dc.html",
     "TextViewer.dc.html",
     "Markdown.dc.html",
+    "PdfViewer.dc.html",
     "VideoPlayer.dc.html",
     "AudioPlayer.dc.html",
     "ArchiveView.dc.html",

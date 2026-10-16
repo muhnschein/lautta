@@ -3,21 +3,6 @@
 .pragma library
 .import Sailfish.Silica 1.0 as Silica
 
-// "NAS › /srv/photos/2026" from the location name and an address
-// (App.displayAddress of the folder: a file:// or netvfs URL with a path).
-function where(locationName, address) {
-    var path = address || ""
-    var m = /^[a-z][a-z0-9+.-]*:\/\/[^\/]*(\/.*)?$/i.exec(path)
-    if (m)
-        path = m[1] || "/"
-    try {
-        path = decodeURIComponent(path)
-    } catch (e) {
-        // keep the encoded text
-    }
-    return locationName ? locationName + " › " + path : path
-}
-
 // "1:42" or "1:02:03" from milliseconds.
 function clock(ms) {
     var total = Math.max(0, Math.floor((ms || 0) / 1000))

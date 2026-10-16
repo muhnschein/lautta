@@ -108,7 +108,7 @@ fn literal_needle(text: &str, mode: MatchMode) -> String {
     match mode {
         MatchMode::Substring => text.to_owned(),
         MatchMode::Glob => text
-            .split(|c| matches!(c, '*' | '?' | '[' | ']'))
+            .split(['*', '?', '[', ']'])
             .max_by_key(|piece| piece.chars().count())
             .unwrap_or("")
             .to_owned(),

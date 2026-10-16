@@ -21,7 +21,8 @@ QtObject {
         check(App.categoryOf("photo.JPG") === "image", "category by extension")
         check(App.viewerFor("notes.md", "") === "markdown", "markdown viewer")
         check(App.viewerFor("song.flac", "") === "audio", "audio viewer")
-        check(App.viewerFor("report.pdf", "") === "external", "pdf goes to Open with")
+        check(App.viewerFor("report.pdf", "") === "pdf", "pdf has its own viewer")
+        check(App.viewerFor("report.docx", "") === "external", "office documents go to Open with")
 
         check(App.setting("remorse_seconds") === 5, "default remorse")
         check(App.setSetting("remorse_seconds", JSON.stringify(8)), "setSetting accepts")
