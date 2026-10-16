@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 use super::nav::{MAX_LINKS, MAX_NAMED_DESTS, MAX_OUTLINE_DEPTH, MAX_OUTLINE_ITEMS, MAX_URI_BYTES};
 use super::sample::{link, page, page_ref, Doc, Spec};
-use super::*;
+use super::{Link, LinkTarget, OutlineItem, PageRect, PdfDocument, PdfError};
 
 /// `n` upright pages of 256 x 128 pt.
 fn pages(n: usize) -> Doc {
