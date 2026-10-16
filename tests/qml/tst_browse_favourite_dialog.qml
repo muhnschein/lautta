@@ -8,7 +8,6 @@ ApplicationWindow {
     initialPage: Component {
         FavouriteDialog {
             uri: "lautta://user-documents/"
-            favouriteId: -1
         }
     }
 }

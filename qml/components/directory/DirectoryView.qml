@@ -7,6 +7,7 @@ import Sailfish.Silica 1.0
 import Sailfish.Share 1.0
 import Lautta 1.0
 import "../"
+import "../transfers"
 import "../Open.js" as Open
 import "../ErrorText.js" as ErrorText
 import "ContextActions.js" as Actions
@@ -178,7 +179,7 @@ Item {
         case "info": pageStack.push(Qt.resolvedUrl("../../pages/InfoPage.qml"), { "uri": uris[0] }); break
         case "compress": pageStack.push(Qt.resolvedUrl("../../dialogs/CompressDialog.qml"), { "uris": JSON.stringify(uris) }); break
         case "extract": pageStack.push(Qt.resolvedUrl("../../dialogs/ExtractDialog.qml"), { "archiveUri": uris[0] }); break
-        case "favourite": pageStack.push(Qt.resolvedUrl("../../dialogs/FavouriteDialog.qml"), { "uri": uris[0], "favouriteId": "" }); break
+        case "favourite": pageStack.push(Qt.resolvedUrl("../../dialogs/FavouriteDialog.qml"), { "uri": uris[0] }); break
         case "open_remote": pageStack.push(Qt.resolvedUrl("../../dialogs/OpenRemoteDialog.qml"), { "uri": uris[0] }); break
         }
     }
@@ -657,12 +658,12 @@ Item {
         VerticalScrollDecorator { }
     }
 
-    // Room for the docked panels at the end of the list.
+    // Room for the docked panels and the activity bar at the end of the list.
     Item {
         id: panelSpace
 
         width: 1
-        height: view.selecting || App.clipboardCount > 0 ? Theme.itemSizeLarge : 0
+        height: (view.selecting || App.clipboardCount > 0 ? Theme.itemSizeLarge : 0) + activityBar.space
     }
 
     BusyIndicator {
@@ -690,6 +691,16 @@ Item {
     }
 
     ClipboardPanel {
+        id: clipboardPanel
+
         owner: view
+    }
+
+    // Above the paste bar; out of the way while selecting (XFR-13).
+    ActivityBar {
+        id: activityBar
+
+        allowed: !view.selecting
+        anchors.bottomMargin: clipboardPanel.visibleSize
     }
 }

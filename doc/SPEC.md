@@ -460,7 +460,7 @@ bridge).
 - XFR-7: Network policy is the bridge's (netvfs decides per account); the app only
   surfaces "Waiting for network".
 - XFR-8: Progress: per item and aggregate bytes, smoothed rate, ETA; shown in the
-  Transfers page, on the cover, and in one updating notification while the app is in the
+  Activity page, on the cover, and in one updating notification while the app is in the
   background.
 - XFR-9: Failure policy: transient errors retry 3 times per item with backoff; then the
   item fails and the rest continue; "Completed with N failures" with *Retry failed*.
@@ -472,6 +472,14 @@ bridge).
   remote: `Stat` through the bridge). Remote destinations resume with
   `Upload(disposition=Resume)` when capable, otherwise restart that file. Downloads
   always resume.
+- XFR-13: Activity bar: Browse and every folder show a bar at the bottom while anything
+  in Activity is unfinished, with the most urgent task first (a conflict waiting for an
+  answer, then running, queued, waiting and paused tasks in queue order), its progress
+  and how many more there are. Tap opens Activity, or the conflict dialog when a task
+  waits for an answer. A completed task shows for 4 s; a failed one stays until Activity
+  is opened or the bar is swiped away. A sideways swipe hides the bar until a task
+  starts, ends or changes state. The bar sits above the paste bar and hides while
+  selecting.
 
 ## 12. Preview, open, stream
 
@@ -535,7 +543,7 @@ bridge).
   input, transfers pending at close (XFR-6). Default actions activate the app through its
   own D-Bus name (`ExecDBus`) and open the relevant page.
 - INT-3: Cover: folder name and count while browsing; aggregate progress, rate and count
-  while transferring; cover actions *Pause all*/*Resume all* and *Transfers*.
+  while transferring; cover actions *Pause all*/*Resume all* and *Activity*.
 - INT-4: Settings → Accounts and Settings → Storage are reached through the bridge
   (NVB-5) and the platform's settings handoff respectively; no account or storage code in
   the app.
@@ -551,7 +559,7 @@ bridge).
 flowchart TD
   B[Browse] --> D[Directory]
   B --> R[Recents]
-  B --> T[Transfers]
+  B --> T[Activity]
   B --> CS[Connect to server<br/>bridge only]
   B --> S[Settings / About]
   D --> D
@@ -569,8 +577,8 @@ present), *Servers* (bridge only: accounts, recent ad-hoc servers, status dot,
 attention badge), *Nearby* (bridge only, hidden when empty).
 
 Pulley: *Settings*, *Connect to server* (bridge only), *Add server* (bridge only, NVB-5),
-*Transfers* (live count). Push-up: *Recents*. Long-press server: *Disconnect*, *Edit
-account* (NVB-5), *Copy address*, *Remove from recents* (ad-hoc). Swipe left: Transfers.
+*Activity* (live count). Push-up: *Recents*. Long-press server: *Disconnect*, *Edit
+account* (NVB-5), *Copy address*, *Remove from recents* (ad-hoc). Swipe left: Activity.
 
 ### 15.3 Directory page
 
@@ -583,10 +591,13 @@ for media folders (suggested when > 60 % images). Pulley: *Select*, *New folder/
 capability-filtered. Selection by tapping icons, actions in a `DockedPanel`.
 Placeholders: empty, no permission, offline, error with *Retry*/*Details*.
 
-### 15.4 Transfers page
+### 15.4 Activity page
 
-Groups: *Active*, *Waiting for you*, *Paused*, *History*. Rows with
-direction icon, title, progress, "1.2 GB of 4.0 GB · 11.4 MB/s · 4 min".
+Every copy, move, upload, download, delete, compress and extract is a task here
+(the engine calls them transfers, §11). Groups: *Active*, *Waiting for you*, *Paused*,
+*History*. Rows with direction icon, title (past tense once completed: "Deleted 4
+items"), progress, "1.2 GB of 4.0 GB · 11.4 MB/s · 4 min". The activity bar (XFR-13)
+leads here from any depth.
 
 ### 15.5 Rules
 

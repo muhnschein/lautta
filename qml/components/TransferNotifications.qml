@@ -50,7 +50,7 @@ Item {
 
     function progressSummary() {
         var percent = TransferText.percent(Transfers.bytesDone, Transfers.bytesTotal)
-        //% "%n transfer(s) · %1%"
+        //% "%n task(s) · %1%"
         var text = qsTrId("lautta-xfr-note-progress", Transfers.activeCount).arg(percent)
         return Transfers.eta >= 0 ? text + " · " + TransferText.duration(Transfers.eta) : text
     }
@@ -66,7 +66,7 @@ Item {
     function publishPending() {
         progressNote.close()
         if (Transfers.pendingCount > 0) {
-            //% "%n transfer(s) will resume"
+            //% "%n task(s) will resume"
             pendingNote.summary = qsTrId("lautta-xfr-note-pending", Transfers.pendingCount)
             pendingNote.publish()
         }
@@ -146,9 +146,9 @@ Item {
 
         appName: "Lautta"
         category: "x-lautta.transfer.finished"
-        //% "Transfers finished"
+        //% "Tasks finished"
         summary: qsTrId("lautta-xfr-note-finished")
-        //% "%n transfer(s)"
+        //% "%n task(s)"
         body: qsTrId("lautta-xfr-note-finished-count", root.finishedCount)
         itemCount: root.finishedCount
         remoteActions: root.remoteAction("transfers")
