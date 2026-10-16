@@ -30,6 +30,9 @@ cpp! {{
     #include <QtQml/QQmlContext>
     #include <QtCore/QUrl>
     #include <QtCore/QCoreApplication>
+    #include <QtCore/QElapsedTimer>
+    #include <QtCore/QEvent>
+    #include <QtCore/QEventLoop>
     #include <QtQml/QQmlComponent>
     #include <QtCore/QTranslator>
     #include <QtCore/QLocale>
@@ -94,6 +97,18 @@ cpp! {{
             std::unique_ptr<QObject> object(component.isReady() ? component.create() : nullptr);
             for (int spin = 0; spin < 10; ++spin)
                 QCoreApplication::processEvents();
+            // A scenario test keeps `scenarioRunning` true until its steps
+            // are done; it fails by logging an error.
+            if (object && object->property("scenarioRunning").isValid()) {
+                QElapsedTimer clock;
+                clock.start();
+                while (object->property("scenarioRunning").toBool() && clock.elapsed() < 60000) {
+                    QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+                    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+                }
+                if (object->property("scenarioRunning").toBool())
+                    problems << QStringLiteral("scenario still running after 60 s");
+            }
             for (const QQmlError &e : component.errors())
                 problems << e.toString();
             if (!object && problems.isEmpty())

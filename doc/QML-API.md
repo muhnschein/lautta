@@ -76,7 +76,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - `LocationsModel` — sections `favourites`, `device`, `android`, `volumes`, `servers`,
   `nearby` (roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
   `colour`, `count`, `itemId`).
-- `FavouritesModel`, `RecentsModel { filter }`.
+- `FavouritesModel` (`add`, `save(uri, label, colour)` adds or relabels, `edit`, `remove`,
+  `removeUri(uri)`, `moveTo`, `moveBy`, `get`, `idOf`, `placeOf`), `RecentsModel { filter }`.
 - `Bridge` singleton: `status` (`absent`, `connecting`, `consentUnknown`, `consentDenied`,
   `ready`, `reconnecting`), `requestConsent()`, `addServer(provider)`,
   `editAccount(locationUri)`, `connectAdHoc(url, secret, options)`, `forgetAdHoc(id)`,
@@ -84,7 +85,7 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - Pages: `pages/BrowsePage.qml` (initial page), `pages/RecentsPage.qml`,
   `dialogs/ConnectServerDialog.qml { url }`,
   `dialogs/ServerQuestionDialog.qml { questionId, kind, details }`,
-  `dialogs/FavouriteDialog.qml { uri, favouriteId }`,
+  `dialogs/FavouriteDialog.qml { uri }` (edits the folder's favourite when it is one),
   `pages/LocationSettingsPage.qml { locationId }`, `cover/CoverPage.qml`.
 
 ### Directory (boards: Directory, DirectoryPulley, DirectoryContext, DirectorySelect, DirectorySelectPulley, DirectoryGrid, DirectoryLandscape, PathMenu, DirectoryRemorse, ImageDeleteRemote, ViewOptions, NewItem, Rename, FolderPicker, FolderPickerPulley, StateEmpty, StateNoAccess, StateOffline, StateError, StateLarge)
