@@ -108,6 +108,16 @@ const MIGRATIONS: &[&str] = &[
         last_used_ms INTEGER NOT NULL
     );
     "#,
+    // 2: BRW-12, what the Browse page shows and in which order.
+    r#"
+    CREATE TABLE browse_layout (
+        section TEXT NOT NULL,
+        item TEXT NOT NULL,
+        hidden INTEGER NOT NULL DEFAULT 0,
+        position INTEGER,
+        PRIMARY KEY (section, item)
+    );
+    "#,
 ];
 
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;

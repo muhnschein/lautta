@@ -5,10 +5,11 @@
 //! `colour`, `count`, `itemId`, `place`, `provider`, `host`, `free`,
 //! `total`, `fs` (see `lautta_core::app_browse::Row` for the values).
 
-use super::{cell_data, role_names, store_subscribe, Cell, Guard};
-use crate::runtime::{core, handle, spawn_then};
+use super::{cell_data, role_names, store_changed, store_subscribe, Cell, Guard};
+use crate::runtime::{blocking_then, core, handle, spawn_then};
 use lautta_core::app::Core;
 use lautta_core::app_browse::Row;
+use lautta_core::browse_layout::layout_item;
 use qmetaobject::prelude::*;
 use qmetaobject::{queued_callback, QPointer};
 use std::collections::HashMap;
@@ -72,6 +73,8 @@ pub struct LocationsModel {
     nearbyCount: qt_property!(i32; NOTIFY countChanged),
     countChanged: qt_signal!(),
     refresh: qt_method!(fn(&mut self)),
+    /// Hides a row from Browse (BRW-12); Settings › Browse page shows it again.
+    hide: qt_method!(fn(&mut self, section: QString, kind: QString, itemId: QString)),
     sectionCount: qt_method!(fn(&self, section: QString) -> i32),
 
     rows: Vec<Vec<Cell>>,
@@ -102,6 +105,22 @@ impl LocationsModel {
                 }
             }
         });
+    }
+
+    fn hide(&mut self, section: QString, kind: QString, itemId: QString) {
+        let Some(core) = core() else { return };
+        let Some(item) = layout_item(&kind.to_string(), &itemId.to_string()) else {
+            return;
+        };
+        let section = section.to_string();
+        blocking_then(
+            move || {
+                if let Err(e) = core.browse_layout.set_hidden(&section, &item, true) {
+                    log::error!("hiding a Browse row failed: {e}");
+                }
+            },
+            |()| store_changed(),
+        );
     }
 
     fn sectionCount(&self, section: QString) -> i32 {

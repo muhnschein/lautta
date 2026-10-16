@@ -381,6 +381,15 @@ what the app does.
   completion from the cache.
 - BRW-10: Symlinks in local folders that point outside the sandbox show as "Not
   accessible" rather than as empty folders.
+- BRW-12: The Browse page is configurable without a wall of options (prior art: iOS
+  Files *Browse › Edit*, Finder sidebar settings, Dolphin *Places › Hide*). *Settings ›
+  Browse page* lists every row in Browse order: a switch per folder, *Recently deleted*,
+  volume and server (hiding the row only; the bin keeps working), one switch for all
+  nearby servers, and a drag handle to move rows within their section (favourites move
+  only; volumes and nearby stay put). A half-size live preview of the Browse page sits
+  below, as in Salama's start page settings; the pulley has *Restore defaults*.
+  Long-press *Hide from Browse* is the shortcut. Stored in `browse_layout`; a removed
+  account's rows are purged with it (SEC-5).
 
 ## 10. File operations
 
@@ -571,7 +580,8 @@ flowchart TD
 
 Sections: *Favourites*, *On this device* (user folders), *Android*, *Volumes* (when
 present), *Servers* (bridge only: accounts, recent ad-hoc servers, status dot,
-attention badge), *Nearby* (bridge only, hidden when empty).
+attention badge), *Nearby* (bridge only, hidden when empty). Rows the user hid are left
+out and rows keep the order the user gave them (BRW-12).
 
 Pulley: *Settings*, *Connect to server* (bridge only), *Add server* (bridge only, NVB-5),
 *Activity* (live count). Push-up: *Recents*. Long-press server: *Disconnect*, *Edit

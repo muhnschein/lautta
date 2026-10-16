@@ -426,6 +426,17 @@ Page {
                         onClicked: Qt.openUrlExternally("settings://system/storage")
                     }
                     MenuItem {
+                        visible: row.kind === "folder" || row.kind === "volume" || row.isServer
+                        //% "Hide from Browse"
+                        text: qsTrId("lautta-browse-hide")
+                        onClicked: {
+                            //% "%1 hidden. Settings › Browse page shows it again."
+                            hiddenNotice.text = qsTrId("lautta-browse-hidden").arg(model.name)
+                            hiddenNotice.show()
+                            locations.hide(model.section, model.kind, model.itemId)
+                        }
+                    }
+                    MenuItem {
                         visible: row.kind === "adhoc" || row.kind === "adhocRecent"
                         //% "Remove from recents"
                         text: qsTrId("lautta-browse-remove-recent")
@@ -455,5 +466,10 @@ Page {
 
     ActivityBar {
         id: activityBar
+    }
+
+    Notice {
+        id: hiddenNotice
+        duration: Notice.Long
     }
 }
