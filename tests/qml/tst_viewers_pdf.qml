@@ -30,8 +30,16 @@ ApplicationWindow {
         viewer.zoomTo(1, 100, 100)
         pageStack.push(lockedComponent, {}, PageStackAction.Immediate)
         // The password dialog opens on its own; a wrong password asks again.
+        var lockedViewer = pageStack.currentPage
         waitFor(function() { return pageStack.currentPage.wrong !== undefined })
         var dialog = pageStack.currentPage
+        if (dialog.wrong === undefined) {
+            console.error("FAILED: no password dialog; status " + lockedViewer.status
+                          + ", wantPassword " + lockedViewer.wantPassword + ", asked " + lockedViewer.asked
+                          + ", problem '" + lockedViewer.problem + "', loading " + lockedViewer.loading
+                          + ", busy " + pageStack.busy + ", depth " + pageStack.depth)
+            return
+        }
         dialog.wrong = true
         tools.pump(200)
         dialog.reject()

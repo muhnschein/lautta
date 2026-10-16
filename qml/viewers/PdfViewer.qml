@@ -23,6 +23,9 @@ Page {
     property real renderZoom: 1
     readonly property real maxZoom: 4
     readonly property string fileName: App.nameOf(uri)
+    // Why the PDF is not shown (PdfDocument.problem), and whether it loads.
+    readonly property string problem: doc.problem
+    readonly property bool loading: doc.loading
     readonly property int currentPage: {
         var item = view.itemAt(view.contentX + view.width / 2, view.contentY + view.height / 2)
         return item ? item.pageIndex + 1 : 1
