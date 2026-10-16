@@ -521,6 +521,15 @@ bridge).
   opens that one parse and is never stored, so reopening asks again (the empty user
   password opens without asking). Reopening a PDF starts at the page where reading
   stopped, remembered with the recents (off and cleared with them, ORG-2).
+  *Search* in the pulley finds text in the document: a search field stays at the top
+  of the page (its close button leaves search mode), typing searches once it pauses,
+  case-insensitive with whitespace runs alike. The search runs off the GUI thread page
+  by page from the page being read to the end and then from the first page; hits are
+  marked on the pages as they arrive, the one shown stronger. A bar at the bottom
+  steps to the previous and next hit (going round, scrolling it into view) and reads
+  "2 of 17 · page 3", or "Not found in 12 pages" once every page is searched. At
+  most 10 000 hits per document, 1 000 per page, in its first 200 000 characters; an
+  encrypted PDF is searchable while it is open after unlocking.
 
 ## 13. Search and organisation
 

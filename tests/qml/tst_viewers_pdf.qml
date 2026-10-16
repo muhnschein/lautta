@@ -11,26 +11,58 @@ ApplicationWindow {
 
     ViewerTools { id: tools }
 
+    // Runs the event loop until `done()` holds, for at most 30 s: the target
+    // is emulated and slow.
+    function waitFor(done) {
+        for (var i = 0; i < 300 && !done(); ++i)
+            tools.pump(100)
+    }
+
+    // Waits for the page on top to be shown and its PDF to be read.
+    function shown() {
+        waitFor(function() {
+            var p = pageStack.currentPage
+            return !pageStack.busy && p.document !== undefined && !p.document.loading
+        })
+        return pageStack.currentPage
+    }
+
     Component.onCompleted: {
         tools.installFixture(Qt.resolvedUrl("host/fixtures/two-pages.pdf"), "lautta://user-documents/two-pages.pdf")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/secret.pdf"), "lautta://user-documents/locked.pdf")
+        tools.installFixture(Qt.resolvedUrl("host/fixtures/searchable.pdf"), "lautta://user-documents/searchable.pdf")
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        // Let the asynchronous loading finish and the pages appear.
-        tools.pump(800)
-        var viewer = pageStack.currentPage
+        var viewer = shown()
         viewer.zoomTo(2.5, 100, 100)
-        tools.pump(800)
+        tools.pump(500)
         viewer.zoomTo(1, 100, 100)
-        pageStack.push(lockedComponent, {}, PageStackAction.Immediate)
+
+        // Search mode: hits marked on the pages, stepped through, nothing
+        // found, and closed again.
+        pageStack.push(searchComponent, {}, PageStackAction.Immediate)
+        var searching = shown()
+        var doc = searching.document
+        searching.openSearch()
+        searching.searchText = "lautta"
+        waitFor(function() { return doc.currentHit > 0 && !doc.searching })
+        searching.nextHit()
+        searching.previousHit()
+        searching.zoomTo(2.5, 100, 100)
+        searching.nextHit()
+        searching.searchText = "no such words"
+        waitFor(function() { return doc.currentHit === 0 && !doc.searching })
+        searching.closeSearch()
+
         // The password dialog opens on its own; a wrong password asks again.
-        tools.pump(800)
+        pageStack.push(lockedComponent, {}, PageStackAction.Immediate)
+        var locked = pageStack.currentPage
+        waitFor(function() { return pageStack.currentPage !== locked && !pageStack.busy })
         var dialog = pageStack.currentPage
         dialog.wrong = true
         tools.pump(200)
         dialog.reject()
-        tools.pump(800)
+        waitFor(function() { return pageStack.currentPage === locked && !pageStack.busy })
         // The Unlocking state while a password is tried.
-        var locked = pageStack.currentPage
         locked.unlocking = true
         tools.pump(200)
         locked.unlocking = false
@@ -39,6 +71,11 @@ ApplicationWindow {
     Component {
         id: pageComponent
         PdfViewer { uri: "lautta://user-documents/two-pages.pdf" }
+    }
+
+    Component {
+        id: searchComponent
+        PdfViewer { uri: "lautta://user-documents/searchable.pdf" }
     }
 
     Component {

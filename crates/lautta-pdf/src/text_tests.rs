@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-use super::*;
+use super::{find, fraction, gap, Gap, Placed, TextChar, TextSink, LINE_BACK, LINE_SHIFT, WORD_GAP};
 use crate::sample::{build, page, text, Spec};
+use crate::{PageRect, PageSize, PdfDocument, PdfError, TextHit, MAX_PAGE_CHARS, MAX_PAGE_HITS};
+use hayro::hayro_interpret::hayro_cmap::BfString;
+use hayro::kurbo::{Affine, Point, Rect};
 
 /// Helvetica advance widths, per 1000 units of the font size.
 const HELLO: f32 = 722.0 + 556.0 + 222.0 + 222.0 + 556.0;

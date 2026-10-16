@@ -2683,5 +2683,27 @@
         <source>Unlocking</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-viewers-pdf-hit">
+        <source>%1 of %2 · page %3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-not-found" numerus="yes">
+        <source>Not found in %n page(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-viewers-pdf-searching">
+        <source>Searching</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-search-placeholder">
+        <source>Search the text</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-search">
+        <source>Search</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

@@ -25,3 +25,15 @@ function problem(name) {
         return qsTrId("lautta-viewers-pdf-invalid")
     }
 }
+
+// The search bar: "2 of 17 · page 3" (the hit shown, all hits, its page).
+function hit(current, count, page) {
+    //% "%1 of %2 · page %3"
+    return qsTrId("lautta-viewers-pdf-hit").arg(current).arg(count).arg(page)
+}
+
+// The search bar once the whole document is searched without a hit.
+function notFound(pages) {
+    //% "Not found in %n page(s)"
+    return qsTrId("lautta-viewers-pdf-not-found", pages)
+}

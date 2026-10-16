@@ -176,7 +176,7 @@ pub fn render_scale(size: PageSize, width: u32) -> f32 {
 }
 
 mod text;
-pub use text::*;
+pub use text::{TextHit, MAX_PAGE_CHARS, MAX_PAGE_HITS};
 
 #[cfg(any(test, feature = "sample"))]
 pub mod sample;
