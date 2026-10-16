@@ -41,8 +41,14 @@ Item {
         check(Transfers.pendingCount >= Transfers.activeCount, "pending includes active")
                         check(Transfers.eta >= -1, "ETA is -1 when unknown")
         check(Transfers.pendingAtStart === 0 && !Transfers.closing, "nothing restored, not closing")
-
+        check(Transfers.barMode === "hidden" && Transfers.barTransferId === 0 && Transfers.barUnfinished === 0,
+              "an empty queue hides the activity bar, got " + Transfers.barMode)
         var before = failedCount
+        Transfers.dismissBar()
+        Transfers.barSeen()
+        check(Transfers.barMode === "hidden" && failedCount === before, "swiping or seeing an empty bar is quiet")
+
+        before = failedCount
         check(!Transfers.pause(987654), "pausing an unknown transfer fails")
         check(failedCount === before + 1 && lastKind === "NotFound", "pause reports NotFound, got " + lastKind)
         check(!Transfers.resume(987654), "resuming an unknown transfer fails")

@@ -414,7 +414,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-busy">
-        <source>Finish or cancel transfers first</source>
+        <source>Finish or cancel running tasks first</source>
+        <oldsource>Finish or cancel transfers first</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-clear-failed">
@@ -570,7 +571,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-resume">
-        <source>Resume unfinished transfers at start</source>
+        <source>Resume unfinished tasks at start</source>
+        <oldsource>Resume unfinished transfers at start</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-history">
@@ -1298,13 +1300,15 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-note-progress" numerus="yes">
-        <source>%n transfer(s) · %1%</source>
+        <source>%n task(s) · %1%</source>
+        <oldsource>%n transfer(s) · %1%</oldsource>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
     </message>
     <message id="lautta-xfr-note-pending" numerus="yes">
-        <source>%n transfer(s) will resume</source>
+        <source>%n task(s) will resume</source>
+        <oldsource>%n transfer(s) will resume</oldsource>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
@@ -1326,11 +1330,13 @@
         </translation>
     </message>
     <message id="lautta-xfr-note-finished">
-        <source>Transfers finished</source>
+        <source>Tasks finished</source>
+        <oldsource>Transfers finished</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-note-finished-count" numerus="yes">
-        <source>%n transfer(s)</source>
+        <source>%n task(s)</source>
+        <oldsource>%n transfer(s)</oldsource>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
@@ -1360,11 +1366,13 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-menu-cancel">
-        <source>Cancel transfer</source>
+        <source>Cancel</source>
+        <oldsource>Cancel transfer</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-remorse-cancel">
-        <source>Canceling transfer</source>
+        <source>Canceling</source>
+        <oldsource>Canceling transfer</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-title-upload-one">
@@ -1536,13 +1544,15 @@
         </translation>
     </message>
     <message id="lautta-xfr-cover-count" numerus="yes">
-        <source>%n transfer(s)</source>
+        <source>%n task(s)</source>
+        <oldsource>%n transfer(s)</oldsource>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
     </message>
     <message id="lautta-xfr-cover-pending" numerus="yes">
-        <source>%n transfer(s) will resume when you open Lautta again</source>
+        <source>%n task(s) will resume when you open Lautta again</source>
+        <oldsource>%n transfer(s) will resume when you open Lautta again</oldsource>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
@@ -1584,7 +1594,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-gone">
-        <source>This transfer is gone</source>
+        <source>This task is gone</source>
+        <oldsource>This transfer is gone</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-group-active">
@@ -1616,11 +1627,13 @@
         </translation>
     </message>
     <message id="lautta-xfr-title">
-        <source>Transfers</source>
+        <source>Activity</source>
+        <oldsource>Transfers</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-restored" numerus="yes">
-        <source>%n transfer(s) stopped when Lautta closed.</source>
+        <source>%n task(s) stopped when Lautta closed.</source>
+        <oldsource>%n transfer(s) stopped when Lautta closed.</oldsource>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
@@ -1650,11 +1663,13 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-empty">
-        <source>No transfers</source>
+        <source>No activity</source>
+        <oldsource>No transfers</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-empty-hint">
-        <source>Copies, moves and uploads you start show up here.</source>
+        <source>Copies, moves, deletes and archives you start show up here.</source>
+        <oldsource>Copies, moves and uploads you start show up here.</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-browse-section-favourites">
@@ -1956,11 +1971,13 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-browse-transfers-count">
-        <source>Transfers (%1)</source>
+        <source>Activity (%1)</source>
+        <oldsource>Transfers (%1)</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-browse-transfers">
-        <source>Transfers</source>
+        <source>Activity</source>
+        <oldsource>Transfers</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-browse-recently-deleted">
@@ -2446,7 +2463,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-transfer-waiting">
-        <source>Waiting in Transfers</source>
+        <source>Waiting in Activity</source>
+        <oldsource>Waiting in Transfers</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-sel-copy">
@@ -2628,6 +2646,108 @@
     <message id="lautta-dir-sel-compress">
         <source>Compress</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-activity-bar-answer">
+        <source>Answer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-activity-bar-show">
+        <source>Show</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-title-uploaded-one">
+        <source>Uploaded %1 to %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-title-downloaded-one">
+        <source>Downloaded %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-title-deleted-one">
+        <source>Deleted %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-title-deleted-many" numerus="yes">
+        <source>Deleted %n item(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-xfr-title-compressed-one">
+        <source>Compressed %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-title-compressed-many" numerus="yes">
+        <source>Compressed %n item(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-xfr-title-extracted">
+        <source>Extracted %1 to %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-title-uploading-one">
+        <source>Uploading %1 to %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-title-downloading-one">
+        <source>Downloading %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-title-copying-one">
+        <source>Copying %1 to %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-title-copying-many" numerus="yes">
+        <source>Copying %n item(s) to %1</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-xfr-title-moving-one">
+        <source>Moving %1 to %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-title-moving-many" numerus="yes">
+        <source>Moving %n item(s) to %1</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-xfr-title-deleting-one">
+        <source>Deleting %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-title-deleting-many" numerus="yes">
+        <source>Deleting %n item(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-xfr-title-compressing-one">
+        <source>Compressing %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-title-compressing-many" numerus="yes">
+        <source>Compressing %n item(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-xfr-title-extracting">
+        <source>Extracting %1 to %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-items-progress">
+        <source>%1 of %2 items</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-bar-more" numerus="yes">
+        <source>%n more</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
     </message>
     <message id="lautta-favourite-remove">
         <source>Remove from favourites</source>

@@ -132,6 +132,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `pause(id)`, `resume(id)`, `cancel(id)`, `retryFailed(id)`, `moveUp(id)`,
   `moveDown(id)`, `moveToTop(id)`, `answer(id, item, choice, applyToAll)`,
   `clearHistory()`; signals `finished(id, ok, failures)`, `needsAnswer(id, item, conflict)`.
+  Activity bar (XFR-13): `barMode` (`hidden`, `question`, `running`, `waiting`, `paused`,
+  `failed`, `done`), `barTransferId`, `barUnfinished`, `dismissBar()` (swiped away),
+  `barSeen()` (the Activity page shows the outcome); `components/transfers/ActivityBar.qml`.
 - `TransfersModel` — groups `active`, `waiting`, `paused`, `history`
   (roles: `transferId`, `group`, `kind`, `title`, `state`, `waitReason`, `bytesDone`,
   `bytesTotal`, `rate`, `eta`, `itemsDone`, `itemsTotal`, `itemsFailed`, `direction`).

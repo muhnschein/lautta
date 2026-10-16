@@ -8,6 +8,7 @@ import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components"
 import "../components/browse"
+import "../components/transfers"
 import "../components/ErrorText.js" as ErrorText
 import "../components/browse/BrowseText.js" as BrowseText
 
@@ -134,9 +135,9 @@ Page {
             }
             MenuItem {
                 text: Transfers.activeCount > 0
-                      //% "Transfers (%1)"
+                      //% "Activity (%1)"
                       ? qsTrId("lautta-browse-transfers-count").arg(Transfers.activeCount)
-                      //% "Transfers"
+                      //% "Activity"
                       : qsTrId("lautta-browse-transfers")
                 onClicked: pageStack.push(Qt.resolvedUrl("TransfersPage.qml"))
             }
@@ -445,6 +446,15 @@ Page {
             }
         }
 
+        footer: Item {
+            width: list.width
+            height: activityBar.space
+        }
+
         VerticalScrollDecorator { }
+    }
+
+    ActivityBar {
+        id: activityBar
     }
 }

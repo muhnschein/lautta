@@ -41,6 +41,7 @@ pub mod trash;
 pub mod undo;
 
 // Transfers and edit-in-place
+pub mod activity;
 pub mod transfer;
 pub mod workcopy;
 

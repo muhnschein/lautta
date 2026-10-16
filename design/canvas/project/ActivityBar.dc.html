@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Activity bar while copying</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.amb{--pri:#ffffff;--sec:rgba(255,255,255,.62);--hl:#74d4ff;--hl2:#5fb3d9;--hlbg:rgba(116,212,255,.30);--hldim:rgba(116,212,255,.13);--ov:rgba(8,14,20,.82);--line:rgba(255,255,255,.28);--warn:#ffb067;--err:#ff8a80;
+ background:radial-gradient(130% 70% at 85% -5%,#2a4a63 0%,#13222f 45%,#0a1219 100%);color:var(--pri);font-family:'Source Sans 3',system-ui,sans-serif;font-size:19px;position:relative;overflow:hidden;box-sizing:border-box}
+.amb.light{--pri:#15191d;--sec:rgba(21,25,29,.66);--hl:#00639c;--hl2:#2a74a3;--hlbg:rgba(0,99,156,.20);--hldim:rgba(0,99,156,.09);--ov:rgba(240,244,247,.9);--line:rgba(21,25,29,.3);--warn:#a14d00;--err:#b3261e;
+ background:radial-gradient(130% 70% at 85% -5%,#ffffff 0%,#e7eef3 50%,#d6e1e9 100%)}
+.amb *{box-sizing:border-box}
+.amb a{color:inherit;text-decoration:none}
+.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.m{width:40px;height:40px;stroke-width:1.2}
+.ind-back{position:absolute;top:14px;left:10px;display:flex;gap:4px}
+.ind-back i{display:block;width:4px;height:4px;border-radius:2px;background:var(--hl);opacity:.9}
+.ind-back i+i{opacity:.45}
+.hdr{min-height:80px;padding:14px 18px 6px 60px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;text-align:right}
+.hdr-t{font-size:28px;font-weight:300;color:var(--hl);line-height:1.15}
+.hdr-d{font-size:15px;color:var(--hl2);margin-top:2px}
+.li{min-height:72px;padding:6px 18px;display:flex;align-items:center;gap:14px;width:100%}
+.li-ic{width:48px;height:48px;display:flex;align-items:center;justify-content:center;flex:none}
+.li-b{flex:1;min-width:0}
+.li-t{display:block;font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li-s{display:block;font-size:15px;color:var(--sec)}
+.bar{position:absolute;left:0;right:0;bottom:0;height:80px;background:var(--ov);backdrop-filter:blur(8px);border-top:1px solid var(--hldim);display:flex;align-items:center;gap:14px;padding:0 6px 0 18px}
+.ring{position:relative;width:48px;height:48px;flex:none;display:flex;align-items:center;justify-content:center;color:var(--pri)}
+.ring svg.r{position:absolute;inset:0;transform:rotate(-90deg)}
+.bar-b{flex:1;min-width:0}
+.bar-t{display:block;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-d{display:block;font-size:13px;color:var(--sec);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-a{height:80px;padding:0 18px;display:flex;align-items:center;font-size:17px;color:var(--hl)}
+.callout{position:absolute;left:18px;right:18px;font-size:13px;color:var(--hl2);text-align:center}
+</style>
+</helmet>
+<div class="amb {{amb}}" style="width: 400px; height: 860px">
+<div class="ind-back"><i></i><i></i></div>
+<div class="hdr"><div class="hdr-t">Chapter 4</div><div class="hdr-d">Thesis › Drafts › 2026 › Figures › Raw › Lab B › Run 7</div></div>
+<a class="li" href="#"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5h6l2 2h10v10.5H3z"/></svg></span><span class="li-b"><span class="li-t">Scans</span><span class="li-s">41 items</span></span></a>
+<a class="li" href="#"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 15h6M9 18h4"/></svg></span><span class="li-b"><span class="li-t">run7-notes.odt</span><span class="li-s">88 kB · Today 10:02</span></span></a>
+<a class="li" href="#"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14"/><path d="M3 16l5-5 4 4 3-3 6 6"/></svg></span><span class="li-b"><span class="li-t">plate-01.tiff</span><span class="li-s">48 MB · Today 09:41</span></span></a>
+<a class="li" href="#"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14"/><path d="M3 16l5-5 4 4 3-3 6 6"/></svg></span><span class="li-b"><span class="li-t">plate-02.tiff</span><span class="li-s">47 MB · Today 09:42</span></span></a>
+<a class="li" href="#"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14"/><path d="M3 16l5-5 4 4 3-3 6 6"/></svg></span><span class="li-b"><span class="li-t">plate-03.tiff</span><span class="li-s">49 MB · Today 09:44</span></span></a>
+<a class="li" href="#"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 15h6M9 18h4"/></svg></span><span class="li-b"><span class="li-t">calibration.csv</span><span class="li-s">12 kB · Yesterday</span></span></a>
+<a class="li" href="#"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18"/><path d="M12 3v2M12 7v2M12 11v2"/><rect x="10.5" y="14" width="3" height="4"/></svg></span><span class="li-b"><span class="li-t">raw-backup.tar.gz</span><span class="li-s">1.1 GB · 3 Oct</span></span></a>
+<div class="callout" style="bottom:96px">Tap: Activity · swipe sideways: hide until something changes</div>
+<div class="bar" role="status">
+<a href="Transfers.dc.html" class="ring" aria-label="Show activity">
+<svg class="r" viewBox="0 0 48 48" width="48" height="48" aria-hidden="true"><circle cx="24" cy="24" r="21" fill="none" stroke="var(--line)" stroke-width="3"></circle><circle cx="24" cy="24" r="21" fill="none" stroke="var(--hl)" stroke-width="3" stroke-dasharray="{{dash}}"></circle></svg>
+<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12"/><path d="M16 8V4H4v12h4"/></svg>
+</a>
+<a href="Transfers.dc.html" class="bar-b"><span class="bar-t">Copying 3 items to NAS · {{pct}}%</span><span class="bar-d">120 MB of 290 MB · 1 min left · 2 more queued</span></a>
+<a href="Transfers.dc.html" class="bar-a">Show</a>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"progress":{"editor":"range","min":0,"max":100,"step":1,"default":42},"$preview":{"width":400,"height":860}}'>
+class Component extends DCLogic {
+renderVals() {
+const p = this.props.progress ?? 42;
+const c = 2 * Math.PI * 21;
+return { amb: (this.props.ambience ?? 'dark') === 'light' ? 'light' : 'dark', pct: p, dash: (c * p / 100).toFixed(1) + ' ' + c.toFixed(1) };
+}
+}
+</script>
+</body>
+</html>
