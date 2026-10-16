@@ -1202,10 +1202,6 @@
         <source>Info</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-viewers-more">
-        <source>More actions</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-viewers-orient-180">
         <source>Rotated 180° (applied)</source>
         <translation type="unfinished"></translation>
@@ -2064,10 +2060,6 @@
         <source>Removing server</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-locset-title">
-        <source>Location settings</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-locset-name">
         <source>Display name</source>
         <translation type="unfinished"></translation>
@@ -2135,12 +2127,6 @@
     <message id="lautta-recents-title">
         <source>Recents</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-count" numerus="yes">
-        <source>%n items</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
     </message>
     <message id="lautta-recents-show">
         <source>Show</source>

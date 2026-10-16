@@ -100,8 +100,6 @@ Page {
         header: PageHeader {
             //% "Browse"
             title: qsTrId("lautta-browse-title")
-            //% "Lautta"
-            description: qsTrId("lautta-app-name")
         }
 
         section.property: "section"

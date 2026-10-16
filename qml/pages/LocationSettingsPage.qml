@@ -39,8 +39,6 @@ Page {
 
             PageHeader {
                 title: prefs.locationName
-                //% "Location settings"
-                description: qsTrId("lautta-locset-title")
             }
 
             TextField {

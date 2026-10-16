@@ -579,7 +579,7 @@ account* (NVB-5), *Copy address*, *Remove from recents* (ad-hoc). Swipe left: Ac
 
 ### 15.3 Directory page
 
-Header with folder name and location; tap → path menu. Slim progress line while listing
+Header with the folder name only (no breadcrumb); tap → path menu. Slim progress line while listing
 or receiving transfers. List view with icon or thumbnail and "size · modified"; grid view
 for media folders (suggested when > 60 % images). Pulley: *Select*, *New folder/file*,
 *Paste* (with clipboard), *Search here*, *View options*, *Refresh*. Push-up: *Info*,
