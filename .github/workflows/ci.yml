@@ -25,24 +25,40 @@ jobs:
       - name: make check
         run: make check
 
+  # Pull requests mutate only the lines they change in the mutated files
+  # (SPEC TST-5); the whole set runs weekly and whenever the mutation setup
+  # changes (mutation.yml).
   mutation:
-    name: Tests bite (mutation check ${{ matrix.shard }}/8)
+    name: Tests bite (mutation check, changed lines)
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 300
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 2  # the merge commit and its base parent
+      - name: Diff against the base branch
+        id: diff
+        run: |
+          # HEAD is the PR merged into the current base, so HEAD^1..HEAD is
+          # exactly what the PR changes.
+          git diff HEAD^1 HEAD -- $(make -s mutants-paths) > "$RUNNER_TEMP/pr.diff"
+          if [ ! -s "$RUNNER_TEMP/pr.diff" ]; then
+            echo "No mutated file changed; nothing to check."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Install dependencies
+        if: steps.diff.outputs.changed == 'true'
         run: ./tools/ci/install-host-deps.sh mutants
       - name: Mutation check
-        run: make mutants MUTANTS_SHARD=${{ matrix.shard }}/8
+        if: steps.diff.outputs.changed == 'true'
+        run: make mutants-diff MUTANTS_DIFF="$RUNNER_TEMP/pr.diff"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
-          name: mutants-${{ matrix.shard }}
+          name: mutants-diff
           path: mutants.out/*.txt
 
   rpm:
