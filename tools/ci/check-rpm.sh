@@ -93,10 +93,14 @@ qml_files=$(find "$PWD/tests/qml" -path '*/host' -prune -o -name 'tst_*.qml' -pr
 rm -rf "$PWD/qml"
 cp -r "/srv/mer/targets/$TARGET/usr/share/harbour-lautta/qml" "$PWD/qml"
 shipped=$(cd "/srv/mer/targets/$TARGET" && find usr/share/harbour-lautta/qml -name '*.qml' | sort | sed 's|^|/|')
+# A fresh home with the user folders the tests put fixtures in, as
+# tools/sdk-qml-check.sh gives them.
+home=$(mktemp -d)
+mkdir -p "$home/Documents" "$home/Downloads" "$home/Pictures"
 # shellcheck disable=SC2086 # one word per file
-if ! sb2 -t "$TARGET" env QT_QPA_PLATFORM=minimal \
+if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal \
         /usr/bin/harbour-lautta --qml-check -I /usr/share/harbour-lautta/qml $shipped $qml_files; then
     fail "QML check on the target"
 fi
-rm -rf "$work"
+rm -rf "$work" "$home"
 exit $status
