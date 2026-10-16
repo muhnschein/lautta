@@ -2679,5 +2679,9 @@
         <source>Password</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-viewers-pdf-unlocking">
+        <source>Unlocking</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

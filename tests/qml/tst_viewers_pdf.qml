@@ -29,6 +29,11 @@ ApplicationWindow {
         tools.pump(200)
         dialog.reject()
         tools.pump(800)
+        // The Unlocking state while a password is tried.
+        var locked = pageStack.currentPage
+        locked.unlocking = true
+        tools.pump(200)
+        locked.unlocking = false
     }
 
     Component {

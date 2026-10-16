@@ -46,6 +46,7 @@ Page {
         wantPassword = false
         var dialog = pageStack.push(passwordDialog, { "fileName": fileName, "wrong": doc.wrongPassword })
         dialog.accepted.connect(function() {
+            unlocking = true
             doc.unlock(dialog.password)
             dialog.forget()
         })
@@ -64,6 +65,8 @@ Page {
         uri: page.uri
 
         onStateChanged: {
+            if (!loading)
+                page.unlocking = false
             if (loaded && lastPage > 0)
                 restore.restart()
             else if (problem === "encrypted" && (!page.asked || wrongPassword)) {
@@ -85,6 +88,8 @@ Page {
     // pull-down menu asks again). Pushing waits until this page is shown.
     property bool asked
     property bool wantPassword
+    // A password is being tried (board Unlocking).
+    property bool unlocking
     onStatusChanged: if (status === PageStatus.Active && wantPassword) askLater.restart()
     Timer {
         id: askLater
@@ -226,7 +231,30 @@ Page {
         }
     }
 
+    Column {
+        anchors { bottom: busy.top; bottomMargin: Theme.paddingLarge * 2; horizontalCenter: parent.horizontalCenter }
+        spacing: Theme.paddingMedium
+        visible: page.unlocking
+
+        HighlightImage {
+            anchors.horizontalCenter: parent.horizontalCenter
+            source: Qt.resolvedUrl("../icons/lock.svg")
+            sourceSize.width: Theme.iconSizeLarge
+            sourceSize.height: Theme.iconSizeLarge
+            color: Theme.highlightColor
+        }
+        Label {
+            anchors.horizontalCenter: parent.horizontalCenter
+            font.pixelSize: Theme.fontSizeExtraLarge
+            font.family: Theme.fontFamilyHeading
+            color: Theme.highlightColor
+            //% "Unlocking"
+            text: qsTrId("lautta-viewers-pdf-unlocking")
+        }
+    }
+
     BusyIndicator {
+        id: busy
         anchors.centerIn: parent
         size: BusyIndicatorSize.Large
         running: doc.loading || external.busy
