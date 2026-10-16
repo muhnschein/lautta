@@ -91,11 +91,16 @@ Page {
     // A password is being tried (board Unlocking).
     property bool unlocking
     onStatusChanged: if (status === PageStatus.Active && wantPassword) askLater.restart()
+    // While the page stack is still moving, a push would be lost: try again.
     Timer {
         id: askLater
-        interval: 0
+        interval: 50
         onTriggered: {
-            if (page.status === PageStatus.Active && page.wantPassword)
+            if (page.status !== PageStatus.Active || !page.wantPassword)
+                return
+            if (pageStack.busy)
+                restart()
+            else
                 page.askPassword()
         }
     }
