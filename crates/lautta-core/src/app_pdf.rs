@@ -144,23 +144,25 @@ impl Core {
         }
     }
 
-    /// Page `page` (0-based) of a PDF, `width` pixels wide. Uses the kept
-    /// document, opening the file when it is not kept (an encrypted one then
-    /// fails: its password is not kept).
+    /// Page `page` (0-based) of a PDF, `width` pixels wide.
     pub async fn pdf_page(
         &self,
         uri: &Uri,
         page: usize,
         width: u32,
     ) -> std::result::Result<RenderedPage, PdfFailure> {
-        let doc = match kept(uri) {
-            Some(d) => d,
-            None => {
-                self.open_pdf(uri, "").await?;
-                kept(uri).ok_or(PdfFailure::File(Error::kind(ErrorKind::Internal)))?
-            }
-        };
+        let doc = self.pdf_document(uri).await?;
         Ok(blocking(move || doc.render(page, width)).await??)
+    }
+
+    /// The kept document, opening the file when it is not kept (an
+    /// encrypted one then fails: its password is not kept).
+    async fn pdf_document(&self, uri: &Uri) -> std::result::Result<Arc<PdfDocument>, PdfFailure> {
+        if let Some(doc) = kept(uri) {
+            return Ok(doc);
+        }
+        self.open_pdf(uri, "").await?;
+        kept(uri).ok_or(PdfFailure::File(Error::kind(ErrorKind::Internal)))
     }
 }
 
