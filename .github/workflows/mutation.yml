@@ -1,0 +1,100 @@
+name: Mutation
+# The full mutation check (SPEC TST-5): every mutant in the mutated files, in
+# 8 parallel shards of about 30 minutes each. Pull requests only check the
+# lines they change (ci.yml); this runs the whole set weekly on main, from the
+# Actions tab before a release (Run workflow, any branch), and on pull
+# requests that change the mutation setup itself, since a diff cannot tell
+# what a new file in the list or a new exclusion lets through.
+on:
+  schedule:
+    - cron: '17 2 * * 1'  # Mondays 02:17 UTC
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - .cargo/mutants.toml
+      - Makefile
+      - rust-toolchain.toml
+      - tools/ci/install-host-deps.sh
+      - .github/workflows/mutation.yml
+permissions:
+  contents: read
+concurrency:
+  group: mutation-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  # A scheduled run is skipped when main has not moved since the last
+  # successful one.
+  changed:
+    name: Main changed since the last run
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          last=""
+          if [ "$GITHUB_EVENT_NAME" = schedule ]; then
+            last=$(gh run list -R "$GITHUB_REPOSITORY" --workflow mutation.yml --branch main \
+              --event schedule --status success --limit 1 --json headSha --jq '.[0].headSha // ""')
+          fi
+          if [ "$last" = "$GITHUB_SHA" ]; then
+            echo "main is still at $last, which passed; skipping."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  mutation:
+    name: Tests bite (mutation check ${{ matrix.shard }}/8)
+    needs: changed
+    if: needs.changed.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install dependencies
+        run: ./tools/ci/install-host-deps.sh mutants
+      - name: Mutation check
+        run: make mutants MUTANTS_SHARD=${{ matrix.shard }}/8
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: mutants-${{ matrix.shard }}
+          path: mutants.out/*.txt
+
+  # Nobody watches a scheduled run, so a failure opens an issue (or comments on
+  # the one still open) instead of only turning the Actions tab red.
+  report:
+    name: Report a failed weekly run
+    needs: mutation
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: Weekly mutation check failed
+          BODY: >-
+            The weekly mutation check failed on main at ${{ github.sha }}:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}.
+            Each failed shard uploads the missed mutants (mutants.out/*.txt) as an artifact.
+        run: |
+          open=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "in:title \"$TITLE\"" \
+            --json number --jq '.[0].number // ""')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body "$BODY"
+          else
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"
+          fi
