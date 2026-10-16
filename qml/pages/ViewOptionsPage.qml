@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// View options (board ViewOptions, SPEC BRW-3/BRW-4): sort, view and
-// thumbnails, the same for every folder. `model` is the DirectoryModel of
+// View options (board ViewOptions, SPEC BRW-3/BRW-4): sort, view, grid size
+// and thumbnails, the same for every folder. `model` is the DirectoryModel of
 // the folder on screen; it shows the change at once.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -26,6 +26,7 @@ Dialog {
         App.setSetting("folders_first", JSON.stringify(prefs.foldersFirst))
         App.setSetting("show_hidden", JSON.stringify(prefs.showHidden))
         App.setSetting("view_mode", JSON.stringify(prefs.viewMode))
+        App.setSetting("grid_columns", JSON.stringify(gridBox.currentIndex === 1 ? 3 : 4))
         App.setSetting("thumbnails_local", JSON.stringify(prefs.thumbnails))
         model.setViewPrefs(JSON.stringify(prefs))
     }
@@ -115,6 +116,25 @@ Dialog {
                     MenuItem {
                         //% "Grid"
                         text: qsTrId("lautta-dir-opts-view-grid")
+                    }
+                }
+            }
+
+            ComboBox {
+                id: gridBox
+
+                visible: viewBox.currentIndex === 1
+                //% "Grid size"
+                label: qsTrId("lautta-dir-opts-grid-size")
+                currentIndex: App.setting("grid_columns") === 3 ? 1 : 0
+                menu: ContextMenu {
+                    MenuItem {
+                        //% "4 per row"
+                        text: qsTrId("lautta-dir-opts-grid-4")
+                    }
+                    MenuItem {
+                        //% "3 per row, with names"
+                        text: qsTrId("lautta-dir-opts-grid-3")
                     }
                 }
             }
