@@ -49,9 +49,9 @@ ApplicationWindow {
         linked.followLink({ "page": -1, "top": -1, "uri": "https://example.org/x" })
         waitFor(function() { return pageStack.currentPage.url !== undefined && !pageStack.busy })
         pageStack.currentPage.reject()
-        tools.pump(800)
+        waitFor(function() { return pageStack.currentPage === linked && !pageStack.busy })
         pageStack.pop(viewer, PageStackAction.Immediate)
-        tools.pump(200)
+        waitFor(function() { return pageStack.currentPage === viewer && !pageStack.busy })
         pageStack.push(lockedComponent, {}, PageStackAction.Immediate)
         // The password dialog opens on its own; a wrong password asks again.
         waitFor(function() { return pageStack.currentPage.wrong !== undefined })
