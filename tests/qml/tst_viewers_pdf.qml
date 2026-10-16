@@ -38,11 +38,16 @@ ApplicationWindow {
         return pageStack.currentPage
     }
 
+    function install(fixture, uri) {
+        if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/" + fixture), uri))
+            console.error("FAILED: fixture " + fixture + " not installed")
+    }
+
     Component.onCompleted: {
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/two-pages.pdf"), "lautta://user-documents/two-pages.pdf")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/secret.pdf"), "lautta://user-documents/locked.pdf")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/linked.pdf"), "lautta://user-documents/linked.pdf")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/searchable.pdf"), "lautta://user-documents/searchable.pdf")
+        install("two-pages.pdf", "lautta://user-documents/two-pages.pdf")
+        install("secret.pdf", "lautta://user-documents/locked.pdf")
+        install("linked.pdf", "lautta://user-documents/linked.pdf")
+        install("searchable.pdf", "lautta://user-documents/searchable.pdf")
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
         var viewer = shown()
         viewer.zoomTo(2.5, 100, 100)
