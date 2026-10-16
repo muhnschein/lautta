@@ -5,6 +5,7 @@
 //! forwards to these methods and turns results into model updates.
 
 use crate::bridge::{Attention, BridgeClient, BridgeConfig, BridgeStatus, RemoteKind, RemoteLocation};
+use crate::browse_layout::BrowseLayout;
 use crate::db::Db;
 use crate::dircache::DirCache;
 use crate::entry::{cap, Entry};
@@ -57,6 +58,8 @@ pub struct Core {
     pub recents: Recents,
     pub recent_searches: RecentSearches,
     pub location_prefs: LocationPrefsStore,
+    /// Hidden rows and row order of the Browse page (BRW-12).
+    pub browse_layout: BrowseLayout,
     pub working_copies: WorkingCopies,
     /// Pending prompts (bridge identity and sign-in questions, NVB-6).
     pub questions: Arc<Questions>,
@@ -161,6 +164,7 @@ impl Core {
             recents: Recents::new(db.clone()),
             recent_searches: RecentSearches::new(db.clone()),
             location_prefs: LocationPrefsStore::new(db.clone()),
+            browse_layout: BrowseLayout::new(db.clone()),
             working_copies: WorkingCopies::new(db.clone(), paths.clone(), Arc::new(SystemClock)),
             questions: questions.clone(),
             bridge: client.clone(),

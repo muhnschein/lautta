@@ -21,6 +21,7 @@ pub mod uri;
 pub mod vpath;
 
 // Locations and browsing
+pub mod browse_layout;
 pub mod dircache;
 pub mod filter;
 pub mod listing;

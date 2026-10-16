@@ -6,6 +6,7 @@
 mod bridge;
 mod favourites;
 mod folderinfo;
+mod layout;
 mod locations;
 mod prefs;
 mod recents;
@@ -21,6 +22,7 @@ use tokio::sync::watch;
 pub(crate) enum Cell {
     Str(String),
     Int(i64),
+    Bool(bool),
 }
 
 impl Cell {
@@ -32,6 +34,7 @@ impl Cell {
         match self {
             Cell::Str(s) => QVariant::from(QString::from(s.as_str())),
             Cell::Int(i) => QVariant::from(*i),
+            Cell::Bool(b) => QVariant::from(*b),
         }
     }
 }
@@ -134,6 +137,12 @@ pub fn register() {
     );
     qmetaobject::qml_register_type::<recents::RecentsModel>(&uri, 1, 0, &crate::cstr("RecentsModel"));
     qmetaobject::qml_register_type::<folderinfo::FolderInfo>(&uri, 1, 0, &crate::cstr("FolderInfo"));
+    qmetaobject::qml_register_type::<layout::BrowseLayoutModel>(
+        &uri,
+        1,
+        0,
+        &crate::cstr("BrowseLayoutModel"),
+    );
     qmetaobject::qml_register_type::<prefs::LocationPrefsModel>(
         &uri,
         1,
@@ -155,11 +164,12 @@ mod tests {
 
     #[test]
     fn cells_become_plain_values() {
-        let rows = vec![vec![Cell::s("x"), Cell::Int(7)]];
+        let rows = vec![vec![Cell::s("x"), Cell::Int(7), Cell::Bool(true)]];
         assert_eq!(cell_data(&rows, 0, FIRST_ROLE).to_qstring().to_string(), "x");
         assert_eq!(cell_data(&rows, 0, FIRST_ROLE + 1).to_int(), 7);
+        assert!(cell_data(&rows, 0, FIRST_ROLE + 2).to_bool());
         assert!(!cell_data(&rows, 1, FIRST_ROLE).is_valid());
-        assert!(!cell_data(&rows, 0, FIRST_ROLE + 2).is_valid());
+        assert!(!cell_data(&rows, 0, FIRST_ROLE + 3).is_valid());
         assert!(!cell_data(&rows, -1, FIRST_ROLE).is_valid());
         assert!(!cell_data(&rows, 0, 3).is_valid());
     }

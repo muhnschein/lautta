@@ -2763,6 +2763,30 @@
         <source>3 per row, with names</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-browse-hide">
+        <source>Hide from Browse</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-hidden">
+        <source>%1 hidden. Settings › Browse page shows it again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-layout-restore">
+        <source>Restore defaults</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-browse-page">
+        <source>Browse page</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-layout-nearby">
+        <source>Servers found nearby</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-layout-preview">
+        <source>Preview</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message id="lautta-dir-sel-done">
         <source>Stop selecting</source>
         <translation type="unfinished"></translation>
