@@ -46,8 +46,6 @@ Page {
             PageHeader {
                 //% "Recents"
                 title: qsTrId("lautta-recents-title")
-                //% "%n items"
-                description: qsTrId("lautta-recents-count", recents.count)
             }
             ComboBox {
                 id: filterBox

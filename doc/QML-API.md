@@ -97,7 +97,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `errorKind`, `errorMessage`, `count`, `selectedCount`, `sortKey`, `descending`,
   `foldersFirst`, `showHidden`, `viewMode`, `filterText`, `suggestGrid`,
   `capabilities` (list of flag strings), `locationName`, `title`;
-  methods `refresh()`, `select(uri)`, `toggle(uri)`, `selectAll()`, `clearSelection()`,
+  methods `refresh()`, `revisit()` (lists again unless watched or an archive, BRW-11),
+  `select(uri)`, `toggle(uri)`, `selectAll()`, `clearSelection()`,
   `selectedUris() → list`, `setViewPrefs(map)` (one set for every folder), `indexOf(uri)`.
 - `PathModel { uri }` — ancestors (roles `uri`, `name`), `complete(prefix) → list`.
 - Pages: `pages/DirectoryPage.qml { uri }`, `dialogs/FolderPickerDialog.qml { title,
