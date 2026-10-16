@@ -60,8 +60,6 @@ Page {
 
         header: PageHeader {
             title: App.nameOf(page.uri)
-            //% "More actions"
-            description: qsTrId("lautta-viewers-more")
         }
 
         delegate: BackgroundItem {
