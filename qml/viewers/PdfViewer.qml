@@ -132,11 +132,16 @@ Page {
     // The page (from 1) reading was on before following a link; 0 for none.
     property int backPage
     onStatusChanged: if (status === PageStatus.Active && wantPassword) askLater.restart()
+    // While the page stack is still moving, a push would be lost: try again.
     Timer {
         id: askLater
-        interval: 0
+        interval: 50
         onTriggered: {
-            if (page.status === PageStatus.Active && page.wantPassword)
+            if (page.status !== PageStatus.Active || !page.wantPassword)
+                return
+            if (pageStack.busy)
+                restart()
+            else
                 page.askPassword()
         }
     }
