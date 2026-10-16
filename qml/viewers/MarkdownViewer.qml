@@ -5,7 +5,6 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/viewers"
-import "../components/viewers/ViewerText.js" as ViewerText
 import "../components/ErrorText.js" as ErrorText
 
 Page {
@@ -55,7 +54,6 @@ Page {
 
             PageHeader {
                 title: page.fileName
-                description: ViewerText.where(App.locationName(page.uri), App.displayAddress(App.parentUri(page.uri)))
             }
 
             Label {

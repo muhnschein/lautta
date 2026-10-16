@@ -7,7 +7,6 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/viewers"
-import "../components/viewers/ViewerText.js" as ViewerText
 
 Page {
     id: page
@@ -132,12 +131,8 @@ Page {
 
         PageHeader {
             title: App.nameOf(page.currentUri)
-            description: {
-                //% "%1 of %2"
-                var counter = qsTrId("lautta-viewers-image-count").arg(page.position).arg(page.total)
-                return counter + " · " + ViewerText.where(App.locationName(page.currentUri),
-                                                               App.displayAddress(App.parentUri(page.currentUri)))
-            }
+            //% "%1 of %2"
+            description: qsTrId("lautta-viewers-image-count").arg(page.position).arg(page.total)
         }
     }
 
