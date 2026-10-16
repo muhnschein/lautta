@@ -246,7 +246,7 @@ Rust was chosen unless a strong reason spoke against it. The candidates were che
 | Concern | Finding | Verdict |
 |---|---|---|
 | Qt 5.6 bindings | `qmetaobject-rs` supports Qt ≥ 5.6 (build script refuses older), is maintained (2026 commits), and has been used for Silica apps | fine; pin a commit |
-| Toolchain in the SDK | Sailfish packages rustc/cargo with scratchbox2 patches (`sailfishos/rust`, tags 1.75 and 1.95) | fine; MSRV = the 5.2 target's rustc (verify which, §24.1) |
+| Toolchain in the SDK | Sailfish packages rustc/cargo with scratchbox2 patches (`sailfishos/rust`, tags 1.75 and 1.95); the 5.2 target ships 1.75 | MSRV 1.95; until a target ships it, the binary is cross-built with host cargo against the SDK's gcc, Qt and sysroot (RS-6) |
 | Harbour ELF checks | Rust binaries link only libc/libm/libpthread/libdl/librt/libgcc_s; need an exported `main` | fine with RS-3 |
 | netvfs is C++/Qt | the app no longer links netvfs (Harbour forbids its dependencies); the boundary is a socket protocol | Rust is no worse than C++ here |
 | C++ glue needed | SailfishApp bootstrap, `QMediaPlayer` with a `QIODevice`; both small, via the `cpp` crate inside `lautta-qt` | acceptable, contained |
@@ -274,8 +274,11 @@ against the target rustc.
   that cannot unwind.
 - RS-5: `unsafe` is allowed only in `lautta-qt` (FFI) and in a single `sys` module of
   `lautta-core` (fd passing, `statx`, `renameat2`). `#![forbid(unsafe_code)]` elsewhere.
-- RS-6: Dependencies are vendored (`cargo vendor`) and `Cargo.lock` is committed;
-  builds inside sfdk never touch the network.
+- RS-6: `Cargo.lock` is committed. The binary is cross-built with the pinned host
+  toolchain against the SDK target's gcc, Qt and sysroot, lifted from the pinned SDK
+  image (`tools/ci/lift-sdk.sh`, `cross-build.sh`); the spec installs it from
+  `prebuilt/` and `mb2` never touches the network. Once an SDK target ships rustc
+  1.95, the spec builds it again with vendored crates.
 - RS-7: Release profile: `lto = "fat"`, `codegen-units = 1`, `opt-level = 3`, `strip =
   "symbols"` (the validator rejects debug info). Binary size budget: ≤ 20 MB stripped.
 - RS-8: Error model: `lautta_core::Error` mirrors the netvfs v2 taxonomy one-to-one
@@ -381,6 +384,11 @@ what the app does.
   completion from the cache.
 - BRW-10: Symlinks in local folders that point outside the sandbox show as "Not
   accessible" rather than as empty folders.
+- BRW-11: There is no *Refresh*. A folder that is not watched (remote folders, local
+  ones whose watch failed) is listed again whenever its page comes back on screen:
+  returning from a subfolder or viewer, or switching back to the app. The rows on
+  screen stay until the fresh listing replaces them (BRW-5). Archives are not listed
+  again.
 
 ## 10. File operations
 
@@ -491,8 +499,8 @@ bridge).
   visible delegates only, canceled on scroll.
 - PRV-4: Viewers: images (zoom, swipe through the folder, EXIF panel), text/code (read-
   only up to 1 MiB, then a notice), Markdown (pulldown-cmark → Qt rich text subset), audio
-  and video (QtMultimedia), archives (as locations). No PDF viewer: poppler is not
-  allowed; PDFs go to *Open with*, as do databases, packages and other binary files.
+  and video (QtMultimedia), archives (as locations), PDFs (PRV-12). Office documents,
+  databases, packages and other binary files go to *Open with*.
 - PRV-5: *Open with* for local files uses the system handler as Harbour File Browser
   does (mechanism to verify in the sandbox, §24.1).
 - PRV-6: Remote files opened in another app must be readable by that sandboxed app, so
@@ -514,6 +522,32 @@ bridge).
   (central directory first); other remote archives are downloaded to the cache first.
 - PRV-11: Create zip or tar.gz from any selection; when the destination is remote the
   archive is written into a pipe that is uploaded as it is produced.
+- PRV-12: PDF viewer, from any location: pages one below the other fitted to the width,
+  pinch and double-tap zoom (sharper rendering once a pinch settles), the page number
+  while scrolling, *Open with* and *Share* in the pulley. Rendering is `hayro` (pure
+  Rust, `lautta-pdf`; poppler is not allowed): it sees only the file's bytes, has no
+  file, network or process access, runs no JavaScript and follows no actions or form
+  submissions. Of links and outline items only page destinations and http(s) URIs are
+  read; everything else (Launch, JavaScript, GoToR, file: and other URIs) is dropped. A
+  link to a page jumps there and offers *Back to page N*; a link to a website opens a
+  dialog showing the address (*Open* hands it to the browser, *Copy link* copies it),
+  so the app itself never fetches it. The app's sandbox has no `Internet` permission
+  either. *Contents and pages* in the pulley shows the outline (the section being read
+  highlighted) and a *Go to page* field. Files up to 200 MB; pages at most 4096 px on an edge.
+  The pulley header shows the page count. A password-protected PDF asks for its
+  password in a dialog (swipe forward unlocks; a wrong one asks again); the password
+  opens that one parse and is never stored, so reopening asks again (the empty user
+  password opens without asking). Reopening a PDF starts at the page where reading
+  stopped, remembered with the recents (off and cleared with them, ORG-2).
+  *Search* in the pulley finds text in the document: a search field stays at the top
+  of the page (its close button leaves search mode), typing searches once it pauses,
+  case-insensitive with whitespace runs alike. The search runs off the GUI thread page
+  by page from the page being read to the end and then from the first page; hits are
+  marked on the pages as they arrive, the one shown stronger. A bar at the bottom
+  steps to the previous and next hit (going round, scrolling it into view) and reads
+  "2 of 17 · page 3", or "Not found in 12 pages" once every page is searched. At
+  most 10 000 hits per document, 1 000 per page, in its first 200 000 characters; an
+  encrypted PDF is searchable while it is open after unlocking.
 
 ## 13. Search and organisation
 
@@ -579,10 +613,10 @@ account* (NVB-5), *Copy address*, *Remove from recents* (ad-hoc). Swipe left: Ac
 
 ### 15.3 Directory page
 
-Header with folder name and location; tap → path menu. Slim progress line while listing
+Header with the folder name only (no breadcrumb); tap → path menu. Slim progress line while listing
 or receiving transfers. List view with icon or thumbnail and "size · modified"; grid view
 for media folders (suggested when > 60 % images). Pulley: *Select*, *New folder/file*,
-*Paste* (with clipboard), *Search here*, *View options*, *Refresh*. Push-up: *Info*,
+*Paste* (with clipboard), *Search here*, *View options* (no *Refresh*, BRW-11). Push-up: *Info*,
 *Add to favourites*. Context menu: *Open with*, *Share*, *Copy*, *Cut*, *Rename*,
 *Delete*, *Copy to…*, *Move to…*, *Download*/*Upload to…*, *Info*; fixed order,
 capability-filtered. Selection starts from the pulley's *Select*, in list and grid alike;
@@ -669,7 +703,8 @@ SQLite for everything structured.
   unused.
 - DAT-2: Schema with `PRAGMA user_version`, forward migrations only: `favourites`,
   `recents`, `transfers`, `transfer_items`, `working_copies`, `dircache`,
-  `trash_items(id, original_uri, trashed_at, stored_name)`.
+  `trash_items(id, original_uri, trashed_at, stored_name)`, `reading_positions(uri,
+  location_id, page, at_ms)` (PRV-12).
 - DAT-3: The netvfs socket directory `~/.local/share/org.netvfs/lautta/netvfs/` belongs
   to netvfs; the app only reads it. *Clear app data* in Settings deletes it along with
   everything else; netvfs recreates it (netvfs XB-4).
@@ -704,7 +739,7 @@ One table for all providers (RS-8); examples:
   copy matrix, resume after a bridge kill, conflict flows, 10 000-entry folders.
 - TST-4: Fuzzing (`cargo fuzz`): bridge message decoding in the client, archive readers'
   adapters, Markdown rendering subset.
-- TST-5: Mutation testing (`cargo-mutants`) on planner, queue and conflict modules;
+- TST-5: Mutation testing (`cargo-mutants`) on planner, queue and conflict modules and the PDF document handling (PRV-12);
   `clippy -D warnings`; `miri` for the `sys` module tests that can run under it.
 - TST-6: QML tests (`TestCase` in the SDK target) for page logic; load test of every QML
   file; screenshot checklist (light/dark/landscape, standalone/bridge modes).
@@ -723,13 +758,14 @@ lautta/
   crates/lautta-core/
   crates/lautta-qt/          qmetaobject-rs, cpp glue (SailfishApp, MediaSource)
   crates/lautta-bridge-proto/
+  crates/lautta-pdf/         PDF pages as pixels (hayro, PRV-12)
   crates/harbour-lautta/     binary (no_main, exported main)
   qml/                       pages/, components/, dialogs/, viewers/, cover/
   translations/
   icons/
-  rpm/harbour-lautta.spec    ExclusiveArch: aarch64; cargo build in %build
+  rpm/harbour-lautta.spec    ExclusiveArch: aarch64; installs prebuilt/
   harbour-lautta.desktop
-  vendor/                    cargo vendor output
+  prebuilt/                  cross-built binary the spec installs (RS-6)
   tests/                     fake bridge contract tests, qml tests
   tools/ci/                  sfdk build, rpmvalidator gate, cargo-deny
   doc/harbour-warnings.md
@@ -742,7 +778,8 @@ lautta/
   allowed libraries and the explicit `sailfishsilica-qt5`, `libsailfishapp`,
   `nemo-qml-plugin-notifications-qt5`,
   `nemo-qml-plugin-thumbnailer-qt5`, `nemo-qml-plugin-configuration-qt5`, `libkeepalive`,
-  `qt5-qtdeclarative-import-multimedia`, `qt5-qtmultimedia` (all on the allowed
+  `qt5-qtdeclarative-import-multimedia`, `qt5-qtmultimedia`,
+  `qt5-qtsvg-plugin-imageformat-svg` (the app's icons are SVG; all on the allowed
   `Requires` list). Never a dependency on netvfs.
 - PKG-3: Icons 86, 108, 128, 172 px and the desktop file as the validator requires.
 
@@ -800,7 +837,7 @@ when the netvfs bridge they depend on is released.
 ## Appendix A — Parity checklist
 
 Harbour File Browser (in-sandbox scope): browse ✓; search ✓ SRC; share/open externally ✓
-PRV-5/7; previews of images, audio, video, archives ✓ PRV-4/10; database previews ✗
+PRV-5/7; previews of images, audio, video, archives, PDFs ✓ PRV-4/10/12; database previews ✗
 (*Open with*); multi-select ✓; copy/link/move in bulk ✓; bulk rename ✗;
 permissions shown ✓ OPS-12, editing ✗; new files/folders ✓; hidden files ✓; edit/enter
 paths ✓ BRW-9; quick filter ✓; per-folder view settings ✗ (global, BRW-4); shortcuts ✓

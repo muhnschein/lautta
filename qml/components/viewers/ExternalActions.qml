@@ -55,6 +55,7 @@ Item {
         case "markdown": return "text/markdown"
         case "audio": return "audio/*"
         case "video": return "video/*"
+        case "pdf": return "application/pdf"
         default: return "application/octet-stream"
         }
     }

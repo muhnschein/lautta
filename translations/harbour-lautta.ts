@@ -1202,10 +1202,6 @@
         <source>Info</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-viewers-more">
-        <source>More actions</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-viewers-orient-180">
         <source>Rotated 180° (applied)</source>
         <translation type="unfinished"></translation>
@@ -2064,10 +2060,6 @@
         <source>Removing server</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-locset-title">
-        <source>Location settings</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-locset-name">
         <source>Display name</source>
         <translation type="unfinished"></translation>
@@ -2135,12 +2127,6 @@
     <message id="lautta-recents-title">
         <source>Recents</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-count" numerus="yes">
-        <source>%n items</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
     </message>
     <message id="lautta-recents-show">
         <source>Show</source>
@@ -2294,10 +2280,6 @@
     </message>
     <message id="lautta-dir-menu-view-options">
         <source>View options</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-menu-refresh">
-        <source>Refresh</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-picker-move" numerus="yes">
@@ -2751,6 +2733,118 @@
     </message>
     <message id="lautta-favourite-remove">
         <source>Remove from favourites</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-page-error">
+        <source>Can&apos;t show page %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-pages" numerus="yes">
+        <source>%n page(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-viewers-pdf-encrypted">
+        <source>This PDF is protected with a password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-empty">
+        <source>This PDF has no pages.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-too-large">
+        <source>This PDF is too large to show here.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-invalid">
+        <source>This file can&apos;t be read as a PDF.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-pull-hint">
+        <source>Pull down to open it in another app.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-page">
+        <source>Page %1 of %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-unlock">
+        <source>Unlock</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-locked">
+        <source>Locked PDF</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-wrong-password">
+        <source>Wrong password, try again</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-password">
+        <source>Password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-unlocking">
+        <source>Unlocking</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-open-link">
+        <source>Open</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-web-link">
+        <source>Link to a website</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-copy-link">
+        <source>Copy link</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-contents">
+        <source>Contents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-no-contents">
+        <source>No table of contents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-go-to-page">
+        <source>Go to page</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-go-to-page-range">
+        <source>Go to page, 1 to %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-contents-and-pages">
+        <source>Contents and pages</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-back-to-page">
+        <source>Back to page %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-hit">
+        <source>%1 of %2 · page %3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-not-found" numerus="yes">
+        <source>Not found in %n page(s)</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-viewers-pdf-searching">
+        <source>Searching</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-search-placeholder">
+        <source>Search the text</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-search">
+        <source>Search</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-sel-done">

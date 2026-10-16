@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 lautta-bridge-proto = { path = "../lautta-bridge-proto" }
+lautta-pdf = { path = "../lautta-pdf" }
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "fs", "io-util", "net"] }
 futures = "0.3"
@@ -48,3 +49,4 @@ tempfile = "3"
 sevenz-rust = { version = "0.5", default-features = false, features = ["compress"] }
 tokio = { version = "1", features = ["test-util"] }
 lautta-bridge-proto = { path = "../lautta-bridge-proto", features = ["fake"] }
+lautta-pdf = { path = "../lautta-pdf", features = ["sample"] }

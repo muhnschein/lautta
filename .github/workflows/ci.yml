@@ -51,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Install dependencies
-        run: ./tools/ci/install-host-deps.sh
+        run: ./tools/ci/install-host-deps.sh cross
       - name: Pull the SDK
         run: docker pull "$SDK_IMAGE"
       - name: Build the RPM in the Sailfish SDK

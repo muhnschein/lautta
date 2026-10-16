@@ -41,6 +41,7 @@ struct FakeWorld {
     answers: qt_method!(fn(&self) -> QString),
     handoffs: qt_method!(fn(&self) -> QString),
     record: qt_method!(fn(&self, uri: QString, name: QString, kind: QString)),
+    putFile: qt_method!(fn(&self, location: QString, path: QString)),
 }
 
 impl FakeWorld {
@@ -117,6 +118,12 @@ impl FakeWorld {
         let uri = Uri::parse(&uri.to_string()).unwrap();
         let kind = RecentKind::parse(&kind.to_string()).unwrap();
         core.recents.record(&uri, &name.to_string(), kind).unwrap();
+    }
+}
+
+impl FakeWorld {
+    fn putFile(&self, location: QString, path: QString) {
+        fake().put_file(&location.to_string(), path.to_string().as_bytes(), b"x");
     }
 }
 

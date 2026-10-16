@@ -95,7 +95,7 @@ Page {
         onClicked: page.chrome = !page.chrome
     }
 
-    // What the player is doing: where from, download progress, errors.
+    // What the player is doing: download progress, streaming, errors.
     readonly property string statusText: {
         if (errorKind !== "")
             return ErrorText.message(errorKind, { "item": fileName, "location": App.locationName(uri) })
@@ -105,7 +105,7 @@ Page {
         if (!local)
             //% "Streaming from %1"
             return qsTrId("lautta-viewers-media-streaming").arg(App.locationName(uri))
-        return ViewerText.where(App.locationName(uri), App.displayAddress(App.parentUri(uri)))
+        return ""
     }
 
     PageHeader {

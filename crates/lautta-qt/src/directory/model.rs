@@ -12,7 +12,7 @@ use lautta_core::entry::{cap, Entry, EntryFlags};
 use lautta_core::error::ErrorKind;
 use lautta_core::filter::FilterOptions;
 use lautta_core::listing::{ListChange, ListingState};
-use lautta_core::locations::LocationStatus;
+use lautta_core::locations::{LocationKind, LocationStatus};
 use lautta_core::mime::{self, FileCategory};
 use lautta_core::sort::SortKey;
 use lautta_core::viewprefs::{suggest_grid, ViewMode, ViewPrefs};
@@ -107,6 +107,7 @@ pub struct DirectoryModel {
     filterChanged: qt_signal!(),
 
     refresh: qt_method!(fn(&mut self)),
+    revisit: qt_method!(fn(&mut self)),
     stopLoading: qt_method!(fn(&mut self)),
     select: qt_method!(fn(&mut self, uri: QString)),
     toggle: qt_method!(fn(&mut self, uri: QString)),
@@ -140,6 +141,8 @@ pub struct DirectoryModel {
     task: Option<AbortHandle>,
     pending: Option<Vec<Entry>>,
     dirty: bool,
+    /// Archives do not change while open: coming back never lists them again.
+    archive: bool,
     watcher: Option<DirWatcher>,
     transfer_states: HashMap<Vec<u8>, String>,
 }
@@ -172,6 +175,7 @@ impl DirectoryModel {
         self.flags = core.capability_flags(&dir.location);
         self.local_dir = core.locations.to_local_path(&dir);
         let location = core.location(&dir.location);
+        self.archive = location.as_ref().is_some_and(|l| l.kind == LocationKind::Archive);
         self.offline = location
             .as_ref()
             .is_some_and(|l| l.status == LocationStatus::Offline);
@@ -282,6 +286,14 @@ impl DirectoryModel {
         self.loading = true;
         self.start_listing(false);
         self.publish();
+    }
+
+    /// The folder is on screen again (BRW-11): a folder nobody watches is
+    /// listed again, the cached rows staying until the fresh ones arrive.
+    fn revisit(&mut self) {
+        if self.watcher.is_none() && !self.archive && !self.loading {
+            self.refresh();
+        }
     }
 
     fn stopLoading(&mut self) {
@@ -610,7 +622,7 @@ impl DirectoryModel {
 
     fn hasCapability(&self, flag: QString) -> bool {
         let flag = flag.to_string();
-        self.flags.iter().any(|f| *f == flag)
+        self.flags.contains(&flag)
     }
 
     /// "folder", "file" or "" for what is called `name` here (before filtering).

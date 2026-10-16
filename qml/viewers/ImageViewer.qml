@@ -7,7 +7,6 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/viewers"
-import "../components/viewers/ViewerText.js" as ViewerText
 
 Page {
     id: page
@@ -16,10 +15,11 @@ Page {
     // The folder to swipe through; the image's own folder by default.
     property string folderUri: App.parentUri(uri)
 
-    readonly property bool inFolder: images.indexOf(uri) >= 0
+    // indexOf is a method: images.count makes the binding follow the listing.
+    readonly property bool inFolder: images.count > 0 && images.indexOf(uri) >= 0
     readonly property string currentUri: slideshow.currentItem ? slideshow.currentItem.imageUri : uri
     readonly property int total: inFolder ? images.count : 1
-    readonly property int position: inFolder ? Math.max(0, images.indexOf(currentUri)) + 1 : 1
+    readonly property int position: inFolder && images.count > 0 ? Math.max(0, images.indexOf(currentUri)) + 1 : 1
     property bool chrome: true
     // Where the view was when an image was deleted, to land next to it.
     property int keepIndex: -1
@@ -101,18 +101,28 @@ Page {
         anchors.fill: parent
         itemWidth: width
         model: page.inFolder ? images : single
+        // Zoomed in or pinching, drags pan the image instead of swiping.
+        interactive: !(currentItem && currentItem.holdsGestures)
 
         delegate: Item {
             readonly property string imageUri: page.inFolder ? model.uri : page.uri
+            readonly property bool holdsGestures: zoomImage.holdsGestures
 
             width: slideshow.itemWidth
             height: slideshow.height
 
             ZoomImage {
+                id: zoomImage
                 anchors.fill: parent
                 // Only the shown image and its neighbours load.
                 source: Math.abs(index - slideshow.currentIndex) <= 1 ? page.sourceFor(parent.imageUri) : ""
                 onTapped: page.chrome = !page.chrome
+            }
+
+            // Swiped away: back to the fitted size for when it returns.
+            Connections {
+                target: slideshow
+                onCurrentIndexChanged: if (index !== slideshow.currentIndex) zoomImage.resetZoom()
             }
         }
     }
@@ -131,12 +141,8 @@ Page {
 
         PageHeader {
             title: App.nameOf(page.currentUri)
-            description: {
-                //% "%1 of %2"
-                var counter = qsTrId("lautta-viewers-image-count").arg(page.position).arg(page.total)
-                return counter + " · " + ViewerText.where(App.locationName(page.currentUri),
-                                                               App.displayAddress(App.parentUri(page.currentUri)))
-            }
+            //% "%1 of %2"
+            description: qsTrId("lautta-viewers-image-count").arg(page.position).arg(page.total)
         }
     }
 

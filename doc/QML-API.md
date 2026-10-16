@@ -60,7 +60,7 @@ Methods:
   `paste(destUri)` (→ `Operations` flow).
 - `undo()`; signal `undone(ok)`.
 - `categoryOf(nameOrUri) → string` (FileCategory icon name), `viewerFor(uri, mime) → string`
-  (`image`, `text`, `markdown`, `audio`, `video`, `archive`, `external`).
+  (`image`, `text`, `markdown`, `audio`, `video`, `archive`, `pdf`, `external`).
 - `open(uri)`: decides by viewer and pushes the viewer page (through
   `components/Open.js`); `external` → `openExternally(uri)`.
 - `openExternally(uri)`: local → system handler; remote → copy to
@@ -97,7 +97,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `errorKind`, `errorMessage`, `count`, `selectedCount`, `sortKey`, `descending`,
   `foldersFirst`, `showHidden`, `viewMode`, `filterText`, `suggestGrid`,
   `capabilities` (list of flag strings), `locationName`, `title`;
-  methods `refresh()`, `select(uri)`, `toggle(uri)`, `selectAll()`, `clearSelection()`,
+  methods `refresh()`, `revisit()` (lists again unless watched or an archive, BRW-11),
+  `select(uri)`, `toggle(uri)`, `selectAll()`, `clearSelection()`,
   `selectedUris() → list`, `setViewPrefs(map)` (one set for every folder), `indexOf(uri)`.
 - `PathModel { uri }` — ancestors (roles `uri`, `name`), `complete(prefix) → list`.
 - Pages: `pages/DirectoryPage.qml { uri }`, `dialogs/FolderPickerDialog.qml { title,
@@ -145,15 +146,37 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   (Nemo.Notifications, INT-2), cover content for transfers inside `cover/CoverPage.qml`
   (browse owns the file; transfers provides `cover/TransferCover.qml`).
 
-### Viewers (boards: ImageViewer, ImageExif, TextViewer, TextViewerPulley, Markdown, VideoPlayer, AudioPlayer, OpenRemote)
+### Viewers (boards: ImageViewer, ImageExif, TextViewer, TextViewerPulley, Markdown, PdfViewer, VideoPlayer, AudioPlayer, OpenRemote)
 
 - `TextDocument { uri }` (text, truncated, validUtf8, size; read-only),
   `MarkdownDocument { uri }` (html), `ExifModel { uri }`, `MediaSource { uri }` (QIODevice for QtMultimedia, PRV-8),
   image provider `image://lautta-thumb/<uri>?size=N` for remote thumbnails (PRV-2) and
   `image://lautta-file/<uri>` for remote full images.
+- `PdfDocument { uri }` (PRV-12): `loading`, `loaded`, `pageCount`, `size`, `errorKind`
+  (file not readable, ErrorText.js), `problem` (`invalid`, `encrypted`, `empty`,
+  `tooLarge`), `wrongPassword` (the last `unlock` failed), `lastPage` (where reading
+  stopped, from 0; -1 unknown), `heightFor(index, width)`, `reload()`,
+  `unlock(password)` (opens an encrypted PDF; the password is not kept),
+  `rememberPage(index)`; text search: `search(query, fromPage)` (from page `fromPage`,
+  from 0, to the end, then from the first page; replaces the last search; a blank
+  query searches nothing), `stopSearch()` (stops and forgets the hits), `searching`,
+  `searchedPages` (all pages once a search has run through), `hitCount` (at most
+  10 000), `currentHit` (from 1 in page order, 0 none; the first hit at or after
+  `fromPage` until `nextHit()`/`previousHit()`, which go round), `currentHitPage` (from
+  0, -1 none), `hitsJson(index)` (JSON array of `{x, y, width, height, current}` per
+  hit area on page `index`, fractions of the page from its top left), `hitsRevision`
+  (changes with the hits or the hit shown; bindings of `hitsJson` read it); all notify
+  `searchChanged()`; `outline` (JSON `[{title, level, page}]`, page from 0 or -1),
+  `requestLinks(index)` then `linksReady(linkPage, pageLinks)` (JSON `[{x, y, width,
+  height, page, top, uri}]`: area as fractions of the shown page; page from 0 and `top`
+  as a fraction of its height or -1; or page -1 and an http(s) `uri`). Image provider
+  `image://lautta-pdf/<uri>?page=N` renders page N (from 0) at `sourceSize.width`
+  (1080 without one), any location.
 - Pages: `viewers/ImageViewer.qml { uri, folderUri }`, `viewers/TextViewer.qml { uri }`,
-  `viewers/MarkdownViewer.qml { uri }`, `viewers/MediaPlayer.qml { uri, video }`,
-  `dialogs/OpenRemoteDialog.qml { uri }`.
+  `viewers/MarkdownViewer.qml { uri }`, `viewers/PdfViewer.qml { uri }`, `viewers/PdfContentsPage.qml { fileName, outline,
+  pageCount, currentPage }` (signal `chosen(index)`), `viewers/MediaPlayer.qml { uri, video }`,
+  `dialogs/OpenRemoteDialog.qml { uri }`, `dialogs/PdfPasswordDialog.qml { fileName, wrong }`,
+  `dialogs/PdfLinkDialog.qml { url }`.
 
 ### Search, settings (boards: Search, SearchFilters, SearchPulley, Settings, About)
 

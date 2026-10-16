@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Viewers area facades (doc/QML-API.md, "Viewers"): text, Markdown and
-//! EXIF sources, the folder's images, the image providers for
-//! remote files and the media source for QtMultimedia. The logic lives in
+//! EXIF sources, the folder's images, PDFs, the image providers for
+//! remote files and PDF pages, and the media source for QtMultimedia. The logic lives in
 //! `lautta_core::app_viewers`; these types only forward and publish.
 
 pub mod docs;
 pub mod exif;
 pub mod images;
 pub mod media;
+pub mod pdf;
 pub mod tools;
 
 use crate::runtime::spawn_then;
@@ -21,6 +22,7 @@ pub fn register() {
     exif::register();
     images::register();
     media::register();
+    pdf::register();
     tools::register();
 }
 

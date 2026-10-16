@@ -100,7 +100,7 @@ mod tests {
     fn outside_a_window_lists_are_taken_as_they_are() {
         let mut s = Settle::default();
         let a = server("A", "a.local");
-        assert_eq!(s.receive(&[a.clone()], vec![]), vec![]);
+        assert_eq!(s.receive(std::slice::from_ref(&a), vec![]), vec![]);
         assert_eq!(s.receive(&[], vec![a.clone()]), vec![a]);
     }
 
