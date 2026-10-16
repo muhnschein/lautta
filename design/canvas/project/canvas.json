@@ -10,6 +10,30 @@
       "x": 960,
       "y": 10900
     },
+    "ActivityBar.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Activity bar \u00b7 copying",
+      "w": 400,
+      "x": 3820,
+      "y": 6580
+    },
+    "ActivityBarDone.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Activity bar \u00b7 finished / failed",
+      "w": 400,
+      "x": 4780,
+      "y": 6580
+    },
+    "ActivityBarQuestion.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Activity bar \u00b7 needs an answer",
+      "w": 400,
+      "x": 4300,
+      "y": 6580
+    },
     "ArchiveView.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -477,7 +501,7 @@
     "Transfers.dc.html": {
       "h": 1200,
       "is_interactive": true,
-      "title": "Transfers",
+      "title": "Activity",
       "w": 400,
       "x": 0,
       "y": 6580
@@ -485,7 +509,7 @@
     "TransfersPulley.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Transfers \u00b7 pulley",
+      "title": "Activity \u00b7 pulley",
       "w": 400,
       "x": 480,
       "y": 6580
@@ -678,7 +702,10 @@
     "TextViewerPulley.dc.html",
     "ServerAdhocMenu.dc.html",
     "ImageDeleteRemote.dc.html",
-    "SearchPulley.dc.html"
+    "SearchPulley.dc.html",
+    "ActivityBar.dc.html",
+    "ActivityBarQuestion.dc.html",
+    "ActivityBarDone.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"

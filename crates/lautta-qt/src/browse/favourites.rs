@@ -45,6 +45,11 @@ fn str_at(row: &[Cell], col: usize) -> &str {
     }
 }
 
+/// No colour for an empty one.
+fn colour_of(colour: &str) -> Option<&str> {
+    Some(colour).filter(|c| !c.is_empty())
+}
+
 /// The index to give a favourite moved by `delta` places; `None` when it
 /// would not move.
 fn target_index(rows: &[Vec<Cell>], id: i64, delta: i32) -> Option<usize> {
@@ -64,8 +69,12 @@ pub struct FavouritesModel {
 
     reload: qt_method!(fn(&mut self)),
     add: qt_method!(fn(&mut self, uri: QString, label: QString, colour: QString)),
+    /// Adds a favourite for a folder, or relabels the one it already is.
+    save: qt_method!(fn(&mut self, uri: QString, label: QString, colour: QString)),
     edit: qt_method!(fn(&mut self, id: i32, label: QString, colour: QString)),
     remove: qt_method!(fn(&mut self, id: i32)),
+    /// Removes the favourite of a folder, if it is one.
+    removeUri: qt_method!(fn(&mut self, uri: QString)),
     moveTo: qt_method!(fn(&mut self, id: i32, index: i32)),
     moveBy: qt_method!(fn(&mut self, id: i32, delta: i32)),
     /// `{id, uri, label, colour, place}` of a loaded favourite, or `{}`.
@@ -121,12 +130,14 @@ impl FavouritesModel {
         blocking_then(
             move || work(core),
             move |res| {
+                // Before the model check: a dialog's model may be gone by
+                // now, the Browse page still has to see the change.
+                store_changed();
                 let Some(model) = me.as_pinned() else { return };
                 let mut model = model.borrow_mut();
                 if let Err(e) = res {
                     model.report(&e);
                 }
-                store_changed();
                 model.reload();
             },
         );
@@ -135,26 +146,33 @@ impl FavouritesModel {
     fn add(&mut self, uri: QString, label: QString, colour: QString) {
         let (uri, label, colour) = (uri.to_string(), label.to_string(), colour.to_string());
         self.change(move |core| {
-            let uri = Uri::parse(&uri)?;
             core.favourites
-                .add(&uri, &label, Some(colour.as_str()).filter(|c| !c.is_empty()))
+                .add(&Uri::parse(&uri)?, &label, colour_of(&colour))
+                .map(|_| ())
+        });
+    }
+
+    fn save(&mut self, uri: QString, label: QString, colour: QString) {
+        let (uri, label, colour) = (uri.to_string(), label.to_string(), colour.to_string());
+        self.change(move |core| {
+            core.favourites
+                .save(&Uri::parse(&uri)?, &label, colour_of(&colour))
                 .map(|_| ())
         });
     }
 
     fn edit(&mut self, id: i32, label: QString, colour: QString) {
         let (label, colour) = (label.to_string(), colour.to_string());
-        self.change(move |core| {
-            core.favourites.update(
-                i64::from(id),
-                &label,
-                Some(colour.as_str()).filter(|c| !c.is_empty()),
-            )
-        });
+        self.change(move |core| core.favourites.update(i64::from(id), &label, colour_of(&colour)));
     }
 
     fn remove(&mut self, id: i32) {
         self.change(move |core| core.favourites.remove(i64::from(id)).map(|_| ()));
+    }
+
+    fn removeUri(&mut self, uri: QString) {
+        let uri = uri.to_string();
+        self.change(move |core| core.favourites.remove_uri(&Uri::parse(&uri)?).map(|_| ()));
     }
 
     fn moveTo(&mut self, id: i32, index: i32) {
@@ -236,6 +254,12 @@ mod tests {
         assert_eq!(target_index(&rows, 3, 5), None);
         assert_eq!(target_index(&rows, 1, 5), Some(2));
         assert_eq!(target_index(&rows, 9, 1), None);
+    }
+
+    #[test]
+    fn empty_colour_is_none() {
+        assert_eq!(colour_of(""), None);
+        assert_eq!(colour_of("#f00"), Some("#f00"));
     }
 
     #[test]

@@ -138,31 +138,55 @@ impl LocationsModel {
         });
     }
 
-    /// Shows `rows`: rows with the same identity update in place (an open
-    /// context menu survives a status change), anything else resets.
+    /// Shows `rows`. Rows that keep their identity stay (an open context
+    /// menu or a row remorse survives); only the rows in between the
+    /// unchanged start and end of the list are removed and inserted.
     fn apply(&mut self, rows: Vec<Row>) {
         let keys: Vec<String> = rows.iter().map(key_of).collect();
-        let cells: Vec<Vec<Cell>> = rows.iter().map(cells).collect();
+        let mut cells: Vec<Vec<Cell>> = rows.iter().map(cells).collect();
         self.sections = rows.iter().map(|r| r.section.to_owned()).collect();
         self.recentCount = rows.iter().filter(|r| r.kind == "adhocRecent").count() as i32;
         self.nearbyCount = rows.iter().filter(|r| r.kind == "nearby").count() as i32;
-        if keys == self.keys {
-            let changed: Vec<usize> = (0..cells.len()).filter(|i| cells[*i] != self.rows[*i]).collect();
-            self.rows = cells;
-            self.countChanged();
-            for i in changed {
+        let (start, removed, inserted) = splice(&self.keys, &keys);
+        if removed > 0 {
+            self.begin_remove_rows(start as i32, (start + removed - 1) as i32);
+            self.rows.drain(start..start + removed);
+            self.end_remove_rows();
+        }
+        if inserted > 0 {
+            self.begin_insert_rows(start as i32, (start + inserted - 1) as i32);
+            let new: Vec<Vec<Cell>> = cells.drain(start..start + inserted).collect();
+            self.rows.splice(start..start, new);
+            self.end_insert_rows();
+        }
+        self.keys = keys;
+        // What is left in `cells` are the rows that stayed, in order.
+        let kept: Vec<usize> = (0..self.rows.len())
+            .filter(|i| *i < start || *i >= start + inserted)
+            .collect();
+        for (i, row) in kept.into_iter().zip(cells) {
+            if self.rows[i] != row {
+                self.rows[i] = row;
                 let index = self.row_index(i as i32);
                 self.data_changed(index, index);
             }
-            return;
         }
-        self.begin_reset_model();
-        self.keys = keys;
-        self.rows = cells;
-        self.end_reset_model();
         self.count = self.rows.len() as i32;
         self.countChanged();
     }
+}
+
+/// How `old` turns into `new`: from `start`, `removed` rows go and
+/// `inserted` rows come; the rows before and after keep their identity.
+fn splice(old: &[String], new: &[String]) -> (usize, usize, usize) {
+    let start = old.iter().zip(new).take_while(|(a, b)| a == b).count();
+    let end = old[start..]
+        .iter()
+        .rev()
+        .zip(new[start..].iter().rev())
+        .take_while(|(a, b)| a == b)
+        .count();
+    (start, old.len() - start - end, new.len() - start - end)
 }
 
 /// Waits for the next bridge status change; false when the bridge is gone.
@@ -205,6 +229,30 @@ mod tests {
     fn cells_match_the_columns() {
         let cells = cells(&Row::default());
         assert_eq!(cells.len(), COLUMNS.len());
+    }
+
+    fn keys(names: &[&str]) -> Vec<String> {
+        names.iter().map(|n| (*n).to_owned()).collect()
+    }
+
+    #[test]
+    fn splice_keeps_the_rows_around_a_change() {
+        let old = keys(&["fav1", "fav2", "docs", "nas"]);
+        assert_eq!(splice(&old, &old), (4, 0, 0));
+        assert_eq!(splice(&old, &keys(&["fav2", "docs", "nas"])), (0, 1, 0));
+        assert_eq!(
+            splice(&old, &keys(&["fav1", "fav2", "fav3", "docs", "nas"])),
+            (2, 0, 1)
+        );
+        assert_eq!(
+            splice(&old, &keys(&["fav1", "fav2", "docs", "nas", "near0"])),
+            (4, 0, 1)
+        );
+        assert_eq!(splice(&old, &keys(&["fav1", "x", "docs", "nas"])), (1, 1, 1));
+        assert_eq!(splice(&[], &keys(&["a", "b"])), (0, 0, 2));
+        assert_eq!(splice(&keys(&["a", "b"]), &[]), (0, 2, 0));
+        // A repeated key is counted once, from the start.
+        assert_eq!(splice(&keys(&["a", "a"]), &keys(&["a"])), (1, 1, 0));
     }
 
     #[test]
