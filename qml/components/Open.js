@@ -35,9 +35,15 @@ function open(pageStack, app, operations, uri, isDir, mimeType, folderUri) {
         pageStack.push(Qt.resolvedUrl(page), props)
         return viewer
     }
+    openWith(pageStack, app, uri)
+    return "external"
+}
+
+// Hands a file to the system: as it is when local, after OpenRemoteDialog
+// when remote.
+function openWith(pageStack, app, uri) {
     if (app.isLocal(uri))
         Qt.openUrlExternally(app.localUrl(uri))
     else
         pageStack.push(Qt.resolvedUrl("../dialogs/OpenRemoteDialog.qml"), { "uri": uri })
-    return "external"
 }

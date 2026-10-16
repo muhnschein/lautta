@@ -1,18 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Which actions the context menu offers and in what order (SPEC §15.3,
-// board DirectoryContext): the five icon-row actions go to the icon row, the
-// rest to the list below it, and capabilities decide what is applicable.
+// Which actions an item offers and where (SPEC §15.3, board
+// DirectoryContext): the long-press menu holds the everyday ones as plain
+// Silica rows, Details' pulley the rest. Capabilities decide what is
+// applicable. Copy to…/Move to… are gone on purpose: copy or cut, then
+// paste where you are.
 .pragma library
-
-var iconRowIds = ["share", "copy", "cut", "rename", "delete"]
-
-var icons = {
-    "share": "image://theme/icon-m-share",
-    "copy": "dir-copy",
-    "cut": "dir-cut",
-    "rename": "image://theme/icon-m-edit",
-    "delete": "image://theme/icon-m-delete"
-}
 
 function text(id) {
     switch (id) {
@@ -34,38 +26,17 @@ function text(id) {
     case "delete":
         //% "Delete"
         return qsTrId("lautta-dir-act-delete")
-    case "copy_to":
-        //% "Copy to…"
-        return qsTrId("lautta-dir-act-copy-to")
-    case "move_to":
-        //% "Move to…"
-        return qsTrId("lautta-dir-act-move-to")
-    case "download":
-        //% "Download to…"
-        return qsTrId("lautta-dir-act-download")
-    case "upload_to":
-        //% "Upload to…"
-        return qsTrId("lautta-dir-act-upload")
     case "info":
-        //% "Info"
-        return qsTrId("lautta-dir-act-info")
+        //% "Details"
+        return qsTrId("lautta-dir-act-details")
     case "compress":
         //% "Compress"
         return qsTrId("lautta-dir-act-compress")
-    case "extract":
-        //% "Extract"
-        return qsTrId("lautta-dir-act-extract")
-    case "favourite":
-        //% "Favourite"
-        return qsTrId("lautta-dir-act-favourite")
-    case "open_remote":
-        //% "Open copy"
-        return qsTrId("lautta-dir-act-open-remote")
     }
     return id
 }
 
-// ctx: { isDir, isLocal, writable, hasRemote, category }
+// ctx: { isDir, writable }
 function applicable(id, ctx) {
     var file = !ctx.isDir
     switch (id) {
@@ -75,36 +46,31 @@ function applicable(id, ctx) {
     case "cut": return ctx.writable
     case "rename": return ctx.writable
     case "delete": return ctx.writable
-    case "copy_to": return true
-    case "move_to": return ctx.writable
-    case "download": return !ctx.isLocal && ctx.hasRemote
-    case "upload_to": return ctx.isLocal && ctx.hasRemote
     case "info": return true
     case "compress": return true
-    case "extract": return ctx.category === "archive"
-    case "favourite": return ctx.isDir
-    case "open_remote": return file && !ctx.isLocal
     }
     return false
 }
 
-// The context menu's actions in display order.
-var order = ["open_with", "share", "copy", "cut", "rename", "delete", "copy_to", "move_to",
-             "download", "upload_to", "info", "compress", "extract", "favourite", "open_remote"]
+// Delete last, as in Silica's own apps.
+var menuOrder = ["share", "copy", "cut", "rename", "info", "delete"]
+var detailsOrder = ["open_with", "compress"]
 
-// { row: [{ id, icon, text }], list: [{ id, text }] } of the actions that
-// apply, in `order`.
-function split(ctx) {
-    var row = []
-    var list = []
+function pick(order, ctx) {
+    var out = []
     for (var i = 0; i < order.length; ++i) {
-        var id = order[i]
-        if (!applicable(id, ctx))
-            continue
-        if (iconRowIds.indexOf(id) >= 0)
-            row.push({ "id": id, "icon": icons[id], "text": text(id) })
-        else
-            list.push({ "id": id, "text": text(id) })
+        if (applicable(order[i], ctx))
+            out.push({ "id": order[i], "text": text(order[i]) })
     }
-    return { "row": row, "list": list }
+    return out
+}
+
+// [{ id, text }] of the long-press menu.
+function menu(ctx) {
+    return pick(menuOrder, ctx)
+}
+
+// [{ id, text }] of the Details page's pulley.
+function details(ctx) {
+    return pick(detailsOrder, ctx)
 }
