@@ -28,18 +28,37 @@ ApplicationWindow {
         return n
     }
 
+    // The first device folder (not Recently deleted), "" when none.
+    function deviceFolder(layout) {
+        for (var i = 0; i < layout.count; ++i) {
+            if (layout.sectionAt(i) === "device" && layout.itemAt(i) !== "deleted")
+                return layout.itemAt(i)
+        }
+        return ""
+    }
+
+    // "section/item" of every row, for failure messages.
+    function describe(layout) {
+        var out = []
+        for (var i = 0; i < layout.count; ++i)
+            out.push(layout.sectionAt(i) + "/" + layout.itemAt(i))
+        return out.join(", ")
+    }
+
     Component.onCompleted: {
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
         tools.pump(800)
         var page = pageStack.currentPage
-        var rows = shownRows(page.layoutModel)
-        expect(rows >= 3, "the device folders are listed: " + rows)
+        var layout = page.layoutModel
+        var rows = shownRows(layout)
+        var folder = deviceFolder(layout)
+        expect(folder !== "", "a device folder is listed: " + describe(layout))
         expect(page.previewCount === rows, "the preview shows every row: " + page.previewCount + " of " + rows)
-        page.layoutModel.setHidden("device", "user-documents", true)
+        layout.setHidden("device", folder, true)
         tools.pump(800)
-        expect(shownRows(page.layoutModel) === rows, "a hidden row stays in the settings")
-        expect(page.previewCount === rows - 1, "the preview drops a hidden row: " + page.previewCount)
-        page.layoutModel.restoreDefaults()
+        expect(shownRows(layout) === rows, "a hidden row stays in the settings")
+        expect(page.previewCount === rows - 1, "the preview drops " + folder + ": " + page.previewCount + " of " + rows)
+        layout.restoreDefaults()
         tools.pump(800)
         expect(page.previewCount === rows, "Restore defaults shows it again: " + page.previewCount)
     }

@@ -4,13 +4,16 @@
 //! `hidden`, `index` (the row's place in its section), `movable`.
 
 use super::{cell_data, error_parts, role_names, store_changed, Cell};
-use crate::runtime::{blocking_then, core, spawn_then};
+use crate::runtime::{core, spawn_then};
 use lautta_core::app::Core;
 use lautta_core::app_browse::LayoutRow;
+use lautta_core::error::{Error, ErrorKind};
 use qmetaobject::prelude::*;
 use qmetaobject::QPointer;
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::Arc;
+use tokio::sync::oneshot;
 
 const COLUMNS: [&str; 7] = ["section", "kind", "item", "name", "hidden", "index", "movable"];
 
@@ -58,9 +61,23 @@ pub struct BrowseLayoutModel {
     sectionAt: qt_method!(fn(&self, row: i32) -> QString),
     /// The place of list row `row` in its section, `-1` outside the list.
     placeAt: qt_method!(fn(&self, row: i32) -> i32),
+    /// The item of list row `row`, `""` outside the list.
+    itemAt: qt_method!(fn(&self, row: i32) -> QString),
     failed: qt_signal!(kind: QString, message: QString),
 
     rows: Vec<Vec<Cell>>,
+    /// Done when the last change is stored: each change waits for the one
+    /// before, so a switch and Restore defaults apply in the order made.
+    last: Option<oneshot::Receiver<()>>,
+}
+
+/// Runs a store write off the runtime's workers.
+async fn blocking(
+    work: impl FnOnce() -> lautta_core::Result<()> + Send + 'static,
+) -> lautta_core::Result<()> {
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))?
 }
 
 impl BrowseLayoutModel {
@@ -94,37 +111,57 @@ impl BrowseLayoutModel {
         model.reload();
     }
 
-    fn change(&mut self, work: impl FnOnce(Arc<Core>) -> lautta_core::Result<()> + Send + 'static) {
+    /// Runs `work` after the changes made before it, then shows the rows.
+    fn change<F>(&mut self, work: impl FnOnce(Arc<Core>) -> F + Send + 'static)
+    where
+        F: Future<Output = lautta_core::Result<()>> + Send + 'static,
+    {
         let Some(core) = core() else { return };
-        let me = QPointer::from(&*self);
-        blocking_then(move || work(core), move |res| Self::changed(&me, res));
-    }
-
-    fn setHidden(&mut self, section: QString, item: QString, hidden: bool) {
-        let (section, item) = (section.to_string(), item.to_string());
-        self.change(move |core| core.browse_layout.set_hidden(&section, &item, hidden));
-    }
-
-    fn moveTo(&mut self, section: QString, item: QString, index: i32) {
-        let Some(core) = core() else { return };
-        let (section, item) = (section.to_string(), item.to_string());
-        let index = usize::try_from(index).unwrap_or(0);
+        let before = self.last.take();
+        let (stored, after) = oneshot::channel();
+        self.last = Some(after);
         let me = QPointer::from(&*self);
         spawn_then(
-            async move { core.move_browse_row(&section, &item, index).await },
+            async move {
+                if let Some(before) = before {
+                    let _ = before.await;
+                }
+                let res = work(core).await;
+                let _ = stored.send(());
+                res
+            },
             move |res| Self::changed(&me, res),
         );
     }
 
-    fn restoreDefaults(&mut self) {
-        self.change(|core| core.browse_layout.reset());
+    fn setHidden(&mut self, section: QString, item: QString, hidden: bool) {
+        let (section, item) = (section.to_string(), item.to_string());
+        self.change(move |core| blocking(move || core.browse_layout.set_hidden(&section, &item, hidden)));
     }
 
-    fn sectionAt(&self, row: i32) -> QString {
-        match cell_at(&self.rows, row, 0) {
+    fn moveTo(&mut self, section: QString, item: QString, index: i32) {
+        let (section, item) = (section.to_string(), item.to_string());
+        let index = usize::try_from(index).unwrap_or(0);
+        self.change(move |core| async move { core.move_browse_row(&section, &item, index).await });
+    }
+
+    fn restoreDefaults(&mut self) {
+        self.change(|core| blocking(move || core.browse_layout.reset()));
+    }
+
+    fn text_at(&self, row: i32, col: usize) -> QString {
+        match cell_at(&self.rows, row, col) {
             Some(Cell::Str(s)) => QString::from(s.as_str()),
             _ => QString::default(),
         }
+    }
+
+    fn sectionAt(&self, row: i32) -> QString {
+        self.text_at(row, 0)
+    }
+
+    fn itemAt(&self, row: i32) -> QString {
+        self.text_at(row, 2)
     }
 
     fn placeAt(&self, row: i32) -> i32 {
@@ -204,6 +241,11 @@ mod tests {
             ..BrowseLayoutModel::default()
         };
         assert_eq!(model.sectionAt(1).to_string(), "device");
+        assert_eq!(
+            (model.itemAt(0).to_string(), model.itemAt(1).to_string()),
+            ("a".into(), "b".into())
+        );
+        assert_eq!(model.itemAt(2).to_string(), "");
         assert_eq!((model.placeAt(0), model.placeAt(1)), (0, 1));
         assert_eq!(model.sectionAt(2).to_string(), "");
         assert_eq!((model.placeAt(2), model.placeAt(-1)), (-1, -1));

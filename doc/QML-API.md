@@ -89,7 +89,7 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - Browse page settings (BRW-12): `LocationsModel.hide(section, kind, itemId)`;
   `BrowseLayoutModel` (roles `section`, `kind`, `item`, `name`, `hidden`, `index`,
   `movable`; `reload()`, `setHidden(section, item, hidden)`, `moveTo(section, item, index)`,
-  `restoreDefaults()`, `sectionAt(row)`, `placeAt(row)`); `pages/BrowseSettingsPage.qml`.
+  `restoreDefaults()`, `sectionAt(row)`, `placeAt(row)`, `itemAt(row)`); `pages/BrowseSettingsPage.qml`.
 
 ### Directory (boards: Directory, DirectoryPulley, DirectoryContext, DirectorySelect, DirectorySelectPulley, DirectoryGrid, DirectoryLandscape, PathMenu, DirectoryRemorse, ImageDeleteRemote, ViewOptions, NewItem, Rename, FolderPicker, FolderPickerPulley, StateEmpty, StateNoAccess, StateOffline, StateError, StateLarge)
 
