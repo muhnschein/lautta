@@ -41,17 +41,20 @@ impl Cell {
 
 cpp! {{
     #include <QtCore/QCoreApplication>
+    #include <QtCore/QEvent>
     #include <QtCore/QEventLoop>
 }}
 
 /// Runs the Qt event loop for `ms` milliseconds. For tests that drive a
 /// scenario from a synchronous script (the host has no widgets to run an
-/// engine with `exec`).
+/// engine with `exec`). Objects a script `destroy()`ed go too, as they would
+/// in the real event loop.
 pub fn pump_events(ms: i32) {
     let until = std::time::Instant::now() + std::time::Duration::from_millis(u64::try_from(ms).unwrap_or(0));
     while std::time::Instant::now() < until {
         cpp!(unsafe [] {
             QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         });
         std::thread::sleep(std::time::Duration::from_millis(2));
     }

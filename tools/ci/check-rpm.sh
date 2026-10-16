@@ -6,7 +6,8 @@
 #   - the binary exports `main` and links __libc_start_main@GLIBC_2.34 (HBR-4),
 #     carries no RPATH and needs only HBR-2 libraries;
 #   - the package installs into the target and every library resolves;
-#   - every shipped QML file and tests/qml/tst_*.qml load in the target (TST-6).
+#   - every shipped QML file and tests/qml/tst_*.qml load in the target (TST-6);
+#     a test with a `scenarioRunning` property runs until it clears it.
 # Env: SDK_IMAGE (container image), TARGET (sb2 target name), DOCKER_ARGS.
 set -eu
 : "${SDK_IMAGE:?}" "${TARGET:?}"

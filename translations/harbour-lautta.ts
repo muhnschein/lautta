@@ -2749,6 +2749,10 @@
             <numerusform></numerusform>
         </translation>
     </message>
+    <message id="lautta-favourite-remove">
+        <source>Remove from favourites</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message id="lautta-browse-hide">
         <source>Hide from Browse</source>
         <translation type="unfinished"></translation>

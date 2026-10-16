@@ -179,7 +179,7 @@ Item {
         case "info": pageStack.push(Qt.resolvedUrl("../../pages/InfoPage.qml"), { "uri": uris[0] }); break
         case "compress": pageStack.push(Qt.resolvedUrl("../../dialogs/CompressDialog.qml"), { "uris": JSON.stringify(uris) }); break
         case "extract": pageStack.push(Qt.resolvedUrl("../../dialogs/ExtractDialog.qml"), { "archiveUri": uris[0] }); break
-        case "favourite": pageStack.push(Qt.resolvedUrl("../../dialogs/FavouriteDialog.qml"), { "uri": uris[0], "favouriteId": "" }); break
+        case "favourite": pageStack.push(Qt.resolvedUrl("../../dialogs/FavouriteDialog.qml"), { "uri": uris[0] }); break
         case "open_remote": pageStack.push(Qt.resolvedUrl("../../dialogs/OpenRemoteDialog.qml"), { "uri": uris[0] }); break
         }
     }
