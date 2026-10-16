@@ -11,6 +11,13 @@ ApplicationWindow {
 
     ViewerTools { id: tools }
 
+    // Runs the event loop until `done()` holds (the target is slow when
+    // emulated: unlocking AES-256 takes seconds there).
+    function waitFor(done) {
+        for (var i = 0; i < 300 && !done(); ++i)
+            tools.pump(100)
+    }
+
     Component.onCompleted: {
         tools.installFixture(Qt.resolvedUrl("host/fixtures/two-pages.pdf"), "lautta://user-documents/two-pages.pdf")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/secret.pdf"), "lautta://user-documents/locked.pdf")
@@ -47,7 +54,7 @@ ApplicationWindow {
         tools.pump(200)
         pageStack.push(lockedComponent, {}, PageStackAction.Immediate)
         // The password dialog opens on its own; a wrong password asks again.
-        tools.pump(800)
+        waitFor(function() { return pageStack.currentPage.wrong !== undefined })
         var dialog = pageStack.currentPage
         dialog.wrong = true
         tools.pump(200)

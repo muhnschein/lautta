@@ -347,7 +347,7 @@ Page {
 
         HighlightImage {
             anchors.horizontalCenter: parent.horizontalCenter
-            source: Qt.resolvedUrl("../icons/lock.svg")
+            source: page.unlocking ? Qt.resolvedUrl("../icons/lock.svg") : ""
             sourceSize.width: Theme.iconSizeLarge
             sourceSize.height: Theme.iconSizeLarge
             color: Theme.highlightColor
