@@ -142,7 +142,9 @@ impl PdfDocument {
         let pixmap = render(
             page,
             &cache,
-            &interpreter_settings(),
+            // The default draws widgets and links as on paper; nothing is
+            // clickable.
+            &InterpreterSettings::default(),
             &RenderSettings::default(),
             &PixmapSettings {
                 x_scale: scale,
@@ -155,15 +157,6 @@ impl PdfDocument {
             height: u32::from(pixmap.height()),
             rgba: pixmap.data_as_u8_slice().to_vec(),
         })
-    }
-}
-
-/// How pages are read, for drawing and for text alike.
-fn interpreter_settings() -> InterpreterSettings {
-    InterpreterSettings {
-        // Widgets and links are drawn as on paper; nothing is clickable.
-        render_annotations: true,
-        ..InterpreterSettings::default()
     }
 }
 

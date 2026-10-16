@@ -3,13 +3,13 @@
 //! glyph's Unicode text and an approximate box; paths, images and Type 3
 //! glyph programs are skipped, nothing is decoded or drawn.
 
-use crate::{interpreter_settings, PageRect, PageSize, PdfDocument, PdfError};
+use crate::{PageRect, PageSize, PdfDocument, PdfError};
 use hayro::hayro_interpret::font::{Glyph, GlyphRun};
 use hayro::hayro_interpret::hayro_cmap::BfString;
 use hayro::hayro_interpret::hayro_syntax::page::Page;
 use hayro::hayro_interpret::{
     interpret_page, BlendMode, ClipPath, Context, Device, DrawMode, DrawProps, Image, ImageDrawProps,
-    InterpreterCache, SoftMask, TransformExt,
+    InterpreterCache, InterpreterSettings, SoftMask, TransformExt,
 };
 use hayro::kurbo::{Affine, BezPath, Point, Rect};
 
@@ -75,7 +75,7 @@ fn page_text(page: &Page<'_>) -> Vec<TextChar> {
         Rect::new(0.0, 0.0, f64::from(width), f64::from(height)),
         &cache,
         page.xref(),
-        interpreter_settings(),
+        InterpreterSettings::default(),
     );
     let mut sink = TextSink::default();
     interpret_page(page, &mut context, &mut sink);
