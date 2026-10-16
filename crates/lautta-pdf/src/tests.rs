@@ -45,12 +45,30 @@ fn a_page_renders_at_the_asked_width_on_white() {
 }
 
 #[test]
+fn annotations_are_drawn_like_the_page() {
+    // A square annotation whose appearance fills it red, over a blank page.
+    let mut doc = super::sample::Doc::new(vec![page(100, 100, "")]);
+    let appearance = doc.ahead(1);
+    let annot = doc.object(&format!(
+        "<< /Type /Annot /Subtype /Square /Rect [0 0 50 50] /AP << /N {appearance} >> >>"
+    ));
+    doc.object(&format!(
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 50 50] /Length {} >>\nstream\n{RED_SQUARE}\nendstream",
+        RED_SQUARE.len()
+    ));
+    doc.page_entry(0, &format!("/Annots [{annot}]"));
+    let r = PdfDocument::open(doc.build()).unwrap().render(0, 100).unwrap();
+    assert_eq!(pixel(&r, 20, 80), RED);
+    assert_eq!(pixel(&r, 80, 20), WHITE_PX);
+}
+
+#[test]
 fn rotated_pages_are_shown_upright() {
     let rotated = Spec {
         w: 100,
         h: 200,
         rotate: 90,
-        content: RED_SQUARE,
+        content: RED_SQUARE.to_string(),
     };
     let doc = PdfDocument::open(build(&[rotated])).unwrap();
     assert_eq!(

@@ -370,8 +370,10 @@ what the app does.
   in the binary), size, modified, type; folders first toggle; stable.
 - BRW-3: Instant filter (substring, case- and diacritics-insensitive), hidden files
   toggle (dot names and the hidden attribute).
-- BRW-4: View settings (sort, folders first, hidden files, list or grid) are global: the
-  same for every folder and location.
+- BRW-4: View settings (sort, folders first, hidden files, list or grid, grid size) are
+  global: the same for every folder and location. The grid shows 4 items per row with
+  names on icons only, or 3 per row with name and size under every item; landscape keeps
+  the tile size.
 - BRW-5: Stale-while-revalidate: cached listing shown immediately (≤ 7 days old, marked
   stale), refresh on the interactive lane, diff applied in place without losing scroll
   or selection.
@@ -535,14 +537,28 @@ bridge).
   pinch and double-tap zoom (sharper rendering once a pinch settles), the page number
   while scrolling, *Open with* and *Share* in the pulley. Rendering is `hayro` (pure
   Rust, `lautta-pdf`; poppler is not allowed): it sees only the file's bytes, has no
-  file, network or process access, runs no JavaScript and follows no links, actions or
-  form submissions; links are drawn but not clickable. The app's sandbox has no
-  `Internet` permission either. Files up to 200 MB; pages at most 4096 px on an edge.
+  file, network or process access, runs no JavaScript and follows no actions or form
+  submissions. Of links and outline items only page destinations and http(s) URIs are
+  read; everything else (Launch, JavaScript, GoToR, file: and other URIs) is dropped. A
+  link to a page jumps there and offers *Back to page N*; a link to a website opens a
+  dialog showing the address (*Open* hands it to the browser, *Copy link* copies it),
+  so the app itself never fetches it. The app's sandbox has no `Internet` permission
+  either. *Contents and pages* in the pulley shows the outline (the section being read
+  highlighted) and a *Go to page* field. Files up to 200 MB; pages at most 4096 px on an edge.
   The pulley header shows the page count. A password-protected PDF asks for its
   password in a dialog (swipe forward unlocks; a wrong one asks again); the password
   opens that one parse and is never stored, so reopening asks again (the empty user
   password opens without asking). Reopening a PDF starts at the page where reading
   stopped, remembered with the recents (off and cleared with them, ORG-2).
+  *Search* in the pulley finds text in the document: a search field stays at the top
+  of the page (its close button leaves search mode), typing searches once it pauses,
+  case-insensitive with whitespace runs alike. The search runs off the GUI thread page
+  by page from the page being read to the end and then from the first page; hits are
+  marked on the pages as they arrive, the one shown stronger. A bar at the bottom
+  steps to the previous and next hit (going round, scrolling it into view) and reads
+  "2 of 17 · page 3", or "Not found in 12 pages" once every page is searched. At
+  most 10 000 hits per document, 1 000 per page, in its first 200 000 characters; an
+  encrypted PDF is searchable while it is open after unlocking.
 
 ## 13. Search and organisation
 

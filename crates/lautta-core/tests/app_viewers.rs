@@ -460,3 +460,182 @@ async fn pdfs_reopen_where_reading_stopped() {
     h.core.remember_pdf_page(&u, 0);
     assert_eq!(h.core.open_pdf(&u, "").await.unwrap().last_page, Some(0));
 }
+
+/// Four pages; "lautta" is on pages 0, 2 (twice, the second across two
+/// lines) and 3.
+fn searchable_pdf() -> Vec<u8> {
+    use lautta_pdf::sample::{build, page, text};
+    build(&[
+        page(200, 100, &text(10, 50, "Lautta ferry")),
+        page(200, 100, &text(10, 50, "nothing here")),
+        page(
+            200,
+            100,
+            &(text(10, 70, "LAUTTA and the") + &text(10, 50, "lautta")),
+        ),
+        page(200, 100, &text(10, 50, "one lautta")),
+    ])
+}
+
+/// Every page a search of `u` sends, with its hits' area counts, and how
+/// the search ended.
+async fn search_pdf(
+    h: &Home,
+    u: &str,
+    query: &str,
+    from: usize,
+    cancel: bool,
+) -> (
+    Vec<(usize, Vec<usize>)>,
+    Result<(), lautta_core::app_pdf::PdfFailure>,
+) {
+    let (tx, mut rx) = tokio::sync::mpsc::channel(2);
+    let flag = Arc::new(std::sync::atomic::AtomicBool::new(cancel));
+    let core = h.core.clone();
+    let (u, query) = (uri(u), query.to_owned());
+    let search = tokio::spawn(async move { core.search_pdf(&u, &query, from, flag, tx).await });
+    let mut pages = Vec::new();
+    while let Some(p) = rx.recv().await {
+        pages.push((p.page, p.hits.iter().map(|hit| hit.areas.len()).collect()));
+    }
+    (pages, search.await.unwrap())
+}
+
+#[tokio::test]
+async fn pdfs_are_searched_page_by_page_from_the_page_being_read() {
+    let h = home().await;
+    h.nas.add_file("docs/ferry.pdf", &searchable_pdf(), 1);
+    let u = "lautta://nv-nas/docs/ferry.pdf";
+    let (pages, end) = search_pdf(&h, u, " Lautta ", 2, false).await;
+    assert_eq!(end, Ok(()));
+    assert_eq!(
+        pages,
+        [(2, vec![1, 1]), (3, vec![1]), (0, vec![1]), (1, vec![]),],
+        "opened on demand, searched round from page 2"
+    );
+    let (pages, _) = search_pdf(&h, u, "the lautta", 0, false).await;
+    assert_eq!(pages[2], (2, vec![2]), "a phrase across lines has two areas");
+}
+
+#[tokio::test]
+async fn pdf_searches_stop_when_cancelled_and_blank_ones_never_start() {
+    let h = home().await;
+    h.nas.add_file("docs/stop.pdf", &searchable_pdf(), 1);
+    let (pages, end) = search_pdf(&h, "lautta://nv-nas/docs/stop.pdf", "lautta", 0, true).await;
+    assert_eq!((pages.len(), end), (0, Ok(())), "cancelled before the first page");
+    for blank in ["", " \t "] {
+        let (pages, end) = search_pdf(&h, "lautta://nv-nas/docs/missing.pdf", blank, 0, false).await;
+        assert_eq!((pages.len(), end), (0, Ok(())), "{blank:?} reads no file");
+    }
+    assert!(
+        h.nas.calls().iter().all(|c| !c.contains("missing")),
+        "{:?}",
+        h.nas.calls()
+    );
+}
+
+#[tokio::test]
+async fn a_pdf_search_stops_at_the_hit_limit() {
+    use lautta_core::app_pdf::MAX_SEARCH_HITS;
+    use lautta_pdf::sample::{build, page, text};
+    use lautta_pdf::MAX_PAGE_HITS;
+    let h = home().await;
+    // Every page has as many hits as a page may; the pages after those that
+    // fill the limit are not searched.
+    let full = "x ".repeat(MAX_PAGE_HITS);
+    let pages: Vec<_> = (0..MAX_SEARCH_HITS / MAX_PAGE_HITS + 2)
+        .map(|_| page(200, 100, &text(0, 50, &full)))
+        .collect();
+    let bytes = build(&pages);
+    h.nas.add_file("docs/many.pdf", &bytes, 1);
+    let (pages, end) = search_pdf(&h, "lautta://nv-nas/docs/many.pdf", "x", 0, false).await;
+    assert_eq!(end, Ok(()));
+    let hits: usize = pages.iter().map(|(_, h)| h.len()).sum();
+    assert_eq!(hits, MAX_SEARCH_HITS);
+    assert_eq!(
+        pages.len(),
+        MAX_SEARCH_HITS / MAX_PAGE_HITS,
+        "no page after the limit"
+    );
+}
+
+#[tokio::test]
+async fn an_encrypted_pdf_is_searched_while_it_is_kept() {
+    use lautta_core::app_pdf::PdfFailure;
+    use lautta_pdf::sample::{LOCKED_AES256, LOCKED_PASSWORD};
+    use lautta_pdf::PdfError;
+    let h = home().await;
+    h.nas.add_file("docs/sealed.pdf", LOCKED_AES256, 1);
+    let u = "lautta://nv-nas/docs/sealed.pdf";
+    let (pages, end) = search_pdf(&h, u, "lautta", 0, false).await;
+    assert_eq!((pages.len(), end), (0, Err(PdfFailure::Pdf(PdfError::Encrypted))));
+    let (_, end) = search_pdf(&h, "lautta://nv-nas/docs/gone.pdf", "lautta", 0, false).await;
+    assert!(matches!(end, Err(PdfFailure::File(_))), "{end:?}");
+    h.core.open_pdf(&uri(u), LOCKED_PASSWORD).await.unwrap();
+    let (pages, end) = search_pdf(&h, u, "lautta", 1, false).await;
+    assert_eq!(end, Ok(()));
+    assert_eq!(
+        pages,
+        [(1, vec![]), (0, vec![])],
+        "both pages searched, nothing found"
+    );
+}
+
+#[tokio::test]
+async fn pdfs_have_their_outline_and_links() {
+    use lautta_core::app_pdf::{LinkTarget, OutlineItem, PdfFailure};
+    use lautta_pdf::sample::{link, page, page_ref, Doc};
+    let mut doc = Doc::new(vec![page(100, 200, ""), page(100, 200, "")]);
+    doc.outline(&[
+        ("(Start)", 0, &format!("/Dest [{} /Fit]", page_ref(0))),
+        ("(Later)", 1, &format!("/Dest [{} /Fit]", page_ref(1))),
+    ])
+    .page_entry(
+        0,
+        &format!(
+            "/Annots [{} {}]",
+            link([0, 100, 50, 200], &format!("/Dest [{} /Fit]", page_ref(1))),
+            link([50, 0, 100, 100], "/A << /S /URI /URI (https://example.org/x) >>"),
+        ),
+    );
+    let h = home().await;
+    h.nas.add_file("docs/linked.pdf", &doc.build(), 1);
+    let u = uri("lautta://nv-nas/docs/linked.pdf");
+    let links = h.core.pdf_links(&u, 0).await.unwrap();
+    assert_eq!(
+        links.iter().map(|l| l.target.clone()).collect::<Vec<_>>(),
+        [
+            LinkTarget::Page { index: 1, top: None },
+            LinkTarget::Uri("https://example.org/x".into())
+        ],
+        "opened on demand"
+    );
+    assert_eq!((links[1].area.x, links[1].area.y), (0.5, 0.5));
+    assert!(h.core.pdf_links(&u, 1).await.unwrap().is_empty());
+    assert_eq!(
+        h.core.pdf_links(&u, 2).await.unwrap_err(),
+        PdfFailure::Pdf(lautta_pdf::PdfError::NoSuchPage)
+    );
+    assert_eq!(
+        h.core.open_pdf(&u, "").await.unwrap().outline,
+        [
+            OutlineItem {
+                title: "Start".into(),
+                level: 0,
+                page: Some(0)
+            },
+            OutlineItem {
+                title: "Later".into(),
+                level: 1,
+                page: Some(1)
+            }
+        ]
+    );
+    h.nas.add_file("docs/plain.pdf", &sample_pdf(), 1);
+    let plain = h
+        .core
+        .open_pdf(&uri("lautta://nv-nas/docs/plain.pdf"), "")
+        .await
+        .unwrap();
+    assert!(plain.outline.is_empty());
+}

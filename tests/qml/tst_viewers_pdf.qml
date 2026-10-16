@@ -11,11 +11,31 @@ ApplicationWindow {
 
     ViewerTools { id: tools }
 
-    // Runs the event loop until `done()` holds (the target is slow when
-    // emulated: unlocking AES-256 takes seconds there).
+    // Runs the event loop until `done()` holds, for at most 30 s: the target
+    // is emulated and slow (unlocking AES-256 takes seconds there).
     function waitFor(done) {
         for (var i = 0; i < 300 && !done(); ++i)
             tools.pump(100)
+    }
+
+    // Waits for the page on top to be shown and its PDF to be read.
+    function shown() {
+        waitFor(function() {
+            var p = pageStack.currentPage
+            return !pageStack.busy && p.document !== undefined && !p.document.loading
+        })
+        return pageStack.currentPage
+    }
+
+    // Waits until `p` is the page on top and the page stack has settled.
+    function back(p) {
+        waitFor(function() { return pageStack.currentPage === p && !pageStack.busy })
+    }
+
+    // Waits for a page or dialog that has `property` to be on top.
+    function opened(property) {
+        waitFor(function() { return pageStack.currentPage[property] !== undefined && !pageStack.busy })
+        return pageStack.currentPage
     }
 
     function install(fixture, uri) {
@@ -26,39 +46,88 @@ ApplicationWindow {
     Component.onCompleted: {
         install("two-pages.pdf", "lautta://user-documents/two-pages.pdf")
         install("secret.pdf", "lautta://user-documents/locked.pdf")
+        install("linked.pdf", "lautta://user-documents/linked.pdf")
+        install("searchable.pdf", "lautta://user-documents/searchable.pdf")
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        // Let the asynchronous loading finish and the pages appear.
-        tools.pump(800)
-        var viewer = pageStack.currentPage
+        var viewer = shown()
         viewer.zoomTo(2.5, 100, 100)
-        tools.pump(800)
+        tools.pump(500)
         viewer.zoomTo(1, 100, 100)
-        pageStack.push(lockedComponent, {}, PageStackAction.Immediate)
+
+        // Contents without an outline, and "Go to page".
+        viewer.showContents()
+        opened("chosen").chosen(1)
+        back(viewer)
+
+        // Contents with an outline; a link within the PDF and back again; a
+        // link to a website.
+        pageStack.push(linkedComponent, {}, PageStackAction.Immediate)
+        var linked = shown()
+        linked.showContents()
+        opened("chosen").chosen(0)
+        back(linked)
+        linked.followLink({ "page": 1, "top": 0.5, "uri": "" })
+        tools.pump(400)
+        if (linked.backPage !== 1)
+            console.error("FAILED: back to page " + linked.backPage)
+        linked.followLink({ "page": -1, "top": -1, "uri": "https://example.org/x" })
+        opened("url").reject()
+        back(linked)
+        pageStack.pop(viewer, PageStackAction.Immediate)
+        back(viewer)
+
+        // Search mode: hits marked on the pages, stepped through, nothing
+        // found, and closed again.
+        pageStack.push(searchComponent, {}, PageStackAction.Immediate)
+        var searching = shown()
+        var doc = searching.document
+        searching.openSearch()
+        searching.searchText = "lautta"
+        waitFor(function() { return doc.currentHit > 0 && !doc.searching })
+        searching.nextHit()
+        searching.previousHit()
+        searching.zoomTo(2.5, 100, 100)
+        searching.nextHit()
+        searching.searchText = "no such words"
+        waitFor(function() { return doc.currentHit === 0 && !doc.searching })
+        searching.closeSearch()
+        pageStack.pop(viewer, PageStackAction.Immediate)
+        back(viewer)
+
         // The password dialog opens on its own; a wrong password asks again.
-        var lockedViewer = pageStack.currentPage
-        waitFor(function() { return pageStack.currentPage.wrong !== undefined })
-        var dialog = pageStack.currentPage
+        pageStack.push(lockedComponent, {}, PageStackAction.Immediate)
+        var locked = pageStack.currentPage
+        var dialog = opened("wrong")
         if (dialog.wrong === undefined) {
-            console.error("FAILED: no password dialog; status " + lockedViewer.status
-                          + ", wantPassword " + lockedViewer.wantPassword + ", asked " + lockedViewer.asked
-                          + ", problem '" + lockedViewer.problem + "', loading " + lockedViewer.loading
+            console.error("FAILED: no password dialog; status " + locked.status
+                          + ", wantPassword " + locked.wantPassword + ", asked " + locked.asked
+                          + ", problem '" + locked.problem + "', loading " + locked.loading
                           + ", busy " + pageStack.busy + ", depth " + pageStack.depth)
             return
         }
         dialog.wrong = true
         tools.pump(200)
         dialog.reject()
-        // Cancel leaves the viewer locked, on top again.
-        waitFor(function() { return pageStack.currentPage === lockedViewer && !pageStack.busy })
+        back(locked)
         // The Unlocking state while a password is tried.
-        lockedViewer.unlocking = true
+        locked.unlocking = true
         tools.pump(200)
-        lockedViewer.unlocking = false
+        locked.unlocking = false
     }
 
     Component {
         id: pageComponent
         PdfViewer { uri: "lautta://user-documents/two-pages.pdf" }
+    }
+
+    Component {
+        id: linkedComponent
+        PdfViewer { uri: "lautta://user-documents/linked.pdf" }
+    }
+
+    Component {
+        id: searchComponent
+        PdfViewer { uri: "lautta://user-documents/searchable.pdf" }
     }
 
     Component {
