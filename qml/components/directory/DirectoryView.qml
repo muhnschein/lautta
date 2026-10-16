@@ -24,6 +24,12 @@ Item {
     property alias model: dir
     readonly property bool selecting: selectionMode
     readonly property bool gridMode: dir.viewMode === "grid"
+    // Grid items per row in portrait (View options): 4, or 3 with name and size.
+    readonly property int gridColumns: {
+        var dependency = App.settingsJson
+        return App.setting("grid_columns") === 3 ? 3 : 4
+    }
+    readonly property bool gridCaptions: gridColumns === 3
     readonly property bool permanentDelete: !(App.setting("recently_deleted") === true && dir.hasCapability("Trash")
                                               && App.isLocal(uri))
     property string pendingName
@@ -513,6 +519,8 @@ Item {
         BackgroundItem {
             id: cell
 
+            readonly property real gap: view.gridCaptions ? Theme.paddingSmall : Math.round(Theme.paddingSmall / 4)
+
             width: grid.cellWidth
             height: grid.cellHeight
             onClicked: {
@@ -527,34 +535,88 @@ Item {
                     dir.toggle(model.uri)
             }
 
-            FileIcon {
-                anchors {
-                    fill: parent
-                    margins: Theme.paddingSmall / 2
+            Item {
+                id: tile
+
+                x: cell.gap
+                y: cell.gap
+                width: grid.cellWidth - 2 * cell.gap
+                height: width
+
+                Rectangle {
+                    anchors.fill: parent
+                    visible: !tileIcon.thumbnailReady
+                    color: Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity / 3)
                 }
-                size: Math.min(width, height)
-                category: model.category
-                isDir: model.isDir
-                isSymlink: model.isSymlink
-                thumbnailSource: model.thumbnailSource
-                mimeType: model.mimeType
-                selected: model.selected
+
+                FileIcon {
+                    id: tileIcon
+
+                    anchors.fill: parent
+                    size: tile.width
+                    category: model.category
+                    isDir: model.isDir
+                    isSymlink: model.isSymlink
+                    thumbnailSource: model.thumbnailSource
+                    mimeType: model.mimeType
+                    selected: model.selected
+                }
+
+                // Compact grid: the name inside the tile, cut at the end only.
+                Label {
+                    visible: !view.gridCaptions && model.thumbnailSource.length === 0
+                    anchors {
+                        left: parent.left
+                        right: parent.right
+                        bottom: parent.bottom
+                        margins: Theme.paddingSmall
+                    }
+                    horizontalAlignment: Text.AlignHCenter
+                    text: model.name
+                    truncationMode: TruncationMode.Elide
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: cell.highlighted || model.selected ? Theme.highlightColor : Theme.primaryColor
+                }
             }
 
-            Label {
-                visible: model.thumbnailSource.length === 0
+            // Three per row: name and size under every tile.
+            Column {
+                visible: view.gridCaptions
                 anchors {
-                    left: parent.left
-                    right: parent.right
-                    bottom: parent.bottom
-                    margins: Theme.paddingSmall
+                    top: tile.bottom
+                    topMargin: Theme.paddingSmall / 2
+                    left: tile.left
+                    right: tile.right
                 }
-                horizontalAlignment: Text.AlignHCenter
-                text: model.name
-                truncationMode: TruncationMode.Fade
-                font.pixelSize: Theme.fontSizeExtraSmall
+
+                Label {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: model.name
+                    truncationMode: TruncationMode.Elide
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: cell.highlighted || model.selected ? Theme.highlightColor : Theme.primaryColor
+                }
+                Label {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: !model.isDir && model.size >= 0 ? Format.formatFileSize(model.size) : ""
+                    truncationMode: TruncationMode.Elide
+                    font.pixelSize: Theme.fontSizeTiny
+                    color: cell.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
+                }
             }
         }
+    }
+
+    FontMetrics {
+        id: nameMetrics
+        font.pixelSize: Theme.fontSizeExtraSmall
+    }
+
+    FontMetrics {
+        id: sizeMetrics
+        font.pixelSize: Theme.fontSizeTiny
     }
 
     SilicaListView {
@@ -580,13 +642,15 @@ Item {
     SilicaGridView {
         id: grid
 
-        readonly property int columns: Math.max(3, Math.round(width / (Theme.itemSizeExtraLarge * 1.1)))
+        // Landscape keeps the tile size of portrait.
+        readonly property real tileWidth: Math.min(Screen.width, Screen.height) / view.gridColumns
+        readonly property int columns: Math.max(view.gridColumns, Math.round(width / tileWidth))
 
         anchors.fill: parent
         visible: view.gridMode
         model: view.gridMode ? dir : null
         cellWidth: width / columns
-        cellHeight: cellWidth
+        cellHeight: cellWidth + (view.gridCaptions ? nameMetrics.height + sizeMetrics.height + Theme.paddingSmall : 0)
         header: headerComponent
         delegate: gridDelegate
         footer: Item {

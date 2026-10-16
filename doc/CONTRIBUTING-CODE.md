@@ -26,8 +26,9 @@ screen; `design/STYLE.md` is the Silica style kit).
 - `unsafe` only in `lautta-core::sys` and `lautta-qt` (SPEC RS-5).
 - Every module has unit tests in `#[cfg(test)] mod tests`; behaviour across modules goes in
   `crates/<crate>/tests/`. Tests must *bite*: each asserted behaviour must fail when the
-  code is broken (CI runs `cargo-mutants` on core modules). Aim for ≥ 90 % line coverage
-  of new code (SonarCloud gates on 80 %).
+  code is broken (CI runs `cargo-mutants` on core modules: on the lines a pull request
+  changes, and on all of them weekly; `make mutants-diff MUTANTS_DIFF=<file>` checks a
+  diff locally). Aim for ≥ 90 % line coverage of new code (SonarCloud gates on 80 %).
 - SonarCloud is gating: keep functions short (cognitive complexity ≤ 15), no duplicated
   blocks, no commented-out code, no TODO comments, no empty functions without a comment,
   no `String` concatenation in loops where `format!`/`push_str` is meant, etc.

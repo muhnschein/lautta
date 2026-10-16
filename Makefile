@@ -4,6 +4,7 @@
 #   make test       host tests only
 #   make coverage   host tests with coverage -> coverage/lcov.info (needs cargo-llvm-cov)
 #   make mutants    mutation check: tests must catch changed code (needs cargo-mutants)
+#   make mutants-diff  the same, only for the lines a diff changes (MUTANTS_DIFF=file)
 #   make clippy-report  clippy JSON for SonarCloud -> coverage/clippy.json
 #   make translations  refresh translations/harbour-lautta.ts from the QML (qsTrId ids)
 #   make rpm        aarch64 RPM: cross-built binary, packaged in the Sailfish SDK
@@ -20,7 +21,7 @@ export SDK_IMAGE TARGET
 
 LUPDATE ?= lupdate
 
-.PHONY: translations translations-check check fmt-check clippy test coverage mutants clippy-report rpm check-rpm clean
+.PHONY: translations translations-check check fmt-check clippy test coverage mutants mutants-diff mutants-paths clippy-report rpm check-rpm clean
 
 check: fmt-check translations-check clippy test
 
@@ -43,16 +44,26 @@ clippy-report:
 
 # SPEC TST-5: planner, queue, conflict and activity-bar modules, and the PDF
 # viewer's document handling and text search (PRV-12). MUTANTS_SHARD=k/n splits
-# the run (CI runs shards in parallel).
+# the run; CI runs all shards weekly (.github/workflows/mutation.yml) and
+# mutants-diff on the lines each pull request changes.
 MUTANTS_SHARD ?= 0/1
-MUTANTS_FILES = -f crates/lautta-core/src/ops/plan.rs -f crates/lautta-core/src/ops/conflict.rs \
-	-f crates/lautta-core/src/transfer/scheduler.rs -f crates/lautta-core/src/transfer/model.rs \
-	-f crates/lautta-core/src/transfer/store.rs -f crates/lautta-core/src/transfer/conflict.rs \
-	-f crates/lautta-core/src/activity.rs -f crates/lautta-core/src/app_pdf.rs \
-	-f crates/lautta-pdf/src/lib.rs -f crates/lautta-pdf/src/text.rs -f crates/lautta-pdf/src/nav.rs
+MUTANTS_DIFF ?= mutants.diff
+MUTANTS_PATHS = crates/lautta-core/src/ops/plan.rs crates/lautta-core/src/ops/conflict.rs \
+	crates/lautta-core/src/transfer/scheduler.rs crates/lautta-core/src/transfer/model.rs \
+	crates/lautta-core/src/transfer/store.rs crates/lautta-core/src/transfer/conflict.rs \
+	crates/lautta-core/src/activity.rs crates/lautta-core/src/app_pdf.rs \
+	crates/lautta-pdf/src/lib.rs crates/lautta-pdf/src/text.rs crates/lautta-pdf/src/nav.rs
+MUTANTS_ARGS = --no-shuffle -j 2 --timeout 300 -p lautta-core -p lautta-pdf $(addprefix -f ,$(MUTANTS_PATHS))
 
 mutants:
-	$(CARGO) mutants --no-shuffle -j 2 --timeout 300 --shard $(MUTANTS_SHARD) -p lautta-core -p lautta-pdf $(MUTANTS_FILES)
+	$(CARGO) mutants $(MUTANTS_ARGS) --shard $(MUTANTS_SHARD)
+
+mutants-diff:
+	$(CARGO) mutants $(MUTANTS_ARGS) --in-diff $(MUTANTS_DIFF)
+
+# The mutated files, for CI to tell whether a pull request touches them.
+mutants-paths:
+	@echo $(MUTANTS_PATHS)
 
 rpm:
 	./tools/ci/build-rpm.sh

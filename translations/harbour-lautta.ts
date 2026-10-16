@@ -2751,6 +2751,18 @@
         <source>Search</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-dir-opts-grid-size">
+        <source>Grid size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-grid-4">
+        <source>4 per row</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-grid-3">
+        <source>3 per row, with names</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message id="lautta-dir-sel-done">
         <source>Stop selecting</source>
         <translation type="unfinished"></translation>
