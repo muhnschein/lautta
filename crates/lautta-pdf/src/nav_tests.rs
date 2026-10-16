@@ -286,7 +286,7 @@ fn links_on_a_rotated_page_map_to_the_shown_page() {
         w: 128,
         h: 256,
         rotate: 90,
-        content: "",
+        content: String::new(),
     };
     // Shown 256 x 128: the page's y runs left to right, its x top to bottom.
     let links = links_of(

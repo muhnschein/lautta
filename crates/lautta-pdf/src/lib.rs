@@ -14,7 +14,7 @@ use hayro::{render, PixmapSettings, RenderCache, RenderSettings};
 use std::fmt;
 
 mod nav;
-pub use nav::*;
+pub use nav::{Link, LinkTarget, OutlineItem};
 
 /// Largest PDF the viewer opens: the whole file is held in memory.
 pub const MAX_PDF_BYTES: u64 = 200_000_000;
@@ -139,15 +139,12 @@ impl PdfDocument {
         let page = self.pdf.pages().get(index).ok_or(PdfError::NoSuchPage)?;
         let scale = render_scale(size, width);
         let cache = RenderCache::new();
-        let settings = InterpreterSettings {
-            // Widgets and links are drawn as on paper; nothing is clickable.
-            render_annotations: true,
-            ..InterpreterSettings::default()
-        };
         let pixmap = render(
             page,
             &cache,
-            &settings,
+            // The default draws widgets and links as on paper; nothing is
+            // clickable.
+            &InterpreterSettings::default(),
             &RenderSettings::default(),
             &PixmapSettings {
                 x_scale: scale,
@@ -173,6 +170,9 @@ pub fn render_scale(size: PageSize, width: u32) -> f32 {
     let edge = f64::from(MAX_EDGE) / w.max(h);
     want.min(edge) as f32
 }
+
+mod text;
+pub use text::{TextHit, MAX_PAGE_CHARS, MAX_PAGE_HITS};
 
 #[cfg(test)]
 mod nav_tests;

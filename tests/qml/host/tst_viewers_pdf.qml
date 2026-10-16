@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of PdfDocument and image://lautta-pdf/ (PRV-12) on files in the
-// temporary home. ViewerTools.pump runs the event loop so the async results
+// Host test of PdfDocument, its text search and image://lautta-pdf/
+// (PRV-12) on files in the temporary home. ViewerTools.pump runs the event loop so the async results
 // arrive while the test runs.
 import QtQuick 2.6
 import Lautta 1.0
@@ -10,6 +10,8 @@ Item {
     id: root
 
     readonly property string pdf: "lautta://user-documents/two-pages.pdf"
+    // Three pages: "Lautta" once on the first, twice on the third.
+    readonly property string searchable: "lautta://user-documents/searchable.pdf"
 
     function check(cond, what) {
         if (!cond)
@@ -29,9 +31,16 @@ Item {
             tools.pump(50)
     }
 
+    // Waits for a search to finish (30 s at most).
+    function searched(d) {
+        for (var i = 0; i < 600 && d.searching; ++i)
+            tools.pump(50)
+    }
+
     ViewerTools { id: tools }
     PdfDocument { id: doc }
     PdfDocument { id: other }
+    PdfDocument { id: found }
     PdfDocument {
         id: linked
         property var got: ({})
@@ -175,5 +184,75 @@ Item {
         loaded(linked)
         tools.pump(200)
         check(linked.got[0] === undefined, "links of the file before are dropped")
+
+        searchTests()
+    }
+
+    function searchTests() {
+        check(tools.installFixture(Qt.resolvedUrl("fixtures/searchable.pdf"), searchable), "searchable fixture")
+        found.uri = searchable
+        loaded(found)
+        check(found.loaded && found.pageCount === 3, "searchable pdf")
+        check(!found.searching && found.hitCount === 0 && found.currentHit === 0 && found.currentHitPage === -1,
+              "no search yet")
+
+        // Every page is searched; the hit shown first is the first at or
+        // after the page being read, numbered in page order.
+        found.search("lautta", 1)
+        check(found.searching, "searching starts at once")
+        searched(found)
+        check(!found.searching && found.searchedPages === 3, "searched every page: " + found.searchedPages)
+        check(found.hitCount === 3, "hits " + found.hitCount)
+        check(found.currentHit === 2 && found.currentHitPage === 2,
+              "first hit from page 2: " + found.currentHit + " on " + found.currentHitPage)
+        var areas = JSON.parse(found.hitsJson(2))
+        check(areas.length === 2 && areas[0].current && !areas[1].current, "page 3: " + found.hitsJson(2))
+        var a = areas[0]
+        check(a.x > 0.05 && a.x < 0.1 && a.width > 0.1 && a.width < 0.2 && a.y > 0.09 && a.y < 0.15 && a.height > 0.02,
+              "where the hit is: " + JSON.stringify(a))
+        check(found.hitsJson(1) === "[]" && found.hitsJson(-1) === "[]" && found.hitsJson(9) === "[]", "no hits there")
+
+        // Next and previous go round.
+        var revision = found.hitsRevision
+        found.nextHit()
+        check(found.currentHit === 3 && found.hitsRevision !== revision, "next: " + found.currentHit)
+        check(JSON.parse(found.hitsJson(2))[1].current, "the hit shown is marked")
+        found.nextHit()
+        check(found.currentHit === 1 && found.currentHitPage === 0, "after the last the first: " + found.currentHit)
+        check(JSON.parse(found.hitsJson(0))[0].current && !JSON.parse(found.hitsJson(2))[1].current, "marked once")
+        found.previousHit()
+        check(found.currentHit === 3 && found.currentHitPage === 2, "before the first the last: " + found.currentHit)
+
+        // Nothing found in the whole document.
+        found.search("ferry boat", 0)
+        searched(found)
+        check(found.searchedPages === 3 && found.hitCount === 0 && found.currentHit === 0 && found.currentHitPage === -1,
+              "not found: " + found.searchedPages + " " + found.hitCount)
+
+        // A blank query searches nothing; stopping forgets the hits.
+        found.search("lautta", 0)
+        searched(found)
+        found.search("  ", 0)
+        check(!found.searching && found.searchedPages === 0 && found.hitCount === 0, "blank query")
+        found.search("lautta", 0)
+        found.stopSearch()
+        check(!found.searching && found.hitCount === 0, "stopped")
+        tools.pump(300)
+        check(found.searchedPages === 0 && found.hitCount === 0, "late results are ignored: " + found.searchedPages)
+
+        // Only the last search counts.
+        found.search("river", 0)
+        found.search("the end", 0)
+        searched(found)
+        check(found.hitCount === 1 && found.currentHitPage === 2 && found.searchedPages === 3,
+              "replaced search: " + found.hitCount + " on " + found.currentHitPage)
+
+        // Another document forgets the hits; one not loaded is not searched.
+        found.uri = pdf
+        check(found.hitCount === 0 && found.searchedPages === 0, "another document")
+        found.uri = "lautta://user-documents/missing.pdf"
+        loaded(found)
+        found.search("lautta", 0)
+        check(!found.searching, "nothing to search")
     }
 }

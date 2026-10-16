@@ -3,26 +3,45 @@
 //! use this one (feature `sample`).
 
 /// One page of a test PDF: media box size, `/Rotate` and content stream.
+/// Every page has Helvetica (WinAnsiEncoding) as font `/F1`.
 #[derive(Clone)]
 pub struct Spec {
     pub w: u32,
     pub h: u32,
     pub rotate: u32,
-    pub content: &'static str,
+    pub content: String,
 }
 
 /// Fills a red 50 pt square in the bottom left corner.
 pub const RED_SQUARE: &str = "1 0 0 rg 0 0 50 50 re f";
 
 /// An upright page.
-pub fn page(w: u32, h: u32, content: &'static str) -> Spec {
+pub fn page(w: u32, h: u32, content: &str) -> Spec {
     Spec {
         w,
         h,
         rotate: 0,
-        content,
+        content: content.to_string(),
     }
 }
+
+/// Content that shows `s` in 12 pt Helvetica, its baseline starting at
+/// `x`, `y` (PDF points from the bottom left). Latin-1 letters such as ä
+/// are written in WinAnsiEncoding.
+pub fn text(x: u32, y: u32, s: &str) -> String {
+    let s: String = s
+        .chars()
+        .map(|c| match c {
+            '\\' | '(' | ')' => format!("\\{c}"),
+            _ if c.is_ascii() => c.to_string(),
+            _ => format!("\\{:03o}", u32::from(c) & 0xff),
+        })
+        .collect();
+    format!("BT /F1 12 Tf {x} {y} Td ({s}) Tj ET\n")
+}
+
+const FONT: &str =
+    "<< /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >> >>";
 
 /// A minimal, valid PDF with a correct cross-reference table.
 pub fn build(pages: &[Spec]) -> Vec<u8> {
@@ -125,7 +144,7 @@ impl Doc {
         ];
         for (i, p) in self.pages.iter().enumerate() {
             objects.push(format!(
-                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {} {}] /Rotate {} /Contents {} 0 R{} >>",
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {} {}] /Rotate {} /Resources {FONT} /Contents {} 0 R{} >>",
                 p.w,
                 p.h,
                 p.rotate,
