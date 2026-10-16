@@ -109,9 +109,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   acceptText, startUri }` (property `selectedUri` after accept),
   `dialogs/NewItemDialog.qml { parentUri }`, `dialogs/RenameDialog.qml { uri }`,
   `pages/ViewOptionsPage.qml { model }`, `components/PathMenu.qml`.
-- Context menus follow the design: an icon row first (`components/IconRow.qml`) and a
-  short list; the order is fixed in `components/directory/ContextActions.js`, filtered by
-  capabilities.
+- The item context menu is plain rows; which actions it and the Details page's pulley
+  hold, in a fixed order filtered by capabilities, is in
+  `components/directory/ContextActions.js`.
 - When selection mode starts and ends is in `components/directory/Selection.js`.
 
 ### Operations (boards: PlanSummary, Conflict, Info, Compress, Extract, RecentlyDeleted, RecentlyDeletedEmpty, ShareTarget, ArchiveView (open as location))

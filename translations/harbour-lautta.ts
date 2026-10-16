@@ -1170,30 +1170,6 @@
         <source>This image has no camera details.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-viewers-move-to">
-        <source>Move to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-copy-to">
-        <source>Copy to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-move-here">
-        <source>Move here</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-copy-here">
-        <source>Copy here</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-more-copy">
-        <source>Copy to…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-more-move">
-        <source>Move to…</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-viewers-more-rename">
         <source>Rename</source>
         <translation type="unfinished"></translation>
@@ -2216,40 +2192,8 @@
         <source>Delete</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-act-copy-to">
-        <source>Copy to…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-act-move-to">
-        <source>Move to…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-act-download">
-        <source>Download to…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-act-upload">
-        <source>Upload to…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-act-info">
-        <source>Info</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-act-compress">
         <source>Compress</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-act-extract">
-        <source>Extract</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-act-favourite">
-        <source>Favourite</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-act-open-remote">
-        <source>Open copy</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-menu-select-all">
@@ -2280,46 +2224,6 @@
     </message>
     <message id="lautta-dir-menu-view-options">
         <source>View options</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-picker-move" numerus="yes">
-        <source>Move %n items to</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message id="lautta-dir-picker-move-here">
-        <source>Move here</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-picker-copy" numerus="yes">
-        <source>Copy %n items to</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message id="lautta-dir-picker-copy-here">
-        <source>Copy here</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-picker-download" numerus="yes">
-        <source>Download %n items to</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message id="lautta-dir-picker-download-here">
-        <source>Download here</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-picker-upload" numerus="yes">
-        <source>Upload %n items to</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message id="lautta-dir-picker-upload-here">
-        <source>Upload here</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-deleting-permanently">
@@ -2885,6 +2789,10 @@
     </message>
     <message id="lautta-dir-sel-done">
         <source>Stop selecting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-details">
+        <source>Details</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

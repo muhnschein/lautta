@@ -443,8 +443,8 @@ bridge).
   remote locations deletes are permanent and say so.
 - OPS-9: Undo for the last rename, same-location move and trash operation, from a banner
   for 10 s.
-- OPS-10: Clipboard (cut/copy, docked paste bar) and *Copy to…*/*Move to…* folder picker
-  across all locations.
+- OPS-10: Clipboard (cut/copy, docked paste bar) across all locations. There is no
+  *Copy to…*/*Move to…*: the user goes to the destination either way, so they paste there.
 - OPS-12: Info page: details, with permissions shown read-only.
 
 ## 11. Transfers
@@ -629,9 +629,10 @@ Header with the folder name only (no breadcrumb); tap → path menu. Slim progre
 or receiving transfers. List view with icon or thumbnail and "size · modified"; grid view
 for media folders (suggested when > 60 % images). Pulley: *Select*, *New folder/file*,
 *Paste* (with clipboard), *Search here*, *View options* (no *Refresh*, BRW-11). Push-up: *Info*,
-*Add to favourites*. Context menu: *Open with*, *Share*, *Copy*, *Cut*, *Rename*,
-*Delete*, *Copy to…*, *Move to…*, *Download*/*Upload to…*, *Info*; fixed order,
-capability-filtered. Selection starts from the pulley's *Select*, in list and grid alike;
+*Add to favourites*. Context menu: plain Silica rows *Share* (files), *Copy*, *Cut*,
+*Rename*, *Details*, *Delete*; fixed order, capability-filtered. The rarer actions sit
+in the Details page's pulley: *Open with* (files) and *Compress*. Archives need no
+*Extract* row: they open as a location with *Extract all*. Selection starts from the pulley's *Select*, in list and grid alike;
 tapping an icon opens the item like the rest of the row. Its actions sit in a
 `DockedPanel` that stays open while selecting and ends with a button that leaves
 selection; the panel's actions, a finished delete and deselecting the last item leave it

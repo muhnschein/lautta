@@ -10,7 +10,6 @@ import "../"
 import "../transfers"
 import "../Open.js" as Open
 import "../ErrorText.js" as ErrorText
-import "ContextActions.js" as Actions
 import "DirFormat.js" as DirFormat
 import "Selection.js" as Selection
 
@@ -31,7 +30,6 @@ Item {
         return App.setting("grid_columns") === 3 ? 3 : 4
     }
     readonly property bool gridCaptions: gridColumns === 3
-    readonly property bool hasRemote: pickerRoots.hasRemote()
     readonly property bool permanentDelete: !(App.setting("recently_deleted") === true && dir.hasCapability("Trash")
                                               && App.isLocal(uri))
     property string pendingName
@@ -99,41 +97,6 @@ Item {
         pageStack.push(Qt.resolvedUrl("../../pages/ViewOptionsPage.qml"), { "model": dir })
     }
 
-    function pickFolder(uris, kind) {
-        var count = uris.length
-        var title
-        var accept
-        if (kind === "move") {
-            //% "Move %n items to"
-            title = qsTrId("lautta-dir-picker-move", count)
-            //% "Move here"
-            accept = qsTrId("lautta-dir-picker-move-here")
-        } else if (kind === "copy") {
-            //% "Copy %n items to"
-            title = qsTrId("lautta-dir-picker-copy", count)
-            //% "Copy here"
-            accept = qsTrId("lautta-dir-picker-copy-here")
-        } else if (kind === "download") {
-            //% "Download %n items to"
-            title = qsTrId("lautta-dir-picker-download", count)
-            //% "Download here"
-            accept = qsTrId("lautta-dir-picker-download-here")
-        } else {
-            //% "Upload %n items to"
-            title = qsTrId("lautta-dir-picker-upload", count)
-            //% "Upload here"
-            accept = qsTrId("lautta-dir-picker-upload-here")
-        }
-        var dialog = pageStack.push(Qt.resolvedUrl("../../dialogs/FolderPickerDialog.qml"),
-                                    { "title": title, "acceptText": accept, "startUri": uri })
-        dialog.accepted.connect(function () {
-            if (kind === "move")
-                Operations.moveTo(JSON.stringify(uris), dialog.selectedUri)
-            else
-                Operations.copyTo(JSON.stringify(uris), dialog.selectedUri)
-        })
-    }
-
     function remove(uris, listItem) {
         var timeout = App.setting("remorse_seconds") * 1000
         var action = function () {
@@ -174,31 +137,17 @@ Item {
         shareAction.trigger()
     }
 
-    function openWith(itemUri) {
-        if (App.isLocal(itemUri))
-            Qt.openUrlExternally(App.localUrl(itemUri))
-        else
-            pageStack.push(Qt.resolvedUrl("../../dialogs/OpenRemoteDialog.qml"), { "uri": itemUri })
-    }
-
     // One action on one or more items; `info` describes the first item.
     function runAction(id, uris, info, listItem) {
         switch (id) {
-        case "open_with": openWith(uris[0]); break
         case "share": share(uris, info.mimeType); break
         case "copy": App.copy(JSON.stringify(uris)); break
         case "cut": App.cut(JSON.stringify(uris)); break
         case "rename": rename(info); break
         case "delete": remove(uris, listItem); break
-        case "copy_to": pickFolder(uris, "copy"); break
-        case "move_to": pickFolder(uris, "move"); break
-        case "download": pickFolder(uris, "download"); break
-        case "upload_to": pickFolder(uris, "upload"); break
         case "info": pageStack.push(Qt.resolvedUrl("../../pages/InfoPage.qml"), { "uri": uris[0] }); break
         case "compress": pageStack.push(Qt.resolvedUrl("../../dialogs/CompressDialog.qml"), { "uris": JSON.stringify(uris) }); break
-        case "extract": pageStack.push(Qt.resolvedUrl("../../dialogs/ExtractDialog.qml"), { "archiveUri": uris[0] }); break
         case "favourite": pageStack.push(Qt.resolvedUrl("../../dialogs/FavouriteDialog.qml"), { "uri": uris[0] }); break
-        case "open_remote": pageStack.push(Qt.resolvedUrl("../../dialogs/OpenRemoteDialog.qml"), { "uri": uris[0] }); break
         }
     }
 
@@ -313,10 +262,6 @@ Item {
         id: path
 
         uri: view.uri
-    }
-
-    PickerRootsModel {
-        id: pickerRoots
     }
 
     ShareAction {

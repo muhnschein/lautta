@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Info of one file or folder (OPS-12): details, favourite, file system and
-// links.
+// links. Its pulley holds the item's actions that the long-press menu leaves
+// out (SPEC §15.3, board DirectoryContext).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -8,6 +9,8 @@ import "../components"
 import "../components/operations"
 import "../components/operations/Json.js" as Json
 import "../components/ErrorText.js" as ErrorText
+import "../components/Open.js" as Open
+import "../components/directory/ContextActions.js" as Actions
 
 Page {
     id: page
@@ -15,6 +18,9 @@ Page {
     property string uri
 
     readonly property var info: Json.value(infoModel.infoJson, {})
+    // Empty until the item is known, so a folder never shows Open with.
+    readonly property var actions: Object.keys(info).length === 0 ? []
+                                                                  : Actions.details({ "isDir": info.isDir === true })
 
     allowedOrientations: Orientation.All
 
@@ -44,6 +50,13 @@ Page {
             return ""
         //% "%1 of %2"
         return qsTrId("lautta-info-space").arg(Format.formatFileSize(info.freeBytes)).arg(Format.formatFileSize(info.totalBytes || 0))
+    }
+
+    function runAction(id) {
+        if (id === "open_with")
+            Open.openWith(pageStack, App, page.uri)
+        else if (id === "compress")
+            pageStack.push(Qt.resolvedUrl("../dialogs/CompressDialog.qml"), { "uris": JSON.stringify([page.uri]) })
     }
 
     function pickLinkFolder(hard) {
@@ -81,6 +94,19 @@ Page {
     SilicaFlickable {
         anchors.fill: parent
         contentHeight: column.height + Theme.paddingLarge
+
+        PullDownMenu {
+            visible: page.actions.length > 0
+
+            Repeater {
+                model: page.actions
+
+                MenuItem {
+                    text: modelData.text
+                    onClicked: page.runAction(modelData.id)
+                }
+            }
+        }
 
         Column {
             id: column
