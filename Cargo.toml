@@ -3,10 +3,11 @@ resolver = "2"
 members = [
     "crates/lautta-core",
     "crates/lautta-bridge-proto",
+    "crates/lautta-pdf",
     "crates/lautta-qt",
     "crates/harbour-lautta",
 ]
-default-members = ["crates/lautta-core", "crates/lautta-bridge-proto"]
+default-members = ["crates/lautta-core", "crates/lautta-bridge-proto", "crates/lautta-pdf"]
 
 [workspace.package]
 version = "0.1.0"
