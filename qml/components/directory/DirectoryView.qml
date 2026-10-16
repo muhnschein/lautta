@@ -12,12 +12,15 @@ import "../Open.js" as Open
 import "../ErrorText.js" as ErrorText
 import "ContextActions.js" as Actions
 import "DirFormat.js" as DirFormat
+import "Selection.js" as Selection
 
 Item {
     id: view
 
     property string uri
     property bool selectionMode
+    // True while selection mode waits for the first item (pulley Select).
+    property bool selectionWaiting
     property bool detailsShown
     property alias model: dir
     readonly property bool selecting: selectionMode
@@ -37,9 +40,18 @@ Item {
     // Asks the host page to open a folder.
     signal openFolder(string uri)
 
+    function setSelection(state) {
+        selectionMode = state.selecting
+        selectionWaiting = state.waiting
+    }
+
+    function startSelection() {
+        setSelection(Selection.start(dir.selectedCount))
+    }
+
     function endSelection() {
+        setSelection({ "selecting": false, "waiting": false })
         dir.clearSelection()
-        selectionMode = false
     }
 
     function openItem(itemUri, isDir, mimeType) {
@@ -174,8 +186,8 @@ Item {
         switch (id) {
         case "open_with": openWith(uris[0]); break
         case "share": share(uris, info.mimeType); break
-        case "copy": App.copy(JSON.stringify(uris)); if (selecting) endSelection(); break
-        case "cut": App.cut(JSON.stringify(uris)); if (selecting) endSelection(); break
+        case "copy": App.copy(JSON.stringify(uris)); break
+        case "cut": App.cut(JSON.stringify(uris)); break
         case "rename": rename(info); break
         case "delete": remove(uris, listItem); break
         case "copy_to": pickFolder(uris, "copy"); break
@@ -196,6 +208,8 @@ Item {
         if (uris.length === 0)
             return
         runAction(id, uris, { "uri": uris[0], "mimeType": "", "isDir": false }, null)
+        if (Selection.endsSelection(id))
+            endSelection()
     }
 
     function placeholderKind() {
@@ -290,12 +304,9 @@ Item {
         onRenamed: App.noteUndo()
         onRenameFailed: view.notifyFailure(kind, message, view.pendingName)
         onCreateFailed: view.notifyFailure(kind, message, view.pendingName)
-        onSelectedCountChanged: {
-            if (selectedCount > 0)
-                view.selectionMode = true
-            else if (view.selectionMode && !view.pulleySelect)
-                view.selectionMode = false
-        }
+        onSelectedCountChanged: view.setSelection(Selection.afterCount({ "selecting": view.selectionMode,
+                                                                          "waiting": view.selectionWaiting },
+                                                                        selectedCount))
     }
 
     PathModel {
@@ -344,9 +355,6 @@ Item {
             }
         }
     }
-
-    // True while the pulley's "Select" waits for the first tap.
-    readonly property bool pulleySelect: selectionMode && dir.selectedCount === 0
 
     Component {
         id: headerComponent
@@ -486,18 +494,6 @@ Item {
                 thumbnailSource: model.thumbnailSource
                 mimeType: model.mimeType
                 selected: model.selected
-
-                // Tapping the icon selects (design: DirectorySelect).
-                MouseArea {
-                    anchors {
-                        fill: parent
-                        margins: -Theme.paddingMedium
-                    }
-                    onClicked: {
-                        dir.toggle(model.uri)
-                        view.selectionMode = true
-                    }
-                }
             }
 
             Column {
@@ -588,9 +584,10 @@ Item {
                 else
                     view.openItem(model.uri, model.isDir, model.mimeType)
             }
+            // Like the list: selection starts from the pulley only.
             onPressAndHold: {
-                dir.toggle(model.uri)
-                view.selectionMode = true
+                if (view.selecting)
+                    dir.toggle(model.uri)
             }
 
             Item {

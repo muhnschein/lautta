@@ -112,6 +112,7 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - Context menus follow the design: an icon row first (`components/IconRow.qml`) and a
   short list; the order is fixed in `components/directory/ContextActions.js`, filtered by
   capabilities.
+- When selection mode starts and ends is in `components/directory/Selection.js`.
 
 ### Operations (boards: PlanSummary, Conflict, Info, Compress, Extract, RecentlyDeleted, RecentlyDeletedEmpty, ShareTarget, ArchiveView (open as location))
 

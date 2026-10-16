@@ -29,7 +29,7 @@ PullDownMenu {
         visible: !menu.selecting
         //% "Select"
         text: qsTrId("lautta-dir-menu-select")
-        onClicked: menu.owner.selectionMode = true
+        onClicked: menu.owner.startSelection()
     }
     MenuItem {
         visible: !menu.selecting && menu.writable

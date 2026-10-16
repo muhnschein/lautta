@@ -2883,5 +2883,9 @@
         <source>Preview</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-dir-sel-done">
+        <source>Stop selecting</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

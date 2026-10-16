@@ -631,7 +631,11 @@ for media folders (suggested when > 60 % images). Pulley: *Select*, *New folder/
 *Paste* (with clipboard), *Search here*, *View options* (no *Refresh*, BRW-11). Push-up: *Info*,
 *Add to favourites*. Context menu: *Open with*, *Share*, *Copy*, *Cut*, *Rename*,
 *Delete*, *Copy to…*, *Move to…*, *Download*/*Upload to…*, *Info*; fixed order,
-capability-filtered. Selection by tapping icons, actions in a `DockedPanel`.
+capability-filtered. Selection starts from the pulley's *Select*, in list and grid alike;
+tapping an icon opens the item like the rest of the row. Its actions sit in a
+`DockedPanel` that stays open while selecting and ends with a button that leaves
+selection; the panel's actions, a finished delete and deselecting the last item leave it
+too.
 Placeholders: empty, no permission, offline, error with *Retry*/*Details*.
 
 ### 15.4 Activity page
@@ -847,7 +851,7 @@ when the netvfs bridge they depend on is released.
 
 Harbour File Browser (in-sandbox scope): browse ✓; search ✓ SRC; share/open externally ✓
 PRV-5/7; previews of images, audio, video, archives, PDFs ✓ PRV-4/10/12; database previews ✗
-(*Open with*); multi-select by tapping icons ✓; copy/link/move in bulk ✓; bulk rename ✗;
+(*Open with*); multi-select ✓; copy/link/move in bulk ✓; bulk rename ✗;
 permissions shown ✓ OPS-12, editing ✗; new files/folders ✓; hidden files ✓; edit/enter
 paths ✓ BRW-9; quick filter ✓; per-folder view settings ✗ (global, BRW-4); shortcuts ✓
 ORG-1; multiple windows ✗ (single process; revisit); root mode ✗ (out of scope).
