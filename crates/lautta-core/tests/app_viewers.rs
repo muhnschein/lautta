@@ -316,7 +316,7 @@ async fn pdfs_open_and_render_from_any_location() {
         "lautta://user-documents/local.pdf",
         "lautta://nv-nas/docs/remote.pdf",
     ] {
-        let opened = h.core.open_pdf(&uri(u), "").await.unwrap();
+        let opened = h.core.open_pdf(&uri(u), None).await.unwrap();
         assert_eq!(
             opened.pages,
             [
@@ -358,7 +358,7 @@ async fn a_page_is_rendered_without_opening_first_and_sees_no_stale_copy() {
     );
     // Opening again reads the file again: the changed file is seen.
     h.nas.add_file("docs/fresh.pdf", &build(&[page(10, 10, "")]), 2);
-    assert_eq!(h.core.open_pdf(&u, "").await.unwrap().pages.len(), 1);
+    assert_eq!(h.core.open_pdf(&u, None).await.unwrap().pages.len(), 1);
     assert_eq!(
         h.core.pdf_page(&u, 1, 60).await.unwrap_err(),
         PdfFailure::Pdf(lautta_pdf::PdfError::NoSuchPage)
@@ -368,7 +368,7 @@ async fn a_page_is_rendered_without_opening_first_and_sees_no_stale_copy() {
 /// What `open_pdf` of `u` fails with, as "file <kind>" or "pdf <problem>".
 async fn pdf_failure(h: &Home, u: &str) -> String {
     use lautta_core::app_pdf::PdfFailure;
-    match h.core.open_pdf(&uri(u), "").await.unwrap_err() {
+    match h.core.open_pdf(&uri(u), None).await.unwrap_err() {
         PdfFailure::File(e) => format!("file {:?}", e.kind),
         PdfFailure::Pdf(p) => format!("pdf {p:?}"),
     }
@@ -412,7 +412,7 @@ async fn oversized_pdfs_are_refused_without_reading_them() {
     drop(big);
     let err = h
         .core
-        .open_pdf(&uri("lautta://nv-nas/docs/huge.pdf"), "")
+        .open_pdf(&uri("lautta://nv-nas/docs/huge.pdf"), None)
         .await
         .unwrap_err();
     assert_eq!(err, PdfFailure::Pdf(lautta_pdf::PdfError::TooLarge));
@@ -433,12 +433,20 @@ async fn encrypted_pdfs_open_with_their_password_only() {
     let u = uri("lautta://nv-nas/docs/locked.pdf");
     for wrong in ["", "nope"] {
         assert_eq!(
-            h.core.open_pdf(&u, wrong).await.unwrap_err(),
+            h.core.open_pdf(&u, Some(wrong)).await.unwrap_err(),
             PdfFailure::Pdf(PdfError::Encrypted),
             "{wrong:?}"
         );
     }
-    assert_eq!(h.core.open_pdf(&u, LOCKED_PASSWORD).await.unwrap().pages.len(), 2);
+    assert_eq!(
+        h.core
+            .open_pdf(&u, Some(LOCKED_PASSWORD))
+            .await
+            .unwrap()
+            .pages
+            .len(),
+        2
+    );
     let p = h.core.pdf_page(&u, 0, 50).await.unwrap();
     assert_eq!((p.width, p.height), (50, 100), "the unlocked document is kept");
 }
@@ -448,17 +456,17 @@ async fn pdfs_reopen_where_reading_stopped() {
     let h = home().await;
     h.nas.add_file("docs/book.pdf", &sample_pdf(), 1);
     let u = uri("lautta://nv-nas/docs/book.pdf");
-    assert_eq!(h.core.open_pdf(&u, "").await.unwrap().last_page, None);
+    assert_eq!(h.core.open_pdf(&u, None).await.unwrap().last_page, None);
     h.core.remember_pdf_page(&u, 1);
-    assert_eq!(h.core.open_pdf(&u, "").await.unwrap().last_page, Some(1));
+    assert_eq!(h.core.open_pdf(&u, None).await.unwrap().last_page, Some(1));
     h.core.remember_pdf_page(&u, 5);
     assert_eq!(
-        h.core.open_pdf(&u, "").await.unwrap().last_page,
+        h.core.open_pdf(&u, None).await.unwrap().last_page,
         None,
         "a page the document no longer has is ignored"
     );
     h.core.remember_pdf_page(&u, 0);
-    assert_eq!(h.core.open_pdf(&u, "").await.unwrap().last_page, Some(0));
+    assert_eq!(h.core.open_pdf(&u, None).await.unwrap().last_page, Some(0));
 }
 
 /// Four pages; "lautta" is on pages 0, 2 (twice, the second across two
@@ -571,7 +579,7 @@ async fn an_encrypted_pdf_is_searched_while_it_is_kept() {
     assert_eq!((pages.len(), end), (0, Err(PdfFailure::Pdf(PdfError::Encrypted))));
     let (_, end) = search_pdf(&h, "lautta://nv-nas/docs/gone.pdf", "lautta", 0, false).await;
     assert!(matches!(end, Err(PdfFailure::File(_))), "{end:?}");
-    h.core.open_pdf(&uri(u), LOCKED_PASSWORD).await.unwrap();
+    h.core.open_pdf(&uri(u), Some(LOCKED_PASSWORD)).await.unwrap();
     let (pages, end) = search_pdf(&h, u, "lautta", 1, false).await;
     assert_eq!(end, Ok(()));
     assert_eq!(
@@ -617,7 +625,7 @@ async fn pdfs_have_their_outline_and_links() {
         PdfFailure::Pdf(lautta_pdf::PdfError::NoSuchPage)
     );
     assert_eq!(
-        h.core.open_pdf(&u, "").await.unwrap().outline,
+        h.core.open_pdf(&u, None).await.unwrap().outline,
         [
             OutlineItem {
                 title: "Start".into(),
@@ -634,7 +642,7 @@ async fn pdfs_have_their_outline_and_links() {
     h.nas.add_file("docs/plain.pdf", &sample_pdf(), 1);
     let plain = h
         .core
-        .open_pdf(&uri("lautta://nv-nas/docs/plain.pdf"), "")
+        .open_pdf(&uri("lautta://nv-nas/docs/plain.pdf"), None)
         .await
         .unwrap();
     assert!(plain.outline.is_empty());

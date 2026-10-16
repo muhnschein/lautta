@@ -95,16 +95,23 @@ impl PdfDocument {
     /// Parses a PDF. Damaged cross-reference tables are repaired where
     /// possible; documents encrypted with an empty user password open.
     pub fn open(bytes: Vec<u8>) -> Result<PdfDocument, PdfError> {
-        PdfDocument::open_with_password(bytes, "")
+        PdfDocument::load(bytes, Pdf::new)
     }
 
     /// Parses a PDF encrypted with `password` (the user or the owner
     /// password). [`PdfError::Encrypted`] when it does not open it.
     pub fn open_with_password(bytes: Vec<u8>, password: &str) -> Result<PdfDocument, PdfError> {
+        PdfDocument::load(bytes, |b| Pdf::new_with_password(b, password))
+    }
+
+    fn load(
+        bytes: Vec<u8>,
+        parse: impl FnOnce(Vec<u8>) -> Result<Pdf, LoadPdfError>,
+    ) -> Result<PdfDocument, PdfError> {
         if bytes.len() as u64 > MAX_PDF_BYTES {
             return Err(PdfError::TooLarge);
         }
-        let pdf = Pdf::new_with_password(bytes, password).map_err(|e| match e {
+        let pdf = parse(bytes).map_err(|e| match e {
             LoadPdfError::Decryption(_) => PdfError::Encrypted,
             _ => PdfError::Invalid,
         })?;

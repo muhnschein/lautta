@@ -250,9 +250,13 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
 impl Core {
     /// Reads and parses a PDF (always afresh, so a changed file is seen) and
     /// keeps it for [`Core::pdf_page`]. `password` opens an encrypted one
-    /// (empty: none); it is used for this parse only and never stored. Notes
-    /// the PDF in Recents (ORG-2).
-    pub async fn open_pdf(&self, uri: &Uri, password: &str) -> std::result::Result<OpenedPdf, PdfFailure> {
+    /// (`None`: no password given); it is used for this parse only and never
+    /// stored. Notes the PDF in Recents (ORG-2).
+    pub async fn open_pdf(
+        &self,
+        uri: &Uri,
+        password: Option<&str>,
+    ) -> std::result::Result<OpenedPdf, PdfFailure> {
         let provider = self.provider(&uri.location)?;
         let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
         if entry.is_dir() {
@@ -265,9 +269,13 @@ impl Core {
         // A file that grew past the limit since the stat is cut there and
         // then usually fails to parse; nothing larger is held in memory.
         let bytes = crate::provider::read_all(handle.as_ref(), MAX_PDF_BYTES).await?;
-        let password = password.to_owned();
+        let password = password.map(str::to_owned);
         let (doc, outline) = blocking(move || {
-            PdfDocument::open_with_password(bytes, &password).map(|d| {
+            match password {
+                Some(password) => PdfDocument::open_with_password(bytes, &password),
+                None => PdfDocument::open(bytes),
+            }
+            .map(|d| {
                 let outline = d.outline();
                 (Arc::new(d), outline)
             })
@@ -354,7 +362,7 @@ impl Core {
         if let Some(doc) = kept(uri) {
             return Ok(doc);
         }
-        self.open_pdf(uri, "").await?;
+        self.open_pdf(uri, None).await?;
         kept(uri).ok_or(PdfFailure::File(Error::kind(ErrorKind::Internal)))
     }
 }

@@ -152,7 +152,7 @@ impl PdfDocument {
         self.stateChanged();
         run_then(
             self,
-            async move { Ok(core.open_pdf(&uri, &password).await) },
+            async move { Ok(core.open_pdf(&uri, attempt.then_some(password.as_str())).await) },
             move |me, res| {
                 if me.generation == gen {
                     me.loading = false;

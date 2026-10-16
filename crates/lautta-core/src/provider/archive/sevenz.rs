@@ -5,7 +5,7 @@ use super::blocks::from_io;
 use super::{Loc, RawEntry};
 use crate::entry::Kind;
 use crate::error::{Error, ErrorKind, Result};
-use sevenz_rust::{Password, SevenZReader};
+use sevenz_rust2::{ArchiveReader, Password};
 use std::fs::File;
 use std::io::{self, Write};
 use std::time::SystemTime;
@@ -14,12 +14,11 @@ use std::time::SystemTime;
 /// (`FILE_ATTRIBUTE_UNIX_EXTENSION`) is set.
 const UNIX_EXTENSION: u32 = 0x8000;
 
-fn open(file: File) -> Result<SevenZReader<File>> {
-    let len = file.metadata().map_err(from_io)?.len();
-    SevenZReader::new(file, len, Password::empty()).map_err(map_err)
+fn open(file: File) -> Result<ArchiveReader<File>> {
+    ArchiveReader::new(file, Password::empty()).map_err(map_err)
 }
 
-fn map_err(err: sevenz_rust::Error) -> Error {
+fn map_err(err: sevenz_rust2::Error) -> Error {
     Error::new(ErrorKind::ProtocolError, format!("7z: {err}"))
 }
 

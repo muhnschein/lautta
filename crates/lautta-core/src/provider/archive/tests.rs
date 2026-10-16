@@ -88,10 +88,10 @@ fn compressed(comp: Compression, data: &[u8]) -> Vec<u8> {
 }
 
 fn sevenz_bytes(files: &[(&str, &[u8])]) -> Vec<u8> {
-    let mut w = sevenz_rust::SevenZWriter::new(Cursor::new(Vec::new())).unwrap();
+    let mut w = sevenz_rust2::ArchiveWriter::new(Cursor::new(Vec::new())).unwrap();
     for (name, data) in files {
         let is_dir = name.ends_with('/');
-        let mut entry = sevenz_rust::SevenZArchiveEntry::new();
+        let mut entry = sevenz_rust2::ArchiveEntry::new();
         entry.name = name.trim_end_matches('/').to_owned();
         entry.has_stream = !is_dir;
         entry.is_directory = is_dir;
