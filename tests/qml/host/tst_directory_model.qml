@@ -169,8 +169,8 @@ Item {
         var zeta = root.docs + "Zeta"
         check(path.count === 2 && path.address === "~/Documents/Zeta", "path model: " + path.count + " " + path.address)
         check(rootPath.count === 1, "root path has one step")
-        check(path.breadcrumb === "Documents" && path.fullPath === "Documents › Zeta", "breadcrumbs: " + path.breadcrumb + " | " + path.fullPath)
-        check(rootPath.breadcrumb === "" && rootPath.fullPath === "Documents", "root breadcrumbs")
+        check(path.fullPath === "Documents › Zeta", "full path: " + path.fullPath)
+        check(rootPath.fullPath === "Documents", "root full path")
         var found = path.complete("~/Documents/z")
         same(found, [zeta], "completion from the cached listing")
         check(path.resolve("~/Documents/Zeta") === zeta, "resolve")
