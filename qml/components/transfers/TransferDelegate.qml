@@ -55,11 +55,11 @@ ListItem {
                 onClicked: Transfers.retryFailed(row.transferId)
             }
             MenuItem {
-                //% "Cancel transfer"
+                //% "Cancel"
                 text: qsTrId("lautta-xfr-menu-cancel")
                 visible: row.group !== "history"
                 onClicked: item.remorseAction(
-                    //% "Canceling transfer"
+                    //% "Canceling"
                     qsTrId("lautta-xfr-remorse-cancel"),
                     function() { Transfers.cancel(row.transferId) },
                     App.setting("remorse_seconds") * 1000)

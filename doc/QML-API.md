@@ -76,7 +76,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - `LocationsModel` — sections `favourites`, `device`, `android`, `volumes`, `servers`,
   `nearby` (roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
   `colour`, `count`, `itemId`).
-- `FavouritesModel`, `RecentsModel { filter }`.
+- `FavouritesModel` (`add`, `save(uri, label, colour)` adds or relabels, `edit`, `remove`,
+  `removeUri(uri)`, `moveTo`, `moveBy`, `get`, `idOf`, `placeOf`), `RecentsModel { filter }`.
 - `Bridge` singleton: `status` (`absent`, `connecting`, `consentUnknown`, `consentDenied`,
   `ready`, `reconnecting`), `requestConsent()`, `addServer(provider)`,
   `editAccount(locationUri)`, `connectAdHoc(url, secret, options)`, `forgetAdHoc(id)`,
@@ -84,7 +85,7 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - Pages: `pages/BrowsePage.qml` (initial page), `pages/RecentsPage.qml`,
   `dialogs/ConnectServerDialog.qml { url }`,
   `dialogs/ServerQuestionDialog.qml { questionId, kind, details }`,
-  `dialogs/FavouriteDialog.qml { uri, favouriteId }`,
+  `dialogs/FavouriteDialog.qml { uri }` (edits the folder's favourite when it is one),
   `pages/LocationSettingsPage.qml { locationId }`, `cover/CoverPage.qml`.
 
 ### Directory (boards: Directory, DirectoryPulley, DirectoryContext, DirectorySelect, DirectorySelectPulley, DirectoryGrid, DirectoryLandscape, PathMenu, DirectoryRemorse, ImageDeleteRemote, ViewOptions, NewItem, Rename, FolderPicker, FolderPickerPulley, StateEmpty, StateNoAccess, StateOffline, StateError, StateLarge)
@@ -131,6 +132,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `pause(id)`, `resume(id)`, `cancel(id)`, `retryFailed(id)`, `moveUp(id)`,
   `moveDown(id)`, `moveToTop(id)`, `answer(id, item, choice, applyToAll)`,
   `clearHistory()`; signals `finished(id, ok, failures)`, `needsAnswer(id, item, conflict)`.
+  Activity bar (XFR-13): `barMode` (`hidden`, `question`, `running`, `waiting`, `paused`,
+  `failed`, `done`), `barTransferId`, `barUnfinished`, `dismissBar()` (swiped away),
+  `barSeen()` (the Activity page shows the outcome); `components/transfers/ActivityBar.qml`.
 - `TransfersModel` — groups `active`, `waiting`, `paused`, `history`
   (roles: `transferId`, `group`, `kind`, `title`, `state`, `waitReason`, `bytesDone`,
   `bytesTotal`, `rate`, `eta`, `itemsDone`, `itemsTotal`, `itemsFailed`, `direction`).
