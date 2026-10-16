@@ -54,6 +54,17 @@ pub struct PageSize {
     pub height: f32,
 }
 
+/// An area of a page as it is shown (rotation applied), in fractions of
+/// the shown width and height from its top left corner; 0..=1 when the area
+/// lies on the page.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PageRect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
 /// A rendered page: premultiplied RGBA, 4 bytes per pixel, rows top to
 /// bottom, no padding. Pages are drawn on white, so every pixel is opaque.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,10 +92,16 @@ impl PdfDocument {
     /// Parses a PDF. Damaged cross-reference tables are repaired where
     /// possible; documents encrypted with an empty user password open.
     pub fn open(bytes: Vec<u8>) -> Result<PdfDocument, PdfError> {
+        PdfDocument::open_with_password(bytes, "")
+    }
+
+    /// Parses a PDF encrypted with `password` (the user or the owner
+    /// password). [`PdfError::Encrypted`] when it does not open it.
+    pub fn open_with_password(bytes: Vec<u8>, password: &str) -> Result<PdfDocument, PdfError> {
         if bytes.len() as u64 > MAX_PDF_BYTES {
             return Err(PdfError::TooLarge);
         }
-        let pdf = Pdf::new(bytes).map_err(|e| match e {
+        let pdf = Pdf::new_with_password(bytes, password).map_err(|e| match e {
             LoadPdfError::Decryption(_) => PdfError::Encrypted,
             _ => PdfError::Invalid,
         })?;
