@@ -29,6 +29,8 @@ Requires:   nemo-qml-plugin-configuration-qt5
 Requires:   qml(Nemo.KeepAlive)
 Requires:   qt5-qtdeclarative-import-multimedia
 Requires:   qt5-qtmultimedia
+# The app's own icons are SVG files.
+Requires:   qt5-qtsvg-plugin-imageformat-svg
 
 # No debug info in the package (HBR-6).
 %define debug_package %{nil}

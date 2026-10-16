@@ -744,7 +744,8 @@ lautta/
   allowed libraries and the explicit `sailfishsilica-qt5`, `libsailfishapp`,
   `nemo-qml-plugin-notifications-qt5`,
   `nemo-qml-plugin-thumbnailer-qt5`, `nemo-qml-plugin-configuration-qt5`, `libkeepalive`,
-  `qt5-qtdeclarative-import-multimedia`, `qt5-qtmultimedia` (all on the allowed
+  `qt5-qtdeclarative-import-multimedia`, `qt5-qtmultimedia`,
+  `qt5-qtsvg-plugin-imageformat-svg` (the app's icons are SVG; all on the allowed
   `Requires` list). Never a dependency on netvfs.
 - PKG-3: Icons 86, 108, 128, 172 px and the desktop file as the validator requires.
 

@@ -65,9 +65,13 @@ impl ViewerTools {
         let Some(source) = source.strip_prefix("file://").map(PathBuf::from) else {
             return false;
         };
-        match core.locations.to_local_path(&dest) {
-            Some(target) => std::fs::copy(source, target).is_ok(),
-            None => false,
-        }
+        // The target's home may have no Documents folder yet.
+        let Some(target) = core.locations.to_local_path(&dest) else {
+            return false;
+        };
+        target
+            .parent()
+            .is_some_and(|dir| std::fs::create_dir_all(dir).is_ok())
+            && std::fs::copy(source, target).is_ok()
     }
 }

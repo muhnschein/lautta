@@ -18,9 +18,14 @@ ApplicationWindow {
             tools.pump(100)
     }
 
+    function install(fixture, uri) {
+        if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/" + fixture), uri))
+            console.error("FAILED: fixture " + fixture + " not installed")
+    }
+
     Component.onCompleted: {
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/two-pages.pdf"), "lautta://user-documents/two-pages.pdf")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/secret.pdf"), "lautta://user-documents/locked.pdf")
+        install("two-pages.pdf", "lautta://user-documents/two-pages.pdf")
+        install("secret.pdf", "lautta://user-documents/locked.pdf")
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
         // Let the asynchronous loading finish and the pages appear.
         tools.pump(800)
