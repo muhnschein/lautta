@@ -94,8 +94,10 @@ rm -rf "$PWD/qml"
 cp -r "/srv/mer/targets/$TARGET/usr/share/harbour-lautta/qml" "$PWD/qml"
 shipped=$(cd "/srv/mer/targets/$TARGET" && find usr/share/harbour-lautta/qml -name '*.qml' | sort | sed 's|^|/|')
 # A fresh home with the user folders the tests put fixtures in, as
-# tools/sdk-qml-check.sh gives them.
-home=$(mktemp -d)
+# tools/sdk-qml-check.sh gives them. It lives in the checked-out tree:
+# a mktemp folder under /tmp did not reach the app under scratchbox.
+home="$PWD/.qml-home"
+rm -rf "$home"
 mkdir -p "$home/Documents" "$home/Downloads" "$home/Pictures"
 # shellcheck disable=SC2086 # one word per file
 if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal \
