@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // One page of the PDF viewer (PRV-12): a white sheet, the page rendered at
 // the fitted width, and over it a sharper copy at the zoom once that has
-// arrived, so zooming never shows an empty page.
+// arrived, so zooming never shows an empty page. Its links can be tapped.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
@@ -14,7 +14,11 @@ Rectangle {
     property real fitWidth
     property real zoom: 1
 
+    // [{x, y, width, height, page, top, uri}] (PdfDocument.linksReady).
+    property var links: []
+
     signal doubleTapped(real tapX, real tapY)
+    signal linkClicked(var link)
 
     function source() {
         return "image://lautta-pdf/" + uri + "?page=" + pageIndex
@@ -63,5 +67,23 @@ Rectangle {
     MouseArea {
         anchors.fill: parent
         onDoubleClicked: sheet.doubleTapped(mouse.x, mouse.y)
+    }
+
+    Repeater {
+        model: sheet.links
+
+        MouseArea {
+            x: modelData.x * sheet.width
+            y: modelData.y * sheet.height
+            width: modelData.width * sheet.width
+            height: modelData.height * sheet.height
+            onClicked: sheet.linkClicked(modelData)
+
+            Rectangle {
+                anchors.fill: parent
+                visible: parent.pressed
+                color: Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity)
+            }
+        }
     }
 }

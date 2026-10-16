@@ -2,12 +2,17 @@
 // PDF viewer (PRV-12, board PdfViewer): the pages one below the other,
 // fitted to the width; pinch or double-tap to zoom, the page number shows
 // while scrolling. Opens where reading stopped last time; an encrypted PDF
-// asks for its password (board Password dialog). Pages come from
-// image://lautta-pdf/, rendered in Rust (hayro); links and forms are drawn
-// but do nothing, and nothing in a PDF can reach the network.
+// asks for its password (board Password dialog). The pulley leads to the
+// contents and "Go to page" (board Contents). A link within the PDF jumps
+// there, with a way back (board After an internal link); a link to a
+// website asks before the browser opens it (board External link); nothing
+// in a PDF can reach the network itself. Pages come from
+// image://lautta-pdf/, rendered in Rust (hayro); forms are drawn but do
+// nothing.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../components"
 import "../components/viewers"
 import "../dialogs"
 import "../components/ErrorText.js" as ErrorText
@@ -38,6 +43,40 @@ Page {
         view.contentX = Math.max(0, Math.min(cx, view.contentWidth - view.width))
         view.contentY = cy
         settle.restart()
+    }
+
+    // Scrolls to page `index` (from 0), `top` (a fraction of its height,
+    // when not negative) at the top of the view.
+    function showPage(index, top) {
+        view.positionViewAtIndex(index, ListView.Beginning)
+        if (top > 0) {
+            var bottom = view.originY + view.contentHeight - view.height
+            view.contentY = Math.min(bottom, view.contentY + top * doc.heightFor(index, view.contentWidth))
+        }
+    }
+
+    // A tapped link: within the PDF it jumps, remembering where reading
+    // was; a web link goes to the browser after asking.
+    function followLink(link) {
+        if (link.page >= 0) {
+            backPage = currentPage
+            showPage(link.page, link.top)
+        } else if (PdfText.isWebLink(link.uri)) {
+            pageStack.push(linkDialog, { "url": link.uri })
+        }
+    }
+
+    function showContents() {
+        var contents = pageStack.push(contentsPage, {
+            "fileName": fileName,
+            "outline": doc.outline !== "" ? JSON.parse(doc.outline) : [],
+            "pageCount": doc.pageCount,
+            "currentPage": currentPage - 1
+        })
+        contents.chosen.connect(function(index) {
+            pageStack.pop(page)
+            showPage(index, -1)
+        })
     }
 
     // Asks for the password of an encrypted PDF; `wrong` after a failed try.
@@ -90,6 +129,8 @@ Page {
     property bool wantPassword
     // A password is being tried (board Unlocking).
     property bool unlocking
+    // The page (from 1) reading was on before following a link; 0 for none.
+    property int backPage
     onStatusChanged: if (status === PageStatus.Active && wantPassword) askLater.restart()
     Timer {
         id: askLater
@@ -111,6 +152,16 @@ Page {
     Component {
         id: passwordDialog
         PdfPasswordDialog { }
+    }
+
+    Component {
+        id: linkDialog
+        PdfLinkDialog { }
+    }
+
+    Component {
+        id: contentsPage
+        PdfContentsPage { }
     }
 
     ExternalActions {
@@ -164,6 +215,12 @@ Page {
                     text: qsTrId("lautta-viewers-share")
                     onClicked: external.share()
                 }
+                MenuItem {
+                    visible: doc.loaded
+                    //% "Contents and pages"
+                    text: qsTrId("lautta-viewers-pdf-contents-and-pages")
+                    onClicked: page.showContents()
+                }
             }
 
             header: PageHeader {
@@ -174,6 +231,7 @@ Page {
             }
 
             delegate: PdfPage {
+                id: pdfPage
                 pageIndex: index
                 uri: page.uri
                 width: view.contentWidth
@@ -183,6 +241,13 @@ Page {
                 onDoubleTapped: {
                     var at = mapToItem(view, tapX, tapY)
                     page.zoomTo(page.zoom > 1 ? 1 : 2.5, at.x, at.y)
+                }
+                onLinkClicked: page.followLink(link)
+                Component.onCompleted: doc.requestLinks(index)
+
+                Connections {
+                    target: doc
+                    onLinksReady: if (linkPage === pdfPage.pageIndex) pdfPage.links = JSON.parse(pageLinks)
                 }
             }
 
@@ -200,9 +265,53 @@ Page {
         }
     }
 
+    // Back to where reading was before following a link.
+    MouseArea {
+        id: back
+
+        anchors { bottom: parent.bottom; bottomMargin: Theme.paddingLarge * 2; horizontalCenter: parent.horizontalCenter }
+        width: backRow.width + 2 * Theme.paddingLarge
+        height: Theme.itemSizeSmall
+        visible: page.backPage > 0 && doc.loaded
+
+        onClicked: {
+            page.showPage(page.backPage - 1, -1)
+            page.backPage = 0
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            color: Theme.rgba(Theme.highlightDimmerColor, 0.9)
+            border.color: back.pressed ? Theme.highlightColor : "transparent"
+        }
+
+        Row {
+            id: backRow
+            anchors.centerIn: parent
+            spacing: Theme.paddingSmall
+
+            AppIcon {
+                anchors.verticalCenter: parent.verticalCenter
+                icon: "image://theme/icon-m-back"
+                color: Theme.highlightColor
+            }
+            Label {
+                anchors.verticalCenter: parent.verticalCenter
+                color: Theme.highlightColor
+                //% "Back to page %1"
+                text: qsTrId("lautta-viewers-pdf-back-to-page").arg(page.backPage)
+            }
+        }
+    }
+
     // Page number while the pages move.
     Rectangle {
-        anchors { bottom: parent.bottom; bottomMargin: Theme.paddingLarge * 2; horizontalCenter: parent.horizontalCenter }
+        anchors {
+            bottom: back.visible ? back.top : parent.bottom
+            bottomMargin: Theme.paddingLarge * 2
+            horizontalCenter: parent.horizontalCenter
+        }
         width: counter.implicitWidth + 2 * Theme.paddingLarge
         height: counter.implicitHeight + Theme.paddingSmall * 2
         radius: height / 2
