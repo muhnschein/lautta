@@ -48,7 +48,7 @@ fn rotated_pages_are_shown_upright() {
         w: 100,
         h: 200,
         rotate: 90,
-        content: RED_SQUARE,
+        content: RED_SQUARE.to_string(),
     };
     let doc = PdfDocument::open(build(&[rotated])).unwrap();
     assert_eq!(

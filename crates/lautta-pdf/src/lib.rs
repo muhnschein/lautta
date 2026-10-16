@@ -136,15 +136,10 @@ impl PdfDocument {
         let page = self.pdf.pages().get(index).ok_or(PdfError::NoSuchPage)?;
         let scale = render_scale(size, width);
         let cache = RenderCache::new();
-        let settings = InterpreterSettings {
-            // Widgets and links are drawn as on paper; nothing is clickable.
-            render_annotations: true,
-            ..InterpreterSettings::default()
-        };
         let pixmap = render(
             page,
             &cache,
-            &settings,
+            &interpreter_settings(),
             &RenderSettings::default(),
             &PixmapSettings {
                 x_scale: scale,
@@ -160,6 +155,15 @@ impl PdfDocument {
     }
 }
 
+/// How pages are read, for drawing and for text alike.
+fn interpreter_settings() -> InterpreterSettings {
+    InterpreterSettings {
+        // Widgets and links are drawn as on paper; nothing is clickable.
+        render_annotations: true,
+        ..InterpreterSettings::default()
+    }
+}
+
 /// Scale from points to pixels so the page is `width` pixels wide, reduced
 /// so that no edge exceeds [`MAX_EDGE`]. Degenerate pages count as at least
 /// one point per edge.
@@ -170,6 +174,9 @@ pub fn render_scale(size: PageSize, width: u32) -> f32 {
     let edge = f64::from(MAX_EDGE) / w.max(h);
     want.min(edge) as f32
 }
+
+mod text;
+pub use text::*;
 
 #[cfg(any(test, feature = "sample"))]
 pub mod sample;
