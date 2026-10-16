@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The rows of Browse, recent ad-hoc servers and the purge of removed
-//! accounts (SPEC §15.2, NVB-3, NVB-6, NVB-12, SEC-5).
+//! The rows of Browse, what the user hid and moved, recent ad-hoc servers and
+//! the purge of removed accounts (SPEC §15.2, BRW-12, NVB-3, NVB-6, NVB-12,
+//! SEC-5).
 
 mod bridge_support;
 
 use bridge_support::{config, eventually};
 use lautta_bridge_proto::fake::{Consent, FakeBridge, Listener};
 use lautta_core::app::Core;
-use lautta_core::app_browse::Row;
+use lautta_core::app_browse::{LayoutRow, Row};
 use lautta_core::bridge::{AdHocOptions, BridgeStatus};
 use lautta_core::locations::LocationRegistry;
 use lautta_core::org::{RecentKind, RecentsFilter};
 use lautta_core::paths::AppPaths;
 use lautta_core::settings::LocationPrefs;
-use lautta_core::Uri;
+use lautta_core::{ErrorKind, Uri};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -84,6 +85,122 @@ async fn standalone_shows_no_trace_of_the_bridge() {
     let deleted = device.last().unwrap();
     assert_eq!((deleted.kind, deleted.count), ("deleted", 0));
     assert_eq!(of(&rows, "android")[0].name, "DCIM");
+}
+
+fn names(rows: &[Row], section: &str) -> Vec<String> {
+    of(rows, section).iter().map(|r| r.name.clone()).collect()
+}
+
+fn layout_of(rows: &[LayoutRow], section: &str) -> Vec<(String, bool)> {
+    rows.iter()
+        .filter(|r| r.section == section)
+        .map(|r| {
+            (
+                if r.kind == "deleted" {
+                    "deleted".to_owned()
+                } else {
+                    r.name.clone()
+                },
+                r.hidden,
+            )
+        })
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn hidden_rows_leave_browse_but_not_its_settings() {
+    let e = env(None, &["Documents", "Music", "Pictures"]).await;
+    e.core
+        .favourites
+        .add(&uri("lautta://user-documents/"), "Docs", None)
+        .unwrap();
+    e.core
+        .browse_layout
+        .set_hidden("device", "user-music", true)
+        .unwrap();
+    e.core
+        .browse_layout
+        .set_hidden("device", "deleted", true)
+        .unwrap();
+    let rows = e.core.browse_rows().await;
+    assert_eq!(names(&rows, "device"), ["Documents", "Pictures"]);
+    assert_eq!(names(&rows, "favourites"), ["Docs"]);
+    let layout = e.core.browse_layout_rows().await;
+    assert_eq!(
+        layout_of(&layout, "device"),
+        [
+            ("Documents".to_owned(), false),
+            ("Pictures".to_owned(), false),
+            ("Music".to_owned(), true),
+            ("deleted".to_owned(), true)
+        ]
+    );
+    assert_eq!(layout_of(&layout, "favourites"), [("Docs".to_owned(), false)]);
+    assert!(
+        layout_of(&layout, "nearby").is_empty(),
+        "no nearby switch without the bridge"
+    );
+    e.core
+        .browse_layout
+        .set_hidden("device", "user-music", false)
+        .unwrap();
+    assert_eq!(
+        names(&e.core.browse_rows().await, "device"),
+        ["Documents", "Pictures", "Music"]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rows_move_within_their_section() {
+    let e = env(None, &["Documents", "Music", "Pictures"]).await;
+    let core = &e.core;
+    core.move_browse_row("device", "user-pictures", 0).await.unwrap();
+    core.move_browse_row("device", "deleted", 1).await.unwrap();
+    let rows = core.browse_rows().await;
+    assert_eq!(
+        names(&rows, "device")[..2],
+        ["Pictures".to_owned(), String::new()]
+    );
+    assert_eq!(of(&rows, "device")[1].kind, "deleted");
+    assert_eq!(
+        names(&rows, "device")[2..],
+        ["Documents".to_owned(), "Music".to_owned()]
+    );
+    core.move_browse_row("device", "user-pictures", 99).await.unwrap();
+    assert_eq!(
+        names(&core.browse_rows().await, "device")
+            .last()
+            .map(String::as_str),
+        Some("Pictures"),
+        "an index past the end moves to the end"
+    );
+    let a = core
+        .favourites
+        .add(&uri("lautta://user-documents/"), "A", None)
+        .unwrap();
+    core.favourites
+        .add(&uri("lautta://user-music/"), "B", None)
+        .unwrap();
+    core.move_browse_row("favourites", &a.id.to_string(), 1)
+        .await
+        .unwrap();
+    assert_eq!(names(&core.browse_rows().await, "favourites"), ["B", "A"]);
+    for (section, item) in [
+        ("device", "nowhere"),
+        ("favourites", "x"),
+        ("android", "user-music"),
+    ] {
+        let err = core.move_browse_row(section, item, 0).await.unwrap_err();
+        assert_eq!(err.kind, ErrorKind::NotFound, "{section}/{item}");
+    }
+    core.browse_layout.reset().unwrap();
+    let rows = core.browse_rows().await;
+    assert_eq!(names(&rows, "device")[..3], ["Documents", "Pictures", "Music"]);
+    assert_eq!(
+        names(&rows, "favourites"),
+        ["B", "A"],
+        "favourites keep their own order"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -244,6 +361,20 @@ async fn nearby_servers_prefill_the_connect_form() {
     assert_eq!(nearby.len(), 1);
     assert_eq!(nearby[0].uri, "sftp://raspberrypi.local/");
     assert_eq!(nearby[0].provider, "SFTP");
+
+    // One switch hides every nearby server (BRW-12).
+    let switch = |layout: &[LayoutRow]| layout_of(layout, "nearby");
+    assert_eq!(
+        switch(&e.core.browse_layout_rows().await),
+        [(String::new(), false)]
+    );
+    e.core.browse_layout.set_hidden("nearby", "nearby", true).unwrap();
+    assert!(of(&e.core.browse_rows().await, "nearby").is_empty());
+    assert_eq!(
+        switch(&e.core.browse_layout_rows().await),
+        [(String::new(), true)]
+    );
+    assert_eq!(of(&e.core.browse_rows().await, "servers").len(), 1);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -314,6 +445,9 @@ fn remember_account(core: &Core, n: i32) -> Uri {
             ..LocationPrefs::new(&format!("nv-account:{n}"))
         })
         .unwrap();
+    core.browse_layout
+        .set_hidden("servers", &format!("nv-account:{n}"), true)
+        .unwrap();
     u
 }
 
@@ -332,6 +466,11 @@ fn remembered(core: &Core, n: i32) -> bool {
             .unwrap()
             .display_name
             .is_some()
+        || core
+            .browse_layout
+            .load()
+            .unwrap()
+            .is_hidden("servers", &format!("nv-account:{n}"))
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

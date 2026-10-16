@@ -391,6 +391,15 @@ what the app does.
   returning from a subfolder or viewer, or switching back to the app. The rows on
   screen stay until the fresh listing replaces them (BRW-5). Archives are not listed
   again.
+- BRW-12: The Browse page is configurable without a wall of options (prior art: iOS
+  Files *Browse › Edit*, Finder sidebar settings, Dolphin *Places › Hide*). *Settings ›
+  Browse page* lists every row in Browse order: a switch per folder, *Recently deleted*,
+  volume and server (hiding the row only; the bin keeps working), one switch for all
+  nearby servers, and a drag handle to move rows within their section (favourites move
+  only; volumes and nearby stay put). A half-size live preview of the Browse page sits
+  below, as in Salama's start page settings; the pulley has *Restore defaults*.
+  Long-press *Hide from Browse* is the shortcut. Stored in `browse_layout`; a removed
+  account's rows are purged with it (SEC-5).
 
 ## 10. File operations
 
@@ -607,7 +616,8 @@ flowchart TD
 
 Sections: *Favourites*, *On this device* (user folders), *Android*, *Volumes* (when
 present), *Servers* (bridge only: accounts, recent ad-hoc servers, status dot,
-attention badge), *Nearby* (bridge only, hidden when empty).
+attention badge), *Nearby* (bridge only, hidden when empty). Rows the user hid are left
+out and rows keep the order the user gave them (BRW-12).
 
 Pulley: *Settings*, *Connect to server* (bridge only), *Add server* (bridge only, NVB-5),
 *Activity* (live count). Push-up: *Recents*. Long-press server: *Disconnect*, *Edit
@@ -702,7 +712,8 @@ SQLite for everything structured.
 - DAT-2: Schema with `PRAGMA user_version`, forward migrations only: `favourites`,
   `recents`, `transfers`, `transfer_items`, `working_copies`, `dircache`,
   `trash_items(id, original_uri, trashed_at, stored_name)`, `reading_positions(uri,
-  location_id, page, at_ms)` (PRV-12).
+  location_id, page, at_ms)` (PRV-12), `browse_layout(section, item, hidden, position)`
+  (BRW-12).
 - DAT-3: The netvfs socket directory `~/.local/share/org.netvfs/lautta/netvfs/` belongs
   to netvfs; the app only reads it. *Clear app data* in Settings deletes it along with
   everything else; netvfs recreates it (netvfs XB-4).

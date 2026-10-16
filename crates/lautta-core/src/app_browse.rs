@@ -9,12 +9,14 @@
 
 use crate::app::Core;
 use crate::bridge::{AdHocOptions, BridgeStatus, NearbyServer, RemoteKind};
+use crate::browse_layout::{layout_item, Layout, NEARBY_ITEM};
 use crate::error::{Error, ErrorKind, Result};
 use crate::locations::{Location, LocationKind, LocationStatus};
 use crate::org::{self, Recent, RecentsFilter};
 use crate::settings::LocationPrefs;
 use crate::uri::Uri;
 use crate::vpath::{display_name, VPath};
+use crate::workcopy::blocking;
 use rusqlite::params;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Weak};
@@ -71,6 +73,25 @@ impl Row {
     pub fn key(&self) -> (&'static str, &'static str, &str, &str) {
         (self.section, self.kind, &self.uri, &self.item_id)
     }
+}
+
+/// One row of Settings › Browse page (BRW-12): every row the user can hide
+/// or move, hidden ones included, in Browse order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayoutRow {
+    pub section: &'static str,
+    /// The kind of the Browse row (`favourite`, `folder`, `deleted`, …);
+    /// `nearby` stands for every nearby server.
+    pub kind: &'static str,
+    /// The layout item; the favourite id for favourites.
+    pub item: String,
+    pub name: String,
+    pub hidden: bool,
+}
+
+/// Whether the layout hides `row`.
+fn is_hidden(layout: &Layout, row: &Row) -> bool {
+    layout_item(row.kind, &row.item_id).is_some_and(|item| layout.is_hidden(row.section, &item))
 }
 
 /// Free and total space and the file system of a volume (LOC-3).
@@ -276,8 +297,73 @@ impl Core {
         })
     }
 
-    /// Every row of the Browse page in display order (SPEC §15.2).
+    /// Every row of the Browse page in display order (SPEC §15.2), without
+    /// the rows the user hid (BRW-12).
     pub async fn browse_rows(self: &Arc<Self>) -> Vec<Row> {
+        let (rows, layout) = self.arranged_rows().await;
+        rows.into_iter().filter(|r| !is_hidden(&layout, r)).collect()
+    }
+
+    /// The rows of Settings › Browse page (BRW-12), in Browse order. Nearby
+    /// servers are one row, there whenever the bridge is.
+    pub async fn browse_layout_rows(self: &Arc<Self>) -> Vec<LayoutRow> {
+        let (rows, layout) = self.arranged_rows().await;
+        let mut out: Vec<LayoutRow> = rows
+            .iter()
+            .filter(|r| r.kind != "nearby")
+            .filter_map(|r| {
+                let item = match r.kind {
+                    "favourite" => Some(r.item_id.clone()),
+                    _ => layout_item(r.kind, &r.item_id),
+                }?;
+                Some(LayoutRow {
+                    section: r.section,
+                    kind: r.kind,
+                    hidden: is_hidden(&layout, r),
+                    item,
+                    name: r.name.clone(),
+                })
+            })
+            .collect();
+        if self.bridge.is_some() {
+            out.push(LayoutRow {
+                section: "nearby",
+                kind: "nearby",
+                item: NEARBY_ITEM.to_owned(),
+                name: String::new(),
+                hidden: layout.is_hidden("nearby", NEARBY_ITEM),
+            });
+        }
+        out
+    }
+
+    /// Moves a row of Settings › Browse page to `index` within its section
+    /// (BRW-12); favourites move in their own order (ORG-1).
+    pub async fn move_browse_row(self: &Arc<Self>, section: &str, item: &str, index: usize) -> Result<()> {
+        let core = self.clone();
+        if section == "favourites" {
+            let id: i64 = item.parse().map_err(|_| Error::kind(ErrorKind::NotFound))?;
+            return blocking(move || core.favourites.move_to(id, index)).await;
+        }
+        let mut items: Vec<String> = self
+            .browse_layout_rows()
+            .await
+            .into_iter()
+            .filter(|r| r.section == section)
+            .map(|r| r.item)
+            .collect();
+        let from = items
+            .iter()
+            .position(|i| i == item)
+            .ok_or_else(|| Error::kind(ErrorKind::NotFound))?;
+        let moving = items.remove(from);
+        items.insert(index.min(items.len()), moving);
+        let section = section.to_owned();
+        blocking(move || core.browse_layout.set_order(&section, &items)).await
+    }
+
+    /// All rows in Browse order, hidden ones included, and the layout.
+    async fn arranged_rows(self: &Arc<Self>) -> (Vec<Row>, Layout) {
         let core = self.clone();
         let blocking = tokio::task::spawn_blocking(move || core.local_rows())
             .await
@@ -288,7 +374,9 @@ impl Core {
         rows.extend(self.volume_rows().await);
         rows.extend(self.server_rows(&blocking.prefs).await);
         rows.extend(self.nearby_rows());
-        rows
+        let layout = blocking.layout;
+        let rows = layout.arrange(rows, |r| (r.section.to_owned(), layout_item(r.kind, &r.item_id)));
+        (rows, layout)
     }
 
     fn local_rows(&self) -> LocalRows {
@@ -311,6 +399,7 @@ impl Core {
             device,
             android: self.folder_rows("android", &LocationKind::Android, &prefs),
             prefs,
+            layout: self.browse_layout.load().unwrap_or_default(),
         }
     }
 
@@ -558,6 +647,7 @@ impl Core {
     pub fn purge_location_data(&self, location: &str) -> Result<()> {
         org::purge_location(&self.db, location)?;
         self.location_prefs.remove(location)?;
+        self.browse_layout.forget(location)?;
         self.dircache.invalidate_location(location)?;
         Ok(())
     }
@@ -574,6 +664,7 @@ impl Core {
         for sql in [
             "SELECT DISTINCT location_id FROM recents",
             "SELECT location_id FROM location_prefs",
+            "SELECT DISTINCT item FROM browse_layout",
         ] {
             let mut stmt = conn.prepare(sql)?;
             let ids = stmt
@@ -657,6 +748,7 @@ struct LocalRows {
     device: Vec<Row>,
     android: Vec<Row>,
     prefs: BTreeMap<String, LocationPrefs>,
+    layout: Layout,
 }
 
 fn display_of(l: &Location, prefs: &BTreeMap<String, LocationPrefs>) -> String {
