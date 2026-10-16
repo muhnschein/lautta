@@ -18,6 +18,15 @@ ApplicationWindow {
             tools.pump(100)
     }
 
+    // Waits for the page on top to be shown and its PDF to be read.
+    function shown() {
+        waitFor(function() {
+            var p = pageStack.currentPage
+            return !pageStack.busy && p.loading !== undefined && !p.loading
+        })
+        return pageStack.currentPage
+    }
+
     function install(fixture, uri) {
         if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/" + fixture), uri))
             console.error("FAILED: fixture " + fixture + " not installed")
@@ -26,13 +35,34 @@ ApplicationWindow {
     Component.onCompleted: {
         install("two-pages.pdf", "lautta://user-documents/two-pages.pdf")
         install("secret.pdf", "lautta://user-documents/locked.pdf")
+        install("linked.pdf", "lautta://user-documents/linked.pdf")
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        // Let the asynchronous loading finish and the pages appear.
-        tools.pump(800)
-        var viewer = pageStack.currentPage
+        var viewer = shown()
         viewer.zoomTo(2.5, 100, 100)
         tools.pump(800)
         viewer.zoomTo(1, 100, 100)
+        // Contents without an outline, and "Go to page".
+        viewer.showContents()
+        waitFor(function() { return pageStack.currentPage.chosen !== undefined && !pageStack.busy })
+        pageStack.currentPage.chosen(1)
+        waitFor(function() { return pageStack.currentPage === viewer && !pageStack.busy })
+        pageStack.push(linkedComponent, {}, PageStackAction.Immediate)
+        var linked = shown()
+        // Contents with an outline; a link within the PDF and back again.
+        linked.showContents()
+        waitFor(function() { return pageStack.currentPage.chosen !== undefined && !pageStack.busy })
+        pageStack.currentPage.chosen(0)
+        waitFor(function() { return pageStack.currentPage === linked && !pageStack.busy })
+        linked.followLink({ "page": 1, "top": 0.5, "uri": "" })
+        tools.pump(400)
+        if (linked.backPage !== 1)
+            console.error("FAILED: back to page " + linked.backPage)
+        linked.followLink({ "page": -1, "top": -1, "uri": "https://example.org/x" })
+        waitFor(function() { return pageStack.currentPage.url !== undefined && !pageStack.busy })
+        pageStack.currentPage.reject()
+        waitFor(function() { return pageStack.currentPage === linked && !pageStack.busy })
+        pageStack.pop(viewer, PageStackAction.Immediate)
+        waitFor(function() { return pageStack.currentPage === viewer && !pageStack.busy })
         pageStack.push(lockedComponent, {}, PageStackAction.Immediate)
         // The password dialog opens on its own; a wrong password asks again.
         var lockedViewer = pageStack.currentPage
@@ -59,6 +89,11 @@ ApplicationWindow {
     Component {
         id: pageComponent
         PdfViewer { uri: "lautta://user-documents/two-pages.pdf" }
+    }
+
+    Component {
+        id: linkedComponent
+        PdfViewer { uri: "lautta://user-documents/linked.pdf" }
     }
 
     Component {

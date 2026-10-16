@@ -4,6 +4,7 @@
 // arrive while the test runs.
 import QtQuick 2.6
 import Lautta 1.0
+import "../../../qml/components/viewers/PdfText.js" as PdfText
 
 Item {
     id: root
@@ -31,15 +32,47 @@ Item {
     ViewerTools { id: tools }
     PdfDocument { id: doc }
     PdfDocument { id: other }
+    PdfDocument {
+        id: linked
+        property var got: ({})
+        onLinksReady: got[linkPage] = JSON.parse(pageLinks)
+    }
 
     Image { id: first; asynchronous: true; cache: false }
     Image { id: second; asynchronous: true; cache: false }
 
+    // The viewer's rules for links, the section being read and "Go to page".
+    function checkTexts() {
+        var web = ["https://example.org/x", "HTTP://a", "http://a/b?c=d#e"]
+        for (var i = 0; i < web.length; ++i)
+            check(PdfText.isWebLink(web[i]), "web link " + web[i])
+        var notWeb = ["", "https://", "http://a b", "file:///etc/passwd", "javascript:alert(1)",
+                      " https://a", "ftp://a", "mailto:a@b", "httpx://a"]
+        for (var j = 0; j < notWeb.length; ++j)
+            check(!PdfText.isWebLink(notWeb[j]), "not a web link: " + notWeb[j])
+        var outline = [{ "page": 0 }, { "page": 2 }, { "page": -1 }, { "page": 2 }, { "page": 1 }, { "page": 5 }]
+        var current = [[0, 0], [1, 4], [2, 3], [4, 3], [5, 5], [9, 5]]
+        for (var k = 0; k < current.length; ++k) {
+            var got = PdfText.currentItem(outline, current[k][0])
+            check(got === current[k][1], "section of page " + current[k][0] + ": " + got)
+        }
+        check(PdfText.currentItem([{ "page": 3 }, { "page": -1 }], 1) === -1, "before the first section")
+        check(PdfText.currentItem([], 1) === -1, "no outline")
+        var typed = [["1", 0], ["12", 11], [" 7 ", 6], ["0", -1], ["13", -1], ["", -1],
+                     ["-1", -1], ["2.5", -1], ["1e1", -1], ["x", -1], ["012", 11]]
+        for (var m = 0; m < typed.length; ++m) {
+            var page = PdfText.typedPage(typed[m][0], 12)
+            check(page === typed[m][1], "typed '" + typed[m][0] + "': " + page)
+        }
+    }
+
     Component.onCompleted: {
+        checkTexts()
         check(tools.installFixture(Qt.resolvedUrl("fixtures/two-pages.pdf"), pdf), "pdf fixture")
         check(tools.installFixture(Qt.resolvedUrl("fixtures/secret.pdf"), "lautta://user-documents/locked.pdf"), "locked fixture")
         check(tools.installFixture(Qt.resolvedUrl("fixtures/notes-crlf.txt"), "lautta://user-documents/fake.pdf"), "fake fixture")
         check(tools.installFixture(Qt.resolvedUrl("fixtures/secret.pdf"), "lautta://user-documents/secret.pdf"), "secret fixture")
+        check(tools.installFixture(Qt.resolvedUrl("fixtures/linked.pdf"), "lautta://user-documents/linked.pdf"), "linked fixture")
 
         // Pages and their sizes.
         check(!doc.loaded && doc.pageCount === 0, "nothing before a uri")
@@ -110,5 +143,37 @@ Item {
         other.reload()
         loaded(other)
         check(other.problem === "encrypted" && !other.wrongPassword, "the password is not kept")
+
+        // Outline and links; only page and web links are given.
+        check(JSON.stringify(JSON.parse(doc.outline)) === "[]", "no outline: " + doc.outline)
+        linked.requestLinks(0)
+        tools.pump(100)
+        check(linked.got[0] === undefined, "no links before loading")
+        linked.uri = "lautta://user-documents/linked.pdf"
+        loaded(linked)
+        check(JSON.stringify(JSON.parse(linked.outline))
+              === '[{"level":0,"page":0,"title":"Start"},{"level":1,"page":1,"title":"Later"}]',
+              "outline: " + linked.outline)
+        linked.requestLinks(0)
+        linked.requestLinks(1)
+        linked.requestLinks(2)
+        linked.requestLinks(-1)
+        tools.pump(300)
+        var links = linked.got[0] || []
+        check(links.length === 2, "two links: " + JSON.stringify(links))
+        check(links.length === 2 && links[0].page === 1 && links[0].top === 0.5 && links[0].uri === ""
+              && links[0].x === 0 && links[0].y === 0 && links[0].width === 0.5 && links[0].height === 0.5,
+              "page link: " + JSON.stringify(links[0]))
+        check(links.length === 2 && links[1].page === -1 && links[1].top === -1
+              && links[1].uri === "https://example.org/x" && links[1].x === 0.5 && links[1].y === 0.5,
+              "web link: " + JSON.stringify(links[1]))
+        check(JSON.stringify(linked.got[1]) === "[]", "no links on page 2")
+        check(linked.got[2] === undefined && linked.got[-1] === undefined, "no such page")
+        linked.got = {}
+        linked.requestLinks(0)
+        linked.uri = pdf
+        loaded(linked)
+        tools.pump(200)
+        check(linked.got[0] === undefined, "links of the file before are dropped")
     }
 }

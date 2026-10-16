@@ -460,3 +460,62 @@ async fn pdfs_reopen_where_reading_stopped() {
     h.core.remember_pdf_page(&u, 0);
     assert_eq!(h.core.open_pdf(&u, "").await.unwrap().last_page, Some(0));
 }
+
+#[tokio::test]
+async fn pdfs_have_their_outline_and_links() {
+    use lautta_core::app_pdf::{LinkTarget, OutlineItem, PdfFailure};
+    use lautta_pdf::sample::{link, page, page_ref, Doc};
+    let mut doc = Doc::new(vec![page(100, 200, ""), page(100, 200, "")]);
+    doc.outline(&[
+        ("(Start)", 0, &format!("/Dest [{} /Fit]", page_ref(0))),
+        ("(Later)", 1, &format!("/Dest [{} /Fit]", page_ref(1))),
+    ])
+    .page_entry(
+        0,
+        &format!(
+            "/Annots [{} {}]",
+            link([0, 100, 50, 200], &format!("/Dest [{} /Fit]", page_ref(1))),
+            link([50, 0, 100, 100], "/A << /S /URI /URI (https://example.org/x) >>"),
+        ),
+    );
+    let h = home().await;
+    h.nas.add_file("docs/linked.pdf", &doc.build(), 1);
+    let u = uri("lautta://nv-nas/docs/linked.pdf");
+    let links = h.core.pdf_links(&u, 0).await.unwrap();
+    assert_eq!(
+        links.iter().map(|l| l.target.clone()).collect::<Vec<_>>(),
+        [
+            LinkTarget::Page { index: 1, top: None },
+            LinkTarget::Uri("https://example.org/x".into())
+        ],
+        "opened on demand"
+    );
+    assert_eq!((links[1].area.x, links[1].area.y), (0.5, 0.5));
+    assert!(h.core.pdf_links(&u, 1).await.unwrap().is_empty());
+    assert_eq!(
+        h.core.pdf_links(&u, 2).await.unwrap_err(),
+        PdfFailure::Pdf(lautta_pdf::PdfError::NoSuchPage)
+    );
+    assert_eq!(
+        h.core.open_pdf(&u, "").await.unwrap().outline,
+        [
+            OutlineItem {
+                title: "Start".into(),
+                level: 0,
+                page: Some(0)
+            },
+            OutlineItem {
+                title: "Later".into(),
+                level: 1,
+                page: Some(1)
+            }
+        ]
+    );
+    h.nas.add_file("docs/plain.pdf", &sample_pdf(), 1);
+    let plain = h
+        .core
+        .open_pdf(&uri("lautta://nv-nas/docs/plain.pdf"), "")
+        .await
+        .unwrap();
+    assert!(plain.outline.is_empty());
+}

@@ -526,9 +526,14 @@ bridge).
   pinch and double-tap zoom (sharper rendering once a pinch settles), the page number
   while scrolling, *Open with* and *Share* in the pulley. Rendering is `hayro` (pure
   Rust, `lautta-pdf`; poppler is not allowed): it sees only the file's bytes, has no
-  file, network or process access, runs no JavaScript and follows no links, actions or
-  form submissions; links are drawn but not clickable. The app's sandbox has no
-  `Internet` permission either. Files up to 200 MB; pages at most 4096 px on an edge.
+  file, network or process access, runs no JavaScript and follows no actions or form
+  submissions. Of links and outline items only page destinations and http(s) URIs are
+  read; everything else (Launch, JavaScript, GoToR, file: and other URIs) is dropped. A
+  link to a page jumps there and offers *Back to page N*; a link to a website opens a
+  dialog showing the address (*Open* hands it to the browser, *Copy link* copies it),
+  so the app itself never fetches it. The app's sandbox has no `Internet` permission
+  either. *Contents and pages* in the pulley shows the outline (the section being read
+  highlighted) and a *Go to page* field. Files up to 200 MB; pages at most 4096 px on an edge.
   The pulley header shows the page count. A password-protected PDF asks for its
   password in a dialog (swipe forward unlocks; a wrong one asks again); the password
   opens that one parse and is never stored, so reopening asks again (the empty user

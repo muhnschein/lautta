@@ -156,12 +156,17 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `tooLarge`), `wrongPassword` (the last `unlock` failed), `lastPage` (where reading
   stopped, from 0; -1 unknown), `heightFor(index, width)`, `reload()`,
   `unlock(password)` (opens an encrypted PDF; the password is not kept),
-  `rememberPage(index)`; image provider
+  `rememberPage(index)`, `outline` (JSON `[{title, level, page}]`, page from 0 or -1),
+  `requestLinks(index)` then `linksReady(linkPage, pageLinks)` (JSON `[{x, y, width,
+  height, page, top, uri}]`: area as fractions of the shown page; page from 0 and `top`
+  as a fraction of its height or -1; or page -1 and an http(s) `uri`); image provider
   `image://lautta-pdf/<uri>?page=N` renders page N (from 0) at `sourceSize.width`
   (1080 without one), any location.
 - Pages: `viewers/ImageViewer.qml { uri, folderUri }`, `viewers/TextViewer.qml { uri }`,
-  `viewers/MarkdownViewer.qml { uri }`, `viewers/PdfViewer.qml { uri }`, `viewers/MediaPlayer.qml { uri, video }`,
-  `dialogs/OpenRemoteDialog.qml { uri }`.
+  `viewers/MarkdownViewer.qml { uri }`, `viewers/PdfViewer.qml { uri }`, `viewers/PdfContentsPage.qml { fileName, outline,
+  pageCount, currentPage }` (signal `chosen(index)`), `viewers/MediaPlayer.qml { uri, video }`,
+  `dialogs/OpenRemoteDialog.qml { uri }`, `dialogs/PdfPasswordDialog.qml { fileName, wrong }`,
+  `dialogs/PdfLinkDialog.qml { url }`.
 
 ### Search, settings (boards: Search, SearchFilters, SearchPulley, Settings, About)
 

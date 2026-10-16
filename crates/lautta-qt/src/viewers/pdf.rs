@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The PDF viewer (PRV-12): `PdfDocument` (page count and sizes of a PDF)
-//! and the requests of `image://lautta-pdf/<uri>?page=N`, which render
+//! The PDF viewer (PRV-12): `PdfDocument` (page count and sizes, outline
+//! and links of a PDF) and the requests of `image://lautta-pdf/<uri>?page=N`, which render
 //! one page at the width the `Image` asks for (`sourceSize.width`).
 //! Rendering is `lautta_core::app_pdf`'s; nothing here reaches the network.
 
 use super::images::{finished, on_cancel, Reply};
 use super::{parse_uri, qstr, run_then};
+use crate::json::to_json;
 use crate::runtime::{core, handle};
 use lautta_core::app::Core;
-use lautta_core::app_pdf::{parse_page_id, pdf_error_name, OpenedPdf, PageSize, PdfError, PdfFailure};
+use lautta_core::app_pdf::{
+    parse_page_id, pdf_error_name, Link, LinkTarget, OpenedPdf, OutlineItem, PageSize, PdfError, PdfFailure,
+};
 use qmetaobject::prelude::*;
 use qmetaobject::qml_register_type;
 use std::sync::Arc;
@@ -41,7 +44,13 @@ pub struct PdfDocument {
     wrongPassword: qt_property!(bool; NOTIFY stateChanged),
     /// Where reading stopped last time (0-based); -1 when unknown.
     lastPage: qt_property!(i32; NOTIFY stateChanged),
+    /// The outline as JSON: `[{title, level, page}]`, depth first; `page`
+    /// counts from 0, -1 when the item goes nowhere in this document.
+    outline: qt_property!(QString; NOTIFY stateChanged),
     stateChanged: qt_signal!(),
+    /// The links of page `linkPage` as JSON (see [`links_json`]), after
+    /// `requestLinks`; `[]` when it has none or they cannot be read.
+    linksReady: qt_signal!(linkPage: i32, pageLinks: QString),
 
     /// Height of page `index` shown `width` wide (0 for no such page).
     heightFor: qt_method!(fn(&self, index: i32, width: f64) -> f64),
@@ -50,6 +59,8 @@ pub struct PdfDocument {
     unlock: qt_method!(fn(&mut self, password: QString)),
     /// Remembers that reading stopped at page `index` (0-based).
     rememberPage: qt_method!(fn(&self, index: i32)),
+    /// Reads the links of page `index` (0-based); `linksReady` follows.
+    requestLinks: qt_method!(fn(&self, index: i32)),
 
     pages: Vec<PageSize>,
     generation: u64,
@@ -116,6 +127,37 @@ impl PdfDocument {
         handle().spawn_blocking(move || core.remember_pdf_page(&uri, page));
     }
 
+    fn requestLinks(&self, index: i32) {
+        let (Some(core), Some(uri), Ok(page)) = (core(), parse_uri(&self.uri), usize::try_from(index)) else {
+            return;
+        };
+        if !self.loaded || page >= self.pages.len() {
+            return;
+        }
+        let gen = self.generation;
+        run_then(
+            self,
+            async move { Ok(core.pdf_links(&uri, page).await) },
+            move |me, res| {
+                if me.generation != gen {
+                    return;
+                }
+                let links = match res {
+                    Ok(Ok(links)) => links,
+                    Ok(Err(f)) => {
+                        log::debug!("links of page {page} not read: {}", failure_text(&f));
+                        Vec::new()
+                    }
+                    Err(e) => {
+                        log::debug!("links of page {page} not read: {e}");
+                        Vec::new()
+                    }
+                };
+                me.linksReady(index, qstr(&links_json(&links)));
+            },
+        );
+    }
+
     fn apply(&mut self, res: Result<OpenedPdf, PdfFailure>, attempt: bool) {
         match res {
             Ok(pdf) => {
@@ -123,6 +165,7 @@ impl PdfDocument {
                 self.pageCount = i32::try_from(pdf.pages.len()).unwrap_or(i32::MAX);
                 self.size = pdf.size.map_or(-1.0, |s| s as f64);
                 self.lastPage = pdf.last_page.and_then(|p| i32::try_from(p).ok()).unwrap_or(-1);
+                self.outline = qstr(&outline_json(&pdf.outline));
                 self.pages = pdf.pages;
             }
             Err(PdfFailure::Pdf(PdfError::Encrypted)) => {
@@ -147,7 +190,45 @@ impl PdfDocument {
         self.problem = QString::default();
         self.wrongPassword = false;
         self.lastPage = -1;
+        self.outline = qstr("[]");
     }
+}
+
+/// A 0-based page for QML: -1 for none.
+fn page_number(page: Option<usize>) -> i64 {
+    page.and_then(|p| i64::try_from(p).ok()).unwrap_or(-1)
+}
+
+/// `[{title, level, page}]` of [`PdfDocument::outline`].
+fn outline_json(items: &[OutlineItem]) -> String {
+    let rows: Vec<_> = items
+        .iter()
+        .map(|i| serde_json::json!({ "title": i.title, "level": i.level, "page": page_number(i.page) }))
+        .collect();
+    to_json(&rows)
+}
+
+/// `[{x, y, width, height, page, top, uri}]`: the area as fractions of the
+/// shown page; a link within the document has `page` (from 0) and `top`
+/// (fraction of the target page's height, -1 when not given) and an empty
+/// `uri`; a web link has `page` -1 and its http(s) `uri`.
+fn links_json(links: &[Link]) -> String {
+    let rows: Vec<_> = links
+        .iter()
+        .map(|l| {
+            let (page, top, uri) = match &l.target {
+                LinkTarget::Page { index, top } => {
+                    (page_number(Some(*index)), top.map_or(-1.0, f64::from), "")
+                }
+                LinkTarget::Uri(uri) => (-1, -1.0, uri.as_str()),
+            };
+            serde_json::json!({
+                "x": l.area.x, "y": l.area.y, "width": l.area.width, "height": l.area.height,
+                "page": page, "top": top, "uri": uri,
+            })
+        })
+        .collect();
+    to_json(&rows)
 }
 
 fn failure_text(f: &PdfFailure) -> String {
