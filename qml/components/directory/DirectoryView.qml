@@ -575,8 +575,11 @@ Item {
                 else
                     view.openItem(model.uri, model.isDir, model.mimeType)
             }
-            // The grid has no context menu: a long press starts selecting.
-            onPressAndHold: dir.toggle(model.uri)
+            // Like the list: selection starts from the pulley only.
+            onPressAndHold: {
+                if (view.selecting)
+                    dir.toggle(model.uri)
+            }
 
             FileIcon {
                 anchors {

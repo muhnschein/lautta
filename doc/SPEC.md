@@ -585,8 +585,8 @@ for media folders (suggested when > 60 % images). Pulley: *Select*, *New folder/
 *Paste* (with clipboard), *Search here*, *View options*, *Refresh*. Push-up: *Info*,
 *Add to favourites*. Context menu: *Open with*, *Share*, *Copy*, *Cut*, *Rename*,
 *Delete*, *Copy to…*, *Move to…*, *Download*/*Upload to…*, *Info*; fixed order,
-capability-filtered. Selection starts from the pulley's *Select* or a long press in the
-grid; tapping an icon opens the item like the rest of the row. Its actions sit in a
+capability-filtered. Selection starts from the pulley's *Select*, in list and grid alike;
+tapping an icon opens the item like the rest of the row. Its actions sit in a
 `DockedPanel` that stays open while selecting and ends with a button that leaves
 selection; the panel's actions, a finished delete and deselecting the last item leave it
 too.
