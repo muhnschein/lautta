@@ -48,12 +48,12 @@ ApplicationWindow {
         dialog.wrong = true
         tools.pump(200)
         dialog.reject()
-        tools.pump(800)
+        // Cancel leaves the viewer locked, on top again.
+        waitFor(function() { return pageStack.currentPage === lockedViewer && !pageStack.busy })
         // The Unlocking state while a password is tried.
-        var locked = pageStack.currentPage
-        locked.unlocking = true
+        lockedViewer.unlocking = true
         tools.pump(200)
-        locked.unlocking = false
+        lockedViewer.unlocking = false
     }
 
     Component {
