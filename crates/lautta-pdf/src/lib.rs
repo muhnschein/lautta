@@ -13,6 +13,9 @@ use hayro::vello_cpu::color::palette::css::WHITE;
 use hayro::{render, PixmapSettings, RenderCache, RenderSettings};
 use std::fmt;
 
+mod nav;
+pub use nav::*;
+
 /// Largest PDF the viewer opens: the whole file is held in memory.
 pub const MAX_PDF_BYTES: u64 = 200_000_000;
 /// Longest edge of a rendered page, in pixels: at most 64 MiB of RGBA.
@@ -171,6 +174,8 @@ pub fn render_scale(size: PageSize, width: u32) -> f32 {
     want.min(edge) as f32
 }
 
+#[cfg(test)]
+mod nav_tests;
 #[cfg(any(test, feature = "sample"))]
 pub mod sample;
 #[cfg(test)]
