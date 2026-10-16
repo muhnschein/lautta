@@ -48,7 +48,8 @@ MUTANTS_SHARD ?= 0/1
 MUTANTS_FILES = -f crates/lautta-core/src/ops/plan.rs -f crates/lautta-core/src/ops/conflict.rs \
 	-f crates/lautta-core/src/transfer/scheduler.rs -f crates/lautta-core/src/transfer/model.rs \
 	-f crates/lautta-core/src/transfer/store.rs -f crates/lautta-core/src/transfer/conflict.rs \
-	-f crates/lautta-core/src/app_pdf.rs -f crates/lautta-pdf/src/lib.rs -f crates/lautta-pdf/src/text.rs
+	-f crates/lautta-core/src/app_pdf.rs -f crates/lautta-pdf/src/lib.rs -f crates/lautta-pdf/src/text.rs \
+	-f crates/lautta-pdf/src/nav.rs
 
 mutants:
 	$(CARGO) mutants --no-shuffle -j 2 --timeout 300 --shard $(MUTANTS_SHARD) -p lautta-core -p lautta-pdf $(MUTANTS_FILES)

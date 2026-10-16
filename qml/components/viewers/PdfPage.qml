@@ -2,7 +2,7 @@
 // One page of the PDF viewer (PRV-12): a white sheet, the page rendered at
 // the fitted width, and over it a sharper copy at the zoom once that has
 // arrived, so zooming never shows an empty page. Search hits are marked
-// over the page.
+// over the page; its links can be tapped.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
@@ -18,7 +18,11 @@ Rectangle {
     // as fractions of the page, and whether they belong to the hit shown.
     property var hits: []
 
+    // [{x, y, width, height, page, top, uri}] (PdfDocument.linksReady).
+    property var links: []
+
     signal doubleTapped(real tapX, real tapY)
+    signal linkClicked(var link)
 
     function source() {
         return "image://lautta-pdf/" + uri + "?page=" + pageIndex
@@ -81,5 +85,23 @@ Rectangle {
     MouseArea {
         anchors.fill: parent
         onDoubleClicked: sheet.doubleTapped(mouse.x, mouse.y)
+    }
+
+    Repeater {
+        model: sheet.links
+
+        MouseArea {
+            x: modelData.x * sheet.width
+            y: modelData.y * sheet.height
+            width: modelData.width * sheet.width
+            height: modelData.height * sheet.height
+            onClicked: sheet.linkClicked(modelData)
+
+            Rectangle {
+                anchors.fill: parent
+                visible: parent.pressed
+                color: Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity)
+            }
+        }
     }
 }

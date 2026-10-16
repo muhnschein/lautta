@@ -160,12 +160,17 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   0, -1 none), `hitsJson(index)` (JSON array of `{x, y, width, height, current}` per
   hit area on page `index`, fractions of the page from its top left), `hitsRevision`
   (changes with the hits or the hit shown; bindings of `hitsJson` read it); all notify
-  `searchChanged()`. Image provider
+  `searchChanged()`; `outline` (JSON `[{title, level, page}]`, page from 0 or -1),
+  `requestLinks(index)` then `linksReady(linkPage, pageLinks)` (JSON `[{x, y, width,
+  height, page, top, uri}]`: area as fractions of the shown page; page from 0 and `top`
+  as a fraction of its height or -1; or page -1 and an http(s) `uri`). Image provider
   `image://lautta-pdf/<uri>?page=N` renders page N (from 0) at `sourceSize.width`
   (1080 without one), any location.
 - Pages: `viewers/ImageViewer.qml { uri, folderUri }`, `viewers/TextViewer.qml { uri }`,
-  `viewers/MarkdownViewer.qml { uri }`, `viewers/PdfViewer.qml { uri }`, `viewers/MediaPlayer.qml { uri, video }`,
-  `dialogs/OpenRemoteDialog.qml { uri }`.
+  `viewers/MarkdownViewer.qml { uri }`, `viewers/PdfViewer.qml { uri }`, `viewers/PdfContentsPage.qml { fileName, outline,
+  pageCount, currentPage }` (signal `chosen(index)`), `viewers/MediaPlayer.qml { uri, video }`,
+  `dialogs/OpenRemoteDialog.qml { uri }`, `dialogs/PdfPasswordDialog.qml { fileName, wrong }`,
+  `dialogs/PdfLinkDialog.qml { url }`.
 
 ### Search, settings (boards: Search, SearchFilters, SearchPulley, Settings, About)
 

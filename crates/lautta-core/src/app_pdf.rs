@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The PDF viewer's actions on [`Core`] (PRV-12): opening a PDF from any
-//! location, rendering its pages for `image://lautta-pdf/` and searching
-//! its text. Parsing, drawing and matching are `lautta-pdf`'s; this module
-//! reads the file, keeps the open documents, runs the search page by page
-//! and moves the CPU work off the runtime's threads.
+//! location, rendering its pages for `image://lautta-pdf/`, reading its
+//! outline and links and searching its text. Parsing, drawing and matching
+//! are `lautta-pdf`'s; this module reads the file, keeps the open
+//! documents, runs the search page by page and moves the CPU work off the
+//! runtime's threads.
 
 use crate::app::Core;
 use crate::error::{Error, ErrorKind, Result};
@@ -17,7 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use tokio::sync::mpsc;
 
-pub use lautta_pdf::{PageRect, PageSize, PdfError, TextHit};
+pub use lautta_pdf::{Link, LinkTarget, OutlineItem, PageRect, PageSize, PdfError, TextHit};
 
 /// How many documents stay parsed: the one shown and the one before it.
 const KEPT_DOCUMENTS: usize = 2;
@@ -63,6 +64,8 @@ pub struct OpenedPdf {
     pub size: Option<u64>,
     /// Where reading stopped last time (0-based, on a page it has).
     pub last_page: Option<usize>,
+    /// The outline (bookmarks), depth first; empty when there is none.
+    pub outline: Vec<OutlineItem>,
 }
 
 type Kept = Vec<(Uri, Arc<PdfDocument>)>;
@@ -263,7 +266,13 @@ impl Core {
         // then usually fails to parse; nothing larger is held in memory.
         let bytes = crate::provider::read_all(handle.as_ref(), MAX_PDF_BYTES).await?;
         let password = password.to_owned();
-        let doc = Arc::new(blocking(move || PdfDocument::open_with_password(bytes, &password)).await??);
+        let (doc, outline) = blocking(move || {
+            PdfDocument::open_with_password(bytes, &password).map(|d| {
+                let outline = d.outline();
+                (Arc::new(d), outline)
+            })
+        })
+        .await??;
         keep(uri, &doc);
         self.note_viewed(uri, RecentKind::Previewed);
         let last_page = self
@@ -279,6 +288,7 @@ impl Core {
             pages: doc.page_sizes().to_vec(),
             size: entry.size,
             last_page,
+            outline,
         })
     }
 
@@ -329,6 +339,13 @@ impl Core {
         })
         .await?;
         Ok(())
+    }
+
+    /// The links of page `page` (0-based) of a PDF: to its own pages and to
+    /// http(s) URIs, nothing else.
+    pub async fn pdf_links(&self, uri: &Uri, page: usize) -> std::result::Result<Vec<Link>, PdfFailure> {
+        let doc = self.pdf_document(uri).await?;
+        Ok(blocking(move || doc.links(page)).await??)
     }
 
     /// The kept document, opening the file when it is not kept (an
