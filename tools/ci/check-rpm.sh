@@ -83,6 +83,10 @@ if sb2 -t "$TARGET" ldd /usr/bin/harbour-lautta | grep 'not found'; then
     fail "unresolved libraries"
 fi
 
+# The PDF viewer test installs its fixtures into Documents, which is a
+# location only when the folder exists; the SDK home has none.
+mkdir -p "$HOME/Documents"
+
 # QML on the target (TST-6): every shipped QML file and the QML tests compile
 # and instantiate with the installed binary's engine (Qt 5.6, real Silica,
 # the real Lautta types), without warnings naming them.
