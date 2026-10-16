@@ -33,6 +33,8 @@ Item {
             property string ruri: uri
             property string ritem: itemId
             property int rcount: count
+            // Set by a step to tell whether this delegate survived a change.
+            property bool marked: false
         }
     }
 
@@ -161,11 +163,18 @@ Item {
         step("edit it",
              function() { favs.edit(favs.idOf(docs), "Papers", "#4fa3e5") },
              function() { return has("favourite", "Papers") && !has("favourite", "Docs") })
-        step("order favourites",
+        // A row remorse lives in its delegate: a change elsewhere in the
+        // list must not rebuild the rows that stay.
+        step("order favourites, keeping the other rows",
              function() {
+                 row("favourite", "Papers").marked = true
+                 row("folder", "Music").marked = true
                  favs.add("lautta://user-music/", "Tunes", "")
              },
-             function() { return favouriteNames() === "Papers,Tunes" })
+             function() {
+                 return favouriteNames() === "Papers,Tunes" && row("favourite", "Papers").marked
+                        && row("folder", "Music").marked
+             })
         step("move one up",
              function() { favs.moveBy(favs.idOf("lautta://user-music/"), -1) },
              function() { return favouriteNames() === "Tunes,Papers" })

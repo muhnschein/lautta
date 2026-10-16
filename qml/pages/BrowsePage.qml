@@ -79,6 +79,28 @@ Page {
         pageStack.push(Qt.resolvedUrl("../dialogs/FavouriteDialog.qml"), { "uri": uri })
     }
 
+    // Row remorses start here, not in the delegate: the Browse rows can be
+    // rebuilt during the countdown, and a callback made in a delegate that
+    // is gone can no longer reach the page's models.
+    function remorseRow(item, text, action) {
+        item.remorseAction(text, action, Number(App.setting("remorse_seconds")) * 1000)
+    }
+
+    function removeFavourite(item, id) {
+        //% "Removing favourite"
+        remorseRow(item, qsTrId("lautta-browse-removing-favourite"), function() { favourites.remove(id) })
+    }
+
+    function removeServer(item, id, connected) {
+        //% "Removing server"
+        remorseRow(item, qsTrId("lautta-browse-removing-server"), function() {
+            if (connected)
+                Bridge.forgetAdHoc(id)
+            else
+                Bridge.removeRecent(id)
+        })
+    }
+
     function copyAddress(text) {
         Clipboard.text = text
     }
@@ -355,17 +377,7 @@ Page {
                         visible: row.kind === "favourite"
                         //% "Remove from favourites"
                         text: qsTrId("lautta-browse-remove-favourite")
-                        onClicked: {
-                            var id = parseInt(model.itemId)
-                            // A page remorse: the row is rebuilt whenever
-                            // the Browse rows change (a nearby server comes
-                            // or goes), which would cancel a row remorse.
-                            Remorse.popupAction(page,
-                                                //% "Removing favourite"
-                                                qsTrId("lautta-browse-removing-favourite"),
-                                                function() { favourites.remove(id) },
-                                                Number(App.setting("remorse_seconds")) * 1000)
-                        }
+                        onClicked: page.removeFavourite(row, parseInt(model.itemId))
                     }
 
                     // Servers (NVB-5)
@@ -430,17 +442,7 @@ Page {
                         visible: row.kind === "adhoc" || row.kind === "adhocRecent"
                         //% "Remove from recents"
                         text: qsTrId("lautta-browse-remove-recent")
-                        onClicked: {
-                            var id = model.itemId
-                            var connected = row.kind === "adhoc"
-                            //% "Removing server"
-                            row.remorseAction(qsTrId("lautta-browse-removing-server"), function() {
-                                if (connected)
-                                    Bridge.forgetAdHoc(id)
-                                else
-                                    Bridge.removeRecent(id)
-                            }, App.setting("remorse_seconds") * 1000)
-                        }
+                        onClicked: page.removeServer(row, model.itemId, row.kind === "adhoc")
                     }
                 }
             }
