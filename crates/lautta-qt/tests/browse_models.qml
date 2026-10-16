@@ -36,6 +36,7 @@ Item {
             property string ruri: uri
             property string ritem: itemId
             property int rcount: count
+            property string rsection: section
             // Set by a step to tell whether this delegate survived a change.
             property bool marked: false
         }
@@ -50,6 +51,40 @@ Item {
             property string rplace: place
             property string rday: day
         }
+    }
+
+    // Settings › Browse page (BRW-12).
+    BrowseLayoutModel { id: layout }
+
+    Repeater {
+        id: layoutRows
+        model: layout
+        delegate: Item {
+            property string lsection: section
+            property string litem: item
+            property bool lhidden: hidden
+            property int lindex: index
+            property bool lmovable: movable
+        }
+    }
+
+    function layoutRow(section, item) {
+        for (var i = 0; i < layoutRows.count; ++i) {
+            var r = layoutRows.itemAt(i)
+            if (r && r.lsection === section && r.litem === item)
+                return r
+        }
+        return null
+    }
+
+    function deviceRows() {
+        var names = []
+        for (var i = 0; i < rows.count; ++i) {
+            var r = rows.itemAt(i)
+            if (r && r.rsection === "device")
+                names.push(r.rkind === "deleted" ? "deleted" : r.rname)
+        }
+        return names.join(",")
     }
 
     function row(kind, name) {
@@ -157,6 +192,39 @@ Item {
                  return d !== null && d.rcount === 1 && has("folder", "Music") && has("deleted")
              })
 
+        step("hide a folder from Browse",
+             function() { locs.hide("device", "folder", "user-music") },
+             function() { return !has("folder", "Music") && has("folder", "Documents") })
+        step("Browse page settings still list it, hidden",
+             function() { layout.reload() },
+             function() {
+                 var m = layoutRow("device", "user-music")
+                 var n = layoutRow("nearby", "nearby")
+                 return m !== null && m.lhidden && m.lmovable && n !== null && !n.lhidden && !n.lmovable
+                        && layoutRow("device", "deleted") !== null
+             })
+        step("show it again from the settings",
+             function() { layout.setHidden("device", "user-music", false) },
+             function() {
+                 var m = layoutRow("device", "user-music")
+                 return has("folder", "Music") && m !== null && !m.lhidden
+             })
+        step("move a row within its section",
+             function() { layout.moveTo("device", "deleted", 0) },
+             function() {
+                 var d = layoutRow("device", "deleted")
+                 return deviceRows().indexOf("deleted,Documents") === 0 && d !== null && d.lindex === 0
+             })
+        step("restore defaults",
+             function() {
+                 layout.setHidden("device", "user-documents", true)
+                 layout.restoreDefaults()
+             },
+             function() {
+                 var d = layoutRow("device", "deleted")
+                 return deviceRows().indexOf("Documents") === 0 && /,deleted$/.test(deviceRows())
+                        && d !== null && d.lindex > 0
+             })
         step("a remote folder lists",
              function() {
                  FakeWorld.putFile("account:1", "r1.txt")

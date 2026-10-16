@@ -93,6 +93,24 @@ Page {
                 //% "Browsing"
                 text: qsTrId("lautta-settings-browsing")
             }
+            BackgroundItem {
+                width: column.width
+                height: Theme.itemSizeSmall
+                onClicked: pageStack.push(Qt.resolvedUrl("BrowseSettingsPage.qml"))
+
+                Label {
+                    anchors {
+                        left: parent.left
+                        right: parent.right
+                        leftMargin: Theme.horizontalPageMargin
+                        rightMargin: Theme.horizontalPageMargin
+                        verticalCenter: parent.verticalCenter
+                    }
+                    //% "Browse page"
+                    text: qsTrId("lautta-settings-browse-page")
+                    color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
+                }
+            }
             SettingCombo {
                 //% "Default view"
                 label: qsTrId("lautta-settings-view")

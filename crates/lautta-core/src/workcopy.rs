@@ -55,7 +55,7 @@ pub struct WorkingCopies {
     clock: Arc<dyn Clock>,
 }
 
-async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T> + Send + 'static) -> Result<T> {
+pub(crate) async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T> + Send + 'static) -> Result<T> {
     tokio::task::spawn_blocking(f)
         .await
         .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))?
