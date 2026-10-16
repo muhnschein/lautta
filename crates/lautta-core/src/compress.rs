@@ -133,7 +133,7 @@ impl Read for ChunkReader<'_> {
                 }
                 Some(Msg::EndData) => self.done = true,
                 // Not `Interrupted`: `io::copy` would retry that forever.
-                _ => return Err(io::Error::new(io::ErrorKind::Other, "compression aborted")),
+                _ => return Err(io::Error::other("compression aborted")),
             }
         }
     }

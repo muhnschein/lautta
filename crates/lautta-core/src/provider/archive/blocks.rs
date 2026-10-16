@@ -18,7 +18,7 @@ type Cache = Vec<(u64, Arc<Vec<u8>>)>;
 
 /// Wraps a lautta error so it survives a trip through `std::io`.
 pub fn to_io(err: Error) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, err)
+    io::Error::other(err)
 }
 
 /// Inverse of [`to_io`]; plain I/O errors are mapped by kind.

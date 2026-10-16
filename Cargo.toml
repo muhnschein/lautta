@@ -11,7 +11,7 @@ default-members = ["crates/lautta-core", "crates/lautta-bridge-proto"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.95"
 license = "LGPL-2.1-or-later"
 publish = false
 

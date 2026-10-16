@@ -459,7 +459,7 @@ fn inserts_and_updates(
                     count: j - s,
                 });
             }
-            if m.map_or(false, |i| changed(j, i)) {
+            if m.is_some_and(|i| changed(j, i)) {
                 out.push(ListChange::Update { index: j });
             }
         } else if run_start.is_none() {
