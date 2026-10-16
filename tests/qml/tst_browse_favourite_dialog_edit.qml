@@ -7,7 +7,7 @@ import "../../qml/dialogs"
 ApplicationWindow {
     initialPage: Component {
         FavouriteDialog {
-            favouriteId: 1
+            uri: "lautta://user-documents/"
         }
     }
 }

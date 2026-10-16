@@ -2749,6 +2749,10 @@
             <numerusform></numerusform>
         </translation>
     </message>
+    <message id="lautta-favourite-remove">
+        <source>Remove from favourites</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message id="lautta-dir-opts-grid-size">
         <source>Grid size</source>
         <translation type="unfinished"></translation>
