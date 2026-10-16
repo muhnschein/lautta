@@ -304,7 +304,7 @@ impl Core {
         use crate::bridge::BridgeStatus;
         self.bridge
             .as_ref()
-            .map_or(true, |b| b.status() != BridgeStatus::ConsentDenied)
+            .is_none_or(|b| b.status() != BridgeStatus::ConsentDenied)
     }
 
     /// Transfers still unfinished when the app closes (XFR-6).

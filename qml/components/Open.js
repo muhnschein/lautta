@@ -9,7 +9,8 @@ var viewerPages = {
     "text": "../viewers/TextViewer.qml",
     "markdown": "../viewers/MarkdownViewer.qml",
     "audio": "../viewers/MediaPlayer.qml",
-    "video": "../viewers/MediaPlayer.qml"
+    "video": "../viewers/MediaPlayer.qml",
+    "pdf": "../viewers/PdfViewer.qml"
 }
 
 // pageStack: the window's page stack; app: the App singleton;

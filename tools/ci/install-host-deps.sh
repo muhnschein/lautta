@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Host build dependencies for CI (Ubuntu 24.04): Qt 5 for the Qt glue crates,
 # the pinned Rust toolchain (rust-toolchain.toml), and optional tools:
-#   install-host-deps.sh [coverage] [mutants]
+#   install-host-deps.sh [coverage] [mutants] [cross]
 set -eu
 sudo apt-get update -q
 sudo apt-get install -y -q --no-install-recommends \
@@ -12,6 +12,8 @@ for tool in "$@"; do
     case $tool in
         coverage) cargo +stable install --locked cargo-llvm-cov@0.6.16 ;;
         mutants) cargo +stable install --locked cargo-mutants@25.0.1 ;;
+        # The SDK's cross compiler is an i386 program (tools/ci/lift-sdk.sh).
+        cross) sudo apt-get install -y -q --no-install-recommends libc6-i386 ;;
         *) echo "unknown tool $tool" >&2; exit 2 ;;
     esac
 done

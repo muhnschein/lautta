@@ -435,7 +435,7 @@ impl Core {
             && plan
                 .items
                 .first()
-                .map_or(true, |first| has_modes(&first.src.location));
+                .is_none_or(|first| has_modes(&first.src.location));
         let renames = plan
             .items
             .iter()
