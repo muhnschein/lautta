@@ -6,7 +6,7 @@ use super::{location_prefix, move_to, next_position, parse_uri, renumber, rewrit
 use crate::db::Db;
 use crate::error::{Error, ErrorKind, Result};
 use crate::uri::Uri;
-use rusqlite::{params, OptionalExtension, Row};
+use rusqlite::{params, Connection, OptionalExtension, Row};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Favourite {
@@ -48,6 +48,26 @@ fn clean_label(label: &str) -> Result<&str> {
     Ok(label)
 }
 
+/// Appends a row; returns its id and position.
+fn insert(conn: &Connection, uri: &str, label: &str, colour: Option<&str>) -> Result<(i64, i64)> {
+    let position = next_position(conn, "favourites")?;
+    conn.execute(
+        "INSERT INTO favourites(uri, label, colour, position) VALUES (?1, ?2, ?3, ?4)",
+        params![uri, label, colour, position],
+    )?;
+    Ok((conn.last_insert_rowid(), position))
+}
+
+fn favourite(id: i64, uri: &Uri, label: &str, colour: Option<&str>, position: i64) -> Favourite {
+    Favourite {
+        id,
+        uri: uri.clone(),
+        label: label.to_owned(),
+        colour: colour.map(str::to_owned),
+        position,
+    }
+}
+
 impl Favourites {
     pub fn new(db: Db) -> Favourites {
         Favourites { db }
@@ -65,18 +85,34 @@ impl Favourites {
         if exists.is_some() {
             return Err(Error::kind(ErrorKind::AlreadyExists));
         }
-        let position = next_position(&conn, "favourites")?;
-        conn.execute(
-            "INSERT INTO favourites(uri, label, colour, position) VALUES (?1, ?2, ?3, ?4)",
-            params![key, label, colour, position],
-        )?;
-        Ok(Favourite {
-            id: conn.last_insert_rowid(),
-            uri: uri.clone(),
-            label: label.to_owned(),
-            colour: colour.map(str::to_owned),
-            position,
-        })
+        let (id, position) = insert(&conn, &key, label, colour)?;
+        Ok(favourite(id, uri, label, colour, position))
+    }
+
+    /// Adds a favourite for `uri`, or relabels the one it already is: what
+    /// the favourite dialog does, without the caller tracking ids.
+    pub fn save(&self, uri: &Uri, label: &str, colour: Option<&str>) -> Result<Favourite> {
+        let label = clean_label(label)?;
+        let conn = self.db.lock();
+        let key = uri.to_string();
+        let existing: Option<(i64, i64)> = conn
+            .query_row(
+                "SELECT id, position FROM favourites WHERE uri = ?1",
+                [&key],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        let (id, position) = match existing {
+            Some((id, position)) => {
+                conn.execute(
+                    "UPDATE favourites SET label = ?1, colour = ?2 WHERE id = ?3",
+                    params![label, colour, id],
+                )?;
+                (id, position)
+            }
+            None => insert(&conn, &key, label, colour)?,
+        };
+        Ok(favourite(id, uri, label, colour, position))
     }
 
     pub fn list(&self) -> Result<Vec<Favourite>> {
@@ -194,6 +230,29 @@ mod tests {
             ErrorKind::InvalidArgument
         );
         assert_eq!(f.list().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn save_adds_new_folders_and_relabels_known_ones() {
+        let f = store();
+        let a = f.save(&u("lautta://nv-1/a"), "A", None).unwrap();
+        let b = f.save(&u("lautta://nv-1/b"), " B ", Some("#0f0")).unwrap();
+        assert_ne!(a.id, b.id);
+        assert_eq!((a.position, b.position, b.label.as_str()), (0, 1, "B"));
+        let again = f.save(&u("lautta://nv-1/a"), "Docs", Some("#f00")).unwrap();
+        assert_eq!((again.id, again.position), (a.id, 0));
+        let list = f.list().unwrap();
+        assert_eq!(
+            list.iter()
+                .map(|x| (x.label.as_str(), x.colour.as_deref()))
+                .collect::<Vec<_>>(),
+            [("Docs", Some("#f00")), ("B", Some("#0f0"))]
+        );
+        assert_eq!(
+            f.save(&u("lautta://nv-1/c"), " ", None).unwrap_err().kind,
+            ErrorKind::InvalidArgument
+        );
+        assert_eq!(f.list().unwrap().len(), 2);
     }
 
     #[test]

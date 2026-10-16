@@ -5,10 +5,11 @@
 use super::events;
 use crate::json::to_json;
 use crate::runtime::{core, spawn_then};
+use lautta_core::activity::{ActivityBar, BarMode, BarView, Task};
 use lautta_core::app::Started;
 use lautta_core::app_transfers::{Aggregate, ProgressBook, StartReport};
 use lautta_core::ops::OperationKind;
-use lautta_core::transfer::{TransferEvent, TransferState};
+use lautta_core::transfer::{Clock, SystemClock, TransferEvent, TransferState};
 use lautta_core::{Error, Result, Uri};
 use qmetaobject::prelude::*;
 use qmetaobject::{QPointer, QSingletonInit};
@@ -39,7 +40,13 @@ pub struct Transfers {
     pendingAtStart: qt_property!(i32; NOTIFY changed),
     /// The app is closing with work pending (XFR-6).
     closing: qt_property!(bool; NOTIFY changed),
+    /// The activity bar (XFR-13): a `BarMode` name, the transfer it names
+    /// (0 when hidden) and how many transfers are unfinished.
+    barMode: qt_property!(QString; NOTIFY barChanged),
+    barTransferId: qt_property!(i64; NOTIFY barChanged),
+    barUnfinished: qt_property!(i32; NOTIFY barChanged),
     changed: qt_signal!(),
+    barChanged: qt_signal!(),
 
     finished: qt_signal!(id: i64, ok: bool, failures: i32),
     needsAnswer: qt_signal!(id: i64, item: i32, conflictJson: QString),
@@ -68,8 +75,13 @@ pub struct Transfers {
     requestShow: qt_method!(fn(&self)),
     queueCopy: qt_method!(fn(&self, uris_json: QString, dest: QString)),
     summaryJson: qt_method!(fn(&self, id: i64) -> QString),
+    dismissBar: qt_method!(fn(&mut self)),
+    barSeen: qt_method!(fn(&mut self)),
 
     book: ProgressBook,
+    bar: ActivityBar,
+    /// A recompute is already scheduled for the end of a success flash.
+    flash_timer: bool,
     notified: HashSet<i64>,
     started: bool,
 }
@@ -85,6 +97,7 @@ impl QSingletonInit for Transfers {
             }
             None => false,
         });
+        self.barMode = QString::from(BarMode::Hidden.name());
         self.recompute();
         // The window loads the persisted settings when its creation is done;
         // starting one event-loop turn later sees them (XFR-11).
@@ -136,6 +149,66 @@ impl Transfers {
         if self.apply_summary(&agg, questions, busy) {
             self.changed();
         }
+        let tasks: Vec<Task> = list.iter().map(Task::from).collect();
+        self.refresh_bar(&tasks);
+    }
+
+    fn refresh_bar(&mut self, tasks: &[Task]) {
+        let now = SystemClock.now_ms();
+        let view = self.bar.view(tasks, now);
+        if self.apply_bar(view) {
+            self.barChanged();
+        }
+        if let Some(ms) = self.bar.next_change_in(now) {
+            self.schedule_flash_end(ms);
+        }
+    }
+
+    fn apply_bar(&mut self, v: BarView) -> bool {
+        let next = (
+            QString::from(v.mode.name()),
+            v.lead.unwrap_or(0),
+            i32::try_from(v.unfinished).unwrap_or(i32::MAX),
+        );
+        if (self.barMode.clone(), self.barTransferId, self.barUnfinished) == next {
+            return false;
+        }
+        (self.barMode, self.barTransferId, self.barUnfinished) = next;
+        true
+    }
+
+    /// The bar hides a success on its own: one recompute when the flash ends.
+    fn schedule_flash_end(&mut self, ms: i64) {
+        if self.flash_timer {
+            return;
+        }
+        self.flash_timer = true;
+        let me = QPointer::from(&*self);
+        let wait = Duration::from_millis(u64::try_from(ms).unwrap_or(0) + 50);
+        qmetaobject::single_shot(wait, move || {
+            if let Some(p) = me.as_pinned() {
+                let mut t = p.borrow_mut();
+                t.flash_timer = false;
+                t.recompute();
+            }
+        });
+    }
+
+    fn tasks() -> Vec<Task> {
+        core().map_or_else(Vec::new, |c| c.engine.list().iter().map(Task::from).collect())
+    }
+
+    /// The bar was swiped away (XFR-13).
+    fn dismissBar(&mut self) {
+        let tasks = Self::tasks();
+        self.bar.dismiss(&tasks);
+        self.refresh_bar(&tasks);
+    }
+
+    /// The Activity page is showing: the last outcome has been seen.
+    fn barSeen(&mut self) {
+        self.bar.seen();
+        self.refresh_bar(&Self::tasks());
     }
 
     fn apply_summary(&mut self, a: &Aggregate, questions: usize, busy: bool) -> bool {
@@ -187,6 +260,8 @@ impl Transfers {
         let Some(s) = core().and_then(|c| c.engine.get(id)) else {
             return;
         };
+        // A retried transfer ends again: the bar shows every end.
+        self.bar.finished(id, s.state, SystemClock.now_ms());
         if s.state == TransferState::Canceled || !self.notified.insert(id) {
             return;
         }

@@ -83,6 +83,11 @@ Item {
             check(queuedId > 0, "queued signal carried an id")
             check(finishedCount === 1 && finishedId === queuedId && finishedOk, "first copy finished ok")
             check(Transfers.activeCount === 0 && !Transfers.busy && Transfers.pendingCount === 0, "queue is idle")
+            // XFR-13: the bar flashes the completed copy.
+            check(Transfers.barMode === "done" && Transfers.barTransferId === queuedId && Transfers.barUnfinished === 0,
+                  "bar shows the finished copy: " + Transfers.barMode + " " + Transfers.barTransferId)
+            Transfers.barSeen()
+            check(Transfers.barMode === "hidden" && Transfers.barTransferId === 0, "seen in Activity, the bar hides")
             check(rows.count === 1, "one row, got " + rows.count)
             var r = rows.itemAt(0)
             check(r.g === "history" && r.k === "copy" && r.d === "local" && r.t === "src" && r.dn === "Downloads" && r.st === "completed",
@@ -99,6 +104,10 @@ Item {
             check(asked.length >= 1, "the existing folder asks, got " + asked.length)
             check(Transfers.questionCount === 1 && Transfers.waitingCount === 1, "one transfer waits for an answer")
             check(seenWaiting, "the list showed the waiting transfer")
+            check(Transfers.barMode === "question" && Transfers.barTransferId === queuedId && Transfers.barUnfinished === 1,
+                  "bar leads with the question: " + Transfers.barMode + " " + Transfers.barUnfinished)
+            Transfers.dismissBar()
+            check(Transfers.barMode === "hidden", "a swipe hides the bar, got " + Transfers.barMode)
             if (asked.length > 0)
                 check(asked[0].choices.length > 0 && asked[0].name === "src" && asked[0].dst_is_dir, "conflict " + JSON.stringify(asked[0]))
             check(answerOpen() >= 1, "there was a question to answer")
@@ -110,12 +119,14 @@ Item {
             next()
         } else if (stage === 5) {
             check(finishedCount === 2 && finishedOk, "second copy finished, count " + finishedCount)
+            check(Transfers.barMode === "done" && Transfers.barTransferId === queuedId, "the end shows again after a swipe, got " + Transfers.barMode)
             check(rows.count === 2, "two history rows, got " + rows.count)
             check(Transfers.clearHistory() === 2, "history cleared")
             blockFor(200)
             next()
         } else if (stage === 6) {
             check(rows.count === 0, "list is empty after clearing, got " + rows.count)
+            check(Transfers.barMode === "hidden", "cleared history leaves nothing on the bar, got " + Transfers.barMode)
         }
     }
 

@@ -33,6 +33,8 @@ Item {
             property string ruri: uri
             property string ritem: itemId
             property int rcount: count
+            // Set by a step to tell whether this delegate survived a change.
+            property bool marked: false
         }
     }
 
@@ -161,11 +163,18 @@ Item {
         step("edit it",
              function() { favs.edit(favs.idOf(docs), "Papers", "#4fa3e5") },
              function() { return has("favourite", "Papers") && !has("favourite", "Docs") })
-        step("order favourites",
+        // A row remorse lives in its delegate: a change elsewhere in the
+        // list must not rebuild the rows that stay.
+        step("order favourites, keeping the other rows",
              function() {
+                 row("favourite", "Papers").marked = true
+                 row("folder", "Music").marked = true
                  favs.add("lautta://user-music/", "Tunes", "")
              },
-             function() { return favouriteNames() === "Papers,Tunes" })
+             function() {
+                 return favouriteNames() === "Papers,Tunes" && row("favourite", "Papers").marked
+                        && row("folder", "Music").marked
+             })
         step("move one up",
              function() { favs.moveBy(favs.idOf("lautta://user-music/"), -1) },
              function() { return favouriteNames() === "Tunes,Papers" })
@@ -173,6 +182,37 @@ Item {
              function() {
                  favs.remove(favs.idOf(docs))
                  favs.remove(favs.idOf("lautta://user-music/"))
+             },
+             function() { return !has("favourite") })
+        // The favourite dialog: opened on a folder, it saves by URI, adds
+        // a second favourite next to the first and removes by URI.
+        step("dialog adds a first favourite",
+             function() { favs.save(docs, "Docs", "") },
+             function() { return favouriteNames() === "Docs" })
+        step("dialog adds a second favourite",
+             function() { favs.save("lautta://user-music/", "Tunes", "#4fa3e5") },
+             function() { return favouriteNames() === "Docs,Tunes" })
+        step("dialog relabels a favourite",
+             function() { favs.save(docs, "Papers", "") },
+             function() { return favouriteNames() === "Papers,Tunes" })
+        step("dialog removes favourites",
+             function() {
+                 favs.removeUri(docs)
+                 favs.removeUri("lautta://user-music/")
+             },
+             function() { return !has("favourite") && favs.idOf(docs) === -1 })
+        step("a closed dialog's change still reaches Browse",
+             function() {
+                 var gone = Qt.createQmlObject("import Lautta 1.0; FavouritesModel { }", root)
+                 gone.save(docs, "Gone", "")
+                 gone.destroy()
+             },
+             function() { return favouriteNames() === "Gone" })
+        step("and its removal too",
+             function() {
+                 var gone = Qt.createQmlObject("import Lautta 1.0; FavouritesModel { }", root)
+                 gone.removeUri(docs)
+                 gone.destroy()
              },
              function() { return !has("favourite") })
 

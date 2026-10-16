@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Transfers (SPEC §15.4): Active, Waiting for you, Paused and History, with
+// Activity (SPEC §15.4): Active, Waiting for you, Paused and History, with
 // the prompt for transfers that stopped when the app closed
 // (XFR-11, board TransfersRestored).
 import QtQuick 2.6
@@ -14,6 +14,9 @@ Page {
 
     objectName: "transfersPage"
     allowedOrientations: Orientation.All
+
+    // What ended is on screen now: the activity bar lets go of it (XFR-13).
+    onStatusChanged: if (status === PageStatus.Active) Transfers.barSeen()
 
     function sectionTitle(group) {
         switch (group) {
@@ -73,7 +76,7 @@ Page {
             width: list.width
 
             PageHeader {
-                //% "Transfers"
+                //% "Activity"
                 title: qsTrId("lautta-xfr-title")
                 description: page.headerDescription()
             }
@@ -104,7 +107,7 @@ Page {
                         rightMargin: Theme.paddingMedium
                         verticalCenter: parent.verticalCenter
                     }
-                    //% "%n transfer(s) stopped when Lautta closed."
+                    //% "%n task(s) stopped when Lautta closed."
                     text: qsTrId("lautta-xfr-restored", Transfers.pendingAtStart)
                     wrapMode: Text.WordWrap
                     font.pixelSize: Theme.fontSizeSmall
@@ -186,9 +189,9 @@ Page {
 
         ViewPlaceholder {
             enabled: list.count === 0
-            //% "No transfers"
+            //% "No activity"
             text: qsTrId("lautta-xfr-empty")
-            //% "Copies, moves and uploads you start show up here."
+            //% "Copies, moves, deletes and archives you start show up here."
             hintText: qsTrId("lautta-xfr-empty-hint")
         }
 

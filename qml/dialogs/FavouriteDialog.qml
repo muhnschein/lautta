@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Add or edit a favourite (ORG-1): a label and a colour for a folder.
-// `favouriteId` is -1 for a new favourite of `uri`.
+// Opened on `uri`; it edits the folder's favourite when it is one already
+// and adds one otherwise, so callers never pass an id.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -10,34 +11,27 @@ Dialog {
     id: dialog
 
     property string uri
-    property int favouriteId: -1
     property string colour
-    readonly property bool editing: favouriteId >= 0
+    // Known once the favourites are loaded (`filled`).
+    property bool editing
     property bool filled
 
     allowedOrientations: Orientation.All
-    canAccept: labelField.text.trim().length > 0
+    canAccept: filled && labelField.text.trim().length > 0
 
     function fill() {
         if (filled || !favourites.loaded)
             return
+        var f = JSON.parse(favourites.get(favourites.idOf(uri)))
+        editing = f.uri !== undefined
+        if (editing) {
+            labelField.text = f.label
+            colour = f.colour
+        }
         filled = true
-        if (!editing)
-            return
-        var f = JSON.parse(favourites.get(favouriteId))
-        if (f.uri === undefined)
-            return
-        uri = f.uri
-        labelField.text = f.label
-        colour = f.colour
     }
 
-    onAccepted: {
-        if (editing)
-            favourites.edit(favouriteId, labelField.text, colour)
-        else
-            favourites.add(uri, labelField.text, colour)
-    }
+    onAccepted: favourites.save(uri, labelField.text, colour)
 
     FavouritesModel {
         id: favourites
@@ -45,14 +39,23 @@ Dialog {
         Component.onCompleted: reload()
     }
 
-    Component.onCompleted: {
-        if (!editing)
-            labelField.text = App.nameOf(uri)
-    }
+    Component.onCompleted: labelField.text = App.nameOf(uri)
 
     SilicaFlickable {
         anchors.fill: parent
         contentHeight: column.height + Theme.paddingLarge
+
+        PullDownMenu {
+            visible: dialog.editing
+            MenuItem {
+                //% "Remove from favourites"
+                text: qsTrId("lautta-favourite-remove")
+                onClicked: {
+                    favourites.removeUri(dialog.uri)
+                    pageStack.pop()
+                }
+            }
+        }
 
         Column {
             id: column
@@ -118,7 +121,7 @@ Dialog {
                 delegate: Item {
                     width: column.width
                     height: Theme.itemSizeSmall
-                    readonly property bool current: model.itemId === dialog.favouriteId
+                    readonly property bool current: model.uri === dialog.uri
 
                     Rectangle {
                         anchors.fill: parent
