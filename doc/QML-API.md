@@ -148,7 +148,10 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `image://lautta-file/<uri>` for remote full images.
 - `PdfDocument { uri }` (PRV-12): `loading`, `loaded`, `pageCount`, `size`, `errorKind`
   (file not readable, ErrorText.js), `problem` (`invalid`, `encrypted`, `empty`,
-  `tooLarge`), `heightFor(index, width)`, `reload()`; image provider
+  `tooLarge`), `wrongPassword` (the last `unlock` failed), `lastPage` (where reading
+  stopped, from 0; -1 unknown), `heightFor(index, width)`, `reload()`,
+  `unlock(password)` (opens an encrypted PDF; the password is not kept),
+  `rememberPage(index)`; image provider
   `image://lautta-pdf/<uri>?page=N` renders page N (from 0) at `sourceSize.width`
   (1080 without one), any location.
 - Pages: `viewers/ImageViewer.qml { uri, folderUri }`, `viewers/TextViewer.qml { uri }`,

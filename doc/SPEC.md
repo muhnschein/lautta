@@ -516,7 +516,11 @@ bridge).
   file, network or process access, runs no JavaScript and follows no links, actions or
   form submissions; links are drawn but not clickable. The app's sandbox has no
   `Internet` permission either. Files up to 200 MB; pages at most 4096 px on an edge.
-  Password-protected PDFs are refused with a message (the empty user password opens).
+  The pulley header shows the page count. A password-protected PDF asks for its
+  password in a dialog (swipe forward unlocks; a wrong one asks again); the password
+  opens that one parse and is never stored, so reopening asks again (the empty user
+  password opens without asking). Reopening a PDF starts at the page where reading
+  stopped, remembered with the recents (off and cleared with them, ORG-2).
 
 ## 13. Search and organisation
 
@@ -665,7 +669,8 @@ SQLite for everything structured.
   unused.
 - DAT-2: Schema with `PRAGMA user_version`, forward migrations only: `favourites`,
   `recents`, `transfers`, `transfer_items`, `working_copies`, `dircache`,
-  `trash_items(id, original_uri, trashed_at, stored_name)`.
+  `trash_items(id, original_uri, trashed_at, stored_name)`, `reading_positions(uri,
+  location_id, page, at_ms)` (PRV-12).
 - DAT-3: The netvfs socket directory `~/.local/share/org.netvfs/lautta/netvfs/` belongs
   to netvfs; the app only reads it. *Clear app data* in Settings deletes it along with
   everything else; netvfs recreates it (netvfs XB-4).

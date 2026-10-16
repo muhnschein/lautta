@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-use super::sample::{build, page, Spec, RED_SQUARE};
+use super::sample::{
+    build, page, Spec, LOCKED_AES256, LOCKED_OWNER_PASSWORD, LOCKED_PASSWORD, LOCKED_RC4, RED_SQUARE,
+};
 use super::*;
 
 fn pixel(p: &RenderedPage, x: u32, y: u32) -> [u8; 4] {
@@ -163,4 +165,31 @@ fn errors_read_as_sentences() {
     ] {
         assert_eq!(e.to_string(), text);
     }
+}
+
+#[test]
+fn encrypted_documents_open_with_their_password() {
+    for bytes in [LOCKED_AES256, LOCKED_RC4] {
+        for wrong in ["", "Sesame", "sesame "] {
+            assert_eq!(
+                PdfDocument::open_with_password(bytes.to_vec(), wrong).unwrap_err(),
+                PdfError::Encrypted,
+                "{wrong:?}"
+            );
+        }
+        assert_eq!(
+            PdfDocument::open(bytes.to_vec()).unwrap_err(),
+            PdfError::Encrypted
+        );
+        let doc = PdfDocument::open_with_password(bytes.to_vec(), LOCKED_PASSWORD).unwrap();
+        assert_eq!(doc.page_count(), 2);
+        assert_eq!(
+            pixel(&doc.render(0, 100).unwrap(), 10, 190),
+            RED,
+            "decrypted content"
+        );
+    }
+    // hayro checks the owner password of AES-256 documents only.
+    let doc = PdfDocument::open_with_password(LOCKED_AES256.to_vec(), LOCKED_OWNER_PASSWORD).unwrap();
+    assert_eq!(doc.page_count(), 2);
 }

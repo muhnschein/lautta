@@ -2663,5 +2663,21 @@
         <source>Page %1 of %2</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-viewers-pdf-unlock">
+        <source>Unlock</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-locked">
+        <source>Locked PDF</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-wrong-password">
+        <source>Wrong password, try again</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-password">
+        <source>Password</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

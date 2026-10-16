@@ -20,6 +20,14 @@ Item {
             tools.pump(50)
     }
 
+    // Waits for a PdfDocument to finish loading (unlocking AES-256 takes a
+    // while in a debug build).
+    function loaded(d) {
+        tools.pump(50)
+        for (var i = 0; i < 100 && d.loading; ++i)
+            tools.pump(50)
+    }
+
     ViewerTools { id: tools }
     PdfDocument { id: doc }
     PdfDocument { id: other }
@@ -29,8 +37,9 @@ Item {
 
     Component.onCompleted: {
         check(tools.installFixture(Qt.resolvedUrl("fixtures/two-pages.pdf"), pdf), "pdf fixture")
-        check(tools.installFixture(Qt.resolvedUrl("fixtures/locked.pdf"), "lautta://user-documents/locked.pdf"), "locked fixture")
+        check(tools.installFixture(Qt.resolvedUrl("fixtures/secret.pdf"), "lautta://user-documents/locked.pdf"), "locked fixture")
         check(tools.installFixture(Qt.resolvedUrl("fixtures/notes-crlf.txt"), "lautta://user-documents/fake.pdf"), "fake fixture")
+        check(tools.installFixture(Qt.resolvedUrl("fixtures/secret.pdf"), "lautta://user-documents/secret.pdf"), "secret fixture")
 
         // Pages and their sizes.
         check(!doc.loaded && doc.pageCount === 0, "nothing before a uri")
@@ -61,19 +70,45 @@ Item {
 
         // What cannot be shown, and why.
         other.uri = "lautta://user-documents/locked.pdf"
-        tools.pump(300)
+        loaded(other)
         check(other.problem === "encrypted" && !other.loaded, "locked: " + other.problem)
         other.uri = "lautta://user-documents/fake.pdf"
-        tools.pump(300)
+        loaded(other)
         check(other.problem === "invalid" && other.pageCount === 0, "not a pdf: " + other.problem)
         other.uri = "lautta://user-documents/missing.pdf"
-        tools.pump(300)
+        loaded(other)
         check(other.errorKind === "NotFound" && other.problem === "", "missing: " + other.errorKind)
         other.uri = "garbage"
         check(!other.loading && !other.loaded && other.errorKind === "", "bad uri clears")
         other.uri = pdf
         other.reload()
-        tools.pump(300)
+        loaded(other)
         check(other.loaded && other.pageCount === 2, "reload")
+
+        // Reading position: none at first, then where it stopped.
+        check(other.lastPage === -1, "no position yet: " + other.lastPage)
+        other.rememberPage(1)
+        other.rememberPage(7)
+        other.rememberPage(-1)
+        tools.pump(300)
+        other.reload()
+        loaded(other)
+        check(other.lastPage === 1, "position kept: " + other.lastPage)
+
+        // A password opens an encrypted PDF; a wrong one says so.
+        other.uri = "lautta://user-documents/secret.pdf"
+        loaded(other)
+        check(other.problem === "encrypted" && !other.wrongPassword, "asks for a password")
+        other.unlock("wrong")
+        check(other.loading, "unlocking")
+        loaded(other)
+        check(other.problem === "encrypted" && other.wrongPassword, "wrong password: " + other.problem)
+        other.unlock("sesame")
+        loaded(other)
+        check(other.loaded && other.pageCount === 2 && other.problem === "" && !other.wrongPassword,
+              "unlocked: " + other.problem)
+        other.reload()
+        loaded(other)
+        check(other.problem === "encrypted" && !other.wrongPassword, "the password is not kept")
     }
 }

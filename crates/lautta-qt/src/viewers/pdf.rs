@@ -8,7 +8,7 @@ use super::images::{finished, on_cancel, Reply};
 use super::{parse_uri, qstr, run_then};
 use crate::runtime::{core, handle};
 use lautta_core::app::Core;
-use lautta_core::app_pdf::{parse_page_id, pdf_error_name, OpenedPdf, PageSize, PdfFailure};
+use lautta_core::app_pdf::{parse_page_id, pdf_error_name, OpenedPdf, PageSize, PdfError, PdfFailure};
 use qmetaobject::prelude::*;
 use qmetaobject::qml_register_type;
 use std::sync::Arc;
@@ -37,11 +37,19 @@ pub struct PdfDocument {
     /// Why the file is no PDF the viewer can show: "invalid", "encrypted",
     /// "empty" or "tooLarge"; empty otherwise.
     problem: qt_property!(QString; NOTIFY stateChanged),
+    /// The last `unlock` was given a password that does not open the PDF.
+    wrongPassword: qt_property!(bool; NOTIFY stateChanged),
+    /// Where reading stopped last time (0-based); -1 when unknown.
+    lastPage: qt_property!(i32; NOTIFY stateChanged),
     stateChanged: qt_signal!(),
 
     /// Height of page `index` shown `width` wide (0 for no such page).
     heightFor: qt_method!(fn(&self, index: i32, width: f64) -> f64),
     reload: qt_method!(fn(&mut self)),
+    /// Opens an encrypted PDF with `password`. The password is not kept.
+    unlock: qt_method!(fn(&mut self, password: QString)),
+    /// Remembers that reading stopped at page `index` (0-based).
+    rememberPage: qt_method!(fn(&self, index: i32)),
 
     pages: Vec<PageSize>,
     generation: u64,
@@ -65,6 +73,15 @@ impl PdfDocument {
     }
 
     fn reload(&mut self) {
+        self.open(String::new());
+    }
+
+    fn unlock(&mut self, password: QString) {
+        self.open(password.to_string());
+    }
+
+    /// Opens the PDF afresh; a non-empty `password` is an unlock attempt.
+    fn open(&mut self, password: String) {
         self.generation += 1;
         let gen = self.generation;
         self.clear();
@@ -73,28 +90,44 @@ impl PdfDocument {
             self.stateChanged();
             return;
         };
+        let attempt = !password.is_empty();
         self.loading = true;
         self.stateChanged();
         run_then(
             self,
-            async move { Ok(core.open_pdf(&uri).await) },
+            async move { Ok(core.open_pdf(&uri, &password).await) },
             move |me, res| {
                 if me.generation == gen {
                     me.loading = false;
-                    me.apply(res.unwrap_or_else(|e| Err(PdfFailure::File(e))));
+                    me.apply(res.unwrap_or_else(|e| Err(PdfFailure::File(e))), attempt);
                     me.stateChanged();
                 }
             },
         );
     }
 
-    fn apply(&mut self, res: Result<OpenedPdf, PdfFailure>) {
+    fn rememberPage(&self, index: i32) {
+        let (Some(core), Some(uri), Ok(page)) = (core(), parse_uri(&self.uri), usize::try_from(index)) else {
+            return;
+        };
+        if !self.loaded || page >= self.pages.len() {
+            return;
+        }
+        handle().spawn_blocking(move || core.remember_pdf_page(&uri, page));
+    }
+
+    fn apply(&mut self, res: Result<OpenedPdf, PdfFailure>, attempt: bool) {
         match res {
             Ok(pdf) => {
                 self.loaded = true;
                 self.pageCount = i32::try_from(pdf.pages.len()).unwrap_or(i32::MAX);
                 self.size = pdf.size.map_or(-1.0, |s| s as f64);
+                self.lastPage = pdf.last_page.and_then(|p| i32::try_from(p).ok()).unwrap_or(-1);
                 self.pages = pdf.pages;
+            }
+            Err(PdfFailure::Pdf(PdfError::Encrypted)) => {
+                self.problem = qstr(pdf_error_name(PdfError::Encrypted));
+                self.wrongPassword = attempt;
             }
             Err(PdfFailure::File(e)) => {
                 self.errorKind = qstr(e.kind.name());
@@ -112,6 +145,8 @@ impl PdfDocument {
         self.errorKind = QString::default();
         self.errorMessage = QString::default();
         self.problem = QString::default();
+        self.wrongPassword = false;
+        self.lastPage = -1;
     }
 }
 

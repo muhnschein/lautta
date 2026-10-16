@@ -70,3 +70,13 @@ pub fn build(pages: &[Spec]) -> Vec<u8> {
     );
     out
 }
+
+/// Password that opens [`LOCKED_AES256`] and [`LOCKED_RC4`] as a reader.
+pub const LOCKED_PASSWORD: &str = "sesame";
+/// The owner password, which opens [`LOCKED_AES256`] too.
+pub const LOCKED_OWNER_PASSWORD: &str = "owner-key";
+/// Two pages as in [`RED_SQUARE`] on 100×200 and an empty 300×150,
+/// encrypted with AES-256 (made with pypdf).
+pub const LOCKED_AES256: &[u8] = include_bytes!("fixtures/locked-aes256.pdf");
+/// The same, encrypted with 128-bit RC4.
+pub const LOCKED_RC4: &[u8] = include_bytes!("fixtures/locked-rc4.pdf");
