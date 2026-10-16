@@ -18,6 +18,15 @@ ApplicationWindow {
             tools.pump(100)
     }
 
+    // Waits for the page on top to be shown and its PDF to be read.
+    function shown() {
+        waitFor(function() {
+            var p = pageStack.currentPage
+            return !pageStack.busy && p.loading !== undefined && !p.loading
+        })
+        return pageStack.currentPage
+    }
+
     function install(fixture, uri) {
         if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/" + fixture), uri))
             console.error("FAILED: fixture " + fixture + " not installed")
@@ -28,9 +37,7 @@ ApplicationWindow {
         install("secret.pdf", "lautta://user-documents/locked.pdf")
         install("linked.pdf", "lautta://user-documents/linked.pdf")
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        // Let the asynchronous loading finish and the pages appear.
-        tools.pump(800)
-        var viewer = pageStack.currentPage
+        var viewer = shown()
         viewer.zoomTo(2.5, 100, 100)
         tools.pump(800)
         viewer.zoomTo(1, 100, 100)
@@ -40,8 +47,7 @@ ApplicationWindow {
         pageStack.currentPage.chosen(1)
         waitFor(function() { return pageStack.currentPage === viewer && !pageStack.busy })
         pageStack.push(linkedComponent, {}, PageStackAction.Immediate)
-        tools.pump(800)
-        var linked = pageStack.currentPage
+        var linked = shown()
         // Contents with an outline; a link within the PDF and back again.
         linked.showContents()
         waitFor(function() { return pageStack.currentPage.chosen !== undefined && !pageStack.busy })
