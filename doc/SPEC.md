@@ -367,8 +367,10 @@ what the app does.
   in the binary), size, modified, type; folders first toggle; stable.
 - BRW-3: Instant filter (substring, case- and diacritics-insensitive), hidden files
   toggle (dot names and the hidden attribute).
-- BRW-4: View settings (sort, folders first, hidden files, list or grid) are global: the
-  same for every folder and location.
+- BRW-4: View settings (sort, folders first, hidden files, list or grid, grid size) are
+  global: the same for every folder and location. The grid shows 4 items per row with
+  names on icons only, or 3 per row with name and size under every item; landscape keeps
+  the tile size.
 - BRW-5: Stale-while-revalidate: cached listing shown immediately (≤ 7 days old, marked
   stale), refresh on the interactive lane, diff applied in place without losing scroll
   or selection.
