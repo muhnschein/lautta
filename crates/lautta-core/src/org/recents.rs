@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Recents (ORG-2): files opened, previewed or transferred;
-//! filterable, clearable, can be switched off.
+//! filterable, clearable, can be switched off. Also where reading stopped in
+//! a document (PRV-12), which goes with them.
 
 use super::{location_prefix, now_ms, parse_uri};
 use crate::db::Db;
@@ -9,7 +10,8 @@ use crate::uri::Uri;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-/// Rows kept; older ones are dropped on `record`.
+/// Rows kept, of recents and of reading positions each; older ones are
+/// dropped on `record` and `set_page`.
 pub const MAX_RECENTS: usize = 500;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -167,17 +169,58 @@ impl Recents {
             > 0)
     }
 
+    /// Forgets all recents and reading positions; counts the recents.
     pub fn clear(&self) -> Result<usize> {
-        Ok(self.db.lock().execute("DELETE FROM recents", [])?)
+        let conn = self.db.lock();
+        conn.execute("DELETE FROM reading_positions", [])?;
+        Ok(conn.execute("DELETE FROM recents", [])?)
     }
 
-    /// SEC-5: forget everything of a removed location.
+    /// SEC-5: forget everything of a removed location; counts the recents.
     pub fn purge_location(&self, location: &str) -> Result<usize> {
-        let n = self.db.lock().execute(
+        let conn = self.db.lock();
+        let prefix = location_prefix(location);
+        conn.execute(
+            "DELETE FROM reading_positions WHERE location_id = ?1 OR substr(uri, 1, length(?2)) = ?2",
+            (location, &prefix),
+        )?;
+        let n = conn.execute(
             "DELETE FROM recents WHERE location_id = ?1 OR substr(uri, 1, length(?2)) = ?2",
-            (location, location_prefix(location)),
+            (location, &prefix),
         )?;
         Ok(n)
+    }
+
+    /// Remembers that reading `uri` stopped at `page` (0-based). A no-op
+    /// while recents are off.
+    pub fn set_page(&self, uri: &Uri, page: u32) -> Result<()> {
+        if !self.is_enabled() {
+            return Ok(());
+        }
+        let conn = self.db.lock();
+        conn.execute(
+            "INSERT INTO reading_positions(uri, location_id, page, at_ms) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(uri) DO UPDATE SET page = excluded.page, at_ms = excluded.at_ms",
+            (uri.to_string(), &uri.location, page, now_ms()),
+        )?;
+        conn.execute(
+            "DELETE FROM reading_positions WHERE uri NOT IN
+             (SELECT uri FROM reading_positions ORDER BY at_ms DESC, rowid DESC LIMIT ?1)",
+            [i64::try_from(self.cap).unwrap_or(i64::MAX)],
+        )?;
+        Ok(())
+    }
+
+    /// Where reading `uri` stopped; `None` when unknown or while recents
+    /// are off.
+    pub fn page(&self, uri: &Uri) -> Result<Option<u32>> {
+        if !self.is_enabled() {
+            return Ok(None);
+        }
+        let conn = self.db.lock();
+        let mut stmt = conn.prepare("SELECT page FROM reading_positions WHERE uri = ?1")?;
+        let mut rows = stmt.query_map([uri.to_string()], |r| r.get::<_, u32>(0))?;
+        Ok(rows.next().transpose()?)
     }
 }
 
@@ -308,5 +351,35 @@ mod tests {
             assert_eq!(RecentKind::parse(k.as_str()), Some(k));
         }
         assert_eq!(RecentKind::parse("nope"), None);
+    }
+
+    #[test]
+    fn reading_positions_follow_recents() {
+        let r = Recents::with_cap(Db::open_in_memory().unwrap(), 2);
+        let (a, b, c) = (
+            u("lautta://x/a.pdf"),
+            u("lautta://x/b.pdf"),
+            u("lautta://y/c.pdf"),
+        );
+        assert_eq!(r.page(&a).unwrap(), None);
+        r.set_page(&a, 3).unwrap();
+        r.set_page(&a, 7).unwrap();
+        assert_eq!(r.page(&a).unwrap(), Some(7), "updated, not added");
+        r.set_page(&b, 1).unwrap();
+        r.set_page(&c, 2).unwrap();
+        assert_eq!(r.page(&a).unwrap(), None, "the oldest beyond the cap goes");
+        assert_eq!((r.page(&b).unwrap(), r.page(&c).unwrap()), (Some(1), Some(2)));
+
+        r.set_enabled(false);
+        assert_eq!(r.page(&b).unwrap(), None, "not read while off");
+        r.set_page(&a, 5).unwrap();
+        r.set_enabled(true);
+        assert_eq!(r.page(&a).unwrap(), None, "not written while off");
+
+        assert_eq!(r.purge_location("x").unwrap(), 0);
+        assert_eq!(r.page(&b).unwrap(), None, "purged with its location");
+        assert_eq!(r.page(&c).unwrap(), Some(2));
+        r.clear().unwrap();
+        assert_eq!(r.page(&c).unwrap(), None, "cleared with recents");
     }
 }

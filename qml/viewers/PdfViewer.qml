@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // PDF viewer (PRV-12, board PdfViewer): the pages one below the other,
 // fitted to the width; pinch or double-tap to zoom, the page number shows
-// while scrolling. Pages come from image://lautta-pdf/, rendered in Rust
-// (hayro); links and forms are drawn but do nothing, and nothing in a PDF
-// can reach the network.
+// while scrolling. Opens where reading stopped last time; an encrypted PDF
+// asks for its password (board Password dialog). Pages come from
+// image://lautta-pdf/, rendered in Rust (hayro); links and forms are drawn
+// but do nothing, and nothing in a PDF can reach the network.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/viewers"
+import "../dialogs"
 import "../components/ErrorText.js" as ErrorText
 import "../components/viewers/PdfText.js" as PdfText
 
@@ -21,6 +23,9 @@ Page {
     property real renderZoom: 1
     readonly property real maxZoom: 4
     readonly property string fileName: App.nameOf(uri)
+    // Why the PDF is not shown (PdfDocument.problem), and whether it loads.
+    readonly property string problem: doc.problem
+    readonly property bool loading: doc.loading
     readonly property int currentPage: {
         var item = view.itemAt(view.contentX + view.width / 2, view.contentY + view.height / 2)
         return item ? item.pageIndex + 1 : 1
@@ -38,6 +43,18 @@ Page {
         settle.restart()
     }
 
+    // Asks for the password of an encrypted PDF; `wrong` after a failed try.
+    function askPassword() {
+        asked = true
+        wantPassword = false
+        var dialog = pageStack.push(passwordDialog, { "fileName": fileName, "wrong": doc.wrongPassword })
+        dialog.accepted.connect(function() {
+            unlocking = true
+            doc.unlock(dialog.password)
+            dialog.forget()
+        })
+    }
+
     function say(kind, message) {
         notice.text = ErrorText.message(kind, { "item": fileName, "location": App.locationName(uri) })
         notice.show()
@@ -49,6 +66,59 @@ Page {
     PdfDocument {
         id: doc
         uri: page.uri
+
+        onStateChanged: {
+            if (!loading)
+                page.unlocking = false
+            if (loaded && lastPage > 0)
+                restore.restart()
+            else if (problem === "encrypted" && (!page.asked || wrongPassword)) {
+                page.wantPassword = true
+                askLater.restart()
+            }
+        }
+    }
+
+    // After the pages are laid out: back where reading stopped.
+    Timer {
+        id: restore
+        interval: 0
+        onTriggered: view.positionViewAtIndex(doc.lastPage, ListView.Beginning)
+    }
+
+    // The password dialog comes when the PDF turns out to be encrypted and
+    // again after a wrong password; Cancel leaves it locked (Unlock in the
+    // pull-down menu asks again). Pushing waits until this page is shown.
+    property bool asked
+    property bool wantPassword
+    // A password is being tried (board Unlocking).
+    property bool unlocking
+    onStatusChanged: if (status === PageStatus.Active && wantPassword) askLater.restart()
+    // While the page stack is still moving, a push would be lost: try again.
+    Timer {
+        id: askLater
+        interval: 50
+        onTriggered: {
+            if (page.status !== PageStatus.Active || !page.wantPassword)
+                return
+            if (pageStack.busy)
+                restart()
+            else
+                page.askPassword()
+        }
+    }
+
+    // Where reading is, saved once scrolling has stopped for a moment.
+    onCurrentPageChanged: if (doc.loaded) remember.restart()
+    Timer {
+        id: remember
+        interval: 1000
+        onTriggered: doc.rememberPage(page.currentPage - 1)
+    }
+
+    Component {
+        id: passwordDialog
+        PdfPasswordDialog { }
     }
 
     ExternalActions {
@@ -87,6 +157,12 @@ Page {
 
             PullDownMenu {
                 MenuItem {
+                    visible: doc.problem === "encrypted"
+                    //% "Unlock"
+                    text: qsTrId("lautta-viewers-pdf-unlock")
+                    onClicked: page.askPassword()
+                }
+                MenuItem {
                     //% "Open with"
                     text: qsTrId("lautta-viewers-open-with")
                     onClicked: external.openWith()
@@ -102,7 +178,7 @@ Page {
                 width: view.width
                 x: view.contentX
                 title: page.fileName
-                description: doc.loaded ? PdfText.summary(doc.pageCount, Format.formatFileSize(doc.size)) : ""
+                description: doc.loaded ? PdfText.summary(doc.pageCount) : ""
             }
 
             delegate: PdfPage {
@@ -163,7 +239,30 @@ Page {
         }
     }
 
+    Column {
+        anchors { bottom: busy.top; bottomMargin: Theme.paddingLarge * 2; horizontalCenter: parent.horizontalCenter }
+        spacing: Theme.paddingMedium
+        visible: page.unlocking
+
+        HighlightImage {
+            anchors.horizontalCenter: parent.horizontalCenter
+            source: page.unlocking ? Qt.resolvedUrl("../icons/lock.svg") : ""
+            sourceSize.width: Theme.iconSizeLarge
+            sourceSize.height: Theme.iconSizeLarge
+            color: Theme.highlightColor
+        }
+        Label {
+            anchors.horizontalCenter: parent.horizontalCenter
+            font.pixelSize: Theme.fontSizeExtraLarge
+            font.family: Theme.fontFamilyHeading
+            color: Theme.highlightColor
+            //% "Unlocking"
+            text: qsTrId("lautta-viewers-pdf-unlocking")
+        }
+    }
+
     BusyIndicator {
+        id: busy
         anchors.centerIn: parent
         size: BusyIndicatorSize.Large
         running: doc.loading || external.busy

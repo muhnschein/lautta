@@ -11,9 +11,21 @@ ApplicationWindow {
 
     ViewerTools { id: tools }
 
+    // Runs the event loop until `done()` holds (the target is slow when
+    // emulated: unlocking AES-256 takes seconds there).
+    function waitFor(done) {
+        for (var i = 0; i < 300 && !done(); ++i)
+            tools.pump(100)
+    }
+
+    function install(fixture, uri) {
+        if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/" + fixture), uri))
+            console.error("FAILED: fixture " + fixture + " not installed")
+    }
+
     Component.onCompleted: {
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/two-pages.pdf"), "lautta://user-documents/two-pages.pdf")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/locked.pdf"), "lautta://user-documents/locked.pdf")
+        install("two-pages.pdf", "lautta://user-documents/two-pages.pdf")
+        install("secret.pdf", "lautta://user-documents/locked.pdf")
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
         // Let the asynchronous loading finish and the pages appear.
         tools.pump(800)
@@ -22,7 +34,26 @@ ApplicationWindow {
         tools.pump(800)
         viewer.zoomTo(1, 100, 100)
         pageStack.push(lockedComponent, {}, PageStackAction.Immediate)
-        tools.pump(500)
+        // The password dialog opens on its own; a wrong password asks again.
+        var lockedViewer = pageStack.currentPage
+        waitFor(function() { return pageStack.currentPage.wrong !== undefined })
+        var dialog = pageStack.currentPage
+        if (dialog.wrong === undefined) {
+            console.error("FAILED: no password dialog; status " + lockedViewer.status
+                          + ", wantPassword " + lockedViewer.wantPassword + ", asked " + lockedViewer.asked
+                          + ", problem '" + lockedViewer.problem + "', loading " + lockedViewer.loading
+                          + ", busy " + pageStack.busy + ", depth " + pageStack.depth)
+            return
+        }
+        dialog.wrong = true
+        tools.pump(200)
+        dialog.reject()
+        // Cancel leaves the viewer locked, on top again.
+        waitFor(function() { return pageStack.currentPage === lockedViewer && !pageStack.busy })
+        // The Unlocking state while a password is tried.
+        lockedViewer.unlocking = true
+        tools.pump(200)
+        lockedViewer.unlocking = false
     }
 
     Component {

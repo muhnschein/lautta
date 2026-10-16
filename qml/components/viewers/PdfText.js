@@ -2,11 +2,10 @@
 // Texts of the PDF viewer (PRV-12).
 .pragma library
 
-// "12 pages · 1.2 MB"; `size` is already formatted.
-function summary(pages, size) {
+// "12 pages".
+function summary(pages) {
     //% "%n page(s)"
-    var count = qsTrId("lautta-viewers-pdf-pages", pages)
-    return size ? count + " · " + size : count
+    return qsTrId("lautta-viewers-pdf-pages", pages)
 }
 
 // Why a file is no PDF the viewer can show (PdfDocument.problem).

@@ -316,7 +316,7 @@ async fn pdfs_open_and_render_from_any_location() {
         "lautta://user-documents/local.pdf",
         "lautta://nv-nas/docs/remote.pdf",
     ] {
-        let opened = h.core.open_pdf(&uri(u)).await.unwrap();
+        let opened = h.core.open_pdf(&uri(u), "").await.unwrap();
         assert_eq!(
             opened.pages,
             [
@@ -358,7 +358,7 @@ async fn a_page_is_rendered_without_opening_first_and_sees_no_stale_copy() {
     );
     // Opening again reads the file again: the changed file is seen.
     h.nas.add_file("docs/fresh.pdf", &build(&[page(10, 10, "")]), 2);
-    assert_eq!(h.core.open_pdf(&u).await.unwrap().pages.len(), 1);
+    assert_eq!(h.core.open_pdf(&u, "").await.unwrap().pages.len(), 1);
     assert_eq!(
         h.core.pdf_page(&u, 1, 60).await.unwrap_err(),
         PdfFailure::Pdf(lautta_pdf::PdfError::NoSuchPage)
@@ -368,7 +368,7 @@ async fn a_page_is_rendered_without_opening_first_and_sees_no_stale_copy() {
 /// What `open_pdf` of `u` fails with, as "file <kind>" or "pdf <problem>".
 async fn pdf_failure(h: &Home, u: &str) -> String {
     use lautta_core::app_pdf::PdfFailure;
-    match h.core.open_pdf(&uri(u)).await.unwrap_err() {
+    match h.core.open_pdf(&uri(u), "").await.unwrap_err() {
         PdfFailure::File(e) => format!("file {:?}", e.kind),
         PdfFailure::Pdf(p) => format!("pdf {p:?}"),
     }
@@ -412,7 +412,7 @@ async fn oversized_pdfs_are_refused_without_reading_them() {
     drop(big);
     let err = h
         .core
-        .open_pdf(&uri("lautta://nv-nas/docs/huge.pdf"))
+        .open_pdf(&uri("lautta://nv-nas/docs/huge.pdf"), "")
         .await
         .unwrap_err();
     assert_eq!(err, PdfFailure::Pdf(lautta_pdf::PdfError::TooLarge));
@@ -421,4 +421,42 @@ async fn oversized_pdfs_are_refused_without_reading_them() {
         "{:?}",
         h.nas.calls()
     );
+}
+
+#[tokio::test]
+async fn encrypted_pdfs_open_with_their_password_only() {
+    use lautta_core::app_pdf::PdfFailure;
+    use lautta_pdf::sample::{LOCKED_AES256, LOCKED_PASSWORD};
+    use lautta_pdf::PdfError;
+    let h = home().await;
+    h.nas.add_file("docs/locked.pdf", LOCKED_AES256, 1);
+    let u = uri("lautta://nv-nas/docs/locked.pdf");
+    for wrong in ["", "nope"] {
+        assert_eq!(
+            h.core.open_pdf(&u, wrong).await.unwrap_err(),
+            PdfFailure::Pdf(PdfError::Encrypted),
+            "{wrong:?}"
+        );
+    }
+    assert_eq!(h.core.open_pdf(&u, LOCKED_PASSWORD).await.unwrap().pages.len(), 2);
+    let p = h.core.pdf_page(&u, 0, 50).await.unwrap();
+    assert_eq!((p.width, p.height), (50, 100), "the unlocked document is kept");
+}
+
+#[tokio::test]
+async fn pdfs_reopen_where_reading_stopped() {
+    let h = home().await;
+    h.nas.add_file("docs/book.pdf", &sample_pdf(), 1);
+    let u = uri("lautta://nv-nas/docs/book.pdf");
+    assert_eq!(h.core.open_pdf(&u, "").await.unwrap().last_page, None);
+    h.core.remember_pdf_page(&u, 1);
+    assert_eq!(h.core.open_pdf(&u, "").await.unwrap().last_page, Some(1));
+    h.core.remember_pdf_page(&u, 5);
+    assert_eq!(
+        h.core.open_pdf(&u, "").await.unwrap().last_page,
+        None,
+        "a page the document no longer has is ignored"
+    );
+    h.core.remember_pdf_page(&u, 0);
+    assert_eq!(h.core.open_pdf(&u, "").await.unwrap().last_page, Some(0));
 }
