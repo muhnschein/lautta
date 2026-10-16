@@ -17,7 +17,8 @@ use std::os::raw::{c_char, c_int};
 /// 128-byte aligned member moves all of it past the slots.
 /// `tools/ci/check-rpm.sh` checks the alignment of the shipped binary.
 #[repr(align(128))]
-struct HybrisTlsGap(u8);
+// The field is never read: it only gives the block its size.
+struct HybrisTlsGap(#[allow(dead_code)] u8);
 
 thread_local! {
     static HYBRIS_TLS_GAP: HybrisTlsGap = const { HybrisTlsGap(0) };

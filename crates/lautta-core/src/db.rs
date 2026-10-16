@@ -108,7 +108,16 @@ const MIGRATIONS: &[&str] = &[
         last_used_ms INTEGER NOT NULL
     );
     "#,
-    // 2: BRW-12, what the Browse page shows and in which order.
+    // 2: where reading stopped in a viewer (PRV-12), forgotten with recents.
+    r#"
+    CREATE TABLE reading_positions (
+        uri TEXT PRIMARY KEY,
+        location_id TEXT NOT NULL,
+        page INTEGER NOT NULL,
+        at_ms INTEGER NOT NULL
+    );
+    "#,
+    // 3: BRW-12, what the Browse page shows and in which order.
     r#"
     CREATE TABLE browse_layout (
         section TEXT NOT NULL,
@@ -205,12 +214,12 @@ mod tests {
             .query_row(
                 "SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN \
                  ('favourites','recents','transfers','transfer_items','working_copies',\
-                 'dircache','trash_items')",
+                 'dircache','trash_items','reading_positions')",
                 [],
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(n, 7);
+        assert_eq!(n, 8);
     }
 
     #[test]

@@ -67,12 +67,7 @@ struct Directory {
 /// Reads the whole archive's entries (ranged: tail, then the directory).
 pub fn read_entries(reader: &mut BlockReader) -> Result<Vec<RawEntry>> {
     let dir = locate_directory(reader)?;
-    if dir.size > MAX_DIRECTORY
-        || dir
-            .offset
-            .checked_add(dir.size)
-            .map_or(true, |e| e > reader.size())
-    {
+    if dir.size > MAX_DIRECTORY || dir.offset.checked_add(dir.size).is_none_or(|e| e > reader.size()) {
         return Err(corrupt("central directory out of range"));
     }
     let len = usize::try_from(dir.size).map_err(|_| corrupt("central directory too large"))?;
@@ -291,10 +286,7 @@ pub fn open_entry(src: &Arc<BlockSource>, loc: &ZipLoc) -> Result<Box<dyn Read +
     let name_len = u64::from(le16(&head, 26).unwrap_or(0));
     let extra_len = u64::from(le16(&head, 28).unwrap_or(0));
     let data_at = loc.header_offset + 30 + name_len + extra_len;
-    if data_at
-        .checked_add(loc.compressed)
-        .map_or(true, |e| e > src.size())
-    {
+    if data_at.checked_add(loc.compressed).is_none_or(|e| e > src.size()) {
         return Err(corrupt("entry data out of range"));
     }
     reader.seek(SeekFrom::Start(data_at)).map_err(from_io)?;

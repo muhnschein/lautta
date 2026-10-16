@@ -300,3 +300,163 @@ async fn viewing_is_noted_in_recents() {
         "recents can be off"
     );
 }
+
+fn sample_pdf() -> Vec<u8> {
+    use lautta_pdf::sample::{build, page, RED_SQUARE};
+    build(&[page(100, 200, RED_SQUARE), page(300, 150, "")])
+}
+
+#[tokio::test]
+async fn pdfs_open_and_render_from_any_location() {
+    use lautta_core::app_pdf::PageSize;
+    let h = home().await;
+    std::fs::write(h.root.join("Documents/local.pdf"), sample_pdf()).unwrap();
+    h.nas.add_file("docs/remote.pdf", &sample_pdf(), 1);
+    for u in [
+        "lautta://user-documents/local.pdf",
+        "lautta://nv-nas/docs/remote.pdf",
+    ] {
+        let opened = h.core.open_pdf(&uri(u), "").await.unwrap();
+        assert_eq!(
+            opened.pages,
+            [
+                PageSize {
+                    width: 100.0,
+                    height: 200.0
+                },
+                PageSize {
+                    width: 300.0,
+                    height: 150.0
+                }
+            ],
+            "{u}"
+        );
+        assert_eq!(opened.size, Some(sample_pdf().len() as u64));
+        let page = h.core.pdf_page(&uri(u), 0, 50).await.unwrap();
+        assert_eq!((page.width, page.height), (50, 100));
+        // The red square fills the bottom left quarter: 25 px of 50.
+        let at = ((90 * 50 + 5) * 4) as usize;
+        assert_eq!(page.rgba[at..at + 4], [255, 0, 0, 255], "{u}");
+    }
+    let r = h.core.recents.list(&RecentsFilter::default()).unwrap();
+    assert_eq!(r.len(), 2, "opened PDFs are noted in Recents");
+    assert_eq!(r[0].kind, RecentKind::Previewed);
+}
+
+#[tokio::test]
+async fn a_page_is_rendered_without_opening_first_and_sees_no_stale_copy() {
+    use lautta_core::app_pdf::PdfFailure;
+    use lautta_pdf::sample::{build, page};
+    let h = home().await;
+    h.nas.add_file("docs/fresh.pdf", &sample_pdf(), 1);
+    let u = uri("lautta://nv-nas/docs/fresh.pdf");
+    let p = h.core.pdf_page(&u, 1, 60).await.unwrap();
+    assert_eq!((p.width, p.height), (60, 30), "opened on demand");
+    assert_eq!(
+        h.core.pdf_page(&u, 2, 60).await.unwrap_err(),
+        PdfFailure::Pdf(lautta_pdf::PdfError::NoSuchPage)
+    );
+    // Opening again reads the file again: the changed file is seen.
+    h.nas.add_file("docs/fresh.pdf", &build(&[page(10, 10, "")]), 2);
+    assert_eq!(h.core.open_pdf(&u, "").await.unwrap().pages.len(), 1);
+    assert_eq!(
+        h.core.pdf_page(&u, 1, 60).await.unwrap_err(),
+        PdfFailure::Pdf(lautta_pdf::PdfError::NoSuchPage)
+    );
+}
+
+/// What `open_pdf` of `u` fails with, as "file <kind>" or "pdf <problem>".
+async fn pdf_failure(h: &Home, u: &str) -> String {
+    use lautta_core::app_pdf::PdfFailure;
+    match h.core.open_pdf(&uri(u), "").await.unwrap_err() {
+        PdfFailure::File(e) => format!("file {:?}", e.kind),
+        PdfFailure::Pdf(p) => format!("pdf {p:?}"),
+    }
+}
+
+#[tokio::test]
+async fn unreadable_pdfs_say_why() {
+    let h = home().await;
+    h.nas.add_file("docs/fake.pdf", b"%PDF-1.4 but nothing else", 1);
+    h.nas.add_dir("docs/folder.pdf");
+    assert_eq!(
+        pdf_failure(&h, "lautta://nv-nas/docs/fake.pdf").await,
+        "pdf Invalid"
+    );
+    assert_eq!(
+        pdf_failure(&h, "lautta://nv-nas/docs/folder.pdf").await,
+        "file IsADirectory"
+    );
+    assert_eq!(
+        pdf_failure(&h, "lautta://nv-nas/docs/missing.pdf").await,
+        "file NotFound"
+    );
+    assert_eq!(pdf_failure(&h, "lautta://nowhere/x.pdf").await, "file NotFound");
+    let page = h
+        .core
+        .pdf_page(&uri("lautta://nv-nas/docs/missing.pdf"), 0, 10)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(page, lautta_core::app_pdf::PdfFailure::File(_)),
+        "{page:?}"
+    );
+}
+
+#[tokio::test]
+async fn oversized_pdfs_are_refused_without_reading_them() {
+    use lautta_core::app_pdf::PdfFailure;
+    let h = home().await;
+    let big = vec![0u8; lautta_pdf::MAX_PDF_BYTES as usize + 1];
+    h.nas.add_file("docs/huge.pdf", &big, 1);
+    drop(big);
+    let err = h
+        .core
+        .open_pdf(&uri("lautta://nv-nas/docs/huge.pdf"), "")
+        .await
+        .unwrap_err();
+    assert_eq!(err, PdfFailure::Pdf(lautta_pdf::PdfError::TooLarge));
+    assert!(
+        !h.nas.calls().iter().any(|c| c.starts_with("open_read")),
+        "{:?}",
+        h.nas.calls()
+    );
+}
+
+#[tokio::test]
+async fn encrypted_pdfs_open_with_their_password_only() {
+    use lautta_core::app_pdf::PdfFailure;
+    use lautta_pdf::sample::{LOCKED_AES256, LOCKED_PASSWORD};
+    use lautta_pdf::PdfError;
+    let h = home().await;
+    h.nas.add_file("docs/locked.pdf", LOCKED_AES256, 1);
+    let u = uri("lautta://nv-nas/docs/locked.pdf");
+    for wrong in ["", "nope"] {
+        assert_eq!(
+            h.core.open_pdf(&u, wrong).await.unwrap_err(),
+            PdfFailure::Pdf(PdfError::Encrypted),
+            "{wrong:?}"
+        );
+    }
+    assert_eq!(h.core.open_pdf(&u, LOCKED_PASSWORD).await.unwrap().pages.len(), 2);
+    let p = h.core.pdf_page(&u, 0, 50).await.unwrap();
+    assert_eq!((p.width, p.height), (50, 100), "the unlocked document is kept");
+}
+
+#[tokio::test]
+async fn pdfs_reopen_where_reading_stopped() {
+    let h = home().await;
+    h.nas.add_file("docs/book.pdf", &sample_pdf(), 1);
+    let u = uri("lautta://nv-nas/docs/book.pdf");
+    assert_eq!(h.core.open_pdf(&u, "").await.unwrap().last_page, None);
+    h.core.remember_pdf_page(&u, 1);
+    assert_eq!(h.core.open_pdf(&u, "").await.unwrap().last_page, Some(1));
+    h.core.remember_pdf_page(&u, 5);
+    assert_eq!(
+        h.core.open_pdf(&u, "").await.unwrap().last_page,
+        None,
+        "a page the document no longer has is ignored"
+    );
+    h.core.remember_pdf_page(&u, 0);
+    assert_eq!(h.core.open_pdf(&u, "").await.unwrap().last_page, Some(0));
+}

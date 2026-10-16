@@ -6,8 +6,8 @@
 #   make mutants    mutation check: tests must catch changed code (needs cargo-mutants)
 #   make clippy-report  clippy JSON for SonarCloud -> coverage/clippy.json
 #   make translations  refresh translations/harbour-lautta.ts from the QML (qsTrId ids)
-#   make vendor     vendor dependencies for the offline SDK build
-#   make rpm        aarch64 RPM in the Sailfish SDK container (tools/ci/build-rpm.sh)
+#   make rpm        aarch64 RPM: cross-built binary, packaged in the Sailfish SDK
+#                   container (tools/ci/build-rpm.sh; needs docker and libc6-i386)
 #
 # The Qt crates need Qt 5 development files on the host (qmake in PATH).
 
@@ -20,7 +20,7 @@ export SDK_IMAGE TARGET
 
 LUPDATE ?= lupdate
 
-.PHONY: translations translations-check check fmt-check clippy test coverage mutants clippy-report vendor rpm check-rpm clean
+.PHONY: translations translations-check check fmt-check clippy test coverage mutants clippy-report rpm check-rpm clean
 
 check: fmt-check translations-check clippy test
 
@@ -41,19 +41,18 @@ clippy-report:
 	mkdir -p coverage
 	$(CARGO) clippy --workspace --all-targets $(HOST_FEATURES) --message-format=json > coverage/clippy.json
 
-# SPEC TST-5: planner, queue, conflict and activity-bar modules. MUTANTS_SHARD=k/n splits
+# SPEC TST-5: planner, queue, conflict and activity-bar modules, and the PDF
+# viewer's document handling (PRV-12). MUTANTS_SHARD=k/n splits
 # the run (CI runs shards in parallel).
 MUTANTS_SHARD ?= 0/1
 MUTANTS_FILES = -f crates/lautta-core/src/ops/plan.rs -f crates/lautta-core/src/ops/conflict.rs \
 	-f crates/lautta-core/src/transfer/scheduler.rs -f crates/lautta-core/src/transfer/model.rs \
 	-f crates/lautta-core/src/transfer/store.rs -f crates/lautta-core/src/transfer/conflict.rs \
-	-f crates/lautta-core/src/activity.rs
+	-f crates/lautta-core/src/activity.rs -f crates/lautta-core/src/app_pdf.rs \
+	-f crates/lautta-pdf/src/lib.rs
 
 mutants:
-	$(CARGO) mutants --no-shuffle -j 2 --timeout 300 --shard $(MUTANTS_SHARD) -p lautta-core $(MUTANTS_FILES)
-
-vendor:
-	$(CARGO) +stable vendor --locked --versioned-dirs vendor > /dev/null
+	$(CARGO) mutants --no-shuffle -j 2 --timeout 300 --shard $(MUTANTS_SHARD) -p lautta-core -p lautta-pdf $(MUTANTS_FILES)
 
 rpm:
 	./tools/ci/build-rpm.sh
@@ -72,4 +71,4 @@ translations-check:
 
 clean:
 	$(CARGO) clean
-	rm -rf coverage mutants.out* RPMS vendor .cargo-home
+	rm -rf coverage mutants.out* RPMS prebuilt build-sdk-cross

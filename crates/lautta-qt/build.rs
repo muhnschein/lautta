@@ -2,7 +2,8 @@
 //! Compiles the C++ glue in `cpp!` blocks. Qt is located through
 //! QT_INCLUDE_PATH/QT_LIBRARY_PATH (set by the rpm build, where build scripts
 //! cannot run the target's qmake under scratchbox2) or `qmake -query` on the
-//! host. With the `sailfish` feature the glue uses libsailfishapp.
+//! host. With the `sailfish` feature the glue uses libsailfishapp
+//! (SAILFISHAPP_INCLUDE_PATH, default /usr/include/sailfishapp).
 
 use std::process::Command;
 
@@ -37,7 +38,13 @@ fn main() {
         });
     }
     if sailfish {
-        config.include("/usr/include/sailfishapp");
+        // The cross build (tools/ci/cross-build.sh) points into the target's
+        // sysroot.
+        let sailfishapp = std::env::var("SAILFISHAPP_INCLUDE_PATH")
+            .ok()
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| "/usr/include/sailfishapp".to_owned());
+        config.include(sailfishapp);
         config.define("LAUTTA_SAILFISH", None);
     }
     config.build("src/lib.rs");
@@ -51,5 +58,6 @@ fn main() {
     }
     println!("cargo:rerun-if-env-changed=QT_INCLUDE_PATH");
     println!("cargo:rerun-if-env-changed=QT_LIBRARY_PATH");
+    println!("cargo:rerun-if-env-changed=SAILFISHAPP_INCLUDE_PATH");
     println!("cargo:rerun-if-changed=src");
 }

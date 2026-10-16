@@ -7,6 +7,7 @@ pub mod app;
 pub mod app_browse;
 pub mod app_directory;
 pub mod app_operations;
+pub mod app_pdf;
 pub mod app_search;
 pub mod app_transfers;
 pub mod app_viewers;

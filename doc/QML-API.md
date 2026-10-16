@@ -60,7 +60,7 @@ Methods:
   `paste(destUri)` (→ `Operations` flow).
 - `undo()`; signal `undone(ok)`.
 - `categoryOf(nameOrUri) → string` (FileCategory icon name), `viewerFor(uri, mime) → string`
-  (`image`, `text`, `markdown`, `audio`, `video`, `archive`, `external`).
+  (`image`, `text`, `markdown`, `audio`, `video`, `archive`, `pdf`, `external`).
 - `open(uri)`: decides by viewer and pushes the viewer page (through
   `components/Open.js`); `external` → `openExternally(uri)`.
 - `openExternally(uri)`: local → system handler; remote → copy to
@@ -149,14 +149,22 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   (Nemo.Notifications, INT-2), cover content for transfers inside `cover/CoverPage.qml`
   (browse owns the file; transfers provides `cover/TransferCover.qml`).
 
-### Viewers (boards: ImageViewer, ImageExif, TextViewer, TextViewerPulley, Markdown, VideoPlayer, AudioPlayer, OpenRemote)
+### Viewers (boards: ImageViewer, ImageExif, TextViewer, TextViewerPulley, Markdown, PdfViewer, VideoPlayer, AudioPlayer, OpenRemote)
 
 - `TextDocument { uri }` (text, truncated, validUtf8, size; read-only),
   `MarkdownDocument { uri }` (html), `ExifModel { uri }`, `MediaSource { uri }` (QIODevice for QtMultimedia, PRV-8),
   image provider `image://lautta-thumb/<uri>?size=N` for remote thumbnails (PRV-2) and
   `image://lautta-file/<uri>` for remote full images.
+- `PdfDocument { uri }` (PRV-12): `loading`, `loaded`, `pageCount`, `size`, `errorKind`
+  (file not readable, ErrorText.js), `problem` (`invalid`, `encrypted`, `empty`,
+  `tooLarge`), `wrongPassword` (the last `unlock` failed), `lastPage` (where reading
+  stopped, from 0; -1 unknown), `heightFor(index, width)`, `reload()`,
+  `unlock(password)` (opens an encrypted PDF; the password is not kept),
+  `rememberPage(index)`; image provider
+  `image://lautta-pdf/<uri>?page=N` renders page N (from 0) at `sourceSize.width`
+  (1080 without one), any location.
 - Pages: `viewers/ImageViewer.qml { uri, folderUri }`, `viewers/TextViewer.qml { uri }`,
-  `viewers/MarkdownViewer.qml { uri }`, `viewers/MediaPlayer.qml { uri, video }`,
+  `viewers/MarkdownViewer.qml { uri }`, `viewers/PdfViewer.qml { uri }`, `viewers/MediaPlayer.qml { uri, video }`,
   `dialogs/OpenRemoteDialog.qml { uri }`.
 
 ### Search, settings (boards: Search, SearchFilters, SearchPulley, Settings, About)

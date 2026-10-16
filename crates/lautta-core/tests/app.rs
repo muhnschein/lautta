@@ -107,7 +107,7 @@ async fn delete_to_recently_deleted_and_undo() {
     let h = home().await;
     write(&h.root.join("Documents/old.txt"), b"old");
     let item = uri("lautta://user-documents/old.txt");
-    let transfer = h.core.delete(&[item.clone()]).await.unwrap();
+    let transfer = h.core.delete(std::slice::from_ref(&item)).await.unwrap();
     assert!(transfer.is_none(), "trashed locally, no transfer");
     assert!(!h.root.join("Documents/old.txt").exists());
     assert_eq!(h.core.trash.list().unwrap().len(), 1);
