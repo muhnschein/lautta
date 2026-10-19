@@ -31,8 +31,8 @@ const PLACE_SEPARATOR: &str = " › ";
 pub struct Row {
     /// `favourites`, `device`, `android`, `volumes`, `servers`, `nearby`.
     pub section: &'static str,
-    /// `favourite`, `folder`, `deleted`, `volume`, `account`, `adhoc`,
-    /// `adhocRecent`, `consent`, `unavailable`, `nearby`.
+    /// `favourite`, `folder`, `recents`, `deleted`, `volume`, `account`,
+    /// `adhoc`, `adhocRecent`, `consent`, `unavailable`, `nearby`.
     pub kind: &'static str,
     pub uri: String,
     pub name: String,
@@ -80,7 +80,7 @@ impl Row {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LayoutRow {
     pub section: &'static str,
-    /// The kind of the Browse row (`favourite`, `folder`, `deleted`, …);
+    /// The kind of the Browse row (`favourite`, `folder`, `recents`, …);
     /// `nearby` stands for every nearby server.
     pub kind: &'static str,
     /// The layout item; the favourite id for favourites.
@@ -388,7 +388,14 @@ impl Core {
             .map(|p| (p.location_id.clone(), p))
             .collect();
         let mut device = self.folder_rows("device", &LocationKind::UserFolder, &prefs);
-        if self.settings().recently_deleted {
+        let settings = self.settings();
+        // Recents is a row of its own while they are remembered (§15.2, ORG-2).
+        if settings.recents_enabled {
+            let mut row = Row::new("device", "recents");
+            row.icon = "image://theme/icon-m-history".to_owned();
+            device.push(row);
+        }
+        if settings.recently_deleted {
             let mut row = Row::new("device", "deleted");
             row.icon = "image://theme/icon-m-delete".to_owned();
             row.count = clamp_i64(self.trash.list().map_or(0, |l| l.len()) as u64);

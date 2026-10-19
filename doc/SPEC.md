@@ -304,8 +304,9 @@ what the app does.
   and this app's ad-hoc servers) and *Nearby* (`Discover`). Attention states from netvfs
   (`auth-failed`, `server-identity-changed`) show as badges.
 - NVB-5: Account management is handed off: *Add server* → `AddAccount(provider)`;
-  *Edit*, *Update sign-in*, *Review server identity* → `OpenAccountSettings(id)`. The bridge
-  opens Settings; the app never edits accounts, pins or secrets.
+  *Edit server*, *Update sign-in*, *Review server identity* → `OpenAccountSettings(id)`.
+  The bridge opens Settings; the app never edits accounts, pins or secrets, and never
+  opens or closes connections (no *Disconnect*).
 - NVB-6: Ad-hoc servers: *Connect to server* collects an `sftp://` or `smb://` URL and,
   when needed, a secret, and calls `ConnectAdHoc`. The secret buffer is zeroized
   (`zeroize`) immediately after the call. Identity prompts for ad-hoc servers and the
@@ -393,10 +394,12 @@ what the app does.
   again.
 - BRW-12: The Browse page is configurable without a wall of options (prior art: iOS
   Files *Browse › Edit*, Finder sidebar settings, Dolphin *Places › Hide*). *Settings ›
-  Browse page* lists every row in Browse order: a switch per folder, *Recently deleted*,
-  volume and server (hiding the row only; the bin keeps working), one switch for all
-  nearby servers, and a drag handle to move rows within their section (favourites move
-  only; volumes and nearby stay put). A half-size live preview of the Browse page sits
+  Browse page* lists every row in Browse order: a switch per folder, *Recents*,
+  *Recently deleted*, volume and server (hiding the row only; the bin and recents keep
+  working), one switch for all nearby servers, and a drag handle to move rows within
+  their section (favourites move only; volumes and nearby stay put). A switch or a move
+  changes its row in place: the list keeps its position, and a drag shows only once the
+  finger moved on the handle. A half-size live preview of the Browse page sits
   below, as in Salama's start page settings; the pulley has *Restore defaults*.
   Long-press *Hide from Browse* is the shortcut. Stored in `browse_layout`; a removed
   account's rows are purged with it (SEC-5).
@@ -570,9 +573,11 @@ bridge).
 - SRC-4: Recent searches per location (10).
 - SRC-5: Later: full-text and global search via Tracker with the `MediaIndexing`
   permission. Not in 1.0 (keeps the permission set minimal).
-- ORG-1: Favourites: any folder, local or remote, reorderable, with label and colour.
+- ORG-1: Favourites: any folder, local or remote, reorderable (Settings › Browse page,
+  BRW-12), with label and colour.
 - ORG-2: Recents: files opened, previewed or transferred; filterable; clearable; can be
-  switched off.
+  switched off. Opened from its row in Browse's *On this device*, there while recents
+  are on.
 
 ## 14. System integration
 
@@ -601,8 +606,9 @@ bridge).
 flowchart TD
   B[Browse] --> D[Directory]
   B --> R[Recents]
+  B --> RD[Recently deleted]
   B --> T[Activity]
-  B --> CS[Connect to server<br/>bridge only]
+  B --> CS[Connect to server<br/>nearby and recent servers]
   B --> S[Settings / About]
   D --> D
   D --> I[Info]
@@ -614,14 +620,22 @@ flowchart TD
 
 ### 15.2 Browse
 
-Sections: *Favourites*, *On this device* (user folders), *Android*, *Volumes* (when
+Sections: *Favourites*, *On this device* (user folders, *Recents* while recents are
+remembered (ORG-2), *Recently deleted* while it is on), *Android*, *Volumes* (when
 present), *Servers* (bridge only: accounts, recent ad-hoc servers, status dot,
 attention badge), *Nearby* (bridge only, hidden when empty). Rows the user hid are left
-out and rows keep the order the user gave them (BRW-12).
+out and rows keep the order the user gave them (BRW-12). Tapping a nearby or recent
+ad-hoc server opens *Connect to server* prefilled (LOC-6, NVB-6).
 
-Pulley: *Settings*, *Connect to server* (bridge only), *Add server* (bridge only, NVB-5),
-*Activity* (live count). Push-up: *Recents*. Long-press server: *Disconnect*, *Edit
-account* (NVB-5), *Copy address*, *Remove from recents* (ad-hoc). Swipe left: Activity.
+Pulley: *Settings*, *Add server* (bridge only, NVB-5), *Activity* (live count).
+Long-press menus: favourite: *Edit favourite*, *Copy address*, *Remove from
+favourites*; folder: *Add to favourites*, *Copy address*, *Hide from Browse*; volume:
+*Add to favourites*, *Copy address*, *Open Storage settings* (LOC-3), *Hide from
+Browse*; account: *Edit server*, *Update sign-in* or *Review server identity* while
+netvfs asks for it (NVB-5), *Copy address*, *Hide from Browse*; ad-hoc server:
+*Connect* (recent ones), *Copy address*, *Hide from Browse*, *Remove from recents*.
+Connections are netvfs' to open and close: no menu disconnects a server. Swipe left:
+Activity.
 
 ### 15.3 Directory page
 
@@ -673,7 +687,7 @@ leads here from any depth.
   are therefore readable by other apps with the Downloads permission while they exist;
   this is stated in the UI and the copies expire.
 - SEC-5: Caches (listings, thumbnails) are in the app's private folders, 0700/0600, with
-  *Clear cache* and per-location opt-outs. Removing an account in Settings purges its
+  *Clear cache*. Removing an account in Settings purges its
   caches, recents and favourites at the next `LocationsChanged`.
 - SEC-6: Logging: `log` crate, default `warn`; paths and host names only at `debug`;
   never secrets or file contents.
@@ -703,7 +717,8 @@ preserve mtimes/permissions, verify with checksums, auto-resume, history retenti
 date format, large-operation threshold.
 
 Per location (app DB): lane sizes (remote), start folder, listing/thumbnail cache opt-out,
-display name override.
+display name override. The app has no page for them: a server's name, start folder and
+sign-in are netvfs' (NVB-5); stored values still apply.
 
 `Nemo.Configuration` (dconf under `/apps/harbour-lautta/`) for simple preferences;
 SQLite for everything structured.

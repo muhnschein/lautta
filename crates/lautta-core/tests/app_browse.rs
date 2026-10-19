@@ -13,7 +13,7 @@ use lautta_core::bridge::{AdHocOptions, BridgeStatus};
 use lautta_core::locations::LocationRegistry;
 use lautta_core::org::{RecentKind, RecentsFilter};
 use lautta_core::paths::AppPaths;
-use lautta_core::settings::LocationPrefs;
+use lautta_core::settings::{LocationPrefs, Settings};
 use lautta_core::{ErrorKind, Uri};
 use std::sync::Arc;
 use std::time::Duration;
@@ -96,10 +96,9 @@ fn layout_of(rows: &[LayoutRow], section: &str) -> Vec<(String, bool)> {
         .filter(|r| r.section == section)
         .map(|r| {
             (
-                if r.kind == "deleted" {
-                    "deleted".to_owned()
-                } else {
-                    r.name.clone()
+                match r.kind {
+                    "deleted" | "recents" => r.kind.to_owned(),
+                    _ => r.name.clone(),
                 },
                 r.hidden,
             )
@@ -123,7 +122,11 @@ async fn hidden_rows_leave_browse_but_not_its_settings() {
         .set_hidden("device", "deleted", true)
         .unwrap();
     let rows = e.core.browse_rows().await;
-    assert_eq!(names(&rows, "device"), ["Documents", "Pictures"]);
+    assert_eq!(
+        names(&rows, "device"),
+        ["Documents", "Pictures", ""],
+        "and Recents"
+    );
     assert_eq!(names(&rows, "favourites"), ["Docs"]);
     let layout = e.core.browse_layout_rows().await;
     assert_eq!(
@@ -132,6 +135,7 @@ async fn hidden_rows_leave_browse_but_not_its_settings() {
             ("Documents".to_owned(), false),
             ("Pictures".to_owned(), false),
             ("Music".to_owned(), true),
+            ("recents".to_owned(), false),
             ("deleted".to_owned(), true)
         ]
     );
@@ -146,7 +150,7 @@ async fn hidden_rows_leave_browse_but_not_its_settings() {
         .unwrap();
     assert_eq!(
         names(&e.core.browse_rows().await, "device"),
-        ["Documents", "Pictures", "Music"]
+        ["Documents", "Pictures", "Music", ""]
     );
 }
 
@@ -164,7 +168,7 @@ async fn rows_move_within_their_section() {
     assert_eq!(of(&rows, "device")[1].kind, "deleted");
     assert_eq!(
         names(&rows, "device")[2..],
-        ["Documents".to_owned(), "Music".to_owned()]
+        ["Documents".to_owned(), "Music".to_owned(), String::new()]
     );
     core.move_browse_row("device", "user-pictures", 99).await.unwrap();
     assert_eq!(
@@ -200,6 +204,47 @@ async fn rows_move_within_their_section() {
         names(&rows, "favourites"),
         ["B", "A"],
         "favourites keep their own order"
+    );
+}
+
+fn kinds(rows: &[Row], section: &str) -> Vec<&'static str> {
+    of(rows, section).iter().map(|r| r.kind).collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn recents_is_a_device_row_while_recents_are_remembered() {
+    let e = env(None, &["Documents"]).await;
+    let core = &e.core;
+    let rows = core.browse_rows().await;
+    assert_eq!(kinds(&rows, "device"), ["folder", "recents", "deleted"]);
+    let recents = of(&rows, "device")[1];
+    assert_eq!(recents.icon, "image://theme/icon-m-history");
+    assert_eq!((recents.count, recents.uri.as_str()), (-1, ""));
+
+    core.browse_layout.set_hidden("device", "recents", true).unwrap();
+    assert_eq!(kinds(&core.browse_rows().await, "device"), ["folder", "deleted"]);
+    assert_eq!(
+        layout_of(&core.browse_layout_rows().await, "device")[1],
+        ("recents".to_owned(), true),
+        "hidden, it stays in the settings"
+    );
+    core.browse_layout.set_hidden("device", "recents", false).unwrap();
+    core.move_browse_row("device", "recents", 0).await.unwrap();
+    assert_eq!(
+        kinds(&core.browse_rows().await, "device"),
+        ["recents", "folder", "deleted"]
+    );
+
+    core.apply_settings(Settings {
+        recents_enabled: false,
+        ..Settings::default()
+    });
+    assert_eq!(kinds(&core.browse_rows().await, "device"), ["folder", "deleted"]);
+    assert!(
+        layout_of(&core.browse_layout_rows().await, "device")
+            .iter()
+            .all(|(name, _)| name != "recents"),
+        "nothing to switch while recents are off"
     );
 }
 

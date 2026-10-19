@@ -50,14 +50,6 @@ fn colour_of(colour: &str) -> Option<&str> {
     Some(colour).filter(|c| !c.is_empty())
 }
 
-/// The index to give a favourite moved by `delta` places; `None` when it
-/// would not move.
-fn target_index(rows: &[Vec<Cell>], id: i64, delta: i32) -> Option<usize> {
-    let at = rows.iter().position(|r| int_at(r, 0) == id)?;
-    let to = (at as i64 + i64::from(delta)).clamp(0, rows.len() as i64 - 1) as usize;
-    (to != at).then_some(to)
-}
-
 #[derive(QObject, Default)]
 pub struct FavouritesModel {
     base: qt_base_class!(trait QAbstractListModel),
@@ -76,7 +68,6 @@ pub struct FavouritesModel {
     /// Removes the favourite of a folder, if it is one.
     removeUri: qt_method!(fn(&mut self, uri: QString)),
     moveTo: qt_method!(fn(&mut self, id: i32, index: i32)),
-    moveBy: qt_method!(fn(&mut self, id: i32, delta: i32)),
     /// `{id, uri, label, colour, place}` of a loaded favourite, or `{}`.
     get: qt_method!(fn(&self, id: i32) -> QString),
     /// The id of the favourite for a folder, `-1` when it is none.
@@ -180,12 +171,6 @@ impl FavouritesModel {
         self.change(move |core| core.favourites.move_to(i64::from(id), index));
     }
 
-    fn moveBy(&mut self, id: i32, delta: i32) {
-        if let Some(to) = target_index(&self.rows, i64::from(id), delta) {
-            self.moveTo(id, to as i32);
-        }
-    }
-
     fn get(&self, id: i32) -> QString {
         let value = self
             .rows
@@ -243,17 +228,6 @@ mod tests {
             Cell::s(""),
             Cell::s("p"),
         ]
-    }
-
-    #[test]
-    fn moves_are_clamped_and_noops_are_none() {
-        let rows = vec![row(1), row(2), row(3)];
-        assert_eq!(target_index(&rows, 2, -1), Some(0));
-        assert_eq!(target_index(&rows, 2, 1), Some(2));
-        assert_eq!(target_index(&rows, 1, -1), None);
-        assert_eq!(target_index(&rows, 3, 5), None);
-        assert_eq!(target_index(&rows, 1, 5), Some(2));
-        assert_eq!(target_index(&rows, 9, 1), None);
     }
 
     #[test]

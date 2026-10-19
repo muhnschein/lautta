@@ -18,7 +18,6 @@ Item {
     LocationsModel { id: locs }
     FavouritesModel { id: favs }
     RecentsModel { id: recents }
-    LocationPrefsModel { id: prefs }
     DirectoryModel { id: remoteDir }
     DirectoryModel { id: localDir }
 
@@ -63,8 +62,10 @@ Item {
             property string lsection: section
             property string litem: item
             property bool lhidden: hidden
-            property int lindex: index
+            property int lplace: place
             property bool lmovable: movable
+            // Set by a step to tell whether this delegate survived a change.
+            property bool marked: false
         }
     }
 
@@ -203,17 +204,24 @@ Item {
                  return m !== null && m.lhidden && m.lmovable && n !== null && !n.lhidden && !n.lmovable
                         && layoutRow("device", "deleted") !== null
              })
+        // The settings page keeps its rows (and the user's place in the
+        // list) on a switch and a move: no row is rebuilt.
         step("show it again from the settings",
-             function() { layout.setHidden("device", "user-music", false) },
+             function() {
+                 layoutRow("device", "user-music").marked = true
+                 layoutRow("device", "deleted").marked = true
+                 layout.setHidden("device", "user-music", false)
+             },
              function() {
                  var m = layoutRow("device", "user-music")
-                 return has("folder", "Music") && m !== null && !m.lhidden
+                 return has("folder", "Music") && m !== null && !m.lhidden && m.marked
              })
         step("move a row within its section",
              function() { layout.moveTo("device", "deleted", 0) },
              function() {
                  var d = layoutRow("device", "deleted")
-                 return deviceRows().indexOf("deleted,Documents") === 0 && d !== null && d.lindex === 0
+                 return deviceRows().indexOf("deleted,Documents") === 0 && d !== null && d.lplace === 0
+                        && d.marked && layoutRow("device", "user-music").marked
              })
         step("restore defaults",
              function() {
@@ -223,7 +231,7 @@ Item {
              function() {
                  var d = layoutRow("device", "deleted")
                  return deviceRows().indexOf("Documents") === 0 && /,deleted$/.test(deviceRows())
-                        && d !== null && d.lindex > 0
+                        && d !== null && d.lplace > 0
              })
         step("a remote folder lists",
              function() {
@@ -270,7 +278,7 @@ Item {
                         && row("folder", "Music").marked
              })
         step("move one up",
-             function() { favs.moveBy(favs.idOf("lautta://user-music/"), -1) },
+             function() { favs.moveTo(favs.idOf("lautta://user-music/"), 0) },
              function() { return favouriteNames() === "Tunes,Papers" })
         step("remove favourites",
              function() {
@@ -381,21 +389,6 @@ Item {
                  var h = JSON.parse(FakeWorld.handoffs())
                  return h.indexOf("add:sftp") >= 0 && h.indexOf("settings:account:1") >= 0
              })
-
-        step("location settings load",
-             function() { prefs.locationId = "nv-account:1" },
-             function() {
-                 return prefs.loaded && prefs.locationName === "NAS" && prefs.kind === "account"
-                        && prefs.provider === "SFTP" && prefs.bulkLanes === 0
-             })
-        step("location settings are saved and rename the row",
-             function() {
-                 prefs.displayName = "Home NAS"
-                 prefs.bulkLanes = 3
-                 prefs.noThumbCache = true
-                 prefs.save()
-             },
-             function() { return has("account", "Home NAS") })
 
         step("an account removed in Settings is forgotten",
              function() { favs.add("lautta://nv-account:1/photos", "Photos", "") },

@@ -71,26 +71,30 @@ Methods:
 
 Each area owns its types and pages. Names are fixed here so areas can use each other.
 
-### Browse (boards: Main, BrowsePulley, BrowseStandalone, BrowseServerMenu, BrowseVolume, ConnectServer, ServerQuestion, ServerAdhocMenu, FavouriteEdit, Recents, RecentsPulley, RecentsFilter, StateReconnecting, StateIdentity, LocationSettings, Covers)
+### Browse (boards: Main, BrowsePulley, BrowseStandalone, BrowseServerMenu, BrowseVolume, ConnectServer, ServerQuestion, ServerAdhocMenu, FavouriteEdit, Recents, RecentsPulley, RecentsFilter, StateReconnecting, StateIdentity, Covers)
 
 - `LocationsModel` — sections `favourites`, `device`, `android`, `volumes`, `servers`,
   `nearby` (roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
-  `colour`, `count`, `itemId`).
+  `colour`, `count`, `itemId`); kinds `recents` and `deleted` are the app's own rows of
+  `device` (`BrowseText.rowName` names them).
 - `FavouritesModel` (`add`, `save(uri, label, colour)` adds or relabels, `edit`, `remove`,
-  `removeUri(uri)`, `moveTo`, `moveBy`, `get`, `idOf`, `placeOf`), `RecentsModel { filter }`.
+  `removeUri(uri)`, `moveTo`, `get`, `idOf`, `placeOf`), `RecentsModel { filter }`.
 - `Bridge` singleton: `status` (`absent`, `connecting`, `consentUnknown`, `consentDenied`,
   `ready`, `reconnecting`), `requestConsent()`, `addServer(provider)`,
   `editAccount(locationUri)`, `connectAdHoc(url, secret, options)`, `forgetAdHoc(id)`,
-  `disconnect(id)`, signal `question(id, kind, details)`, `answer(id, answer)`.
+  signal `question(id, kind, details)`, `answer(id, answer)`.
 - Pages: `pages/BrowsePage.qml` (initial page), `pages/RecentsPage.qml`,
   `dialogs/ConnectServerDialog.qml { url }`,
   `dialogs/ServerQuestionDialog.qml { questionId, kind, details }`,
   `dialogs/FavouriteDialog.qml { uri }` (edits the folder's favourite when it is one),
-  `pages/LocationSettingsPage.qml { locationId }`, `cover/CoverPage.qml`.
+  `cover/CoverPage.qml`.
 - Browse page settings (BRW-12): `LocationsModel.hide(section, kind, itemId)`;
-  `BrowseLayoutModel` (roles `section`, `kind`, `item`, `name`, `hidden`, `index`,
-  `movable`; `reload()`, `setHidden(section, item, hidden)`, `moveTo(section, item, index)`,
-  `restoreDefaults()`, `sectionAt(row)`, `placeAt(row)`, `itemAt(row)`); `pages/BrowseSettingsPage.qml`.
+  `BrowseLayoutModel` (roles `section`, `kind`, `item`, `name`, `hidden`, `place` (the
+  place in the section; no role is called `index`, which would hide the delegate's
+  `index`), `movable`; `reload()`, `setHidden(section, item, hidden)`,
+  `moveTo(section, item, index)`, `restoreDefaults()`, `sectionAt(row)`, `placeAt(row)`,
+  `itemAt(row)`; changes arrive as row changes, moves, insertions and removals, not a
+  reset); `pages/BrowseSettingsPage.qml`.
 
 ### Directory (boards: Directory, DirectoryPulley, DirectoryContext, DirectorySelect, DirectorySelectPulley, DirectoryGrid, DirectoryLandscape, PathMenu, DirectoryRemorse, ImageDeleteRemote, ViewOptions, NewItem, Rename, FolderPicker, FolderPickerPulley, StateEmpty, StateNoAccess, StateOffline, StateError, StateLarge)
 

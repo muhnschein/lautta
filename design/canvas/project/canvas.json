@@ -250,14 +250,6 @@
       "x": 2400,
       "y": 4860
     },
-    "LocationSettings.dc.html": {
-      "h": 1000,
-      "is_interactive": true,
-      "title": "Location settings",
-      "w": 400,
-      "x": 480,
-      "y": 10900
-    },
     "Main.dc.html": {
       "h": 1640,
       "is_interactive": true,
@@ -699,7 +691,6 @@
     "Search.dc.html",
     "SearchFilters.dc.html",
     "Settings.dc.html",
-    "LocationSettings.dc.html",
     "About.dc.html",
     "DirectoryLandscape.dc.html",
     "DirectorySelectPulley.dc.html",

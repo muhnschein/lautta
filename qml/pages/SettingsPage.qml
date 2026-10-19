@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Settings (SPEC §18; design: Settings): every global preference, recents,
-// per-location settings and storage. Values are
+// Settings (SPEC §18; design: Settings): every global preference, recents
+// and storage. Values are
 // persisted through App.setSetting; QML keeps no copy.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -10,8 +10,6 @@ import "../components/search"
 Page {
     id: page
 
-    // Servers, ad-hoc servers and volumes: [{ id, name, kind }].
-    property var locations: []
     readonly property var largeOps: [[100, 100000000], [1000, 1000000000], [10000, 10000000000]]
 
     function days(list) {
@@ -40,14 +38,7 @@ Page {
     }
 
     allowedOrientations: Orientation.All
-    Component.onCompleted: {
-        cache.refresh()
-        try {
-            locations = JSON.parse(cache.locationsJson())
-        } catch (e) {
-            locations = []
-        }
-    }
+    Component.onCompleted: cache.refresh()
 
     CacheInfo {
         id: cache
@@ -338,35 +329,6 @@ Page {
                                                qsTrId("lautta-settings-clearing-recents"),
                                                function () { cache.clearRecents() },
                                                Number(App.setting("remorse_seconds")) * 1000)
-            }
-
-            SectionHeader {
-                visible: page.locations.length > 0
-                //% "Locations"
-                text: qsTrId("lautta-settings-locations")
-            }
-            Repeater {
-                model: page.locations
-
-                BackgroundItem {
-                    width: column.width
-                    height: Theme.itemSizeSmall
-                    onClicked: pageStack.push(Qt.resolvedUrl("LocationSettingsPage.qml"),
-                                              { "locationId": modelData.id })
-
-                    Label {
-                        anchors {
-                            left: parent.left
-                            right: parent.right
-                            leftMargin: Theme.horizontalPageMargin
-                            rightMargin: Theme.horizontalPageMargin
-                            verticalCenter: parent.verticalCenter
-                        }
-                        text: modelData.name
-                        truncationMode: TruncationMode.Fade
-                        color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
-                    }
-                }
             }
 
             SectionHeader {
