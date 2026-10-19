@@ -23,6 +23,7 @@ use crate::uri::{LocationId, Uri};
 use crate::volumes::{self, Volume, VolumeEvent, VolumeWatcher};
 use crate::vpath::VPath;
 use percent_encoding::{percent_encode, AsciiSet, CONTROLS};
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
@@ -157,6 +158,9 @@ struct State {
     volumes: Vec<Slot>,
     remote: Vec<Slot>,
     extra: Vec<Slot>,
+    /// Names of remote locations that went away, by id: URIs on them (the
+    /// clipboard, a page still open) are told apart from a missing item.
+    gone: BTreeMap<String, String>,
 }
 
 impl State {
@@ -375,12 +379,32 @@ impl LocationRegistry {
 
     /// Replaces all remote locations (netvfs accounts, ad-hoc servers).
     pub fn set_remote(&self, remote: Vec<(Location, Arc<dyn Provider>)>) {
-        let slots = remote
+        let slots: Vec<Slot> = remote
             .into_iter()
             .map(|(location, provider)| Slot { location, provider })
             .collect();
-        self.state().remote = slots;
+        {
+            let mut state = self.state();
+            let old = std::mem::replace(&mut state.remote, slots);
+            for slot in old {
+                state.gone.insert(slot.location.id, slot.location.name);
+            }
+            let State { remote, gone, .. } = &mut *state;
+            for slot in remote.iter() {
+                gone.remove(&slot.location.id);
+            }
+        }
         self.notify();
+    }
+
+    /// The name of a location, also of a remote one that went away.
+    pub fn name(&self, id: &str) -> Option<String> {
+        let state = self.state();
+        let name = state
+            .all()
+            .find(|s| s.location.id == id)
+            .map(|s| s.location.name.clone());
+        name.or_else(|| state.gone.get(id).cloned())
     }
 
     /// Adds or replaces one location (archives, LOC-5).
@@ -505,11 +529,14 @@ fn local_path_of(loc: &Location, uri: &Uri) -> Option<PathBuf> {
 
 impl ProviderResolver for LocationRegistry {
     fn provider(&self, location: &str) -> Result<Arc<dyn Provider>> {
-        self.state()
-            .all()
-            .find(|s| s.location.id == location)
-            .map(|s| s.provider.clone())
-            .ok_or_else(|| Error::new(ErrorKind::NotFound, format!("unknown location {location}")))
+        let state = self.state();
+        if let Some(slot) = state.all().find(|s| s.location.id == location) {
+            return Ok(slot.provider.clone());
+        }
+        Err(match state.gone.get(location) {
+            Some(name) => Error::new(ErrorKind::LocationGone, format!("{name} is no longer connected")),
+            None => Error::new(ErrorKind::NotFound, format!("unknown location {location}")),
+        })
     }
 }
 
@@ -768,6 +795,39 @@ mod tests {
         e.reg.set_remote(Vec::new());
         assert_eq!(ids(&e.reg), ["user-documents"]);
         assert!(e.reg.provider("nv-1").is_err());
+    }
+
+    #[test]
+    fn a_server_that_went_away_says_so() {
+        let e = env_with(&["Documents"]);
+        let nas = || {
+            Location::remote(
+                "nv-1",
+                LocationKind::Server {
+                    provider: "sftp".into(),
+                },
+                "NAS",
+                Some("sftp://me@nas.local".into()),
+            )
+        };
+        e.reg.set_remote(vec![(nas(), mem())]);
+        e.reg.set_remote(Vec::new());
+        let gone = e.reg.provider("nv-1").err().unwrap();
+        assert_eq!(gone.kind, ErrorKind::LocationGone);
+        assert!(gone.message.contains("NAS"), "{gone}");
+        assert_eq!(e.reg.name("nv-1").as_deref(), Some("NAS"));
+        // A location never seen is unknown, not gone.
+        assert_eq!(e.reg.provider("nv-9").err().unwrap().kind, ErrorKind::NotFound);
+        assert_eq!(e.reg.name("nv-9"), None);
+        assert_eq!(e.reg.name("user-documents").as_deref(), Some("Documents"));
+        // Back again, it is a location like before.
+        e.reg.set_remote(vec![(nas(), mem())]);
+        assert!(e.reg.provider("nv-1").is_ok());
+        e.reg.set_remote(vec![(nas(), mem())]);
+        assert!(
+            e.reg.provider("nv-1").is_ok(),
+            "a location still there is not gone"
+        );
     }
 
     #[test]

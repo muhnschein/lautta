@@ -1278,6 +1278,9 @@ async fn run_item_task(inner: Arc<Inner>, pick: ItemRef) {
     let Some(Prepared { env, mut job }) = inner.prepare(pick) else {
         return;
     };
+    // The item decides with them (atomic writes, resume, checksums).
+    env.src.known_capabilities().await;
+    env.dst.known_capabilities().await;
     let mut attempt = 0;
     loop {
         let res = exec::run_item(&env, &job).await;

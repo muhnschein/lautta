@@ -283,7 +283,7 @@ async fn keep_both_dst(
         _ => return Err(Error::new(ErrorKind::InvalidArgument, "destination has no name")),
     };
     let provider = resolver.provider(&parent.location)?;
-    let caps = provider.capabilities();
+    let caps = provider.known_capabilities().await;
     let rules = NameRules::from_capabilities(&caps);
     if !cache.folders.contains_key(&parent) {
         let mut set = existing_names(&*provider, &parent, rules).await?;

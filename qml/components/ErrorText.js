@@ -79,6 +79,12 @@ function message(kind, context) {
     case "BridgeUnavailable":
         //% "Network locations are unavailable right now."
         return qsTrId("lautta-err-bridge-gone")
+    case "LocationGone":
+        return _pick(loc,
+                     //% "%1 is no longer connected."
+                     qsTrId("lautta-err-location-gone"),
+                     //% "The server is no longer connected."
+                     qsTrId("lautta-err-location-gone-unnamed"))
     case "Sandbox":
         //% "Lautta isn't allowed to read this file."
         return qsTrId("lautta-err-sandbox")

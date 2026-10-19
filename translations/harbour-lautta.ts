@@ -2855,5 +2855,13 @@
         <source>Not enough space.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-err-location-gone">
+        <source>%1 is no longer connected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-location-gone-unnamed">
+        <source>The server is no longer connected.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

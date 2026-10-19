@@ -26,18 +26,20 @@ pub struct NetvfsProvider {
     client: BridgeClient,
     /// The bridge's id (`account:1`).
     loc: String,
-    caps: RwLock<Capabilities>,
+    /// `None` until fetched from the bridge.
+    caps: RwLock<Option<Capabilities>>,
 }
 
 impl NetvfsProvider {
     /// A provider for `location` (`nv-account:1` or `account:1`). Capabilities
-    /// are fetched by [`NetvfsProvider::refresh_capabilities`]; until then
-    /// only `Write` is assumed.
+    /// are fetched by [`NetvfsProvider::refresh_capabilities`], which
+    /// [`Provider::known_capabilities`] does on first use; until then only
+    /// `Write` is assumed.
     pub fn new(client: BridgeClient, location: &str) -> NetvfsProvider {
         NetvfsProvider {
             client,
             loc: bridge_id(location).to_owned(),
-            caps: RwLock::new(Capabilities::with(&[cap::WRITE])),
+            caps: RwLock::new(None),
         }
     }
 
@@ -59,8 +61,16 @@ impl NetvfsProvider {
         *self
             .caps
             .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = capabilities_from_wire(&wire);
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(capabilities_from_wire(&wire));
         Ok(())
+    }
+
+    /// Whether the capabilities came from the bridge yet.
+    pub fn has_capabilities(&self) -> bool {
+        self.caps
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
     }
 
     fn link(&self) -> Result<Arc<Link>> {
@@ -135,6 +145,18 @@ impl Provider for NetvfsProvider {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
+            .unwrap_or_else(|| Capabilities::with(&[cap::WRITE]))
+    }
+
+    /// Fetched once; a bridge that cannot answer yet leaves the assumed ones
+    /// and is asked again next time.
+    async fn known_capabilities(&self) -> Capabilities {
+        if !self.has_capabilities() {
+            if let Err(e) = self.refresh_capabilities().await {
+                log::debug!("capabilities of {}: {e}", self.loc);
+            }
+        }
+        self.capabilities()
     }
 
     async fn list(&self, dir: &VPath, lane: Lane, out: mpsc::Sender<Vec<Entry>>) -> Result<()> {

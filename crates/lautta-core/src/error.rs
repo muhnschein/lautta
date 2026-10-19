@@ -38,6 +38,10 @@ pub enum ErrorKind {
     BridgeUnavailable,
     /// The sandbox does not let the app read the path (SPEC §20 "sandbox").
     Sandbox,
+    /// A server location that is not there any more (disconnected, or the
+    /// bridge restarted, which ends ad-hoc servers): items copied from it
+    /// cannot be reached through it again.
+    LocationGone,
     /// A name crosses into a location where it is not representable.
     CrossesDevice,
     Io,
@@ -45,7 +49,7 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
-    pub const ALL: [ErrorKind; 28] = [
+    pub const ALL: [ErrorKind; 29] = [
         ErrorKind::NotFound,
         ErrorKind::AlreadyExists,
         ErrorKind::PermissionDenied,
@@ -71,6 +75,7 @@ impl ErrorKind {
         ErrorKind::RateLimited,
         ErrorKind::BridgeUnavailable,
         ErrorKind::Sandbox,
+        ErrorKind::LocationGone,
         ErrorKind::CrossesDevice,
         ErrorKind::Io,
         ErrorKind::Internal,
@@ -103,6 +108,7 @@ impl ErrorKind {
             ErrorKind::RateLimited => "RateLimited",
             ErrorKind::BridgeUnavailable => "BridgeUnavailable",
             ErrorKind::Sandbox => "Sandbox",
+            ErrorKind::LocationGone => "LocationGone",
             ErrorKind::CrossesDevice => "CrossesDevice",
             ErrorKind::Io => "Io",
             ErrorKind::Internal => "Internal",

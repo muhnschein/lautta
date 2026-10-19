@@ -186,9 +186,10 @@ impl App {
         let loc = parse_uri(&uri)
             .map(|u| u.location)
             .unwrap_or_else(|| uri.to_string());
+        // A server that went away keeps its name, for the message saying so.
         core()
-            .and_then(|c| c.location(&loc))
-            .map(|l| QString::from(l.name.as_str()))
+            .and_then(|c| c.locations.name(&loc))
+            .map(|name| QString::from(name.as_str()))
             .unwrap_or_default()
     }
 

@@ -237,7 +237,7 @@ async fn plan_transfer(
     let dst = resolver
         .provider(&destination.location)
         .map_err(|e| e.about(destination))?;
-    let dst_caps = dst.capabilities();
+    let dst_caps = dst.known_capabilities().await;
     if !dst_caps.writable() {
         return Err(Error::kind(ErrorKind::ReadOnlyFilesystem));
     }
@@ -274,6 +274,19 @@ struct Node {
     src: Uri,
     real: VPath,
     entry: Entry,
+    seen: Seen,
+}
+
+/// Which folder a node is, to find loops (OPS-6): the path it is listed at,
+/// or for a link whose target is not a path of the location, that target.
+/// Such a target names the server's file system, which is not the
+/// location's (an SFTP location starts at the home folder): an absolute
+/// one, or a relative one that climbs out of the location. The server
+/// follows it, so such a folder is listed through the link.
+#[derive(Clone, PartialEq, Eq)]
+enum Seen {
+    Path(VPath),
+    Target(Vec<u8>),
 }
 
 #[derive(Clone, Copy)]
@@ -281,6 +294,10 @@ struct Frame {
     /// Look the destination up at the provider (false below a folder that is new).
     check_dst: bool,
     link_depth: usize,
+    /// Below a link listed through itself ([`Seen::Target`]): paths here are
+    /// not where the server keeps the items, so the targets of links here
+    /// cannot be worked out from them.
+    through_link: bool,
 }
 
 struct Added {
@@ -318,7 +335,7 @@ impl Scan<'_> {
             .await
             .map_err(|e| e.about(src))?;
         let same_location = src.location == destination.location;
-        if self.kind == OperationKind::Move && !provider.capabilities().writable() {
+        if self.kind == OperationKind::Move && !provider.known_capabilities().await.writable() {
             return Err(Error::kind(ErrorKind::ReadOnlyFilesystem));
         }
         if same_location && entry.is_dir() && destination.path.starts_with(&src.path) {
@@ -336,10 +353,12 @@ impl Scan<'_> {
             src: src.clone(),
             real: src.path.clone(),
             entry: Entry { name, ..entry },
+            seen: Seen::Path(src.path.clone()),
         };
         let frame = Frame {
             check_dst: true,
             link_depth: 0,
+            through_link: false,
         };
         self.add_node(node, destination.clone(), frame, Vec::new()).await
     }
@@ -363,7 +382,7 @@ impl Scan<'_> {
         node: Node,
         parent: Uri,
         frame: Frame,
-        ancestors: Vec<VPath>,
+        ancestors: Vec<Seen>,
     ) -> BoxFuture<'_, Result<()>> {
         Box::pin(async move {
             check_cancel(self.cancel)?;
@@ -385,10 +404,10 @@ impl Scan<'_> {
         node: Node,
         parent: Uri,
         frame: Frame,
-        mut ancestors: Vec<VPath>,
+        mut ancestors: Vec<Seen>,
     ) -> Result<()> {
         // A folder that is its own ancestor (reached through a link) is a loop (OPS-6).
-        if ancestors.contains(&node.real) {
+        if ancestors.contains(&node.seen) {
             return Ok(());
         }
         let added = self
@@ -404,15 +423,16 @@ impl Scan<'_> {
         let listing = children(&*provider, &node.real)
             .await
             .map_err(|e| e.about(&node.src))?;
-        ancestors.push(node.real.clone());
+        ancestors.push(node.seen.clone());
         let child_frame = Frame {
             check_dst: added.dst_dir_exists,
-            link_depth: frame.link_depth,
+            ..frame
         };
         for entry in listing {
             let real = node.real.join(&entry.name)?;
             let child = Node {
                 src: Uri::new(node.src.location.clone(), real.clone()),
+                seen: Seen::Path(real.clone()),
                 real,
                 entry,
             };
@@ -422,7 +442,7 @@ impl Scan<'_> {
         Ok(())
     }
 
-    async fn add_link(&mut self, node: Node, parent: Uri, frame: Frame, ancestors: Vec<VPath>) -> Result<()> {
+    async fn add_link(&mut self, node: Node, parent: Uri, frame: Frame, ancestors: Vec<Seen>) -> Result<()> {
         let provider = self.resolver.provider(&node.src.location)?;
         let link = provider
             .read_link(&node.src.path)
@@ -448,7 +468,16 @@ impl Scan<'_> {
         if target.kind == Kind::Symlink {
             return Ok(());
         }
-        let real = resolve_link(&node.real, &link).unwrap_or_else(|| node.real.clone());
+        let resolved = if frame.through_link {
+            None
+        } else {
+            resolve_link(&node.real, &link)
+        };
+        let through_link = resolved.is_none();
+        let (real, seen) = match resolved {
+            Some(real) => (real.clone(), Seen::Path(real)),
+            None => (node.real.clone(), Seen::Target(link)),
+        };
         let followed = Node {
             src: node.src,
             real,
@@ -456,8 +485,13 @@ impl Scan<'_> {
                 name: node.entry.name,
                 ..target
             },
+            seen,
         };
-        let frame = Frame { link_depth, ..frame };
+        let frame = Frame {
+            link_depth,
+            through_link,
+            ..frame
+        };
         // A followed link is a plain file or folder from here on.
         match followed.entry.kind {
             Kind::Dir => self.add_dir(followed, parent, frame, ancestors).await,
@@ -557,14 +591,14 @@ fn side_of(e: &Entry) -> Side {
 }
 
 /// The location-relative path a link at `real` points to, with `.` and `..`
-/// resolved. Absolute targets are taken relative to the location root. `None`
-/// when the target climbs out of the location.
+/// resolved. `None` when the target climbs out of the location, and for an
+/// absolute target: a location is a folder of the server's file system (the
+/// home folder of an SFTP account, a local user folder), not its root.
 pub fn resolve_link(real: &VPath, target: &[u8]) -> Option<VPath> {
-    let mut parts: Vec<Vec<u8>> = if target.first() == Some(&b'/') {
-        Vec::new()
-    } else {
-        real.parent()?.components().map(<[u8]>::to_vec).collect()
-    };
+    if target.first() == Some(&b'/') {
+        return None;
+    }
+    let mut parts: Vec<Vec<u8>> = real.parent()?.components().map(<[u8]>::to_vec).collect();
     for comp in target.split(|b| *b == b'/') {
         match comp {
             b"" | b"." => {}
@@ -1198,7 +1232,8 @@ mod tests {
             .unwrap();
         assert_eq!(dsts(&p), vec!["dst/s", "dst/s/l", "dst/s/l/x"]);
         assert_eq!(p.items[1].kind, Kind::Dir);
-        assert_eq!(p.items[2].src, uri("m", "real/x"));
+        // An absolute target is the server's path: read through the link.
+        assert_eq!(p.items[2].src, uri("m", "s/l/x"));
     }
 
     fn link_to_file() -> (MemoryProvider, StaticResolver) {
@@ -1264,9 +1299,70 @@ mod tests {
         )
         .await
         .unwrap();
-        // `loop` is the location root, which holds only `a` again: skipped. `self` is `a` itself.
-        assert_eq!(dsts(&p), vec!["d/a", "d/a/loop", "d/a/x"]);
+        // `loop` is the location root, which holds only `a` again: skipped.
+        // `self` is `a` itself, which only its absolute target can tell: it
+        // is copied once, and the second time round its target is known.
+        // Below `self` the server's paths are unknown, so `loop` there is
+        // told only by its target: one more round, then each is known.
+        assert_eq!(
+            dsts(&p),
+            vec![
+                "d/a",
+                "d/a/loop",
+                "d/a/self",
+                "d/a/self/loop",
+                "d/a/self/loop/a",
+                "d/a/self/loop/a/x",
+                "d/a/self/x",
+                "d/a/x"
+            ]
+        );
         assert_eq!(p.items[1].kind, Kind::Dir);
+    }
+
+    #[tokio::test]
+    async fn links_that_climb_out_are_followed_through_the_link() {
+        // From `/home/alice/nas`, `../../alice/src/alpha` leaves the location
+        // and comes back into it; `back` inside it leads to itself.
+        let mem = MemoryProvider::default().rooted_at("/home/alice");
+        let r = StaticResolver::default().with("m", Arc::new(mem.clone()));
+        mem.add_file("src/alpha/x", b"1", 1);
+        mem.add_symlink("src/alpha/back", "../../../alice/src/alpha");
+        mem.add_symlink("nas/Photos", "../../alice/src/alpha");
+        mem.add_dir("dst");
+        let p = plan_with(OperationKind::Copy, &["nas"], "dst", &r, &follow())
+            .await
+            .unwrap();
+        // `back` is copied once; the second time round its target is known.
+        assert_eq!(
+            dsts(&p),
+            vec![
+                "dst/nas",
+                "dst/nas/Photos",
+                "dst/nas/Photos/back",
+                "dst/nas/Photos/back/x",
+                "dst/nas/Photos/x"
+            ]
+        );
+        assert_eq!(p.items[1].kind, Kind::Dir);
+        assert_eq!(p.items[4].src, uri("m", "nas/Photos/x"));
+    }
+
+    #[tokio::test]
+    async fn absolute_links_are_followed_through_the_link() {
+        // An SFTP location starts at the home folder: `/home/alice/src/alpha`
+        // is `src/alpha` there, never `home/alice/src/alpha`.
+        let mem = MemoryProvider::default().rooted_at("/home/alice");
+        let r = StaticResolver::default().with("m", Arc::new(mem.clone()));
+        mem.add_file("src/alpha/x", b"1", 1);
+        mem.add_symlink("nas/Photos", "/home/alice/src/alpha");
+        mem.add_dir("dst");
+        let p = plan_with(OperationKind::Copy, &["nas"], "dst", &r, &follow())
+            .await
+            .unwrap();
+        assert_eq!(dsts(&p), vec!["dst/nas", "dst/nas/Photos", "dst/nas/Photos/x"]);
+        assert_eq!(p.items[1].kind, Kind::Dir);
+        assert_eq!(p.items[2].src, uri("m", "nas/Photos/x"));
     }
 
     #[tokio::test]
@@ -1308,7 +1404,11 @@ mod tests {
         let p = |s: &str| VPath::parse(s.as_bytes()).unwrap();
         assert_eq!(resolve_link(&p("a/b/l"), b"../c"), Some(p("a/c")));
         assert_eq!(resolve_link(&p("a/b/l"), b"c/./d"), Some(p("a/b/c/d")));
-        assert_eq!(resolve_link(&p("a/b/l"), b"/x/y"), Some(p("x/y")));
+        assert_eq!(
+            resolve_link(&p("a/b/l"), b"/x/y"),
+            None,
+            "absolute targets are the server's"
+        );
         assert_eq!(resolve_link(&p("a/l"), b".."), Some(p("")));
         assert_eq!(resolve_link(&p("a/l"), b"../.."), None);
         assert_eq!(resolve_link(&p("l"), b"x"), Some(p("x")));

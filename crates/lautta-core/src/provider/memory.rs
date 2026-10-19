@@ -41,6 +41,9 @@ struct State {
     /// Errors injected per path and operation name (`"list"`, `"stat"`, …).
     failures: HashMap<(String, VPath), Vec<Error>>,
     calls: Vec<String>,
+    /// Where the location sits on its server: absolute link targets below
+    /// it resolve into the tree, others point outside (empty: at `/`).
+    root_at: Vec<u8>,
 }
 
 /// Thread-safe in-memory tree. The root always exists.
@@ -82,6 +85,14 @@ impl MemoryProvider {
             caps,
             batch: 64,
         }
+    }
+
+    /// The location starts at `dir` of its server (`/home/alice` for an
+    /// SFTP account): absolute link targets are written against the
+    /// server's root, and relative ones may climb out of `dir` and back.
+    pub fn rooted_at(self, dir: &str) -> MemoryProvider {
+        self.lock().root_at = dir.trim_end_matches('/').as_bytes().to_vec();
+        self
     }
 
     /// Listing batch size (to test batched delivery).
@@ -192,7 +203,7 @@ impl MemoryProvider {
         }
     }
 
-    fn entry_for(path: &VPath, node: &Node, nodes: &BTreeMap<VPath, Node>, follow: bool) -> Entry {
+    fn entry_for(path: &VPath, node: &Node, st: &State, follow: bool) -> Entry {
         let name = path.name().unwrap_or(b"");
         match node {
             Node::File { data, mtime, mode } => {
@@ -209,11 +220,11 @@ impl MemoryProvider {
                 e
             }
             Node::Link { target } => {
-                let resolved = resolve_link(path, target);
-                let target_node = resolved.as_ref().and_then(|t| nodes.get(t));
+                let resolved = resolve_link(path, target, &st.root_at);
+                let target_node = resolved.as_ref().and_then(|t| st.nodes.get(t));
                 match (follow, target_node, resolved) {
                     (true, Some(n), Some(t)) if !matches!(n, Node::Link { .. }) => {
-                        let mut e = Self::entry_for(&t, n, nodes, false);
+                        let mut e = Self::entry_for(&t, n, st, false);
                         e.name = name.to_vec();
                         e
                     }
@@ -236,7 +247,7 @@ impl MemoryProvider {
         st.nodes
             .iter()
             .filter(|(p, _)| !p.is_root() && p.parent().as_ref() == Some(dir))
-            .map(|(p, n)| Self::entry_for(p, n, &st.nodes, false))
+            .map(|(p, n)| Self::entry_for(p, n, st, false))
             .collect()
     }
 
@@ -267,22 +278,56 @@ fn ensure_parents(st: &mut State, p: &VPath) {
     }
 }
 
-fn resolve_link(link: &VPath, target: &[u8]) -> Option<VPath> {
-    if target.first() == Some(&b'/') {
-        return VPath::parse(target).ok();
+/// Links followed in one lookup before it gives up, as a file system does.
+const MAX_HOPS: usize = 40;
+
+/// `path` with the links among its folders followed, as a real file system
+/// does when it opens a path; the last component too with `follow_last`.
+/// Reads go through this; changes address the nodes themselves.
+fn canonical(st: &State, path: &VPath, follow_last: bool) -> VPath {
+    let names: Vec<&[u8]> = path.components().collect();
+    let mut cur = VPath::root();
+    for (i, name) in names.iter().enumerate() {
+        let Ok(mut next) = cur.join(name) else {
+            return path.clone();
+        };
+        let follow = follow_last || i + 1 < names.len();
+        let mut hops = 0;
+        while let (true, Some(Node::Link { target })) = (follow, st.nodes.get(&next)) {
+            hops += 1;
+            match resolve_link(&next, target, &st.root_at) {
+                Some(t) if hops <= MAX_HOPS => next = t,
+                _ => return path.clone(),
+            }
+        }
+        cur = next;
     }
-    let base = link.parent()?;
-    let mut parts: Vec<Vec<u8>> = base.components().map(<[u8]>::to_vec).collect();
-    for comp in target.split(|b| *b == b'/') {
+    cur
+}
+
+/// Where a link at `link` leads, as the server resolves it: from the
+/// link's folder for a relative target, from the server's root for an
+/// absolute one, `..` past the location included. `None` when that is
+/// outside the location (`root_at` on the server).
+fn resolve_link(link: &VPath, target: &[u8], root_at: &[u8]) -> Option<VPath> {
+    let from = if target.first() == Some(&b'/') {
+        Vec::new()
+    } else {
+        [root_at, b"/", link.parent()?.as_bytes()].concat()
+    };
+    let mut parts: Vec<&[u8]> = Vec::new();
+    for comp in from.split(|b| *b == b'/').chain(target.split(|b| *b == b'/')) {
         match comp {
             b"" | b"." => {}
             b".." => {
                 parts.pop()?;
             }
-            c => parts.push(c.to_vec()),
+            c => parts.push(c),
         }
     }
-    VPath::parse(&parts.join(&b'/')).ok()
+    let root: Vec<&[u8]> = root_at.split(|b| *b == b'/').filter(|c| !c.is_empty()).collect();
+    let inside = parts.strip_prefix(root.as_slice())?;
+    VPath::parse(&inside.join(&b'/')).ok()
 }
 
 struct MemoryReader {
@@ -312,8 +357,9 @@ impl Provider for MemoryProvider {
         self.enter("list", dir)?;
         let entries = {
             let st = self.lock();
-            Self::get_dir(&st, dir)?;
-            Self::children(&st, dir)
+            let dir = canonical(&st, dir, true);
+            Self::get_dir(&st, &dir)?;
+            Self::children(&st, &dir)
         };
         for chunk in entries.chunks(self.batch) {
             if out.send(chunk.to_vec()).await.is_err() {
@@ -326,16 +372,20 @@ impl Provider for MemoryProvider {
     async fn stat(&self, path: &VPath, follow: bool, _lane: Lane) -> Result<Entry> {
         self.enter("stat", path)?;
         let st = self.lock();
+        let real = canonical(&st, path, false);
         let node = st
             .nodes
-            .get(path)
+            .get(&real)
             .ok_or_else(|| Error::kind(ErrorKind::NotFound))?;
-        Ok(Self::entry_for(path, node, &st.nodes, follow))
+        let mut entry = Self::entry_for(&real, node, &st, follow);
+        entry.name = path.name().unwrap_or(b"").to_vec();
+        Ok(entry)
     }
 
     async fn read_link(&self, path: &VPath) -> Result<Vec<u8>> {
         self.enter("read_link", path)?;
-        match self.lock().nodes.get(path) {
+        let st = self.lock();
+        match st.nodes.get(&canonical(&st, path, false)) {
             Some(Node::Link { target }) => Ok(target.clone()),
             Some(_) => Err(Error::kind(ErrorKind::InvalidArgument)),
             None => Err(Error::kind(ErrorKind::NotFound)),
@@ -506,7 +556,8 @@ impl Provider for MemoryProvider {
 
     async fn open_read(&self, path: &VPath, _lane: Lane) -> Result<Box<dyn ReadHandle>> {
         self.enter("open_read", path)?;
-        match self.lock().nodes.get(path) {
+        let st = self.lock();
+        match st.nodes.get(&canonical(&st, path, true)) {
             Some(Node::File { data, .. }) => Ok(Box::new(MemoryReader { data: data.clone() })),
             Some(_) => Err(Error::kind(ErrorKind::IsADirectory)),
             None => Err(Error::kind(ErrorKind::NotFound)),
@@ -573,10 +624,13 @@ impl Provider for MemoryProvider {
         progress: ProgressSink,
     ) -> Result<()> {
         self.enter("download_into", src)?;
-        let data = match self.lock().nodes.get(src) {
-            Some(Node::File { data, .. }) => data.clone(),
-            Some(_) => return Err(Error::kind(ErrorKind::IsADirectory)),
-            None => return Err(Error::kind(ErrorKind::NotFound)),
+        let data = {
+            let st = self.lock();
+            match st.nodes.get(&canonical(&st, src, true)) {
+                Some(Node::File { data, .. }) => data.clone(),
+                Some(_) => return Err(Error::kind(ErrorKind::IsADirectory)),
+                None => return Err(Error::kind(ErrorKind::NotFound)),
+            }
         };
         let start = usize::try_from(opts.offset).unwrap_or(usize::MAX).min(data.len());
         let len = data.len() as u64;
@@ -620,9 +674,12 @@ impl Provider for MemoryProvider {
         if !self.caps.has(cap::CHECKSUMS) {
             return Err(Error::kind(ErrorKind::Unsupported));
         }
-        let data = match self.lock().nodes.get(path) {
-            Some(Node::File { data, .. }) => data.clone(),
-            _ => return Err(Error::kind(ErrorKind::NotFound)),
+        let data = {
+            let st = self.lock();
+            match st.nodes.get(&canonical(&st, path, true)) {
+                Some(Node::File { data, .. }) => data.clone(),
+                _ => return Err(Error::kind(ErrorKind::NotFound)),
+            }
         };
         match algorithm {
             "sha256" => Ok(sha2::Sha256::digest(data).to_vec()),
@@ -681,6 +738,40 @@ mod tests {
                 .kind,
             ErrorKind::NotADirectory
         );
+    }
+
+    #[tokio::test]
+    async fn paths_through_linked_folders_are_followed() {
+        let m = MemoryProvider::default().rooted_at("/home/alice/");
+        m.add_file("real/f", b"data", 1);
+        m.add_symlink("abs", "/home/alice/real");
+        m.add_symlink("rel", "real");
+        m.add_symlink("outside", "/etc");
+        m.add_symlink("hop", "rel");
+        for dir in ["abs", "rel", "hop"] {
+            let names: Vec<String> = list_all(&m, &vp(dir), Lane::Interactive)
+                .await
+                .unwrap()
+                .iter()
+                .map(Entry::display_name)
+                .collect();
+            assert_eq!(names, vec!["f"], "{dir}");
+            let f = vp(&format!("{dir}/f"));
+            let handle = m.open_read(&f, Lane::Interactive).await.unwrap();
+            assert_eq!(read_all(&*handle, 100).await.unwrap(), b"data");
+            assert_eq!(m.stat(&f, false, Lane::Interactive).await.unwrap().name, b"f");
+            assert_eq!(m.checksum(&f, "sha256").await.unwrap().len(), 32);
+        }
+        let link = m.stat(&vp("abs"), false, Lane::Interactive).await.unwrap();
+        assert_eq!((link.kind, link.target_kind), (Kind::Symlink, Kind::Dir));
+        assert_eq!(m.read_link(&vp("hop")).await.unwrap(), b"rel");
+        let err = m
+            .stat(&vp("outside/passwd"), true, Lane::Interactive)
+            .await
+            .unwrap_err();
+        assert_eq!(err.kind, ErrorKind::NotFound, "outside the location");
+        m.add_symlink("loop", "loop");
+        assert!(m.stat(&vp("loop/x"), true, Lane::Interactive).await.is_err());
     }
 
     #[tokio::test]
