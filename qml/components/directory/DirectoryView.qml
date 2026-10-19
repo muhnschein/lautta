@@ -191,6 +191,7 @@ Item {
         case "TimedOut":
         case "ConnectionLost":
         case "BridgeUnavailable":
+        case "LocationGone":
             //% "Can't reach this place"
             return qsTrId("lautta-dir-err-unreachable")
         }

@@ -9,6 +9,7 @@ use bridge_support::{config, eventually};
 use lautta_bridge_proto::fake::{Consent, FakeBridge};
 use lautta_core::app::{Core, Started};
 use lautta_core::bridge::BridgeStatus;
+use lautta_core::error::ErrorKind;
 use lautta_core::locations::{LocationRegistry, LocationStatus};
 use lautta_core::ops::OperationKind;
 use lautta_core::paths::AppPaths;
@@ -95,6 +96,57 @@ async fn download_from_a_server() {
         std::fs::read(home.path().join("Documents/a.jpg")).unwrap(),
         b"jpeg bytes"
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn uploads_follow_the_server_name_rules() {
+    let fake = fake_with_files().await;
+    // A share with Windows' name rules (SMB): a name it refuses gets a safe one.
+    fake.set_capabilities("account:1", &["WindowsNames"], &[], 255);
+    let (home, core, _l) = core_with(&fake, true).await;
+    eventually("server location", || core.location(SERVER).is_some()).await;
+    std::fs::write(home.path().join("Documents/a:b.txt"), b"text").unwrap();
+    let started = core
+        .copy_or_move(
+            OperationKind::Copy,
+            vec![Uri::parse("lautta://user-documents/a:b.txt").unwrap()],
+            Uri::parse("lautta://nv-account:1/photos").unwrap(),
+        )
+        .await
+        .unwrap();
+    let Started::Transfer(id) = started else {
+        panic!("small copy starts at once")
+    };
+    let done = core.engine.wait_for(id, |s| s.state.is_finished()).await.unwrap();
+    assert_eq!(done.state, TransferState::Completed);
+    assert_eq!(
+        fake.file("account:1", b"photos/a_b.txt").as_deref(),
+        Some(&b"text"[..])
+    );
+    assert!(!fake.exists("account:1", b"photos/a:b.txt"));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn copying_from_a_server_that_went_away_says_so() {
+    let fake = fake_with_files().await;
+    let (_home, core, _l) = core_with(&fake, true).await;
+    eventually("server location", || core.location(SERVER).is_some()).await;
+    // Copied while the server was there; it goes before the paste.
+    fake.remove_location("account:1").await;
+    eventually("server gone", || core.location(SERVER).is_none()).await;
+    let photo = Uri::parse("lautta://nv-account:1/photos/a.jpg").unwrap();
+    let e = core
+        .copy_or_move(
+            OperationKind::Copy,
+            vec![photo.clone()],
+            Uri::parse("lautta://user-documents/").unwrap(),
+        )
+        .await
+        .err()
+        .unwrap();
+    assert_eq!(e.kind, ErrorKind::LocationGone, "{e}");
+    assert_eq!(e.subject, Some(photo));
+    assert_eq!(core.locations.name(SERVER).as_deref(), Some("NAS"));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

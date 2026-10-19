@@ -46,10 +46,21 @@ fn join_err(e: tokio::task::JoinError) -> Error {
 // ------------------------------------------------------------ pending plans
 
 /// Large plans wait for the user's confirmation under an id (OPS-1).
+///
+/// A plan is lent out while a conflict answer works on it across awaits
+/// ([`lend`](Self::lend)); starting it meanwhile waits for it to come back
+/// ([`take_when_returned`](Self::take_when_returned)) instead of finding
+/// nothing, and discarding it meanwhile drops it when it comes back.
 #[derive(Default)]
 pub struct PendingPlans {
     next: AtomicU64,
-    plans: Mutex<HashMap<u64, Plan>>,
+    plans: Mutex<HashMap<u64, Slot>>,
+    returned: tokio::sync::Notify,
+}
+
+enum Slot {
+    Ready(Box<Plan>),
+    Lent,
 }
 
 impl PendingPlans {
@@ -60,26 +71,73 @@ impl PendingPlans {
     /// Keeps `plan` and returns its id (1, 2, …).
     pub fn insert(&self, plan: Plan) -> u64 {
         let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
-        guard(&self.plans).insert(id, plan);
+        guard(&self.plans).insert(id, Slot::Ready(Box::new(plan)));
         id
     }
 
-    /// Takes the plan out (to start it, or to work on it across awaits).
+    /// Takes the plan out for good (to start it); `None` while it is lent.
     pub fn take(&self, id: u64) -> Option<Plan> {
-        guard(&self.plans).remove(&id)
+        self.take_unless_lent(id).ok().flatten()
     }
 
-    /// Puts a plan taken out with [`take`](Self::take) back under its id.
+    /// The plan taken out, `Ok(None)` without one, `Err` while it is lent.
+    fn take_unless_lent(&self, id: u64) -> std::result::Result<Option<Plan>, ()> {
+        let mut plans = guard(&self.plans);
+        match plans.remove(&id) {
+            Some(Slot::Ready(plan)) => Ok(Some(*plan)),
+            Some(Slot::Lent) => {
+                plans.insert(id, Slot::Lent);
+                Err(())
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// The plan, once it is back if it is lent; `None` when there is no
+    /// such plan or it was discarded meanwhile.
+    pub async fn take_when_returned(&self, id: u64) -> Option<Plan> {
+        loop {
+            let returned = self.returned.notified();
+            let mut returned = std::pin::pin!(returned);
+            // Registered before looking, so a return in between is not missed.
+            returned.as_mut().enable();
+            if let Ok(plan) = self.take_unless_lent(id) {
+                return plan;
+            }
+            returned.await;
+        }
+    }
+
+    /// Takes the plan out to work on it across awaits; it stays known and
+    /// comes back with [`put_back`](Self::put_back).
+    pub fn lend(&self, id: u64) -> Option<Plan> {
+        let mut plans = guard(&self.plans);
+        match std::mem::replace(plans.get_mut(&id)?, Slot::Lent) {
+            Slot::Ready(plan) => Some(*plan),
+            Slot::Lent => None,
+        }
+    }
+
+    /// Returns a plan taken out with [`lend`](Self::lend); one discarded
+    /// while it was out is dropped.
     pub fn put_back(&self, id: u64, plan: Plan) {
-        guard(&self.plans).insert(id, plan);
+        if let Some(slot) = guard(&self.plans).get_mut(&id) {
+            *slot = Slot::Ready(Box::new(plan));
+        }
+        self.returned.notify_waiters();
     }
 
     pub fn discard(&self, id: u64) -> bool {
-        guard(&self.plans).remove(&id).is_some()
+        let found = guard(&self.plans).remove(&id).is_some();
+        self.returned.notify_waiters();
+        found
     }
 
     pub fn with<R>(&self, id: u64, f: impl FnOnce(&Plan) -> R) -> Option<R> {
-        guard(&self.plans).get(&id).map(f)
+        match guard(&self.plans).get(&id) {
+            Some(Slot::Ready(plan)) => Some(f(plan)),
+            _ => None,
+        }
     }
 
     pub fn len(&self) -> usize {

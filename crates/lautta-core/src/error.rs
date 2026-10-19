@@ -3,6 +3,7 @@
 //! (netvfs SPEC-v2 XC-21) plus local I/O mappings, so the UI has a single
 //! message table (SPEC §20, [`crate::messages`]).
 
+use crate::uri::Uri;
 use std::fmt;
 
 /// Error kinds. The names returned by [`ErrorKind::name`] are the netvfs
@@ -37,6 +38,10 @@ pub enum ErrorKind {
     BridgeUnavailable,
     /// The sandbox does not let the app read the path (SPEC §20 "sandbox").
     Sandbox,
+    /// A server location that is not there any more (disconnected, or the
+    /// bridge restarted, which ends ad-hoc servers): items copied from it
+    /// cannot be reached through it again.
+    LocationGone,
     /// A name crosses into a location where it is not representable.
     CrossesDevice,
     Io,
@@ -44,7 +49,7 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
-    pub const ALL: [ErrorKind; 28] = [
+    pub const ALL: [ErrorKind; 29] = [
         ErrorKind::NotFound,
         ErrorKind::AlreadyExists,
         ErrorKind::PermissionDenied,
@@ -70,6 +75,7 @@ impl ErrorKind {
         ErrorKind::RateLimited,
         ErrorKind::BridgeUnavailable,
         ErrorKind::Sandbox,
+        ErrorKind::LocationGone,
         ErrorKind::CrossesDevice,
         ErrorKind::Io,
         ErrorKind::Internal,
@@ -102,6 +108,7 @@ impl ErrorKind {
             ErrorKind::RateLimited => "RateLimited",
             ErrorKind::BridgeUnavailable => "BridgeUnavailable",
             ErrorKind::Sandbox => "Sandbox",
+            ErrorKind::LocationGone => "LocationGone",
             ErrorKind::CrossesDevice => "CrossesDevice",
             ErrorKind::Io => "Io",
             ErrorKind::Internal => "Internal",
@@ -142,14 +149,16 @@ impl fmt::Display for ErrorKind {
 }
 
 /// An error with its kind, a human-oriented message from the source (never
-/// secrets), an optional protocol detail for the *Details* view, and an
-/// optional retry hint (netvfs XC-24).
+/// secrets), an optional protocol detail for the *Details* view, an
+/// optional retry hint (netvfs XC-24) and the item it is about, so the
+/// message can name what failed (SPEC §20).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Error {
     pub kind: ErrorKind,
     pub message: String,
     pub detail: Option<String>,
     pub retry_after_ms: Option<u64>,
+    pub subject: Option<Uri>,
 }
 
 impl Error {
@@ -159,7 +168,16 @@ impl Error {
             message: message.into(),
             detail: None,
             retry_after_ms: None,
+            subject: None,
         }
+    }
+
+    /// Names the item the error is about, unless an inner step named one.
+    pub fn about(mut self, uri: &Uri) -> Error {
+        if self.subject.is_none() {
+            self.subject = Some(uri.clone());
+        }
+        self
     }
 
     pub fn kind(kind: ErrorKind) -> Error {
@@ -284,6 +302,15 @@ mod tests {
             ErrorKind::from_name("org.netvfs.Error.Brandnew"),
             ErrorKind::ProtocolError
         );
+    }
+
+    #[test]
+    fn the_first_subject_named_stays() {
+        let inner = Uri::parse("lautta://nas/a/b").unwrap();
+        let outer = Uri::parse("lautta://nas/a").unwrap();
+        let e = Error::kind(ErrorKind::NotFound).about(&inner).about(&outer);
+        assert_eq!(e.subject, Some(inner));
+        assert_eq!(Error::kind(ErrorKind::NotFound).subject, None);
     }
 
     #[test]

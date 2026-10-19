@@ -135,6 +135,13 @@ pub async fn read_all(handle: &dyn ReadHandle, limit: u64) -> Result<Vec<u8>> {
 pub trait Provider: Send + Sync {
     fn capabilities(&self) -> Capabilities;
 
+    /// [`Provider::capabilities`] once they are known: a bridge location
+    /// learns them from the bridge on first use. Plans and transfers decide
+    /// with these (name rules, atomic writes, resume).
+    async fn known_capabilities(&self) -> Capabilities {
+        self.capabilities()
+    }
+
     /// Streams the listing in batches into `out`. Returns when complete.
     async fn list(&self, dir: &VPath, lane: Lane, out: mpsc::Sender<Vec<Entry>>) -> Result<()>;
     async fn stat(&self, path: &VPath, follow: bool, lane: Lane) -> Result<Entry>;

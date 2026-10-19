@@ -43,13 +43,68 @@ fn pending_plans_are_kept_by_id() {
     assert_eq!((a, b), (1, 2));
     assert_eq!(pending.len(), 2);
     assert_eq!(pending.with(b, |p| p.items.len()), Some(1));
-    let taken = pending.take(b).unwrap();
-    assert!(pending.with(b, |_| ()).is_none(), "taken plans are gone");
-    pending.put_back(b, taken);
+    let lent = pending.lend(b).unwrap();
+    assert!(pending.with(b, |_| ()).is_none(), "lent plans are out");
+    assert!(pending.lend(b).is_none(), "a plan is lent once");
+    assert!(pending.take(b).is_none(), "a lent plan cannot be started");
+    assert_eq!(pending.len(), 2, "a lent plan is still known");
+    pending.put_back(b, lent);
     assert_eq!(pending.with(b, |p| p.items.len()), Some(1));
+    assert_eq!(pending.take(b).map(|p| p.items.len()), Some(1));
+    assert!(pending.take(b).is_none(), "taken plans are gone");
     assert!(pending.discard(a));
     assert!(!pending.discard(a), "discarding twice finds nothing");
     assert!(pending.take(99).is_none());
+    assert!(pending.lend(99).is_none());
+    assert!(pending.is_empty());
+}
+
+#[test]
+fn a_plan_discarded_while_lent_is_dropped_when_it_comes_back() {
+    let pending = PendingPlans::new();
+    let id = pending.insert(plan(vec![]));
+    let lent = pending.lend(id).unwrap();
+    assert!(pending.discard(id));
+    pending.put_back(id, lent);
+    assert!(pending.is_empty());
+    assert!(pending.take(id).is_none());
+}
+
+#[tokio::test]
+async fn starting_a_lent_plan_waits_for_it() {
+    let pending = Arc::new(PendingPlans::new());
+    let id = pending.insert(plan(vec![item("lautta://a/x", "lautta://b/x", Kind::File, None)]));
+    let lent = pending.lend(id).unwrap();
+    let waiter = tokio::spawn({
+        let pending = pending.clone();
+        async move { pending.take_when_returned(id).await }
+    });
+    tokio::task::yield_now().await;
+    assert!(!waiter.is_finished(), "waits while the plan is out");
+    pending.put_back(id, lent);
+    let started = waiter.await.unwrap();
+    assert_eq!(started.map(|p| p.items.len()), Some(1));
+    assert!(pending.is_empty(), "the started plan is taken out");
+}
+
+#[tokio::test]
+async fn starting_waits_end_when_the_plan_is_discarded_or_missing() {
+    let pending = Arc::new(PendingPlans::new());
+    assert!(pending.take_when_returned(7).await.is_none());
+    let id = pending.insert(plan(vec![]));
+    assert!(
+        pending.take_when_returned(id).await.is_some(),
+        "a ready plan starts at once"
+    );
+    let id = pending.insert(plan(vec![]));
+    let _lent = pending.lend(id).unwrap();
+    let waiter = tokio::spawn({
+        let pending = pending.clone();
+        async move { pending.take_when_returned(id).await }
+    });
+    tokio::task::yield_now().await;
+    assert!(pending.discard(id));
+    assert!(waiter.await.unwrap().is_none());
 }
 
 #[test]

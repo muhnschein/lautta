@@ -45,9 +45,7 @@ QtObject {
         Operations.measure("[1]")
         check(failures.length === 7, "measure refuses bad uris")
 
-        // Plans that do not exist.
-        Operations.startPlan(999)
-        check(lastFailure() === "NotFound" && failures.length === 8, "unknown plan cannot start")
+        // Plans that do not exist (starting one: tst_operations_plans.qml).
         Operations.resolveConflict(999, 0, "KeepBoth", false)
         check(lastFailure() === "NotFound", "unknown plan has no conflicts to answer")
         Operations.resolveConflict(999, 0, "Smash", false)

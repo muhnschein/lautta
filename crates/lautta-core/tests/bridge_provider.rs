@@ -54,6 +54,25 @@ async fn capabilities_come_from_the_location() {
 }
 
 #[tokio::test]
+async fn known_capabilities_are_fetched_on_first_use() {
+    let rig = Rig::ready().await;
+    rig.fake
+        .set_capabilities("account:1", &["WindowsNames"], &[], 255);
+    let provider = rig.provider();
+    assert!(!provider.has_capabilities());
+    let caps = provider.known_capabilities().await;
+    assert!(caps.has(cap::RESTRICTED_NAMES) && caps.writable());
+    assert!(provider.has_capabilities());
+    // Asked once: what the bridge says later is not fetched again.
+    rig.fake.set_capabilities("account:1", &["Symlinks"], &[], 255);
+    assert!(!provider.known_capabilities().await.has(cap::SYMLINKS));
+    // A location the bridge cannot answer for keeps the assumed ones.
+    let unknown = rig.client.provider("nv-account:9");
+    assert!(unknown.known_capabilities().await.writable());
+    assert!(!unknown.has_capabilities());
+}
+
+#[tokio::test]
 async fn listings_arrive_in_batches_with_names_as_bytes() {
     let rig = Rig::ready().await;
     for i in 0..600 {

@@ -27,6 +27,13 @@ Item {
         notice.show()
     }
 
+    // What a failure is about: the item's path, with its location.
+    function context(subject) {
+        if (!subject)
+            return {}
+        return { "item": Operations.displayPath(subject), "location": App.locationName(subject) }
+    }
+
     function background() {
         //% "Running in the background"
         show(qsTrId("lautta-ops-background"))
@@ -49,7 +56,7 @@ Item {
             "summary": JSON.parse(summaryJson)
         })
         onArchiveOpened: handlers.stack().push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": rootUri })
-        onFailed: handlers.show(ErrorText.message(kind, {}))
+        onFailed: handlers.show(ErrorText.message(kind, handlers.context(subject)))
         onStarted: handlers.background()
         onJobStarted: handlers.background()
         onJobFinished: {

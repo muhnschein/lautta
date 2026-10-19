@@ -136,6 +136,7 @@ fn text_for_other(kind: ErrorKind, ctx: &MessageContext) -> String {
         }
         ErrorKind::RateLimited => format!("{loc} asked Lautta to slow down. Trying again shortly."),
         ErrorKind::CrossesDevice => format!("{it} can't be moved to {loc} directly."),
+        ErrorKind::LocationGone => format!("{loc} is no longer connected."),
         ErrorKind::Io => format!("Something went wrong while accessing {it}."),
         ErrorKind::Internal => "Something went wrong inside Lautta.".to_owned(),
         // The §20 group is handled by `text_for`; kept total for safety.

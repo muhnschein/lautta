@@ -62,6 +62,8 @@ impl Core {
             }
         }
         let provider = self.provider(&dir.location)?;
+        // Learnt with the first listing, for the actions the UI offers.
+        provider.known_capabilities().await;
         let (tx, mut rx) = mpsc::channel::<Vec<Entry>>(BATCH_QUEUE);
         let collect = async {
             let mut all = Vec::new();
