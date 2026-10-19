@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Search here (SRC-2..4): recursive name search below a folder with results
-// streaming in, grouped by folder (design: Search, SearchPulley).
+// streaming in, grouped by folder (design: Search).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -14,21 +14,18 @@ Page {
 
     // The folder (or location root) searched.
     property string rootUri
-    // The text in the search field.
-    property string queryText
     // Whether a search was run since the page opened (for the placeholder).
     property bool searched
 
     allowedOrientations: Orientation.All
 
+    // The match mode and types; the folder is the header's description.
     function summary() {
-        //% "In %1"
-        var parts = [qsTrId("lautta-search-in").arg(searchModel.rootName)]
-        parts.push(searchModel.matchMode === "glob"
-                   //% "glob"
-                   ? qsTrId("lautta-search-mode-glob")
-                   //% "contains"
-                   : qsTrId("lautta-search-mode-substring"))
+        var parts = [searchModel.matchMode === "glob"
+                     //% "glob"
+                     ? qsTrId("lautta-search-mode-glob")
+                     //% "contains"
+                     : qsTrId("lautta-search-mode-substring")]
         var types = []
         try {
             types = JSON.parse(searchModel.types || "[]")
@@ -47,32 +44,33 @@ Page {
             searched = true
     }
 
+    // The model's query is set here rather than bound to the field: the
+    // filters dialog sets it too, which would drop a binding and leave later
+    // typing unsearched. Text equal to the query is the dialog's own name
+    // coming back, already searched.
+    function edited(text) {
+        if (text === searchModel.query)
+            return
+        searchModel.query = text
+        if (text.length === 0) {
+            typing.stop()
+            searchModel.clear()
+        } else {
+            typing.restart()
+        }
+    }
+
     function openFilters() {
         var dialog = pageStack.push(Qt.resolvedUrl("SearchFiltersPage.qml"), { "searchModel": searchModel })
         dialog.accepted.connect(function () {
-            page.queryText = searchModel.query
+            searchField.text = searchModel.query
             page.searched = true
-        })
-    }
-
-    function pickRoot() {
-        var picker = pageStack.push(Qt.resolvedUrl("../dialogs/FolderPickerDialog.qml"), {
-            //% "Search in"
-            "title": qsTrId("lautta-search-pick-title"),
-            //% "Search"
-            "acceptText": qsTrId("lautta-search-pick-accept"),
-            "startUri": searchModel.rootUri
-        })
-        picker.accepted.connect(function () {
-            searchModel.rootUri = picker.selectedUri
-            page.start()
         })
     }
 
     SearchModel {
         id: searchModel
         rootUri: page.rootUri
-        query: page.queryText
     }
 
     Timer {
@@ -81,85 +79,84 @@ Page {
         onTriggered: page.start()
     }
 
+    // The field and the filter summary sit above the list, not in its header
+    // (SRC-2): each search resets the model and the list then makes its first
+    // new row current, which takes the focus inside the list, so a field in
+    // the header lost the keyboard; it also scrolled away with the rows.
+    // Without a pulley nothing needs a flickable around the two.
+    Column {
+        id: heading
+
+        objectName: "searchHeading"
+        anchors {
+            top: parent.top
+            left: parent.left
+            right: parent.right
+        }
+
+        PageHeader {
+            //% "Search"
+            title: qsTrId("lautta-search-title")
+            description: searchModel.rootName
+        }
+
+        SearchField {
+            id: searchField
+
+            objectName: "searchField"
+            width: parent.width
+            //% "Search"
+            placeholderText: qsTrId("lautta-search-placeholder")
+            inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
+            EnterKey.iconSource: "image://theme/icon-m-enter-accept"
+            EnterKey.onClicked: {
+                typing.stop()
+                page.start()
+                focus = false
+            }
+            onTextChanged: page.edited(text)
+            Component.onCompleted: forceActiveFocus()
+        }
+
+        // The filters are reached from here only.
+        BackgroundItem {
+            objectName: "searchFilters"
+            width: parent.width
+            height: Math.max(Theme.itemSizeExtraSmall, summaryLabel.height + Theme.paddingMedium)
+            onClicked: page.openFilters()
+
+            Label {
+                id: summaryLabel
+
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                    leftMargin: Theme.horizontalPageMargin + Theme.itemSizeSmall
+                    rightMargin: Theme.horizontalPageMargin
+                    verticalCenter: parent.verticalCenter
+                }
+                text: page.summary()
+                truncationMode: TruncationMode.Fade
+                color: parent.highlighted ? Theme.highlightColor : Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeSmall
+            }
+        }
+    }
+
     SilicaListView {
         id: list
 
+        objectName: "searchList"
         anchors {
-            fill: parent
+            top: heading.bottom
+            left: parent.left
+            right: parent.right
+            bottom: parent.bottom
             bottomMargin: progressPanel.visibleSize
         }
+        // Rows otherwise draw over the heading when scrolled.
         clip: true
         model: searchModel
-
-        PullDownMenu {
-            MenuItem {
-                //% "Search in another location"
-                text: qsTrId("lautta-search-another-location")
-                onClicked: page.pickRoot()
-            }
-            MenuItem {
-                //% "Filters"
-                text: qsTrId("lautta-search-filters")
-                onClicked: page.openFilters()
-            }
-        }
-
-        header: Column {
-            width: list.width
-
-            Binding {
-                target: searchField
-                property: "text"
-                value: page.queryText
-            }
-
-            SearchField {
-                id: searchField
-
-                width: parent.width
-                //% "Search"
-                placeholderText: qsTrId("lautta-search-placeholder")
-                inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
-                EnterKey.iconSource: "image://theme/icon-m-enter-accept"
-                EnterKey.onClicked: {
-                    typing.stop()
-                    page.start()
-                    focus = false
-                }
-                onTextChanged: {
-                    page.queryText = text
-                    if (text.length === 0) {
-                        typing.stop()
-                        searchModel.clear()
-                    } else {
-                        typing.restart()
-                    }
-                }
-                Component.onCompleted: forceActiveFocus()
-            }
-
-            BackgroundItem {
-                width: parent.width
-                height: Math.max(Theme.itemSizeExtraSmall, summaryLabel.height + Theme.paddingMedium)
-                onClicked: page.openFilters()
-
-                Label {
-                    id: summaryLabel
-
-                    anchors {
-                        left: parent.left
-                        right: parent.right
-                        leftMargin: Theme.horizontalPageMargin + Theme.itemSizeSmall
-                        rightMargin: Theme.horizontalPageMargin
-                        verticalCenter: parent.verticalCenter
-                    }
-                    text: page.summary()
-                    truncationMode: TruncationMode.Fade
-                    color: parent.highlighted ? Theme.highlightColor : Theme.secondaryColor
-                    font.pixelSize: Theme.fontSizeSmall
-                }
-            }
-        }
 
         section {
             property: "section"
