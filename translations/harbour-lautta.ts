@@ -329,10 +329,6 @@
         <source>Recent searches</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-search-in">
-        <source>In %1</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-search-mode-glob">
         <source>glob</source>
         <translation type="unfinished"></translation>
@@ -343,22 +339,6 @@
     </message>
     <message id="lautta-search-any-type">
         <source>any type</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-pick-title">
-        <source>Search in</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-pick-accept">
-        <source>Search</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-another-location">
-        <source>Search in another location</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-filters">
-        <source>Filters</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-search-placeholder">
@@ -2861,6 +2841,10 @@
     </message>
     <message id="lautta-err-location-gone-unnamed">
         <source>The server is no longer connected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-title">
+        <source>Search</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

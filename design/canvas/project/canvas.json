@@ -378,14 +378,6 @@
       "x": 480,
       "y": 9480
     },
-    "SearchPulley.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Search \u00b7 pulley",
-      "w": 400,
-      "x": 5280,
-      "y": 14440
-    },
     "ServerAdhocMenu.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -711,7 +703,6 @@
     "TextViewerPulley.dc.html",
     "ServerAdhocMenu.dc.html",
     "ImageDeleteRemote.dc.html",
-    "SearchPulley.dc.html",
     "ActivityBar.dc.html",
     "ActivityBarQuestion.dc.html",
     "ActivityBarDone.dc.html"

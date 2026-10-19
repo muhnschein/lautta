@@ -182,12 +182,15 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `dialogs/OpenRemoteDialog.qml { uri }`, `dialogs/PdfPasswordDialog.qml { fileName, wrong }`,
   `dialogs/PdfLinkDialog.qml { url }`.
 
-### Search, settings (boards: Search, SearchFilters, SearchPulley, Settings, About)
+### Search, settings (boards: Search, SearchFilters, Settings, About)
 
 - `SearchModel { rootUri }` — query/filters, results grouped by folder, `start()`,
   `cancel()`, `recentSearches`.
 - Pages: `pages/SearchPage.qml { rootUri }`, `pages/SearchFiltersPage.qml`,
   `pages/SettingsPage.qml`, `pages/AboutPage.qml`.
+- The search page has no pulley: its header, search field and filter summary (which
+  opens `SearchFiltersPage`) sit above the results list, not in the list's header, so
+  the field keeps the keyboard while each search resets the list.
 
 ## Shared QML (core infra owns)
 
