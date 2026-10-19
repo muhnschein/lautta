@@ -2795,5 +2795,65 @@
         <source>Details</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-err-auth-failed-unnamed">
+        <source>The server didn&apos;t accept the sign-in.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-identity-changed-unnamed">
+        <source>The server is presenting a different identity than before. This can mean it was reinstalled — or that someone is intercepting the connection.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-identity-unknown-unnamed">
+        <source>The server has not been verified yet.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-security-policy-unnamed">
+        <source>The server doesn&apos;t meet the account&apos;s security settings.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-permission-unnamed">
+        <source>You don&apos;t have permission to change this.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-locked-unnamed">
+        <source>The item is open elsewhere.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-connection-lost-unnamed">
+        <source>The connection was lost. Retrying…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-unreachable-unnamed">
+        <source>Can&apos;t reach the server.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-unsupported-unnamed">
+        <source>This location can&apos;t do this.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-not-found-unnamed">
+        <source>The item no longer exists.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-exists-unnamed">
+        <source>An item with this name already exists.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-read-only-unnamed">
+        <source>This location is read-only.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-busy-unnamed">
+        <source>The server is busy. Try again in a moment.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-no-space-sizes-unnamed">
+        <source>Not enough space (needs %1, %2 free).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-no-space-unnamed">
+        <source>Not enough space.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

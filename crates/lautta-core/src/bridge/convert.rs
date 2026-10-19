@@ -21,6 +21,7 @@ pub fn map_error(e: BridgeError) -> Error {
             message,
             detail,
             retry_after_ms,
+            subject: None,
         },
         BridgeError::InvalidArgs(m) => Error::new(ErrorKind::InvalidArgument, m),
         BridgeError::UnknownMethod(m) => Error::new(ErrorKind::Unsupported, m),

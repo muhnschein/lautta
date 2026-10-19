@@ -71,7 +71,8 @@ pub struct Operations {
 
     needsSummary: qt_signal!(planId: i32, summaryJson: QString),
     started: qt_signal!(transferId: i64),
-    failed: qt_signal!(kind: QString, message: QString),
+    /// `subject`: the URI of the item the error is about, or empty.
+    failed: qt_signal!(kind: QString, message: QString, subject: QString),
     removed: qt_signal!(trashedCount: i32, transferId: i64),
     conflictResolved: qt_signal!(planId: i32, remaining: i32),
     jobStarted: qt_signal!(jobId: i32),
@@ -117,6 +118,11 @@ fn bad_arguments() -> Error {
     Error::new(ErrorKind::InvalidArgument, "bad arguments")
 }
 
+/// The plan of a summary sheet is gone (started or discarded already).
+fn plan_gone() -> Error {
+    Error::new(ErrorKind::NotFound, "the planned operation is no longer pending")
+}
+
 /// `file:///a%20b` or `/a b` as a path.
 fn local_path(text: &str) -> std::path::PathBuf {
     let raw = text.strip_prefix("file://").unwrap_or(text);
@@ -154,7 +160,8 @@ impl Operations {
 
     fn emit_failed(&self, e: &Error) {
         let (kind, message) = error_parts(e);
-        self.failed(kind, message);
+        let subject = e.subject.as_ref().map(Uri::to_string).unwrap_or_default();
+        self.failed(kind, message, QString::from(subject.as_str()));
     }
 
     fn change_jobs(&self, delta: i32) {
@@ -219,13 +226,16 @@ impl Operations {
 
     fn start_pending(&self, id: i32, options: Option<String>) {
         let id = u64::try_from(id).unwrap_or(0);
-        let (Some(core), Some(plan)) = (core(), self.pending.take(id)) else {
-            return self.emit_failed(&Error::kind(ErrorKind::NotFound));
+        let Some(core) = core() else {
+            return self.emit_failed(&plan_gone());
         };
         let open_after = self.state.borrow_mut().open_after_plan.remove(&id);
+        let pending = self.pending.clone();
         let me = QPointer::from(self);
         spawn_then(
             async move {
+                // A conflict answer may still be working on the plan.
+                let plan = pending.take_when_returned(id).await.ok_or_else(plan_gone)?;
                 let started = match options {
                     Some(text) => {
                         let wanted = StartOptions::from_settings(&core.settings()).merged_with_json(&text);
@@ -270,8 +280,8 @@ impl Operations {
         else {
             return self.emit_failed(&bad_arguments());
         };
-        let Some(mut plan) = self.pending.take(id) else {
-            return self.emit_failed(&Error::kind(ErrorKind::NotFound));
+        let Some(mut plan) = self.pending.lend(id) else {
+            return self.emit_failed(&plan_gone());
         };
         let me = QPointer::from(self);
         spawn_then(

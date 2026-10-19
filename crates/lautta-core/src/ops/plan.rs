@@ -186,8 +186,11 @@ async fn plan_delete(
         items: Vec::new(),
     };
     for src in sources {
-        let provider = resolver.provider(&src.location)?;
-        let entry = provider.stat(&src.path, false, Lane::Bulk).await?;
+        let provider = resolver.provider(&src.location).map_err(|e| e.about(src))?;
+        let entry = provider
+            .stat(&src.path, false, Lane::Bulk)
+            .await
+            .map_err(|e| e.about(src))?;
         scan.walk(src.clone(), entry).await?;
     }
     Ok(scan.items)
@@ -207,7 +210,8 @@ impl DeleteScan<'_> {
             check_cancel(self.cancel)?;
             if entry.kind == Kind::Dir {
                 let provider = self.resolver.provider(&src.location)?;
-                for child in children(&*provider, &src.path).await? {
+                let listing = children(&*provider, &src.path).await.map_err(|e| e.about(&src))?;
+                for child in listing {
                     let child_uri = src.join(&child.name)?;
                     self.walk(child_uri, child).await?;
                 }
@@ -230,12 +234,17 @@ async fn plan_transfer(
     cancel: &AtomicBool,
     progress: Progress<'_>,
 ) -> Result<Vec<PlanItem>> {
-    let dst = resolver.provider(&destination.location)?;
+    let dst = resolver
+        .provider(&destination.location)
+        .map_err(|e| e.about(destination))?;
     let dst_caps = dst.capabilities();
     if !dst_caps.writable() {
         return Err(Error::kind(ErrorKind::ReadOnlyFilesystem));
     }
-    let dest_entry = dst.stat(&destination.path, true, Lane::Bulk).await?;
+    let dest_entry = dst
+        .stat(&destination.path, true, Lane::Bulk)
+        .await
+        .map_err(|e| e.about(destination))?;
     if !dest_entry.is_dir() {
         return Err(Error::kind(ErrorKind::NotADirectory));
     }
@@ -303,8 +312,11 @@ impl Scan<'_> {
             .name()
             .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "a location root cannot be copied"))?
             .to_vec();
-        let provider = self.resolver.provider(&src.location)?;
-        let entry = provider.stat(&src.path, false, Lane::Bulk).await?;
+        let provider = self.resolver.provider(&src.location).map_err(|e| e.about(src))?;
+        let entry = provider
+            .stat(&src.path, false, Lane::Bulk)
+            .await
+            .map_err(|e| e.about(src))?;
         let same_location = src.location == destination.location;
         if self.kind == OperationKind::Move && !provider.capabilities().writable() {
             return Err(Error::kind(ErrorKind::ReadOnlyFilesystem));
@@ -389,7 +401,9 @@ impl Scan<'_> {
         }
         let dst_dir = item.dst.clone();
         let provider = self.resolver.provider(&node.src.location)?;
-        let listing = children(&*provider, &node.real).await?;
+        let listing = children(&*provider, &node.real)
+            .await
+            .map_err(|e| e.about(&node.src))?;
         ancestors.push(node.real.clone());
         let child_frame = Frame {
             check_dst: added.dst_dir_exists,
@@ -410,7 +424,10 @@ impl Scan<'_> {
 
     async fn add_link(&mut self, node: Node, parent: Uri, frame: Frame, ancestors: Vec<VPath>) -> Result<()> {
         let provider = self.resolver.provider(&node.src.location)?;
-        let link = provider.read_link(&node.src.path).await?;
+        let link = provider
+            .read_link(&node.src.path)
+            .await
+            .map_err(|e| e.about(&node.src))?;
         if self.as_links {
             return self
                 .add_item(&node.src, &node.entry, Kind::Symlink, &parent, frame, Some(link))
@@ -425,7 +442,7 @@ impl Scan<'_> {
             Ok(e) => e,
             // A dangling link has nothing to copy.
             Err(e) if e.kind == ErrorKind::NotFound => return Ok(()),
-            Err(e) => return Err(e),
+            Err(e) => return Err(e.about(&node.src)),
         };
         // Providers may answer a dangling link with the link itself.
         if target.kind == Kind::Symlink {
@@ -526,7 +543,7 @@ impl Scan<'_> {
         match self.dst.stat(&dst.path, false, Lane::Bulk).await {
             Ok(e) => Ok(Some(e)),
             Err(e) if matches!(e.kind, ErrorKind::NotFound | ErrorKind::NotADirectory) => Ok(None),
-            Err(e) => Err(e),
+            Err(e) => Err(e.about(dst)),
         }
     }
 }
@@ -901,6 +918,52 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(err.kind, ErrorKind::NotFound);
+    }
+
+    #[tokio::test]
+    async fn errors_name_the_item_that_failed() {
+        let (mem, r) = setup();
+        mem.add_file("s/a/x", b"1", 1);
+        mem.add_file("s/b/y", b"1", 1);
+        mem.add_symlink("s/b/l", "x");
+        mem.add_dir("dst");
+        let subject = |e: Error| e.subject.map(|u| u.to_string());
+        let err = plan(OperationKind::Copy, &["s/a"], "gone", &r).await.unwrap_err();
+        assert_eq!(subject(err), Some(uri("m", "gone").to_string()));
+        let err = plan(OperationKind::Copy, &["s/a", "s/c"], "dst", &r)
+            .await
+            .unwrap_err();
+        assert_eq!(subject(err), Some(uri("m", "s/c").to_string()));
+        mem.fail_next("list", "s/b", Error::kind(ErrorKind::PermissionDenied));
+        let err = plan(OperationKind::Copy, &["s/a", "s/b"], "dst", &r)
+            .await
+            .unwrap_err();
+        assert_eq!(subject(err), Some(uri("m", "s/b").to_string()));
+        mem.fail_next("read_link", "s/b/l", Error::kind(ErrorKind::Io));
+        let err = plan(OperationKind::Copy, &["s/b"], "dst", &r).await.unwrap_err();
+        assert_eq!(subject(err), Some(uri("m", "s/b/l").to_string()));
+        mem.fail_next("stat", "s/b/l", Error::kind(ErrorKind::Io));
+        let opts = PlanOptions {
+            link_policy: LinkPolicy::FollowTargets,
+            ..PlanOptions::default()
+        };
+        let err = plan_with(OperationKind::Copy, &["s/b"], "dst", &r, &opts)
+            .await
+            .unwrap_err();
+        assert_eq!(subject(err), Some(uri("m", "s/b/l").to_string()));
+        mem.fail_next("stat", "dst/a", Error::kind(ErrorKind::ConnectionLost));
+        let err = plan(OperationKind::Copy, &["s/a"], "dst", &r).await.unwrap_err();
+        assert_eq!(subject(err), Some(uri("m", "dst/a").to_string()));
+        mem.fail_next("list", "s/a", Error::kind(ErrorKind::PermissionDenied));
+        let err = plan(OperationKind::Delete, &["s/a"], "", &r).await.unwrap_err();
+        assert_eq!(subject(err), Some(uri("m", "s/a").to_string()));
+        let err = plan(OperationKind::Delete, &["s/zz"], "", &r).await.unwrap_err();
+        assert_eq!(subject(err), Some(uri("m", "s/zz").to_string()));
+        let none = StaticResolver::default();
+        let err = plan(OperationKind::Copy, &["s/a"], "dst", &none)
+            .await
+            .unwrap_err();
+        assert_eq!(subject(err), Some(uri("m", "dst").to_string()));
     }
 
     #[tokio::test]

@@ -3,6 +3,7 @@
 //! (netvfs SPEC-v2 XC-21) plus local I/O mappings, so the UI has a single
 //! message table (SPEC §20, [`crate::messages`]).
 
+use crate::uri::Uri;
 use std::fmt;
 
 /// Error kinds. The names returned by [`ErrorKind::name`] are the netvfs
@@ -142,14 +143,16 @@ impl fmt::Display for ErrorKind {
 }
 
 /// An error with its kind, a human-oriented message from the source (never
-/// secrets), an optional protocol detail for the *Details* view, and an
-/// optional retry hint (netvfs XC-24).
+/// secrets), an optional protocol detail for the *Details* view, an
+/// optional retry hint (netvfs XC-24) and the item it is about, so the
+/// message can name what failed (SPEC §20).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Error {
     pub kind: ErrorKind,
     pub message: String,
     pub detail: Option<String>,
     pub retry_after_ms: Option<u64>,
+    pub subject: Option<Uri>,
 }
 
 impl Error {
@@ -159,7 +162,16 @@ impl Error {
             message: message.into(),
             detail: None,
             retry_after_ms: None,
+            subject: None,
         }
+    }
+
+    /// Names the item the error is about, unless an inner step named one.
+    pub fn about(mut self, uri: &Uri) -> Error {
+        if self.subject.is_none() {
+            self.subject = Some(uri.clone());
+        }
+        self
     }
 
     pub fn kind(kind: ErrorKind) -> Error {
@@ -284,6 +296,15 @@ mod tests {
             ErrorKind::from_name("org.netvfs.Error.Brandnew"),
             ErrorKind::ProtocolError
         );
+    }
+
+    #[test]
+    fn the_first_subject_named_stays() {
+        let inner = Uri::parse("lautta://nas/a/b").unwrap();
+        let outer = Uri::parse("lautta://nas/a").unwrap();
+        let e = Error::kind(ErrorKind::NotFound).about(&inner).about(&outer);
+        assert_eq!(e.subject, Some(inner));
+        assert_eq!(Error::kind(ErrorKind::NotFound).subject, None);
     }
 
     #[test]

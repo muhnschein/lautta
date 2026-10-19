@@ -17,7 +17,6 @@ Dialog {
     readonly property var s: Json.value(summary, {})
     property int conflictCount: s.conflicts || 0
     property bool resolving
-    property bool started
 
     function destinationText() {
         var name = s.destinationName || ""
@@ -79,12 +78,11 @@ Dialog {
 
     canAccept: planId >= 0
 
-    onAccepted: {
-        started = true
-        Operations.startPlanWith(planId, optionsJson())
-    }
+    onAccepted: Operations.startPlanWith(planId, optionsJson())
+    // Silica emits done() before accepted(), with the result already set:
+    // only a dialog that was not accepted lets its plan go.
     onDone: {
-        if (!started)
+        if (result !== DialogResult.Accepted)
             Operations.discardPlan(planId)
     }
 
