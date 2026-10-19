@@ -32,6 +32,7 @@ use crate::workcopy::WorkingCopies;
 use async_trait::async_trait;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, MutexGuard};
+use tokio::sync::watch;
 
 /// Listings kept in memory (BRW-5).
 const DIRCACHE_ENTRIES: usize = 64;
@@ -66,6 +67,8 @@ pub struct Core {
     /// The netvfs bridge client (SPEC §7); `None` only in tests without one.
     pub bridge: Option<BridgeClient>,
     settings: Mutex<Settings>,
+    /// Counts the changes of `settings` (see [`Core::watch_settings`]).
+    settings_changed: watch::Sender<u64>,
     undo: Mutex<UndoRecorder>,
 }
 
@@ -169,6 +172,7 @@ impl Core {
             questions: questions.clone(),
             bridge: client.clone(),
             settings: Mutex::new(settings),
+            settings_changed: watch::channel(0).0,
             undo: Mutex::new(UndoRecorder::default()),
             paths,
             db,
@@ -191,7 +195,17 @@ impl Core {
     pub fn apply_settings(&self, settings: Settings) {
         let settings = settings.sanitised();
         self.recents.set_enabled(settings.recents_enabled);
-        *lock(&self.settings) = settings;
+        let previous = std::mem::replace(&mut *lock(&self.settings), settings.clone());
+        if previous != settings {
+            self.settings_changed.send_modify(|generation| *generation += 1);
+        }
+    }
+
+    /// A receiver whose value increases whenever the settings change, so
+    /// what is already on screen can follow them (BRW-4: folders open
+    /// while the view settings change show the new ones at once).
+    pub fn watch_settings(&self) -> watch::Receiver<u64> {
+        self.settings_changed.subscribe()
     }
 
     /// The view settings every folder uses (BRW-4).
