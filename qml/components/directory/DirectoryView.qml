@@ -59,20 +59,17 @@ Item {
             Open.open(pageStack, App, Operations, itemUri, false, mimeType, uri)
     }
 
-    function newItem() {
+    function newFolder() {
         var dialog = pageStack.push(Qt.resolvedUrl("../../dialogs/NewItemDialog.qml"), { "parentUri": uri })
         dialog.accepted.connect(function () {
             view.pendingName = dialog.itemName
-            if (dialog.isFolder)
-                dir.createFolder(dialog.itemName)
-            else
-                dir.createFile(dialog.itemName)
+            dir.createFolder(dialog.itemName)
         })
     }
 
     function rename(info) {
         var dialog = pageStack.push(Qt.resolvedUrl("../../dialogs/RenameDialog.qml"),
-                                    { "uri": info.uri, "size": info.size, "modified": info.modified, "isDir": info.isDir })
+                                    { "uri": info.uri, "isDir": info.isDir })
         dialog.accepted.connect(function () {
             view.pendingName = dialog.newName
             dir.rename(info.uri, dialog.newName)
@@ -137,7 +134,9 @@ Item {
         shareAction.trigger()
     }
 
-    // One action on one or more items; `info` describes the first item.
+    // One action on one or more items; `info` describes the first item. A
+    // favourite is the item itself (ORG-1): a folder unless `info` says it
+    // is a file (the path menu's favourite is the folder shown).
     function runAction(id, uris, info, listItem) {
         switch (id) {
         case "share": share(uris, info.mimeType); break
@@ -145,9 +144,10 @@ Item {
         case "cut": App.cut(JSON.stringify(uris)); break
         case "rename": rename(info); break
         case "delete": remove(uris, listItem); break
-        case "info": pageStack.push(Qt.resolvedUrl("../../pages/InfoPage.qml"), { "uri": uris[0] }); break
         case "compress": pageStack.push(Qt.resolvedUrl("../../dialogs/CompressDialog.qml"), { "uris": JSON.stringify(uris) }); break
-        case "favourite": pageStack.push(Qt.resolvedUrl("../../dialogs/FavouriteDialog.qml"), { "uri": uris[0] }); break
+        case "favourite":
+            pageStack.push(Qt.resolvedUrl("../../dialogs/FavouriteDialog.qml"), { "uri": uris[0], "isDir": info.isDir !== false })
+            break
         }
     }
 
@@ -339,7 +339,6 @@ Item {
                 pathModel: path
                 currentUri: view.uri
                 onNavigate: view.openFolder(uri)
-                onInfoRequested: view.runAction("info", [view.uri], {}, null)
                 onFavouriteRequested: view.runAction("favourite", [view.uri], {}, null)
             }
 

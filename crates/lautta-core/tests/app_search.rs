@@ -166,7 +166,7 @@ async fn clear_app_data_removes_everything_the_app_keeps() {
     let paths = AppPaths::new(&h.root);
     h.core
         .favourites
-        .add(&uri("lautta://user-documents/"), "Docs", None)
+        .add(&uri("lautta://user-documents/"), "Docs", None, true)
         .unwrap();
     h.core.recent_searches.add("user-documents", "q").unwrap();
     write(&paths.data_dir().join("netvfs/bridge.sock"), b"s");
@@ -180,7 +180,7 @@ async fn clear_app_data_removes_everything_the_app_keeps() {
     assert!(h.root.join("Documents/mine.txt").is_file(), "user files stay");
     h.core
         .favourites
-        .add(&uri("lautta://user-documents/"), "Again", None)
+        .add(&uri("lautta://user-documents/"), "Again", None, true)
         .unwrap();
 }
 

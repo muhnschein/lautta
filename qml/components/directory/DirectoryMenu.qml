@@ -33,9 +33,9 @@ PullDownMenu {
     }
     MenuItem {
         visible: !menu.selecting && menu.writable
-        //% "New folder or file"
-        text: qsTrId("lautta-dir-menu-new")
-        onClicked: menu.owner.newItem()
+        //% "New folder"
+        text: qsTrId("lautta-dir-menu-new-folder")
+        onClicked: menu.owner.newFolder()
     }
     MenuItem {
         visible: !menu.selecting && menu.writable && App.clipboardCount > 0 && App.canPasteInto(owner ? owner.uri : "")

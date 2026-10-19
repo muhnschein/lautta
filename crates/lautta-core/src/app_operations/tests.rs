@@ -157,13 +157,6 @@ fn reverting_names_moves_the_whole_subtree() {
 }
 
 #[test]
-fn mode_as_text() {
-    assert_eq!(mode_text(0o644), "rw-r--r--");
-    assert_eq!(mode_text(0o755), "rwxr-xr-x");
-    assert_eq!(mode_text(0), "---------");
-}
-
-#[test]
 fn days_left_rounds_up_and_stops_at_zero() {
     let day = SECS_PER_DAY;
     assert_eq!(days_left(0, 0, 30), 30);
@@ -203,10 +196,7 @@ fn conflict_choice_names() {
 }
 
 #[test]
-fn names_of_kinds_and_filesystems() {
+fn names_of_kinds() {
     assert_eq!(kind_name(OperationKind::Copy), "copy");
     assert_eq!(kind_name(OperationKind::Move), "move");
-    assert_eq!(fs_type_name(0xEF53), Some("ext4"));
-    assert_eq!(fs_type_name(0x2011_BAB0), Some("exFAT"));
-    assert_eq!(fs_type_name(1), None);
 }

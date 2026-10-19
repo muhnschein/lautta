@@ -233,14 +233,6 @@ impl Core {
         Ok(uri)
     }
 
-    /// New empty file.
-    pub async fn make_file(&self, parent: &Uri, name: &[u8]) -> Result<Uri> {
-        let uri = parent.join(name)?;
-        self.provider(&uri.location)?.make_file(&uri.path).await?;
-        self.invalidate(parent);
-        Ok(uri)
-    }
-
     /// Renames without replacing (§10 table); favourites follow and the
     /// rename can be undone for 10 s (OPS-9).
     pub async fn rename(&self, uri: &Uri, new_name: &[u8]) -> Result<Uri> {

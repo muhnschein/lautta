@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The path menu below the folder header (SPEC BRW-9, board PathMenu): the
 // ancestors from the location down, an icon row (Copy address, Edit path,
-// Favourite, Info) and the path editor with completion from cached listings.
+// Favourite) and the path editor with completion from cached listings.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -16,7 +16,6 @@ Item {
     property bool editing
 
     signal navigate(string uri)
-    signal infoRequested
     signal favouriteRequested
 
     function close() {
@@ -91,9 +90,7 @@ Item {
                 //% "Edit path"
                 { "id": "edit", "icon": "image://theme/icon-m-edit", "text": qsTrId("lautta-dir-path-edit") },
                 //% "Favourite"
-                { "id": "favourite", "icon": "image://theme/icon-m-favorite", "text": qsTrId("lautta-dir-path-favourite") },
-                //% "Info"
-                { "id": "info", "icon": "image://theme/icon-m-about", "text": qsTrId("lautta-dir-path-info") }
+                { "id": "favourite", "icon": "image://theme/icon-m-favorite", "text": qsTrId("lautta-dir-path-favourite") }
             ]
             onTriggered: {
                 switch (actionId) {
@@ -109,10 +106,6 @@ Item {
                 case "favourite":
                     menu.close()
                     menu.favouriteRequested()
-                    break
-                case "info":
-                    menu.close()
-                    menu.infoRequested()
                     break
                 }
             }

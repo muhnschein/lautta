@@ -36,12 +36,18 @@ Item {
 
     function wait(ms) { pump.pump(ms) }
 
+    // A file in Documents, copied from a fixture: the app makes folders only.
+    function install(fixture, name) {
+        check(tools.installFixture(Qt.resolvedUrl("fixtures/" + fixture), root.docs + name), "fixture " + name)
+    }
+
     PickerRootsModel { id: pump }
+    ViewerTools { id: tools }
 
     DirectoryModel {
         id: dir
         uri: root.docs
-        onCreated: root.events.push("created:" + uri + ":" + isDir)
+        onCreated: root.events.push("created:" + uri)
         onCreateFailed: root.events.push("createFailed:" + kind)
         onRenamed: root.events.push("renamed:" + oldUri + ">" + newUri)
         onRenameFailed: root.events.push("renameFailed:" + kind)
@@ -78,14 +84,16 @@ Item {
 
     function testCreate() {
         dir.createFolder("Zeta")
-        dir.createFile("alpha.txt")
-        dir.createFile("Beta.png")
-        dir.createFile("notes.md")
-        dir.createFile(".hidden")
+        install("notes-crlf.txt", "alpha.txt")
+        install("photo.jpg", "Beta.png")
+        install("doc.md", "notes.md")
+        install("data.bin", ".hidden")
+        wait(500)
+        dir.refresh()
         wait(500)
         same(names(rep), ["Zeta", "alpha.txt", "Beta.png", "notes.md"], "folders first, hidden files off")
-        check(root.events.indexOf("created:" + root.docs + "Zeta:true") >= 0, "created signal for the folder")
-        check(root.events.indexOf("created:" + root.docs + ".hidden:false") >= 0, "created signal for the hidden file")
+        same(root.events, ["created:" + root.docs + "Zeta"], "created signal for the folder")
+        check(dir.createFile === undefined, "no empty files: the app makes folders only")
         var z = row(rep, "Zeta")
         check(z.dirRow && z.cat === "folder", "folder row")
         check(row(rep, "alpha.txt").cat === "text", "category of a text file")
@@ -93,8 +101,8 @@ Item {
         check(row(rep, "notes.md").thumb === "", "no thumbnail for other files")
 
         dir.createFolder("Zeta")
-        dir.createFile("alpha.txt")
-        dir.createFile("bad/name")
+        dir.createFolder("alpha.txt")
+        dir.createFolder("bad/name")
         wait(300)
         check(root.events.filter(function (e) { return e === "createFailed:AlreadyExists" }).length === 2, "name clashes are reported: " + root.events)
         check(root.events.indexOf("createFailed:InvalidName") >= 0, "invalid names are reported")
@@ -154,10 +162,10 @@ Item {
     }
 
     function testLiveUpdate() {
-        other.createFile("watched.txt")
+        install("notes-crlf.txt", "watched.txt")
         wait(1200)
         check(names(rep).indexOf("watched.txt") >= 0, "changes by others appear without refresh: " + names(rep))
-        other.createFile("watched2.txt")
+        install("notes-crlf.txt", "watched2.txt")
         wait(1200)
         check(dir.count === 6, "second live update")
     }

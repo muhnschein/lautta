@@ -12,6 +12,8 @@ use crate::bridge::{AdHocOptions, BridgeStatus, NearbyServer, RemoteKind};
 use crate::browse_layout::{layout_item, Layout, NEARBY_ITEM};
 use crate::error::{Error, ErrorKind, Result};
 use crate::locations::{Location, LocationKind, LocationStatus};
+use crate::mime::{category_of_name, FileCategory};
+use crate::org::favourites::Favourite;
 use crate::org::{self, Recent, RecentsFilter};
 use crate::settings::LocationPrefs;
 use crate::uri::Uri;
@@ -46,7 +48,8 @@ pub struct Row {
     pub count: i64,
     /// Favourite or location id; the nearby index.
     pub item_id: String,
-    /// `Location › folder` for favourites, the address for servers.
+    /// `Location › folder` for favourites (the folder a file is in), the
+    /// address for servers.
     pub place: String,
     /// Protocol label such as `SFTP`.
     pub provider: String,
@@ -54,6 +57,8 @@ pub struct Row {
     pub free: i64,
     pub total: i64,
     pub fs: String,
+    /// A favourite that is a file (ORG-1): opened, not browsed.
+    pub is_file: bool,
 }
 
 impl Row {
@@ -245,6 +250,22 @@ fn account_ids(list: &[crate::bridge::RemoteLocation]) -> BTreeSet<String> {
         .collect()
 }
 
+/// The theme icon of a favourite: the star for a folder, the file's category
+/// for a file, as the folder view shows it (ORG-1).
+fn favourite_icon(f: &Favourite) -> &'static str {
+    if f.is_dir {
+        return "image://theme/icon-m-favorite";
+    }
+    match category_of_name(f.uri.name().unwrap_or_default()) {
+        FileCategory::Image => "image://theme/icon-m-file-image",
+        FileCategory::Video => "image://theme/icon-m-file-video",
+        FileCategory::Audio => "image://theme/icon-m-file-audio",
+        FileCategory::Archive => "image://theme/icon-m-file-compressed",
+        FileCategory::Package => "image://theme/icon-m-file-rpm",
+        _ => "image://theme/icon-m-document",
+    }
+}
+
 /// The location id inside a stored `lautta://<location>/…` string.
 fn location_of(uri: &str) -> Option<&str> {
     uri.strip_prefix("lautta://")?.split('/').next()
@@ -267,6 +288,15 @@ impl Core {
         }
         let parts: Vec<String> = uri.path.components().map(display_name).collect();
         format!("{name}{PLACE_SEPARATOR}{}", parts.join(PLACE_SEPARATOR))
+    }
+
+    /// The line under a favourite: the folder itself, or the folder a file
+    /// favourite is in (ORG-1).
+    pub fn favourite_place(&self, f: &Favourite) -> String {
+        match f.uri.parent().filter(|_| !f.is_dir) {
+            Some(folder) => self.place_of(&folder),
+            None => self.place_of(&f.uri),
+        }
     }
 
     /// Visible items of the cached listing of a folder (the cover, INT-3);
@@ -430,11 +460,12 @@ impl Core {
         for f in self.favourites.list().unwrap_or_default() {
             let mut row = Row::new("favourites", "favourite");
             row.uri = f.uri.to_string();
+            row.place = self.favourite_place(&f);
+            row.icon = favourite_icon(&f).to_owned();
+            row.is_file = !f.is_dir;
+            row.item_id = f.id.to_string();
             row.name = f.label;
             row.colour = f.colour.unwrap_or_default();
-            row.place = self.place_of(&f.uri);
-            row.icon = "image://theme/icon-m-favorite".to_owned();
-            row.item_id = f.id.to_string();
             rows.push(row);
         }
         rows

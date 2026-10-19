@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Favourites (ORG-1): any folder, local or remote, with label and colour,
-//! reorderable.
+//! Favourites (ORG-1): any folder or file, local or remote, with label and
+//! colour, reorderable. Whether it is a folder is stored with it, so Browse
+//! can show and open a favourite without asking its location.
 
 use super::{location_prefix, move_to, next_position, parse_uri, renumber, rewrite_uris};
 use crate::db::Db;
@@ -15,6 +16,8 @@ pub struct Favourite {
     pub label: String,
     pub colour: Option<String>,
     pub position: i64,
+    /// A folder; false for a file.
+    pub is_dir: bool,
 }
 
 #[derive(Clone)]
@@ -22,10 +25,10 @@ pub struct Favourites {
     db: Db,
 }
 
-type RawRow = (i64, String, String, Option<String>, i64);
+type RawRow = (i64, String, String, Option<String>, i64, bool);
 
 fn from_row(r: &Row<'_>) -> rusqlite::Result<RawRow> {
-    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
 }
 
 fn build(raw: RawRow) -> Result<Favourite> {
@@ -35,10 +38,11 @@ fn build(raw: RawRow) -> Result<Favourite> {
         label: raw.2,
         colour: raw.3,
         position: raw.4,
+        is_dir: raw.5,
     })
 }
 
-const COLUMNS: &str = "id, uri, label, colour, position";
+const COLUMNS: &str = "id, uri, label, colour, position, is_dir";
 
 fn clean_label(label: &str) -> Result<&str> {
     let label = label.trim();
@@ -49,22 +53,36 @@ fn clean_label(label: &str) -> Result<&str> {
 }
 
 /// Appends a row; returns its id and position.
-fn insert(conn: &Connection, uri: &str, label: &str, colour: Option<&str>) -> Result<(i64, i64)> {
+fn insert(
+    conn: &Connection,
+    uri: &str,
+    label: &str,
+    colour: Option<&str>,
+    is_dir: bool,
+) -> Result<(i64, i64)> {
     let position = next_position(conn, "favourites")?;
     conn.execute(
-        "INSERT INTO favourites(uri, label, colour, position) VALUES (?1, ?2, ?3, ?4)",
-        params![uri, label, colour, position],
+        "INSERT INTO favourites(uri, label, colour, position, is_dir) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![uri, label, colour, position, is_dir],
     )?;
     Ok((conn.last_insert_rowid(), position))
 }
 
-fn favourite(id: i64, uri: &Uri, label: &str, colour: Option<&str>, position: i64) -> Favourite {
+fn favourite(
+    id: i64,
+    uri: &Uri,
+    label: &str,
+    colour: Option<&str>,
+    position: i64,
+    is_dir: bool,
+) -> Favourite {
     Favourite {
         id,
         uri: uri.clone(),
         label: label.to_owned(),
         colour: colour.map(str::to_owned),
         position,
+        is_dir,
     }
 }
 
@@ -73,9 +91,10 @@ impl Favourites {
         Favourites { db }
     }
 
-    /// Appends a favourite. A folder can be a favourite once
-    /// (`AlreadyExists`); an empty label is `InvalidArgument`.
-    pub fn add(&self, uri: &Uri, label: &str, colour: Option<&str>) -> Result<Favourite> {
+    /// Appends a favourite for the folder (`is_dir`) or file `uri`. An item
+    /// can be a favourite once (`AlreadyExists`); an empty label is
+    /// `InvalidArgument`.
+    pub fn add(&self, uri: &Uri, label: &str, colour: Option<&str>, is_dir: bool) -> Result<Favourite> {
         let label = clean_label(label)?;
         let conn = self.db.lock();
         let key = uri.to_string();
@@ -85,34 +104,38 @@ impl Favourites {
         if exists.is_some() {
             return Err(Error::kind(ErrorKind::AlreadyExists));
         }
-        let (id, position) = insert(&conn, &key, label, colour)?;
-        Ok(favourite(id, uri, label, colour, position))
+        let (id, position) = insert(&conn, &key, label, colour, is_dir)?;
+        Ok(favourite(id, uri, label, colour, position, is_dir))
     }
 
-    /// Adds a favourite for `uri`, or relabels the one it already is: what
-    /// the favourite dialog does, without the caller tracking ids.
-    pub fn save(&self, uri: &Uri, label: &str, colour: Option<&str>) -> Result<Favourite> {
+    /// Adds a favourite for the folder (`is_dir`) or file `uri`, or
+    /// relabels the one it already is, which keeps what it was stored as:
+    /// what the favourite dialog does, without the caller tracking ids.
+    pub fn save(&self, uri: &Uri, label: &str, colour: Option<&str>, is_dir: bool) -> Result<Favourite> {
         let label = clean_label(label)?;
         let conn = self.db.lock();
         let key = uri.to_string();
-        let existing: Option<(i64, i64)> = conn
+        let existing: Option<(i64, i64, bool)> = conn
             .query_row(
-                "SELECT id, position FROM favourites WHERE uri = ?1",
+                "SELECT id, position, is_dir FROM favourites WHERE uri = ?1",
                 [&key],
-                |r| Ok((r.get(0)?, r.get(1)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .optional()?;
-        let (id, position) = match existing {
-            Some((id, position)) => {
+        let (id, position, is_dir) = match existing {
+            Some((id, position, stored)) => {
                 conn.execute(
                     "UPDATE favourites SET label = ?1, colour = ?2 WHERE id = ?3",
                     params![label, colour, id],
                 )?;
-                (id, position)
+                (id, position, stored)
             }
-            None => insert(&conn, &key, label, colour)?,
+            None => {
+                let (id, position) = insert(&conn, &key, label, colour, is_dir)?;
+                (id, position, is_dir)
+            }
         };
-        Ok(favourite(id, uri, label, colour, position))
+        Ok(favourite(id, uri, label, colour, position, is_dir))
     }
 
     pub fn list(&self) -> Result<Vec<Favourite>> {
@@ -172,7 +195,7 @@ impl Favourites {
         move_to(&self.db.lock(), "favourites", id, index)
     }
 
-    /// Follows a folder moved or renamed by the app, including favourites
+    /// Follows an item moved or renamed by the app, including favourites
     /// inside it.
     pub fn on_moved(&self, old: &Uri, new: &Uri) -> Result<usize> {
         rewrite_uris(&self.db.lock(), "favourites", old, new)
@@ -206,8 +229,8 @@ mod tests {
     #[test]
     fn add_list_in_order_with_positions() {
         let f = store();
-        let a = f.add(&u("lautta://nv-1/a"), "  A ", Some("#f00")).unwrap();
-        let b = f.add(&u("lautta://nv-1/b"), "B", None).unwrap();
+        let a = f.add(&u("lautta://nv-1/a"), "  A ", Some("#f00"), true).unwrap();
+        let b = f.add(&u("lautta://nv-1/b"), "B", None, true).unwrap();
         assert_eq!((a.position, b.position), (0, 1));
         assert_eq!(a.label, "A");
         let list = f.list().unwrap();
@@ -220,13 +243,15 @@ mod tests {
     #[test]
     fn duplicates_and_empty_labels_are_refused() {
         let f = store();
-        f.add(&u("lautta://nv-1/a"), "A", None).unwrap();
+        f.add(&u("lautta://nv-1/a"), "A", None, true).unwrap();
         assert_eq!(
-            f.add(&u("lautta://nv-1/a"), "Again", None).unwrap_err().kind,
+            f.add(&u("lautta://nv-1/a"), "Again", None, true)
+                .unwrap_err()
+                .kind,
             ErrorKind::AlreadyExists
         );
         assert_eq!(
-            f.add(&u("lautta://nv-1/b"), "   ", None).unwrap_err().kind,
+            f.add(&u("lautta://nv-1/b"), "   ", None, true).unwrap_err().kind,
             ErrorKind::InvalidArgument
         );
         assert_eq!(f.list().unwrap().len(), 1);
@@ -235,11 +260,11 @@ mod tests {
     #[test]
     fn save_adds_new_folders_and_relabels_known_ones() {
         let f = store();
-        let a = f.save(&u("lautta://nv-1/a"), "A", None).unwrap();
-        let b = f.save(&u("lautta://nv-1/b"), " B ", Some("#0f0")).unwrap();
+        let a = f.save(&u("lautta://nv-1/a"), "A", None, true).unwrap();
+        let b = f.save(&u("lautta://nv-1/b"), " B ", Some("#0f0"), true).unwrap();
         assert_ne!(a.id, b.id);
         assert_eq!((a.position, b.position, b.label.as_str()), (0, 1, "B"));
-        let again = f.save(&u("lautta://nv-1/a"), "Docs", Some("#f00")).unwrap();
+        let again = f.save(&u("lautta://nv-1/a"), "Docs", Some("#f00"), true).unwrap();
         assert_eq!((again.id, again.position), (a.id, 0));
         let list = f.list().unwrap();
         assert_eq!(
@@ -249,7 +274,7 @@ mod tests {
             [("Docs", Some("#f00")), ("B", Some("#0f0"))]
         );
         assert_eq!(
-            f.save(&u("lautta://nv-1/c"), " ", None).unwrap_err().kind,
+            f.save(&u("lautta://nv-1/c"), " ", None, true).unwrap_err().kind,
             ErrorKind::InvalidArgument
         );
         assert_eq!(f.list().unwrap().len(), 2);
@@ -258,7 +283,7 @@ mod tests {
     #[test]
     fn update_and_lookup() {
         let f = store();
-        let a = f.add(&u("lautta://nv-1/a"), "A", None).unwrap();
+        let a = f.add(&u("lautta://nv-1/a"), "A", None, true).unwrap();
         f.update(a.id, "Docs", Some("#0f0")).unwrap();
         let got = f.get_by_uri(&u("lautta://nv-1/a")).unwrap().unwrap();
         assert_eq!(
@@ -279,7 +304,7 @@ mod tests {
         let f = store();
         let ids: Vec<i64> = ["a", "b", "c"]
             .iter()
-            .map(|n| f.add(&u(&format!("lautta://x/{n}")), n, None).unwrap().id)
+            .map(|n| f.add(&u(&format!("lautta://x/{n}")), n, None, true).unwrap().id)
             .collect();
         f.move_to(ids[2], 0).unwrap();
         let order: Vec<String> = f.list().unwrap().into_iter().map(|x| x.label).collect();
@@ -295,9 +320,9 @@ mod tests {
     #[test]
     fn remove_location_only_touches_that_location() {
         let f = store();
-        f.add(&u("lautta://nv-1/a"), "a", None).unwrap();
-        f.add(&u("lautta://nv-10/a"), "b", None).unwrap();
-        f.add(&u("lautta://nv-1/b"), "c", None).unwrap();
+        f.add(&u("lautta://nv-1/a"), "a", None, true).unwrap();
+        f.add(&u("lautta://nv-10/a"), "b", None, true).unwrap();
+        f.add(&u("lautta://nv-1/b"), "c", None, true).unwrap();
         assert_eq!(f.remove_location("nv-1").unwrap(), 2);
         let left = f.list().unwrap();
         assert_eq!(left.len(), 1);
@@ -306,9 +331,46 @@ mod tests {
     }
 
     #[test]
+    fn files_are_favourites_too_and_stay_files() {
+        let f = store();
+        let folder = f.add(&u("lautta://x/Uni"), "Uni", None, true).unwrap();
+        let file = f
+            .add(&u("lautta://x/Uni/thesis.pdf"), "Thesis", None, false)
+            .unwrap();
+        assert!(folder.is_dir && !file.is_dir);
+        let list = f.list().unwrap();
+        assert_eq!(
+            list.iter()
+                .map(|x| (x.label.as_str(), x.is_dir))
+                .collect::<Vec<_>>(),
+            [("Uni", true), ("Thesis", false)]
+        );
+        let got = f.get_by_uri(&u("lautta://x/Uni/thesis.pdf")).unwrap().unwrap();
+        assert!(!got.is_dir);
+        // The dialog relabels without knowing what the favourite is.
+        let again = f
+            .save(&u("lautta://x/Uni/thesis.pdf"), "Final", None, true)
+            .unwrap();
+        assert_eq!((again.id, again.is_dir), (file.id, false));
+        let new = f.save(&u("lautta://x/notes.md"), "Notes", None, false).unwrap();
+        assert!(!new.is_dir);
+        let stored = f.list().unwrap();
+        assert_eq!(
+            stored
+                .iter()
+                .map(|x| (x.label.as_str(), x.is_dir))
+                .collect::<Vec<_>>(),
+            [("Uni", true), ("Final", false), ("Notes", false)]
+        );
+        f.on_moved(&u("lautta://x/Uni"), &u("lautta://x/Old")).unwrap();
+        let moved = f.get_by_uri(&u("lautta://x/Old/thesis.pdf")).unwrap().unwrap();
+        assert!(!moved.is_dir, "a file favourite follows its folder");
+    }
+
+    #[test]
     fn follows_moves() {
         let f = store();
-        f.add(&u("lautta://x/a/b"), "b", None).unwrap();
+        f.add(&u("lautta://x/a/b"), "b", None, true).unwrap();
         f.on_moved(&u("lautta://x/a"), &u("lautta://x/z")).unwrap();
         assert!(f.is_favourite(&u("lautta://x/z/b")).unwrap());
     }

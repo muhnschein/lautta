@@ -234,22 +234,6 @@
       "x": 0,
       "y": 8200
     },
-    "Info.dc.html": {
-      "h": 1300,
-      "is_interactive": true,
-      "title": "Info",
-      "w": 400,
-      "x": 1920,
-      "y": 4860
-    },
-    "InfoPulley.dc.html": {
-      "h": 1300,
-      "is_interactive": true,
-      "title": "Info \u00b7 pulley (Open with, Compress)",
-      "w": 400,
-      "x": 2400,
-      "y": 4860
-    },
     "LocationSettings.dc.html": {
       "h": 1000,
       "is_interactive": true,
@@ -277,7 +261,7 @@
     "NewItem.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "New folder / file",
+      "title": "New folder",
       "w": 400,
       "x": 3840,
       "y": 2060
@@ -676,8 +660,6 @@
     "FolderPicker.dc.html",
     "PlanSummary.dc.html",
     "Conflict.dc.html",
-    "Info.dc.html",
-    "InfoPulley.dc.html",
     "Compress.dc.html",
     "Extract.dc.html",
     "RecentlyDeleted.dc.html",

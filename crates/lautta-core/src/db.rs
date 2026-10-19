@@ -127,6 +127,10 @@ const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (section, item)
     );
     "#,
+    // 4: ORG-1, files can be favourites too; the rows before were folders.
+    r#"
+    ALTER TABLE favourites ADD COLUMN is_dir INTEGER NOT NULL DEFAULT 1;
+    "#,
 ];
 
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -232,6 +236,34 @@ mod tests {
         assert_eq!(db.version().unwrap(), SCHEMA_VERSION);
         let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn favourites_from_before_files_stay_folders() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v3.db");
+        {
+            // A database as schema 3 left it, with one favourite.
+            let c = Connection::open(&path).unwrap();
+            for sql in &MIGRATIONS[..3] {
+                c.execute_batch(sql).unwrap();
+            }
+            c.pragma_update(None, "user_version", 3).unwrap();
+            c.execute(
+                "INSERT INTO favourites(uri, label, colour, position) \
+                 VALUES ('lautta://user-documents/Uni', 'Uni', NULL, 0)",
+                [],
+            )
+            .unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.version().unwrap(), SCHEMA_VERSION);
+        let favourites = crate::org::favourites::Favourites::new(db.clone());
+        let list = favourites.list().unwrap();
+        assert_eq!(list.len(), 1);
+        assert!(list[0].is_dir, "rows from before are folders");
+        let file = crate::uri::Uri::parse("lautta://user-documents/Uni/a.pdf").unwrap();
+        assert!(!favourites.add(&file, "A", None, false).unwrap().is_dir);
     }
 
     #[test]

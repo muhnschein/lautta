@@ -63,8 +63,8 @@ async fn make_rename_and_undo() {
     assert!(h.root.join("Documents/Plans").is_dir());
     let err = h.core.make_folder(&docs, b"Plans").await.unwrap_err();
     assert_eq!(err.kind, ErrorKind::AlreadyExists);
-    let file = h.core.make_file(&folder, b"a.txt").await.unwrap();
-    assert!(h.root.join("Documents/Plans/a.txt").is_file());
+    write(&h.root.join("Documents/Plans/a.txt"), b"a");
+    let file = folder.join(b"a.txt").unwrap();
 
     let renamed = h.core.rename(&file, b"b.txt").await.unwrap();
     assert_eq!(renamed, uri("lautta://user-documents/Plans/b.txt"));
@@ -95,7 +95,7 @@ async fn favourites_follow_renames() {
     let h = home().await;
     std::fs::create_dir_all(h.root.join("Documents/x")).unwrap();
     let x = uri("lautta://user-documents/x");
-    h.core.favourites.add(&x, "x", None).unwrap();
+    h.core.favourites.add(&x, "x", None, true).unwrap();
     let y = h.core.rename(&x, b"y").await.unwrap();
     let favourites = h.core.favourites.list().unwrap();
     assert_eq!(favourites.len(), 1);

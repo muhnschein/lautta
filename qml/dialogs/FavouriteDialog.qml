@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Add or edit a favourite (ORG-1): a label and a colour for a folder.
-// Opened on `uri`; it edits the folder's favourite when it is one already
-// and adds one otherwise, so callers never pass an id.
+// Add or edit a favourite (ORG-1): a label and a colour for a folder or a
+// file. Opened on `uri`; it edits the item's favourite when it is one
+// already and adds one otherwise, so callers never pass an id.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -11,6 +11,9 @@ Dialog {
     id: dialog
 
     property string uri
+    // A folder unless the caller says the item is a file; a favourite that
+    // exists already says what it is.
+    property bool isDir: true
     property string colour
     // Known once the favourites are loaded (`filled`).
     property bool editing
@@ -27,11 +30,12 @@ Dialog {
         if (editing) {
             labelField.text = f.label
             colour = f.colour
+            isDir = f.isDir !== false
         }
         filled = true
     }
 
-    onAccepted: favourites.save(uri, labelField.text, colour)
+    onAccepted: favourites.save(uri, labelField.text, colour, isDir)
 
     FavouritesModel {
         id: favourites
@@ -85,10 +89,11 @@ Dialog {
                 EnterKey.onClicked: dialog.accept()
             }
 
+            // The folder itself, or the folder a file is in.
             DetailItem {
                 //% "Folder"
                 label: qsTrId("lautta-favourite-folder")
-                value: favourites.placeOf(dialog.uri)
+                value: favourites.placeOf(dialog.isDir ? dialog.uri : App.parentUri(dialog.uri))
             }
 
             SectionHeader {

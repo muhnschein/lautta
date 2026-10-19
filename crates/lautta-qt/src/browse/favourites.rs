@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! `FavouritesModel` (ORG-1): favourites in their order, with label and
-//! colour. Roles: `itemId`, `uri`, `label`, `colour`, `place`.
+//! colour. Roles: `itemId`, `uri`, `label`, `colour`, `place`, `isDir`.
 
 use super::{cell_data, error_parts, role_names, store_changed, Cell};
 use crate::json::to_json;
@@ -12,7 +12,7 @@ use qmetaobject::QPointer;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-const COLUMNS: [&str; 5] = ["itemId", "uri", "label", "colour", "place"];
+const COLUMNS: [&str; 6] = ["itemId", "uri", "label", "colour", "place", "isDir"];
 
 fn load(core: &Core) -> lautta_core::Result<Vec<Vec<Cell>>> {
     Ok(core
@@ -20,12 +20,14 @@ fn load(core: &Core) -> lautta_core::Result<Vec<Vec<Cell>>> {
         .list()?
         .into_iter()
         .map(|f| {
+            let place = core.favourite_place(&f);
             vec![
                 Cell::Int(f.id),
                 Cell::Str(f.uri.to_string()),
                 Cell::Str(f.label),
                 Cell::Str(f.colour.unwrap_or_default()),
-                Cell::Str(core.place_of(&f.uri)),
+                Cell::Str(place),
+                Cell::Bool(f.is_dir),
             ]
         })
         .collect())
@@ -43,6 +45,10 @@ fn str_at(row: &[Cell], col: usize) -> &str {
         Some(Cell::Str(s)) => s,
         _ => "",
     }
+}
+
+fn bool_at(row: &[Cell], col: usize) -> bool {
+    matches!(row.get(col), Some(Cell::Bool(true)))
 }
 
 /// No colour for an empty one.
@@ -68,18 +74,20 @@ pub struct FavouritesModel {
     loadedChanged: qt_signal!(),
 
     reload: qt_method!(fn(&mut self)),
+    /// Adds a favourite for a folder.
     add: qt_method!(fn(&mut self, uri: QString, label: QString, colour: QString)),
-    /// Adds a favourite for a folder, or relabels the one it already is.
-    save: qt_method!(fn(&mut self, uri: QString, label: QString, colour: QString)),
+    /// Adds a favourite for a folder (`isDir`) or a file, or relabels the
+    /// one it already is.
+    save: qt_method!(fn(&mut self, uri: QString, label: QString, colour: QString, isDir: bool)),
     edit: qt_method!(fn(&mut self, id: i32, label: QString, colour: QString)),
     remove: qt_method!(fn(&mut self, id: i32)),
-    /// Removes the favourite of a folder, if it is one.
+    /// Removes the favourite of a folder or file, if it is one.
     removeUri: qt_method!(fn(&mut self, uri: QString)),
     moveTo: qt_method!(fn(&mut self, id: i32, index: i32)),
     moveBy: qt_method!(fn(&mut self, id: i32, delta: i32)),
-    /// `{id, uri, label, colour, place}` of a loaded favourite, or `{}`.
+    /// `{id, uri, label, colour, place, isDir}` of a loaded favourite, or `{}`.
     get: qt_method!(fn(&self, id: i32) -> QString),
-    /// The id of the favourite for a folder, `-1` when it is none.
+    /// The id of the favourite for a folder or file, `-1` when it is none.
     idOf: qt_method!(fn(&self, uri: QString) -> i32),
     /// `Location › folder` for a folder URI (no I/O).
     placeOf: qt_method!(fn(&self, uri: QString) -> QString),
@@ -147,16 +155,16 @@ impl FavouritesModel {
         let (uri, label, colour) = (uri.to_string(), label.to_string(), colour.to_string());
         self.change(move |core| {
             core.favourites
-                .add(&Uri::parse(&uri)?, &label, colour_of(&colour))
+                .add(&Uri::parse(&uri)?, &label, colour_of(&colour), true)
                 .map(|_| ())
         });
     }
 
-    fn save(&mut self, uri: QString, label: QString, colour: QString) {
+    fn save(&mut self, uri: QString, label: QString, colour: QString, isDir: bool) {
         let (uri, label, colour) = (uri.to_string(), label.to_string(), colour.to_string());
         self.change(move |core| {
             core.favourites
-                .save(&Uri::parse(&uri)?, &label, colour_of(&colour))
+                .save(&Uri::parse(&uri)?, &label, colour_of(&colour), isDir)
                 .map(|_| ())
         });
     }
@@ -194,7 +202,7 @@ impl FavouritesModel {
             .map(|r| {
                 serde_json::json!({
                     "id": int_at(r, 0), "uri": str_at(r, 1), "label": str_at(r, 2),
-                    "colour": str_at(r, 3), "place": str_at(r, 4),
+                    "colour": str_at(r, 3), "place": str_at(r, 4), "isDir": bool_at(r, 5),
                 })
             })
             .unwrap_or_else(|| serde_json::json!({}));
@@ -242,6 +250,7 @@ mod tests {
             Cell::s("l"),
             Cell::s(""),
             Cell::s("p"),
+            Cell::Bool(true),
         ]
     }
 
@@ -267,5 +276,9 @@ mod tests {
         let r = row(4);
         assert_eq!((int_at(&r, 0), int_at(&r, 1), int_at(&r, 9)), (4, -1, -1));
         assert_eq!((str_at(&r, 4), str_at(&r, 0), str_at(&r, 9)), ("p", "", ""));
+        assert_eq!(
+            (bool_at(&r, 5), bool_at(&r, 4), bool_at(&r, 9)),
+            (true, false, false)
+        );
     }
 }
