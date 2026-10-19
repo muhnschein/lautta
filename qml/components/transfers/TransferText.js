@@ -14,7 +14,7 @@ function duration(seconds) {
 }
 
 function when(ms) {
-    return Silica.Format.formatDate(new Date(ms), Silica.Formatter.TimepointRelativeCurrentDay)
+    return Silica.Format.formatDate(new Date(ms), Silica.Formatter.TimepointRelative)
 }
 
 function percent(done, total) {

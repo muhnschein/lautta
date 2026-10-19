@@ -410,70 +410,6 @@
         <source>Browsing</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-settings-view">
-        <source>Default view</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-view-list">
-        <source>List</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-view-grid">
-        <source>Grid</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-sort">
-        <source>Sort by</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-sort-name">
-        <source>Name</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-sort-size">
-        <source>Size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-sort-modified">
-        <source>Modified</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-sort-type">
-        <source>Type</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-descending">
-        <source>Sort descending</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-folders-first">
-        <source>Folders first</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-hidden">
-        <source>Show hidden files</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-date-format">
-        <source>Date format</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-date-relative">
-        <source>Relative (Today 09:14)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-date-iso">
-        <source>ISO (2026-10-02 09:14)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-date-locale">
-        <source>System format</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-thumbs-local">
-        <source>Thumbnails on this device</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-settings-thumbs-remote">
         <source>Thumbnails from servers</source>
         <translation type="unfinished"></translation>
@@ -2449,12 +2385,9 @@
         <source>Modified</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-opts-apply">
-        <source>Apply</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-opts-title">
-        <source>View options · %1</source>
+        <source>View options</source>
+        <oldsource>View options · %1</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-opts-sort">
@@ -2841,6 +2774,50 @@
     </message>
     <message id="lautta-err-location-gone-unnamed">
         <source>The server is no longer connected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-view-preview-photos">
+        <source>Photos</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-view-preview-work">
+        <source>Work</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-view-preview-photo">
+        <source>beach</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-view-preview-notes">
+        <source>notes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-view-preview-report">
+        <source>report</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-view-preview-song">
+        <source>song</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-view-preview-hidden">
+        <source>backup</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-view-preview-title">
+        <source>Documents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-view-options">
+        <source>View options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-every-folder">
+        <source>Used in every folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-preview">
+        <source>Preview</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-search-title">

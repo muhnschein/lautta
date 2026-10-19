@@ -26,19 +26,10 @@ const GB: u64 = 1_000_000_000;
 pub const SORT_KEYS: [&str; 4] = ["name", "size", "modified", "type"];
 pub const VIEW_MODES: [&str; 2] = ["list", "grid"];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum DateFormat {
-    #[default]
-    Relative,
-    Iso,
-    Locale,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    // Default view (BRW-4 global defaults).
+    // View options (BRW-4): one set for every folder.
     pub sort_key: String,
     pub sort_descending: bool,
     pub folders_first: bool,
@@ -73,7 +64,6 @@ pub struct Settings {
     pub large_op_items: u64,
     pub large_op_bytes: u64,
 
-    pub date_format: DateFormat,
     pub recents_enabled: bool,
     /// SRC-3: depth limit of remote searches.
     pub search_remote_depth: u32,
@@ -106,7 +96,6 @@ impl Default for Settings {
             history_retention_days: 30,
             large_op_items: 1_000,
             large_op_bytes: GB,
-            date_format: DateFormat::Relative,
             recents_enabled: true,
             search_remote_depth: 8,
         }
@@ -366,7 +355,6 @@ mod tests {
         assert!(s.preserve_mtimes && !s.preserve_permissions && !s.verify_checksums && s.auto_resume);
         assert_eq!(s.history_retention_days, 30);
         assert_eq!((s.large_op_items, s.large_op_bytes), (1_000, 1_000_000_000));
-        assert_eq!(s.date_format, DateFormat::Relative);
         assert!(s.recents_enabled);
         assert_eq!(s.search_remote_depth, 8);
         assert_eq!(s.grid_columns, 4);
@@ -414,7 +402,6 @@ mod tests {
             sort_key: "size".into(),
             sort_descending: true,
             show_hidden: true,
-            date_format: DateFormat::Iso,
             remote_lanes: 5,
             grid_columns: 3,
             ..Settings::default()
@@ -422,7 +409,6 @@ mod tests {
         .sanitised();
         assert_eq!(Settings::from_json(&s.to_json()), s);
         let map = s.to_map();
-        assert_eq!(map["date_format"], json!("iso"));
         assert_eq!(map["remote_lanes"], json!(5));
         assert_eq!(map["grid_columns"], json!(3));
         assert_eq!(Settings::from_map(&map), s);
@@ -433,19 +419,36 @@ mod tests {
         let mut map = BTreeMap::new();
         map.insert("remorse_seconds".to_owned(), json!(8));
         map.insert("local_concurrency".to_owned(), json!("many"));
-        map.insert("date_format".to_owned(), json!("martian"));
         map.insert("show_hidden".to_owned(), json!(true));
         map.insert("not_a_setting".to_owned(), json!(1));
         map.insert("remote_lanes".to_owned(), json!(100));
         let s = Settings::from_map(&map);
         assert_eq!(s.remorse_seconds, 8);
         assert_eq!(s.local_concurrency, 2);
-        assert_eq!(s.date_format, DateFormat::Relative);
         assert!(s.show_hidden);
         assert_eq!(s.remote_lanes, 6, "out-of-range values are clamped");
         assert_eq!(Settings::from_json("not json"), Settings::default());
         assert_eq!(Settings::from_json("[1]"), Settings::default());
         assert_eq!(Settings::from_json("{}"), Settings::default());
+    }
+
+    #[test]
+    fn a_stored_date_format_is_ignored() {
+        // Dates follow the system format (§18): there is no date format
+        // setting, and the value an earlier version left in dconf neither
+        // breaks the other keys nor survives the next save.
+        let stored = r#"{"date_format":"iso","remorse_seconds":7}"#;
+        let mut s = Settings::from_json(stored);
+        assert_eq!(
+            s,
+            Settings {
+                remorse_seconds: 7,
+                ..Settings::default()
+            }
+        );
+        assert!(!s.to_map().contains_key("date_format"));
+        assert!(!s.to_json().contains("date_format"));
+        assert!(!s.set("date_format", json!("locale")));
     }
 
     #[test]

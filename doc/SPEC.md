@@ -370,10 +370,15 @@ what the app does.
   in the binary), size, modified, type; folders first toggle; stable.
 - BRW-3: Instant filter (substring, case- and diacritics-insensitive), hidden files
   toggle (dot names and the hidden attribute).
-- BRW-4: View settings (sort, folders first, hidden files, list or grid, grid size) are
-  global: the same for every folder and location. The grid shows 4 items per row with
-  names on icons only, or 3 per row with name and size under every item; landscape keeps
-  the tile size.
+- BRW-4: View settings (sort, folders first, hidden files, list or grid, grid size,
+  thumbnails) are global: the same for every folder and location. They are set on one
+  *View options* page, opened from a folder's pulley or from *Settings*: a plain page
+  whose controls apply at once, with a live preview of a sample folder (folders, files,
+  a hidden file, a photo) in the order and view a real folder would get. Folders already
+  open follow a change at once; what one folder was switched to on its own (*Use list*
+  over a suggested grid, §15.3) stays until that setting changes for all. The grid shows
+  4 items per row with names on icons only, or 3 per row with name and size under every
+  item; landscape keeps the tile size.
 - BRW-5: Stale-while-revalidate: cached listing shown immediately (≤ 7 days old, marked
   stale), refresh on the interactive lane, diff applied in place without losing scroll
   or selection.
@@ -628,7 +633,7 @@ account* (NVB-5), *Copy address*, *Remove from recents* (ad-hoc). Swipe left: Ac
 Header with the folder name only (no breadcrumb); tap → path menu. Slim progress line while listing
 or receiving transfers. List view with icon or thumbnail and "size · modified"; grid view
 for media folders (suggested when > 60 % images). Pulley: *Select*, *New folder/file*,
-*Paste* (with clipboard), *Search here*, *View options* (no *Refresh*, BRW-11). Push-up: *Info*,
+*Paste* (with clipboard), *Search here*, *View options* (BRW-4; no *Refresh*, BRW-11). Push-up: *Info*,
 *Add to favourites*. Context menu: plain Silica rows *Share* (files), *Copy*, *Cut*,
 *Rename*, *Details*, *Delete*; fixed order, capability-filtered. The rarer actions sit
 in the Details page's pulley: *Open with* (files) and *Compress*. Archives need no
@@ -697,10 +702,12 @@ copies through the app for local↔remote).
 
 ## 18. Settings
 
-Global: default view options, hidden files, folders first, thumbnail limits, cache sizes,
-*Recently deleted* on/off and retention, remorse duration, local transfer concurrency,
-preserve mtimes/permissions, verify with checksums, auto-resume, history retention,
-date format, large-operation threshold.
+Global: view options (BRW-4; Settings links to their page instead of repeating them),
+server thumbnails and their limits, cache sizes, *Recently deleted* on/off and retention,
+remorse duration, local transfer concurrency, preserve mtimes/permissions, verify with
+checksums, auto-resume, history retention, large-operation threshold. There is no date
+format setting: every date follows the system's formats (Silica `Format`); a value an
+earlier version stored is ignored.
 
 Per location (app DB): lane sizes (remote), start folder, listing/thumbnail cache opt-out,
 display name override.

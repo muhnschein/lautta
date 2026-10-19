@@ -111,61 +111,26 @@ Page {
                     color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
                 }
             }
-            SettingCombo {
-                //% "Default view"
-                label: qsTrId("lautta-settings-view")
-                settingKey: "view_mode"
-                values: ["list", "grid"]
-                //% "List"
-                labels: [qsTrId("lautta-settings-view-list"),
-                         //% "Grid"
-                         qsTrId("lautta-settings-view-grid")]
-            }
-            SettingCombo {
-                //% "Sort by"
-                label: qsTrId("lautta-settings-sort")
-                settingKey: "sort_key"
-                values: ["name", "size", "modified", "type"]
-                //% "Name"
-                labels: [qsTrId("lautta-settings-sort-name"),
-                         //% "Size"
-                         qsTrId("lautta-settings-sort-size"),
-                         //% "Modified"
-                         qsTrId("lautta-settings-sort-modified"),
-                         //% "Type"
-                         qsTrId("lautta-settings-sort-type")]
-            }
-            SettingSwitch {
-                //% "Sort descending"
-                text: qsTrId("lautta-settings-descending")
-                settingKey: "sort_descending"
-            }
-            SettingSwitch {
-                //% "Folders first"
-                text: qsTrId("lautta-settings-folders-first")
-                settingKey: "folders_first"
-            }
-            SettingSwitch {
-                //% "Show hidden files"
-                text: qsTrId("lautta-settings-hidden")
-                settingKey: "show_hidden"
-            }
-            SettingCombo {
-                //% "Date format"
-                label: qsTrId("lautta-settings-date-format")
-                settingKey: "date_format"
-                values: ["relative", "iso", "locale"]
-                //% "Relative (Today 09:14)"
-                labels: [qsTrId("lautta-settings-date-relative"),
-                         //% "ISO (2026-10-02 09:14)"
-                         qsTrId("lautta-settings-date-iso"),
-                         //% "System format"
-                         qsTrId("lautta-settings-date-locale")]
-            }
-            SettingSwitch {
-                //% "Thumbnails on this device"
-                text: qsTrId("lautta-settings-thumbs-local")
-                settingKey: "thumbnails_local"
+            BackgroundItem {
+                objectName: "viewOptionsRow"
+                width: column.width
+                height: Theme.itemSizeSmall
+                // The view settings live on their own page, the one folders
+                // open from their pulley (BRW-4).
+                onClicked: pageStack.push(Qt.resolvedUrl("ViewOptionsPage.qml"))
+
+                Label {
+                    anchors {
+                        left: parent.left
+                        right: parent.right
+                        leftMargin: Theme.horizontalPageMargin
+                        rightMargin: Theme.horizontalPageMargin
+                        verticalCenter: parent.verticalCenter
+                    }
+                    //% "View options"
+                    text: qsTrId("lautta-settings-view-options")
+                    color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
+                }
             }
             SettingSwitch {
                 //% "Thumbnails from servers"

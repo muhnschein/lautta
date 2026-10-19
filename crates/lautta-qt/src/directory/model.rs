@@ -3,10 +3,12 @@
 //! top of `lautta_core::listing::ListingState`. Listings stream in from the
 //! core (cached copy first, BRW-5), diffs become row inserts/removes/updates,
 //! local folders are watched (BRW-6) and the view settings are the global
-//! ones (BRW-4).
+//! ones (BRW-4), followed while the folder is open.
 
+use crate::browse::Guard;
 use crate::json::from_json;
 use crate::runtime::{self, core, spawn_then};
+use lautta_core::app::Core;
 use lautta_core::app_directory::{file_url, ListEvent};
 use lautta_core::entry::{cap, Entry, EntryFlags};
 use lautta_core::error::ErrorKind;
@@ -131,7 +133,10 @@ pub struct DirectoryModel {
     local_dir: Option<PathBuf>,
     state: ListingState,
     prefs: ViewPrefs,
-    /// The view was set here (`setViewPrefs`): no grid suggestion.
+    /// The global view settings `prefs` last followed (BRW-4).
+    global: ViewPrefs,
+    /// The view was set here (`setViewPrefs`) or for every folder since
+    /// the folder opened: no grid suggestion.
     prefs_set: bool,
     filter: FilterOptions,
     flags: Vec<String>,
@@ -144,6 +149,8 @@ pub struct DirectoryModel {
     /// Archives do not change while open: coming back never lists them again.
     archive: bool,
     watcher: Option<DirWatcher>,
+    /// Ends the task following the settings when the model goes.
+    settings_watch: Option<Guard>,
     transfer_states: HashMap<Vec<u8>, String>,
 }
 
@@ -169,8 +176,12 @@ impl DirectoryModel {
             return;
         };
         self.prefs = core.view_prefs();
+        self.global = self.prefs;
         self.prefs_set = false;
         self.remote_thumbs = core.settings().thumbnails_remote;
+        if self.settings_watch.is_none() {
+            self.watch_settings(&core);
+        }
         self.apply_prefs_state();
         self.flags = core.capability_flags(&dir.location);
         self.local_dir = core.locations.to_local_path(&dir);
@@ -262,6 +273,32 @@ impl DirectoryModel {
             }
         });
         self.watcher = Some(watcher);
+    }
+
+    /// Follows the settings while the model lives: a change made on another
+    /// page (Settings, or View options in another folder) shows here at
+    /// once (BRW-4), not only when the folder is opened again.
+    fn watch_settings(&mut self, core: &Core) {
+        let guard = Guard::default();
+        let mut stop = guard.subscribe();
+        let mut changes = core.watch_settings();
+        let me = QPointer::from(&*self);
+        let cb = queued_callback(move |()| {
+            if let Some(m) = me.as_pinned() {
+                m.borrow_mut().follow_settings();
+            }
+        });
+        runtime::handle().spawn(async move {
+            loop {
+                tokio::select! {
+                    r = changes.changed() => if r.is_err() { return },
+                    _ = stop.changed() => return,
+                }
+                changes.borrow_and_update();
+                cb(());
+            }
+        });
+        self.settings_watch = Some(guard);
     }
 
     fn on_watch(&mut self, generation: u64) {
@@ -491,7 +528,13 @@ impl DirectoryModel {
         self.descending = p.descending;
         self.foldersFirst = p.folders_first;
         self.showHidden = p.show_hidden;
-        self.viewMode = qs(p.view_mode.as_str());
+        // A suggested grid (SPEC 15.3) stays until a view is chosen.
+        let mode = if self.suggestGrid {
+            ViewMode::Grid
+        } else {
+            p.view_mode
+        };
+        self.viewMode = qs(mode.as_str());
         self.thumbnails = p.thumbnails;
         self.filter.show_hidden = p.show_hidden;
         self.prefsChanged();
@@ -530,17 +573,46 @@ impl DirectoryModel {
             .and_then(ViewMode::parse)
         {
             p.view_mode = m;
+            self.view_chosen();
         }
+        self.show_prefs(p);
+        true
+    }
+
+    /// The global settings changed. What changed shows here at once; what
+    /// was set for this folder alone and did not change stays (BRW-4).
+    fn follow_settings(&mut self) {
+        let Some(core) = core() else { return };
+        let global = core.view_prefs();
+        let remote_thumbs = core.settings().thumbnails_remote;
+        if global == self.global && remote_thumbs == self.remote_thumbs {
+            return;
+        }
+        if global.view_mode != self.global.view_mode {
+            self.view_chosen();
+        }
+        let prefs = self.prefs.follow(self.global, global);
+        self.global = global;
+        self.remote_thumbs = remote_thumbs;
+        self.show_prefs(prefs);
+    }
+
+    /// A view was chosen for this folder or for all: it replaces a
+    /// suggested grid and no other is suggested.
+    fn view_chosen(&mut self) {
         self.prefs_set = true;
-        self.prefs = p;
         self.suggestGrid = false;
+    }
+
+    /// Shows the folder with the view settings `p`.
+    fn show_prefs(&mut self, p: ViewPrefs) {
+        self.prefs = p;
         self.apply_prefs_state();
         let mut changes = self.state.set_sort(self.prefs.sort_options());
         changes.extend(self.state.set_filter(self.filter.clone()));
         self.apply(changes);
         self.reload_roles();
         self.publish();
-        true
     }
 
     /// Thumbnails may have been switched: every row's data changed.
