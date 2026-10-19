@@ -103,12 +103,22 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `capabilities` (list of flag strings), `locationName`, `title`;
   methods `refresh()`, `revisit()` (lists again unless watched or an archive, BRW-11),
   `select(uri)`, `toggle(uri)`, `selectAll()`, `clearSelection()`,
-  `selectedUris() → list`, `setViewPrefs(map)` (one set for every folder), `indexOf(uri)`.
+  `selectedUris() → list`, `setViewPrefs(map)` (shows this folder with other view
+  settings without storing them, `App.setSetting` does that; a `viewMode` replaces a
+  suggested grid), `indexOf(uri)`. An open model follows every change of the global view
+  settings at once (BRW-4).
+- `ViewPreviewModel { entries, sortKey, descending, foldersFirst, showHidden }` — the
+  sample folder of the view options preview: `entries` is JSON
+  `[{ name, dir, size, modified }]` (bytes, ms since the epoch), ordered and filtered by
+  the core as a real folder; roles `name`, `isDir`, `size`, `modified`, `hidden`,
+  `category`; `names` (list in display order), `count`.
 - `PathModel { uri }` — ancestors (roles `uri`, `name`), `complete(prefix) → list`.
 - Pages: `pages/DirectoryPage.qml { uri }`, `dialogs/FolderPickerDialog.qml { title,
   acceptText, startUri }` (property `selectedUri` after accept),
   `dialogs/NewItemDialog.qml { parentUri }`, `dialogs/RenameDialog.qml { uri }`,
-  `pages/ViewOptionsPage.qml { model }`, `components/PathMenu.qml`.
+  `pages/ViewOptionsPage.qml { model }` (a page whose controls apply at once; `model`, the
+  folder it was opened from, is absent when Settings opens it),
+  `components/directory/ViewPreview.qml` (its live preview), `components/PathMenu.qml`.
 - The item context menu is plain rows; which actions it and the Details page's pulley
   hold, in a fixed order filtered by capabilities, is in
   `components/directory/ContextActions.js`.
@@ -187,7 +197,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - `SearchModel { rootUri }` — query/filters, results grouped by folder, `start()`,
   `cancel()`, `recentSearches`.
 - Pages: `pages/SearchPage.qml { rootUri }`, `pages/SearchFiltersPage.qml`,
-  `pages/SettingsPage.qml`, `pages/AboutPage.qml`.
+  `pages/SettingsPage.qml` (its *View options* row opens `pages/ViewOptionsPage.qml`
+  without a model; the view settings are not repeated, BRW-4), `pages/AboutPage.qml`.
 
 ## Shared QML (core infra owns)
 
