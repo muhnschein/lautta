@@ -24,6 +24,7 @@ use super::{
 use crate::entry::{cap, Capabilities, Entry};
 use crate::error::{Error, ErrorKind, Result};
 use crate::sys;
+use crate::trash;
 use crate::vpath::VPath;
 use async_trait::async_trait;
 use entries::EntryBuilder;
@@ -156,15 +157,23 @@ where
         .map_err(|e| Error::new(ErrorKind::Internal, format!("blocking task failed: {e}")))?
 }
 
+/// Lists `real`. At a location's root the *Recently deleted* bin is left
+/// out (OPS-8), so it is never shown, searched, selected or copied, hidden
+/// files shown or not.
 fn list_blocking(
     real: &Path,
+    at_root: bool,
     builder: &EntryBuilder,
     batch: usize,
     out: &mpsc::Sender<Vec<Entry>>,
 ) -> Result<()> {
     let mut buf = Vec::with_capacity(batch);
     for item in std::fs::read_dir(real)? {
-        if let Some(entry) = builder.entry_from_dirent(&item?) {
+        let item = item?;
+        if at_root && item.file_name() == trash::BIN_NAME {
+            continue;
+        }
+        if let Some(entry) = builder.entry_from_dirent(&item) {
             buf.push(entry);
         }
         if buf.len() >= batch {
@@ -469,12 +478,12 @@ impl Provider for LocalProvider {
     }
 
     async fn list(&self, dir: &VPath, _lane: Lane, out: mpsc::Sender<Vec<Entry>>) -> Result<()> {
-        let real = self.real_path(dir);
+        let (real, at_root) = (self.real_path(dir), dir.is_root());
         let permit = self.permit().await?;
         let (builder, batch) = (self.builder.clone(), self.batch);
         blocking(move || {
             let _permit = permit;
-            list_blocking(&real, &builder, batch, &out)
+            list_blocking(&real, at_root, &builder, batch, &out)
         })
         .await
     }

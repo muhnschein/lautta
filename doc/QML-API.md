@@ -75,7 +75,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 
 - `LocationsModel` — sections `favourites`, `device`, `android`, `volumes`, `servers`,
   `nearby` (roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
-  `colour`, `count`, `itemId`).
+  `colour`, `count`, `itemId`). `refresh()` rescans the device folders and volumes first
+  (LOC-3); the model also follows location changes by itself.
 - `FavouritesModel` (`add`, `save(uri, label, colour)` adds or relabels, `edit`, `remove`,
   `removeUri(uri)`, `moveTo`, `moveBy`, `get`, `idOf`, `placeOf`), `RecentsModel { filter }`.
 - `Bridge` singleton: `status` (`absent`, `connecting`, `consentUnknown`, `consentDenied`,
@@ -134,7 +135,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   renamed, kind, destination) → `startPlan(planId)` / `discardPlan(planId)`;
   `started(transferId)`; `failed(kind, message)`.
 - `InfoModel { uri }` — details (permissions shown read-only), `setModified()`.
-- `TrashModel` — Recently deleted list, `restore(id)`, `remove(id)`, `empty()`.
+- `TrashModel` — Recently deleted list of every location's bin (OPS-8), `reload()` (also
+  purges what is past the retention setting), `restore(id)`, `remove(id)`, `empty()`.
 - Pages: `dialogs/PlanSummaryDialog.qml { planId, summary }`,
   `dialogs/ConflictDialog.qml { transferId, item, conflict }`,
   `pages/InfoPage.qml { uri }`, `dialogs/CompressDialog.qml { uris }`,

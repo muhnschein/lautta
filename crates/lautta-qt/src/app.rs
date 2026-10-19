@@ -3,10 +3,11 @@
 //! undo, URI helpers and opening files outside the app.
 
 use crate::json::{from_json, json_value_to_qvariant, to_json};
-use crate::runtime::{core, spawn_then};
+use crate::runtime::{core, handle, spawn_then};
 use lautta_core::clipboard::{Clipboard, ClipboardMode};
 use lautta_core::mime::{category_of_name, extension_of, from_extension, viewer_for, FileCategory, Viewer};
 use lautta_core::settings::Settings;
+use lautta_core::trash::now_secs;
 use lautta_core::undo::UndoAction;
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
@@ -117,6 +118,12 @@ impl App {
         let map = from_json(&json.to_string()).unwrap_or_default();
         core.apply_settings(Settings::from_map(&map));
         self.publish_settings();
+        // The user's retention is known from here on (OPS-8).
+        handle().spawn_blocking(move || {
+            if let Err(e) = core.purge_trash(now_secs()) {
+                log::warn!("purging Recently deleted failed: {e}");
+            }
+        });
     }
 
     fn publish_settings(&mut self) {

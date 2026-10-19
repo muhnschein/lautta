@@ -25,6 +25,10 @@ Page {
     allowedOrientations: Orientation.All
 
     onDiscoveringChanged: Bridge.setDiscover(discovering)
+    // Back in the foreground: refresh, which rescans the volumes (LOC-3) in
+    // case the media watch missed a mount inside the sandbox.
+    readonly property bool foreground: Qt.application.state === Qt.ApplicationActive
+    onForegroundChanged: if (foreground && status === PageStatus.Active) locations.refresh()
     onStatusChanged: {
         if (status !== PageStatus.Active)
             return

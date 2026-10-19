@@ -127,6 +127,12 @@ const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (section, item)
     );
     "#,
+    // 4: OPS-8, the bin holding a trashed item (`<location root>/.lautta-trash`,
+    // path bytes). NULL for the items trashed before, which stay in the app
+    // data trash folder.
+    r#"
+    ALTER TABLE trash_items ADD COLUMN bin BLOB;
+    "#,
 ];
 
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -244,6 +250,33 @@ mod tests {
         }
         let err = Db::open(&path).err().unwrap();
         assert_eq!(err.kind, ErrorKind::Unsupported);
+    }
+
+    #[test]
+    fn older_schemas_migrate_forward_and_keep_their_rows() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("x.db");
+        {
+            let c = Connection::open(&path).unwrap();
+            for sql in &MIGRATIONS[..3] {
+                c.execute_batch(sql).unwrap();
+            }
+            c.pragma_update(None, "user_version", 3).unwrap();
+            c.execute(
+                "INSERT INTO trash_items(original_uri, trashed_at, stored_name) VALUES ('lautta://a/b', 1, 's')",
+                [],
+            )
+            .unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.version().unwrap(), SCHEMA_VERSION);
+        let bin: Option<Vec<u8>> = db
+            .lock()
+            .query_row("SELECT bin FROM trash_items WHERE stored_name = 's'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(bin, None, "old items keep the app data folder");
     }
 
     #[test]

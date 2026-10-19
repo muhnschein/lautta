@@ -149,6 +149,14 @@ Implicit: `~/.local/share/org.netvfs/lautta`, `~/.cache/org.netvfs/lautta`,
 `~/.config/org.netvfs/lautta`, and ownership of D-Bus name `org.netvfs.lautta` (used for
 notification actions and `ExecDBus` activation).
 
+What the app sees of the file system (firejail `whitelist`): a tmpfs on `$HOME` with every
+granted folder above, and the app's own folders, bind-mounted onto it one by one. So no
+folder is on `$HOME`'s device, and `rename(2)` between two of them fails with `EXDEV` even
+when both live on the same ext4: moves between folders are copies (OPS-4), and *Recently
+deleted* keeps a bin in each folder (OPS-8). `/run/media` is the host's (`ignore
+disable-mnt`); the sandbox has its own mount namespace, in which an inotify watch on the
+media folder can miss a mount, so volumes are also rescanned (LOC-3).
+
 ### 3.4 Two modes
 
 | | Standalone (Harbour default) | With netvfs v2 bridge |
@@ -343,10 +351,15 @@ what the app does.
   (the sandbox would show an incomplete tree, which the old File Browser had to explain).
 - LOC-2: Android storage: one *Android* group listing the exposed subfolders (Documents,
   Download, Pictures, DCIM, Music, Podcasts, Movies) that exist.
-- LOC-3: Removable volumes: from UDisks2 signals plus a scan of `/run/media/$USER/*`;
-  appear and disappear live. Mount, unmount and format are not available to sandboxed
-  apps; the app shows *Open Storage settings* instead (verify the handoff, §24.1).
-  Transfers to a vanishing volume pause with "Insert the card to continue".
+- LOC-3: Removable volumes: the readable, non-hidden folders `/run/media/<user>/<label or
+  UUID>` (`<user>` is `$USER`, the home folder's name when that is unset). They appear and
+  disappear live: an inotify watch on the media folder (on its nearest existing parent
+  until it exists) runs for the app's lifetime, and Browse rescans whenever it refreshes,
+  also when the app comes back to the foreground, for mounts the watch missed (§3.3). The
+  UDisks2 signals would tell the same, so they are not used. Mount, unmount and format are
+  not available to sandboxed apps; the app shows *Open Storage settings* instead (verify
+  the handoff, §24.1). Transfers to a vanishing volume pause with "Insert the card to
+  continue".
 - LOC-4: netvfs accounts and ad-hoc servers (NVB-4, NVB-6).
 - LOC-5: Archives opened as read-only locations (PRV-11).
 - LOC-6: Nearby servers from the bridge's discovery; tapping prefills *Connect to
@@ -442,10 +455,20 @@ bridge).
   locally, visited set remotely), depth limit 40.
 - OPS-7: Names invalid on the destination (vfat/exFAT and SMB rules, length) get a
   proposed safe name in the plan, acceptable for all.
-- OPS-8: Delete: remorse timer (5 s, 3–10 s setting). Local deletes on the home
-  filesystem move items to *Recently deleted* (`~/.local/share/org.netvfs/lautta/trash`,
-  same filesystem, so a rename) and are purged after 30 days; on removable media and
-  remote locations deletes are permanent and say so.
+- OPS-8: Delete: remorse timer (5 s, 3–10 s setting). Deletes in user and Android
+  folders move items to *Recently deleted*: a hidden bin `.lautta-trash` (0700, made on
+  the first delete) at the root of the item's location, so the move is a rename on one
+  mount (one trash folder for all locations cannot work in the sandbox, §3.3). An item on
+  another mount than its bin (something mounted inside the folder) is deleted
+  permanently. The bin is never listed (hidden files shown or not), searched, selected or
+  copied, and it cannot be deleted into itself. Recently deleted lists, restores
+  (rename; a copy when that crosses a mount), deletes and empties the items of all bins;
+  emptying removes the bins. Items are purged after the retention setting (30 days)
+  when the settings are loaded at start and whenever Recently deleted opens. Like its
+  folder, a bin is readable by other apps with that folder's permission. Items deleted
+  before schema 4 (DAT-2) stay in `~/.local/share/org.netvfs/lautta/trash` until
+  restored, deleted or purged. On removable media and remote locations deletes are
+  permanent and say so.
 - OPS-9: Undo for the last rename, same-location move and trash operation, from a banner
   for 10 s.
 - OPS-10: Clipboard (cut/copy, docked paste bar) across all locations. There is no
@@ -717,18 +740,22 @@ SQLite for everything structured.
 
 ## 19. Persistence
 
-- DAT-1: `~/.local/share/org.netvfs/lautta/lautta.db` (SQLite, WAL) and `.../trash/`;
+- DAT-1: `~/.local/share/org.netvfs/lautta/lautta.db` (SQLite, WAL), `.../trash/` (only
+  items deleted before schema 4; newer ones are in the bins of their locations, OPS-8);
   `~/.cache/org.netvfs/lautta/` (thumbs, dircache blobs). Simple
   preferences live in dconf via `Nemo.Configuration`; `~/.config/org.netvfs/lautta/` is
   unused.
 - DAT-2: Schema with `PRAGMA user_version`, forward migrations only: `favourites`,
   `recents`, `transfers`, `transfer_items`, `working_copies`, `dircache`,
-  `trash_items(id, original_uri, trashed_at, stored_name)`, `reading_positions(uri,
+  `trash_items(id, original_uri, trashed_at, stored_name, is_dir, size, bin)` (`bin`: path
+  bytes of the item's bin, schema 4; NULL for older items, which are in `.../trash/`),
+  `reading_positions(uri,
   location_id, page, at_ms)` (PRV-12), `browse_layout(section, item, hidden, position)`
   (BRW-12).
 - DAT-3: The netvfs socket directory `~/.local/share/org.netvfs/lautta/netvfs/` belongs
   to netvfs; the app only reads it. *Clear app data* in Settings deletes it along with
-  everything else; netvfs recreates it (netvfs XB-4).
+  everything else (the *Recently deleted* bins in the locations too, OPS-8); netvfs
+  recreates it (netvfs XB-4).
 
 ## 20. Error presentation
 
@@ -832,6 +859,11 @@ when the netvfs bridge they depend on is released.
 - File descriptor passing over p2p D-Bus between the sandboxed app and the unsandboxed
   bridge (no proxy is involved on a direct socket; still test it).
 - *Open with* and the settings handoff (Storage) from a sandboxed app (PRV-5, LOC-3).
+- Inside the sandbox: a volume mounted from Settings while the app runs appears without
+  leaving Browse (inotify on `/run/media/<user>`, LOC-3), and a delete in `~/Documents`
+  and in `~/android_storage/DCIM` lands in that folder's bin (OPS-8); whether Gallery or
+  the Android media scanner pick up files in `.lautta-trash` (expected: no, a hidden
+  folder).
 - `ShareProvider` delivery of files from other apps' locations (INT-1).
 - Harbour accepting an aarch64-only upload (the validator accepts the architecture; the
   store's per-release policy needs confirming).
