@@ -10,6 +10,7 @@
 use crate::app::Core;
 use crate::bridge::{AdHocOptions, BridgeStatus, NearbyServer, RemoteKind};
 use crate::browse_layout::{layout_item, Layout, NEARBY_ITEM};
+use crate::date_group::DateGroup;
 use crate::error::{Error, ErrorKind, Result};
 use crate::locations::{Location, LocationKind, LocationStatus};
 use crate::org::{self, Recent, RecentsFilter};
@@ -121,7 +122,8 @@ pub struct RecentRow {
     pub kind: &'static str,
     pub place: String,
     pub at_ms: i64,
-    pub day: &'static str,
+    /// The section it is listed under, by `at_ms`.
+    pub date_group: DateGroup,
 }
 
 /// The name of the file system with `statfs` magic `magic`, for the volume
@@ -190,28 +192,6 @@ pub fn url_host(url: &str) -> String {
     let rest = url.split_once("://").map_or(url, |(_, r)| r);
     let authority = rest.split('/').next().unwrap_or(rest);
     authority.rsplit('@').next().unwrap_or(authority).to_owned()
-}
-
-/// The recents section of `at_ms`: `today`, `yesterday`, `week` (the last
-/// seven days) or `earlier`; `offset_secs` is the local UTC offset.
-pub fn day_bucket_at(at_ms: i64, now_ms: i64, offset_secs: i64) -> &'static str {
-    let day = |ms: i64| (ms / 1000 + offset_secs).div_euclid(86_400);
-    match day(now_ms) - day(at_ms) {
-        i64::MIN..=0 => "today",
-        1 => "yesterday",
-        2..=6 => "week",
-        _ => "earlier",
-    }
-}
-
-/// [`day_bucket_at`] in the device's time zone.
-pub fn day_bucket(at_ms: i64, now_ms: i64) -> &'static str {
-    use chrono::{Local, Offset, TimeZone};
-    let offset = Local
-        .timestamp_millis_opt(now_ms)
-        .single()
-        .map_or(0, |t| i64::from(t.offset().fix().local_minus_utc()));
-    day_bucket_at(at_ms, now_ms, offset)
 }
 
 fn status_name(s: LocationStatus) -> &'static str {
@@ -711,7 +691,8 @@ impl Core {
 
     // ---- recents (ORG-2) ----------------------------------------------------
 
-    /// Recents for the page, newest first, with their day sections.
+    /// Recents for the page, newest first, with their date sections (the
+    /// Activity page's, §15.4).
     pub fn recent_rows(&self, filter: &RecentsFilter) -> Result<Vec<RecentRow>> {
         let now = now_ms();
         Ok(self
@@ -737,7 +718,7 @@ impl Core {
             kind: r.kind.as_str(),
             place,
             at_ms: r.at_ms,
-            day: day_bucket(r.at_ms, now),
+            date_group: DateGroup::at(r.at_ms, now),
         }
     }
 }
@@ -858,20 +839,6 @@ mod tests {
         assert_eq!(public_url("smb://nas/share"), "smb://nas/share");
         assert_eq!(url_host("sftp://pi@raspberrypi.local/home"), "raspberrypi.local");
         assert_eq!(url_host("nas"), "nas");
-    }
-
-    #[test]
-    fn day_buckets_follow_the_local_day() {
-        let day = 86_400_000;
-        let now = 10 * day + 3_600_000; // 01:00 UTC
-        assert_eq!(day_bucket_at(now, now, 0), "today");
-        assert_eq!(day_bucket_at(now - 2 * 3_600_000, now, 0), "yesterday");
-        // The same instants at UTC+2 are both on the same local day.
-        assert_eq!(day_bucket_at(now - 2 * 3_600_000, now, 7200), "today");
-        assert_eq!(day_bucket_at(now - 3 * day, now, 0), "week");
-        assert_eq!(day_bucket_at(now - 6 * day, now, 0), "week");
-        assert_eq!(day_bucket_at(now - 7 * day, now, 0), "earlier");
-        assert_eq!(day_bucket_at(now + day, now, 0), "today");
     }
 
     #[test]

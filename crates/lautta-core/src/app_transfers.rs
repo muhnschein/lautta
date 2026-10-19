@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! User-level actions of the transfers area on [`Core`](crate::app::Core):
-//! the grouped transfer list with live progress (XFR-8, §15.4) and start-up
-//! restore (XFR-11). Everything here is Qt-free; the Qt layer turns it into
-//! models.
+//! the transfer list with live progress in date sections (XFR-8, §15.4) and
+//! start-up restore (XFR-11). Everything here is Qt-free; the Qt layer turns
+//! it into models.
 
 use crate::app::Core;
+use crate::date_group::DateGroup;
 use crate::error::{Error, ErrorKind, Result};
 use crate::locations::LocationRegistry;
 use crate::ops::{Conflict, ConflictChoice, OperationKind};
@@ -13,7 +14,8 @@ use crate::transfer::{TransferId, TransferState, TransferSummary, WaitReason};
 use crate::uri::Uri;
 use std::collections::{HashMap, HashSet};
 
-/// The groups of the Transfers page (§15.4), in display order.
+/// What a transfer is doing, as its row's `group` role says; the row's
+/// menu and status line follow it. The page's sections are [`DateGroup`]s.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TransferGroup {
     Active,
@@ -236,11 +238,13 @@ impl ProgressBook {
     }
 }
 
-/// One row of the grouped list.
+/// One row of the list.
 #[derive(Debug, Clone)]
 pub struct TransferRow {
     pub summary: TransferSummary,
     pub group: TransferGroup,
+    /// The section it is listed under: see [`date_group_of`].
+    pub date_group: DateGroup,
     pub direction: Direction,
     pub bytes_done: u64,
     pub rate: u64,
@@ -267,15 +271,35 @@ pub struct StartReport {
     pub paused: usize,
 }
 
-/// Orders the list for display: transfers by group, history newest first.
+/// When a transfer ended: its finish time, or when it was created if the
+/// store has none.
+fn ended_ms(s: &TransferSummary) -> i64 {
+    s.finished_ms.unwrap_or(s.created_ms)
+}
+
+/// The Activity section of a transfer (§15.4): every task that has not
+/// ended (running, scanning, queued, waiting or paused) is in progress; one
+/// that ended goes by the day it ended.
+pub fn date_group_of(s: &TransferSummary, now_ms: i64) -> DateGroup {
+    if s.state.is_finished() {
+        DateGroup::at(ended_ms(s), now_ms)
+    } else {
+        DateGroup::InProgress
+    }
+}
+
+/// Orders the list for display (§15.4): what has not ended in queue order,
+/// then what ended, newest first, so each date section is one run of rows.
 fn order_rows(rows: &mut [TransferRow]) {
     rows.sort_by_key(|r| {
-        let g = TransferGroup::ALL.iter().position(|x| *x == r.group).unwrap_or(0);
-        let tie = match r.group {
-            TransferGroup::History => -r.summary.finished_ms.unwrap_or(r.summary.created_ms),
-            _ => r.summary.position,
+        let s = &r.summary;
+        let ended = s.state.is_finished();
+        let tie = if ended {
+            ended_ms(s).saturating_neg()
+        } else {
+            s.position
         };
-        (g, tie, r.summary.id)
+        (ended, tie, s.id)
     });
 }
 
@@ -314,17 +338,18 @@ impl Core {
 
     /// The transfer list with live progress, in display order (§15.4).
     pub fn transfer_rows(&self, book: &ProgressBook) -> Vec<TransferRow> {
+        let now = crate::org::now_ms();
         let mut rows: Vec<TransferRow> = self
             .engine
             .list()
             .into_iter()
-            .map(|s| self.row_of(book, s))
+            .map(|s| self.row_of(book, s, now))
             .collect();
         order_rows(&mut rows);
         rows
     }
 
-    fn row_of(&self, book: &ProgressBook, s: TransferSummary) -> TransferRow {
+    fn row_of(&self, book: &ProgressBook, s: TransferSummary, now_ms: i64) -> TransferRow {
         let group = group_of(s.state);
         let direction = match self.engine.first_item(s.id) {
             Some(i) => direction_of(&self.locations, s.kind, &i.src, &i.dst),
@@ -338,6 +363,7 @@ impl Core {
         let (bytes_done, rate, eta_secs) = book.of(&s);
         TransferRow {
             group,
+            date_group: date_group_of(&s, now_ms),
             direction,
             bytes_done,
             rate,
@@ -504,29 +530,75 @@ mod tests {
     }
 
     #[test]
-    fn rows_are_ordered_by_group_then_queue_then_history_newest_first() {
-        let mk = |id, state| TransferRow {
-            group: group_of(state),
-            direction: Direction::Local,
-            bytes_done: 0,
-            rate: 0,
-            eta_secs: None,
-            questions: 0,
-            dest_name: String::new(),
-            dest_address: String::new(),
-            summary: summary(id, state, 0, 0),
+    fn rows_are_in_progress_in_queue_order_then_ended_newest_first() {
+        use TransferState::*;
+        let mk = |id, state, position, finished_ms| {
+            let mut summary = summary(id, state, 0, 0);
+            summary.position = position;
+            summary.created_ms = id * 1000;
+            summary.finished_ms = finished_ms;
+            TransferRow {
+                group: group_of(state),
+                date_group: DateGroup::InProgress,
+                direction: Direction::Local,
+                bytes_done: 0,
+                rate: 0,
+                eta_secs: None,
+                questions: 0,
+                dest_name: String::new(),
+                dest_address: String::new(),
+                summary,
+            }
         };
         let mut rows = vec![
-            mk(1, TransferState::Completed),
-            mk(2, TransferState::Paused),
-            mk(3, TransferState::Completed),
-            mk(4, TransferState::Running),
-            mk(5, TransferState::Waiting(WaitReason::Bridge)),
-            mk(6, TransferState::Queued),
+            mk(1, Completed, 0, Some(5000)),
+            mk(2, Paused, 3, None),
+            mk(3, Failed, 0, Some(9000)),
+            mk(4, Running, 2, None),
+            mk(5, Waiting(WaitReason::Bridge), 1, None),
+            mk(6, Queued, 4, None),
+            // No finish time stored: it ended when it was created.
+            mk(7, Canceled, 0, None),
+            mk(8, Scanning, 0, None),
+            mk(9, Completed, 0, Some(5000)),
         ];
         order_rows(&mut rows);
         let ids: Vec<i64> = rows.iter().map(|r| r.summary.id).collect();
-        assert_eq!(ids, [4, 6, 5, 2, 3, 1]);
+        assert_eq!(ids, [8, 5, 4, 2, 6, 3, 7, 1, 9]);
+    }
+
+    #[test]
+    fn unfinished_transfers_are_in_progress_and_ended_ones_go_by_their_end() {
+        use TransferState::*;
+        let day = 86_400_000;
+        // 2027-01-15 08:00 UTC: no time zone puts it within an hour of
+        // midnight, so "a minute ago" is today everywhere.
+        let now = 1_800_000_000_000;
+        let unfinished = [
+            Queued,
+            Scanning,
+            Running,
+            Paused,
+            Waiting(WaitReason::Question),
+            Waiting(WaitReason::Network),
+            Waiting(WaitReason::Volume),
+        ];
+        for state in unfinished {
+            let mut s = summary(1, state, 0, 0);
+            s.created_ms = now - 90 * day;
+            assert_eq!(date_group_of(&s, now), DateGroup::InProgress, "{state:?}");
+        }
+        for state in [Completed, Failed, Canceled] {
+            let mut s = summary(1, state, 0, 0);
+            s.created_ms = now - 90 * day;
+            s.finished_ms = Some(now - 60_000);
+            assert_eq!(date_group_of(&s, now), DateGroup::Today, "{state:?}");
+            s.finished_ms = Some(now - 45 * day);
+            assert_eq!(date_group_of(&s, now), DateGroup::Older, "{state:?}");
+            s.finished_ms = None;
+            s.created_ms = now - 10 * day;
+            assert_eq!(date_group_of(&s, now), DateGroup::LastThirtyDays, "{state:?}");
+        }
     }
 
     #[test]

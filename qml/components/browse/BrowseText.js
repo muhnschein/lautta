@@ -102,40 +102,6 @@ function recentKindLine(kind, place) {
     return place.length > 0 ? what + " · " + place : what
 }
 
-function recentDayTitle(day) {
-    switch (day) {
-    case "today":
-        //% "Today"
-        return qsTrId("lautta-recents-today")
-    case "yesterday":
-        //% "Yesterday"
-        return qsTrId("lautta-recents-yesterday")
-    case "week":
-        //% "Earlier this week"
-        return qsTrId("lautta-recents-week")
-    default:
-        //% "Earlier"
-        return qsTrId("lautta-recents-earlier")
-    }
-}
-
-function recentFilterTitle(kind) {
-    switch (kind) {
-    case "opened":
-        //% "Opened"
-        return qsTrId("lautta-recents-opened")
-    case "previewed":
-        //% "Previewed"
-        return qsTrId("lautta-recents-previewed")
-    case "transferred":
-        //% "Transferred"
-        return qsTrId("lautta-recents-transferred")
-    default:
-        //% "Everything"
-        return qsTrId("lautta-recents-everything")
-    }
-}
-
 // Colours offered for favourites.
 var colours = ["#e7a33c", "#7ec97a", "#e5604f", "#4fa3e5", "#9bd26a", "#b57edc", "#e57fb0", "#8a9aa6"]
 

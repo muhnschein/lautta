@@ -338,14 +338,6 @@
       "x": 2400,
       "y": 0
     },
-    "RecentsFilter.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Recents \u00b7 filter",
-      "w": 400,
-      "x": 1440,
-      "y": 14440
-    },
     "RecentsPulley.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -704,7 +696,6 @@
     "DirectoryLandscape.dc.html",
     "DirectorySelectPulley.dc.html",
     "RecentsPulley.dc.html",
-    "RecentsFilter.dc.html",
     "RecentlyDeletedEmpty.dc.html",
     "FolderPickerPulley.dc.html",
     "TransferDetailsPulley.dc.html",

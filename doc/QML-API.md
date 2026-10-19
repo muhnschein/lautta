@@ -71,13 +71,18 @@ Methods:
 
 Each area owns its types and pages. Names are fixed here so areas can use each other.
 
-### Browse (boards: Main, BrowsePulley, BrowseStandalone, BrowseServerMenu, BrowseVolume, ConnectServer, ServerQuestion, ServerAdhocMenu, FavouriteEdit, Recents, RecentsPulley, RecentsFilter, StateReconnecting, StateIdentity, LocationSettings, Covers)
+### Browse (boards: Main, BrowsePulley, BrowseStandalone, BrowseServerMenu, BrowseVolume, ConnectServer, ServerQuestion, ServerAdhocMenu, FavouriteEdit, Recents, RecentsPulley, StateReconnecting, StateIdentity, LocationSettings, Covers)
 
 - `LocationsModel` — sections `favourites`, `device`, `android`, `volumes`, `servers`,
   `nearby` (roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
   `colour`, `count`, `itemId`).
 - `FavouritesModel` (`add`, `save(uri, label, colour)` adds or relabels, `edit`, `remove`,
-  `removeUri(uri)`, `moveTo`, `moveBy`, `get`, `idOf`, `placeOf`), `RecentsModel { filter }`.
+  `removeUri(uri)`, `moveTo`, `moveBy`, `get`, `idOf`, `placeOf`).
+- `RecentsModel` (ORG-2, newest first, no filter; `count`, `enabled`, `loaded`,
+  `reload()`, `clear()`, `remove(itemId)`, signal `failed(kind, message)`; roles:
+  `itemId`, `uri`, `name`, `kind`, `place`, `at`, `dateGroup`). `dateGroup` is the date
+  section (§15.4): `today`, `yesterday`, `last7Days`, `last30Days`, `older`;
+  `components/DateSectionHeader.qml { group }` shows it.
 - `Bridge` singleton: `status` (`absent`, `connecting`, `consentUnknown`, `consentDenied`,
   `ready`, `reconnecting`), `requestConsent()`, `addServer(provider)`,
   `editAccount(locationUri)`, `connectAdHoc(url, secret, options)`, `forgetAdHoc(id)`,
@@ -141,9 +146,13 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   Activity bar (XFR-13): `barMode` (`hidden`, `question`, `running`, `waiting`, `paused`,
   `failed`, `done`), `barTransferId`, `barUnfinished`, `dismissBar()` (swiped away),
   `barSeen()` (the Activity page shows the outcome); `components/transfers/ActivityBar.qml`.
-- `TransfersModel` — groups `active`, `waiting`, `paused`, `history`
-  (roles: `transferId`, `group`, `kind`, `title`, `state`, `waitReason`, `bytesDone`,
-  `bytesTotal`, `rate`, `eta`, `itemsDone`, `itemsTotal`, `itemsFailed`, `direction`).
+- `TransfersModel` — what has not ended in queue order, then what ended, newest first
+  (roles: `transferId`, `group`, `dateGroup`, `kind`, `title`, `state`, `waitReason`,
+  `bytesDone`, `bytesTotal`, `rate`, `eta`, `itemsDone`, `itemsTotal`, `itemsFailed`,
+  `direction`). `group` is what the task does (`active`, `waiting`, `paused`,
+  `history`); `dateGroup` is its section (§15.4): `inProgress` until it ends, then
+  `today`, `yesterday`, `last7Days`, `last30Days` or `older` by when it ended, shown by
+  `components/DateSectionHeader.qml { group }`.
 - `TransferItemsModel { transferId }`.
 - Pages: `pages/TransfersPage.qml`, `pages/TransferDetailsPage.qml { transferId }`,
   `components/TransferNotifications.qml`
