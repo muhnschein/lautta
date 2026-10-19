@@ -509,7 +509,8 @@ bridge).
 - PRV-3: Thumbnail jobs: interactive lane, lowest priority, ≤ 2 in flight per location,
   visible delegates only, canceled on scroll.
 - PRV-4: Viewers: images (zoom, swipe through the folder, EXIF panel), text/code (read-
-  only up to 1 MiB, then a notice), Markdown (pulldown-cmark → Qt rich text subset), audio
+  only up to 1 MiB, then a notice), Markdown (pulldown-cmark → Qt rich text subset,
+  wrapped to the page's width, code blocks and tables included), audio
   and video (QtMultimedia), archives (as locations), PDFs (PRV-12). Office documents,
   databases, packages and other binary files go to *Open with*.
 - PRV-5: *Open with* for local files uses the system handler as Harbour File Browser

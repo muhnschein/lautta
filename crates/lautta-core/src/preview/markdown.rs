@@ -3,7 +3,9 @@
 //!
 //! The output uses only tags Qt's `Text.RichText` understands: `h1`-`h6`,
 //! `p`, `em`, `strong`, `s`, `code`, `pre`, `ul`/`ol`/`li`, `blockquote`, `a`,
-//! `hr`, `br` and a simple `table`. Nothing from the source is trusted:
+//! `hr`, `br` and a simple `table`. Everything wraps to the viewer's width,
+//! code blocks too, whose lines Qt would otherwise never break (`PRE`).
+//! Nothing from the source is trusted:
 //! every text event is escaped, raw HTML (block or inline) is shown as
 //! escaped text, images become their alt text (no resource is ever
 //! requested), and link targets are limited to a few safe schemes.
@@ -12,6 +14,12 @@ use pulldown_cmark::{Alignment, Event, HeadingLevel, Options, Parser, Tag};
 
 /// Schemes a rendered link may carry; other targets are shown as plain text.
 const SAFE_SCHEMES: [&str; 4] = ["http", "https", "mailto", "ftp"];
+
+/// A code block. Qt's rich text never breaks the lines of a plain `<pre>`
+/// (it lays them out as non-breakable), so a long line would run off the
+/// screen however the `Text` wraps (PRV-4). `pre-wrap` keeps the block's
+/// spaces and line breaks and lets long lines wrap.
+const PRE: &str = "<pre style=\"white-space: pre-wrap\">";
 
 /// Escapes text for element content and double-quoted attributes.
 pub fn escape_html(text: &str) -> String {
@@ -93,7 +101,7 @@ impl Renderer {
             Tag::Paragraph => self.out.push_str("<p>"),
             Tag::Heading(level, _, _) => self.out.push_str(&format!("<h{}>", heading_number(level))),
             Tag::BlockQuote => self.out.push_str("<blockquote>"),
-            Tag::CodeBlock(_) => self.out.push_str("<pre>"),
+            Tag::CodeBlock(_) => self.out.push_str(PRE),
             Tag::List(None) => self.out.push_str("<ul>"),
             Tag::List(Some(1)) => self.out.push_str("<ol>"),
             Tag::List(Some(n)) => self.out.push_str(&format!("<ol start=\"{n}\">")),
@@ -253,7 +261,28 @@ mod tests {
         let html = render("```rust\nfn main() { if a < b && c > d {} }\n```\n");
         assert_eq!(
             html,
-            "<pre>fn main() { if a &lt; b &amp;&amp; c &gt; d {} }\n</pre>"
+            "<pre style=\"white-space: pre-wrap\">fn main() { if a &lt; b &amp;&amp; c &gt; d {} }\n</pre>"
+        );
+    }
+
+    #[test]
+    fn code_blocks_wrap_and_keep_their_lines() {
+        let long = "x".repeat(300);
+        for md in [
+            format!("```\n{long}\n  next\n```\n"),
+            format!("    {long}\n      next\n"),
+        ] {
+            let html = render(&md);
+            assert_eq!(html.matches("<pre").count(), 1, "{html}");
+            assert!(
+                html.starts_with("<pre style=\"white-space: pre-wrap\">"),
+                "a code block may wrap: {html}"
+            );
+            assert!(html.contains(&format!("{long}\n  next\n</pre>")), "{html}");
+        }
+        assert!(
+            !render("> ```\n> a\n> ```").contains("<pre>"),
+            "quoted code wraps too"
         );
     }
 
