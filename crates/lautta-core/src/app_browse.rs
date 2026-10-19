@@ -362,12 +362,18 @@ impl Core {
         blocking(move || core.browse_layout.set_order(&section, &items)).await
     }
 
-    /// All rows in Browse order, hidden ones included, and the layout.
+    /// All rows in Browse order, hidden ones included, and the layout. The
+    /// local locations are rescanned first: a volume shows up (LOC-3) even
+    /// when the media watch missed its mount, which inotify can inside the
+    /// sandbox's mount namespace.
     async fn arranged_rows(self: &Arc<Self>) -> (Vec<Row>, Layout) {
         let core = self.clone();
-        let blocking = tokio::task::spawn_blocking(move || core.local_rows())
-            .await
-            .unwrap_or_default();
+        let blocking = tokio::task::spawn_blocking(move || {
+            core.locations.refresh();
+            core.local_rows()
+        })
+        .await
+        .unwrap_or_default();
         let mut rows = blocking.favourites;
         rows.extend(blocking.device);
         rows.extend(blocking.android);

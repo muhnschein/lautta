@@ -857,6 +857,20 @@ impl Core {
             .collect())
     }
 
+    /// Removes what is older than the retention setting from every bin
+    /// (OPS-8). Returns the number of items removed.
+    pub fn purge_trash(&self, now_secs: i64) -> Result<usize> {
+        let retention = self.settings().recently_deleted_retention_days;
+        self.trash
+            .purge_before(now_secs.saturating_sub(i64::from(retention) * SECS_PER_DAY))
+    }
+
+    /// Empties Recently deleted: every item, and what a crash left in the
+    /// bins of the locations (OPS-8). Returns the number of items removed.
+    pub fn empty_trash(&self) -> Result<usize> {
+        self.trash.empty(&self.locations.trash_bins())
+    }
+
     // -------------------------------------------------------- share
 
     /// Which received files Lautta can read and where they live (INT-1).

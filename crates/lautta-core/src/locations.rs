@@ -18,7 +18,7 @@ use crate::error::{Error, ErrorKind, Result};
 use crate::paths::AppPaths;
 use crate::provider::local::{lexical_normalize, new_io_semaphore, LocalProvider};
 use crate::provider::{Provider, ProviderResolver};
-use crate::sys;
+use crate::trash;
 use crate::uri::{LocationId, Uri};
 use crate::volumes::{self, Volume, VolumeEvent, VolumeWatcher};
 use crate::vpath::VPath;
@@ -265,25 +265,24 @@ impl LocationRegistry {
             .collect()
     }
 
-    /// Provider for a local folder: sharing the I/O semaphore, and with
-    /// *Recently deleted* when the folder is on the home filesystem (OPS-8).
-    fn local_provider(&self, root: &Path, trash_possible: bool) -> Arc<dyn Provider> {
+    /// Provider for a local folder, sharing the I/O semaphore. User and
+    /// Android folders keep *Recently deleted* in a bin at their own root
+    /// (OPS-8), so no file system or mount check is needed: in the sandbox
+    /// each of them is a mount of its own, unlike `$HOME` (a tmpfs, §3.3).
+    fn local_provider(&self, root: &Path, keeps_trash: bool) -> Arc<dyn Provider> {
         let mut provider = LocalProvider::new(root.to_path_buf()).with_semaphore(self.inner.io.clone());
-        if trash_possible && self.on_home_filesystem(root) {
+        if keeps_trash {
             provider = provider.with_capability(cap::TRASH);
         }
         Arc::new(provider)
-    }
-
-    fn on_home_filesystem(&self, root: &Path) -> bool {
-        sys::same_device(root, &self.inner.paths.home).unwrap_or(false)
     }
 
     /// Swaps in the new locations for one group, keeping unchanged slots
     /// (same id, name and root) with their provider and status. True when
     /// the list differs.
     fn replace_slots(&self, group: fn(&mut State) -> &mut Vec<Slot>, found: Vec<Location>) -> bool {
-        let trash_possible = !matches!(found.first().map(|l| &l.kind), Some(LocationKind::Volume));
+        // Deletes on removable volumes are permanent (OPS-8).
+        let keeps_trash = !matches!(found.first().map(|l| &l.kind), Some(LocationKind::Volume));
         let old: Vec<Slot> = group(&mut self.state()).clone();
         let same =
             |a: &Location, b: &Location| a.id == b.id && a.name == b.name && a.local_root == b.local_root;
@@ -293,7 +292,7 @@ impl LocationRegistry {
                 if let Some(slot) = old.iter().find(|s| same(&s.location, &loc)) {
                     return Some(slot.clone());
                 }
-                let provider = self.local_provider(loc.local_root.as_deref()?, trash_possible);
+                let provider = self.local_provider(loc.local_root.as_deref()?, keeps_trash);
                 Some(Slot {
                     location: loc,
                     provider,
@@ -488,6 +487,21 @@ impl LocationRegistry {
         }
     }
 
+    /// The bin that deletes in `location` go to (OPS-8): the hidden folder
+    /// at its root, `None` when the location does not keep a trash.
+    pub fn trash_bin(&self, location: &str) -> Option<PathBuf> {
+        self.state()
+            .all()
+            .find(|s| s.location.id == location)
+            .and_then(bin_of_slot)
+    }
+
+    /// The bins of all locations that keep a trash now, whether they hold
+    /// anything or not.
+    pub fn trash_bins(&self) -> Vec<PathBuf> {
+        self.state().all().filter_map(bin_of_slot).collect()
+    }
+
     /// The local path behind `uri`, `None` for remote locations and archives.
     pub fn to_local_path(&self, uri: &Uri) -> Option<PathBuf> {
         local_path_of(&self.get(&uri.location)?, uri)
@@ -515,6 +529,14 @@ impl LocationRegistry {
         let rel = path.strip_prefix(&root).ok()?;
         Some(Uri::new(id, VPath::parse(rel.as_os_str().as_bytes()).ok()?))
     }
+}
+
+fn bin_of_slot(slot: &Slot) -> Option<PathBuf> {
+    let root = slot.location.local_root.as_deref()?;
+    slot.provider
+        .capabilities()
+        .has(cap::TRASH)
+        .then(|| trash::bin_of(root))
 }
 
 /// The absolute path of `uri` inside a local location.
@@ -564,6 +586,7 @@ mod tests {
     use super::*;
     use crate::provider::memory::MemoryProvider;
     use crate::provider::{list_all, Lane};
+    use crate::sys;
     use std::time::Duration;
 
     struct Env {
@@ -760,18 +783,64 @@ mod tests {
     }
 
     #[test]
-    fn trash_is_offered_on_the_home_filesystem_only() {
-        let e = env_with(&["Documents"]);
+    fn user_and_android_folders_keep_a_trash_in_their_own_bin() {
+        let e = env_with(&["Documents", "android_storage/DCIM"]);
         std::fs::create_dir(e.media.join("CARD")).unwrap();
         e.reg.refresh();
         let docs = e.reg.provider("user-documents").unwrap().capabilities();
         assert!(docs.has(cap::TRASH));
         assert!(docs.has(cap::WRITE));
+        assert!(e
+            .reg
+            .provider("android-dcim")
+            .unwrap()
+            .capabilities()
+            .has(cap::TRASH));
         let card = e.reg.provider("vol-CARD").unwrap().capabilities();
         assert!(
             !card.has(cap::TRASH),
             "removable media delete permanently (OPS-8)"
         );
+        assert_eq!(
+            e.reg.trash_bin("user-documents"),
+            Some(e.home.join("Documents/.lautta-trash"))
+        );
+        assert_eq!(e.reg.trash_bin("vol-CARD"), None);
+        assert_eq!(e.reg.trash_bin("nope"), None);
+        e.reg.register(
+            Location::local("arc-1", LocationKind::Archive, "a.zip", e.home.clone()),
+            mem(),
+        );
+        assert_eq!(e.reg.trash_bin("arc-1"), None, "only providers that keep a trash");
+        assert_eq!(
+            e.reg.trash_bins(),
+            [
+                e.home.join("Documents/.lautta-trash"),
+                e.home.join("android_storage/DCIM/.lautta-trash")
+            ]
+        );
+    }
+
+    #[test]
+    fn folders_on_another_device_than_home_keep_a_trash() {
+        // Sailjail: $HOME is a tmpfs and every permitted folder is mounted
+        // on it from the real file system, so no folder is on $HOME's device.
+        let e = env_with(&[]);
+        let Ok(shm) = tempfile::tempdir_in("/dev/shm") else {
+            return;
+        };
+        if sys::same_device(shm.path(), &e.home).unwrap_or(true) {
+            return;
+        }
+        std::fs::create_dir(shm.path().join("Documents")).unwrap();
+        std::os::unix::fs::symlink(shm.path().join("Documents"), e.home.join("Documents")).unwrap();
+        e.reg.refresh();
+        assert!(e
+            .reg
+            .provider("user-documents")
+            .unwrap()
+            .capabilities()
+            .has(cap::TRASH));
     }
 
     #[test]
