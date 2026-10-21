@@ -70,7 +70,27 @@ pub struct WireCapabilities {
     pub max_name_bytes: i64,
 }
 
-/// `(sssa{sv})`: id, provider, display name, info.
+/// The connection state of a location: info key `state` of
+/// `ListLocations` (netvfs SPEC-v2 XB-10, XB-12), with `stateError` (the
+/// XC-21 name) when it is [`FAILED`](location_state::FAILED).
+pub mod location_state {
+    /// The info key of the state.
+    pub const KEY: &str = "state";
+    /// The info key of the error of a failed state.
+    pub const ERROR_KEY: &str = "stateError";
+    /// No connection of the consumer's pool is established or being
+    /// established.
+    pub const DISCONNECTED: &str = "disconnected";
+    /// None is established, at least one is being established.
+    pub const CONNECTING: &str = "connecting";
+    /// At least one is established (connected and authenticated).
+    pub const CONNECTED: &str = "connected";
+    /// As [`DISCONNECTED`], but the last attempt to connect failed.
+    pub const FAILED: &str = "failed";
+}
+
+/// `(sssa{sv})`: id, provider, display name, info (`kind`, `host`, `path`,
+/// `attention`, `state`, …).
 #[derive(Debug, Serialize, Deserialize, Type)]
 pub struct WireLocation {
     pub id: String,
