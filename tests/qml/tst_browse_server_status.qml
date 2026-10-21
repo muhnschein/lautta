@@ -11,6 +11,7 @@ import Lautta 1.0
 ApplicationWindow {
     id: win
 
+
     property bool scenarioRunning: true
     property int waited: 0
     property var browse
@@ -60,7 +61,7 @@ ApplicationWindow {
     }
 
     function findAll(item, pred, out) {
-        if (!item)
+        if (!item || out.indexOf(item) >= 0)
             return out
         if (pred(item))
             out.push(item)
@@ -81,6 +82,14 @@ ApplicationWindow {
             views[i].forceLayout()
         }
         var rows = findAll(win.contentItem, function(x) { return x.serverText !== undefined && x.openMenu !== undefined }, [])
+        // Headless, the page is not shown and nothing in it is visible:
+        // show what holds the rows, so that only what a row hides is.
+        for (var r = 0; r < rows.length; ++r) {
+            for (var p = rows[r].parent; p; p = p.parent) {
+                if (!p.visible)
+                    p.visible = true
+            }
+        }
         var byName = {}
         for (var j = 0; j < rows.length; ++j) {
             var shown = texts(rows[j])
@@ -144,6 +153,7 @@ ApplicationWindow {
         }
         if (looks["none"] !== "none")
             fail("a row without a state shows " + looks["none"])
+        console.log("server rows look: " + JSON.stringify(looks))
     }
 
     Timer {
