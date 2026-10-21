@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `ViewPreviewModel` (doc/QML-API.md): the sample folder in the preview of
-//! the view options page (BRW-4). QML gives the entries and the view
-//! settings; the core's `ListingState` orders and filters them, so the
+//! The sample folder in the preview of the view options page (BRW-4),
+//! behind `App.previewRows` (doc/QML-API.md). QML gives the entries and the
+//! view settings; the core's `ListingState` orders and filters them, so the
 //! preview shows exactly what a real folder would.
 
 use crate::json::from_json;
@@ -10,13 +10,11 @@ use lautta_core::listing::ListingState;
 use lautta_core::mime;
 use lautta_core::sort::SortKey;
 use lautta_core::viewprefs::ViewPrefs;
-use qmetaobject::prelude::*;
-use qmetaobject::{QByteArray, QVariantList};
+use qmetaobject::{QString, QVariant, QVariantList, QVariantMap};
 use serde::Deserialize;
-use std::collections::HashMap;
 
-const ROLE_BASE: i32 = 0x0100;
-const ROLES: [&str; 6] = ["name", "isDir", "size", "modified", "hidden", "category"];
+/// The fields of a row, in the order of `role_value`'s numbers.
+const FIELDS: [&str; 6] = ["name", "isDir", "size", "modified", "hidden", "category"];
 
 /// One sample entry as QML writes it.
 #[derive(Deserialize)]
@@ -56,74 +54,34 @@ fn listing(entries: &[Entry], prefs: &ViewPrefs) -> ListingState {
     state
 }
 
-#[derive(QObject, Default)]
-pub struct ViewPreviewModel {
-    base: qt_base_class!(trait QAbstractListModel),
-
-    /// JSON list of the sample entries (see `parse_entries`).
-    entries: qt_property!(QString; NOTIFY changed WRITE set_entries),
-    sortKey: qt_property!(QString; NOTIFY changed WRITE set_sort_key),
-    descending: qt_property!(bool; NOTIFY changed WRITE set_descending),
-    foldersFirst: qt_property!(bool; NOTIFY changed WRITE set_folders_first),
-    showHidden: qt_property!(bool; NOTIFY changed WRITE set_show_hidden),
-    /// The names in the order shown.
-    names: qt_property!(QVariantList; NOTIFY changed),
-    count: qt_property!(i32; NOTIFY changed),
-    changed: qt_signal!(),
-
-    samples: Vec<Entry>,
-    state: ListingState,
+/// The view settings the preview is asked for; an unknown sort key sorts
+/// by name, as a folder does.
+pub(crate) fn prefs(sort_key: &str, descending: bool, folders_first: bool, show_hidden: bool) -> ViewPrefs {
+    ViewPrefs {
+        sort: SortKey::parse(sort_key).unwrap_or_default(),
+        descending,
+        folders_first,
+        show_hidden,
+        ..ViewPrefs::default()
+    }
 }
 
-impl ViewPreviewModel {
-    fn set_entries(&mut self, value: QString) {
-        self.samples = parse_entries(&value.to_string());
-        self.entries = value;
-        self.update();
+/// The entries of `entries_json` as a folder shows them with `prefs`: one
+/// map of `FIELDS` per shown entry, in order.
+pub(crate) fn rows(entries_json: &str, prefs: &ViewPrefs) -> QVariantList {
+    let mut out = QVariantList::default();
+    for e in listing(&parse_entries(entries_json), prefs).visible_entries() {
+        out.push(QVariant::from(row(e)));
     }
+    out
+}
 
-    fn set_sort_key(&mut self, value: QString) {
-        self.sortKey = value;
-        self.update();
+fn row(e: &Entry) -> QVariantMap {
+    let mut map = QVariantMap::default();
+    for (i, field) in FIELDS.iter().enumerate() {
+        map.insert(QString::from(*field), role_value(e, i));
     }
-
-    fn set_descending(&mut self, value: bool) {
-        self.descending = value;
-        self.update();
-    }
-
-    fn set_folders_first(&mut self, value: bool) {
-        self.foldersFirst = value;
-        self.update();
-    }
-
-    fn set_show_hidden(&mut self, value: bool) {
-        self.showHidden = value;
-        self.update();
-    }
-
-    fn prefs(&self) -> ViewPrefs {
-        ViewPrefs {
-            sort: SortKey::parse(&self.sortKey.to_string()).unwrap_or_default(),
-            descending: self.descending,
-            folders_first: self.foldersFirst,
-            show_hidden: self.showHidden,
-            ..ViewPrefs::default()
-        }
-    }
-
-    fn update(&mut self) {
-        self.begin_reset_model();
-        self.state = listing(&self.samples, &self.prefs());
-        self.end_reset_model();
-        let mut names = QVariantList::default();
-        for e in self.state.visible_entries() {
-            names.push(QVariant::from(QString::from(e.display_name().as_str())));
-        }
-        self.names = names;
-        self.count = self.state.len() as i32;
-        self.changed();
-    }
+    map
 }
 
 fn role_value(e: &Entry, role: usize) -> QVariant {
@@ -135,30 +93,6 @@ fn role_value(e: &Entry, role: usize) -> QVariant {
         4 => e.is_hidden().into(),
         5 => QString::from(mime::category_of(e).icon_name()).into(),
         _ => QVariant::default(),
-    }
-}
-
-impl QAbstractListModel for ViewPreviewModel {
-    fn row_count(&self) -> i32 {
-        self.state.len() as i32
-    }
-
-    fn data(&self, index: QModelIndex, role: i32) -> QVariant {
-        let (Ok(row), Ok(r)) = (usize::try_from(index.row()), usize::try_from(role - ROLE_BASE)) else {
-            return QVariant::default();
-        };
-        self.state
-            .entry_at(row)
-            .map(|e| role_value(e, r))
-            .unwrap_or_default()
-    }
-
-    fn role_names(&self) -> HashMap<i32, QByteArray> {
-        ROLES
-            .iter()
-            .enumerate()
-            .map(|(i, n)| (ROLE_BASE + i as i32, QByteArray::from(*n)))
-            .collect()
     }
 }
 
@@ -237,5 +171,26 @@ mod tests {
         assert!(!role_value(image, 4).to_bool());
         assert_eq!(role_value(image, 5).to_qstring().to_string(), "image");
         assert!(!role_value(image, 6).is_valid());
+    }
+
+    #[test]
+    fn rows_are_maps_of_the_fields_in_order() {
+        let key = |k: &str| QString::from(k);
+        let wanted = prefs("size", true, true, false);
+        assert_eq!(wanted.sort, SortKey::Size);
+        assert!(wanted.descending && wanted.folders_first && !wanted.show_hidden);
+        assert_eq!(prefs("nonsense", false, false, true).sort, SortKey::Name);
+        assert_eq!(rows(SAMPLES, &wanted).len(), 4, "no hidden file");
+        assert_eq!(rows(SAMPLES, &prefs("name", false, true, true)).len(), 5);
+        assert_eq!(rows("not json", &wanted).len(), 0);
+        let state = listing(&parse_entries(SAMPLES), &wanted);
+        let image = row(state.entry_at(2).unwrap());
+        assert_eq!(image.len(), FIELDS.len());
+        let field = |k: &str| image.value(key(k), QVariant::default());
+        assert_eq!(field("name").to_qstring().to_string(), "photo.jpg");
+        assert!(!field("isDir").to_bool() && !field("hidden").to_bool());
+        assert_eq!(field("size"), QVariant::from(2_400_000.0));
+        assert_eq!(field("modified"), QVariant::from(3000.0));
+        assert_eq!(field("category").to_qstring().to_string(), "image");
     }
 }

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The `App` singleton (doc/QML-API.md): readiness, settings, clipboard,
-//! undo, URI helpers and opening files outside the app.
+//! undo, URI helpers, opening files outside the app and the sample folder of
+//! the view options preview.
 
+use crate::directory::preview;
 use crate::json::{from_json, json_value_to_qvariant, to_json};
 use crate::runtime::{core, handle, spawn_then};
 use lautta_core::clipboard::{Clipboard, ClipboardMode};
@@ -11,7 +13,7 @@ use lautta_core::trash::now_secs;
 use lautta_core::undo::UndoAction;
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
-use qmetaobject::{QPointer, QSingletonInit};
+use qmetaobject::{QPointer, QSingletonInit, QVariantList};
 use std::time::Duration;
 
 /// How long the undo banner stays (OPS-9).
@@ -36,6 +38,18 @@ pub struct App {
     loadSettings: qt_method!(fn(&mut self, json: QString)),
     setting: qt_method!(fn(&self, key: QString) -> QVariant),
     setSetting: qt_method!(fn(&mut self, key: QString, value_json: QString) -> bool),
+    /// The view options preview (BRW-4): the sample entries as a folder
+    /// shows them with these view settings, one map per shown entry.
+    previewRows: qt_method!(
+        fn(
+            &self,
+            entries: QString,
+            sort_key: QString,
+            descending: bool,
+            folders_first: bool,
+            show_hidden: bool,
+        ) -> QVariantList
+    ),
 
     childUri: qt_method!(fn(&self, parent: QString, name: QString) -> QString),
     parentUri: qt_method!(fn(&self, uri: QString) -> QString),
@@ -156,6 +170,18 @@ impl App {
         core.apply_settings(settings);
         self.publish_settings();
         true
+    }
+
+    fn previewRows(
+        &self,
+        entries: QString,
+        sort_key: QString,
+        descending: bool,
+        folders_first: bool,
+        show_hidden: bool,
+    ) -> QVariantList {
+        let prefs = preview::prefs(&sort_key.to_string(), descending, folders_first, show_hidden);
+        preview::rows(&entries.to_string(), &prefs)
     }
 
     fn childUri(&self, parent: QString, name: QString) -> QString {

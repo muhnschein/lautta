@@ -3,7 +3,7 @@
 // the Browse page preview (BRW-12): sample folders and files, a hidden file
 // and a photo, drawn as DirectoryView draws a folder. It shows the global
 // view settings and follows every change at once; the order and the hidden
-// file come from the core (ViewPreviewModel). Takes no input.
+// file come from the core (App.previewRows). Takes no input.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -30,7 +30,6 @@ Item {
     readonly property int columns: tileWidth > 0 ? Math.max(gridColumns, Math.round(screenWidth / tileWidth)) : gridColumns
     readonly property real cellWidth: screenWidth / columns
     readonly property real cellHeight: cellWidth + (gridCaptions ? nameMetrics.height + sizeMetrics.height + Theme.paddingSmall : 0)
-    readonly property alias count: samples.count
     // Modified times count back from now, so the rows read like a real
     // folder's. File names keep their extensions out of the translations.
     readonly property var sampleEntries: {
@@ -54,6 +53,11 @@ Item {
             { "name": "." + qsTrId("lautta-view-preview-hidden"), "size": 12000, "modified": now - 3 * day }
         ]
     }
+    // The samples as a folder shows them: { name, isDir, size, modified,
+    // hidden, category } each.
+    readonly property var rows: App.previewRows(JSON.stringify(sampleEntries), sortKey, descending,
+                                                foldersFirst, showHidden)
+    readonly property int count: rows.length
 
     function setting(key) {
         var dependency = App.settingsJson
@@ -62,26 +66,16 @@ Item {
 
     // The rows as drawn, in order (tests): { name, isDir, size, photo }.
     function shown() {
-        var rows = gridMode ? tiles : listRows
+        var drawn = gridMode ? tiles : listRows
         var out = []
-        for (var i = 0; i < rows.count; ++i) {
-            var row = rows.itemAt(i)
+        for (var i = 0; i < drawn.count; ++i) {
+            var row = drawn.itemAt(i)
             out.push({ "name": row.name, "isDir": row.isDir, "size": row.size, "photo": row.photo })
         }
         return out
     }
 
     height: frame.height
-
-    ViewPreviewModel {
-        id: samples
-
-        entries: JSON.stringify(preview.sampleEntries)
-        sortKey: preview.sortKey
-        descending: preview.descending
-        foldersFirst: preview.foldersFirst
-        showHidden: preview.showHidden
-    }
 
     FontMetrics {
         id: nameMetrics
@@ -128,9 +122,9 @@ Item {
         id: listRow
 
         Item {
-            readonly property string name: model.name
-            readonly property bool isDir: model.isDir
-            readonly property real size: model.size
+            readonly property string name: modelData.name
+            readonly property bool isDir: modelData.isDir
+            readonly property real size: modelData.size
             readonly property bool photo: rowIcon.photo
 
             width: folder.width
@@ -139,7 +133,7 @@ Item {
             Item {
                 id: rowIcon
 
-                readonly property bool photo: preview.thumbnails && model.category === "image"
+                readonly property bool photo: preview.thumbnails && modelData.category === "image"
 
                 x: Theme.horizontalPageMargin
                 anchors.verticalCenter: parent.verticalCenter
@@ -149,8 +143,8 @@ Item {
                 FileIcon {
                     visible: !rowIcon.photo
                     size: parent.width
-                    category: model.category
-                    isDir: model.isDir
+                    category: modelData.category
+                    isDir: modelData.isDir
                 }
                 Loader {
                     anchors.fill: parent
@@ -170,13 +164,13 @@ Item {
 
                 Label {
                     width: parent.width
-                    text: model.name
+                    text: modelData.name
                     truncationMode: TruncationMode.Fade
                     font.pixelSize: Theme.fontSizeMedium
                 }
                 Label {
                     width: parent.width
-                    text: DirFormat.subtitle(model.isDir, false, model.size, model.modified)
+                    text: DirFormat.subtitle(modelData.isDir, false, modelData.size, modelData.modified)
                     truncationMode: TruncationMode.Fade
                     font.pixelSize: Theme.fontSizeExtraSmall
                     color: Theme.secondaryColor
@@ -193,10 +187,10 @@ Item {
         Item {
             id: cell
 
-            readonly property string name: model.name
-            readonly property bool isDir: model.isDir
-            readonly property real size: model.size
-            readonly property bool photo: preview.thumbnails && model.category === "image"
+            readonly property string name: modelData.name
+            readonly property bool isDir: modelData.isDir
+            readonly property real size: modelData.size
+            readonly property bool photo: preview.thumbnails && modelData.category === "image"
             readonly property real gap: preview.gridCaptions ? Theme.paddingSmall : Math.round(Theme.paddingSmall / 4)
 
             width: preview.cellWidth
@@ -219,8 +213,8 @@ Item {
                     anchors.fill: parent
                     visible: !cell.photo
                     size: tile.width
-                    category: model.category
-                    isDir: model.isDir
+                    category: modelData.category
+                    isDir: modelData.isDir
                 }
                 Loader {
                     anchors.fill: parent
@@ -236,7 +230,7 @@ Item {
                         margins: Theme.paddingSmall
                     }
                     horizontalAlignment: Text.AlignHCenter
-                    text: model.name
+                    text: modelData.name
                     truncationMode: TruncationMode.Elide
                     font.pixelSize: Theme.fontSizeExtraSmall
                 }
@@ -254,14 +248,14 @@ Item {
                 Label {
                     width: parent.width
                     horizontalAlignment: Text.AlignHCenter
-                    text: model.name
+                    text: modelData.name
                     truncationMode: TruncationMode.Elide
                     font.pixelSize: Theme.fontSizeExtraSmall
                 }
                 Label {
                     width: parent.width
                     horizontalAlignment: Text.AlignHCenter
-                    text: !model.isDir && model.size >= 0 ? Format.formatFileSize(model.size) : ""
+                    text: !modelData.isDir && modelData.size >= 0 ? Format.formatFileSize(modelData.size) : ""
                     truncationMode: TruncationMode.Elide
                     font.pixelSize: Theme.fontSizeTiny
                     color: Theme.secondaryColor
@@ -303,7 +297,7 @@ Item {
                 Repeater {
                     id: listRows
 
-                    model: preview.gridMode ? null : samples
+                    model: preview.gridMode ? [] : preview.rows
                     delegate: listRow
                 }
             }
@@ -314,7 +308,7 @@ Item {
                 Repeater {
                     id: tiles
 
-                    model: preview.gridMode ? samples : null
+                    model: preview.gridMode ? preview.rows : []
                     delegate: gridTile
                 }
             }

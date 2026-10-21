@@ -61,6 +61,12 @@ Methods:
 - `undo()`; signal `undone(ok)`.
 - `categoryOf(nameOrUri) → string` (FileCategory icon name), `viewerFor(uri, mime) → string`
   (`image`, `text`, `markdown`, `audio`, `video`, `archive`, `pdf`, `external`).
+- `previewRows(entries, sortKey, descending, foldersFirst, showHidden) → list` — the
+  sample folder of the view options preview (BRW-4): `entries` is JSON
+  `[{ name, dir, size, modified }]` (bytes, ms since the epoch), ordered and filtered by
+  the core as a real folder with these view settings; one map per shown entry with
+  `name`, `isDir`, `size` (bytes, -1 for a folder), `modified` (ms, -1 if unknown),
+  `hidden`, `category`. Bad JSON gives an empty list.
 - `open(uri)`: decides by viewer and pushes the viewer page (through
   `components/Open.js`); `external` → `openExternally(uri)`.
 - `openExternally(uri)`: local → system handler; remote → copy to
@@ -117,11 +123,6 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   settings without storing them, `App.setSetting` does that; a `viewMode` replaces a
   suggested grid), `indexOf(uri)`. An open model follows every change of the global view
   settings at once (BRW-4).
-- `ViewPreviewModel { entries, sortKey, descending, foldersFirst, showHidden }` — the
-  sample folder of the view options preview: `entries` is JSON
-  `[{ name, dir, size, modified }]` (bytes, ms since the epoch), ordered and filtered by
-  the core as a real folder; roles `name`, `isDir`, `size`, `modified`, `hidden`,
-  `category`; `names` (list in display order), `count`.
 - `PathModel { uri }` — ancestors (roles `uri`, `name`), `complete(prefix) → list`.
 - Pages: `pages/DirectoryPage.qml { uri }`, `dialogs/FolderPickerDialog.qml { title,
   acceptText, startUri }` (property `selectedUri` after accept),
