@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! browse area facades (doc/QML-API.md): the Browse page's locations, the
-//! `Bridge` singleton, favourites, recents and per-location settings.
+//! `Bridge` singleton, favourites, recents and the Browse page's layout.
 //! Logic lives in `lautta_core::app_browse`; this layer maps it to QML.
 
 mod bridge;
@@ -8,7 +8,6 @@ mod favourites;
 mod folderinfo;
 mod layout;
 mod locations;
-mod prefs;
 mod recents;
 
 use cpp::cpp;
@@ -142,12 +141,6 @@ pub fn register() {
         1,
         0,
         &crate::cstr("BrowseLayoutModel"),
-    );
-    qmetaobject::qml_register_type::<prefs::LocationPrefsModel>(
-        &uri,
-        1,
-        0,
-        &crate::cstr("LocationPrefsModel"),
     );
 }
 

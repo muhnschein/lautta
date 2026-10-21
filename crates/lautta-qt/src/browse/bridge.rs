@@ -96,7 +96,6 @@ pub struct Bridge {
     connectAdHoc: qt_method!(fn(&mut self, url: QString, secret: QString, options_json: QString)),
     forgetAdHoc: qt_method!(fn(&mut self, id: QString)),
     removeRecent: qt_method!(fn(&mut self, id: QString)),
-    disconnect: qt_method!(fn(&mut self, id: QString)),
     setDiscover: qt_method!(fn(&mut self, on: bool)),
     setForeground: qt_method!(fn(&mut self, foreground: bool)),
     poke: qt_method!(fn(&mut self)),
@@ -286,16 +285,6 @@ impl Bridge {
             tokio::task::spawn_blocking(move || core.remove_adhoc_recent(&id))
                 .await
                 .map_err(|e| lautta_core::Error::new(lautta_core::ErrorKind::Internal, e.to_string()))?
-        });
-    }
-
-    fn disconnect(&mut self, id: QString) {
-        let id = location_id(&id.to_string());
-        self.call(name_of(&id), |core| async move {
-            match &core.bridge {
-                Some(b) => b.disconnect(&id).await,
-                None => Ok(()),
-            }
         });
     }
 

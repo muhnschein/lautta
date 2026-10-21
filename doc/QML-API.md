@@ -71,33 +71,42 @@ Methods:
 
 Each area owns its types and pages. Names are fixed here so areas can use each other.
 
-### Browse (boards: Main, BrowsePulley, BrowseStandalone, BrowseServerMenu, BrowseVolume, ConnectServer, ServerQuestion, ServerAdhocMenu, FavouriteEdit, Recents, RecentsPulley, RecentsFilter, StateReconnecting, StateIdentity, LocationSettings, Covers)
+### Browse (boards: Main, BrowsePulley, BrowseStandalone, BrowseServerMenu, BrowseVolume, ConnectServer, ServerQuestion, ServerAdhocMenu, FavouriteEdit, Recents, RecentsPulley, StateReconnecting, StateIdentity, Covers)
 
 - `LocationsModel` — sections `favourites`, `device`, `android`, `volumes`, `servers`,
   `nearby` (roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
   `colour`, `count`, `itemId`, `place`, `provider`, `host`, `free`, `total`, `fs`,
-  `connection`, `connectionError`). `connection` is a server's connection state (NVB-4):
-  `connected`, `connecting` (also while the bridge reconnects, NVB-12), `disconnected`
-  (also recent ad-hoc servers), `failed`, or empty when the bridge reports none;
-  `connectionError` is the netvfs error name of a `failed` one (`AuthFailed`, `Timeout`,
-  …). `components/browse/ServerStatus.js` turns them into the row's line and dot.
-  `refresh()` rescans the device folders and volumes first (LOC-3); the model also
+  `connection`, `connectionError`); kinds `recents` and `deleted` are the app's own rows of
+  `device` (`BrowseText.rowName` names them). `connection` is a server's connection state
+  (NVB-4): `connected`, `connecting` (also while the bridge reconnects, NVB-12),
+  `disconnected` (also recent ad-hoc servers), `failed`, or empty when the bridge reports
+  none; `connectionError` is the netvfs error name of a `failed` one (`AuthFailed`,
+  `Timeout`, …). `components/browse/ServerStatus.js` turns them into the row's line and
+  dot. `refresh()` rescans the device folders and volumes first (LOC-3); the model also
   follows location changes by itself, and a changed row changes in place.
 - `FavouritesModel` (`add`, `save(uri, label, colour)` adds or relabels, `edit`, `remove`,
-  `removeUri(uri)`, `moveTo`, `moveBy`, `get`, `idOf`, `placeOf`), `RecentsModel { filter }`.
+  `removeUri(uri)`, `moveTo`, `get`, `idOf`, `placeOf`).
+- `RecentsModel` (ORG-2, newest first, no filter; `count`, `enabled`, `loaded`,
+  `reload()`, `clear()`, `remove(itemId)`, signal `failed(kind, message)`; roles:
+  `itemId`, `uri`, `name`, `kind`, `place`, `at`, `dateGroup`). `dateGroup` is the date
+  section (§15.4): `today`, `yesterday`, `last7Days`, `last30Days`, `older`;
+  `components/DateSectionHeader.qml { group }` shows it.
 - `Bridge` singleton: `status` (`absent`, `connecting`, `consentUnknown`, `consentDenied`,
   `ready`, `reconnecting`), `requestConsent()`, `addServer(provider)`,
   `editAccount(locationUri)`, `connectAdHoc(url, secret, options)`, `forgetAdHoc(id)`,
-  `disconnect(id)`, signal `question(id, kind, details)`, `answer(id, answer)`.
+  signal `question(id, kind, details)`, `answer(id, answer)`.
 - Pages: `pages/BrowsePage.qml` (initial page), `pages/RecentsPage.qml`,
   `dialogs/ConnectServerDialog.qml { url }`,
   `dialogs/ServerQuestionDialog.qml { questionId, kind, details }`,
   `dialogs/FavouriteDialog.qml { uri }` (edits the folder's favourite when it is one),
-  `pages/LocationSettingsPage.qml { locationId }`, `cover/CoverPage.qml`.
+  `cover/CoverPage.qml`.
 - Browse page settings (BRW-12): `LocationsModel.hide(section, kind, itemId)`;
-  `BrowseLayoutModel` (roles `section`, `kind`, `item`, `name`, `hidden`, `index`,
-  `movable`; `reload()`, `setHidden(section, item, hidden)`, `moveTo(section, item, index)`,
-  `restoreDefaults()`, `sectionAt(row)`, `placeAt(row)`, `itemAt(row)`); `pages/BrowseSettingsPage.qml`.
+  `BrowseLayoutModel` (roles `section`, `kind`, `item`, `name`, `hidden`, `place` (the
+  place in the section; no role is called `index`, which would hide the delegate's
+  `index`), `movable`; `reload()`, `setHidden(section, item, hidden)`,
+  `moveTo(section, item, index)`, `restoreDefaults()`, `sectionAt(row)`, `placeAt(row)`,
+  `itemAt(row)`; changes arrive as row changes, moves, insertions and removals, not a
+  reset); `pages/BrowseSettingsPage.qml`.
 
 ### Directory (boards: Directory, DirectoryPulley, DirectoryContext, DirectorySelect, DirectorySelectPulley, DirectoryGrid, DirectoryLandscape, PathMenu, DirectoryRemorse, ImageDeleteRemote, ViewOptions, NewItem, Rename, FolderPicker, FolderPickerPulley, StateEmpty, StateNoAccess, StateOffline, StateError, StateLarge)
 
@@ -159,9 +168,13 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   Activity bar (XFR-13): `barMode` (`hidden`, `question`, `running`, `waiting`, `paused`,
   `failed`, `done`), `barTransferId`, `barUnfinished`, `dismissBar()` (swiped away),
   `barSeen()` (the Activity page shows the outcome); `components/transfers/ActivityBar.qml`.
-- `TransfersModel` — groups `active`, `waiting`, `paused`, `history`
-  (roles: `transferId`, `group`, `kind`, `title`, `state`, `waitReason`, `bytesDone`,
-  `bytesTotal`, `rate`, `eta`, `itemsDone`, `itemsTotal`, `itemsFailed`, `direction`).
+- `TransfersModel` — what has not ended in queue order, then what ended, newest first
+  (roles: `transferId`, `group`, `dateGroup`, `kind`, `title`, `state`, `waitReason`,
+  `bytesDone`, `bytesTotal`, `rate`, `eta`, `itemsDone`, `itemsTotal`, `itemsFailed`,
+  `direction`). `group` is what the task does (`active`, `waiting`, `paused`,
+  `history`); `dateGroup` is its section (§15.4): `inProgress` until it ends, then
+  `today`, `yesterday`, `last7Days`, `last30Days` or `older` by when it ended, shown by
+  `components/DateSectionHeader.qml { group }`.
 - `TransferItemsModel { transferId }`.
 - Pages: `pages/TransfersPage.qml`, `pages/TransferDetailsPage.qml { transferId }`,
   `components/TransferNotifications.qml`

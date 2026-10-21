@@ -296,11 +296,6 @@ impl BridgeClient {
     pub async fn forget_adhoc(&self, loc: &str) -> Result<()> {
         rpc(self.files_link()?.proxy().forget_ad_hoc(bridge_id(loc)).await)
     }
-
-    /// Closes the connections of a location in the bridge.
-    pub async fn disconnect(&self, loc: &str) -> Result<()> {
-        rpc(self.files_link()?.proxy().disconnect(bridge_id(loc)).await)
-    }
 }
 
 /// Why a call cannot be made in `status` (SPEC §20 "bridge gone").

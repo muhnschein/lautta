@@ -15,7 +15,6 @@ QtObject {
     property var favourites: FavouritesModel { }
     property var locations: LocationsModel { }
     property var recents: RecentsModel { }
-    property var prefs: LocationPrefsModel { }
     property var folder: FolderInfo { }
 
     Component.onCompleted: {
@@ -37,7 +36,7 @@ QtObject {
         check(favourites.placeOf("lautta://user-documents/") === "Documents", "place of a root: " + favourites.placeOf("lautta://user-documents/"))
         check(favourites.placeOf("lautta://user-documents/Uni/Thesis") === "Documents › Uni › Thesis", "place of a folder: " + favourites.placeOf("lautta://user-documents/Uni/Thesis"))
         check(favourites.placeOf("nonsense") === "", "place of nonsense")
-        favourites.moveBy(7, 1)
+        favourites.moveTo(7, 1)
 
         check(locations.count === 0, "locations start empty")
         check(locations.sectionCount("servers") === 0, "no servers section")
@@ -45,13 +44,7 @@ QtObject {
         locations.refresh()
 
         check(recents.count === 0 && !recents.enabled && !recents.loaded, "recents start empty")
-        recents.kindFilter = "previewed"
-        recents.text = "notes"
-        check(recents.kindFilter === "previewed" && recents.text === "notes", "recents filter is kept")
-
-        check(prefs.locationName === "" && prefs.bulkLanes === 0, "prefs start empty")
-        prefs.locationId = "user-documents"
-        check(prefs.locationId === "user-documents", "location id is set")
+        check(recents.kindFilter === undefined && recents.text === undefined, "recents have no filter (ORG-2)")
 
         folder.uri = "lautta://user-documents/"
         check(folder.uri === "lautta://user-documents/", "folder uri is set")

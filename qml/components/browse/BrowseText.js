@@ -28,6 +28,20 @@ function sectionTitle(section) {
     }
 }
 
+// The name of a Browse row: the app's own rows have none of their own.
+function rowName(kind, name) {
+    switch (kind) {
+    case "recents":
+        //% "Recents"
+        return qsTrId("lautta-browse-recents")
+    case "deleted":
+        //% "Recently deleted"
+        return qsTrId("lautta-browse-recently-deleted")
+    default:
+        return name
+    }
+}
+
 // "58.2 GB free of 128 GB · exFAT" (LOC-3); empty when the space is unknown.
 function volumeLine(free, total, fs) {
     if (free < 0 || total < 0)
@@ -67,40 +81,6 @@ function recentKindLine(kind, place) {
         break
     }
     return place.length > 0 ? what + " · " + place : what
-}
-
-function recentDayTitle(day) {
-    switch (day) {
-    case "today":
-        //% "Today"
-        return qsTrId("lautta-recents-today")
-    case "yesterday":
-        //% "Yesterday"
-        return qsTrId("lautta-recents-yesterday")
-    case "week":
-        //% "Earlier this week"
-        return qsTrId("lautta-recents-week")
-    default:
-        //% "Earlier"
-        return qsTrId("lautta-recents-earlier")
-    }
-}
-
-function recentFilterTitle(kind) {
-    switch (kind) {
-    case "opened":
-        //% "Opened"
-        return qsTrId("lautta-recents-opened")
-    case "previewed":
-        //% "Previewed"
-        return qsTrId("lautta-recents-previewed")
-    case "transferred":
-        //% "Transferred"
-        return qsTrId("lautta-recents-transferred")
-    default:
-        //% "Everything"
-        return qsTrId("lautta-recents-everything")
-    }
 }
 
 // Colours offered for favourites.

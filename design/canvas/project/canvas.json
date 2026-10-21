@@ -250,14 +250,6 @@
       "x": 2400,
       "y": 4860
     },
-    "LocationSettings.dc.html": {
-      "h": 1000,
-      "is_interactive": true,
-      "title": "Location settings",
-      "w": 400,
-      "x": 480,
-      "y": 10900
-    },
     "Main.dc.html": {
       "h": 1640,
       "is_interactive": true,
@@ -337,14 +329,6 @@
       "w": 400,
       "x": 2400,
       "y": 0
-    },
-    "RecentsFilter.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Recents \u00b7 filter",
-      "w": 400,
-      "x": 1440,
-      "y": 14440
     },
     "RecentsPulley.dc.html": {
       "h": 860,
@@ -691,12 +675,10 @@
     "Search.dc.html",
     "SearchFilters.dc.html",
     "Settings.dc.html",
-    "LocationSettings.dc.html",
     "About.dc.html",
     "DirectoryLandscape.dc.html",
     "DirectorySelectPulley.dc.html",
     "RecentsPulley.dc.html",
-    "RecentsFilter.dc.html",
     "RecentlyDeletedEmpty.dc.html",
     "FolderPickerPulley.dc.html",
     "TransferDetailsPulley.dc.html",
