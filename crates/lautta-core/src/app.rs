@@ -10,7 +10,7 @@ use crate::db::Db;
 use crate::dircache::DirCache;
 use crate::entry::Entry;
 use crate::error::{Error, ErrorKind, Result};
-use crate::locations::{Location, LocationKind, LocationRegistry, LocationStatus};
+use crate::locations::{ConnectionState, Location, LocationKind, LocationRegistry, LocationStatus};
 use crate::ops::plan::{PlanOptions, Planner};
 use crate::ops::{OperationKind, Plan};
 use crate::org::favourites::Favourites;
@@ -502,7 +502,8 @@ fn spawn_bridge_sync(core: &Arc<Core>, client: BridgeClient) {
 }
 
 /// Registry entries for the bridge's locations: hidden unless the bridge
-/// is usable (UI-8), shown as connecting while it reconnects (NVB-12).
+/// is usable (UI-8), shown as connecting while it reconnects (NVB-12),
+/// otherwise with the connection state the bridge reports (NVB-4).
 fn remote_entries(
     client: &BridgeClient,
     remote: &[RemoteLocation],
@@ -522,6 +523,11 @@ fn remote_entries(
                 RemoteKind::AdHoc => LocationKind::AdHoc,
             };
             let mut location = Location::remote(r.id.clone(), kind, r.name.clone(), r.url.clone());
+            // The states of the last list are stale while the bridge is away.
+            location.connection = match status {
+                BridgeStatus::Reconnecting => ConnectionState::Connecting,
+                _ => r.connection.clone(),
+            };
             let (status, attention) = match (status, r.attention) {
                 (BridgeStatus::Reconnecting, _) => (LocationStatus::Connecting, None),
                 (_, Attention::AuthFailed) => {

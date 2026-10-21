@@ -11,6 +11,7 @@ import "../components/browse"
 import "../components/transfers"
 import "../components/ErrorText.js" as ErrorText
 import "../components/browse/BrowseText.js" as BrowseText
+import "../components/browse/ServerStatus.js" as ServerStatus
 
 Page {
     id: page
@@ -177,15 +178,10 @@ Page {
                     return ""
                 }
             }
-            readonly property string serverText: {
-                if (kind === "adhocRecent")
-                    return BrowseText.recentLine(model.provider)
-                if (model.status === "attention")
-                    return BrowseText.attentionText(model.attention) + (model.provider.length > 0 ? " · " + model.provider : "")
-                if (model.status === "connecting")
-                    return BrowseText.reconnectingLine(model.provider)
-                return BrowseText.connectedLine(model.provider, model.host)
-            }
+            // Only how the connection stands, no protocol or host (NVB-4).
+            readonly property string serverText: ServerStatus.text(model.status, model.attention,
+                                                                   model.connection, model.connectionError)
+            readonly property string serverIndicator: ServerStatus.indicator(model.status, model.connection)
             readonly property bool hasMenu: kind === "favourite" || kind === "folder" || kind === "volume"
                                             || kind === "account" || kind === "adhoc" || kind === "adhocRecent"
 
@@ -238,22 +234,26 @@ Page {
                     truncationMode: TruncationMode.Fade
                 }
                 Row {
-                    visible: row.isServer
+                    visible: row.isServer && row.serverText.length > 0
                     width: parent.width
                     spacing: Theme.paddingMedium
 
+                    // Connected: filled; failed: in the error colour; not
+                    // connected: a ring.
                     Rectangle {
-                        visible: model.status === "ready" || row.kind === "adhocRecent"
+                        visible: row.serverIndicator === "connected" || row.serverIndicator === "failed"
+                                 || row.serverIndicator === "disconnected"
                         anchors.verticalCenter: parent.verticalCenter
                         width: Theme.paddingMedium
                         height: width
                         radius: width / 2
-                        color: row.kind === "adhocRecent" ? "transparent" : Theme.highlightColor
-                        border.width: row.kind === "adhocRecent" ? 1 : 0
+                        color: row.serverIndicator === "connected" ? Theme.highlightColor
+                               : (row.serverIndicator === "failed" ? Theme.errorColor : "transparent")
+                        border.width: row.serverIndicator === "disconnected" ? 1 : 0
                         border.color: Theme.secondaryColor
                     }
                     HighlightImage {
-                        visible: model.status === "attention"
+                        visible: row.serverIndicator === "warning"
                         anchors.verticalCenter: parent.verticalCenter
                         source: "image://theme/icon-s-warning"
                         width: Theme.iconSizeExtraSmall
@@ -262,7 +262,7 @@ Page {
                         highlighted: row.highlighted
                     }
                     BusyIndicator {
-                        visible: model.status === "connecting"
+                        visible: row.serverIndicator === "busy"
                         running: visible
                         anchors.verticalCenter: parent.verticalCenter
                         size: BusyIndicatorSize.ExtraSmall

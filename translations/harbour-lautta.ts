@@ -1576,18 +1576,6 @@
         <source>Connected</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-browse-server-reconnecting">
-        <source>Reconnecting…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-browse-server-recent">
-        <source>Recent</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-browse-server-not-connected">
-        <source>not connected</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-recents-previewed">
         <source>Previewed</source>
         <translation type="unfinished"></translation>
@@ -2706,6 +2694,18 @@
     </message>
     <message id="lautta-dir-opts-preview">
         <source>Preview</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-server-failed">
+        <source>Couldn&apos;t connect</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-server-connecting">
+        <source>Connecting…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-server-disconnected">
+        <source>Not connected</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

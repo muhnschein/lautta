@@ -89,6 +89,50 @@ pub enum LocationStatus {
     NeedsAttention,
 }
 
+/// How the connection to a network location stands, as netvfs reports it
+/// (NVB-4; netvfs XB-10, XB-12). Kept apart from [`LocationStatus`]: a
+/// server that is not connected (never used, closed when idle) is still
+/// browsable, and opening it connects.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum ConnectionState {
+    /// Not a network location, or a bridge that does not tell (an older
+    /// netvfs, a state this app does not know): nothing is shown.
+    #[default]
+    Unknown,
+    /// No connection is established or being established.
+    Disconnected,
+    /// One is being established; also while the bridge itself reconnects
+    /// (NVB-12).
+    Connecting,
+    /// At least one is established.
+    Connected,
+    /// As disconnected, but the last attempt to connect failed: the
+    /// netvfs error name (XC-21, `""` when the bridge gave none).
+    Failed(String),
+}
+
+impl ConnectionState {
+    /// The engineering name the UI gets: `disconnected`, `connecting`,
+    /// `connected`, `failed`, or `""` when unknown.
+    pub fn name(&self) -> &'static str {
+        match self {
+            ConnectionState::Unknown => "",
+            ConnectionState::Disconnected => "disconnected",
+            ConnectionState::Connecting => "connecting",
+            ConnectionState::Connected => "connected",
+            ConnectionState::Failed(_) => "failed",
+        }
+    }
+
+    /// The error name of a failed state, `""` otherwise.
+    pub fn error(&self) -> &str {
+        match self {
+            ConnectionState::Failed(error) => error,
+            _ => "",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Location {
     pub id: LocationId,
@@ -103,6 +147,8 @@ pub struct Location {
     /// Why the location needs the user (for example "Sign in again").
     pub attention: Option<String>,
     pub status: LocationStatus,
+    /// The bridge's connection state of a network location (NVB-4).
+    pub connection: ConnectionState,
 }
 
 impl Location {
@@ -120,6 +166,7 @@ impl Location {
             url: None,
             attention: None,
             status: LocationStatus::Ready,
+            connection: ConnectionState::Unknown,
         }
     }
 
@@ -137,6 +184,7 @@ impl Location {
             url,
             attention: None,
             status: LocationStatus::Ready,
+            connection: ConnectionState::Unknown,
         }
     }
 
@@ -955,6 +1003,32 @@ mod tests {
         assert!(!e.reg.set_status("missing", LocationStatus::Offline, None));
         assert!(e.reg.set_status("nv-1", LocationStatus::Ready, None));
         assert_eq!(e.reg.get("nv-1").unwrap().attention, None);
+    }
+
+    #[test]
+    fn connection_states_have_names_and_errors() {
+        let states = [
+            ConnectionState::Unknown,
+            ConnectionState::Disconnected,
+            ConnectionState::Connecting,
+            ConnectionState::Connected,
+            ConnectionState::Failed("Timeout".into()),
+        ];
+        let names: Vec<(&str, &str)> = states.iter().map(|c| (c.name(), c.error())).collect();
+        assert_eq!(
+            names,
+            [
+                ("", ""),
+                ("disconnected", ""),
+                ("connecting", ""),
+                ("connected", ""),
+                ("failed", "Timeout")
+            ]
+        );
+        assert_eq!(
+            Location::remote("nv-1", LocationKind::AdHoc, "x", None).connection,
+            ConnectionState::Unknown
+        );
     }
 
     #[test]

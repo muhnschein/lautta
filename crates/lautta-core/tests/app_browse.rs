@@ -365,6 +365,47 @@ async fn servers_follow_the_bridge() {
     assert_eq!(servers[0].uri, "lautta://nv-account:1/");
 }
 
+/// What a server row says about its connection (§15.2, NVB-4).
+fn connection_of(rows: &[Row]) -> (&'static str, String) {
+    let server = of(rows, "servers")
+        .into_iter()
+        .find(|r| r.kind == "account")
+        .unwrap();
+    (server.connection, server.connection_error.clone())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn server_rows_show_the_connection_state() {
+    let (fake, e) = ready_env().await;
+    let state = |s: &'static str, error: &str| (s, error.to_owned());
+    assert_eq!(
+        connection_of(&e.core.browse_rows().await),
+        state("disconnected", "")
+    );
+    fake.set_state("account:1", "failed", Some("AuthFailed")).await;
+    eventually("failed", || {
+        e.core
+            .location("nv-account:1")
+            .is_some_and(|l| l.connection.name() == "failed")
+    })
+    .await;
+    let rows = e.core.browse_rows().await;
+    assert_eq!(connection_of(&rows), state("failed", "AuthFailed"));
+    assert_eq!(
+        of(&rows, "servers")[0].status,
+        "ready",
+        "a failure is no attention"
+    );
+    fake.set_state("account:1", "connected", None).await;
+    eventually("connected", || {
+        e.core
+            .location("nv-account:1")
+            .is_some_and(|l| l.connection.name() == "connected")
+    })
+    .await;
+    assert_eq!(connection_of(&e.core.browse_rows().await), state("connected", ""));
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn consent_row_until_allowed_and_nothing_when_denied() {
     let fake = account_fake().await;
@@ -413,6 +454,8 @@ async fn reconnecting_shows_a_notice_and_busy_rows() {
         (servers[1].name.as_str(), servers[1].status),
         ("NAS", "connecting")
     );
+    // Whatever the bridge said last, it is connecting again (NVB-12).
+    assert_eq!(servers[1].connection, "connecting");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -473,6 +516,7 @@ async fn adhoc_servers_are_remembered_and_forgotten() {
         .filter(|r| r.kind == "adhoc")
         .collect();
     assert_eq!(adhoc.len(), 1, "a connected server is not listed twice");
+    assert_eq!(adhoc[0].connection, "connected");
 
     // The bridge forgets it (another session): it stays as a recent one.
     fake.remove_location(&id.replace("nv-", "")).await;
@@ -491,6 +535,7 @@ async fn adhoc_servers_are_remembered_and_forgotten() {
         ),
         ("offline", "SFTP", "sftp://pi@host.example:2222/docs")
     );
+    assert_eq!(recent[0].connection, "disconnected");
     e.core.remove_adhoc_recent(&id).unwrap();
     assert!(e.core.adhoc_recents().unwrap().is_empty());
 }

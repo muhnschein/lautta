@@ -310,7 +310,17 @@ what the app does.
   (`RequestConsent`). `denied` hides the section and shows the reason in *About*.
 - NVB-4: Locations: `ListLocations` and `LocationsChanged` populate *Servers* (accounts
   and this app's ad-hoc servers) and *Nearby* (`Discover`). Attention states from netvfs
-  (`auth-failed`, `server-identity-changed`) show as badges.
+  (`auth-failed`, `server-identity-changed`) show as badges. A server row's second line
+  tells only how its connection stands, from the `state` and `stateError` netvfs lists
+  for each location (netvfs XB-10, XB-12; every `LocationsChanged` lists again and the
+  row changes in place): *Connected* (a filled dot), *Connecting…* (busy indicator),
+  *Not connected* (a ring: never used, closed when idle or dropped; also a recent ad-hoc
+  server), *Couldn't connect* (a dot in the error colour; *Sign-in failed* or *Identity
+  changed* when `stateError` is `AuthFailed` or `ServerIdentityChanged`). An attention
+  comes first (warning icon and its text); a bridge that reports no state gets no line
+  rather than a wrong one. No protocol or host is shown. The connection state is not the
+  location's status: a server that is not connected stays browsable, and opening it
+  connects.
 - NVB-5: Account management is handed off: *Add server* → `AddAccount(provider)`;
   *Edit server*, *Update sign-in*, *Review server identity* → `OpenAccountSettings(id)`.
   The bridge opens Settings; the app never edits accounts, pins or secrets, and never
@@ -341,7 +351,7 @@ what the app does.
   `Rename(NoReplace or Replace)` call. Backends reporting `AtomicPut` are written
   directly.
 - NVB-12: Failure handling: socket EOF or `ConnectionLost` → all bridge locations show
-  "Reconnecting…"; the app reconnects with backoff (1, 2, 4, 8 s, then 15 s) while in the
+  *Connecting…* (NVB-4); the app reconnects with backoff (1, 2, 4, 8 s, then 15 s) while in the
   foreground; running transfers become *waiting* and resume (XFR-12). The bridge cancels
   jobs of a disconnected client itself (netvfs XB-13).
 
@@ -651,10 +661,11 @@ flowchart TD
 
 Sections: *Favourites*, *On this device* (user folders, *Recents* while recents are
 remembered (ORG-2), *Recently deleted* while it is on), *Android*, *Volumes* (when
-present), *Servers* (bridge only: accounts, recent ad-hoc servers, status dot,
-attention badge), *Nearby* (bridge only, hidden when empty). Rows the user hid are left
-out and rows keep the order the user gave them (BRW-12). Tapping a nearby or recent
-ad-hoc server opens *Connect to server* prefilled (LOC-6, NVB-6).
+present), *Servers* (bridge only: accounts, recent ad-hoc servers, each with its
+connection state and status dot (NVB-4) or attention badge), *Nearby* (bridge only,
+hidden when empty). Rows the user hid are left out and rows keep the order the user gave
+them (BRW-12). Tapping a nearby or recent ad-hoc server opens *Connect to server*
+prefilled (LOC-6, NVB-6).
 
 Pulley: *Settings*, *Add server* (bridge only, NVB-5), *Activity* (live count).
 Long-press menus: favourite: *Edit favourite*, *Copy address*, *Remove from

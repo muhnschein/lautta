@@ -3,7 +3,8 @@
 //!
 //! Roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
 //! `colour`, `count`, `itemId`, `place`, `provider`, `host`, `free`,
-//! `total`, `fs` (see `lautta_core::app_browse::Row` for the values).
+//! `total`, `fs`, `connection`, `connectionError` (see
+//! `lautta_core::app_browse::Row` for the values).
 
 use super::{cell_data, role_names, store_changed, store_subscribe, Cell, Guard};
 use crate::runtime::{blocking_then, core, handle, spawn_then};
@@ -16,7 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-const COLUMNS: [&str; 16] = [
+const COLUMNS: [&str; 18] = [
     "section",
     "uri",
     "name",
@@ -33,6 +34,8 @@ const COLUMNS: [&str; 16] = [
     "free",
     "total",
     "fs",
+    "connection",
+    "connectionError",
 ];
 
 /// Changes that arrive together are applied together.
@@ -56,6 +59,8 @@ fn cells(r: &Row) -> Vec<Cell> {
         Cell::Int(r.free),
         Cell::Int(r.total),
         Cell::s(&r.fs),
+        Cell::s(r.connection),
+        Cell::s(&r.connection_error),
     ]
 }
 
@@ -248,6 +253,21 @@ mod tests {
     fn cells_match_the_columns() {
         let cells = cells(&Row::default());
         assert_eq!(cells.len(), COLUMNS.len());
+    }
+
+    #[test]
+    fn a_server_row_tells_its_connection() {
+        let row = Row {
+            kind: "account",
+            connection: "failed",
+            connection_error: "Timeout".into(),
+            ..Row::default()
+        };
+        let cells = cells(&row);
+        let at = |name: &str| &cells[COLUMNS.iter().position(|c| *c == name).unwrap()];
+        assert_eq!(at("connection"), &Cell::s("failed"));
+        assert_eq!(at("connectionError"), &Cell::s("Timeout"));
+        assert_eq!(at("kind"), &Cell::s("account"));
     }
 
     fn keys(names: &[&str]) -> Vec<String> {

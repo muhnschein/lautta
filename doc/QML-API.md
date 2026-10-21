@@ -81,9 +81,15 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 
 - `LocationsModel` — sections `favourites`, `device`, `android`, `volumes`, `servers`,
   `nearby` (roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
-  `colour`, `count`, `itemId`); kinds `recents` and `deleted` are the app's own rows of
-  `device` (`BrowseText.rowName` names them). `refresh()` rescans the device folders and
-  volumes first (LOC-3); the model also follows location changes by itself.
+  `colour`, `count`, `itemId`, `place`, `provider`, `host`, `free`, `total`, `fs`,
+  `connection`, `connectionError`); kinds `recents` and `deleted` are the app's own rows of
+  `device` (`BrowseText.rowName` names them). `connection` is a server's connection state
+  (NVB-4): `connected`, `connecting` (also while the bridge reconnects, NVB-12),
+  `disconnected` (also recent ad-hoc servers), `failed`, or empty when the bridge reports
+  none; `connectionError` is the netvfs error name of a `failed` one (`AuthFailed`,
+  `Timeout`, …). `components/browse/ServerStatus.js` turns them into the row's line and
+  dot. `refresh()` rescans the device folders and volumes first (LOC-3); the model also
+  follows location changes by itself, and a changed row changes in place.
 - `FavouritesModel` (`add`, `save(uri, label, colour)` adds or relabels, `edit`, `remove`,
   `removeUri(uri)`, `moveTo`, `get`, `idOf`, `placeOf`).
 - `RecentsModel` (ORG-2, newest first, no filter; `count`, `enabled`, `loaded`,

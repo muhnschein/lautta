@@ -51,47 +51,14 @@ function volumeLine(free, total, fs) {
     return fs.length > 0 ? space + " · " + fs : space
 }
 
-function attentionText(attention) {
-    if (attention === "server-identity-changed")
-        //% "Identity changed"
-        return qsTrId("lautta-browse-attention-identity")
-    //% "Sign-in failed"
-    return qsTrId("lautta-browse-attention-auth")
-}
-
-// The part after the status of a server line: "SFTP · nas.home".
-function serverDetail(provider, host) {
+// A nearby server's line: "SFTP · raspberrypi.local".
+function nearbyLine(provider, host) {
     var parts = []
     if (provider.length > 0)
         parts.push(provider)
     if (host.length > 0)
         parts.push(host)
     return parts.join(" · ")
-}
-
-function connectedLine(provider, host) {
-    //% "Connected"
-    var text = qsTrId("lautta-browse-server-connected")
-    var detail = serverDetail(provider, host)
-    return detail.length > 0 ? text + " · " + detail : text
-}
-
-function reconnectingLine(provider) {
-    //% "Reconnecting…"
-    var text = qsTrId("lautta-browse-server-reconnecting")
-    return provider.length > 0 ? text + " · " + provider : text
-}
-
-function recentLine(provider) {
-    //% "Recent"
-    var text = qsTrId("lautta-browse-server-recent")
-    //% "not connected"
-    var off = qsTrId("lautta-browse-server-not-connected")
-    return provider.length > 0 ? text + " · " + provider + " · " + off : text + " · " + off
-}
-
-function nearbyLine(provider, host) {
-    return serverDetail(provider, host)
 }
 
 // Recents: "Opened · NAS › /srv/photos", "Transferred to NAS".

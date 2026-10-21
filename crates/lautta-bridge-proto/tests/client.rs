@@ -6,7 +6,7 @@
 
 use futures::StreamExt;
 use lautta_bridge_proto::fake::{Failure, FakeBridge};
-use lautta_bridge_proto::{connect, BridgeError, OptsBuilder, Signal, Zeroizing};
+use lautta_bridge_proto::{connect, BridgeError, OptsBuilder, Signal, SignalStream, Zeroizing};
 use std::time::Duration;
 
 async fn fake_with_account() -> FakeBridge {
@@ -154,6 +154,8 @@ async fn listing_signals_arrive_in_order() {
                 assert_eq!((r, error.as_str()), (req, ""));
                 break;
             }
+            // The listing connected the location: its state is told.
+            Signal::LocationsChanged => {}
             other => panic!("unexpected {other:?}"),
         }
     }
@@ -234,4 +236,67 @@ async fn keyboard_answers_are_wiped_after_the_call() {
     let e = conn.answer_wiping("q1", true, &mut answers).await.unwrap_err();
     assert_eq!(e.netvfs_name(), Some("NotFound"));
     assert!(answers.is_empty());
+}
+
+/// `state` and `stateError` of `loc` in `ListLocations`.
+async fn state_of(conn: &lautta_bridge_proto::Connection, loc: &str) -> (String, Option<String>) {
+    let locations = conn.proxy().list_locations().await.unwrap();
+    let info = &locations.iter().find(|l| l.id == loc).unwrap().info;
+    let text = |key: &str| info.get(key).and_then(|v| lautta_bridge_proto::value_str(v));
+    (text("state").unwrap(), text("stateError"))
+}
+
+/// Waits for the next `LocationsChanged`, skipping other signals.
+async fn locations_changed(signals: &mut SignalStream) {
+    let wait = async {
+        while !matches!(
+            signals.next().await.expect("the stream stays open").unwrap(),
+            Signal::LocationsChanged
+        ) {}
+    };
+    tokio::time::timeout(Duration::from_secs(5), wait)
+        .await
+        .expect("LocationsChanged arrives");
+}
+
+/// The fake reports connection states as netvfs does (XB-10, XB-12):
+/// disconnected until a call needs a connection, connected then,
+/// disconnected after `Disconnect`; a scripted failure carries its error.
+#[tokio::test]
+async fn connection_states_follow_use_disconnect_and_the_script() {
+    let fake = fake_with_account().await;
+    let conn = fake.connect().await.unwrap();
+    let mut signals = conn.signals();
+    hello(&conn).await;
+    let s = |state: &str, error: Option<&str>| (state.to_owned(), error.map(str::to_owned));
+    assert_eq!(state_of(&conn, "account:1").await, s("disconnected", None));
+    // A call that needs a connection connects it, and tells.
+    conn.proxy().capabilities("account:1").await.unwrap();
+    locations_changed(&mut signals).await;
+    assert_eq!(state_of(&conn, "account:1").await, s("connected", None));
+    conn.proxy().disconnect("account:1").await.unwrap();
+    locations_changed(&mut signals).await;
+    assert_eq!(state_of(&conn, "account:1").await, s("disconnected", None));
+    // Scripted: a failure with its error, told once.
+    fake.set_state("account:1", "failed", Some("AuthFailed")).await;
+    locations_changed(&mut signals).await;
+    assert_eq!(
+        state_of(&conn, "account:1").await,
+        s("failed", Some("AuthFailed"))
+    );
+    fake.set_state("account:1", "failed", Some("AuthFailed")).await;
+    conn.proxy().stat("account:1", b"", true, "").await.unwrap();
+    locations_changed(&mut signals).await;
+    assert_eq!(state_of(&conn, "account:1").await, s("connected", None));
+    // Work on a connected location tells nothing more.
+    conn.proxy().stat("account:1", b"", true, "").await.unwrap();
+    let quiet = tokio::time::timeout(Duration::from_millis(200), signals.next()).await;
+    assert!(quiet.is_err(), "{quiet:?}");
+    // A connected ad-hoc location.
+    let loc = conn
+        .proxy()
+        .connect_ad_hoc("sftp://h/", b"", &OptsBuilder::new().build())
+        .await
+        .unwrap();
+    assert_eq!(state_of(&conn, &loc).await, s("connected", None));
 }
