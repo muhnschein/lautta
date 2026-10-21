@@ -38,6 +38,8 @@ Item {
             property string ritem: itemId
             property int rcount: count
             property string rsection: section
+            property string ricon: icon
+            property bool rfile: isFile
             // Set by a step to tell whether this delegate survived a change.
             property bool marked: false
         }
@@ -321,24 +323,41 @@ Item {
         // The favourite dialog: opened on a folder, it saves by URI, adds
         // a second favourite next to the first and removes by URI.
         step("dialog adds a first favourite",
-             function() { favs.save(docs, "Docs", "") },
+             function() { favs.save(docs, "Docs", "", true) },
              function() { return favouriteNames() === "Docs" })
         step("dialog adds a second favourite",
-             function() { favs.save("lautta://user-music/", "Tunes", "#4fa3e5") },
+             function() { favs.save("lautta://user-music/", "Tunes", "#4fa3e5", true) },
              function() { return favouriteNames() === "Docs,Tunes" })
         step("dialog relabels a favourite",
-             function() { favs.save(docs, "Papers", "") },
+             function() { favs.save(docs, "Papers", "", true) },
              function() { return favouriteNames() === "Papers,Tunes" })
+        // ORG-1: a file is a favourite as a file, under the folder it is in.
+        step("dialog adds a file favourite",
+             function() { favs.save(a, "Notes", "", false) },
+             function() {
+                 var f = row("favourite", "Notes")
+                 var stored = JSON.parse(favs.get(favs.idOf(a)))
+                 return f !== null && f.rfile && f.rplace === "Documents" && f.ricon === "image://theme/icon-m-document"
+                        && stored.isDir === false && stored.place === "Documents"
+                        && !row("favourite", "Papers").rfile && row("favourite", "Papers").ricon === "image://theme/icon-m-favorite"
+             })
+        step("relabelling it keeps it a file",
+             function() { favs.save(a, "Lecture notes", "", true) },
+             function() {
+                 var f = row("favourite", "Lecture notes")
+                 return f !== null && f.rfile && JSON.parse(favs.get(favs.idOf(a))).isDir === false
+             })
         step("dialog removes favourites",
              function() {
                  favs.removeUri(docs)
                  favs.removeUri("lautta://user-music/")
+                 favs.removeUri(a)
              },
-             function() { return !has("favourite") && favs.idOf(docs) === -1 })
+             function() { return !has("favourite") && favs.idOf(docs) === -1 && favs.idOf(a) === -1 })
         step("a closed dialog's change still reaches Browse",
              function() {
                  var gone = Qt.createQmlObject("import Lautta 1.0; FavouritesModel { }", root)
-                 gone.save(docs, "Gone", "")
+                 gone.save(docs, "Gone", "", true)
                  gone.destroy()
              },
              function() { return favouriteNames() === "Gone" })

@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Which actions an item offers and where (SPEC §15.3, board
 // DirectoryContext): the long-press menu holds the everyday ones as plain
-// Silica rows, Details' pulley the rest. Capabilities decide what is
-// applicable. Copy to…/Move to… are gone on purpose: copy or cut, then
-// paste where you are.
+// Silica rows and ends with More actions, which turns the same menu into
+// the rarer ones for this item. Capabilities decide what is applicable.
+// Copy to…/Move to… are gone on purpose: copy or cut, then paste where you
+// are.
 .pragma library
 
 function text(id) {
     switch (id) {
-    case "open_with":
-        //% "Open with"
-        return qsTrId("lautta-dir-act-open-with")
     case "share":
         //% "Share"
         return qsTrId("lautta-dir-act-share")
@@ -26,9 +24,12 @@ function text(id) {
     case "delete":
         //% "Delete"
         return qsTrId("lautta-dir-act-delete")
-    case "info":
-        //% "Details"
-        return qsTrId("lautta-dir-act-details")
+    case "more":
+        //% "More actions"
+        return qsTrId("lautta-dir-act-more")
+    case "favourite":
+        //% "Add to favourites"
+        return qsTrId("lautta-dir-act-favourite")
     case "compress":
         //% "Compress"
         return qsTrId("lautta-dir-act-compress")
@@ -38,23 +39,23 @@ function text(id) {
 
 // ctx: { isDir, writable }
 function applicable(id, ctx) {
-    var file = !ctx.isDir
     switch (id) {
-    case "open_with": return file
-    case "share": return file
+    case "share": return !ctx.isDir
     case "copy": return true
     case "cut": return ctx.writable
     case "rename": return ctx.writable
     case "delete": return ctx.writable
-    case "info": return true
+    case "more": return more(ctx).length > 0
+    // The item itself, file or folder (ORG-1), not the folder it is in.
+    case "favourite": return true
     case "compress": return true
     }
     return false
 }
 
-// Delete last, as in Silica's own apps.
-var menuOrder = ["share", "copy", "cut", "rename", "info", "delete"]
-var detailsOrder = ["open_with", "compress"]
+// More actions last, after Delete: it leads on rather than acting.
+var menuOrder = ["share", "copy", "cut", "rename", "delete", "more"]
+var moreOrder = ["favourite", "compress"]
 
 function pick(order, ctx) {
     var out = []
@@ -70,7 +71,7 @@ function menu(ctx) {
     return pick(menuOrder, ctx)
 }
 
-// [{ id, text }] of the Details page's pulley.
-function details(ctx) {
-    return pick(detailsOrder, ctx)
+// [{ id, text }] that More actions puts in the menu's place.
+function more(ctx) {
+    return pick(moreOrder, ctx)
 }

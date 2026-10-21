@@ -412,7 +412,7 @@ what the app does.
 - BRW-8: Large folders: listings arrive in batches and render as they arrive; above
   20 000 entries the view falls back to name order, no sections, thumbnails off.
 - BRW-9: Path menu from the page header: ancestors, *Copy address*, *Edit path* with
-  completion from the cache.
+  completion from the cache, *Favourite* (the folder shown).
 - BRW-10: Symlinks in local folders that point outside the sandbox show as "Not
   accessible" rather than as empty folders.
 - BRW-11: There is no *Refresh*. A folder that is not watched (remote folders, local
@@ -438,13 +438,11 @@ what the app does.
 
 | Operation | Local (sandbox) | netvfs location | Notes |
 |---|---|---|---|
-| New folder / empty file | ✓ | ✓ | exclusive create |
+| New folder | ✓ | ✓ | exclusive create; no empty files |
 | Rename | ✓ | ✓ | no-replace by default |
 | Copy / move within location | ✓ (reflink/`copy_file_range`, rename) | server copy if capable, else via bridge | |
 | Copy / move across locations | ✓ | ✓ | queue |
 | Delete | ✓ to *Recently deleted* | ✓ remorse, permanent | |
-| Symlink / hard link | ✓ (same volume, not on vfat/exFAT) | if capable | |
-| Set modification time | ✓ | if capable | |
 | Compress / extract | ✓ | ✓ streamed through pipes (NVB-9) | |
 
 The UI reads capabilities (local: per filesystem type via `statfs`; remote: from the
@@ -486,7 +484,11 @@ bridge).
   for 10 s.
 - OPS-10: Clipboard (cut/copy, docked paste bar) across all locations. There is no
   *Copy to…*/*Move to…*: the user goes to the destination either way, so they paste there.
-- OPS-12: Info page: details, with permissions shown read-only.
+- OPS-12: There is no details page for an item. The rarer actions on one item sit
+  behind *More actions*, the last row of its long-press menu: tapping it keeps the
+  menu open and puts *Add to favourites* (the item itself, file or folder, ORG-1)
+  and *Compress* in its rows' place. The image viewer's *More* offers the same next
+  to *Rename*.
 
 ## 11. Transfers
 
@@ -550,7 +552,8 @@ bridge).
 - PRV-3: Thumbnail jobs: interactive lane, lowest priority, ≤ 2 in flight per location,
   visible delegates only, canceled on scroll.
 - PRV-4: Viewers: images (zoom, swipe through the folder, EXIF panel), text/code (read-
-  only up to 1 MiB, then a notice), Markdown (pulldown-cmark → Qt rich text subset), audio
+  only up to 1 MiB, then a notice), Markdown (pulldown-cmark → Qt rich text subset,
+  wrapped to the page's width, code blocks and tables included), audio
   and video (QtMultimedia), archives (as locations), PDFs (PRV-12). Office documents,
   databases, packages and other binary files go to *Open with*.
 - PRV-5: *Open with* for local files uses the system handler as Harbour File Browser
@@ -611,8 +614,11 @@ bridge).
 - SRC-4: Recent searches per location (10).
 - SRC-5: Later: full-text and global search via Tracker with the `MediaIndexing`
   permission. Not in 1.0 (keeps the permission set minimal).
-- ORG-1: Favourites: any folder, local or remote, reorderable (Settings › Browse page,
-  BRW-12), with label and colour.
+- ORG-1: Favourites: any folder or file, local or remote, reorderable (Settings › Browse
+  page, BRW-12), with label and colour. A file favourite shows its file's icon and the
+  folder it is in, and opens like the file does in its folder (viewer or *Open with*); a
+  folder favourite opens the folder. Whether a favourite is a folder is stored with it
+  (DAT-2), so Browse never asks the location.
 - ORG-2: Recents: files opened, previewed or transferred, newest first, in the date
   sections of the Activity page (§15.4, without *In progress*); not filterable;
   clearable (pulley *Clear recents*); can be switched off in Settings. Opened from its
@@ -650,7 +656,6 @@ flowchart TD
   B --> CS[Connect to server<br/>nearby and recent servers]
   B --> S[Settings / About]
   D --> D
-  D --> I[Info]
   D --> V[Viewers]
   D --> P[Folder picker]
   D --> SR[Search results]
@@ -681,12 +686,16 @@ Activity.
 
 Header with the folder name only (no breadcrumb); tap → path menu. Slim progress line while listing
 or receiving transfers. List view with icon or thumbnail and "size · modified"; grid view
-for media folders (suggested when > 60 % images). Pulley: *Select*, *New folder/file*,
-*Paste* (with clipboard), *Search here*, *View options* (BRW-4; no *Refresh*, BRW-11). Push-up: *Info*,
-*Add to favourites*. Context menu: plain Silica rows *Share* (files), *Copy*, *Cut*,
-*Rename*, *Details*, *Delete*; fixed order, capability-filtered. The rarer actions sit
-in the Details page's pulley: *Open with* (files) and *Compress*. Archives need no
-*Extract* row: they open as a location with *Extract all*. Selection starts from the pulley's *Select*, in list and grid alike;
+for media folders (suggested when > 60 % images). Pulley: *Select*, *New folder*,
+*Paste* (with clipboard), *Search here*, *View options* (BRW-4; no *Refresh*, BRW-11). The
+folder itself is made a favourite from the path menu (BRW-9). Context menu: plain
+Silica rows *Share* (files), *Copy*, *Cut*, *Rename*, *Delete*, *More actions*; fixed
+order, capability-filtered. *More actions* turns the same menu into *Add to
+favourites* and *Compress* for that item (OPS-12); there is no details page. *Rename*
+is a dialog of the plain Silica dialog header, titled *Rename*, and the name field
+only; *New folder* has its header (titled *New folder*, accept *Create*) and the name
+field. A taken or invalid name is an error in the field's label; at the root of a local
+location `.lautta-trash`, the bin (OPS-8), is invalid. Archives need no *Extract* row: they open as a location with *Extract all*. Selection starts from the pulley's *Select*, in list and grid alike;
 tapping an icon opens the item like the rest of the row. Its actions sit in a
 `DockedPanel` that stays open while selecting and ends with a button that leaves
 selection; the panel's actions, a finished delete and deselecting the last item leave it
@@ -778,7 +787,8 @@ SQLite for everything structured.
   `~/.cache/org.netvfs/lautta/` (thumbs, dircache blobs). Simple
   preferences live in dconf via `Nemo.Configuration`; `~/.config/org.netvfs/lautta/` is
   unused.
-- DAT-2: Schema with `PRAGMA user_version`, forward migrations only: `favourites`,
+- DAT-2: Schema with `PRAGMA user_version`, forward migrations only: `favourites`
+  (`is_dir`: folder or file, ORG-1, schema 5; older rows are folders),
   `recents`, `transfers`, `transfer_items`, `working_copies`, `dircache`,
   `trash_items(id, original_uri, trashed_at, stored_name, is_dir, size, bin)` (`bin`: path
   bytes of the item's bin, schema 4; NULL for older items, which are in `.../trash/`),
@@ -924,8 +934,8 @@ when the netvfs bridge they depend on is released.
 
 Harbour File Browser (in-sandbox scope): browse ✓; search ✓ SRC; share/open externally ✓
 PRV-5/7; previews of images, audio, video, archives, PDFs ✓ PRV-4/10/12; database previews ✗
-(*Open with*); multi-select ✓; copy/link/move in bulk ✓; bulk rename ✗;
-permissions shown ✓ OPS-12, editing ✗; new files/folders ✓; hidden files ✓; edit/enter
+(*Open with*); multi-select ✓; copy/move in bulk ✓; links ✗; bulk rename ✗;
+permissions ✗ (no details page, OPS-12); new folders ✓, new empty files ✗; hidden files ✓; edit/enter
 paths ✓ BRW-9; quick filter ✓; per-folder view settings ✗ (global, BRW-4); shortcuts ✓
 ORG-1; multiple windows ✗ (single process; revisit); root mode ✗ (out of scope).
 

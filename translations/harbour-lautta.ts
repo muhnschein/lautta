@@ -844,102 +844,6 @@
         <source>Verify with checksums</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-info-folder">
-        <source>Folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-symlink">
-        <source>Symbolic link</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-size-bytes">
-        <source>%1 (%2 bytes)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-space">
-        <source>%1 of %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-hard-link-in">
-        <source>Hard link in…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-symlink-in">
-        <source>Symbolic link in…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-create-link">
-        <source>Create link</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-link-made">
-        <source>Link created</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-type">
-        <source>Type</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-size">
-        <source>Size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-modified">
-        <source>Modified</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-created">
-        <source>Created</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-points-to">
-        <source>Points to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-location">
-        <source>Location</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-copy-address">
-        <source>%1 (Copy)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-permissions">
-        <source>Permissions</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-owner">
-        <source>Owner</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-favourite">
-        <source>Favourite</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-add-favourite">
-        <source>Add parent folder to Favourites</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-filesystem">
-        <source>Filesystem</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-free-space">
-        <source>Free space</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-fs-type">
-        <source>Filesystem</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-hard-link">
-        <source>Hard link…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-info-symbolic-link">
-        <source>Symbolic link…</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-trash-restored">
         <source>Restored</source>
         <translation type="unfinished"></translation>
@@ -1084,10 +988,6 @@
     </message>
     <message id="lautta-viewers-more-rename">
         <source>Rename</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-more-info">
-        <source>Info</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-orient-180">
@@ -1924,10 +1824,6 @@
         <source>Clear clipboard</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-act-open-with">
-        <source>Open with</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-act-share">
         <source>Share</source>
         <translation type="unfinished"></translation>
@@ -1962,10 +1858,6 @@
     </message>
     <message id="lautta-dir-menu-select">
         <source>Select</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-menu-new">
-        <source>New folder or file</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-menu-paste" numerus="yes">
@@ -2137,10 +2029,6 @@
         <source>Favourite</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-path-info">
-        <source>Info</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-path-label">
         <source>Path</source>
         <translation type="unfinished"></translation>
@@ -2181,48 +2069,17 @@
         <source>Create</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-new-title">
-        <source>New in %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-new-type">
-        <source>Type</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-new-type-folder">
-        <source>Folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-new-type-file">
-        <source>File</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-new-name">
         <source>Name</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-rename-accept">
-        <source>Rename</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-rename-title">
-        <source>Rename · %1</source>
+        <source>Rename</source>
+        <oldsource>Rename · %1</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-rename-name">
         <source>Name</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-rename-location">
-        <source>Location</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-rename-size">
-        <source>Size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-rename-modified">
-        <source>Modified</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-opts-title">
@@ -2544,10 +2401,6 @@
         <source>Stop selecting</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-act-details">
-        <source>Details</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-err-auth-failed-unnamed">
         <source>The server didn&apos;t accept the sign-in.</source>
         <translation type="unfinished"></translation>
@@ -2694,6 +2547,22 @@
     </message>
     <message id="lautta-dir-opts-preview">
         <source>Preview</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-more">
+        <source>More actions</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-favourite">
+        <source>Add to favourites</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-menu-new-folder">
+        <source>New folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-new-folder-title">
+        <source>New folder</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-browse-server-failed">

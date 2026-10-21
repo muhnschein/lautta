@@ -82,16 +82,19 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - `LocationsModel` — sections `favourites`, `device`, `android`, `volumes`, `servers`,
   `nearby` (roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
   `colour`, `count`, `itemId`, `place`, `provider`, `host`, `free`, `total`, `fs`,
-  `connection`, `connectionError`); kinds `recents` and `deleted` are the app's own rows of
-  `device` (`BrowseText.rowName` names them). `connection` is a server's connection state
-  (NVB-4): `connected`, `connecting` (also while the bridge reconnects, NVB-12),
-  `disconnected` (also recent ad-hoc servers), `failed`, or empty when the bridge reports
-  none; `connectionError` is the netvfs error name of a `failed` one (`AuthFailed`,
-  `Timeout`, …). `components/browse/ServerStatus.js` turns them into the row's line and
-  dot. `refresh()` rescans the device folders and volumes first (LOC-3); the model also
-  follows location changes by itself, and a changed row changes in place.
-- `FavouritesModel` (`add`, `save(uri, label, colour)` adds or relabels, `edit`, `remove`,
-  `removeUri(uri)`, `moveTo`, `get`, `idOf`, `placeOf`).
+  `connection`, `connectionError`, `isFile` (a file favourite: opened, not browsed));
+  kinds `recents` and `deleted` are the app's own rows of `device` (`BrowseText.rowName`
+  names them). `connection` is a server's connection state (NVB-4): `connected`,
+  `connecting` (also while the bridge reconnects, NVB-12), `disconnected` (also recent
+  ad-hoc servers), `failed`, or empty when the bridge reports none; `connectionError` is
+  the netvfs error name of a `failed` one (`AuthFailed`, `Timeout`, …).
+  `components/browse/ServerStatus.js` turns them into the row's line and dot. `refresh()`
+  rescans the device folders and volumes first (LOC-3); the model also follows location
+  changes by itself, and a changed row changes in place.
+- `FavouritesModel` (roles `itemId`, `uri`, `label`, `colour`, `place`, `isDir`; `add`
+  (a folder), `save(uri, label, colour, isDir)` adds a folder or file or relabels the
+  favourite it is, `edit`, `remove`, `removeUri(uri)`, `moveTo`, `get`, `idOf`,
+  `placeOf`).
 - `RecentsModel` (ORG-2, newest first, no filter; `count`, `enabled`, `loaded`,
   `reload()`, `clear()`, `remove(itemId)`, signal `failed(kind, message)`; roles:
   `itemId`, `uri`, `name`, `kind`, `place`, `at`, `dateGroup`). `dateGroup` is the date
@@ -104,8 +107,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - Pages: `pages/BrowsePage.qml` (initial page), `pages/RecentsPage.qml`,
   `dialogs/ConnectServerDialog.qml { url }`,
   `dialogs/ServerQuestionDialog.qml { questionId, kind, details }`,
-  `dialogs/FavouriteDialog.qml { uri }` (edits the folder's favourite when it is one),
-  `cover/CoverPage.qml`.
+  `dialogs/FavouriteDialog.qml { uri, isDir }` (edits the item's favourite when it is
+  one; `isDir` defaults to true, a file passes false), `cover/CoverPage.qml`.
 - Browse page settings (BRW-12): `LocationsModel.hide(section, kind, itemId)`;
   `BrowseLayoutModel` (roles `section`, `kind`, `item`, `name`, `hidden`, `place` (the
   place in the section; no role is called `index`, which would hide the delegate's
@@ -132,16 +135,21 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - `PathModel { uri }` — ancestors (roles `uri`, `name`), `complete(prefix) → list`.
 - Pages: `pages/DirectoryPage.qml { uri }`, `dialogs/FolderPickerDialog.qml { title,
   acceptText, startUri }` (property `selectedUri` after accept),
-  `dialogs/NewItemDialog.qml { parentUri }`, `dialogs/RenameDialog.qml { uri }`,
+  `dialogs/NewItemDialog.qml { parentUri }` (a new folder: property `itemName` after
+  accept, the caller calls `DirectoryModel.createFolder(name)`),
+  `dialogs/RenameDialog.qml { uri, isDir }` (property `newName` after accept),
   `pages/ViewOptionsPage.qml { model }` (a page whose controls apply at once; `model`, the
   folder it was opened from, is absent when Settings opens it),
   `components/directory/ViewPreview.qml` (its live preview), `components/PathMenu.qml`.
-- The item context menu is plain rows; which actions it and the Details page's pulley
-  hold, in a fixed order filtered by capabilities, is in
-  `components/directory/ContextActions.js`.
+- The item context menu is plain rows ending with *More actions*, which keeps the menu
+  open and swaps its rows for the item's rarer actions; which actions each holds, in a
+  fixed order filtered by capabilities, is in `components/directory/ContextActions.js`
+  (`menu(ctx)`, `more(ctx)`).
 - When selection mode starts and ends is in `components/directory/Selection.js`.
+- Which names New folder and Rename refuse is in `components/directory/Names.js`
+  (`invalid(name, binHere)`).
 
-### Operations (boards: PlanSummary, Conflict, Info, Compress, Extract, RecentlyDeleted, RecentlyDeletedEmpty, ShareTarget, ArchiveView (open as location))
+### Operations (boards: PlanSummary, Conflict, Compress, Extract, RecentlyDeleted, RecentlyDeletedEmpty, ShareTarget, ArchiveView (open as location))
 
 - `Operations` singleton: `copyTo(uris, destUri)`, `moveTo(uris, destUri)`,
   `remove(uris)` (after remorse; signal `removed(trashedCount, transferId)`),
@@ -150,12 +158,11 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   signals `needsSummary(planId, summary)` (`summary`: files, dirs, bytes, conflicts,
   renamed, kind, destination) → `startPlan(planId)` / `discardPlan(planId)`;
   `started(transferId)`; `failed(kind, message)`.
-- `InfoModel { uri }` — details (permissions shown read-only), `setModified()`.
 - `TrashModel` — Recently deleted list of every location's bin (OPS-8), `reload()` (also
   purges what is past the retention setting), `restore(id)`, `remove(id)`, `empty()`.
 - Pages: `dialogs/PlanSummaryDialog.qml { planId, summary }`,
   `dialogs/ConflictDialog.qml { transferId, item, conflict }`,
-  `pages/InfoPage.qml { uri }`, `dialogs/CompressDialog.qml { uris }`,
+  `dialogs/CompressDialog.qml { uris }`,
   `dialogs/ExtractDialog.qml { archiveUri }`, `pages/RecentlyDeletedPage.qml`,
   `pages/ShareTargetPage.qml { resources }` (Sailfish.Share `ShareProvider`, INT-1).
 

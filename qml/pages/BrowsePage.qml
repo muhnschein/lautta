@@ -10,6 +10,7 @@ import "../components"
 import "../components/browse"
 import "../components/transfers"
 import "../components/ErrorText.js" as ErrorText
+import "../components/Open.js" as Open
 import "../components/browse/BrowseText.js" as BrowseText
 import "../components/browse/ServerStatus.js" as ServerStatus
 
@@ -52,6 +53,13 @@ Page {
 
     function openRow(row) {
         switch (row.kind) {
+        case "favourite":
+            // A file favourite opens like a file in its folder (ORG-1).
+            if (row.isFile)
+                Open.open(pageStack, App, Operations, row.uri, false, "", "")
+            else
+                openDirectory(row.uri)
+            break
         case "recents":
             pageStack.push(Qt.resolvedUrl("RecentsPage.qml"))
             break

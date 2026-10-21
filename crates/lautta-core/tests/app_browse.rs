@@ -112,7 +112,7 @@ async fn hidden_rows_leave_browse_but_not_its_settings() {
     let e = env(None, &["Documents", "Music", "Pictures"]).await;
     e.core
         .favourites
-        .add(&uri("lautta://user-documents/"), "Docs", None)
+        .add(&uri("lautta://user-documents/"), "Docs", None, true)
         .unwrap();
     e.core
         .browse_layout
@@ -181,10 +181,10 @@ async fn rows_move_within_their_section() {
     );
     let a = core
         .favourites
-        .add(&uri("lautta://user-documents/"), "A", None)
+        .add(&uri("lautta://user-documents/"), "A", None, true)
         .unwrap();
     core.favourites
-        .add(&uri("lautta://user-music/"), "B", None)
+        .add(&uri("lautta://user-music/"), "B", None, true)
         .unwrap();
     core.move_browse_row("favourites", &a.id.to_string(), 1)
         .await
@@ -259,7 +259,10 @@ async fn volumes_have_space_and_favourites_have_places() {
     assert_eq!(volume[0].name, "SD");
     assert!(volume[0].total > 0 && volume[0].free >= 0 && volume[0].free <= volume[0].total);
     let uni = uri("lautta://user-documents/Uni");
-    e.core.favourites.add(&uni, "Thesis", Some("#e7a33c")).unwrap();
+    e.core
+        .favourites
+        .add(&uni, "Thesis", Some("#e7a33c"), true)
+        .unwrap();
     let rows = e.core.browse_rows().await;
     let fav = of(&rows, "favourites");
     assert_eq!(
@@ -267,6 +270,35 @@ async fn volumes_have_space_and_favourites_have_places() {
         ("favourite", "Thesis", "Documents › Uni")
     );
     assert_eq!(fav[0].colour, "#e7a33c");
+    assert_eq!(fav[0].icon, "image://theme/icon-m-favorite");
+    assert!(!fav[0].is_file);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn file_favourites_name_their_folder_and_icon() {
+    let e = env(None, &["Documents/Uni"]).await;
+    let pdf = uri("lautta://user-documents/Uni/thesis.pdf");
+    let photo = uri("lautta://user-documents/photo.jpg");
+    e.core.favourites.add(&pdf, "Thesis", None, false).unwrap();
+    e.core
+        .favourites
+        .add(&photo, "Photo", Some("#e7a33c"), false)
+        .unwrap();
+    let rows = e.core.browse_rows().await;
+    let fav = of(&rows, "favourites");
+    let shown: Vec<_> = fav
+        .iter()
+        .map(|r| (r.name.as_str(), r.place.as_str(), r.icon.as_str(), r.is_file))
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            ("Thesis", "Documents › Uni", "image://theme/icon-m-document", true),
+            ("Photo", "Documents", "image://theme/icon-m-file-image", true),
+        ],
+        "the folder a file is in, and the file's icon"
+    );
+    assert_eq!((fav[1].kind, fav[1].colour.as_str()), ("favourite", "#e7a33c"));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -554,7 +586,7 @@ async fn a_failed_connect_stores_nothing() {
 
 fn remember_account(core: &Core, n: i32) -> Uri {
     let u = uri(&format!("lautta://nv-account:{n}/photos"));
-    core.favourites.add(&u, "Photos", None).unwrap();
+    core.favourites.add(&u, "Photos", None, true).unwrap();
     core.recents.record(&u, "photos", RecentKind::Opened).unwrap();
     core.location_prefs
         .set(&LocationPrefs {
@@ -598,7 +630,7 @@ async fn a_removed_account_is_forgotten() {
     remember_account(&e.core, 1);
     remember_account(&e.core, 2);
     let local = uri("lautta://user-documents/");
-    e.core.favourites.add(&local, "Docs", None).unwrap();
+    e.core.favourites.add(&local, "Docs", None, true).unwrap();
     e.core.spawn_account_purge(|| {});
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert!(
@@ -640,7 +672,7 @@ async fn accounts_removed_while_the_app_was_closed_are_purged_at_start() {
     remember_account(&e.core, 9);
     // Ad-hoc ids change between runs; their data is not touched at start.
     let adhoc = uri("lautta://nv-adhoc:4/x");
-    e.core.favourites.add(&adhoc, "Adhoc", None).unwrap();
+    e.core.favourites.add(&adhoc, "Adhoc", None, true).unwrap();
     e.core.spawn_account_purge(|| {});
     eventually("purge", || !remembered(&e.core, 9)).await;
     assert!(remembered(&e.core, 1));

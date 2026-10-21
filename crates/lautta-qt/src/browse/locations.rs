@@ -3,7 +3,7 @@
 //!
 //! Roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
 //! `colour`, `count`, `itemId`, `place`, `provider`, `host`, `free`,
-//! `total`, `fs`, `connection`, `connectionError` (see
+//! `total`, `fs`, `connection`, `connectionError`, `isFile` (see
 //! `lautta_core::app_browse::Row` for the values).
 
 use super::{cell_data, role_names, store_changed, store_subscribe, Cell, Guard};
@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-const COLUMNS: [&str; 18] = [
+const COLUMNS: [&str; 19] = [
     "section",
     "uri",
     "name",
@@ -36,6 +36,7 @@ const COLUMNS: [&str; 18] = [
     "fs",
     "connection",
     "connectionError",
+    "isFile",
 ];
 
 /// Changes that arrive together are applied together.
@@ -61,6 +62,7 @@ fn cells(r: &Row) -> Vec<Cell> {
         Cell::s(&r.fs),
         Cell::s(r.connection),
         Cell::s(&r.connection_error),
+        Cell::Bool(r.is_file),
     ]
 }
 

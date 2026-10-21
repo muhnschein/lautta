@@ -123,10 +123,9 @@ pub struct DirectoryModel {
     setTransferState: qt_method!(fn(&mut self, uri: QString, state: QString)),
     rename: qt_method!(fn(&mut self, uri: QString, name: QString)),
     createFolder: qt_method!(fn(&mut self, name: QString)),
-    createFile: qt_method!(fn(&mut self, name: QString)),
     renamed: qt_signal!(oldUri: QString, newUri: QString),
     renameFailed: qt_signal!(uri: QString, kind: QString, message: QString),
-    created: qt_signal!(uri: QString, isDir: bool),
+    created: qt_signal!(uri: QString),
     createFailed: qt_signal!(kind: QString, message: QString),
 
     dir: Option<Uri>,
@@ -746,33 +745,19 @@ impl DirectoryModel {
     }
 
     fn createFolder(&mut self, name: QString) {
-        self.create(name, true);
-    }
-
-    fn createFile(&mut self, name: QString) {
-        self.create(name, false);
-    }
-
-    fn create(&mut self, name: QString, folder: bool) {
         let (Some(core), Some(dir)) = (core(), self.dir.clone()) else {
             return;
         };
         let me = QPointer::from(&*self);
         let new_name = name.to_string();
         spawn_then(
-            async move {
-                if folder {
-                    core.make_folder(&dir, new_name.as_bytes()).await
-                } else {
-                    core.make_file(&dir, new_name.as_bytes()).await
-                }
-            },
+            async move { core.make_folder(&dir, new_name.as_bytes()).await },
             move |res| {
                 let Some(m) = me.as_pinned() else { return };
                 let mut m = m.borrow_mut();
                 match res {
                     Ok(new) => {
-                        m.created(qs(&new.to_string()), folder);
+                        m.created(qs(&new.to_string()));
                         m.refresh();
                     }
                     Err(e) => m.createFailed(qs(e.kind.name()), qs(&e.message)),
