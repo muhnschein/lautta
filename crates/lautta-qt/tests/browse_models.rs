@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The browse facades with the real Qt event loop, a temporary HOME and a
 //! fake netvfs bridge: models load and follow changes, the `Bridge`
-//! singleton follows consent, questions, ad-hoc servers and hand-offs, and
-//! a removed account is forgotten (SPEC §7, §13, §15.2, SEC-5).
+//! singleton follows consent, questions, ad-hoc servers and hand-offs, a
+//! server row follows its connection state in place, and a removed account
+//! is forgotten (SPEC §7, §13, §15.2, NVB-4, SEC-5).
 //!
 //! The scenario is a QML script that runs one step after the other, each
 //! with an action and a condition to wait for; the fake bridge is driven
@@ -35,6 +36,7 @@ struct FakeWorld {
     grant: qt_method!(fn(&self)),
     consentRequests: qt_method!(fn(&self) -> i32),
     setAttention: qt_method!(fn(&self, id: QString, attention: QString)),
+    setState: qt_method!(fn(&self, id: QString, state: QString, error: QString)),
     removeAccount: qt_method!(fn(&self, id: QString)),
     scriptQuestion: qt_method!(fn(&self, kind: QString)),
     secrets: qt_method!(fn(&self) -> QString),
@@ -62,6 +64,15 @@ impl FakeWorld {
         run(fake().set_attention(
             &id.to_string(),
             Some(attention.as_str()).filter(|a| !a.is_empty()),
+        ));
+    }
+
+    fn setState(&self, id: QString, state: QString, error: QString) {
+        let error = error.to_string();
+        run(fake().set_state(
+            &id.to_string(),
+            &state.to_string(),
+            Some(error.as_str()).filter(|e| !e.is_empty()),
         ));
     }
 

@@ -30,6 +30,8 @@ Item {
             property string rname: name
             property string rstatus: status
             property string rattention: attention
+            property string rconnection: connection
+            property string rconnectionError: connectionError
             property string rcolour: colour
             property string rplace: place
             property string rprovider: provider
@@ -185,6 +187,12 @@ Item {
                  return Bridge.ready && nas !== null && nas.rstatus === "ready" && nas.rprovider === "SFTP"
                         && nas.ruri === "lautta://nv-account:1/"
              })
+        step("an unused server is not connected",
+             null,
+             function() {
+                 var nas = row("account", "NAS")
+                 return nas !== null && nas.rconnection === "disconnected" && nas.rconnectionError === ""
+             })
         step("folders with visible item counts",
              null,
              function() {
@@ -238,6 +246,30 @@ Item {
                  root.relisted = remoteDir.loading
              },
              function() { return root.relisted && !remoteDir.loading && remoteDir.count === 2 })
+        step("listing connected the server",
+             null,
+             function() {
+                 var nas = row("account", "NAS")
+                 return nas !== null && nas.rconnection === "connected"
+             })
+        // A state change is a change of the row, not a new row (NVB-4).
+        step("a failed connection updates the server row in place",
+             function() {
+                 row("account", "NAS").marked = true
+                 FakeWorld.setState("account:1", "failed", "Timeout")
+             },
+             function() {
+                 var nas = row("account", "NAS")
+                 return nas !== null && nas.rconnection === "failed" && nas.rconnectionError === "Timeout"
+                        && nas.rstatus === "ready" && nas.marked
+             })
+        step("and so does closing it when idle",
+             function() { FakeWorld.setState("account:1", "disconnected", "") },
+             function() {
+                 var nas = row("account", "NAS")
+                 return nas !== null && nas.rconnection === "disconnected" && nas.rconnectionError === ""
+                        && nas.marked
+             })
         step("a local folder lists",
              function() { localDir.uri = docs },
              function() { return !localDir.loading && localDir.count === 1 })

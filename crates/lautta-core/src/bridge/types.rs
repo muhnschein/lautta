@@ -2,10 +2,11 @@
 //! Public value types of the bridge client: status, consent, locations, nearby
 //! servers, configuration (SPEC NVB-3, NVB-4, NVB-12, LOC-6, LOC-7).
 
+use crate::locations::ConnectionState;
 use crate::paths::AppPaths;
 use crate::uri::LocationId;
 use crate::vpath::VPath;
-use lautta_bridge_proto::{value_bytes, value_i64, value_str, WireLocation, WireNearby};
+use lautta_bridge_proto::{location_state, value_bytes, value_i64, value_str, WireLocation, WireNearby};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -104,6 +105,21 @@ pub struct RemoteLocation {
     /// Display and copy address, never containing a secret (LOC-7).
     pub url: Option<String>,
     pub attention: Attention,
+    /// `info.state` and `info.stateError` (netvfs XB-10, XB-12).
+    pub connection: ConnectionState,
+}
+
+/// Reads `info.state` (with `info.stateError` for a failure); a missing or
+/// unknown state is [`ConnectionState::Unknown`], so that a bridge that
+/// does not report states shows none rather than a wrong one (NVB-4).
+fn connection_from_wire(state: Option<&str>, error: Option<String>) -> ConnectionState {
+    match state {
+        Some(location_state::DISCONNECTED) => ConnectionState::Disconnected,
+        Some(location_state::CONNECTING) => ConnectionState::Connecting,
+        Some(location_state::CONNECTED) => ConnectionState::Connected,
+        Some(location_state::FAILED) => ConnectionState::Failed(error.unwrap_or_default()),
+        _ => ConnectionState::Unknown,
+    }
 }
 
 /// Prefix of internal location ids of bridge locations (LOC-7).
@@ -149,6 +165,10 @@ impl RemoteLocation {
                 .unwrap_or_default(),
             url: str_of("url"),
             attention: str_of("attention").map_or(Attention::None, |a| Attention::from_wire(&a)),
+            connection: connection_from_wire(
+                str_of(location_state::KEY).as_deref(),
+                str_of(location_state::ERROR_KEY),
+            ),
         }
     }
 }
@@ -271,6 +291,51 @@ mod tests {
         assert_eq!(loc.start_path.as_bytes(), b"docs/x");
         assert_eq!(loc.attention, Attention::AuthFailed);
         assert_eq!(loc.url.as_deref(), Some("sftp://nas.local/"));
+        assert_eq!(loc.connection, ConnectionState::Unknown, "no state was sent");
+    }
+
+    #[test]
+    fn connection_states_are_read() {
+        let state = |info: OptsBuilder| RemoteLocation::from_wire(&wire(info)).connection;
+        assert_eq!(
+            state(OptsBuilder::new().str("state", "disconnected")),
+            ConnectionState::Disconnected
+        );
+        assert_eq!(
+            state(OptsBuilder::new().str("state", "connecting")),
+            ConnectionState::Connecting
+        );
+        assert_eq!(
+            state(
+                OptsBuilder::new()
+                    .str("state", "connected")
+                    .str("stateError", "Timeout")
+            ),
+            ConnectionState::Connected,
+            "only a failure has an error"
+        );
+        assert_eq!(
+            state(
+                OptsBuilder::new()
+                    .str("state", "failed")
+                    .str("stateError", "AuthFailed")
+            ),
+            ConnectionState::Failed("AuthFailed".into())
+        );
+        assert_eq!(
+            state(OptsBuilder::new().str("state", "failed")),
+            ConnectionState::Failed(String::new())
+        );
+        // Older bridges send none; a state from a newer one is not guessed at.
+        assert_eq!(state(OptsBuilder::new()), ConnectionState::Unknown);
+        assert_eq!(
+            state(OptsBuilder::new().str("state", "suspended")),
+            ConnectionState::Unknown
+        );
+        assert_eq!(
+            state(OptsBuilder::new().int("state", 1)),
+            ConnectionState::Unknown
+        );
     }
 
     #[test]

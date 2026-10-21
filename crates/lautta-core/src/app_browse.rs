@@ -11,7 +11,7 @@ use crate::app::Core;
 use crate::bridge::{AdHocOptions, BridgeStatus, NearbyServer, RemoteKind};
 use crate::browse_layout::{layout_item, Layout, NEARBY_ITEM};
 use crate::error::{Error, ErrorKind, Result};
-use crate::locations::{Location, LocationKind, LocationStatus};
+use crate::locations::{ConnectionState, Location, LocationKind, LocationStatus};
 use crate::org::{self, Recent, RecentsFilter};
 use crate::settings::LocationPrefs;
 use crate::uri::Uri;
@@ -41,6 +41,13 @@ pub struct Row {
     pub status: &'static str,
     /// `auth-failed`, `server-identity-changed` or empty.
     pub attention: String,
+    /// A server's connection state (NVB-4, [`ConnectionState::name`]):
+    /// `connected`, `connecting`, `disconnected`, `failed`, or empty when
+    /// the bridge does not tell.
+    pub connection: &'static str,
+    /// The netvfs error name of a `failed` connection (`AuthFailed`,
+    /// `Timeout`, …), empty otherwise.
+    pub connection_error: String,
     pub colour: String,
     /// Items in the folder, `-1` when not shown.
     pub count: i64,
@@ -521,6 +528,8 @@ impl Core {
                 row.name = display_of(&l, prefs);
                 row.status = status_name(l.status);
                 row.attention = l.attention.clone().unwrap_or_default();
+                row.connection = l.connection.name();
+                row.connection_error = l.connection.error().to_owned();
                 row.icon = "image://theme/icon-m-computer".to_owned();
                 row.place = l.url.clone().unwrap_or_default();
                 if let Some(r) = &remote {
@@ -544,6 +553,7 @@ impl Core {
                 let mut row = Row::new("servers", "adhocRecent");
                 row.name = r.name;
                 row.status = "offline";
+                row.connection = ConnectionState::Disconnected.name();
                 row.icon = "image://theme/icon-m-computer".to_owned();
                 row.provider = r
                     .url
