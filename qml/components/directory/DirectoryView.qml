@@ -238,7 +238,8 @@ Item {
         case "retry": dir.refresh(); break
         case "details": detailsShown = !detailsShown; break
         case "signIn":
-            pageStack.push(Qt.resolvedUrl("../../pages/LocationSettingsPage.qml"), { "locationId": uri.split("/")[2] })
+            // The sign-in is netvfs' to update, as from the Browse menu (NVB-5).
+            Bridge.editAccount("lautta://" + uri.split("/")[2] + "/")
             break
         }
     }

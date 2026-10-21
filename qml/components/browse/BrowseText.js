@@ -28,6 +28,20 @@ function sectionTitle(section) {
     }
 }
 
+// The name of a Browse row: the app's own rows have none of their own.
+function rowName(kind, name) {
+    switch (kind) {
+    case "recents":
+        //% "Recents"
+        return qsTrId("lautta-browse-recents")
+    case "deleted":
+        //% "Recently deleted"
+        return qsTrId("lautta-browse-recently-deleted")
+    default:
+        return name
+    }
+}
+
 // "58.2 GB free of 128 GB · exFAT" (LOC-3); empty when the space is unknown.
 function volumeLine(free, total, fs) {
     if (free < 0 || total < 0)

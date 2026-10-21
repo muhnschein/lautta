@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! `BrowseLayoutModel`: the rows of Settings › Browse page (BRW-12), hidden
 //! ones included, in Browse order. Roles: `section`, `kind`, `item`, `name`,
-//! `hidden`, `index` (the row's place in its section), `movable`.
+//! `hidden`, `place` (the row's place in its section), `movable`.
+//!
+//! A change shows in place ([`steps`]): a switch changes its row, a move
+//! moves it, so the list keeps its scroll position and its delegates, and
+//! nothing is rebuilt under the user's finger.
 
 use super::{cell_data, error_parts, role_names, store_changed, Cell};
 use crate::runtime::{core, spawn_then};
@@ -10,12 +14,14 @@ use lautta_core::app_browse::LayoutRow;
 use lautta_core::error::{Error, ErrorKind};
 use qmetaobject::prelude::*;
 use qmetaobject::QPointer;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
-const COLUMNS: [&str; 7] = ["section", "kind", "item", "name", "hidden", "index", "movable"];
+/// `place`, not `index`: a role named `index` hides the delegate's own
+/// `index` (its list row) in QML, and the page's drag code needs that.
+const COLUMNS: [&str; 7] = ["section", "kind", "item", "name", "hidden", "place", "movable"];
 
 /// Sections whose rows the user can reorder; volumes come and go and nearby
 /// servers are one switch.
@@ -45,6 +51,140 @@ fn cell_at(rows: &[Vec<Cell>], row: i32, col: usize) -> Option<&Cell> {
     rows.get(usize::try_from(row).ok()?)?.get(col)
 }
 
+/// One change of the shown rows; the places are those at the time it is
+/// made, after the steps before it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Step {
+    Remove(usize),
+    /// `to` is the row's place once moved.
+    Move {
+        from: usize,
+        to: usize,
+    },
+    /// The new row at this place comes.
+    Insert(usize),
+    /// The row at this place takes the new row's values.
+    Change(usize),
+}
+
+/// A row's identity: its section and item (what `browse_layout` stores).
+type Key<'a> = (&'a str, &'a str);
+
+fn key(row: &[Cell]) -> Key<'_> {
+    let text = |col: usize| match row.get(col) {
+        Some(Cell::Str(s)) => s.as_str(),
+        _ => "",
+    };
+    (text(0), text(2))
+}
+
+fn keys(rows: &[Vec<Cell>]) -> Option<Vec<Key<'_>>> {
+    let keys: Vec<Key> = rows.iter().map(|r| key(r)).collect();
+    let distinct: HashSet<&Key> = keys.iter().collect();
+    (distinct.len() == keys.len()).then_some(keys)
+}
+
+/// The steps that turn the rows `old` into `new` in place: rows that are
+/// gone are removed, kept rows move into the new order, new rows are
+/// inserted and kept rows whose values differ change. `None` when a row's
+/// identity repeats; the rows are then replaced as a whole.
+fn steps(old: &[Vec<Cell>], new: &[Vec<Cell>]) -> Option<Vec<Step>> {
+    let (old_keys, new_keys) = (keys(old)?, keys(new)?);
+    // From the end, so that the places of the rows before stay valid.
+    let mut out: Vec<Step> = (0..old_keys.len())
+        .rev()
+        .filter(|i| !new_keys.contains(&old_keys[*i]))
+        .map(Step::Remove)
+        .collect();
+    let mut kept: Vec<Key> = old_keys
+        .iter()
+        .copied()
+        .filter(|k| new_keys.contains(k))
+        .collect();
+    out.extend(moves(&mut kept, &new_keys));
+    // In order: the rows before each insertion are the new ones by then.
+    for (i, k) in new_keys.iter().enumerate() {
+        match old_keys.iter().position(|o| o == k) {
+            None => out.push(Step::Insert(i)),
+            Some(j) if old[j] != new[i] => out.push(Step::Change(i)),
+            Some(_) => {}
+        }
+    }
+    // Changes after every insertion: their places are the final ones.
+    out.sort_by_key(|s| matches!(s, Step::Change(_)));
+    Some(out)
+}
+
+/// Moves that put the kept rows `kept` in their order in `new`. The longest
+/// run already in that order stays; every other row moves right behind the
+/// row it follows in `new` (a dragged row is one move).
+fn moves(kept: &mut Vec<Key>, new: &[Key]) -> Vec<Step> {
+    let order: Vec<Key> = new.iter().copied().filter(|k| kept.contains(k)).collect();
+    // Every kept row is in `order`, so the fallback is never taken.
+    let places: Vec<usize> = kept
+        .iter()
+        .map(|k| order.iter().position(|o| o == k).unwrap_or(0))
+        .collect();
+    let staying: Vec<Key> = kept
+        .iter()
+        .zip(in_order(&places))
+        .filter_map(|(k, stays)| stays.then_some(*k))
+        .collect();
+    let mut out = Vec::new();
+    for (t, k) in order.iter().enumerate() {
+        let Some(from) = kept.iter().position(|o| o == k).filter(|_| !staying.contains(k)) else {
+            continue;
+        };
+        let moving = kept.remove(from);
+        let to = match t.checked_sub(1) {
+            Some(before) => kept.iter().position(|o| *o == order[before]).map_or(0, |p| p + 1),
+            None => 0,
+        };
+        kept.insert(to, moving);
+        if from != to {
+            out.push(Step::Move { from, to });
+        }
+    }
+    out
+}
+
+/// Which of `places` make up the longest increasing run (one of them when
+/// there are several).
+fn in_order(places: &[usize]) -> Vec<bool> {
+    // The length of the longest run ending at each place, and the place
+    // before it in that run.
+    let mut runs: Vec<(usize, Option<usize>)> = Vec::with_capacity(places.len());
+    for (i, place) in places.iter().enumerate() {
+        let best = (0..i)
+            .filter(|j| places[*j] < *place)
+            .max_by_key(|j| runs[*j].0)
+            .map_or((1, None), |j| (runs[j].0 + 1, Some(j)));
+        runs.push(best);
+    }
+    let mut stays = vec![false; places.len()];
+    let mut at = (0..runs.len()).max_by_key(|i| runs[*i].0);
+    while let Some(i) = at {
+        stays[i] = true;
+        at = runs[i].1;
+    }
+    stays
+}
+
+/// Makes `step` on `rows`, taking the values of new rows from `new`.
+fn apply_step(rows: &mut Vec<Vec<Cell>>, new: &[Vec<Cell>], step: Step) {
+    match step {
+        Step::Remove(i) => {
+            rows.remove(i);
+        }
+        Step::Move { from, to } => {
+            let row = rows.remove(from);
+            rows.insert(to, row);
+        }
+        Step::Insert(i) => rows.insert(i, new[i].clone()),
+        Step::Change(i) => rows[i] = new[i].clone(),
+    }
+}
+
 #[derive(QObject, Default)]
 pub struct BrowseLayoutModel {
     base: qt_base_class!(trait QAbstractListModel),
@@ -69,6 +209,9 @@ pub struct BrowseLayoutModel {
     /// Done when the last change is stored: each change waits for the one
     /// before, so a switch and Restore defaults apply in the order made.
     last: Option<oneshot::Receiver<()>>,
+    /// The last reload asked for; an older one that ends later is dropped,
+    /// it would show a switch flipping back.
+    generation: u64,
 }
 
 /// Runs a store write off the runtime's workers.
@@ -83,20 +226,55 @@ async fn blocking(
 impl BrowseLayoutModel {
     fn reload(&mut self) {
         let Some(core) = core() else { return };
+        self.generation += 1;
+        let generation = self.generation;
         let me = QPointer::from(&*self);
         spawn_then(async move { core.browse_layout_rows().await }, move |rows| {
             if let Some(model) = me.as_pinned() {
-                model.borrow_mut().show(cells(&rows));
+                let mut model = model.borrow_mut();
+                if model.generation == generation {
+                    model.show(cells(&rows));
+                }
             }
         });
     }
 
     fn show(&mut self, rows: Vec<Vec<Cell>>) {
-        self.begin_reset_model();
-        self.rows = rows;
-        self.end_reset_model();
+        match steps(&self.rows, &rows).filter(|_| !self.rows.is_empty()) {
+            Some(steps) => steps.into_iter().for_each(|s| self.make(s, &rows)),
+            None => {
+                self.begin_reset_model();
+                self.rows = rows;
+                self.end_reset_model();
+            }
+        }
         self.count = self.rows.len() as i32;
         self.countChanged();
+    }
+
+    /// Makes one step and tells the views.
+    fn make(&mut self, step: Step, new: &[Vec<Cell>]) {
+        match step {
+            Step::Remove(i) => self.begin_remove_rows(i as i32, i as i32),
+            Step::Insert(i) => self.begin_insert_rows(i as i32, i as i32),
+            // Qt names the place before the move: past `to` when moving down.
+            Step::Move { from, to } => {
+                let top = QModelIndex::default();
+                let before = if to > from { to + 1 } else { to };
+                self.begin_move_rows(top, from as i32, from as i32, top, before as i32);
+            }
+            Step::Change(_) => {}
+        }
+        apply_step(&mut self.rows, new, step);
+        match step {
+            Step::Remove(_) => self.end_remove_rows(),
+            Step::Insert(_) => self.end_insert_rows(),
+            Step::Move { .. } => self.end_move_rows(),
+            Step::Change(i) => {
+                let index = self.row_index(i as i32);
+                self.data_changed(index, index);
+            }
+        }
     }
 
     /// Tells the Browse page and shows the new rows, or why it failed.
@@ -235,6 +413,12 @@ mod tests {
     }
 
     #[test]
+    fn no_role_hides_the_delegate_index() {
+        assert!(!COLUMNS.contains(&"index") && !COLUMNS.contains(&"model"));
+        assert_eq!(COLUMNS[5], "place", "placeAt reads this column");
+    }
+
+    #[test]
     fn rows_are_looked_up_by_list_row() {
         let model = BrowseLayoutModel {
             rows: cells(&[row("device", "folder", "a"), row("device", "folder", "b")]),
@@ -249,5 +433,118 @@ mod tests {
         assert_eq!((model.placeAt(0), model.placeAt(1)), (0, 1));
         assert_eq!(model.sectionAt(2).to_string(), "");
         assert_eq!((model.placeAt(2), model.placeAt(-1)), (-1, -1));
+    }
+
+    /// Rows named by single letters, all in one section; an upper-case
+    /// letter is a hidden row.
+    fn named(names: &str) -> Vec<Vec<Cell>> {
+        names
+            .chars()
+            .map(|c| {
+                vec![
+                    Cell::s("device"),
+                    Cell::s("folder"),
+                    Cell::Str(c.to_ascii_lowercase().to_string()),
+                    Cell::s(""),
+                    Cell::Bool(c.is_ascii_uppercase()),
+                ]
+            })
+            .collect()
+    }
+
+    /// The rows after making the steps from `old` to `new` one by one.
+    fn replayed(old: &[Vec<Cell>], new: &[Vec<Cell>]) -> Vec<Vec<Cell>> {
+        let mut rows = old.to_vec();
+        for step in steps(old, new).unwrap() {
+            apply_step(&mut rows, new, step);
+        }
+        rows
+    }
+
+    fn steps_of(old: &str, new: &str) -> Vec<Step> {
+        steps(&named(old), &named(new)).unwrap()
+    }
+
+    #[test]
+    fn a_switch_changes_its_row_only() {
+        assert_eq!(steps_of("abc", "aBc"), [Step::Change(1)]);
+        assert_eq!(steps_of("aBc", "abc"), [Step::Change(1)]);
+        assert!(steps_of("abc", "abc").is_empty());
+    }
+
+    #[test]
+    fn a_dragged_row_is_one_move() {
+        assert_eq!(steps_of("abcd", "bcda"), [Step::Move { from: 0, to: 3 }]);
+        assert_eq!(steps_of("abcd", "dabc"), [Step::Move { from: 3, to: 0 }]);
+        assert_eq!(steps_of("abcd", "acbd"), [Step::Move { from: 1, to: 2 }]);
+        assert_eq!(
+            steps_of("abcd", "bAcd"),
+            [Step::Move { from: 0, to: 1 }, Step::Change(1)]
+        );
+    }
+
+    #[test]
+    fn rows_come_and_go_where_they_are() {
+        assert_eq!(steps_of("abc", "ac"), [Step::Remove(1)]);
+        assert_eq!(steps_of("abc", "abxc"), [Step::Insert(2)]);
+        assert_eq!(
+            steps_of("abcd", "xbdy"),
+            [Step::Remove(2), Step::Remove(0), Step::Insert(0), Step::Insert(3)]
+        );
+        assert_eq!(steps_of("ab", "Bxa").last(), Some(&Step::Change(0)));
+    }
+
+    #[test]
+    fn every_change_ends_in_the_new_rows() {
+        let words = [
+            "", "a", "ab", "ba", "abc", "cab", "bca", "abcd", "dcba", "badc", "cdab", "aBcD",
+        ];
+        let more = ["xa", "axyb", "dxcy", "e", "Cxbea", "dCbAe", "edcba", "bdfac"];
+        for old in words.iter().chain(&more) {
+            for new in words.iter().chain(&more) {
+                let (o, n) = (named(old), named(new));
+                assert_eq!(replayed(&o, &n), n, "{old} → {new}");
+            }
+        }
+    }
+
+    #[test]
+    fn rows_that_keep_their_order_do_not_move() {
+        let moves = |old: &str, new: &str| {
+            steps_of(old, new)
+                .iter()
+                .filter(|s| matches!(s, Step::Move { .. }))
+                .count()
+        };
+        assert_eq!(moves("abcdef", "abcdef"), 0);
+        assert_eq!(moves("abcdef", "bcdefa"), 1);
+        assert_eq!(moves("abcdef", "badcfe"), 3);
+        assert_eq!(moves("abcdef", "fedcba"), 5);
+        assert_eq!(
+            moves("abxcdef", "aybcdfe"),
+            1,
+            "removals and insertions are not moves"
+        );
+    }
+
+    #[test]
+    fn the_longest_run_in_order_stays() {
+        assert_eq!(in_order(&[3, 0, 1, 2]), [false, true, true, true]);
+        assert_eq!(in_order(&[1, 2, 3, 0]), [true, true, true, false]);
+        assert_eq!(in_order(&[0, 2, 1, 3]).iter().filter(|s| **s).count(), 3);
+        assert!(in_order(&[]).is_empty());
+    }
+
+    #[test]
+    fn a_repeated_row_is_replaced_as_a_whole() {
+        assert_eq!(steps(&named("aa"), &named("a")), None);
+        assert_eq!(steps(&named("a"), &named("bb")), None);
+        let other_section = vec![vec![Cell::s("android"), Cell::s("folder"), Cell::s("a")]];
+        let rows = [named("a"), other_section].concat();
+        assert_eq!(
+            steps(&rows, &rows),
+            Some(vec![]),
+            "the section is part of the identity"
+        );
     }
 }

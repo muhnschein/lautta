@@ -533,10 +533,6 @@
         <source>Clearing recents</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-settings-locations">
-        <source>Locations</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-settings-storage">
         <source>Storage</source>
         <translation type="unfinished"></translation>
@@ -1806,10 +1802,6 @@
         <source>Settings</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-browse-connect">
-        <source>Connect to server</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-browse-add-server">
         <source>Add server</source>
         <translation type="unfinished"></translation>
@@ -1852,14 +1844,6 @@
         <source>Edit favourite</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-browse-move-up">
-        <source>Move up</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-browse-move-down">
-        <source>Move down</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-browse-remove-favourite">
         <source>Remove from favourites</source>
         <translation type="unfinished"></translation>
@@ -1870,14 +1854,6 @@
     </message>
     <message id="lautta-browse-connect-recent">
         <source>Connect</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-browse-disconnect">
-        <source>Disconnect</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-browse-edit-account">
-        <source>Edit account</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-browse-update-sign-in">
@@ -1896,10 +1872,6 @@
         <source>Copy address</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-browse-location-settings">
-        <source>Location settings</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-browse-open-storage-settings">
         <source>Open Storage settings</source>
         <translation type="unfinished"></translation>
@@ -1910,70 +1882,6 @@
     </message>
     <message id="lautta-browse-removing-server">
         <source>Removing server</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-locset-name">
-        <source>Display name</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-locset-start-default">
-        <source>Use the default start folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-locset-start">
-        <source>Start folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-locset-start-select">
-        <source>Select</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-locset-start-none">
-        <source>Default</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-locset-lanes">
-        <source>Bulk lane</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-locset-cache-listings">
-        <source>Cache folder listings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-locset-cache-thumbs">
-        <source>Cache thumbnails</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-locset-account">
-        <source>Account</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-locset-edit-account">
-        <source>Edit account</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-locset-update-sign-in">
-        <source>Update sign-in</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-locset-review-identity">
-        <source>Review server identity</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-locset-opens-settings">
-        <source>Opens Settings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-locset-storage">
-        <source>Storage</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-locset-storage-hint">
-        <source>Mount, unmount and format are in Settings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-locset-clear-cache">
-        <source>Clear this location&apos;s cache</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-recents-title">
@@ -2720,6 +2628,10 @@
         <source>The server is no longer connected.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-browse-edit-server">
+        <source>Edit server</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message id="lautta-date-in-progress">
         <source>In progress</source>
         <translation type="unfinished"></translation>
@@ -2742,10 +2654,6 @@
     </message>
     <message id="lautta-date-older">
         <source>Older</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-off-settings-hint">
-        <source>Turn them on in Settings</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-view-preview-photos">
@@ -2778,6 +2686,10 @@
     </message>
     <message id="lautta-view-preview-title">
         <source>Documents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-recents-off-settings-hint">
+        <source>Turn them on in Settings</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-search-title">
