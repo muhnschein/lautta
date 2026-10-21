@@ -7,6 +7,7 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/ErrorText.js" as ErrorText
+import "../components/directory/Names.js" as Names
 
 Dialog {
     id: dialog
@@ -18,7 +19,9 @@ Dialog {
     readonly property string newName: nameField.text
     readonly property bool taken: nameField.text !== oldName && parentModel.count >= 0
                                   && parentModel.nameKind(nameField.text) !== ""
-    readonly property bool badName: nameField.text.indexOf("/") >= 0 || nameField.text === "." || nameField.text === ".."
+    readonly property string folderUri: App.parentUri(uri)
+    // The bin of a local location sits at its root (OPS-8).
+    readonly property bool badName: Names.invalid(nameField.text, App.isLocal(folderUri) && App.parentUri(folderUri) === "")
 
     function errorText() {
         if (taken)
@@ -34,7 +37,7 @@ Dialog {
     DirectoryModel {
         id: parentModel
 
-        uri: App.parentUri(dialog.uri)
+        uri: dialog.folderUri
     }
 
     SilicaFlickable {

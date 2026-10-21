@@ -683,7 +683,8 @@ order, capability-filtered. *More actions* turns the same menu into *Add to
 favourites* and *Compress* for that item (OPS-12); there is no details page. *Rename*
 is a dialog of the plain Silica dialog header, titled *Rename*, and the name field
 only; *New folder* has its header (titled *New folder*, accept *Create*) and the name
-field. A taken or invalid name is an error in the field's label. Archives need no *Extract* row: they open as a location with *Extract all*. Selection starts from the pulley's *Select*, in list and grid alike;
+field. A taken or invalid name is an error in the field's label; at the root of a local
+location `.lautta-trash`, the bin (OPS-8), is invalid. Archives need no *Extract* row: they open as a location with *Extract all*. Selection starts from the pulley's *Select*, in list and grid alike;
 tapping an icon opens the item like the rest of the row. Its actions sit in a
 `DockedPanel` that stays open while selecting and ends with a button that leaves
 selection; the panel's actions, a finished delete and deselecting the last item leave it

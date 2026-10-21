@@ -139,6 +139,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   fixed order filtered by capabilities, is in `components/directory/ContextActions.js`
   (`menu(ctx)`, `more(ctx)`).
 - When selection mode starts and ends is in `components/directory/Selection.js`.
+- Which names New folder and Rename refuse is in `components/directory/Names.js`
+  (`invalid(name, binHere)`).
 
 ### Operations (boards: PlanSummary, Conflict, Compress, Extract, RecentlyDeleted, RecentlyDeletedEmpty, ShareTarget, ArchiveView (open as location))
 

@@ -7,6 +7,7 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/ErrorText.js" as ErrorText
+import "../components/directory/Names.js" as Names
 
 Dialog {
     id: dialog
@@ -15,7 +16,8 @@ Dialog {
     readonly property string itemName: nameField.text
     // "folder", "file" or "" for what already has this name here.
     readonly property string clash: parentModel.count >= 0 ? parentModel.nameKind(nameField.text) : ""
-    readonly property bool badName: nameField.text.indexOf("/") >= 0 || nameField.text === "." || nameField.text === ".."
+    // The bin of a local location sits at its root (OPS-8).
+    readonly property bool badName: Names.invalid(nameField.text, App.isLocal(parentUri) && App.parentUri(parentUri) === "")
 
     function errorText() {
         if (clash === "folder")

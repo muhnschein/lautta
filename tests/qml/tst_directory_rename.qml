@@ -2,7 +2,8 @@
 // RenameDialog on the target (real Silica): the plain dialog header titled
 // Rename with Silica's own accept and cancel texts, and the name field,
 // nothing else. The name is selected without its extension, and a name that
-// is taken shows as an error in the field's label.
+// is taken, or the bin's at the location's root, shows as an error in the
+// field's label.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -57,6 +58,8 @@ ApplicationWindow {
         field[0].text = "taken.md"
         expect(field[0].errorHighlight && field[0].label !== field[0].placeholderText && !dialog.canAccept,
                "a taken name is an error in the label: " + field[0].label)
+        field[0].text = ".lautta-trash"
+        expect(field[0].errorHighlight && !dialog.canAccept, "the bin's name is refused at the root (OPS-8)")
         field[0].text = "fresh.odt"
         expect(!field[0].errorHighlight && dialog.canAccept && dialog.newName === "fresh.odt", "a free name")
     }
