@@ -127,7 +127,13 @@ const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (section, item)
     );
     "#,
-    // 4: ORG-1, files can be favourites too; the rows before were folders.
+    // 4: OPS-8, the bin holding a trashed item (`<location root>/.lautta-trash`,
+    // path bytes). NULL for the items trashed before, which stay in the app
+    // data trash folder.
+    r#"
+    ALTER TABLE trash_items ADD COLUMN bin BLOB;
+    "#,
+    // 5: ORG-1, files can be favourites too; the rows before were folders.
     r#"
     ALTER TABLE favourites ADD COLUMN is_dir INTEGER NOT NULL DEFAULT 1;
     "#,
@@ -241,14 +247,14 @@ mod tests {
     #[test]
     fn favourites_from_before_files_stay_folders() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("v3.db");
+        let path = dir.path().join("v4.db");
         {
-            // A database as schema 3 left it, with one favourite.
+            // A database as schema 4 left it, with one favourite.
             let c = Connection::open(&path).unwrap();
-            for sql in &MIGRATIONS[..3] {
+            for sql in &MIGRATIONS[..4] {
                 c.execute_batch(sql).unwrap();
             }
-            c.pragma_update(None, "user_version", 3).unwrap();
+            c.pragma_update(None, "user_version", 4).unwrap();
             c.execute(
                 "INSERT INTO favourites(uri, label, colour, position) \
                  VALUES ('lautta://user-documents/Uni', 'Uni', NULL, 0)",
@@ -276,6 +282,33 @@ mod tests {
         }
         let err = Db::open(&path).err().unwrap();
         assert_eq!(err.kind, ErrorKind::Unsupported);
+    }
+
+    #[test]
+    fn older_schemas_migrate_forward_and_keep_their_rows() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("x.db");
+        {
+            let c = Connection::open(&path).unwrap();
+            for sql in &MIGRATIONS[..3] {
+                c.execute_batch(sql).unwrap();
+            }
+            c.pragma_update(None, "user_version", 3).unwrap();
+            c.execute(
+                "INSERT INTO trash_items(original_uri, trashed_at, stored_name) VALUES ('lautta://a/b', 1, 's')",
+                [],
+            )
+            .unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.version().unwrap(), SCHEMA_VERSION);
+        let bin: Option<Vec<u8>> = db
+            .lock()
+            .query_row("SELECT bin FROM trash_items WHERE stored_name = 's'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(bin, None, "old items keep the app data folder");
     }
 
     #[test]

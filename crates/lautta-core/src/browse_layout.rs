@@ -4,8 +4,8 @@
 //! their fixed order; favourites keep their own order (ORG-1).
 //!
 //! A row is named by its section and an item: the location id of a folder,
-//! volume or server, `deleted` for *Recently deleted* and `nearby` for all
-//! nearby servers together. The store is blocking: call it from
+//! volume or server, `recents` for *Recents*, `deleted` for *Recently
+//! deleted* and `nearby` for all nearby servers together. The store is blocking: call it from
 //! `spawn_blocking` (ARC-6).
 
 use crate::db::Db;
@@ -15,6 +15,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// The item of *Recently deleted* in the `device` section.
 pub const DELETED_ITEM: &str = "deleted";
+/// The item of *Recents* in the `device` section (ORG-2).
+pub const RECENTS_ITEM: &str = "recents";
 /// The one item that stands for every nearby server.
 pub const NEARBY_ITEM: &str = "nearby";
 
@@ -23,6 +25,7 @@ pub const NEARBY_ITEM: &str = "nearby";
 pub fn layout_item(kind: &str, item_id: &str) -> Option<String> {
     match kind {
         "deleted" => Some(DELETED_ITEM.to_owned()),
+        "recents" => Some(RECENTS_ITEM.to_owned()),
         "nearby" => Some(NEARBY_ITEM.to_owned()),
         "folder" | "volume" | "account" | "adhoc" | "adhocRecent" => Some(item_id.to_owned()),
         _ => None,
@@ -200,6 +203,7 @@ mod tests {
     #[test]
     fn items_of_rows() {
         assert_eq!(layout_item("deleted", "").as_deref(), Some("deleted"));
+        assert_eq!(layout_item("recents", "").as_deref(), Some("recents"));
         assert_eq!(layout_item("nearby", "3").as_deref(), Some("nearby"));
         for kind in ["folder", "volume", "account", "adhoc", "adhocRecent"] {
             assert_eq!(layout_item(kind, "x").as_deref(), Some("x"), "{kind}");

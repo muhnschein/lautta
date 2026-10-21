@@ -26,6 +26,10 @@ Page {
     allowedOrientations: Orientation.All
 
     onDiscoveringChanged: Bridge.setDiscover(discovering)
+    // Back in the foreground: refresh, which rescans the volumes (LOC-3) in
+    // case the media watch missed a mount inside the sandbox.
+    readonly property bool foreground: Qt.application.state === Qt.ApplicationActive
+    onForegroundChanged: if (foreground && status === PageStatus.Active) locations.refresh()
     onStatusChanged: {
         if (status !== PageStatus.Active)
             return
@@ -54,6 +58,9 @@ Page {
                 Open.open(pageStack, App, Operations, row.uri, false, "", "")
             else
                 openDirectory(row.uri)
+            break
+        case "recents":
+            pageStack.push(Qt.resolvedUrl("RecentsPage.qml"))
             break
         case "deleted":
             pageStack.push(Qt.resolvedUrl("RecentlyDeletedPage.qml"))
@@ -146,20 +153,9 @@ Page {
             }
             MenuItem {
                 visible: Bridge.ready
-                //% "Connect to server"
-                text: qsTrId("lautta-browse-connect")
-                onClicked: page.connectTo("")
-            }
-            MenuItem {
-                visible: Bridge.ready
                 //% "Add server"
                 text: qsTrId("lautta-browse-add-server")
                 onClicked: Bridge.addServer("")
-            }
-            MenuItem {
-                //% "Recents"
-                text: qsTrId("lautta-browse-recents")
-                onClicked: pageStack.push(Qt.resolvedUrl("RecentsPage.qml"))
             }
             MenuItem {
                 text: Transfers.activeCount > 0
@@ -237,10 +233,7 @@ Page {
 
                 Label {
                     width: parent.width
-                    text: model.kind === "deleted"
-                          //% "Recently deleted"
-                          ? qsTrId("lautta-browse-recently-deleted")
-                          : model.name
+                    text: BrowseText.rowName(model.kind, model.name)
                     color: row.highlighted ? Theme.highlightColor : Theme.primaryColor
                     truncationMode: TruncationMode.Fade
                 }
@@ -367,24 +360,6 @@ Page {
                         text: qsTrId("lautta-browse-edit-favourite")
                         onClicked: page.openFavourite(model.uri)
                     }
-                    MenuItem {
-                        visible: row.kind === "favourite"
-                        //% "Move up"
-                        text: qsTrId("lautta-browse-move-up")
-                        onClicked: favourites.moveBy(parseInt(model.itemId), -1)
-                    }
-                    MenuItem {
-                        visible: row.kind === "favourite"
-                        //% "Move down"
-                        text: qsTrId("lautta-browse-move-down")
-                        onClicked: favourites.moveBy(parseInt(model.itemId), 1)
-                    }
-                    MenuItem {
-                        visible: row.kind === "favourite"
-                        //% "Remove from favourites"
-                        text: qsTrId("lautta-browse-remove-favourite")
-                        onClicked: page.removeFavourite(row, parseInt(model.itemId))
-                    }
 
                     // Servers (NVB-5)
                     MenuItem {
@@ -394,15 +369,9 @@ Page {
                         onClicked: page.connectTo(model.uri)
                     }
                     MenuItem {
-                        visible: row.kind === "account" || row.kind === "adhoc"
-                        //% "Disconnect"
-                        text: qsTrId("lautta-browse-disconnect")
-                        onClicked: Bridge.disconnect(model.itemId)
-                    }
-                    MenuItem {
                         visible: row.kind === "account"
-                        //% "Edit account"
-                        text: qsTrId("lautta-browse-edit-account")
+                        //% "Edit server"
+                        text: qsTrId("lautta-browse-edit-server")
                         onClicked: Bridge.editAccount(model.uri)
                     }
                     MenuItem {
@@ -425,17 +394,11 @@ Page {
                         text: qsTrId("lautta-browse-add-favourite")
                         onClicked: page.openFavourite(model.uri)
                     }
+                    // Every row with a menu, favourites too.
                     MenuItem {
-                        visible: row.kind !== "favourite"
                         //% "Copy address"
                         text: qsTrId("lautta-browse-copy-address")
                         onClicked: page.copyAddress(row.kind === "adhocRecent" ? model.place : App.displayAddress(model.uri))
-                    }
-                    MenuItem {
-                        visible: row.kind === "volume" || row.kind === "account" || row.kind === "adhoc"
-                        //% "Location settings"
-                        text: qsTrId("lautta-browse-location-settings")
-                        onClicked: pageStack.push(Qt.resolvedUrl("LocationSettingsPage.qml"), { "locationId": model.itemId })
                     }
                     MenuItem {
                         visible: row.kind === "volume"
@@ -454,6 +417,12 @@ Page {
                             hiddenNotice.show()
                             locations.hide(model.section, model.kind, model.itemId)
                         }
+                    }
+                    MenuItem {
+                        visible: row.kind === "favourite"
+                        //% "Remove from favourites"
+                        text: qsTrId("lautta-browse-remove-favourite")
+                        onClicked: page.removeFavourite(row, parseInt(model.itemId))
                     }
                     MenuItem {
                         visible: row.kind === "adhoc" || row.kind === "adhocRecent"

@@ -71,29 +71,39 @@ Methods:
 
 Each area owns its types and pages. Names are fixed here so areas can use each other.
 
-### Browse (boards: Main, BrowsePulley, BrowseStandalone, BrowseServerMenu, BrowseVolume, ConnectServer, ServerQuestion, ServerAdhocMenu, FavouriteEdit, Recents, RecentsPulley, RecentsFilter, StateReconnecting, StateIdentity, LocationSettings, Covers)
+### Browse (boards: Main, BrowsePulley, BrowseStandalone, BrowseServerMenu, BrowseVolume, ConnectServer, ServerQuestion, ServerAdhocMenu, FavouriteEdit, Recents, RecentsPulley, StateReconnecting, StateIdentity, Covers)
 
 - `LocationsModel` — sections `favourites`, `device`, `android`, `volumes`, `servers`,
   `nearby` (roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
-  `colour`, `count`, `itemId`, `isFile` (a file favourite: opened, not browsed)).
+  `colour`, `count`, `itemId`, `isFile` (a file favourite: opened, not browsed)); kinds
+  `recents` and `deleted` are the app's own rows of `device` (`BrowseText.rowName` names
+  them). `refresh()` rescans the device folders and volumes first (LOC-3); the model also
+  follows location changes by itself.
 - `FavouritesModel` (roles `itemId`, `uri`, `label`, `colour`, `place`, `isDir`; `add`
   (a folder), `save(uri, label, colour, isDir)` adds a folder or file or relabels the
-  favourite it is, `edit`, `remove`, `removeUri(uri)`, `moveTo`, `moveBy`, `get`, `idOf`,
-  `placeOf`), `RecentsModel { filter }`.
+  favourite it is, `edit`, `remove`, `removeUri(uri)`, `moveTo`, `get`, `idOf`,
+  `placeOf`).
+- `RecentsModel` (ORG-2, newest first, no filter; `count`, `enabled`, `loaded`,
+  `reload()`, `clear()`, `remove(itemId)`, signal `failed(kind, message)`; roles:
+  `itemId`, `uri`, `name`, `kind`, `place`, `at`, `dateGroup`). `dateGroup` is the date
+  section (§15.4): `today`, `yesterday`, `last7Days`, `last30Days`, `older`;
+  `components/DateSectionHeader.qml { group }` shows it.
 - `Bridge` singleton: `status` (`absent`, `connecting`, `consentUnknown`, `consentDenied`,
   `ready`, `reconnecting`), `requestConsent()`, `addServer(provider)`,
   `editAccount(locationUri)`, `connectAdHoc(url, secret, options)`, `forgetAdHoc(id)`,
-  `disconnect(id)`, signal `question(id, kind, details)`, `answer(id, answer)`.
+  signal `question(id, kind, details)`, `answer(id, answer)`.
 - Pages: `pages/BrowsePage.qml` (initial page), `pages/RecentsPage.qml`,
   `dialogs/ConnectServerDialog.qml { url }`,
   `dialogs/ServerQuestionDialog.qml { questionId, kind, details }`,
   `dialogs/FavouriteDialog.qml { uri, isDir }` (edits the item's favourite when it is
-  one; `isDir` defaults to true, a file passes false),
-  `pages/LocationSettingsPage.qml { locationId }`, `cover/CoverPage.qml`.
+  one; `isDir` defaults to true, a file passes false), `cover/CoverPage.qml`.
 - Browse page settings (BRW-12): `LocationsModel.hide(section, kind, itemId)`;
-  `BrowseLayoutModel` (roles `section`, `kind`, `item`, `name`, `hidden`, `index`,
-  `movable`; `reload()`, `setHidden(section, item, hidden)`, `moveTo(section, item, index)`,
-  `restoreDefaults()`, `sectionAt(row)`, `placeAt(row)`, `itemAt(row)`); `pages/BrowseSettingsPage.qml`.
+  `BrowseLayoutModel` (roles `section`, `kind`, `item`, `name`, `hidden`, `place` (the
+  place in the section; no role is called `index`, which would hide the delegate's
+  `index`), `movable`; `reload()`, `setHidden(section, item, hidden)`,
+  `moveTo(section, item, index)`, `restoreDefaults()`, `sectionAt(row)`, `placeAt(row)`,
+  `itemAt(row)`; changes arrive as row changes, moves, insertions and removals, not a
+  reset); `pages/BrowseSettingsPage.qml`.
 
 ### Directory (boards: Directory, DirectoryPulley, DirectoryContext, DirectorySelect, DirectorySelectPulley, DirectoryGrid, DirectoryLandscape, PathMenu, DirectoryRemorse, ImageDeleteRemote, ViewOptions, NewItem, Rename, FolderPicker, FolderPickerPulley, StateEmpty, StateNoAccess, StateOffline, StateError, StateLarge)
 
@@ -106,14 +116,24 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `capabilities` (list of flag strings), `locationName`, `title`;
   methods `refresh()`, `revisit()` (lists again unless watched or an archive, BRW-11),
   `select(uri)`, `toggle(uri)`, `selectAll()`, `clearSelection()`,
-  `selectedUris() → list`, `setViewPrefs(map)` (one set for every folder), `indexOf(uri)`.
+  `selectedUris() → list`, `setViewPrefs(map)` (shows this folder with other view
+  settings without storing them, `App.setSetting` does that; a `viewMode` replaces a
+  suggested grid), `indexOf(uri)`. An open model follows every change of the global view
+  settings at once (BRW-4).
+- `ViewPreviewModel { entries, sortKey, descending, foldersFirst, showHidden }` — the
+  sample folder of the view options preview: `entries` is JSON
+  `[{ name, dir, size, modified }]` (bytes, ms since the epoch), ordered and filtered by
+  the core as a real folder; roles `name`, `isDir`, `size`, `modified`, `hidden`,
+  `category`; `names` (list in display order), `count`.
 - `PathModel { uri }` — ancestors (roles `uri`, `name`), `complete(prefix) → list`.
 - Pages: `pages/DirectoryPage.qml { uri }`, `dialogs/FolderPickerDialog.qml { title,
   acceptText, startUri }` (property `selectedUri` after accept),
   `dialogs/NewItemDialog.qml { parentUri }` (a new folder: property `itemName` after
   accept, the caller calls `DirectoryModel.createFolder(name)`),
   `dialogs/RenameDialog.qml { uri, isDir }` (property `newName` after accept),
-  `pages/ViewOptionsPage.qml { model }`, `components/PathMenu.qml`.
+  `pages/ViewOptionsPage.qml { model }` (a page whose controls apply at once; `model`, the
+  folder it was opened from, is absent when Settings opens it),
+  `components/directory/ViewPreview.qml` (its live preview), `components/PathMenu.qml`.
 - The item context menu is plain rows ending with *More actions*, which keeps the menu
   open and swaps its rows for the item's rarer actions; which actions each holds, in a
   fixed order filtered by capabilities, is in `components/directory/ContextActions.js`
@@ -129,7 +149,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   signals `needsSummary(planId, summary)` (`summary`: files, dirs, bytes, conflicts,
   renamed, kind, destination) → `startPlan(planId)` / `discardPlan(planId)`;
   `started(transferId)`; `failed(kind, message)`.
-- `TrashModel` — Recently deleted list, `restore(id)`, `remove(id)`, `empty()`.
+- `TrashModel` — Recently deleted list of every location's bin (OPS-8), `reload()` (also
+  purges what is past the retention setting), `restore(id)`, `remove(id)`, `empty()`.
 - Pages: `dialogs/PlanSummaryDialog.qml { planId, summary }`,
   `dialogs/ConflictDialog.qml { transferId, item, conflict }`,
   `dialogs/CompressDialog.qml { uris }`,
@@ -146,9 +167,13 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   Activity bar (XFR-13): `barMode` (`hidden`, `question`, `running`, `waiting`, `paused`,
   `failed`, `done`), `barTransferId`, `barUnfinished`, `dismissBar()` (swiped away),
   `barSeen()` (the Activity page shows the outcome); `components/transfers/ActivityBar.qml`.
-- `TransfersModel` — groups `active`, `waiting`, `paused`, `history`
-  (roles: `transferId`, `group`, `kind`, `title`, `state`, `waitReason`, `bytesDone`,
-  `bytesTotal`, `rate`, `eta`, `itemsDone`, `itemsTotal`, `itemsFailed`, `direction`).
+- `TransfersModel` — what has not ended in queue order, then what ended, newest first
+  (roles: `transferId`, `group`, `dateGroup`, `kind`, `title`, `state`, `waitReason`,
+  `bytesDone`, `bytesTotal`, `rate`, `eta`, `itemsDone`, `itemsTotal`, `itemsFailed`,
+  `direction`). `group` is what the task does (`active`, `waiting`, `paused`,
+  `history`); `dateGroup` is its section (§15.4): `inProgress` until it ends, then
+  `today`, `yesterday`, `last7Days`, `last30Days` or `older` by when it ended, shown by
+  `components/DateSectionHeader.qml { group }`.
 - `TransferItemsModel { transferId }`.
 - Pages: `pages/TransfersPage.qml`, `pages/TransferDetailsPage.qml { transferId }`,
   `components/TransferNotifications.qml`
@@ -187,12 +212,16 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `dialogs/OpenRemoteDialog.qml { uri }`, `dialogs/PdfPasswordDialog.qml { fileName, wrong }`,
   `dialogs/PdfLinkDialog.qml { url }`.
 
-### Search, settings (boards: Search, SearchFilters, SearchPulley, Settings, About)
+### Search, settings (boards: Search, SearchFilters, Settings, About)
 
 - `SearchModel { rootUri }` — query/filters, results grouped by folder, `start()`,
   `cancel()`, `recentSearches`.
 - Pages: `pages/SearchPage.qml { rootUri }`, `pages/SearchFiltersPage.qml`,
-  `pages/SettingsPage.qml`, `pages/AboutPage.qml`.
+  `pages/SettingsPage.qml` (its *View options* row opens `pages/ViewOptionsPage.qml`
+  without a model; the view settings are not repeated, BRW-4), `pages/AboutPage.qml`.
+- The search page has no pulley: its header, search field and filter summary (which
+  opens `SearchFiltersPage`) sit above the results list, not in the list's header, so
+  the field keeps the keyboard while each search resets the list.
 
 ## Shared QML (core infra owns)
 

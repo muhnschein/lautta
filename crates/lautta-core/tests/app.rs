@@ -213,6 +213,35 @@ async fn large_plans_need_the_summary() {
 }
 
 #[tokio::test]
+async fn settings_changes_are_announced() {
+    // BRW-4: open folders learn of new view settings through this.
+    let h = home().await;
+    let mut rx = h.core.watch_settings();
+    h.core.apply_settings(Settings::default());
+    assert!(!rx.has_changed().unwrap(), "the same settings are no change");
+    h.core.apply_settings(Settings {
+        sort_descending: true,
+        ..Settings::default()
+    });
+    assert!(rx.has_changed().unwrap());
+    let first = *rx.borrow_and_update();
+    assert!(h.core.view_prefs().descending);
+    h.core.apply_settings(Settings {
+        sort_descending: true,
+        remorse_seconds: 99,
+        ..Settings::default()
+    });
+    assert!(rx.has_changed().unwrap(), "every changed key counts");
+    assert!(*rx.borrow_and_update() > first);
+    h.core.apply_settings(Settings {
+        sort_descending: true,
+        remorse_seconds: 10,
+        ..Settings::default()
+    });
+    assert!(!rx.has_changed().unwrap(), "compared after clamping");
+}
+
+#[tokio::test]
 async fn listing_uses_the_cache_first() {
     let h = home().await;
     write(&h.root.join("Documents/one"), b"1");

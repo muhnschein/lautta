@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Host test of DirectoryModel, PathModel and PickerRootsModel (no Silica):
 // listing a temp HOME's Documents, create/rename errors, sort, filter, hidden
-// files, selection, live updates, per-folder view settings and the path menu.
+// files, selection, live updates, per-folder view settings, open folders
+// following the global ones and the path menu.
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -197,6 +198,35 @@ Item {
         dir.setViewPrefs(JSON.stringify({ viewMode: "list", thumbnails: true }))
     }
 
+    // BRW-4: folders already open follow a change made elsewhere (Settings,
+    // or View options in another folder) without being opened again.
+    function testOpenFoldersFollowSettings() {
+        var open = Qt.createQmlObject('import Lautta 1.0; DirectoryModel { uri: "' + root.docs + 'Zeta" }', root)
+        wait(300)
+        check(!open.descending && open.viewMode === "list", "an open folder starts with the global settings")
+        var before = names(rep)
+        // Set for this folder alone; the global settings do not touch it.
+        dir.setViewPrefs(JSON.stringify({ thumbnails: false }))
+        App.setSetting("sort_descending", JSON.stringify(true))
+        App.setSetting("view_mode", JSON.stringify("grid"))
+        wait(300)
+        check(open.descending && open.viewMode === "grid", "an open folder follows: " + open.descending + " " + open.viewMode)
+        check(dir.descending && dir.viewMode === "grid", "so does the folder on screen")
+        same(names(rep), [before[0]].concat(before.slice(1).reverse()), "its rows are in the new order")
+        check(row(rep, "Beta.png").thumb === "", "what was set for the folder alone stays")
+        App.setSetting("remorse_seconds", JSON.stringify(7))
+        wait(300)
+        check(dir.viewMode === "grid" && dir.descending, "other settings change nothing")
+        App.setSetting("sort_descending", JSON.stringify(false))
+        App.setSetting("view_mode", JSON.stringify("list"))
+        App.setSetting("remorse_seconds", JSON.stringify(5))
+        wait(300)
+        check(!open.descending && open.viewMode === "list", "and back: " + open.viewMode)
+        same(names(rep), before, "the rows are back in name order")
+        dir.setViewPrefs(JSON.stringify({ thumbnails: true }))
+        open.destroy()
+    }
+
     function testPicker() {
         check(pump.hasRemote() === false, "no servers in a plain home")
     }
@@ -210,6 +240,7 @@ Item {
         testLiveUpdate()
         testStates()
         testPrefsAreGlobal()
+        testOpenFoldersFollowSettings()
         testPicker()
     }
 }

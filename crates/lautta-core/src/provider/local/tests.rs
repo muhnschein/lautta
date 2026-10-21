@@ -150,6 +150,18 @@ async fn listing_inside_a_subfolder() {
 }
 
 #[tokio::test]
+async fn the_trash_bin_is_never_listed_at_the_root() {
+    let (d, p) = setup();
+    std::fs::create_dir_all(d.path().join(".lautta-trash/stored")).unwrap();
+    std::fs::write(d.path().join(".hidden"), "1").unwrap();
+    std::fs::create_dir_all(d.path().join("sub/.lautta-trash")).unwrap();
+    let all = list_all(&p, &VPath::root(), Lane::Interactive).await.unwrap();
+    assert_eq!(names(&all), [".hidden", "sub"], "other hidden entries stay");
+    let sub = list_all(&p, &vp("sub"), Lane::Bulk).await.unwrap();
+    assert_eq!(names(&sub), [".lautta-trash"], "only the root's bin is ours");
+}
+
+#[tokio::test]
 async fn non_utf8_names_survive_listing_and_stat() {
     let (d, p) = setup();
     let raw = b"caf\xe9 \xff.txt";

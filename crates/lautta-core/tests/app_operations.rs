@@ -369,7 +369,7 @@ async fn recently_deleted_entries_restore_and_empty() {
     h.core.restore(old.id).await.unwrap();
     assert!(h.root.join("Documents/Uni/old.txt").is_file());
     assert_eq!(h.core.trash_entries(now).unwrap().len(), 1);
-    assert_eq!(h.core.trash.empty().unwrap(), 1);
+    assert_eq!(h.core.empty_trash().unwrap(), 1);
     assert!(h.core.trash_entries(now).unwrap().is_empty());
     assert_eq!(h.core.trash.total_size().unwrap(), 0);
 }

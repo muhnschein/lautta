@@ -8,7 +8,7 @@ use crate::bridge::{Attention, BridgeClient, BridgeConfig, BridgeStatus, RemoteK
 use crate::browse_layout::BrowseLayout;
 use crate::db::Db;
 use crate::dircache::DirCache;
-use crate::entry::{cap, Entry};
+use crate::entry::Entry;
 use crate::error::{Error, ErrorKind, Result};
 use crate::locations::{Location, LocationKind, LocationRegistry, LocationStatus};
 use crate::ops::plan::{PlanOptions, Planner};
@@ -28,10 +28,12 @@ use crate::trash::Trash;
 use crate::undo::{UndoAction, UndoRecorder, UndoStep};
 use crate::uri::Uri;
 use crate::viewprefs::{ViewMode, ViewPrefs};
+use crate::volumes::VolumeWatcher;
 use crate::workcopy::WorkingCopies;
 use async_trait::async_trait;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, MutexGuard};
+use tokio::sync::watch;
 
 /// Listings kept in memory (BRW-5).
 const DIRCACHE_ENTRIES: usize = 64;
@@ -66,7 +68,13 @@ pub struct Core {
     /// The netvfs bridge client (SPEC §7); `None` only in tests without one.
     pub bridge: Option<BridgeClient>,
     settings: Mutex<Settings>,
+    /// Counts the changes of `settings` (see [`Core::watch_settings`]).
+    settings_changed: watch::Sender<u64>,
     undo: Mutex<UndoRecorder>,
+    /// Follows the removable-media root for as long as the core lives
+    /// (LOC-3); `None` when inotify is not available, then Browse finds
+    /// volumes by rescanning when it refreshes.
+    _volume_watch: Option<VolumeWatcher>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -92,19 +100,18 @@ impl Trasher for LocalTrasher {
     }
 }
 
-/// Trashes one item; `None` when its location does not keep a trash or the
-/// item is on another file system (then the caller deletes permanently).
+/// Trashes one item into its location's bin; `None` when the location does
+/// not keep a trash or the item is on another mount than the bin (then the
+/// caller deletes permanently).
 async fn trash_one(locations: &LocationRegistry, trash: &Trash, uri: &Uri) -> Result<Option<i64>> {
-    let provider = locations.provider(&uri.location)?;
-    if !provider.capabilities().has(cap::TRASH) {
-        return Ok(None);
-    }
-    let Some(path) = locations.to_local_path(uri) else {
+    // An unknown or vanished location is an error, not a permanent delete.
+    locations.provider(&uri.location)?;
+    let (Some(bin), Some(path)) = (locations.trash_bin(&uri.location), locations.to_local_path(uri)) else {
         return Ok(None);
     };
     let trash = trash.clone();
     let uri = uri.clone();
-    let res = tokio::task::spawn_blocking(move || trash.trash(&path, &uri))
+    let res = tokio::task::spawn_blocking(move || trash.trash(&path, &uri, &bin))
         .await
         .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))?;
     match res {
@@ -141,6 +148,7 @@ impl Core {
             .await
             .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))??;
         locations.refresh();
+        let volume_watch = watch_volumes(&locations);
         let trash = Trash::new(paths.trash_dir(), db.clone());
         let mut deps = EngineDeps::new(db.clone(), Arc::new(locations.clone()));
         deps.trasher = Some(Arc::new(LocalTrasher {
@@ -169,7 +177,9 @@ impl Core {
             questions: questions.clone(),
             bridge: client.clone(),
             settings: Mutex::new(settings),
+            settings_changed: watch::channel(0).0,
             undo: Mutex::new(UndoRecorder::default()),
+            _volume_watch: volume_watch,
             paths,
             db,
             locations,
@@ -191,7 +201,17 @@ impl Core {
     pub fn apply_settings(&self, settings: Settings) {
         let settings = settings.sanitised();
         self.recents.set_enabled(settings.recents_enabled);
-        *lock(&self.settings) = settings;
+        let previous = std::mem::replace(&mut *lock(&self.settings), settings.clone());
+        if previous != settings {
+            self.settings_changed.send_modify(|generation| *generation += 1);
+        }
+    }
+
+    /// A receiver whose value increases whenever the settings change, so
+    /// what is already on screen can follow them (BRW-4: folders open
+    /// while the view settings change show the new ones at once).
+    pub fn watch_settings(&self) -> watch::Receiver<u64> {
+        self.settings_changed.subscribe()
     }
 
     /// The view settings every folder uses (BRW-4).
@@ -259,9 +279,10 @@ impl Core {
         let _ = self.favourites.on_moved(from, to);
     }
 
-    /// Deletes items after the remorse timer (OPS-8): local items on the home
-    /// file system go to Recently deleted (undoable, OPS-9); the rest are
-    /// deleted permanently through the transfer engine.
+    /// Deletes items after the remorse timer (OPS-8): items in user and
+    /// Android folders go to Recently deleted, the bin at their location's
+    /// root (undoable, OPS-9); the rest are deleted permanently through the
+    /// transfer engine.
     pub async fn delete(&self, items: &[Uri]) -> Result<Option<TransferId>> {
         let use_trash = self.settings().recently_deleted;
         let mut trashed = Vec::new();
@@ -433,6 +454,18 @@ impl Core {
     /// Sets a location's status shown in Browse (bridge reconnects, NVB-12).
     pub fn set_location_status(&self, id: &str, status: LocationStatus, attention: Option<String>) {
         self.locations.set_status(id, status, attention);
+    }
+}
+
+/// Starts following mounts and unmounts below the media root (LOC-3). The
+/// app works without it, so a failure (no inotify, watch limit) is logged.
+fn watch_volumes(locations: &LocationRegistry) -> Option<VolumeWatcher> {
+    match locations.watch_volumes() {
+        Ok(watcher) => Some(watcher),
+        Err(e) => {
+            log::warn!("removable volumes are not followed live: {e}");
+            None
+        }
     }
 }
 

@@ -361,7 +361,6 @@ async fn adhoc_servers_are_connected_and_forgotten() {
     assert_eq!(l.provider, "sftp");
     assert_eq!(l.start_path.as_bytes(), b"docs");
 
-    rig.client.disconnect(&id).await.unwrap();
     rig.client.forget_adhoc(&id).await.unwrap();
     eventually("the removal", || rig.client.location(&id).is_none()).await;
     let e = rig.client.forget_adhoc(&id).await.unwrap_err();
