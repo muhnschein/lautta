@@ -45,9 +45,7 @@ QtObject {
         locations.refresh()
 
         check(recents.count === 0 && !recents.enabled && !recents.loaded, "recents start empty")
-        recents.kindFilter = "previewed"
-        recents.text = "notes"
-        check(recents.kindFilter === "previewed" && recents.text === "notes", "recents filter is kept")
+        check(recents.kindFilter === undefined && recents.text === undefined, "recents have no filter (ORG-2)")
 
         check(prefs.locationName === "" && prefs.bulkLanes === 0, "prefs start empty")
         prefs.locationId = "user-documents"

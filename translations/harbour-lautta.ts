@@ -1486,22 +1486,6 @@
         <oldsource>This transfer is gone</oldsource>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-xfr-group-active">
-        <source>Active</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-group-waiting">
-        <source>Waiting for you</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-group-paused">
-        <source>Paused</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-group-history">
-        <source>History</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-xfr-header-stopped" numerus="yes">
         <source>%n stopped</source>
         <translation type="unfinished">
@@ -1528,10 +1512,6 @@
     </message>
     <message id="lautta-xfr-restored-hint">
         <source>Nothing was lost. Finished files stay where they are.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-menu-settings">
-        <source>Settings</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-menu-clear">
@@ -1626,26 +1606,6 @@
     </message>
     <message id="lautta-recents-opened">
         <source>Opened</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-today">
-        <source>Today</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-yesterday">
-        <source>Yesterday</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-week">
-        <source>Earlier this week</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-earlier">
-        <source>Earlier</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-everything">
-        <source>Everything</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-colour-amber">
@@ -2020,18 +1980,6 @@
         <source>Recents</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-recents-show">
-        <source>Show</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-turn-off">
-        <source>Turn off recents</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-turn-on">
-        <source>Turn on recents</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-recents-clear">
         <source>Clear recents</source>
         <translation type="unfinished"></translation>
@@ -2054,10 +2002,6 @@
     </message>
     <message id="lautta-recents-empty-hint">
         <source>Files you open, edit or transfer show up here</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-off-hint">
-        <source>Pull down to turn them on</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-clip-from">
@@ -2776,6 +2720,34 @@
         <source>The server is no longer connected.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-date-in-progress">
+        <source>In progress</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-date-today">
+        <source>Today</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-date-yesterday">
+        <source>Yesterday</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-date-last-7-days">
+        <source>Last 7 days</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-date-last-30-days">
+        <source>Last 30 days</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-date-older">
+        <source>Older</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-recents-off-settings-hint">
+        <source>Turn them on in Settings</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message id="lautta-view-preview-photos">
         <source>Photos</source>
         <translation type="unfinished"></translation>
@@ -2808,6 +2780,10 @@
         <source>Documents</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-search-title">
+        <source>Search</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message id="lautta-settings-view-options">
         <source>View options</source>
         <translation type="unfinished"></translation>
@@ -2818,10 +2794,6 @@
     </message>
     <message id="lautta-dir-opts-preview">
         <source>Preview</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-title">
-        <source>Search</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

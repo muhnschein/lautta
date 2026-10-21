@@ -49,7 +49,7 @@ Item {
             property int rid: itemId
             property string rname: name
             property string rplace: place
-            property string rday: day
+            property string rgroup: dateGroup
         }
     }
 
@@ -320,17 +320,11 @@ Item {
              function() {
                  return recents.loaded && recents.enabled && recents.count === 3 && recentRows.count === 3
                         && recentRows.itemAt(0).rname === "d.zip" && recentRows.itemAt(0).rplace === "Documents"
-                        && recentRows.itemAt(0).rday === "today"
+                        && recentRows.itemAt(0).rgroup === "today"
              })
-        step("filter recents by kind",
-             function() { recents.kindFilter = "previewed" },
-             function() { return recents.count === 1 && recentRows.itemAt(0).rname === "c.txt" })
-        step("filter recents by text",
-             function() { recents.kindFilter = ""; recents.text = "A.T" },
-             function() { return recents.count === 1 && recentRows.itemAt(0).rname === "a.txt" })
         step("remove one recent",
-             function() { recents.text = ""; recents.remove(recentRows.itemAt(0).rid) },
-             function() { return recents.count === 2 })
+             function() { recents.remove(recentRows.itemAt(0).rid) },
+             function() { return recents.count === 2 && recentRows.itemAt(0).rname === "c.txt" })
         step("turn recents off through the setting",
              function() { App.setSetting("recents_enabled", JSON.stringify(false)); recents.reload() },
              function() { return !recents.enabled })

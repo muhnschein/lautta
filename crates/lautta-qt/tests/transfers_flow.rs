@@ -21,6 +21,7 @@ Item {
     property int finishedCount: 0
     property var asked: []
     property bool seenWaiting: false
+    property string waitingSection: ""
 
     function check(cond, what) {
         if (!cond)
@@ -30,6 +31,11 @@ Item {
     function blockFor(ms) {
         var end = Date.now() + ms
         while (Date.now() < end) { }
+    }
+
+    function sawWaiting(section) {
+        seenWaiting = true
+        waitingSection = section
     }
 
     function next() {
@@ -53,14 +59,15 @@ Item {
         model: list
         delegate: Item {
             property string g: group
+            property string dg: dateGroup
             property string k: kind
             property string d: direction
             property string t: title
             property string dn: destName
             property string st: model.state
             property int q: questions
-            onGChanged: if (g === "waiting") root.seenWaiting = true
-            Component.onCompleted: if (g === "waiting") root.seenWaiting = true
+            onGChanged: if (g === "waiting") root.sawWaiting(dg)
+            Component.onCompleted: if (g === "waiting") root.sawWaiting(dg)
         }
     }
     TransferItemsModel { id: items }
@@ -92,6 +99,8 @@ Item {
             var r = rows.itemAt(0)
             check(r.g === "history" && r.k === "copy" && r.d === "local" && r.t === "src" && r.dn === "Downloads" && r.st === "completed",
                   "history row " + r.g + "/" + r.k + "/" + r.d + "/" + r.t + "/" + r.dn + "/" + r.st)
+            // §15.4: what ended just now is listed under Today.
+            check(r.dg === "today", "a copy that just ended is today's, got " + r.dg)
             items.transferId = queuedId
             check(items.count === 2, "folder and file are the items, got " + items.count)
             var s = JSON.parse(items.summaryJson)
@@ -104,6 +113,8 @@ Item {
             check(asked.length >= 1, "the existing folder asks, got " + asked.length)
             check(Transfers.questionCount === 1 && Transfers.waitingCount === 1, "one transfer waits for an answer")
             check(seenWaiting, "the list showed the waiting transfer")
+            // Waiting has not ended: In progress (§15.4).
+            check(waitingSection === "inProgress", "the waiting transfer is in progress, got " + waitingSection)
             check(Transfers.barMode === "question" && Transfers.barTransferId === queuedId && Transfers.barUnfinished === 1,
                   "bar leads with the question: " + Transfers.barMode + " " + Transfers.barUnfinished)
             Transfers.dismissBar()
@@ -121,6 +132,7 @@ Item {
             check(finishedCount === 2 && finishedOk, "second copy finished, count " + finishedCount)
             check(Transfers.barMode === "done" && Transfers.barTransferId === queuedId, "the end shows again after a swipe, got " + Transfers.barMode)
             check(rows.count === 2, "two history rows, got " + rows.count)
+            check(rows.itemAt(0).dg === "today" && rows.itemAt(1).dg === "today", "both ended today")
             check(Transfers.clearHistory() === 2, "history cleared")
             blockFor(200)
             next()

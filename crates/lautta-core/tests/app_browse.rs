@@ -10,6 +10,7 @@ use lautta_bridge_proto::fake::{Consent, FakeBridge, Listener};
 use lautta_core::app::Core;
 use lautta_core::app_browse::{LayoutRow, Row};
 use lautta_core::bridge::{AdHocOptions, BridgeStatus};
+use lautta_core::date_group::DateGroup;
 use lautta_core::locations::LocationRegistry;
 use lautta_core::org::{RecentKind, RecentsFilter};
 use lautta_core::paths::AppPaths;
@@ -249,11 +250,37 @@ async fn recents_rows_say_where_and_when() {
             RecentKind::Transferred,
         )
         .unwrap();
+    // The sections are the Activity page's (§15.4), by calendar day.
+    let day = 86_400_000;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    for (name, days) in [("old.txt", 12), ("older.txt", 400)] {
+        let at = uri(&format!("lautta://user-documents/{name}"));
+        e.core
+            .recents
+            .record_at(&at, name, RecentKind::Opened, now - days * day)
+            .unwrap();
+    }
     let rows = e.core.recent_rows(&RecentsFilter::default()).unwrap();
-    assert_eq!(rows.len(), 2);
+    assert_eq!(rows.len(), 4);
     assert_eq!(rows[1].place, "Documents › Uni");
-    assert_eq!((rows[1].kind, rows[1].day), ("previewed", "today"));
+    assert_eq!(
+        (rows[1].kind, rows[1].date_group),
+        ("previewed", DateGroup::Today)
+    );
     assert_eq!(rows[0].place, "Documents", "transfers name the location");
+    let sections: Vec<DateGroup> = rows.iter().map(|r| r.date_group).collect();
+    assert_eq!(
+        sections,
+        [
+            DateGroup::Today,
+            DateGroup::Today,
+            DateGroup::LastThirtyDays,
+            DateGroup::Older
+        ]
+    );
     let only = RecentsFilter {
         text: Some("NOTES".into()),
         ..RecentsFilter::default()

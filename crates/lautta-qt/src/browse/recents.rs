@@ -1,29 +1,19 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! `RecentsModel` (ORG-2): files opened, previewed or transferred,
-//! newest first, filtered by kind and name. Roles: `id`, `uri`, `name`,
-//! `kind`, `place`, `at` (ms since the epoch), `day` (`today`, `yesterday`,
-//! `week`, `earlier`).
+//! newest first. Roles: `itemId`, `uri`, `name`, `kind`, `place`, `at` (ms
+//! since the epoch), `dateGroup` (the Activity page's date sections, §15.4:
+//! `today`, `yesterday`, `last7Days`, `last30Days`, `older`).
 
 use super::{cell_data, error_parts, role_names, store_changed, Cell};
 use crate::runtime::{blocking_then, core};
 use lautta_core::app::Core;
 use lautta_core::app_browse::RecentRow;
-use lautta_core::org::{RecentKind, RecentsFilter};
+use lautta_core::org::RecentsFilter;
 use qmetaobject::prelude::*;
 use qmetaobject::QPointer;
 use std::collections::HashMap;
 
-const COLUMNS: [&str; 7] = ["itemId", "uri", "name", "kind", "place", "at", "day"];
-
-/// The core filter for QML's `kindFilter` (empty or unknown: everything)
-/// and `text`.
-fn filter_of(kind: &str, text: &str) -> RecentsFilter {
-    RecentsFilter {
-        kinds: RecentKind::parse(kind).into_iter().collect(),
-        text: Some(text.trim().to_owned()).filter(|t| !t.is_empty()),
-        limit: None,
-    }
-}
+const COLUMNS: [&str; 7] = ["itemId", "uri", "name", "kind", "place", "at", "dateGroup"];
 
 fn cells(r: RecentRow) -> Vec<Cell> {
     vec![
@@ -33,17 +23,13 @@ fn cells(r: RecentRow) -> Vec<Cell> {
         Cell::s(r.kind),
         Cell::Str(r.place),
         Cell::Int(r.at_ms),
-        Cell::s(r.day),
+        Cell::s(r.date_group.name()),
     ]
 }
 
 #[derive(QObject, Default)]
 pub struct RecentsModel {
     base: qt_base_class!(trait QAbstractListModel),
-    /// `""` (everything), `opened`, `previewed` or `transferred`.
-    kindFilter: qt_property!(QString; NOTIFY filterChanged WRITE set_kind_filter),
-    text: qt_property!(QString; NOTIFY filterChanged WRITE set_text),
-    filterChanged: qt_signal!(),
     count: qt_property!(i32; NOTIFY countChanged),
     /// The setting `recents_enabled` as of the last reload.
     enabled: qt_property!(bool; NOTIFY countChanged),
@@ -60,30 +46,18 @@ pub struct RecentsModel {
 }
 
 impl RecentsModel {
-    fn set_kind_filter(&mut self, kind: QString) {
-        if self.kindFilter != kind {
-            self.kindFilter = kind;
-            self.filterChanged();
-            self.reload();
-        }
-    }
-
-    fn set_text(&mut self, text: QString) {
-        if self.text != text {
-            self.text = text;
-            self.filterChanged();
-            self.reload();
-        }
-    }
-
     fn reload(&mut self) {
         let Some(core) = core() else { return };
         self.generation += 1;
         let generation = self.generation;
-        let filter = filter_of(&self.kindFilter.to_string(), &self.text.to_string());
         let me = QPointer::from(&*self);
         blocking_then(
-            move || (core.recent_rows(&filter), core.recents.is_enabled()),
+            move || {
+                (
+                    core.recent_rows(&RecentsFilter::default()),
+                    core.recents.is_enabled(),
+                )
+            },
             move |(res, enabled)| {
                 let Some(model) = me.as_pinned() else { return };
                 let mut model = model.borrow_mut();
@@ -153,17 +127,7 @@ impl QAbstractListModel for RecentsModel {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn filters_read_kind_and_text() {
-        let f = filter_of("previewed", "  Notes ");
-        assert_eq!(f.kinds, vec![RecentKind::Previewed]);
-        assert_eq!(f.text.as_deref(), Some("Notes"));
-        let all = filter_of("", "");
-        assert!(all.kinds.is_empty());
-        assert_eq!(all.text, None);
-        assert!(filter_of("bogus", "").kinds.is_empty());
-    }
+    use lautta_core::date_group::DateGroup;
 
     #[test]
     fn rows_match_the_columns() {
@@ -174,8 +138,14 @@ mod tests {
             kind: "opened",
             place: "A".into(),
             at_ms: 5,
-            day: "today",
+            date_group: DateGroup::LastThirtyDays,
         };
-        assert_eq!(cells(row).len(), COLUMNS.len());
+        let rows = vec![cells(row)];
+        assert_eq!(rows[0].len(), COLUMNS.len());
+        let (role, _) = role_names(&COLUMNS)
+            .into_iter()
+            .find(|(_, name)| name.to_string() == "dateGroup")
+            .unwrap();
+        assert_eq!(cell_data(&rows, 0, role).to_qstring().to_string(), "last30Days");
     }
 }

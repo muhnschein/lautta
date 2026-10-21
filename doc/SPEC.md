@@ -599,8 +599,9 @@ bridge).
 - SRC-5: Later: full-text and global search via Tracker with the `MediaIndexing`
   permission. Not in 1.0 (keeps the permission set minimal).
 - ORG-1: Favourites: any folder, local or remote, reorderable, with label and colour.
-- ORG-2: Recents: files opened, previewed or transferred; filterable; clearable; can be
-  switched off.
+- ORG-2: Recents: files opened, previewed or transferred, newest first, in the date
+  sections of the Activity page (§15.4, without *In progress*); not filterable;
+  clearable (pulley *Clear recents*); can be switched off in Settings.
 
 ## 14. System integration
 
@@ -670,10 +671,16 @@ Placeholders: empty, no permission, offline, error with *Retry*/*Details*.
 ### 15.4 Activity page
 
 Every copy, move, upload, download, delete, compress and extract is a task here
-(the engine calls them transfers, §11). Groups: *Active*, *Waiting for you*, *Paused*,
-*History*. Rows with direction icon, title (past tense once completed: "Deleted 4
-items"), progress, "1.2 GB of 4.0 GB · 11.4 MB/s · 4 min". The activity bar (XFR-13)
-leads here from any depth.
+(the engine calls them transfers, §11). Sections by date: *In progress* first, every
+task that has not ended (running, scanning, queued, waiting or paused) in queue order;
+then the ended tasks by when they ended, newest first: *Today*, *Yesterday*, *Last 7
+days*, *Last 30 days*, *Older*. Calendar days in the device's time zone: yesterday
+starts at last midnight, today counts as one of the 7 and of the 30, and a time after
+now (the clock was moved back) is today. Recents use the same sections (ORG-2). Rows
+with direction icon, title (past tense once completed: "Deleted 4 items"), progress,
+"1.2 GB of 4.0 GB · 11.4 MB/s · 4 min"; the row's state (running, waiting for you,
+paused) is in its status line and context menu. Pulley: *Clear history*, *Resume all*,
+*Pause all*, as they apply. The activity bar (XFR-13) leads here from any depth.
 
 ### 15.5 Rules
 
