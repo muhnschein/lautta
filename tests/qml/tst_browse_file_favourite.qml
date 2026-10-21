@@ -2,7 +2,8 @@
 // Scenario on the target (real Silica): a file favourite (ORG-1) shows in
 // Browse with its file icon and the folder it is in, and tapping it opens
 // the file (here the Markdown viewer), not a folder page. Folder
-// favourites still open their folder.
+// favourites still open their folder. Both favourites are removed again at
+// the end, so later scenarios sharing the database see none of them.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -33,6 +34,8 @@ ApplicationWindow {
 
     function fail(what) {
         console.error("FAILED: " + what)
+        favs.removeUri(file)
+        favs.removeUri(folder)
         scenarioRunning = false
     }
 
@@ -137,7 +140,15 @@ ApplicationWindow {
                     break
                 if (String(folderPage).indexOf("DirectoryPage") !== 0)
                     return win.fail("a folder favourite opens the folder: " + folderPage)
-                win.scenarioRunning = false
+                favs.removeUri(win.file)
+                favs.removeUri(win.folder)
+                win.next()
+                break
+            case 6:
+                if (favs.idOf(win.file) === -1 && favs.idOf(win.folder) === -1)
+                    win.scenarioRunning = false
+                else if (win.waited % 10 === 0)
+                    favs.reload()
                 break
             }
         }

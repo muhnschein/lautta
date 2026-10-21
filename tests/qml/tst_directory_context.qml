@@ -4,7 +4,8 @@
 // Add to favourites and Compress in its rows' place, and Add to favourites
 // makes the file itself a favourite, as a file. Fails when More actions is
 // missing or not last, when the tap closes the menu, or when the favourite
-// is the folder.
+// is the folder. The file's favourite is removed again at the end, so later
+// scenarios sharing the database see none of it.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -21,6 +22,8 @@ ApplicationWindow {
     property int waited: 0
     property var row
     property var menu
+    // The folder's favourite before (an earlier scenario's, or -1).
+    property int folderBefore: -2
 
     ViewerTools { id: tools }
 
@@ -34,6 +37,7 @@ ApplicationWindow {
 
     function fail(what) {
         console.error("FAILED: " + what)
+        favs.removeUri(file)
         scenarioRunning = false
     }
 
@@ -100,6 +104,12 @@ ApplicationWindow {
                 return win.fail("step " + win.step + " timed out")
             switch (win.step) {
             case 0:
+                if (!favs.loaded) {
+                    if (win.waited % 10 === 1)
+                        favs.reload()
+                    break
+                }
+                win.folderBefore = favs.idOf(win.folder)
                 if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), win.file))
                     return win.fail("fixture")
                 win.next()
@@ -167,9 +177,16 @@ ApplicationWindow {
                 var saved = JSON.parse(favs.get(id))
                 if (saved.isDir !== false)
                     return win.fail("stored as a folder: " + favs.get(id))
-                if (favs.idOf(win.folder) !== -1)
+                if (favs.idOf(win.folder) !== win.folderBefore)
                     return win.fail("the folder became a favourite")
-                win.scenarioRunning = false
+                favs.removeUri(win.file)
+                win.next()
+                break
+            case 9:
+                if (favs.idOf(win.file) === -1)
+                    win.scenarioRunning = false
+                else if (win.waited % 10 === 0)
+                    favs.reload()
                 break
             }
         }
