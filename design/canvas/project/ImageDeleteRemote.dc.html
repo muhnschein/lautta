@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Image delete remote</title>
+<title>Image delete permanently</title>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -114,9 +114,10 @@ body{margin:0}
 .note{background:rgba(20,30,40,.92);color:#fff;padding:12px 16px;display:flex;gap:12px;align-items:flex-start;border-radius:6px}
 </style>
 </helmet>
-<div class="amb {{amb}}" style="width: 400px; height: 860px; background: #000">
-<div style="position:absolute;left:0;right:0;top:72px;bottom:0;background:linear-gradient(180deg,#27406b 0%,#5b7fb4 22%,#e9b389 40%,#ec9a73 47%,#3a6a86 49%,#25506d 62%,#3a3a3c 64%,#262628 80%,#161617 100%)"></div>
-<a class="remorse" href="ImageViewer.dc.html" style="position:absolute;left:0;right:0;top:0;display:flex;color:#fff"><i style="width:40%"></i><b>Deleting permanently</b><span>From NAS · can't be restored · tap to cancel</span></a>
+<div class="amb {{amb}}" style="width: 400px; height: 860px">
+<div class="ind-back"><i></i><i></i></div>
+<div class="dlg"><a class="dlg-c" href="ImageViewer.dc.html">Cancel</a><a class="dlg-a" href="ImageViewer.dc.html">Delete</a></div><div class="dlg-sub">Delete permanently?</div>
+<div style="padding: 16px 18px; font-size: 19px; line-height: 1.35; color: var(--hl)">“sunset.jpg” will be deleted from NAS. This can't be undone.</div>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":400,"height":860}}'>

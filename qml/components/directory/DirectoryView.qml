@@ -30,8 +30,6 @@ Item {
         return App.setting("grid_columns") === 3 ? 3 : 4
     }
     readonly property bool gridCaptions: gridColumns === 3
-    readonly property bool permanentDelete: !(App.setting("recently_deleted") === true && dir.hasCapability("Trash")
-                                              && App.isLocal(uri))
     property string pendingName
     property string pendingShare
 
@@ -94,26 +92,27 @@ Item {
         pageStack.push(Qt.resolvedUrl("../../pages/ViewOptionsPage.qml"), { "model": dir })
     }
 
+    // OPS-8: to the Trash after the remorse timer; for good (volumes,
+    // servers, the Trash off) once the dialog is accepted, with no timer.
     function remove(uris, listItem) {
-        var timeout = App.setting("remorse_seconds") * 1000
         var action = function () {
             Operations.remove(JSON.stringify(uris))
             refreshTimer.restart()
             if (view.selecting)
                 view.endSelection()
         }
+        if (Operations.deletesPermanently(JSON.stringify(uris))) {
+            var dialog = pageStack.push(Qt.resolvedUrl("../../dialogs/DeleteDialog.qml"), { "uris": uris })
+            dialog.accepted.connect(action)
+            return
+        }
+        var timeout = App.setting("remorse_seconds") * 1000
         if (listItem) {
-            //% "Deleting permanently"
-            var single = view.permanentDelete ? qsTrId("lautta-dir-deleting-permanently")
-                                              //% "Deleting"
-                                              : qsTrId("lautta-dir-deleting")
-            listItem.remorseAction(single, action, timeout)
+            //% "Moving to trash"
+            listItem.remorseAction(qsTrId("lautta-dir-trashing"), action, timeout)
         } else {
-            //% "Deleting %n items permanently"
-            var many = view.permanentDelete ? qsTrId("lautta-dir-deleting-many-permanently", uris.length)
-                                            //% "Deleting %n items"
-                                            : qsTrId("lautta-dir-deleting-many", uris.length)
-            remorsePopup.execute(many, action, timeout)
+            //% "Moving %n items to trash"
+            remorsePopup.execute(qsTrId("lautta-dir-trashing-many", uris.length), action, timeout)
         }
     }
 

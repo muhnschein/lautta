@@ -58,7 +58,7 @@ Page {
             pageStack.push(Qt.resolvedUrl("RecentsPage.qml"))
             break
         case "deleted":
-            pageStack.push(Qt.resolvedUrl("RecentlyDeletedPage.qml"))
+            pageStack.push(Qt.resolvedUrl("TrashPage.qml"))
             break
         case "nearby":
         case "adhocRecent":

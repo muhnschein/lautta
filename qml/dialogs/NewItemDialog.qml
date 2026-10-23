@@ -16,8 +16,7 @@ Dialog {
     readonly property string itemName: nameField.text
     // "folder", "file" or "" for what already has this name here.
     readonly property string clash: parentModel.count >= 0 ? parentModel.nameKind(nameField.text) : ""
-    // The bin of a local location sits at its root (OPS-8).
-    readonly property bool badName: Names.invalid(nameField.text, App.isLocal(parentUri) && App.parentUri(parentUri) === "")
+    readonly property bool badName: Names.invalid(nameField.text)
 
     function errorText() {
         if (clash === "folder")

@@ -35,8 +35,8 @@ function rowName(kind, name) {
         //% "Recents"
         return qsTrId("lautta-browse-recents")
     case "deleted":
-        //% "Recently deleted"
-        return qsTrId("lautta-browse-recently-deleted")
+        //% "Trash"
+        return qsTrId("lautta-browse-trash")
     default:
         return name
     }

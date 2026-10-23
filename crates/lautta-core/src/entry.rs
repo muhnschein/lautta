@@ -153,7 +153,7 @@ pub mod cap {
     pub const CHECKSUMS: &str = "Checksums";
     pub const SPACE_INFO: &str = "SpaceInfo";
     pub const ATOMIC_RENAME_NOREPLACE: &str = "RenameNoReplace";
-    /// Local-only: deletes go to Recently deleted.
+    /// Local-only: deletes go to the Trash.
     pub const TRASH: &str = "Trash";
     /// Archives and offline caches.
     pub const READ_ONLY: &str = "ReadOnly";

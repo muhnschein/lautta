@@ -213,7 +213,7 @@
     "ImageDeleteRemote.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Remote delete remorse",
+      "title": "Permanent delete dialog",
       "w": 400,
       "x": 4800,
       "y": 14440
@@ -293,7 +293,7 @@
     "RecentlyDeleted.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Recently deleted",
+      "title": "Trash",
       "w": 400,
       "x": 4320,
       "y": 4860
@@ -301,7 +301,7 @@
     "RecentlyDeletedEmpty.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Empty Recently deleted",
+      "title": "Empty trash",
       "w": 400,
       "x": 2400,
       "y": 14440

@@ -90,7 +90,7 @@ QtQuick.Window {
         return ""
     }
 
-    // The first device folder (not Recents or Recently deleted), "" when none.
+    // The first device folder (not Recents or Trash), "" when none.
     function deviceFolder(layout) {
         for (var i = 0; i < layout.count; ++i) {
             var item = layout.itemAt(i)

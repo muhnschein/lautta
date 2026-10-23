@@ -152,8 +152,8 @@ notification actions and `ExecDBus` activation).
 What the app sees of the file system (firejail `whitelist`): a tmpfs on `$HOME` with every
 granted folder above, and the app's own folders, bind-mounted onto it one by one. So no
 folder is on `$HOME`'s device, and `rename(2)` between two of them fails with `EXDEV` even
-when both live on the same ext4: moves between folders are copies (OPS-4), and *Recently
-deleted* keeps a bin in each folder (OPS-8). `/run/media` is the host's (`ignore
+when both live on the same ext4: moves between folders are copies (OPS-4), and so is a
+move into the *Trash* in the app's data folder (OPS-8). `/run/media` is the host's (`ignore
 disable-mnt`); the sandbox has its own mount namespace, in which an inotify watch on the
 media folder can miss a mount, so volumes are also rescanned (LOC-3).
 
@@ -242,7 +242,7 @@ flowchart LR
 | `Thumbs` | local thumbnails via `Nemo.Thumbnailer`; remote thumbnails decoded in Rust |
 | `MediaSource` | random-access byte source for the player (PRV-9) |
 | `WorkingCopies` | copies of remote files opened in other apps, expiry (PRV-6) |
-| `Trash` | app-private *Recently deleted* for local files |
+| `Trash` | app-private *Trash* for this device's folders |
 | `Questions` | blocking prompts (conflicts, ad-hoc identity, keyboard-interactive) |
 
 ## 6. Rust
@@ -424,8 +424,8 @@ what the app does.
 - BRW-12: The Browse page is configurable without a wall of options (prior art: iOS
   Files *Browse › Edit*, Finder sidebar settings, Dolphin *Places › Hide*). *Settings ›
   Browse page* lists every row in Browse order, laid out and moved as Salama's tab
-  group view: a switch per folder, *Recents*, *Recently deleted*, volume and server
-  (hiding the row only; the bin and recents keep working), one switch for all nearby
+  group view: a switch per folder, *Recents*, *Trash*, volume and server
+  (hiding the row only; the Trash and recents keep working), one switch for all nearby
   servers, a tap on the row switching it, and a grip to move rows within their section
   (favourites move only; volumes and nearby stay put). A press on the grip picks the row
   up at once; it follows the finger, the rows it passes slide aside and its new order is
@@ -446,7 +446,7 @@ what the app does.
 | Rename | ✓ | ✓ | no-replace by default |
 | Copy / move within location | ✓ (reflink/`copy_file_range`, rename) | server copy if capable, else via bridge | |
 | Copy / move across locations | ✓ | ✓ | queue |
-| Delete | ✓ to *Recently deleted* | ✓ remorse, permanent | |
+| Delete | ✓ to the *Trash* (user and Android folders) | ✓ confirmation, permanent | volumes: confirmation, permanent |
 | Compress / extract | ✓ | ✓ streamed through pipes (NVB-9) | |
 
 The UI reads capabilities (local: per filesystem type via `statfs`; remote: from the
@@ -470,20 +470,30 @@ bridge).
   locally, visited set remotely), depth limit 40.
 - OPS-7: Names invalid on the destination (vfat/exFAT and SMB rules, length) get a
   proposed safe name in the plan, acceptable for all.
-- OPS-8: Delete: remorse timer (5 s, 3–10 s setting). Deletes in user and Android
-  folders move items to *Recently deleted*: a hidden bin `.lautta-trash` (0700, made on
-  the first delete) at the root of the item's location, so the move is a rename on one
-  mount (one trash folder for all locations cannot work in the sandbox, §3.3). An item on
-  another mount than its bin (something mounted inside the folder) is deleted
-  permanently. The bin is never listed (hidden files shown or not), searched, selected or
-  copied, and it cannot be deleted into itself. Recently deleted lists, restores
-  (rename; a copy when that crosses a mount), deletes and empties the items of all bins;
-  emptying removes the bins. Items are purged after the retention setting (30 days)
-  when the settings are loaded at start and whenever Recently deleted opens. Like its
-  folder, a bin is readable by other apps with that folder's permission. Items deleted
-  before schema 4 (DAT-2) stay in `~/.local/share/org.netvfs/lautta/trash` until
-  restored, deleted or purged. On removable media and remote locations deletes are
-  permanent and say so.
+- OPS-8: Delete. Deletes in user and Android folders move items to the *Trash*, a folder
+  `~/.local/share/org.netvfs/lautta/trash` in the app's data (prior art: the Trash of
+  Finder, GNOME Files and Dolphin, a local feature; Lautta puts no hidden folders into
+  the user's folders). In the sandbox that folder is a mount of its own (§3.3), so the
+  move is a rename where it can be and otherwise a copy (modification times and
+  permissions kept, links stay links) followed by deleting the original; a copy that
+  fails leaves the original as it was and removes what it copied, and an item that could
+  not be deleted afterwards (no write permission on its folder) is refused before
+  anything is copied. Such a delete runs the remorse timer (5 s, 3–10 s setting) first.
+  Deletes on volumes and servers, and every delete while the Trash is switched off, are
+  permanent: a dialog *Delete permanently?* names the item (or the number of items) and
+  its location, says it can't be undone, and deletes on *Delete*, with no remorse timer
+  after it. The decision is one call, `Operations.deletesPermanently` (QML-API). The
+  *Trash* page lists, restores (to the original folder, made again if it is gone; a
+  copy when that crosses a mount; never overwriting), deletes and empties the items, and
+  says that only files deleted from this device's folders appear there. Items are purged
+  after the retention setting (30 days) when the settings are loaded at start and
+  whenever the Trash opens. The round-1 builds (schema 4–5) kept a hidden bin
+  `.lautta-trash` at the root of each folder: at start the items in them are moved into
+  the Trash (their rows, and so their deletion times, kept) and the emptied bins
+  removed. This is done once (schema 7 marks it due, DAT-2), item by item so an
+  interrupted start continues where it stopped, and it waits for an Android folder that
+  is not there. Anything else left in a bin stays, and the bin is then an ordinary
+  hidden folder.
 - OPS-9: Undo for the last rename, same-location move and trash operation, from a banner
   for 10 s.
 - OPS-10: Clipboard (cut/copy, docked paste bar) across all locations. There is no
@@ -664,7 +674,7 @@ bridge).
 flowchart TD
   B[Browse] --> D[Directory]
   B --> R[Recents]
-  B --> RD[Recently deleted]
+  B --> RD[Trash]
   B --> T[Activity]
   B --> CS[Connect to server<br/>nearby and recent servers]
   B --> S[Settings / About]
@@ -678,8 +688,8 @@ flowchart TD
 ### 15.2 Browse
 
 Sections: *Favourites*, *On this device* (*Recents* while recents are remembered
-(ORG-2), first until the user orders the section, then the user folders and *Recently
-deleted* while it is on), *Android*, *Volumes* (when present), *Servers* (bridge only:
+(ORG-2), first until the user orders the section, then the user folders and *Trash* while
+it is on), *Android*, *Volumes* (when present), *Servers* (bridge only:
 accounts, recent ad-hoc servers, each with its connection state and status dot (NVB-4)
 or attention badge on the right, where a folder shows its item count, so a server row
 is as tall as a folder row), *Nearby* (bridge only, hidden when empty). Rows the user hid are left out and rows keep the order the user gave
@@ -708,8 +718,7 @@ order, capability-filtered. *More actions* turns the same menu into *Add to
 favourites* and *Compress* for that item (OPS-12); there is no details page. *Rename*
 is a dialog of the plain Silica dialog header, titled *Rename*, and the name field
 only; *New folder* has its header (titled *New folder*, accept *Create*) and the name
-field. A taken or invalid name is an error in the field's label; at the root of a local
-location `.lautta-trash`, the bin (OPS-8), is invalid. Archives need no *Extract* row: they open as a location with *Extract all*. Selection starts from the pulley's *Select*, in list and grid alike;
+field. A taken or invalid name is an error in the field's label. Archives need no *Extract* row: they open as a location with *Extract all*. Selection starts from the pulley's *Select*, in list and grid alike;
 tapping an icon opens the item like the rest of the row. Its actions sit in a
 `DockedPanel` that stays open while selecting and ends with a button that leaves
 selection; the panel's actions, a finished delete and deselecting the last item leave it
@@ -737,7 +746,8 @@ paused) is in its status line and context menu. Pulley: *Clear activity history*
   otherwise SVG at all scale factors under `/usr/share/harbour-lautta`.
 - UI-3: Portrait and landscape.
 - UI-4: Nothing modal blocks navigation; all long work is visible and cancelable.
-- UI-5: Destructive actions use remorse; permanent remote deletes say so.
+- UI-5: Destructive actions use remorse; a permanent delete (volumes, servers, the Trash
+  switched off) asks first in a dialog instead (OPS-8).
 - UI-6: Text follows the system font size; touch targets ≥ `Theme.itemSizeSmall`.
 - UI-7: All strings translatable (`qsTrId` with `//%` engineering English, plurals with
   `%n`); `.qm` files under `/usr/share/harbour-lautta/translations`.
@@ -786,7 +796,7 @@ copies through the app for local↔remote).
 ## 18. Settings
 
 Global: view options (BRW-4; Settings links to their page instead of repeating them),
-server thumbnails and their limits, cache sizes, *Recently deleted* on/off and retention,
+server thumbnails and their limits, cache sizes, the *Trash* on/off and retention,
 remorse duration, local transfer concurrency, preserve mtimes/permissions, verify with
 checksums, auto-resume, history retention, large-operation threshold. There is no date
 format setting: every date follows the system's formats (Silica `Format`); a value an
@@ -801,8 +811,8 @@ SQLite for everything structured.
 
 ## 19. Persistence
 
-- DAT-1: `~/.local/share/org.netvfs/lautta/lautta.db` (SQLite, WAL), `.../trash/` (only
-  items deleted before schema 4; newer ones are in the bins of their locations, OPS-8);
+- DAT-1: `~/.local/share/org.netvfs/lautta/lautta.db` (SQLite, WAL), `.../trash/` (the
+  Trash, OPS-8);
   `~/.cache/org.netvfs/lautta/` (thumbs, dircache blobs). Simple
   preferences live in dconf via `Nemo.Configuration`; `~/.config/org.netvfs/lautta/` is
   unused.
@@ -811,13 +821,15 @@ SQLite for everything structured.
   theme icon name, ORG-1, schema 6; NULL for the default icon and for older rows),
   `recents`, `transfers`, `transfer_items`, `working_copies`, `dircache`,
   `trash_items(id, original_uri, trashed_at, stored_name, is_dir, size, bin)` (`bin`: path
-  bytes of the item's bin, schema 4; NULL for older items, which are in `.../trash/`),
+  bytes of the round-1 bin still holding the item, schema 4; NULL once it is in
+  `.../trash/`), `trash_drain(due)` (a row while those bins are still to be drained into
+  the Trash, schema 7, OPS-8),
   `reading_positions(uri,
   location_id, page, at_ms)` (PRV-12), `browse_layout(section, item, hidden, position)`
   (BRW-12).
 - DAT-3: The netvfs socket directory `~/.local/share/org.netvfs/lautta/netvfs/` belongs
   to netvfs; the app only reads it. *Clear app data* in Settings deletes it along with
-  everything else (the *Recently deleted* bins in the locations too, OPS-8); netvfs
+  everything else (the Trash too, and any round-1 bins still in the folders, OPS-8); netvfs
   recreates it (netvfs XB-4).
 
 ## 20. Error presentation
@@ -899,7 +911,7 @@ lautta/
 | Milestone | Scope | Exit criteria |
 |---|---|---|
 | M0 – skeleton | workspace, SailfishApp bootstrap from Rust, booster check, rpmvalidator in CI, Browse page with user folders | validator clean; launches via booster on device |
-| M1 – local MVP | directory page, sorting/filter, cache, file operations, clipboard, folder picker, Recently deleted, image/text viewers, local thumbnails, transfers for local copies, cover | Harbour submission of a standalone 1.0 candidate; PRF-1/3/5 met |
+| M1 – local MVP | directory page, sorting/filter, cache, file operations, clipboard, folder picker, Trash, image/text viewers, local thumbnails, transfers for local copies, cover | Harbour submission of a standalone 1.0 candidate; PRF-1/3/5 met |
 | M2 – bridge | netvfs provider, consent flow, accounts and ad-hoc servers, remote browse and operations, local↔remote transfers with resume, remote thumbnails | contract tests with netvfs green; device test with SFTP and SMB |
 | M3 – depth | MediaSource streaming, share target, search, archives, Nearby | Appendix A complete |
 | M4 – power | server copy everywhere available | — |
@@ -924,9 +936,9 @@ when the netvfs bridge they depend on is released.
 - *Open with* and the settings handoff (Storage) from a sandboxed app (PRV-5, LOC-3).
 - Inside the sandbox: a volume mounted from Settings while the app runs appears without
   leaving Browse (inotify on `/run/media/<user>`, LOC-3), and a delete in `~/Documents`
-  and in `~/android_storage/DCIM` lands in that folder's bin (OPS-8); whether Gallery or
-  the Android media scanner pick up files in `.lautta-trash` (expected: no, a hidden
-  folder).
+  and in `~/android_storage/DCIM` lands in the Trash (a copy across the sandbox's mounts,
+  OPS-8) and restores from it; a round-1 build's `.lautta-trash` bins are drained and
+  removed on the first start of this one.
 - `ShareProvider` delivery of files from other apps' locations (INT-1).
 - Harbour accepting an aarch64-only upload (the validator accepts the architecture; the
   store's per-release policy needs confirming).
@@ -965,7 +977,7 @@ sync/compare ✗; server-side copy ✓; recursive permissions ✗; preserve time
 Bonjour discovery ✓ (via bridge).
 
 iOS Files: Browse/Recents ✓; Favourites ✓; Tags ✗; Connect to server ✓; quick look ✓;
-Recently deleted ✓ OPS-8; compress/uncompress ✓.
+Recently deleted ✓ (the *Trash*, OPS-8); compress/uncompress ✓.
 
 ## Appendix B — Core provider trait (sketch)
 

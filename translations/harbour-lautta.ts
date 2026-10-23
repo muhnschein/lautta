@@ -100,7 +100,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-undo-trashed">
-        <source>Moved to Recently deleted</source>
+        <source>Moved to trash</source>
+        <oldsource>Moved to Recently deleted</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-undo">
@@ -849,15 +850,18 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-trash-empty">
-        <source>Empty Recently deleted</source>
+        <source>Empty trash</source>
+        <oldsource>Empty Recently deleted</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-trash-emptying">
-        <source>Emptying Recently deleted</source>
+        <source>Emptying trash</source>
+        <oldsource>Emptying Recently deleted</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-trash-title">
-        <source>Recently deleted</source>
+        <source>Trash</source>
+        <oldsource>Recently deleted</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-trash-kept" numerus="yes">
@@ -893,11 +897,13 @@
         </translation>
     </message>
     <message id="lautta-trash-footer">
-        <source>Only files deleted from this device&apos;s folders appear here. Deletes on SD cards and servers are permanent.</source>
+        <source>Only files deleted from this device&apos;s folders appear here. Deletes on volumes and servers are permanent.</source>
+        <oldsource>Only files deleted from this device&apos;s folders appear here. Deletes on SD cards and servers are permanent.</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-trash-placeholder">
-        <source>Nothing deleted recently</source>
+        <source>Trash is empty</source>
+        <oldsource>Nothing deleted recently</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-trash-placeholder-hint">
@@ -1025,14 +1031,6 @@
     </message>
     <message id="lautta-viewers-open-with">
         <source>Open with</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-delete-remote">
-        <source>Deleting permanently from %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-delete">
-        <source>Deleting</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-image-count">
@@ -1664,10 +1662,6 @@
         <oldsource>Transfers</oldsource>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-browse-recently-deleted">
-        <source>Recently deleted</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-browse-consent">
         <source>Allow access in the notification from netvfs</source>
         <translation type="unfinished"></translation>
@@ -1829,26 +1823,6 @@
     <message id="lautta-dir-menu-view-options">
         <source>View options</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-deleting-permanently">
-        <source>Deleting permanently</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-deleting">
-        <source>Deleting</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-deleting-many-permanently" numerus="yes">
-        <source>Deleting %n items permanently</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message id="lautta-dir-deleting-many" numerus="yes">
-        <source>Deleting %n items</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
     </message>
     <message id="lautta-dir-noaccess">
         <source>Not accessible</source>
@@ -2543,6 +2517,42 @@
     </message>
     <message id="lautta-xfr-remorse-clear-activity">
         <source>Clearing activity history</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-trash">
+        <source>Trash</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-trashing">
+        <source>Moving to trash</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-trashing-many" numerus="yes">
+        <source>Moving %n items to trash</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-delete-permanent-one">
+        <source>“%1” will be deleted from %2. This can&apos;t be undone.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-delete-permanent-many" numerus="yes">
+        <source>%n items will be deleted from %1. This can&apos;t be undone.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-delete-permanent-accept">
+        <source>Delete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-delete-permanent-title">
+        <source>Delete permanently?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-trashing">
+        <source>Moving to trash</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

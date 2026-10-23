@@ -160,23 +160,27 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   (`menu(ctx)`, `more(ctx)`).
 - When selection mode starts and ends is in `components/directory/Selection.js`.
 - Which names New folder and Rename refuse is in `components/directory/Names.js`
-  (`invalid(name, binHere)`).
+  (`invalid(name)`).
 
 ### Operations (boards: PlanSummary, Conflict, Compress, Extract, RecentlyDeleted, RecentlyDeletedEmpty, ShareTarget, ArchiveView (open as location))
 
 - `Operations` singleton: `copyTo(uris, destUri)`, `moveTo(uris, destUri)`,
-  `remove(uris)` (after remorse; signal `removed(trashedCount, transferId)`),
+  `remove(uris)` (after the remorse timer for a delete to the Trash, after
+  `dialogs/DeleteDialog.qml` for a permanent one; signal `removed(trashedCount,
+  transferId)`), `deletesPermanently(uris)` → bool (true unless every item goes to the
+  Trash: the one place that decides between remorse and the dialog, OPS-8),
   `compress(uris, destUri, name, kind)`, `extract(archiveUri, destUri)`,
   `openArchive(uri)` → signal `archiveOpened(uri, rootUri)`;
   signals `needsSummary(planId, summary)` (`summary`: files, dirs, bytes, conflicts,
   renamed, kind, destination) → `startPlan(planId)` / `discardPlan(planId)`;
   `started(transferId)`; `failed(kind, message)`.
-- `TrashModel` — Recently deleted list of every location's bin (OPS-8), `reload()` (also
+- `TrashModel` — the Trash in the app's data (OPS-8), `reload()` (also
   purges what is past the retention setting), `restore(id)`, `remove(id)`, `empty()`.
 - Pages: `dialogs/PlanSummaryDialog.qml { planId, summary }`,
   `dialogs/ConflictDialog.qml { transferId, item, conflict }`,
   `dialogs/CompressDialog.qml { uris }`,
-  `dialogs/ExtractDialog.qml { archiveUri }`, `pages/RecentlyDeletedPage.qml`,
+  `dialogs/ExtractDialog.qml { archiveUri }`, `dialogs/DeleteDialog.qml { uris }`
+  (*Delete permanently?*; the caller deletes on `accepted`), `pages/TrashPage.qml`,
   `pages/ShareTargetPage.qml { resources }` (Sailfish.Share `ShareProvider`, INT-1).
 
 ### Transfers (boards: Transfers, TransfersPulley, TransferDetails, TransferDetailsPulley, TransfersRestored, Notifications, Covers (transfer cover))
