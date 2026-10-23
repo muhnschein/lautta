@@ -23,7 +23,7 @@ Page {
             pageStack.replace(Qt.resolvedUrl("../../dialogs/FavouriteDialog.qml"), { "uri": page.uri, "isDir": false })
             break
         case "compress":
-            pageStack.replace(Qt.resolvedUrl("../../dialogs/CompressDialog.qml"), { "uris": JSON.stringify([page.uri]) })
+            pageStack.replace(Qt.resolvedUrl("../../dialogs/CompressDialog.qml"), { "uris": [page.uri] })
             break
         }
     }
