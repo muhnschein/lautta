@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! User-level actions of the browse area on [`Core`](crate::app::Core): the
 //! rows of the Browse page (SPEC §15.2), recent ad-hoc servers (NVB-6),
-//! volume space (LOC-3) and the purge of what the app remembers about a
-//! removed account (SEC-5).
+//! volume space, mounting and unmounting (LOC-3) and the purge of what the
+//! app remembers about a removed account (SEC-5).
 //!
 //! Everything blocking here runs in `spawn_blocking`; the Qt layer only
 //! turns the returned values into model rows.
 
 use crate::app::Core;
-use crate::bridge::{AdHocOptions, BridgeStatus, NearbyServer, RemoteKind};
+use crate::bridge::{AdHocOptions, BridgeStatus, Drive, DriveKind, NearbyServer, RemoteKind};
 use crate::browse_layout::{layout_item, Layout, NEARBY_ITEM};
 use crate::date_group::DateGroup;
 use crate::error::{Error, ErrorKind, Result};
@@ -22,11 +22,19 @@ use crate::vpath::{display_name, VPath};
 use crate::workcopy::blocking;
 use rusqlite::params;
 use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsStr;
+use std::path::Path;
 use std::sync::{Arc, Weak};
+use std::time::Duration;
 use zeroize::Zeroizing;
 
 /// Separator of the "Location › folder" lines.
 const PLACE_SEPARATOR: &str = " › ";
+
+/// How long a drive the bridge mounted may take to show as a volume in the
+/// sandbox (LOC-3): this many looks, this far apart.
+const MOUNT_LOOKS: u32 = 10;
+const MOUNT_LOOK_EVERY: Duration = Duration::from_millis(200);
 
 /// One row of the Browse page, with plain values only (the Qt layer maps
 /// them to model roles; QML turns engineering values into translated text).
@@ -40,7 +48,8 @@ pub struct Row {
     pub uri: String,
     pub name: String,
     pub icon: String,
-    /// `ready`, `connecting`, `offline`, `attention`.
+    /// `ready`, `connecting`, `offline`, `attention`; `unmounted` for a
+    /// volume the bridge can mount (LOC-3).
     pub status: &'static str,
     /// `auth-failed`, `server-identity-changed` or empty.
     pub attention: String,
@@ -67,6 +76,9 @@ pub struct Row {
     pub fs: String,
     /// A favourite that is a file (ORG-1): opened, not browsed.
     pub is_file: bool,
+    /// The bridge's id of a volume's drive, which it mounts and unmounts
+    /// (LOC-3, netvfs XB-20); empty when it cannot.
+    pub drive: String,
 }
 
 impl Row {
@@ -471,7 +483,9 @@ impl Core {
         rows
     }
 
+    /// The mounted volumes, and the drives the bridge can mount (LOC-3).
     async fn volume_rows(&self) -> Vec<Row> {
+        let drives = self.bridge.as_ref().map(|b| b.drives()).unwrap_or_default();
         let mut rows = Vec::new();
         for l in self
             .locations
@@ -484,7 +498,14 @@ impl Core {
             row.uri = uri.to_string();
             row.name = l.name.clone();
             row.item_id = l.id.clone();
-            row.icon = "image://theme/icon-m-sd-card".to_owned();
+            row.icon = drive_icon(DriveKind::Card).to_owned();
+            if let Some(d) = drives
+                .iter()
+                .find(|d| d.mount_point.is_some() && d.mount_point == l.local_root)
+            {
+                row.drive = d.id.clone();
+                row.icon = drive_icon(d.kind).to_owned();
+            }
             if let Ok(info) = self.volume_info(&uri).await {
                 row.free = clamp_i64(info.free);
                 row.total = clamp_i64(info.total);
@@ -492,7 +513,57 @@ impl Core {
             }
             rows.push(row);
         }
+        rows.extend(
+            drives
+                .iter()
+                .filter(|d| d.mount_point.is_none())
+                .map(unmounted_row),
+        );
+        rows.sort_by(|a, b| a.name.cmp(&b.name));
         rows
+    }
+
+    /// *Mount* of a drive (LOC-3): the bridge mounts it (netvfs XB-20), and
+    /// the volume's root is returned once the sandbox shows it.
+    pub async fn mount_drive(self: &Arc<Self>, drive: &str) -> Result<Uri> {
+        let point = self.drive_client()?.mount_drive(drive).await?;
+        for look in 0..MOUNT_LOOKS {
+            if look > 0 {
+                tokio::time::sleep(MOUNT_LOOK_EVERY).await;
+            }
+            let (core, point) = (self.clone(), point.clone());
+            if let Some(uri) = blocking(move || Ok(core.volume_at(&point))).await? {
+                return Ok(uri);
+            }
+        }
+        Err(Error::new(
+            ErrorKind::NotFound,
+            format!("{} is mounted but does not show", point.display()),
+        ))
+    }
+
+    /// *Unmount* of a volume's drive (LOC-3, netvfs XB-20).
+    pub async fn unmount_drive(self: &Arc<Self>, drive: &str) -> Result<()> {
+        self.drive_client()?.unmount_drive(drive).await?;
+        let core = self.clone();
+        blocking(move || Ok(core.locations.refresh_volumes())).await?;
+        Ok(())
+    }
+
+    fn drive_client(&self) -> Result<&crate::bridge::BridgeClient> {
+        self.bridge
+            .as_ref()
+            .ok_or_else(|| Error::new(ErrorKind::BridgeUnavailable, "drives are mounted by netvfs"))
+    }
+
+    /// The volume mounted on `point`, after a rescan.
+    fn volume_at(&self, point: &Path) -> Option<Uri> {
+        self.locations.refresh_volumes();
+        self.locations
+            .locations()
+            .into_iter()
+            .find(|l| l.kind == LocationKind::Volume && l.local_root.as_deref() == Some(point))
+            .map(|l| Uri::root(l.id))
     }
 
     /// The Servers section (SPEC §3.4, NVB-3, NVB-12): nothing without a
@@ -784,6 +855,28 @@ struct LocalRows {
     android: Vec<Row>,
     prefs: BTreeMap<String, LocationPrefs>,
     layout: Layout,
+}
+
+fn drive_icon(kind: DriveKind) -> &'static str {
+    match kind {
+        DriveKind::Card => "image://theme/icon-m-sd-card",
+        DriveKind::Usb => "image://theme/icon-m-usb",
+    }
+}
+
+/// A drive that is not mounted (LOC-3): shown as the volume it becomes, by
+/// the folder it is mounted on, so that what the user hid or moved stays
+/// hidden or in place (BRW-12). It has no address until it is mounted.
+fn unmounted_row(d: &Drive) -> Row {
+    let name = d.mount_name();
+    let mut row = Row::new("volumes", "volume");
+    row.status = "unmounted";
+    row.item_id = crate::volumes::location_id_of(OsStr::new(&name));
+    row.name = name;
+    row.icon = drive_icon(d.kind).to_owned();
+    row.total = d.size;
+    row.drive = d.id.clone();
+    row
 }
 
 fn display_of(l: &Location, prefs: &BTreeMap<String, LocationPrefs>) -> String {

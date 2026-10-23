@@ -82,7 +82,10 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - `LocationsModel` — sections `favourites`, `device`, `android`, `volumes`, `servers`,
   `nearby` (roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
   `colour`, `count`, `itemId`, `place`, `provider`, `host`, `free`, `total`, `fs`,
-  `connection`, `connectionError`, `isFile` (a file favourite: opened, not browsed));
+  `connection`, `connectionError`, `isFile` (a file favourite: opened, not browsed),
+  `drive` (the bridge's id of a volume's drive, empty when the bridge does not mount it,
+  LOC-3)); a `volume` with `status` `unmounted` is a drive that is not mounted: no `uri`,
+  `total` its size, `free` -1;
   kinds `recents` and `deleted` are the app's own rows of `device` (`BrowseText.rowName`
   names them). `connection` is a server's connection state (NVB-4): `connected`,
   `connecting` (also while the bridge reconnects, NVB-12), `disconnected` (also recent
@@ -106,7 +109,10 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   signal `question(id, kind, details)`, `answer(id, answer)`; `storageSettings` (the
   bridge can open Settings › Storage, NVB-13; changes with `statusChanged`) and
   `openStorageSettings()` (a failure arrives as `failed`). `BrowsePage`'s
-  `storageSettings` follows it; tests set it.
+  `storageSettings` follows it; tests set it. `mountDrive(drive, name)` mounts a drive
+  (LOC-3) and opens it: `adhocConnected(locationUri)` carries the volume as it carries a
+  connected ad-hoc server; `unmountDrive(drive, name)`; their failures arrive as `failed`
+  with `name` as the subject.
 - Pages: `pages/BrowsePage.qml` (initial page), `pages/RecentsPage.qml`,
   `dialogs/ConnectServerDialog.qml { url }`,
   `dialogs/ServerQuestionDialog.qml { questionId, kind, details }`,

@@ -40,6 +40,7 @@ Item {
             property string rsection: section
             property string ricon: icon
             property bool rfile: isFile
+            property string rdrive: drive
             // Set by a step to tell whether this delegate survived a change.
             property bool marked: false
         }
@@ -182,6 +183,31 @@ Item {
         step("Settings › Storage opens without the consent (NVB-13)",
              function() { if (Bridge.storageSettings) Bridge.openStorageSettings() },
              function() { return JSON.parse(FakeWorld.handoffs()).indexOf("storage") >= 0 })
+        // A drive is mounted (where the sandbox does not see it here) and
+        // unmounted without the consent (LOC-3).
+        step("a drive that is not mounted is a volume row",
+             null,
+             function() {
+                 var v = row("volume", "STICK")
+                 return v !== null && v.rstatus === "unmounted" && v.rdrive === "sda1" && v.ruri === ""
+                        && v.ritem === "vol-STICK" && v.ricon === "image://theme/icon-m-usb"
+             })
+        step("a drive mounted out of the app's sight is an error naming it",
+             function() { Bridge.mountDrive("sda1", "STICK") },
+             function() {
+                 return root.failedKind === "NotFound" && root.failedSubject === "STICK"
+                        && JSON.parse(FakeWorld.drives())[0].mounted
+             })
+        step("unmounting reaches the bridge and the row comes back",
+             function() {
+                 root.failedKind = ""
+                 Bridge.unmountDrive("sda1", "STICK")
+             },
+             function() {
+                 var v = row("volume", "STICK")
+                 return !JSON.parse(FakeWorld.drives())[0].mounted && v !== null && v.rstatus === "unmounted"
+                        && root.failedKind === "" && root.connected === ""
+             })
         step("no account without consent", null, function() { return !has("account") && !has("adhocRecent") })
         step("ask again reaches the bridge",
              function() { Bridge.requestConsent() },

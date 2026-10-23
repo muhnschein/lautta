@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The `Bridge` singleton: netvfs bridge status, consent, hand-offs,
-//! ad-hoc servers and the questions the bridge asks (SPEC §7).
+//! ad-hoc servers, mounting drives (LOC-3) and the questions the bridge asks
+//! (SPEC §7).
 //!
 //! `status` is one of `absent`, `connecting`, `consentUnknown`,
 //! `consentDenied`, `ready`, `reconnecting`.
@@ -96,6 +97,9 @@ pub struct Bridge {
     requestConsent: qt_method!(fn(&mut self)),
     addServer: qt_method!(fn(&mut self, provider: QString)),
     openStorageSettings: qt_method!(fn(&mut self)),
+    /// *Mount* of a volume's drive (LOC-3); `name` is the volume's.
+    mountDrive: qt_method!(fn(&mut self, drive: QString, name: QString)),
+    unmountDrive: qt_method!(fn(&mut self, drive: QString, name: QString)),
     editAccount: qt_method!(fn(&mut self, location_uri: QString)),
     connectAdHoc: qt_method!(fn(&mut self, url: QString, secret: QString, options_json: QString)),
     forgetAdHoc: qt_method!(fn(&mut self, id: QString)),
@@ -108,6 +112,8 @@ pub struct Bridge {
 
     question: qt_signal!(questionId: QString, kind: QString, detailsJson: QString),
     questionResolved: qt_signal!(questionId: QString),
+    /// A location to open: the server *Connect to server* connected, the
+    /// volume a drive was mounted as.
     adhocConnected: qt_signal!(locationUri: QString),
     /// A call failed; `subject` names what it was about (server, address).
     failed: qt_signal!(kind: QString, message: QString, subject: QString),
@@ -226,6 +232,24 @@ impl Bridge {
         });
     }
 
+    /// Runs a call that ends in a location to open, and opens it
+    /// (`adhocConnected`) or reports its failure through `failed`.
+    fn open_when<F>(&self, subject: String, f: impl FnOnce(Arc<Core>) -> F)
+    where
+        F: std::future::Future<Output = lautta_core::Result<Uri>> + Send + 'static,
+    {
+        let Some(core) = core() else { return };
+        let me = QPointer::from(self);
+        spawn_then(f(core), move |res| {
+            let Some(b) = me.as_pinned() else { return };
+            let b = b.borrow();
+            match res {
+                Ok(uri) => b.adhocConnected(QString::from(uri.to_string().as_str())),
+                Err(e) => b.report(&e, &subject),
+            }
+        });
+    }
+
     fn requestConsent(&mut self) {
         self.call(String::new(), |core| async move {
             match &core.bridge {
@@ -258,6 +282,22 @@ impl Bridge {
         });
     }
 
+    /// Mounts the drive and opens the volume (LOC-3).
+    fn mountDrive(&mut self, drive: QString, name: QString) {
+        let drive = drive.to_string();
+        self.open_when(
+            name.to_string(),
+            |core| async move { core.mount_drive(&drive).await },
+        );
+    }
+
+    fn unmountDrive(&mut self, drive: QString, name: QString) {
+        let drive = drive.to_string();
+        self.call(name.to_string(), |core| async move {
+            core.unmount_drive(&drive).await
+        });
+    }
+
     fn editAccount(&mut self, location_uri: QString) {
         let id = location_id(&location_uri.to_string());
         self.call(name_of(&id), |core| async move {
@@ -278,19 +318,9 @@ impl Bridge {
         };
         let url = url.to_string();
         let subject = lautta_core::app_browse::url_host(&url);
-        let Some(core) = core() else { return };
-        let me = QPointer::from(&*self);
-        spawn_then(
-            async move { core.connect_adhoc(&url, secret, opts).await },
-            move |res| {
-                let Some(b) = me.as_pinned() else { return };
-                let b = b.borrow();
-                match res {
-                    Ok(id) => b.adhocConnected(QString::from(Uri::root(id).to_string().as_str())),
-                    Err(e) => b.report(&e, &subject),
-                }
-            },
-        );
+        self.open_when(subject, |core| async move {
+            core.connect_adhoc(&url, secret, opts).await.map(Uri::root)
+        });
     }
 
     fn forgetAdHoc(&mut self, id: QString) {

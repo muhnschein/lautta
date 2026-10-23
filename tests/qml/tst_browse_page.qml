@@ -4,8 +4,10 @@
 // Recents, servers' menus have Edit server and neither Disconnect nor
 // Location settings, favourites' menus have Copy address and no Move up or
 // down, a volume's has Open Storage settings only while the bridge offers it
-// (NVB-13), and the Recents row of On this device opens Recents. Fails naming
-// the row whose menu differs.
+// (NVB-13) and Unmount only when the bridge mounted it, a drive that is not
+// mounted is dimmed, says so, has Mount and mounts when tapped instead of
+// opening (LOC-3), and the Recents row of On this device opens Recents.
+// Fails naming the row whose menu differs.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -24,6 +26,8 @@ ApplicationWindow {
         { "name": "Thesis", "items": ["edit-favourite", "copy-address", "remove-favourite"] },
         { "name": "Documents", "items": ["add-favourite", "copy-address", "hide"] },
         { "name": "SD card", "items": ["add-favourite", "copy-address", "open-storage-settings", "hide"] },
+        { "name": "CARD", "items": ["add-favourite", "copy-address", "unmount", "open-storage-settings", "hide"] },
+        { "name": "STICK", "items": ["mount", "open-storage-settings", "hide"] },
         { "name": "NAS", "items": ["edit-server", "copy-address", "hide"] },
         { "name": "Office", "items": ["edit-server", "update-sign-in", "copy-address", "hide"] },
         { "name": "Vault", "items": ["edit-server", "review-identity", "copy-address", "hide"] },
@@ -44,6 +48,8 @@ ApplicationWindow {
         ListElement { section: "device"; uri: ""; name: ""; kind: "deleted"; icon: "image://theme/icon-m-delete"; status: "ready"; attention: ""; colour: ""; count: 8; itemId: ""; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: "" }
         ListElement { section: "android"; uri: "lautta://android-dcim/"; name: "DCIM"; kind: "folder"; icon: "image://theme/icon-m-file-folder"; status: "ready"; attention: ""; colour: ""; count: 3410; itemId: "android-dcim"; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: "" }
         ListElement { section: "volumes"; uri: "lautta://vol-SD/"; name: "SD card"; kind: "volume"; icon: "image://theme/icon-m-sd-card"; status: "ready"; attention: ""; colour: ""; count: -1; itemId: "vol-SD"; place: ""; provider: ""; host: ""; free: 62500000000; total: 128000000000; fs: "exFAT" }
+        ListElement { section: "volumes"; uri: "lautta://vol-CARD/"; name: "CARD"; kind: "volume"; icon: "image://theme/icon-m-sd-card"; status: "ready"; attention: ""; colour: ""; count: -1; itemId: "vol-CARD"; place: ""; provider: ""; host: ""; free: 1000000000; total: 64000000000; fs: "vfat"; drive: "mmcblk1p1" }
+        ListElement { section: "volumes"; uri: ""; name: "STICK"; kind: "volume"; icon: "image://theme/icon-m-usb"; status: "unmounted"; attention: ""; colour: ""; count: -1; itemId: "vol-STICK"; place: ""; provider: ""; host: ""; free: -1; total: 8000000000; fs: ""; drive: "sda1" }
         ListElement { section: "servers"; uri: ""; name: ""; kind: "consent"; icon: "image://theme/icon-m-computer"; status: "ready"; attention: ""; colour: ""; count: -1; itemId: ""; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: "" }
         ListElement { section: "servers"; uri: ""; name: ""; kind: "unavailable"; icon: "image://theme/icon-m-file-folder"; status: "ready"; attention: ""; colour: ""; count: -1; itemId: ""; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: "" }
         ListElement { section: "servers"; uri: "lautta://nv-account:1/"; name: "NAS"; kind: "account"; icon: "image://theme/icon-m-computer"; status: "ready"; attention: ""; connection: "connected"; connectionError: ""; colour: ""; count: -1; itemId: "nv-account:1"; place: ""; provider: "SFTP"; host: "nas.home"; free: -1; total: -1; fs: "" }
@@ -122,6 +128,32 @@ ApplicationWindow {
         row.closeMenu()
     }
 
+    function dimmed(row) {
+        return findAll(row, function(x) { return x.opacity === Theme.opacityHigh }, []).length
+    }
+
+    // A drive that is not mounted (LOC-3): dimmed, saying so, and a tap
+    // mounts it instead of opening a page for a volume that is not there.
+    function checkUnmountedRow(list) {
+        var row = rowOf(list, "STICK")
+        if (!row || !row.unmounted)
+            return fail("STICK is not shown as not mounted")
+        if (findAll(row, function(x) { return x.text === "lautta-browse-not-mounted" && x.visible }, []).length !== 1)
+            return fail("STICK does not say that it is not mounted")
+        var stickDimmed = dimmed(row)
+        var mounted = rowOf(list, "CARD")
+        if (mounted.unmounted || findAll(mounted, function(x) { return x.text === "lautta-browse-not-mounted" }, []).length > 0)
+            return fail("CARD is shown as not mounted")
+        // Its icon and its labels, and nothing of the mounted one.
+        if (stickDimmed < dimmed(mounted) + 2)
+            return fail("STICK is not dimmed")
+        row = rowOf(list, "STICK")
+        var depth = pageStack.depth
+        row.clicked(null)
+        if (pageStack.depth !== depth)
+            fail("tapping STICK opened a page")
+    }
+
     function checkRecentsRow(list) {
         var row = rowOf(list, "", "recents")
         var label = row ? findAll(row, function(x) { return x.text === "lautta-browse-recents" }, []) : []
@@ -152,6 +184,8 @@ ApplicationWindow {
             pageStack.currentPage.storageSettings = false
             if (win.scenarioRunning)
                 win.checkMenu(list, win.withoutStorage)
+            if (win.scenarioRunning)
+                win.checkUnmountedRow(list)
             if (win.scenarioRunning)
                 win.checkRecentsRow(list)
             win.step = 1

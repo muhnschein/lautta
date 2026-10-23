@@ -73,6 +73,13 @@ Page {
         case "adhocRecent":
             connectTo(row.uri)
             break
+        case "volume":
+            // A drive that is not mounted is mounted, then opens (LOC-3).
+            if (row.status === "unmounted")
+                Bridge.mountDrive(row.drive, row.name)
+            else
+                openDirectory(row.uri)
+            break
         case "account":
         case "adhoc":
             if (row.attention.length > 0 && row.attention !== "")
@@ -177,12 +184,19 @@ Page {
             readonly property string kind: model.kind
             readonly property bool banner: kind === "consent" || kind === "unavailable"
             readonly property bool isServer: kind === "account" || kind === "adhoc" || kind === "adhocRecent"
+            // A drive the bridge can mount, and the bridge's id of a
+            // volume's drive (LOC-3).
+            readonly property bool unmounted: kind === "volume" && model.status === "unmounted"
+            readonly property string drive: model.drive || ""
             readonly property string subtitle: {
                 switch (kind) {
                 case "favourite":
                     return model.place
                 case "volume":
-                    return BrowseText.volumeLine(model.free, model.total, model.fs)
+                    return unmounted
+                            //% "Not mounted"
+                            ? qsTrId("lautta-browse-not-mounted")
+                            : BrowseText.volumeLine(model.free, model.total, model.fs)
                 case "nearby":
                     return BrowseText.nearbyLine(model.provider, model.host)
                 default:
@@ -205,6 +219,7 @@ Page {
 
             HighlightImage {
                 visible: !row.banner
+                opacity: row.unmounted ? Theme.opacityHigh : 1.0
                 anchors {
                     left: parent.left
                     leftMargin: Theme.horizontalPageMargin
@@ -222,6 +237,7 @@ Page {
 
             Column {
                 visible: !row.banner
+                opacity: row.unmounted ? Theme.opacityHigh : 1.0
                 anchors {
                     left: parent.left
                     leftMargin: Theme.horizontalPageMargin + Theme.iconSizeMedium + Theme.paddingLarge
@@ -392,16 +408,30 @@ Page {
 
                     // Folders and volumes (ORG-1, LOC-3)
                     MenuItem {
-                        visible: row.kind === "folder" || row.kind === "volume"
+                        visible: row.unmounted
+                        //% "Mount"
+                        text: qsTrId("lautta-browse-mount")
+                        onClicked: Bridge.mountDrive(row.drive, model.name)
+                    }
+                    MenuItem {
+                        visible: (row.kind === "folder" || row.kind === "volume") && !row.unmounted
                         //% "Add to favourites"
                         text: qsTrId("lautta-browse-add-favourite")
                         onClicked: page.openFavourite(model.uri)
                     }
-                    // Every row with a menu, favourites too.
+                    // Every row with a menu, favourites too, but a drive
+                    // that is not mounted has no address yet.
                     MenuItem {
+                        visible: !row.unmounted
                         //% "Copy address"
                         text: qsTrId("lautta-browse-copy-address")
                         onClicked: page.copyAddress(row.kind === "adhocRecent" ? model.place : App.displayAddress(model.uri))
+                    }
+                    MenuItem {
+                        visible: row.kind === "volume" && !row.unmounted && row.drive.length > 0
+                        //% "Unmount"
+                        text: qsTrId("lautta-browse-unmount")
+                        onClicked: Bridge.unmountDrive(row.drive, model.name)
                     }
                     MenuItem {
                         visible: row.kind === "volume" && page.storageSettings

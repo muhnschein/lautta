@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // App-wide reactions of the browse area: the bridge's questions (NVB-6) open
-// their dialog, a connected ad-hoc server opens, failures of bridge calls are
-// told, and the app looks for the bridge again when it comes to the
-// foreground (NVB-1).
+// their dialog, a connected ad-hoc server and a mounted drive (LOC-3) open,
+// failures of bridge calls are told, and the app looks for the bridge again
+// when it comes to the foreground (NVB-1).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0

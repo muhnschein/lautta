@@ -2,9 +2,9 @@
 //! netvfs bridge client: discovery, handshake, consent, reconnect (SPEC §7).
 //!
 //! [`BridgeClient`] finds the socket (NVB-1), connects peer-to-peer (NVB-2),
-//! follows the user's consent (NVB-3), publishes the locations and nearby
-//! servers (NVB-4, LOC-6) and keeps the connection alive with backoff while the
-//! app is in the foreground (NVB-12). Requests are made through
+//! follows the user's consent (NVB-3), publishes the locations, nearby
+//! servers and drives (NVB-4, LOC-6, LOC-3) and keeps the connection alive
+//! with backoff while the app is in the foreground (NVB-12). Requests are made through
 //! [`crate::provider::netvfs::NetvfsProvider`].
 
 mod client;
@@ -20,6 +20,6 @@ pub use client::BridgeClient;
 pub use lautta_bridge_proto::feature;
 pub use link::JobOutcome;
 pub use types::{
-    bridge_id, location_id, AdHocOptions, Attention, BridgeConfig, BridgeStatus, Consent, NearbyServer,
-    RemoteKind, RemoteLocation, LOCATION_PREFIX,
+    bridge_id, location_id, AdHocOptions, Attention, BridgeConfig, BridgeStatus, Consent, Drive, DriveKind,
+    NearbyServer, RemoteKind, RemoteLocation, LOCATION_PREFIX,
 };

@@ -2577,5 +2577,17 @@
         <source>Not connected</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-browse-not-mounted">
+        <source>Not mounted</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-mount">
+        <source>Mount</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-unmount">
+        <source>Unmount</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>
