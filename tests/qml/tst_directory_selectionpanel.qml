@@ -82,6 +82,14 @@ ApplicationWindow {
             expect(item.opacity === 1, what + ": nothing over the backdrop is translucent: " + item)
     }
 
+    // Waits out the page stack's transition: Silica ignores a pop pressed
+    // while one runs, and on the emulated target an animated push can take
+    // longer than any fixed wait.
+    function settle() {
+        for (var i = 0; i < 100 && pageStack.busy; ++i)
+            tools.pump(50)
+    }
+
     // The docked panel of the folder view with `prop`.
     function panel(prop) {
         var kids = view.children
@@ -116,12 +124,13 @@ ApplicationWindow {
 
         more[0].clicked()
         tools.pump(500)
+        settle()
         var dialog = pageStack.currentPage
         expect(dialog.newName !== undefined && dialog.uri === base + "a.md" && dialog.isDir === false,
                "Rename opens the rename dialog for the selected file")
         pageStack.pop(null, PageStackAction.Immediate)
         tools.pump(300)
-        expect(!view.selecting, "Rename leaves selection")
+        expect(view && !view.selecting, "Rename leaves selection")
 
         view.model.selectAll()
         tools.pump(300)
