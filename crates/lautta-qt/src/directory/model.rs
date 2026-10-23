@@ -118,8 +118,12 @@ pub struct DirectoryModel {
     selectedUris: qt_method!(fn(&self) -> QVariantList),
     setViewPrefs: qt_method!(fn(&mut self, prefs_json: QString) -> bool),
     indexOf: qt_method!(fn(&self, uri: QString) -> i32),
+    /// The uri of row `index`, empty outside the rows (drag selection, SPEC §15.3).
+    uriAt: qt_method!(fn(&self, index: i32) -> QString),
     hasCapability: qt_method!(fn(&self, flag: QString) -> bool),
     nameKind: qt_method!(fn(&self, name: QString) -> QString),
+    /// "folder", "file" or "" for the item `uri` of this folder.
+    kindOf: qt_method!(fn(&self, uri: QString) -> QString),
     setTransferState: qt_method!(fn(&mut self, uri: QString, state: QString)),
     rename: qt_method!(fn(&mut self, uri: QString, name: QString)),
     createFolder: qt_method!(fn(&mut self, name: QString)),
@@ -691,6 +695,15 @@ impl DirectoryModel {
             .map_or(-1, |i| i as i32)
     }
 
+    fn uriAt(&self, index: i32) -> QString {
+        usize::try_from(index)
+            .ok()
+            .filter(|&i| i < self.shown)
+            .and_then(|i| self.state.entry_at(i))
+            .and_then(|e| self.entry_uri(e))
+            .map_or_else(QString::default, |u| qs(&u.to_string()))
+    }
+
     fn hasCapability(&self, flag: QString) -> bool {
         let flag = flag.to_string();
         self.flags.contains(&flag)
@@ -698,12 +711,14 @@ impl DirectoryModel {
 
     /// "folder", "file" or "" for what is called `name` here (before filtering).
     fn nameKind(&self, name: QString) -> QString {
-        let kind = match self.state.entry_named(name.to_string().as_bytes()) {
-            Some(e) if e.is_dir() => "folder",
-            Some(_) => "file",
-            None => "",
-        };
-        qs(kind)
+        qs(kind_of(self.state.entry_named(name.to_string().as_bytes())))
+    }
+
+    /// By uri, so names that are not UTF-8 are found too (the selection
+    /// panel's one item, SPEC §15.3).
+    fn kindOf(&self, uri: QString) -> QString {
+        let name = self.name_of(&uri).unwrap_or_default();
+        qs(kind_of(self.state.entry_named(&name)))
     }
 
     fn setTransferState(&mut self, uri: QString, state: QString) {
@@ -764,6 +779,15 @@ impl DirectoryModel {
                 }
             },
         );
+    }
+}
+
+/// What `nameKind` and `kindOf` answer for an entry or none.
+fn kind_of(entry: Option<&Entry>) -> &'static str {
+    match entry {
+        Some(e) if e.is_dir() => "folder",
+        Some(_) => "file",
+        None => "",
     }
 }
 

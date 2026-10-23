@@ -130,8 +130,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `select(uri)`, `toggle(uri)`, `selectAll()`, `clearSelection()`,
   `selectedUris() → list`, `setViewPrefs(map)` (shows this folder with other view
   settings without storing them, `App.setSetting` does that; a `viewMode` replaces a
-  suggested grid), `indexOf(uri)`. An open model follows every change of the global view
-  settings at once (BRW-4).
+  suggested grid), `indexOf(uri)`, `uriAt(index)` (empty outside the rows), `kindOf(uri)`
+  (`folder`, `file` or empty, like `nameKind(name)` but by uri). An open model follows
+  every change of the global view settings at once (BRW-4).
 - `PathModel { uri }` — ancestors (roles `uri`, `name`), `complete(prefix) → list`.
 - Pages: `pages/DirectoryPage.qml { uri }`, `dialogs/FolderPickerDialog.qml { title,
   acceptText, startUri }` (property `selectedUri` after accept),
@@ -145,7 +146,11 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   open and swaps its rows for the item's rarer actions; which actions each holds, in a
   fixed order filtered by capabilities, is in `components/directory/ContextActions.js`
   (`menu(ctx)`, `more(ctx)`).
-- When selection mode starts and ends is in `components/directory/Selection.js`.
+- When selection mode starts and ends, what its panel offers (`panelButtons(count,
+  writable)`, `panelMore(count, writable)`, the push-up menu with one item) and how a drag
+  selects a range (`dragStart`, `dragTo`, `autoScroll`) is in
+  `components/directory/Selection.js`; `components/directory/DragSelect.qml` runs the
+  drag for the grid and list delegates (§15.3).
 - Which names New folder and Rename refuse is in `components/directory/Names.js`
   (`invalid(name, binHere)`).
 
@@ -238,8 +243,10 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   for `Operations.needsSummary`, `Transfers.needsAnswer`, `Bridge.question`, the undo
   banner and the app-wide `KeepAlive`.
 - `components/ErrorText.js`, `components/Open.js`, `components/FileIcon.qml { category,
-  isDir, thumbnailSource }`, `components/IconRow.qml` (icon row for context menus),
-  `components/UndoBanner.qml`.
+  isDir, thumbnailSource }`, `components/FileIcons.js` (icons every file view shares:
+  `archive`), `components/IconRow.qml` (icon row for context menus),
+  `components/UndoBanner.qml`, `components/BarBackground.qml` (the opaque backdrop of
+  bottom bars, UI-9).
 
 ## Tests
 

@@ -2001,22 +2001,6 @@
         <oldsource>Waiting in Transfers</oldsource>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-sel-copy">
-        <source>Copy</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-sel-cut">
-        <source>Cut</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-sel-delete">
-        <source>Delete</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-sel-share">
-        <source>Share</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-path-copy-address">
         <source>Copy address</source>
         <translation type="unfinished"></translation>
@@ -2137,10 +2121,6 @@
     </message>
     <message id="lautta-dir-opts-thumbnails">
         <source>Thumbnails</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-sel-compress">
-        <source>Compress</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-activity-bar-answer">

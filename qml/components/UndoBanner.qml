@@ -41,9 +41,10 @@ Item {
 
         Behavior on opacity { FadeAnimator { } }
 
-        Rectangle {
+        // Opaque (UI-9); under the press highlight.
+        BarBackground {
             anchors.fill: parent
-            color: Theme.rgba(Theme.overlayBackgroundColor, 0.9)
+            z: -1
         }
         Label {
             anchors {
