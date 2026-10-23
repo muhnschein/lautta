@@ -155,11 +155,27 @@ SilicaFlickable {
             y: flickable.contentY + Theme.paddingLarge
             width: flickable.width - 2 * Theme.paddingLarge
             height: flickable.height - 2 * Theme.paddingLarge
+            // A double tap zooms once the finger lifts: zooming disables the
+            // flickable, and done mid-press that leaves the area (Qt 5.6)
+            // taking the next tap for this one's end, so it would not count.
+            property bool doubleTapped
+            property real tappedX
+            property real tappedY
+
             onClicked: tapTimer.restart()
             onDoubleClicked: {
                 tapTimer.stop()
-                flickable.toggleZoom(x + mouse.x - flickable.contentX, y + mouse.y - flickable.contentY)
+                tappedX = x + mouse.x - flickable.contentX
+                tappedY = y + mouse.y - flickable.contentY
+                doubleTapped = true
             }
+            onReleased: {
+                if (doubleTapped) {
+                    doubleTapped = false
+                    flickable.toggleZoom(tappedX, tappedY)
+                }
+            }
+            onCanceled: doubleTapped = false
         }
     }
 

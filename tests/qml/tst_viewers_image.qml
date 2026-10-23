@@ -3,9 +3,9 @@
 // Jolla Gallery's: it opens a local image full screen on the folder's
 // listing with the overlay shown; a tap hides the overlay and another
 // brings it back; a double tap zooms in (overlay away, no swiping, no back
-// navigation) and a tap zooms out again; a swipe goes to the folder's next
-// image; Delete calls remove() (its remorse runs) and the close button
-// goes back; the folder goes at the end. Taps and swipes are real mouse events, so the Silica window
+// navigation) and a tap zooms out again; the close button goes back; the
+// folder goes at the end. Swiping and Delete are tst_viewers_image_swipe's
+// (one scenario has 60 s). Taps are real mouse events, so the Silica window
 // sits in a Qt Quick window: only items in one get them.
 import QtQuick 2.6
 import QtQuick.Window 2.2 as QtQuick
@@ -18,8 +18,10 @@ QtQuick.Window {
     id: window
 
     property bool scenarioRunning: true
-    // What Silica's pages look up in the window they are in.
+    // What Silica's pages look up in the window they are in, and the page
+    // stack that an app's ApplicationWindow, as the root, gives them all.
     property var __silica_applicationwindow_instance: app
+    readonly property var pageStack: app.pageStack
     property int step: 0
     property int waited: 0
     property var page
@@ -92,16 +94,6 @@ QtQuick.Window {
             tapAt(area, area.width / 2, area.height / 2)
     }
 
-    // Finger down in the middle, moved left over half the view, up.
-    function swipeLeft() {
-        var y = view.height / 2
-        var x = view.width * 0.8
-        events.mousePress(view, x, y, Qt.LeftButton, Qt.NoModifier, -1)
-        for (var i = 1; i <= 10; ++i)
-            events.mouseMove(view, x - i * view.width * 0.06, y, 16, Qt.LeftButton)
-        events.mouseRelease(view, x - view.width * 0.6, y, Qt.LeftButton, Qt.NoModifier, 16)
-    }
-
     // The state the steps wait on, for a timeout's message.
     function describe() {
         var shown = view ? image() : null
@@ -112,17 +104,12 @@ QtQuick.Window {
                 + ", overlay " + (view ? view.overlay.active : "-")
     }
 
-    function remorse() {
-        var found = findAll(page, function(x) { return x.execute !== undefined && x.cancel !== undefined && x.active !== undefined }, [])
-        return found.length > 0 ? found[0] : null
-    }
-
     function opened() {
         view = named(page, "flickableView")
         if (!expect(view !== null, "the viewer has its image view"))
             return
         expect(page.inFolder && page.total === 2, "on the folder's listing: " + page.total)
-        expect(page.currentUri === "lautta://user-pictures/ViewerSwipe/one.jpg", "on the opened image: " + page.currentUri)
+        expect(page.currentUri === "lautta://user-pictures/ViewerOpen/one.jpg", "on the opened image: " + page.currentUri)
         expect(view.currentIndex === 0, "the opened image first in the folder's order: " + view.currentIndex)
         expect(view.overlay.active && view.overlay.opacity > 0, "the overlay shows at first")
         var photo = named(image(), "zoomableImage")
@@ -187,44 +174,20 @@ QtQuick.Window {
                               "a tap zooms out: " + back.zoom + " at " + back.contentX)
                 window.expect(window.view.overlay.active, "zoomed out: the overlay is back")
                 window.expect(window.view.interactive && window.page.backNavigation, "swipes and back navigation again")
-                window.swipeLeft()
-                break
-            case 5:
-                if (window.view.currentIndex !== 1 || window.view.moving)
-                    return
-                window.expect(window.page.currentUri === "lautta://user-pictures/ViewerSwipe/two.jpg",
-                              "swiped to the folder's next image: " + window.page.currentUri)
-                var remove = window.named(window.view.overlay, "deleteButton")
-                if (!window.expect(remove !== null, "the overlay has Delete"))
-                    return
-                remove.clicked(null)
-                break
-            case 6:
-                var popup = window.remorse()
-                if (!window.expect(popup !== null && popup.active, "Delete runs remove(): its remorse shows"))
-                    return
-                window.expect(!window.view.interactive && !window.view.overlay.enabled,
-                              "while the remorse runs: no swipes, no overlay")
-                popup.cancel()
-                break
-            case 7:
-                if (window.remorse().active)
-                    return
-                window.expect(window.page.total === 2, "cancelled: nothing deleted")
                 var close = window.named(window.view.overlay, "dismissButton")
                 if (!window.expect(close !== null && window.view.overlay.enabled, "the overlay has its close button"))
                     return
                 close.clicked(null)
                 break
-            case 8:
+            case 5:
                 if (app.pageStack.busy || app.pageStack.currentPage === window.page)
                     return
                 window.expect(app.pageStack.depth === 1, "closed: back on the page below: " + app.pageStack.depth)
                 // Leave Pictures as it was for the scenarios after this one.
                 window.cleaned = false
-                Operations.remove(JSON.stringify(["lautta://user-pictures/ViewerSwipe"]))
+                Operations.remove(JSON.stringify(["lautta://user-pictures/ViewerOpen"]))
                 break
-            case 9:
+            case 6:
                 if (!window.cleaned)
                     return
                 window.scenarioRunning = false
@@ -236,10 +199,13 @@ QtQuick.Window {
     }
 
     Component.onCompleted: {
-        pictures.createFolder("ViewerSwipe")
+        pictures.createFolder("ViewerOpen")
         tools.pump(500)
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), "lautta://user-pictures/ViewerSwipe/one.jpg")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), "lautta://user-pictures/ViewerSwipe/two.jpg")
+        // Larger than the screen: the Gallery zooms up to the longer screen
+        // side / 200 (1.6 on the check's 240x320), which a small picture
+        // already fits at, so it would not zoom at all.
+        tools.installFixture(Qt.resolvedUrl("host/fixtures/large-photo.jpg"), "lautta://user-pictures/ViewerOpen/one.jpg")
+        tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), "lautta://user-pictures/ViewerOpen/two.jpg")
         // The page the viewer opens from, to go back to.
         app.pageStack.push(belowComponent, {}, PageStackAction.Immediate)
         tools.pump(300)
@@ -260,6 +226,6 @@ QtQuick.Window {
 
     Component {
         id: pageComponent
-        ImageViewer { uri: "lautta://user-pictures/ViewerSwipe/one.jpg"; folderUri: "lautta://user-pictures/ViewerSwipe/" }
+        ImageViewer { uri: "lautta://user-pictures/ViewerOpen/one.jpg"; folderUri: "lautta://user-pictures/ViewerOpen/" }
     }
 }
