@@ -278,7 +278,7 @@ async fn recents_comes_first_until_the_user_orders_the_rows() {
 
     let order: Vec<String> = ["user-documents", "user-music", "recents", "deleted"]
         .iter()
-        .map(|s| s.to_string())
+        .map(ToString::to_string)
         .collect();
     core.browse_layout.set_order("device", &order).unwrap();
     assert_eq!(
