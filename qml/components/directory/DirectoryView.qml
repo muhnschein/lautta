@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The folder view of DirectoryPage (SPEC §9, §15.3): header with the path menu, list or grid, pulley,
-// context menu and its More actions page, selection mode with a docked
-// panel, paste bar, remorse (also the undo of a rename, OPS-9) and the
-// placeholders for empty, not accessible, offline, large and error.
+// context menu and its More actions page, selection mode with drag
+// selection and a docked panel, paste bar, remorse (also the undo of a
+// rename, OPS-9) and the placeholders for empty, not accessible, offline,
+// large and error.
 import QtQuick 2.6
+import QtQml.Models 2.2
 import Sailfish.Silica 1.0
 import Sailfish.Share 1.0
 import Lautta 1.0
@@ -260,12 +262,13 @@ Item {
         }
     }
 
-    // Actions of the selection panel (board DirectorySelect).
+    // Actions of the selection panel (board DirectorySelect); Rename and Add
+    // to favourites need to know whether their one item is a folder.
     function runSelectionAction(id) {
         var uris = dir.selectedUris()
         if (uris.length === 0)
             return
-        runAction(id, uris, { "uri": uris[0], "mimeType": "", "isDir": false }, null)
+        runAction(id, uris, { "uri": uris[0], "mimeType": "", "isDir": dir.kindOf(uris[0]) === "folder" }, null)
         if (Selection.endsSelection(id))
             endSelection()
     }
@@ -539,9 +542,24 @@ Item {
                 else
                     view.openItem(model.uri, model.isDir, model.mimeType)
             }
+            // Outside selection the long-press menu opens; while selecting,
+            // holding flips the item and a drag goes on as in the grid.
             onPressAndHold: {
-                if (view.selecting)
-                    dir.toggle(model.uri)
+                if (!view.selecting)
+                    return
+                DelegateModel.inPersistedItems = true
+                dragSelect.begin(item, index, mouse.x, mouse.y)
+            }
+            onPositionChanged: if (dragSelect.holder === item) dragSelect.move(mouse.x, mouse.y)
+            onReleased: item.letGo()
+            onCanceled: item.letGo()
+
+            // Last: the view drops a row out of view once it is not held.
+            function letGo() {
+                if (dragSelect.holder !== item)
+                    return
+                dragSelect.end()
+                DelegateModel.inPersistedItems = false
             }
 
             Rectangle {
@@ -658,10 +676,23 @@ Item {
                 else
                     view.openItem(model.uri, model.isDir, model.mimeType)
             }
-            // Like the list: selection starts from the pulley only.
+            // As in Photos apps, holding an item selects it (starting selection
+            // mode) and the finger then selects a range (DragSelect, §15.3).
+            // The view keeps a held item while its row scrolls out of view.
             onPressAndHold: {
-                if (view.selecting)
-                    dir.toggle(model.uri)
+                DelegateModel.inPersistedItems = true
+                dragSelect.begin(cell, index, mouse.x, mouse.y)
+            }
+            onPositionChanged: if (dragSelect.holder === cell) dragSelect.move(mouse.x, mouse.y)
+            onReleased: cell.letGo()
+            onCanceled: cell.letGo()
+
+            // Last: the view drops an item out of view once it is not held.
+            function letGo() {
+                if (dragSelect.holder !== cell)
+                    return
+                dragSelect.end()
+                DelegateModel.inPersistedItems = false
             }
 
             RenameRemorse {
@@ -842,7 +873,17 @@ Item {
         }
     }
 
+    DragSelect {
+        id: dragSelect
+
+        view: view.flickable
+        model: dir
+        bottomInset: selectionPanel.visibleSize
+    }
+
     SelectionPanel {
+        id: selectionPanel
+
         owner: view
     }
 

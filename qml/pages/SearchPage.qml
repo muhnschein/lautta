@@ -261,6 +261,7 @@ Page {
         open: searchModel.running
         // The panel hides the progress row once the search is done.
         modal: false
+        background: BarBackground { }
 
         Row {
             anchors {

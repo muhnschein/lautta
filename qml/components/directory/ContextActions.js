@@ -7,6 +7,7 @@
 // Copy to…/Move to… are gone on purpose: copy or cut, then paste where you
 // are.
 .pragma library
+.import "../FileIcons.js" as FileIcons
 
 function text(id) {
     switch (id) {
@@ -38,11 +39,12 @@ function text(id) {
     return id
 }
 
-// The theme icon of a row of the More actions page.
+// The theme icon of a row of the More actions page; Compress shows the
+// archive icon archives show (FileIcons.js), as the selection panel does.
 function icon(id) {
     switch (id) {
     case "favourite": return "image://theme/icon-m-favorite"
-    case "compress": return "image://theme/icon-m-file-compressed"
+    case "compress": return FileIcons.archive
     }
     return ""
 }

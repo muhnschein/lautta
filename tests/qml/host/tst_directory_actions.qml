@@ -5,6 +5,7 @@
 // any more.
 import QtQuick 2.6
 import "../../../qml/components/directory/ContextActions.js" as Actions
+import "../../../qml/components/FileIcons.js" as FileIcons
 
 Item {
     function check(cond, what) {
@@ -48,11 +49,12 @@ Item {
         for (var i = 0; i < ctxs.length; ++i) {
             var rows = Actions.more(ctxs[i])
             same(rows.map(function(r) { return r.icon }),
-                 ["image://theme/icon-m-favorite", "image://theme/icon-m-file-compressed"],
+                 ["image://theme/icon-m-favorite", FileIcons.archive],
                  "More actions icons: " + JSON.stringify(ctxs[i]))
         }
         same(Actions.icon("favourite"), "image://theme/icon-m-favorite", "Add to favourites")
-        same(Actions.icon("compress"), "image://theme/icon-m-file-compressed", "Compress")
+        same(Actions.icon("compress"), "image://theme/icon-m-file-archive-folder",
+             "Compress: the archive icon, not the off-centre zipper badge")
         same(Actions.icon("copy"), "", "the menu's rows have no icon")
     }
 
