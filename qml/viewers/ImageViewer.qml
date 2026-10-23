@@ -1,31 +1,38 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Image viewer (PRV-4, boards ImageViewer, ImageExif, ImageDeleteRemote):
-// swipe through the images of the folder, pinch and double-tap to zoom,
-// tap to hide the controls. Local images are shown directly, remote ones
-// through image://lautta-file/ (EXIF orientation applied by the provider).
+// Jolla Gallery's full-screen viewer (components/viewers/gallery, BSD-3-Clause,
+// after jolla-gallery's GalleryFullscreenPage). The folder's images in its
+// order, swiped sideways; a tap shows or hides the overlay (details, close,
+// Delete, Open with, Share, More), a pinch or a double tap zooms and puts the
+// overlay away, a tap zooms out again; a swipe down or up goes back. Local
+// images are shown directly, remote ones through image://lautta-file/ (EXIF
+// orientation applied by the provider).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/viewers"
+import "../components/viewers/gallery"
+import "../components/ErrorText.js" as ErrorText
 
-Page {
+FullscreenContentPage {
     id: page
 
     property string uri
     // The folder to swipe through; the image's own folder by default.
     property string folderUri: App.parentUri(uri)
 
+    // The listing has had the image: the view stays on the folder when the
+    // image is deleted (to its neighbour) or renamed.
+    property bool listed
     // indexOf is a method: images.count makes the binding follow the listing.
-    readonly property bool inFolder: images.count > 0 && images.indexOf(uri) >= 0
+    readonly property bool inFolder: images.count > 0 && (listed || images.indexOf(uri) >= 0)
     readonly property string currentUri: slideshow.currentItem ? slideshow.currentItem.imageUri : uri
     readonly property int total: inFolder ? images.count : 1
-    readonly property int position: inFolder && images.count > 0 ? Math.max(0, images.indexOf(currentUri)) + 1 : 1
-    property bool chrome: true
     // Where the view was when an image was deleted, to land next to it.
     property int keepIndex: -1
 
     function sourceFor(imageUri) {
-        return App.isLocal(imageUri) ? App.localUrl(imageUri) : "image://lautta-file/" + imageUri
+        return slideshow.sourceOf(imageUri)
     }
 
     function remove() {
@@ -47,27 +54,56 @@ Page {
         }, seconds * 1000)
     }
 
-    allowedOrientations: Orientation.All
-    backNavigation: true
-
-    ImageListModel {
-        id: images
-        folderUri: page.folderUri
-        onLoadingChanged: {
-            if (loading)
-                return
-            if (page.keepIndex >= 0) {
-                slideshow.currentIndex = Math.min(page.keepIndex, Math.max(0, count - 1))
-                page.keepIndex = -1
-            } else if (page.inFolder) {
-                slideshow.currentIndex = indexOf(page.uri)
-            }
-        }
+    // More › Rename: the dialog only asks, so the viewer renames, and keeps
+    // showing the image under its new name.
+    function askRename() {
+        var target = page.currentUri
+        var dialog = pageStack.replace(Qt.resolvedUrl("../dialogs/RenameDialog.qml"), { "uri": target, "isDir": false })
+        dialog.accepted.connect(function () {
+            renamer.pendingName = dialog.newName
+            renamer.rename(target, dialog.newName)
+        })
     }
 
-    ListModel {
-        id: single
-        ListElement { uri: "" }
+    function showDetails() {
+        pageStack.push(Qt.resolvedUrl("../components/viewers/ImageDetailsPage.qml"),
+                       { "uri": page.currentUri, "imageSource": page.sourceFor(page.currentUri) })
+    }
+
+    function showMore() {
+        var more = pageStack.push(Qt.resolvedUrl("../components/viewers/ImageMorePage.qml"), { "uri": page.currentUri })
+        more.renameChosen.connect(page.askRename)
+    }
+
+    function say(kind, item) {
+        notice.text = ErrorText.message(kind, { "item": item, "location": App.locationName(page.currentUri) })
+        notice.show()
+    }
+
+    // On the image the viewer opened with (or renamed) once the folder's
+    // listing shows it. Called when the view takes up the listing as well:
+    // that may come after the listing's own change.
+    function place() {
+        if (page.inFolder && page.keepIndex < 0)
+            slideshow.currentIndex = images.indexOf(page.uri)
+    }
+
+    allowedOrientations: Orientation.All
+    // Zoomed in, drags pan the image; a tap zooms out and swipes go back.
+    backNavigation: !slideshow.zoomed
+
+    // Renames only (no folder listed).
+    DirectoryModel {
+        id: renamer
+
+        property string pendingName
+
+        onRenamed: {
+            App.noteUndo()
+            page.uri = newUri
+            images.reload()
+        }
+        onRenameFailed: page.say(kind, pendingName)
     }
 
     ViewerTools { id: tools }
@@ -75,6 +111,7 @@ Page {
     ExternalActions {
         id: external
         uri: page.currentUri
+        onFailed: page.say(kind, App.nameOf(uri))
     }
 
     Timer {
@@ -90,120 +127,52 @@ Page {
 
     onCurrentUriChanged: tools.noteViewed(currentUri)
 
-    Rectangle {
-        anchors.fill: parent
-        color: "black"
-    }
-
-    SlideshowView {
+    // The images, swiped, with the overlay over them.
+    FlickableImageView {
         id: slideshow
 
+        objectName: "flickableView"
         anchors.fill: parent
-        itemWidth: width
-        model: page.inFolder ? images : single
-        // Zoomed in or pinching, drags pan the image instead of swiping.
-        interactive: !(currentItem && currentItem.holdsGestures)
+        model: page.inFolder ? images : [page.uri]
+        held: remorse.active
+        onModelChanged: page.place()
+    }
 
-        delegate: Item {
-            readonly property string imageUri: page.inFolder ? model.uri : page.uri
-            readonly property bool holdsGestures: zoomImage.holdsGestures
-
-            width: slideshow.itemWidth
-            height: slideshow.height
-
-            ZoomImage {
-                id: zoomImage
-                anchors.fill: parent
-                // Only the shown image and its neighbours load.
-                source: Math.abs(index - slideshow.currentIndex) <= 1 ? page.sourceFor(parent.imageUri) : ""
-                onTapped: page.chrome = !page.chrome
-            }
-
-            // Swiped away: back to the fitted size for when it returns.
-            Connections {
-                target: slideshow
-                onCurrentIndexChanged: if (index !== slideshow.currentIndex) zoomImage.resetZoom()
+    // Declared after the view: the page's children go in this order when it
+    // is destroyed, and Silica's PagedView crashes when its model went first.
+    ImageListModel {
+        id: images
+        folderUri: page.folderUri
+        onLoadingChanged: {
+            if (loading)
+                return
+            if (indexOf(page.uri) >= 0)
+                page.listed = true
+            if (page.keepIndex >= 0) {
+                slideshow.currentIndex = Math.min(page.keepIndex, Math.max(0, count - 1))
+                page.keepIndex = -1
+            } else {
+                page.place()
             }
         }
     }
 
-    // Header over a dark gradient.
-    Rectangle {
-        anchors { top: parent.top; left: parent.left; right: parent.right }
-        height: Theme.itemSizeHuge
-        opacity: page.chrome ? 1 : 0
-        visible: opacity > 0
-        gradient: Gradient {
-            GradientStop { position: 0; color: Qt.rgba(0, 0, 0, 0.7) }
-            GradientStop { position: 1; color: "transparent" }
-        }
-        Behavior on opacity { FadeAnimation { } }
-
-        PageHeader {
-            title: App.nameOf(page.currentUri)
-            //% "%1 of %2"
-            description: qsTrId("lautta-viewers-image-count").arg(page.position).arg(page.total)
-        }
+    Connections {
+        target: slideshow.overlay
+        onDetails: page.showDetails()
+        onRemove: page.remove()
+        onOpenWith: external.openWith()
+        onShare: external.share()
+        onMore: page.showMore()
     }
 
-    // Actions over a dark gradient.
-    Rectangle {
-        anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
-        height: Theme.itemSizeHuge
-        opacity: page.chrome ? 1 : 0
-        visible: opacity > 0
-        gradient: Gradient {
-            GradientStop { position: 0; color: "transparent" }
-            GradientStop { position: 1; color: Qt.rgba(0, 0, 0, 0.75) }
-        }
-        Behavior on opacity { FadeAnimation { } }
-
-        Row {
-            anchors { bottom: parent.bottom; horizontalCenter: parent.horizontalCenter }
-            height: Theme.itemSizeLarge
-            width: parent.width
-
-            Repeater {
-                model: [
-                    { "icon": "image://theme/icon-m-share", "id": "share" },
-                    { "icon": "image://theme/icon-m-about", "id": "details" },
-                    { "icon": "image://theme/icon-m-edit", "id": "open" },
-                    { "icon": "image://theme/icon-m-delete", "id": "delete" },
-                    { "icon": "image://theme/icon-m-other", "id": "more" }
-                ]
-
-                IconButton {
-                    width: parent.width / 5
-                    anchors.verticalCenter: parent.verticalCenter
-                    icon.source: modelData.icon
-                    icon.color: "white"
-                    icon.highlightColor: Theme.highlightColor
-                    onClicked: {
-                        switch (modelData.id) {
-                        case "share":
-                            external.share()
-                            break
-                        case "details":
-                            pageStack.push(Qt.resolvedUrl("../components/viewers/ImageDetailsPage.qml"),
-                                           { "uri": page.currentUri, "imageSource": page.sourceFor(page.currentUri) })
-                            break
-                        case "open":
-                            external.openWith()
-                            break
-                        case "delete":
-                            page.remove()
-                            break
-                        default:
-                            pageStack.push(Qt.resolvedUrl("../components/viewers/ImageMorePage.qml"),
-                                           { "uri": page.currentUri })
-                        }
-                    }
-                }
-            }
-        }
+    VerticalPageBackHint {
+        pageActive: page.status === PageStatus.Active
     }
 
     RemorsePopup { id: remorse }
+
+    Notice { id: notice }
 
     BusyIndicator {
         anchors.centerIn: parent

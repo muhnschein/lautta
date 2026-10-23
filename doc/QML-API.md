@@ -215,7 +215,10 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   as a fraction of its height or -1; or page -1 and an http(s) `uri`). Image provider
   `image://lautta-pdf/<uri>?page=N` renders page N (from 0) at `sourceSize.width`
   (1080 without one), any location.
-- Pages: `viewers/ImageViewer.qml { uri, folderUri }`, `viewers/TextViewer.qml { uri }`,
+- Pages: `viewers/ImageViewer.qml { uri, folderUri }` (Jolla Gallery's viewer, adapted in
+  `components/viewers/gallery`; `remove()` deletes the image shown; its *More* is
+  `components/viewers/ImageMorePage.qml { uri }`, whose Rename signals `renameChosen()` for
+  the viewer to rename), `viewers/TextViewer.qml { uri }`,
   `viewers/MarkdownViewer.qml { uri }`, `viewers/PdfViewer.qml { uri }`, `viewers/PdfContentsPage.qml { fileName, outline,
   pageCount, currentPage }` (signal `chosen(index)`), `viewers/MediaPlayer.qml { uri, video }`,
   `dialogs/OpenRemoteDialog.qml { uri }`, `dialogs/PdfPasswordDialog.qml { fileName, wrong }`,
