@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// When selection mode starts and ends (SPEC §15.3, board DirectorySelect).
-// Picking the first item starts it; dropping the last one ends it, unless
-// the mode was started with nothing picked yet (pulley Select), which waits
-// for the first tap. The panel's dismiss button and the actions end it too.
+// Selection mode (SPEC §15.3, board DirectorySelect): when it starts and
+// ends, what its panel offers and how a drag selects a range.
+// Picking the first item (holding one in grid view picks it) starts it;
+// dropping the last one ends it, unless the mode was started with nothing
+// picked yet (pulley Select), which waits for the first tap. The panel's
+// dismiss button and the actions end it too.
 .pragma library
+.import "ContextActions.js" as Actions
+.import "../FileIcons.js" as FileIcons
 
-// The panel actions after which the selection is done. Delete ends it once
-// its remorse timer has run out, so an undo keeps the selection.
-var endingActions = ["copy", "cut", "share", "compress"]
+// The panel actions after which the selection is done, Rename and Add to
+// favourites included: their dialog takes over the one item. Delete ends it
+// once its remorse timer has run out, so an undo keeps the selection.
+var endingActions = ["copy", "cut", "share", "compress", "rename", "favourite"]
 
 function endsSelection(id) {
     return endingActions.indexOf(id) >= 0
@@ -26,4 +31,96 @@ function afterCount(state, count) {
     if (state.selecting && state.waiting)
         return state
     return { "selecting": false, "waiting": false }
+}
+
+// ---- The panel ----
+
+// The panel's buttons in the long-press menu's order (ContextActions.js),
+// then the dismiss button. Rename and Add to favourites are for one item:
+// with one selected they are in the panel's push-up menu (panelMore).
+var buttonOrder = ["share", "copy", "cut", "delete", "compress"]
+var moreOrder = ["rename", "favourite"]
+
+function buttonIcon(id) {
+    switch (id) {
+    case "share": return "image://theme/icon-m-share"
+    case "copy": return "dir-copy"
+    case "cut": return "dir-cut"
+    case "delete": return "image://theme/icon-m-delete"
+    case "compress": return FileIcons.archive
+    }
+    return "image://theme/icon-m-dismiss"
+}
+
+// The ids of `order` that a folder, `writable` or not, allows.
+function allowed(order, writable) {
+    var ctx = { "isDir": false, "writable": writable }
+    return order.filter(function (id) { return Actions.applicable(id, ctx) })
+}
+
+// [{ id, icon, text }] for `count` selected items of a folder that is
+// `writable` or not; "done" leaves selection.
+function panelButtons(count, writable) {
+    var ids = count > 0 ? allowed(buttonOrder, writable) : []
+    var out = ids.map(function (id) { return { "id": id, "icon": buttonIcon(id), "text": Actions.text(id) } })
+    //% "Stop selecting"
+    out.push({ "id": "done", "icon": buttonIcon("done"), "text": qsTrId("lautta-dir-sel-done") })
+    return out
+}
+
+// [{ id, text }] of the push-up menu: with one item selected, the rest of
+// its long-press menu, so grid view, where holding an item selects it,
+// keeps every action of that menu.
+function panelMore(count, writable) {
+    var ids = count === 1 ? allowed(moreOrder, writable) : []
+    return ids.map(function (id) { return { "id": id, "text": Actions.text(id) } })
+}
+
+// ---- Selecting by dragging (iOS Photos, Google Photos, Immich) ----
+// Holding an item flips it; moving the finger on gives every item from the
+// held one to the one under the finger, in reading order, the held item's
+// new state. Moving back shrinks the range: the items it leaves get the
+// state they had before the drag. A drag is { anchor, target, from, to }:
+// the held item, the state it gives, and the range it covers.
+
+// The drag once item `anchor`, `selected` or not, is held. It covers
+// nothing yet: dragTo(drag, anchor) flips the held item.
+function dragStart(anchor, selected) {
+    return { "anchor": anchor, "target": !selected, "from": anchor, "to": anchor - 1 }
+}
+
+// The finger reached item `index`: { drag, flips }, the drag after it and
+// the items whose state flips, in index order. `before(i)` is item i's
+// state before the drag. Both ranges hold the anchor, so only their ends
+// differ: an item entering the range flips unless it already had the
+// target state, one leaving it flips back on the same condition.
+function dragTo(drag, index, before) {
+    var next = {
+        "anchor": drag.anchor,
+        "target": drag.target,
+        "from": Math.min(drag.anchor, index),
+        "to": Math.max(drag.anchor, index)
+    }
+    var flips = []
+    var take = function (first, last) {
+        for (var i = first; i <= last; ++i) {
+            if (before(i) !== drag.target)
+                flips.push(i)
+        }
+    }
+    take(Math.min(drag.from, next.from), Math.max(drag.from, next.from) - 1)
+    take(Math.min(drag.to, next.to) + 1, Math.max(drag.to, next.to))
+    return { "drag": next, "flips": flips }
+}
+
+// How far a drag scrolls the view per step with the finger at `y`, the
+// items being shown between `top` and `bottom`: in a zone `zone` high at
+// either edge towards that edge, faster the nearer the finger is to it, at
+// most `fastest`; 0 elsewhere. Negative is up.
+function autoScroll(y, top, bottom, zone, fastest) {
+    if (y < top + zone)
+        return -fastest * Math.min(1, (top + zone - y) / zone)
+    if (y > bottom - zone)
+        return fastest * Math.min(1, (y - bottom + zone) / zone)
+    return 0
 }

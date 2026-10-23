@@ -7,6 +7,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.Thumbnailer 1.0
+import "FileIcons.js" as FileIcons
 
 Item {
     id: icon
@@ -28,7 +29,7 @@ Item {
         case "image": return "image://theme/icon-m-file-image"
         case "video": return "image://theme/icon-m-file-video"
         case "audio": return "image://theme/icon-m-file-audio"
-        case "archive": return "image://theme/icon-m-file-compressed"
+        case "archive": return FileIcons.archive
         case "package": return "image://theme/icon-m-file-rpm"
         case "text":
         case "code":

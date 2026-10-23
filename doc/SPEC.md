@@ -751,11 +751,23 @@ order, capability-filtered. *More actions* opens a page of *Add to favourites* a
 *Compress* for that item (OPS-12); there is no details page. *Rename*
 is a dialog of the plain Silica dialog header, titled *Rename*, and the name field
 only; *New folder* has its header (titled *New folder*, accept *Create*) and the name
-field. A taken or invalid name is an error in the field's label. Archives need no *Extract* row: they open as a location with *Extract all*. Selection starts from the pulley's *Select*, in list and grid alike;
-tapping an icon opens the item like the rest of the row. Its actions sit in a
-`DockedPanel` that stays open while selecting and ends with a button that leaves
-selection; the panel's actions, a finished delete and deselecting the last item leave it
-too.
+field. A taken or invalid name is an error in the field's label. Archives need no *Extract* row: they open as a location with *Extract all*. Selection starts from the pulley's *Select*, in list and grid alike,
+and in grid view also by holding an item, as in photo apps (iOS Photos, Immich): holding
+selects the item and starts selection, and there is no long-press menu in the grid.
+Keeping the finger down and moving it selects by dragging: every item from the held one
+to the one under the finger, in reading order, takes the held item's new state (selected;
+deselected when the held item was selected), moving back shrinks the range and the items
+it leaves get their earlier state back, and near the top or bottom edge the view scrolls
+on by itself, faster nearer the edge, with the range following. While selecting, holding
+a list row does the same; outside selection a list row's long-press menu stays.
+Tapping an icon opens the item like the rest of the row. The selection's actions sit in a
+`DockedPanel` that stays open while selecting: icons spread over its width in the
+long-press menu's order (*Share*, *Copy*, *Cut*, *Delete*, *Compress*) and a last button
+that leaves selection; with one item selected, pushing the panel up offers the rest of
+that menu (*Rename*, *Add to favourites*), so every action of an item is reachable from
+the grid. The panel's actions, a finished delete and deselecting the last item leave
+selection too. Archives and *Compress* show the platform's archive icon
+(`icon-m-file-archive-folder`) everywhere.
 Placeholders: empty, no permission, offline, error with *Retry*/*Details*. They and the
 loading indicator are part of the view's content, so pulling the pulley moves them with
 the header.
@@ -793,6 +805,11 @@ paused) is in its status line and context menu. Pulley: *Clear activity history*
   the line's colour: a favourite's place in Browse and in the favourite dialog, a
   recent's place, the folder headers of a search on a server and the destination in an
   Activity title. Local places have none.
+- UI-10: Bars at the bottom of a page (selection and paste panels, activity bar, undo
+  notice, search progress) are opaque: Silica's docked panel gradient on the ambience's
+  dimmer highlight colour, so content scrolling under them never shows through. Their
+  icons share the theme's stroke weight and optical size; the app's own icons are drawn
+  on the theme's 64-unit grid with 2-unit strokes.
 
 ## 16. Security and privacy
 

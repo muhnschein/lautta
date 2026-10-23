@@ -3,6 +3,7 @@
 // (the core's FileCategory icon name, `App.categoryOf`).
 import QtQuick 2.6
 import "../"
+import "../FileIcons.js" as FileIcons
 
 AppIcon {
     property string category
@@ -19,7 +20,7 @@ AppIcon {
         case "audio":
             return "image://theme/icon-m-file-audio"
         case "archive":
-            return "image://theme/icon-m-file-compressed"
+            return FileIcons.archive
         case "package":
             return "image://theme/icon-m-file-rpm"
         case "pdf":

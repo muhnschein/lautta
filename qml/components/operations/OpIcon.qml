@@ -2,6 +2,7 @@
 // The glyph of a file or folder in the operations pages (theme icons, UI-2).
 import QtQuick 2.6
 import ".."
+import "../FileIcons.js" as FileIcons
 
 AppIcon {
     // FileCategory icon name from App.categoryOf / the "category" of Info.
@@ -14,7 +15,7 @@ AppIcon {
         case "image": return "image://theme/icon-m-file-image"
         case "video": return "image://theme/icon-m-file-video"
         case "audio": return "image://theme/icon-m-file-audio"
-        case "archive": return "image://theme/icon-m-file-compressed"
+        case "archive": return FileIcons.archive
         case "pdf": return "image://theme/icon-m-file-download-as-pdf"
         case "package": return "image://theme/icon-m-file-apk"
         default: return "image://theme/icon-m-document"

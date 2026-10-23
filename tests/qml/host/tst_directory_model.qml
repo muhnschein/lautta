@@ -147,6 +147,11 @@ Item {
         dir.clearSelection()
         check(dir.selectedCount === 0 && dir.selectedUris().length === 0, "clear")
         check(dir.indexOf(a) === 1 && dir.indexOf(root.docs + "none") === -1, "indexOf: " + dir.indexOf(a))
+        // Drag selection reads the rows by index, the selection panel the kind by uri.
+        same([dir.uriAt(0), dir.uriAt(1), dir.uriAt(3)], [root.docs + "Zeta", a, root.docs + "notes.md"], "uriAt")
+        check(dir.uriAt(-1) === "" && dir.uriAt(dir.count) === "", "uriAt outside the rows")
+        same([dir.kindOf(root.docs + "Zeta"), dir.kindOf(a), dir.kindOf(root.docs + "none"),
+              dir.kindOf("lautta://user-downloads/Zeta"), dir.kindOf("garbage")], ["folder", "file", "", "", ""], "kindOf")
     }
 
     function testRename() {
