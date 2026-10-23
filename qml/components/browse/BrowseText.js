@@ -42,12 +42,18 @@ function rowName(kind, name) {
     }
 }
 
-// "58.2 GB free of 128 GB · exFAT" (LOC-3); empty when the space is unknown.
+// "58.2 GB free of 128 GB · exFAT" (LOC-3); the size alone for a drive that
+// is not mounted, the file system alone when the space is unknown.
 function volumeLine(free, total, fs) {
-    if (free < 0 || total < 0)
+    var space = ""
+    if (free >= 0 && total >= 0) {
+        //% "%1 free of %2"
+        space = qsTrId("lautta-browse-volume-space").arg(Silica.Format.formatFileSize(free)).arg(Silica.Format.formatFileSize(total))
+    } else if (total >= 0) {
+        space = Silica.Format.formatFileSize(total)
+    }
+    if (space.length === 0)
         return fs
-    //% "%1 free of %2"
-    var space = qsTrId("lautta-browse-volume-space").arg(Silica.Format.formatFileSize(free)).arg(Silica.Format.formatFileSize(total))
     return fs.length > 0 ? space + " · " + fs : space
 }
 

@@ -187,10 +187,7 @@ Page {
                 case "favourite":
                     return model.place
                 case "volume":
-                    return unmounted
-                            //% "Not mounted"
-                            ? qsTrId("lautta-browse-not-mounted")
-                            : BrowseText.volumeLine(model.free, model.total, model.fs)
+                    return BrowseText.volumeLine(model.free, model.total, model.fs)
                 case "nearby":
                     return BrowseText.nearbyLine(model.provider, model.host)
                 default:
@@ -237,7 +234,9 @@ Page {
                 anchors {
                     left: parent.left
                     leftMargin: Theme.horizontalPageMargin + Theme.iconSizeMedium + Theme.paddingLarge
-                    right: countLabel.visible ? countLabel.left : (statusRow.visible ? statusRow.left : parent.right)
+                    right: countLabel.visible ? countLabel.left
+                                              : (statusRow.visible ? statusRow.left
+                                                                   : (mountLabel.visible ? mountLabel.left : parent.right))
                     rightMargin: Theme.horizontalPageMargin
                     verticalCenter: parent.verticalCenter
                 }
@@ -310,6 +309,25 @@ Page {
                            : (row.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor)
                     truncationMode: TruncationMode.Fade
                 }
+            }
+
+            // A drive that is not mounted says so where a folder shows its
+            // count, as a server tells its connection (LOC-3).
+            Label {
+                id: mountLabel
+
+                visible: row.unmounted
+                width: Math.min(implicitWidth, row.width / 2)
+                anchors {
+                    right: parent.right
+                    rightMargin: Theme.horizontalPageMargin
+                    verticalCenter: parent.verticalCenter
+                }
+                //% "Not mounted"
+                text: qsTrId("lautta-browse-not-mounted")
+                font.pixelSize: Theme.fontSizeSmall
+                color: row.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
+                truncationMode: TruncationMode.Fade
             }
 
             Label {

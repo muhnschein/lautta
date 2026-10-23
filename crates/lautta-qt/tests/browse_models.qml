@@ -205,11 +205,12 @@ Item {
                  return v !== null && v.rstatus === "unmounted" && v.rdrive === "sda1" && v.ruri === ""
                         && v.ritem === "vol-STICK" && v.ricon === "image://theme/icon-m-usb"
              })
+        // Mounted where the sandbox does not see it, it is no row at all.
         step("a drive mounted out of the app's sight is an error naming it",
              function() { Bridge.mountDrive("sda1", "STICK") },
              function() {
                  return root.failedKind === "NotFound" && root.failedSubject === "STICK"
-                        && JSON.parse(FakeWorld.drives())[0].mounted
+                        && JSON.parse(FakeWorld.drives())[0].mounted && !has("volume", "STICK")
              })
         step("unmounting reaches the bridge and the row comes back",
              function() {

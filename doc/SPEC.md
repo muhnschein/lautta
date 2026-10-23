@@ -378,11 +378,12 @@ what the app does.
   app does not use UDisks2 itself: the sandbox may not mount, unmount or format. While the
   bridge has the `drives` feature (NVB-13) it lists the memory cards and USB drives it can
   mount (`ListDrives`, netvfs XB-20, also without the consent, followed by
-  `DrivesChanged`): one that is not mounted is a dimmed *Volumes* row "Not mounted", named
-  and placed (BRW-12) as the volume it becomes, by the folder UDisks2 mounts it on (label,
-  else UUID, else `disk`). Tapping it, or its *Mount*, has the bridge mount it (`Mount`, as
-  Settings › Storage does, without a question) and opens the volume once the sandbox
-  shows its folder (up to 2 s; otherwise "not found", naming it). A mounted volume of
+  `DrivesChanged`): one that is not mounted is a dimmed *Volumes* row with its size and
+  "Not mounted" on the right (where a folder shows its count, as tall as a mounted
+  volume), named and placed (BRW-12) as the volume it becomes, by the folder UDisks2
+  mounts it on (label, else UUID, else `disk`). Tapping it, or its *Mount*, has the
+  bridge mount it (`Mount`, as Settings › Storage does, without a question) and opens the
+  volume once the sandbox shows its folder (up to 2 s; otherwise "not found", naming it). A mounted volume of
   such a drive has *Unmount* (`Unmount`); a failure (busy, not allowed) is told with the
   volume's name. A drive that is mounted where the sandbox does not see it is not shown.
   Without the feature (older netvfs, standalone) volumes are only the mounted ones and
@@ -743,7 +744,8 @@ Long-press menus: favourite: *Edit favourite*, *Copy address*, *Remove from
 favourites*; folder: *Add to favourites*, *Copy address*, *Hide from Browse*; volume:
 *Add to favourites*, *Copy address*, *Unmount* (drives the bridge mounts, LOC-3),
 *Open Storage settings* (bridge only, LOC-3, NVB-13), *Hide from Browse*; a drive that
-is not mounted: *Mount*, *Open Storage settings*, *Hide from Browse*; account: *Edit server*, *Update sign-in* or *Review server identity* while
+is not mounted: *Mount*, *Open Storage settings*, *Hide from Browse*; account: *Edit
+server*, *Update sign-in* or *Review server identity* while
 netvfs asks for it (NVB-5), *Copy address*, *Hide from Browse*; ad-hoc server:
 *Connect* (recent ones), *Copy address*, *Hide from Browse*, *Remove from recents*.
 Connections are netvfs' to open and close: no menu disconnects a server. Nothing is

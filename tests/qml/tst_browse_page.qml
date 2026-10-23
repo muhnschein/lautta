@@ -142,7 +142,7 @@ ApplicationWindow {
             return fail("STICK does not say that it is not mounted")
         var stickDimmed = dimmed(row)
         var mounted = rowOf(list, "CARD")
-        if (mounted.unmounted || findAll(mounted, function(x) { return x.text === "lautta-browse-not-mounted" }, []).length > 0)
+        if (mounted.unmounted || findAll(mounted, function(x) { return x.text === "lautta-browse-not-mounted" && x.visible }, []).length > 0)
             return fail("CARD is shown as not mounted")
         // Its icon and its labels, and nothing of the mounted one.
         if (stickDimmed < dimmed(mounted) + 2)
