@@ -302,6 +302,36 @@ async fn file_favourites_name_their_folder_and_icon() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn favourites_show_their_chosen_icon() {
+    let e = env(None, &["Documents/Uni"]).await;
+    let uni = uri("lautta://user-documents/Uni");
+    let pdf = uri("lautta://user-documents/Uni/thesis.pdf");
+    let favourites = &e.core.favourites;
+    favourites
+        .save(&uni, "Uni", Some("#4fa3e5"), Some("home"), true)
+        .unwrap();
+    favourites
+        .save(&pdf, "Thesis", None, Some("company"), false)
+        .unwrap();
+    let rows = e.core.browse_rows().await;
+    let shown: Vec<_> = of(&rows, "favourites")
+        .iter()
+        .map(|r| (r.name.as_str(), r.icon.as_str(), r.colour.as_str()))
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            ("Uni", "image://theme/icon-m-home", "#4fa3e5"),
+            ("Thesis", "image://theme/icon-m-company", ""),
+        ],
+        "the chosen icons, tinted as before"
+    );
+    favourites.save(&uni, "Uni", None, None, true).unwrap();
+    let rows = e.core.browse_rows().await;
+    assert_eq!(of(&rows, "favourites")[0].icon, "image://theme/icon-m-favorite");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn location_display_names_apply() {
     let e = env(None, &["Documents"]).await;
     let mut prefs = LocationPrefs::new("user-documents");

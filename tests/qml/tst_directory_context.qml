@@ -2,9 +2,9 @@
 // Scenario on the target (real Silica): the long-press menu of a file ends
 // with More actions (SPEC §15.3); tapping it keeps the same menu open with
 // Add to favourites and Compress in its rows' place, and Add to favourites
-// makes the file itself a favourite, as a file. Fails when More actions is
-// missing or not last, when the tap closes the menu, or when the favourite
-// is the folder. The file's favourite is removed again at the end, so later
+// makes the file itself a favourite at once, as a file, and opens its page.
+// Fails when More actions is missing or not last, when the tap closes the
+// menu, or when the favourite is the folder. The file's favourite is removed again at the end, so later
 // scenarios sharing the database see none of it.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -149,18 +149,18 @@ ApplicationWindow {
                 win.next()
                 break
             case 6:
-                var dialog = pageStack.currentPage
-                if (!dialog || dialog.uri !== win.file || dialog.isDir === undefined)
+                var page = pageStack.currentPage
+                if (!page || page.uri !== win.file || page.isDir === undefined)
                     break
                 // The menu closes after its close delay; the timeout fails
                 // a menu that stays.
                 if (win.row.menuOpen)
                     break
-                if (dialog.isDir !== false)
+                if (page.isDir !== false)
                     return win.fail("the favourite is a file, not a folder")
-                if (!dialog.canAccept)
+                // Nothing to accept: the page adds the favourite itself.
+                if (!page.filled)
                     break
-                dialog.accept()
                 win.next()
                 break
             case 7:

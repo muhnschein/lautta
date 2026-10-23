@@ -1582,20 +1582,8 @@
         <source>Nearby</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-favourite-save">
-        <source>Save</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-favourite-add">
-        <source>Add</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-favourite-edit-title">
         <source>Edit favourite</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-favourite-add-title">
-        <source>Add to favourites</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-favourite-label">
@@ -1608,14 +1596,6 @@
     </message>
     <message id="lautta-favourite-colour">
         <source>Colour</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-favourite-order">
-        <source>Order</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-favourite-order-hint">
-        <source>Long-press a favourite in Browse to move it up or down.</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-question-trust">
@@ -2245,10 +2225,6 @@
             <numerusform></numerusform>
         </translation>
     </message>
-    <message id="lautta-favourite-remove">
-        <source>Remove from favourites</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-viewers-pdf-page-error">
         <source>Can&apos;t show page %1</source>
         <translation type="unfinished"></translation>
@@ -2575,6 +2551,14 @@
     </message>
     <message id="lautta-browse-server-disconnected">
         <source>Not connected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-favourite-added">
+        <source>Added to favourites</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-favourite-icon">
+        <source>Icon</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

@@ -13,7 +13,6 @@ use crate::browse_layout::{layout_item, Layout, NEARBY_ITEM};
 use crate::date_group::DateGroup;
 use crate::error::{Error, ErrorKind, Result};
 use crate::locations::{ConnectionState, Location, LocationKind, LocationStatus};
-use crate::mime::{category_of_name, FileCategory};
 use crate::org::favourites::Favourite;
 use crate::org::{self, Recent, RecentsFilter};
 use crate::settings::LocationPrefs;
@@ -237,22 +236,6 @@ fn account_ids(list: &[crate::bridge::RemoteLocation]) -> BTreeSet<String> {
         .collect()
 }
 
-/// The theme icon of a favourite: the star for a folder, the file's category
-/// for a file, as the folder view shows it (ORG-1).
-fn favourite_icon(f: &Favourite) -> &'static str {
-    if f.is_dir {
-        return "image://theme/icon-m-favorite";
-    }
-    match category_of_name(f.uri.name().unwrap_or_default()) {
-        FileCategory::Image => "image://theme/icon-m-file-image",
-        FileCategory::Video => "image://theme/icon-m-file-video",
-        FileCategory::Audio => "image://theme/icon-m-file-audio",
-        FileCategory::Archive => "image://theme/icon-m-file-compressed",
-        FileCategory::Package => "image://theme/icon-m-file-rpm",
-        _ => "image://theme/icon-m-document",
-    }
-}
-
 /// The location id inside a stored `lautta://<location>/…` string.
 fn location_of(uri: &str) -> Option<&str> {
     uri.strip_prefix("lautta://")?.split('/').next()
@@ -461,7 +444,7 @@ impl Core {
             let mut row = Row::new("favourites", "favourite");
             row.uri = f.uri.to_string();
             row.place = self.favourite_place(&f);
-            row.icon = favourite_icon(&f).to_owned();
+            row.icon = f.icon_source();
             row.is_file = !f.is_dir;
             row.item_id = f.id.to_string();
             row.name = f.label;

@@ -92,7 +92,7 @@ Page {
     }
 
     function openFavourite(uri) {
-        pageStack.push(Qt.resolvedUrl("../dialogs/FavouriteDialog.qml"), { "uri": uri })
+        pageStack.push(Qt.resolvedUrl("FavouritePage.qml"), { "uri": uri })
     }
 
     // Row remorses start here, not in the delegate: the Browse rows can be

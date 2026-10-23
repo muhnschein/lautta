@@ -91,10 +91,14 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `components/browse/ServerStatus.js` turns them into the row's line and dot. `refresh()`
   rescans the device folders and volumes first (LOC-3); the model also follows location
   changes by itself, and a changed row changes in place.
-- `FavouritesModel` (roles `itemId`, `uri`, `label`, `colour`, `place`, `isDir`; `add`
-  (a folder), `save(uri, label, colour, isDir)` adds a folder or file or relabels the
-  favourite it is, `edit`, `remove`, `removeUri(uri)`, `moveTo`, `get`, `idOf`,
-  `placeOf`).
+- `FavouritesModel` (roles `itemId`, `uri`, `label`, `colour`, `place`, `isDir`, `icon`
+  (the chosen theme icon name, empty for the default), `defaultIcon` (the icon source
+  shown without one: the star, or a file's icon); `add` (a folder),
+  `save(uri, label, colour, icon, isDir)` adds a folder or file or changes label, colour
+  and icon of the favourite it is (an empty colour or icon is none, an unknown icon is
+  none), `edit`, `remove`, `removeUri(uri)`, `moveTo`, `get`, `idOf`, `placeOf`,
+  `iconChoices()` (the icon names, the star first); `components/browse/IconPicker.qml
+  { icon, icons, defaultIcon, colour }`, signal `picked(icon)`).
 - `RecentsModel` (ORG-2, newest first, no filter; `count`, `enabled`, `loaded`,
   `reload()`, `clear()`, `remove(itemId)`, signal `failed(kind, message)`; roles:
   `itemId`, `uri`, `name`, `kind`, `place`, `at`, `dateGroup`). `dateGroup` is the date
@@ -107,8 +111,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - Pages: `pages/BrowsePage.qml` (initial page), `pages/RecentsPage.qml`,
   `dialogs/ConnectServerDialog.qml { url }`,
   `dialogs/ServerQuestionDialog.qml { questionId, kind, details }`,
-  `dialogs/FavouriteDialog.qml { uri, isDir }` (edits the item's favourite when it is
-  one; `isDir` defaults to true, a file passes false), `cover/CoverPage.qml`.
+  `pages/FavouritePage.qml { uri, isDir }` (saves each change; makes the item a
+  favourite when it is none; `isDir` defaults to true, a file passes false),
+  `cover/CoverPage.qml`.
 - Browse page settings (BRW-12): `LocationsModel.hide(section, kind, itemId)`;
   `BrowseLayoutModel` (roles `section`, `kind`, `item`, `name`, `hidden`, `place` (the
   place in the section; no role is called `index`, which would hide the delegate's
