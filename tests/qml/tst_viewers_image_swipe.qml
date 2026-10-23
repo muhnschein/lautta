@@ -22,8 +22,11 @@ QtQuick.Window {
     readonly property var pageStack: app.pageStack
     property int step: 0
     property int waited: 0
+    // The viewer: null once closed, as the page stack destroys it then.
     property var page
     property var view
+    // The viewer is pushed: the steps run from here on.
+    property bool started
     property int readyFor
     property bool cleaned
     // A swipe's moves wait between them, and the step timer must not run a
@@ -91,6 +94,8 @@ QtQuick.Window {
 
     // The state the steps wait on, for a timeout's message.
     function describe() {
+        if (!page)
+            return "viewer closed, " + app.pageStack.depth + " pages"
         return "page " + page.status + ", in folder " + page.inFolder + " (" + page.total + "), on " + page.currentUri
                 + ", index " + (view ? view.currentIndex + " of " + view.count + (view.moving ? ", moving" : "") : "-")
     }
@@ -105,7 +110,7 @@ QtQuick.Window {
         repeat: true
         running: window.scenarioRunning
         onTriggered: {
-            if (!window.page || window.swiping)
+            if (!window.started || window.swiping)
                 return
             if (++window.waited > 100)
                 return window.fail("step " + window.step + " timed out: " + window.describe())
@@ -181,6 +186,7 @@ QtQuick.Window {
         app.pageStack.push(belowComponent, {}, PageStackAction.Immediate)
         tools.pump(300)
         page = app.pageStack.push(pageComponent, {}, PageStackAction.Immediate)
+        started = true
     }
 
     width: 540
