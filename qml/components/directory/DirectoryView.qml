@@ -146,7 +146,7 @@ Item {
         case "delete": remove(uris, listItem); break
         case "compress": pageStack.push(Qt.resolvedUrl("../../dialogs/CompressDialog.qml"), { "uris": JSON.stringify(uris) }); break
         case "favourite":
-            pageStack.push(Qt.resolvedUrl("../../dialogs/FavouriteDialog.qml"), { "uri": uris[0], "isDir": info.isDir !== false })
+            pageStack.push(Qt.resolvedUrl("../../pages/FavouritePage.qml"), { "uri": uris[0], "isDir": info.isDir !== false })
             break
         }
     }

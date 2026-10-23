@@ -615,10 +615,18 @@ bridge).
 - SRC-5: Later: full-text and global search via Tracker with the `MediaIndexing`
   permission. Not in 1.0 (keeps the permission set minimal).
 - ORG-1: Favourites: any folder or file, local or remote, reorderable (Settings › Browse
-  page, BRW-12), with label and colour. A file favourite shows its file's icon and the
-  folder it is in, and opens like the file does in its folder (viewer or *Open with*); a
-  folder favourite opens the folder. Whether a favourite is a folder is stored with it
-  (DAT-2), so Browse never asks the location.
+  page, BRW-12), with label, colour and icon. The icon is one of a range of theme icons
+  (star, home, work, person, people, documents, pictures, camera, videos, music, downloads,
+  folder, cloud, computer, games, calendar, mail, internet, travel, car, health, kids,
+  private, Android), shown in Browse tinted with the colour; without a chosen one (or with
+  one the app does not know) a folder favourite shows the star and a file favourite its
+  file's icon. A file favourite shows the folder it is in, and opens like the file does in
+  its folder (viewer or *Open with*); a folder favourite opens the folder. Whether a
+  favourite is a folder is stored with it (DAT-2), so Browse never asks the location.
+  The favourite page (*Edit favourite*, and *Add to favourites*, which makes the item a
+  favourite at once with its name, no colour and the default icon) is a plain page with
+  the label, the folder, colour and icon, no pulley: a pick is saved at once, the label
+  when typing pauses and when the page is left. Removing is Browse's long-press menu.
 - ORG-2: Recents: files opened, previewed or transferred, newest first, in the date
   sections of the Activity page (§15.4, without *In progress*); not filterable;
   clearable (pulley *Clear recents*); can be switched off in Settings. Opened from its
@@ -788,7 +796,8 @@ SQLite for everything structured.
   preferences live in dconf via `Nemo.Configuration`; `~/.config/org.netvfs/lautta/` is
   unused.
 - DAT-2: Schema with `PRAGMA user_version`, forward migrations only: `favourites`
-  (`is_dir`: folder or file, ORG-1, schema 5; older rows are folders),
+  (`is_dir`: folder or file, ORG-1, schema 5; older rows are folders; `icon`: the chosen
+  theme icon name, ORG-1, schema 6; NULL for the default icon and for older rows),
   `recents`, `transfers`, `transfer_items`, `working_copies`, `dircache`,
   `trash_items(id, original_uri, trashed_at, stored_name, is_dir, size, bin)` (`bin`: path
   bytes of the item's bin, schema 4; NULL for older items, which are in `.../trash/`),
