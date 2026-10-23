@@ -363,7 +363,7 @@
       "y": 0
     },
     "Settings.dc.html": {
-      "h": 2100,
+      "h": 820,
       "is_interactive": true,
       "title": "Settings",
       "w": 400,
@@ -499,7 +499,7 @@
       "y": 8200
     },
     "ViewOptions.dc.html": {
-      "h": 1100,
+      "h": 1600,
       "is_interactive": true,
       "title": "View options",
       "w": 400,

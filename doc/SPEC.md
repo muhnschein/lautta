@@ -398,11 +398,16 @@ what the app does.
   thumbnails) are global: the same for every folder and location. They are set on one
   *View options* page, opened from a folder's pulley or from *Settings*: a plain page
   whose controls apply at once, with a live preview of a sample folder (folders, files,
-  a hidden file, a photo) in the order and view a real folder would get. Folders already
-  open follow a change at once; what one folder was switched to on its own (*Use list*
-  over a suggested grid, §15.3) stays until that setting changes for all. The grid shows
-  4 items per row with names on icons only, or 3 per row with name and size under every
-  item; landscape keeps the tile size.
+  a hidden file, a photo) in the order and view a real folder would get, drawn on a
+  half-size screen of the page's size that no setting makes larger or smaller. Below the
+  preview, a *Thumbnails* section, the same whether the page came from Settings or a
+  folder: *Show thumbnails* (its description says that making thumbnails decodes files
+  as soon as they show, untrusted ones too), *Thumbnails from servers* (its description
+  names the cost in data, battery and speed) with their size limits (PRV-2) and the
+  thumbnail cache size. Folders already open follow a change at once; what one folder
+  was switched to on its own (*Use list* over a suggested grid, §15.3) stays until that
+  setting changes for all. The grid shows 4 items per row with names on icons only, or 3
+  per row with name and size under every item; landscape keeps the tile size.
 - BRW-5: Stale-while-revalidate: cached listing shown immediately (≤ 7 days old, marked
   stale), refresh on the interactive lane, diff applied in place without losing scroll
   or selection.
@@ -766,12 +771,18 @@ copies through the app for local↔remote).
 
 ## 18. Settings
 
-Global: view options (BRW-4; Settings links to their page instead of repeating them),
-server thumbnails and their limits, cache sizes, *Recently deleted* on/off and retention,
-remorse duration, local transfer concurrency, preserve mtimes/permissions, verify with
-checksums, auto-resume, history retention, large-operation threshold. There is no date
-format setting: every date follows the system's formats (Silica `Format`); a value an
-earlier version stored is ignored.
+Global, on pages opened from *Settings*, which lists them as Salama does: an entry per
+page with an icon and, under its name, what is chosen there. *Browsing*: *Browse page*
+(BRW-12), *View options* (BRW-4; Settings links to that page instead of repeating it; the
+thumbnails are there: the switch for all of them, server thumbnails with their size limits
+and the thumbnail cache size), *Search* (depth on servers, SRC-3), *Recents* (on/off,
+*Clear recents*, ORG-2). *Files*: *Deleting* (move deleted items to *Trash* on/off, how
+long Trash keeps them, remorse duration, OPS-8), *Transfers* (local transfer concurrency,
+connections per server, preserve mtimes/permissions, verify with checksums, auto-resume,
+history retention, large-operation threshold), *Storage* (how long stored listings are
+kept, cache size, *Clear cache*, *Clear app data*, which says it empties Trash too,
+DAT-3). Then *About Lautta*. There is no date format setting: every date follows the
+system's formats (Silica `Format`); a value an earlier version stored is ignored.
 
 Per location (app DB): lane sizes (remote), start folder, listing/thumbnail cache opt-out,
 display name override. The app has no page for them: a server's name, start folder and

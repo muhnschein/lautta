@@ -114,17 +114,16 @@ body{margin:0}
 .note{background:rgba(20,30,40,.92);color:#fff;padding:12px 16px;display:flex;gap:12px;align-items:flex-start;border-radius:6px}
 </style>
 </helmet>
-<div class="amb {{amb}}" style="width: 400px; height: 1100px">
+<div class="amb {{amb}}" style="width: 400px; height: 1600px">
 <div class="ind-back"><i></i><i></i></div>
-<div class="hdr"><div class="hdr-t">View options</div><div class="hdr-d">Used in every folder</div></div>
+<div class="hdr"><div class="hdr-t">View options</div></div>
 <div class="cb"><div class="cb-r"><span class="cb-l">Sort by</span><span class="cb-v">Name</span></div></div>
 <div class="sw"><span class="sw-d"></span><div><div class="sw-t">Descending</div></div></div>
 <div class="sw on"><span class="sw-d"></span><div><div class="sw-t">Folders first</div></div></div>
 <div class="sw"><span class="sw-d"></span><div><div class="sw-t">Show hidden files</div><div class="sw-x">Names starting with a dot and hidden files</div></div></div>
 <div class="cb"><div class="cb-r"><span class="cb-l">View</span><span class="cb-v">List</span></div></div>
-<div class="sw on"><span class="sw-d"></span><div><div class="sw-t">Thumbnails</div></div></div>
 <div class="sh" style="margin-top:8px">Preview</div>
-<div style="margin:12px auto;width:200px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--hldim)"><div style="width:400px;transform:scale(.5);transform-origin:0 0;margin-bottom:-260px">
+<div style="margin:12px auto;width:200px;height:430px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--hldim)"><div style="width:400px;transform:scale(.5);transform-origin:0 0">
 <div class="hdr"><div class="hdr-t">Documents</div></div>
 <div class="li"><span class="li-ic"><svg class="ic m" viewBox="0 0 40 40"><path d="M5 11h11l3 3h16v17H5z"/></svg></span><span class="li-b"><span class="li-t" style="display:block">Photos</span><span class="li-s" style="display:block">17 Oct</span></span></div>
 <div class="li"><span class="li-ic"><svg class="ic m" viewBox="0 0 40 40"><path d="M5 11h11l3 3h16v17H5z"/></svg></span><span class="li-b"><span class="li-t" style="display:block">Work</span><span class="li-s" style="display:block">13:20</span></span></div>
@@ -133,9 +132,15 @@ body{margin:0}
 <div class="li"><span class="li-ic"><svg class="ic m" viewBox="0 0 40 40"><path d="M10 5h14l6 6v24H10z"/></svg></span><span class="li-b"><span class="li-t" style="display:block">report.pdf</span><span class="li-s" style="display:block">845 kB · 11 Oct</span></span></div>
 <div class="li"><span class="li-ic"><svg class="ic m" viewBox="0 0 40 40"><path d="M10 5h14l6 6v24H10z"/></svg></span><span class="li-b"><span class="li-t" style="display:block">song.mp3</span><span class="li-s" style="display:block">5.1 MB · 19 Sep</span></span></div>
 </div></div>
+<div class="sh" style="margin-top:8px">Thumbnails</div>
+<div class="sw on"><span class="sw-d"></span><div><div class="sw-t">Show thumbnails</div><div class="sw-x">Making thumbnails decodes files as soon as they show in a folder, including files you may not trust. When off, a file is decoded only when you open it.</div></div></div>
+<div class="sw on"><span class="sw-d"></span><div><div class="sw-t">Thumbnails from servers</div><div class="sw-x">Downloads pictures from servers to make them, which uses more data and battery and can slow down browsing</div></div></div>
+<div class="cb"><div class="cb-r"><span class="cb-l">Largest server file with a thumbnail</span><span class="cb-v">Up to 20 MB</span></div></div>
+<div class="cb"><div class="cb-r"><span class="cb-l">On a metered connection</span><span class="cb-v">Up to 5 MB</span></div></div>
+<div class="sl"><div class="sl-v">200 MB</div><div class="sl-t"><i style="width:16%"></i><b style="left:16%"></b></div><div class="sl-l">Thumbnail cache</div></div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":400,"height":1100}}'>
+<script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":400,"height":1600}}'>
 class Component extends DCLogic {
 renderVals() {
 return { amb: (this.props.ambience ?? 'dark') === 'light' ? 'light' : 'dark' };

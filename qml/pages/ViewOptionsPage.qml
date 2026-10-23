@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// View options (board ViewOptions, SPEC BRW-3/BRW-4): sort, view, grid size
-// and thumbnails, the same for every folder, with a live preview below. A
-// settings page, not a dialog: every control applies at once, and folders
-// already open follow. `model` is the DirectoryModel of the folder the page
-// was opened from (none from Settings): it also takes a choice that only
-// differed there, such as List over a suggested grid.
+// View options (board ViewOptions, SPEC BRW-3/BRW-4): sort, view and grid
+// size, the same for every folder, with a live preview below them, then the
+// thumbnails: the switch for all of them, and those from servers with their
+// limits and cache (PRV-1, PRV-2). A settings page, not a dialog: every
+// control applies at once, and folders already open follow. `model` is the
+// DirectoryModel of the folder the page was opened from (none from
+// Settings): it also takes a choice that only differed there, such as List
+// over a suggested grid.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/directory"
+import "../components/search"
+import "../components/search/SettingsText.js" as SettingsText
 
 Page {
     id: page
@@ -16,6 +20,7 @@ Page {
     property var model
     readonly property var sortKeys: ["name", "size", "modified", "type"]
     readonly property alias preview: preview
+    readonly property bool thumbnails: setting("thumbnails_local") === true
 
     function setting(key) {
         var dependency = App.settingsJson
@@ -46,10 +51,9 @@ Page {
             width: parent.width
 
             PageHeader {
+                objectName: "viewOptionsHeader"
                 //% "View options"
                 title: qsTrId("lautta-dir-opts-title")
-                //% "Used in every folder"
-                description: qsTrId("lautta-dir-opts-every-folder")
             }
 
             ComboBox {
@@ -157,15 +161,6 @@ Page {
                 }
             }
 
-            TextSwitch {
-                objectName: "thumbnailsSwitch"
-                automaticCheck: false
-                checked: page.setting("thumbnails_local") === true
-                //% "Thumbnails"
-                text: qsTrId("lautta-dir-opts-thumbnails")
-                onClicked: page.choose("thumbnails_local", "thumbnails", !checked)
-            }
-
             SectionHeader {
                 //% "Preview"
                 text: qsTrId("lautta-dir-opts-preview")
@@ -180,6 +175,66 @@ Page {
                 width: parent.width
                 screenWidth: page.width
                 screenHeight: page.height
+            }
+
+            // Global like everything on this page (BRW-4), whichever folder
+            // it was opened from; the server ones are not view settings but
+            // belong with the switch that turns every thumbnail off (PRV-1,
+            // PRV-2).
+            SectionHeader {
+                objectName: "thumbnailsSection"
+                //% "Thumbnails"
+                text: qsTrId("lautta-dir-opts-thumbnails-section")
+            }
+            TextSwitch {
+                objectName: "thumbnailsSwitch"
+                automaticCheck: false
+                checked: page.thumbnails
+                //% "Show thumbnails"
+                text: qsTrId("lautta-dir-opts-thumbnails")
+                //% "Making thumbnails decodes files as soon as they show in a folder, including files you may not trust. When off, a file is decoded only when you open it."
+                description: qsTrId("lautta-dir-opts-thumbnails-hint")
+                onClicked: page.choose("thumbnails_local", "thumbnails", !checked)
+            }
+            SettingSwitch {
+                id: remoteThumbnails
+
+                objectName: "remoteThumbnailsSwitch"
+                enabled: page.thumbnails
+                //% "Thumbnails from servers"
+                text: qsTrId("lautta-settings-thumbs-remote")
+                //% "Downloads pictures from servers to make them, which uses more data and battery and can slow down browsing"
+                description: qsTrId("lautta-settings-thumbs-remote-hint")
+                settingKey: "thumbnails_remote"
+            }
+            SettingCombo {
+                objectName: "remoteThumbnailLimitBox"
+                enabled: page.thumbnails && remoteThumbnails.current
+                //% "Largest server file with a thumbnail"
+                label: qsTrId("lautta-settings-thumbs-limit")
+                settingKey: "thumbnail_max_remote_mb"
+                values: [5, 10, 20, 50, 100]
+                labels: SettingsText.megabytes(values)
+            }
+            SettingCombo {
+                objectName: "meteredThumbnailLimitBox"
+                enabled: page.thumbnails && remoteThumbnails.current
+                //% "On a metered connection"
+                label: qsTrId("lautta-settings-thumbs-metered")
+                settingKey: "thumbnail_max_metered_mb"
+                values: [0, 1, 5, 10, 20]
+                labels: SettingsText.megabytes(values)
+            }
+            SettingSlider {
+                objectName: "thumbnailCacheSlider"
+                //% "Thumbnail cache"
+                label: qsTrId("lautta-settings-thumb-cache")
+                settingKey: "thumbnail_cache_mb"
+                minimumValue: 50
+                maximumValue: 1000
+                stepSize: 50
+                //% "%1 MB"
+                valueFormat: function (n) { return qsTrId("lautta-settings-mb").arg(n) }
             }
         }
 
