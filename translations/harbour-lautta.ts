@@ -1817,7 +1817,8 @@
         </translation>
     </message>
     <message id="lautta-dir-menu-search">
-        <source>Search here</source>
+        <source>Search</source>
+        <oldsource>Search here</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-menu-view-options">
@@ -2553,6 +2554,22 @@
     </message>
     <message id="lautta-viewers-trashing">
         <source>Moving to trash</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-menu-activity-count">
+        <source>Activity (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-menu-activity">
+        <source>Activity</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-renamed-folder">
+        <source>Folder renamed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-renamed-file">
+        <source>File renamed</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

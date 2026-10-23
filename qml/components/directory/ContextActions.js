@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Which actions an item offers and where (SPEC §15.3, board
+// Which actions an item offers and where (SPEC §15.3, OPS-12, board
 // DirectoryContext): the long-press menu holds the everyday ones as plain
-// Silica rows and ends with More actions, which turns the same menu into
-// the rarer ones for this item. Capabilities decide what is applicable.
+// Silica rows and ends with More actions, which opens a page of the rarer
+// ones for this item (MoreActionsPage.qml), each row with its theme icon.
+// Capabilities decide what is applicable.
 // Copy to…/Move to… are gone on purpose: copy or cut, then paste where you
 // are.
 .pragma library
@@ -37,6 +38,15 @@ function text(id) {
     return id
 }
 
+// The theme icon of a row of the More actions page.
+function icon(id) {
+    switch (id) {
+    case "favourite": return "image://theme/icon-m-favorite"
+    case "compress": return "image://theme/icon-m-file-compressed"
+    }
+    return ""
+}
+
 // ctx: { isDir, writable }
 function applicable(id, ctx) {
     switch (id) {
@@ -61,17 +71,17 @@ function pick(order, ctx) {
     var out = []
     for (var i = 0; i < order.length; ++i) {
         if (applicable(order[i], ctx))
-            out.push({ "id": order[i], "text": text(order[i]) })
+            out.push({ "id": order[i], "text": text(order[i]), "icon": icon(order[i]) })
     }
     return out
 }
 
-// [{ id, text }] of the long-press menu.
+// [{ id, text, icon }] of the long-press menu.
 function menu(ctx) {
     return pick(menuOrder, ctx)
 }
 
-// [{ id, text }] that More actions puts in the menu's place.
+// [{ id, text, icon }] of the More actions page.
 function more(ctx) {
     return pick(moreOrder, ctx)
 }

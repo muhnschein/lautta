@@ -154,10 +154,17 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `pages/ViewOptionsPage.qml { model }` (a page whose controls apply at once; `model`, the
   folder it was opened from, is absent when Settings opens it),
   `components/directory/ViewPreview.qml` (its live preview), `components/PathMenu.qml`.
-- The item context menu is plain rows ending with *More actions*, which keeps the menu
-  open and swaps its rows for the item's rarer actions; which actions each holds, in a
-  fixed order filtered by capabilities, is in `components/directory/ContextActions.js`
-  (`menu(ctx)`, `more(ctx)`).
+- The item context menu is plain rows ending with *More actions*, which opens
+  `components/directory/MoreActionsPage.qml { owner, info }` (the DirectoryView and the
+  row's item): the item's rarer actions, one row each with its theme icon; a dialog an
+  action opens replaces the page (`DirectoryView.openDialog`). Which actions each holds,
+  in a fixed order filtered by capabilities, and their icons, is in
+  `components/directory/ContextActions.js` (`menu(ctx)`, `more(ctx)` →
+  `[{ id, text, icon }]`, `icon(id)`).
+- After `DirectoryModel.renamed(oldUri, newUri)` the DirectoryView shows a Silica remorse on
+  the new name's row (OPS-9); every list row and grid cell holds a
+  `components/directory/RenameRemorse.qml { owner, row, uri }` so that a row made anew
+  while it runs shows the rest. Cancelling it calls `rename(newUri, oldName)`.
 - When selection mode starts and ends is in `components/directory/Selection.js`.
 - Which names New folder and Rename refuse is in `components/directory/Names.js`
   (`invalid(name)`).

@@ -494,15 +494,20 @@ bridge).
   interrupted start continues where it stopped, and it waits for an Android folder that
   is not there. Anything else left in a bin stays, and the bin is then an ordinary
   hidden folder.
-- OPS-9: Undo for the last rename, same-location move and trash operation, from a banner
-  for 10 s.
+- OPS-9: Undo for the last rename, same-location move and trash operation. A rename is
+  undone from the Silica remorse on its row, *File renamed* or *Folder renamed*, for the
+  remorse time of OPS-8 (the remorse timer setting): tapping it renames the item back,
+  letting it run out keeps the new name; a row the listing makes anew meanwhile shows the
+  rest of it. Moves and trash from a banner for 10 s.
 - OPS-10: Clipboard (cut/copy, docked paste bar) across all locations. There is no
   *Copy to…*/*Move to…*: the user goes to the destination either way, so they paste there.
 - OPS-12: There is no details page for an item. The rarer actions on one item sit
-  behind *More actions*, the last row of its long-press menu: tapping it keeps the
-  menu open and puts *Add to favourites* (the item itself, file or folder, ORG-1)
-  and *Compress* in its rows' place. The image viewer's *More* offers the same next
-  to *Rename*.
+  behind *More actions*, the last row of its long-press menu: tapping it opens a Silica
+  page whose header names the item, one row (theme icon and name) per action:
+  *Add to favourites* (the item itself, file or folder, ORG-1) and *Compress*. Tapping
+  a row runs the action and leaves the page; a dialog it opens takes the page's place,
+  so leaving the dialog returns to the folder. The image viewer's *More* offers the same
+  next to *Rename*.
 
 ## 11. Transfers
 
@@ -621,9 +626,9 @@ bridge).
 ## 13. Search and organisation
 
 - SRC-1: Instant filter in the current view (BRW-3).
-- SRC-2: *Search here*: recursive name search (substring or glob, type, size, date),
-  streaming results grouped by folder, cancelable; local via a Rust walker, remote via the
-  bridge's `Walk` (server-assisted where netvfs can).
+- SRC-2: *Search* (a folder's pulley): recursive name search below that folder (substring
+  or glob, type, size, date), streaming results grouped by folder, cancelable; local via a
+  Rust walker, remote via the bridge's `Walk` (server-assisted where netvfs can).
 - SRC-3: Depth limit unlimited locally, 8 remotely (setting).
 - SRC-4: Recent searches per location (10).
 - SRC-5: Later: full-text and global search via Tracker with the `MediaIndexing`
@@ -710,12 +715,15 @@ attached to swipe to: Activity is in the pulley and the activity bar (XFR-13).
 
 Header with the folder name only (no breadcrumb); tap → path menu. Slim progress line while listing
 or receiving transfers. List view with icon or thumbnail and "size · modified"; grid view
-for media folders (suggested when > 60 % images). Pulley: *Select*, *New folder*,
-*Paste* (with clipboard), *Search here*, *View options* (BRW-4; no *Refresh*, BRW-11). The
+for media folders (suggested when > 60 % images). Pulley: *Activity* (live count, as in
+Browse; at the top, as it leads away), *Select*, *New folder*, *Paste* (with clipboard),
+*Search*, *View options* (BRW-4; no *Refresh*, BRW-11); while selecting *Select all* and
+*Clear selection*. The folder picker and the share target, dialogs that choose a
+destination, have no *Activity*. The
 folder itself is made a favourite from the path menu (BRW-9). Context menu: plain
 Silica rows *Share* (files), *Copy*, *Cut*, *Rename*, *Delete*, *More actions*; fixed
-order, capability-filtered. *More actions* turns the same menu into *Add to
-favourites* and *Compress* for that item (OPS-12); there is no details page. *Rename*
+order, capability-filtered. *More actions* opens a page of *Add to favourites* and
+*Compress* for that item (OPS-12); there is no details page. *Rename*
 is a dialog of the plain Silica dialog header, titled *Rename*, and the name field
 only; *New folder* has its header (titled *New folder*, accept *Create*) and the name
 field. A taken or invalid name is an error in the field's label. Archives need no *Extract* row: they open as a location with *Extract all*. Selection starts from the pulley's *Select*, in list and grid alike;
@@ -723,7 +731,9 @@ tapping an icon opens the item like the rest of the row. Its actions sit in a
 `DockedPanel` that stays open while selecting and ends with a button that leaves
 selection; the panel's actions, a finished delete and deselecting the last item leave it
 too.
-Placeholders: empty, no permission, offline, error with *Retry*/*Details*.
+Placeholders: empty, no permission, offline, error with *Retry*/*Details*. They and the
+loading indicator are part of the view's content, so pulling the pulley moves them with
+the header.
 
 ### 15.4 Activity page
 

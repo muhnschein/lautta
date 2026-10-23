@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The folder view of DirectoryPage (SPEC §9, §15.3): header with the path menu, list or grid, pulley,
-// context menu, selection mode with a docked panel, paste bar, remorse and
-// the placeholders for empty, not accessible, offline, large and error.
+// context menu and its More actions page, selection mode with a docked
+// panel, paste bar, remorse (also the undo of a rename, OPS-9) and the
+// placeholders for empty, not accessible, offline, large and error.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Sailfish.Share 1.0
@@ -32,6 +33,16 @@ Item {
     readonly property bool gridCaptions: gridColumns === 3
     property string pendingName
     property string pendingShare
+    // The list or the grid, whichever is shown.
+    readonly property Item flickable: gridMode ? grid : list
+    // The item renamed last while its remorse runs (OPS-9): { uri, oldUri,
+    // isDir, ends, revealed }. Its row shows the remorse (RenameRemorse.qml).
+    property var renamed: null
+    property bool renamingDir
+    // The item renamed back from its remorse: that rename has none.
+    property string undoingUri
+    // The More actions page while it is open.
+    property Item moreActionsPage
 
     // Asks the host page to open a folder.
     signal openFolder(string uri)
@@ -70,8 +81,88 @@ Item {
                                     { "uri": info.uri, "isDir": info.isDir })
         dialog.accepted.connect(function () {
             view.pendingName = dialog.newName
+            view.renamingDir = info.isDir === true
             dir.rename(info.uri, dialog.newName)
         })
+    }
+
+    // A rename is undone from a remorse on its row, not a banner (OPS-9).
+    function renameDone(oldUri, newUri) {
+        if (oldUri === undoingUri) {
+            undoingUri = ""
+            return
+        }
+        var ms = App.setting("remorse_seconds") * 1000
+        renamed = { "uri": newUri, "oldUri": oldUri, "isDir": renamingDir, "ends": Date.now() + ms, "revealed": false }
+        renamedTimer.interval = ms
+        renamedTimer.restart()
+    }
+
+    // Shows the remorse of the rename on `row` (a list row or grid cell) for
+    // the time left. Returns { rename, orphaned }; the row sets `orphaned`
+    // when it goes: its remorse ends with it then, and that is not running
+    // out.
+    function showRenameRemorse(row) {
+        var r = renamed
+        var left = r ? r.ends - Date.now() : 0
+        if (left <= 0)
+            return null
+        var shown = { "rename": r, "orphaned": false }
+        //% "Folder renamed"
+        var text = r.isDir ? qsTrId("lautta-dir-renamed-folder")
+                           //% "File renamed"
+                           : qsTrId("lautta-dir-renamed-file")
+        var keep = function () {
+            if (!shown.orphaned)
+                view.forgetRename(r)
+        }
+        var remorse = typeof row.remorseAction === "function" ? row.remorseAction(text, keep, left)
+                                                              : Remorse.itemAction(row.contentItem, text, keep, left)
+        if (remorse)
+            onceCanceled(remorse, function () { view.undoRename(r) })
+        return shown
+    }
+
+    // Silica keeps one remorse item per row for all its timers: `action`
+    // belongs to this one only.
+    function onceCanceled(remorse, action) {
+        var done = function () {
+            remorse.canceled.disconnect(canceled)
+            remorse.triggered.disconnect(done)
+        }
+        var canceled = function () {
+            done()
+            action()
+        }
+        remorse.canceled.connect(canceled)
+        remorse.triggered.connect(done)
+    }
+
+    function forgetRename(r) {
+        if (r && renamed === r) {
+            renamed = null
+            renamedTimer.stop()
+        }
+    }
+
+    // Tapping the remorse renames the item back.
+    function undoRename(r) {
+        forgetRename(r)
+        undoingUri = r.uri
+        pendingName = App.nameOf(r.oldUri)
+        dir.rename(r.uri, pendingName)
+    }
+
+    // The renamed item may have moved out of sight: bring its row, and so
+    // its remorse, into view once the listing has it.
+    function revealRenamed() {
+        if (!renamed || renamed.revealed || dir.loading)
+            return
+        var index = dir.indexOf(renamed.uri)
+        if (index < 0)
+            return
+        renamed.revealed = true
+        flickable.positionViewAtIndex(index, ListView.Contain)
     }
 
     function paste() {
@@ -90,6 +181,23 @@ Item {
 
     function viewOptions() {
         pageStack.push(Qt.resolvedUrl("../../pages/ViewOptionsPage.qml"), { "model": dir })
+    }
+
+    function activity() {
+        pageStack.push(Qt.resolvedUrl("../../pages/TransfersPage.qml"))
+    }
+
+    function moreActions(info) {
+        moreActionsPage = pageStack.push(Qt.resolvedUrl("MoreActionsPage.qml"), { "owner": view, "info": info })
+    }
+
+    // A dialog opened from More actions takes that page's place, so that
+    // leaving the dialog returns to the folder.
+    function openDialog(path, properties) {
+        var url = Qt.resolvedUrl(path)
+        if (moreActionsPage && pageStack.currentPage === moreActionsPage)
+            return pageStack.replace(url, properties)
+        return pageStack.push(url, properties)
     }
 
     // OPS-8: to the Trash after the remorse timer; for good (volumes,
@@ -143,9 +251,11 @@ Item {
         case "cut": App.cut(JSON.stringify(uris)); break
         case "rename": rename(info); break
         case "delete": remove(uris, listItem); break
-        case "compress": pageStack.push(Qt.resolvedUrl("../../dialogs/CompressDialog.qml"), { "uris": JSON.stringify(uris) }); break
+        case "more": moreActions(info); break
+        // CompressDialog takes the list itself, not its JSON text.
+        case "compress": openDialog("../../dialogs/CompressDialog.qml", { "uris": uris }); break
         case "favourite":
-            pageStack.push(Qt.resolvedUrl("../../pages/FavouritePage.qml"), { "uri": uris[0], "isDir": info.isDir !== false })
+            openDialog("../../pages/FavouritePage.qml", { "uri": uris[0], "isDir": info.isDir !== false })
             break
         }
     }
@@ -251,8 +361,13 @@ Item {
         id: dir
 
         uri: view.uri
-        onRenamed: App.noteUndo()
-        onRenameFailed: view.notifyFailure(kind, message, view.pendingName)
+        onRenamed: view.renameDone(oldUri, newUri)
+        onRenameFailed: {
+            if (uri === view.undoingUri)
+                view.undoingUri = ""
+            view.notifyFailure(kind, message, view.pendingName)
+        }
+        onStateChanged: view.revealRenamed()
         onCreateFailed: view.notifyFailure(kind, message, view.pendingName)
         onSelectedCountChanged: view.setSelection(Selection.afterCount({ "selecting": view.selectionMode,
                                                                           "waiting": view.selectionWaiting },
@@ -275,6 +390,14 @@ Item {
 
     RemorsePopup {
         id: remorsePopup
+    }
+
+    // The remorse of the rename ran out, shown or not (its row may be out
+    // of view): the new name stays.
+    Timer {
+        id: renamedTimer
+
+        onTriggered: view.forgetRename(view.renamed)
     }
 
     Timer {
@@ -427,6 +550,12 @@ Item {
                 color: Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity / 2)
             }
 
+            RenameRemorse {
+                owner: view
+                row: item
+                uri: model.uri
+            }
+
             FileIcon {
                 id: icon
 
@@ -533,6 +662,12 @@ Item {
             onPressAndHold: {
                 if (view.selecting)
                     dir.toggle(model.uri)
+            }
+
+            RenameRemorse {
+                owner: view
+                row: cell
+                uri: model.uri
             }
 
             Item {
@@ -673,24 +808,38 @@ Item {
         height: (view.selecting || App.clipboardCount > 0 ? Theme.itemSizeLarge : 0) + activityBar.space
     }
 
-    BusyIndicator {
-        anchors.centerIn: parent
-        size: BusyIndicatorSize.Large
-        running: dir.loading && dir.count === 0 && dir.errorKind.length === 0 && view.visible
-    }
+    // The loading, empty and error states sit in the content of the list or
+    // grid, as Silica's ViewPlaceholder does, so pulling the pulley moves
+    // them with the header. As siblings of the views they stayed put, and in
+    // an empty folder they are all there is below the header.
+    Item {
+        id: stateLayer
 
-    FolderPlaceholder {
-        id: placeholder
+        parent: view.flickable.contentItem
+        x: view.flickable.originX
+        y: view.flickable.originY
+        width: view.width
+        height: view.height
 
-        readonly property string kind: view.placeholderKind()
+        BusyIndicator {
+            anchors.centerIn: parent
+            size: BusyIndicatorSize.Large
+            running: dir.loading && dir.count === 0 && dir.errorKind.length === 0 && view.visible
+        }
 
-        visible: kind.length > 0
-        x: Theme.horizontalPageMargin
-        y: Math.round(parent.height * 0.38)
-        title: view.placeholderTitle(kind)
-        hint: view.placeholderHint(kind)
-        buttons: view.placeholderButtons(kind)
-        onTriggered: view.placeholderAction(action)
+        FolderPlaceholder {
+            id: placeholder
+
+            readonly property string kind: view.placeholderKind()
+
+            visible: kind.length > 0
+            x: Theme.horizontalPageMargin
+            y: Math.round(parent.height * 0.38)
+            title: view.placeholderTitle(kind)
+            hint: view.placeholderHint(kind)
+            buttons: view.placeholderButtons(kind)
+            onTriggered: view.placeholderAction(action)
+        }
     }
 
     SelectionPanel {
