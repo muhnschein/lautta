@@ -6,13 +6,13 @@
 
 use super::args::{self, Dict};
 use super::fail::Fail;
-use super::state::{CancelOutcome, Consent, InfoValue, RecordedAnswer, Session, Shared};
+use super::state::{CancelOutcome, Consent, FakeDrive, InfoValue, RecordedAnswer, Session, Shared};
 use super::transfer::{self, Env};
 use super::tree::Tree;
 use super::{tree::TreeError, DEFAULT_CAPS};
 use crate::wire::{
-    location_state, WireCapabilities, WireEntry, WireLocation, WireNearby, WireWalkItem, INTERFACE,
-    OBJECT_PATH,
+    feature, location_state, WireCapabilities, WireDrive, WireEntry, WireLocation, WireNearby, WireWalkItem,
+    INTERFACE, OBJECT_PATH,
 };
 use sha2::Digest;
 use std::collections::HashMap;
@@ -168,6 +168,37 @@ impl Iface {
         }
     }
 
+    /// What a bridge without the drive methods answers (XB-20). The call is
+    /// recorded all the same, so that tests see what an older bridge was
+    /// asked.
+    fn require_drives(&self, method: &str) -> Result<(), Fail> {
+        if self.shared.with(|s| s.offers_drives()) {
+            Ok(())
+        } else {
+            self.shared.record_call(method, "interactive", "");
+            Err(Fail::unknown_method(method))
+        }
+    }
+
+    /// `Mount` or `Unmount`: where the drive is mounted then. A change is
+    /// told to every client (`DrivesChanged`); with a mount root the folder
+    /// comes and goes as udisks makes and removes it.
+    async fn mount_or_unmount(&self, method: &str, drive: &str, mount: bool) -> Result<Vec<u8>, Fail> {
+        self.require_drives(method)?;
+        let drive = args::drive(drive)?;
+        self.begin(method, "interactive", &drive, false).await?;
+        let Some((before, after)) = self.shared.with(|s| s.mount(&drive, mount)) else {
+            return Err(Fail::net("NotFound", "No such drive"));
+        };
+        if before != after {
+            if self.shared.with(|s| s.mount_root.is_some()) {
+                mount_folder(&before, &after).map_err(|e| Fail::net("Internal", &e.to_string()))?;
+            }
+            self.shared.broadcast_drives().await;
+        }
+        Ok(after)
+    }
+
     fn require_location(&self, loc: &str) -> Result<(), Fail> {
         if self.shared.with(|s| s.locations.contains_key(loc)) {
             Ok(())
@@ -262,6 +293,18 @@ fn declined(kind: &str) -> Fail {
         "identity-unknown" => Fail::net("ServerIdentityUnknown", "The server identity was not accepted"),
         "keyboard-interactive" => Fail::net("AuthFailed", "The sign-in was cancelled"),
         _ => Fail::net("SecurityPolicy", "The insecure connection was declined"),
+    }
+}
+
+/// Makes the folder of a mounted drive, or removes the one of an unmounted
+/// drive.
+fn mount_folder(before: &[u8], after: &[u8]) -> std::io::Result<()> {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+    if after.is_empty() {
+        std::fs::remove_dir(OsStr::from_bytes(before))
+    } else {
+        std::fs::create_dir_all(OsStr::from_bytes(after))
     }
 }
 
@@ -373,6 +416,14 @@ impl Iface {
             self.ask_consent();
         }
         Ok(())
+    }
+
+    async fn get_features(&self) -> Result<Vec<String>, Fail> {
+        let Some(features) = self.shared.with(|s| s.features.clone()) else {
+            return Err(Fail::unknown_method("GetFeatures"));
+        };
+        self.begin("GetFeatures", "interactive", "", false).await?;
+        Ok(features)
     }
 
     // ---- Locations -------------------------------------------------------
@@ -798,8 +849,42 @@ impl Iface {
         Ok(())
     }
 
+    async fn open_storage_settings(&self) -> Result<(), Fail> {
+        let offered = self.shared.with(|s| s.features.clone());
+        let Some(offered) = offered else {
+            return Err(Fail::unknown_method("OpenStorageSettings"));
+        };
+        self.begin("OpenStorageSettings", "interactive", "", false)
+            .await?;
+        if !offered.iter().any(|f| f == feature::STORAGE_SETTINGS) {
+            return Err(Fail::net("Unsupported", "Settings > Storage cannot be opened"));
+        }
+        self.shared.with(|s| s.handoffs.push("storage".to_owned()));
+        Ok(())
+    }
+
+    // ---- Drives (XB-20) ----------------------------------------------------
+
+    async fn list_drives(&self) -> Result<Vec<WireDrive>, Fail> {
+        self.require_drives("ListDrives")?;
+        self.begin("ListDrives", "interactive", "", false).await?;
+        Ok(self
+            .shared
+            .with(|s| s.drives.iter().map(FakeDrive::wire).collect()))
+    }
+
+    async fn mount(&self, drive: String) -> Result<Vec<u8>, Fail> {
+        self.mount_or_unmount("Mount", &drive, true).await
+    }
+
+    async fn unmount(&self, drive: String) -> Result<(), Fail> {
+        self.mount_or_unmount("Unmount", &drive, false).await.map(drop)
+    }
+
     // ---- Signals -----------------------------------------------------------
 
+    #[zbus(signal)]
+    pub async fn drives_changed(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
     #[zbus(signal)]
     pub async fn consent_changed(ctxt: &SignalContext<'_>, consent: String) -> zbus::Result<()>;
     #[zbus(signal)]
@@ -868,6 +953,15 @@ impl Shared {
         for session in self.sessions_snapshot() {
             if let Some(ctx) = context(&session) {
                 let _ = Iface::locations_changed(&ctx).await;
+            }
+        }
+    }
+
+    pub async fn broadcast_drives(&self) {
+        for session in self.sessions_snapshot() {
+            if let Some(ctx) = context(&session) {
+                // A closed client misses the signal.
+                let _ = Iface::drives_changed(&ctx).await;
             }
         }
     }

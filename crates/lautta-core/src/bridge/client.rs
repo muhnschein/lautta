@@ -1,18 +1,23 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The bridge client the rest of the app talks to: status, consent, locations,
-//! nearby servers, handoff and ad-hoc servers (SPEC NVB-1..6, NVB-12). The
-//! connection itself is kept by the supervisor in [`super::session`].
+//! nearby servers, drives, handoff and ad-hoc servers (SPEC NVB-1..6, NVB-12,
+//! LOC-3). The connection itself is kept by the supervisor in
+//! [`super::session`].
 
 use super::convert::map_error;
 use super::link::{rpc, Link};
 use super::nearby::Settle;
 use super::types::{
-    bridge_id, location_id, AdHocOptions, BridgeConfig, BridgeStatus, Consent, NearbyServer, RemoteLocation,
+    bridge_id, location_id, AdHocOptions, BridgeConfig, BridgeStatus, Consent, Drive, NearbyServer,
+    RemoteLocation,
 };
 use crate::error::{Error, ErrorKind, Result};
 use crate::paths::AppPaths;
 use crate::questions::Questions;
 use lautta_bridge_proto::{OptsBuilder, Zeroizing};
+use std::ffi::OsStr;
+use std::os::unix::ffi::OsStrExt;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use tokio::sync::{watch, Notify};
@@ -22,11 +27,15 @@ use tokio::task::JoinHandle;
 pub(super) struct Info {
     pub link: Option<Arc<Link>>,
     pub bridge_version: Option<String>,
+    /// What `GetFeatures` answered on the current connection (NVB-13).
+    pub features: Vec<String>,
     pub consent: Option<Consent>,
     /// Hub ids of questions the bridge asked on the current connection.
     pub questions: Vec<String>,
     /// Newest `ListLocations` request that was applied.
     pub applied_refresh: u64,
+    /// Newest `ListDrives` request that was applied.
+    pub applied_drives: u64,
     /// Nearby servers while a restarted discovery settles.
     pub nearby: Settle,
 }
@@ -37,10 +46,13 @@ pub(super) struct Inner {
     pub status: watch::Sender<BridgeStatus>,
     pub locations: watch::Sender<Arc<Vec<RemoteLocation>>>,
     pub nearby: watch::Sender<Arc<Vec<NearbyServer>>>,
+    /// The drives while the bridge has them (LOC-3, feature `drives`).
+    pub drives: watch::Sender<Arc<Vec<Drive>>>,
     pub foreground: watch::Sender<bool>,
     pub wake: Notify,
     pub discover: AtomicBool,
     pub refreshes: AtomicU64,
+    pub drive_refreshes: AtomicU64,
     pub attempts: AtomicU64,
     pub info: Mutex<Info>,
     pub task: Mutex<Option<JoinHandle<()>>>,
@@ -79,9 +91,11 @@ impl BridgeClient {
             status: watch::channel(BridgeStatus::Absent).0,
             locations: watch::channel(Arc::new(Vec::new())).0,
             nearby: watch::channel(Arc::new(Vec::new())).0,
+            drives: watch::channel(Arc::new(Vec::new())).0,
             wake: Notify::new(),
             discover: AtomicBool::new(false),
             refreshes: AtomicU64::new(0),
+            drive_refreshes: AtomicU64::new(0),
             attempts: AtomicU64::new(0),
             info: Mutex::new(Info::default()),
             task: Mutex::new(None),
@@ -175,6 +189,22 @@ impl BridgeClient {
         self.inner.info().bridge_version.clone()
     }
 
+    /// The memory cards and USB drives the bridge can mount, mounted or not
+    /// (LOC-3); none while it is not connected or has no `drives` (NVB-13).
+    pub fn drives(&self) -> Arc<Vec<Drive>> {
+        self.inner.drives.borrow().clone()
+    }
+
+    pub fn watch_drives(&self) -> watch::Receiver<Arc<Vec<Drive>>> {
+        self.inner.drives.subscribe()
+    }
+
+    /// True when the connected bridge offers `feature` (NVB-13,
+    /// [`lautta_bridge_proto::feature`]); false while there is none.
+    pub fn offers(&self, feature: &str) -> bool {
+        self.inner.info().features.iter().any(|f| f == feature)
+    }
+
     // ---- lifecycle -------------------------------------------------------
 
     /// Tells the client whether the app is in the foreground. Coming back
@@ -248,6 +278,24 @@ impl BridgeClient {
             .proxy()
             .open_account_settings(bridge_id(loc))
             .await)
+    }
+
+    /// *Open Storage settings* of a volume (LOC-3): the bridge opens Settings ›
+    /// Storage, which the sandbox cannot (NVB-13). Needs no consent.
+    pub async fn open_storage_settings(&self) -> Result<()> {
+        rpc(self.link()?.proxy().open_storage_settings().await)
+    }
+
+    /// *Mount* (LOC-3, netvfs XB-20): where the drive is mounted. Needs no
+    /// consent.
+    pub async fn mount_drive(&self, drive: &str) -> Result<PathBuf> {
+        let point = rpc(self.link()?.proxy().mount(drive).await)?;
+        Ok(PathBuf::from(OsStr::from_bytes(&point)))
+    }
+
+    /// *Unmount* (LOC-3, netvfs XB-20). Needs no consent.
+    pub async fn unmount_drive(&self, drive: &str) -> Result<()> {
+        rpc(self.link()?.proxy().unmount(drive).await)
     }
 
     /// *Connect to server* (NVB-6). The secret is wiped before this returns,

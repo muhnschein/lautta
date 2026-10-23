@@ -16,6 +16,17 @@ const MAX_ID: usize = 64;
 
 pub type Dict = HashMap<String, OwnedValue>;
 
+/// A drive id of `ListDrives` (XB-20): `[A-Za-z0-9_]{1,64}`, never a path.
+pub fn drive(id: &str) -> Result<String, Fail> {
+    let ok =
+        !id.is_empty() && id.len() <= MAX_ID && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');
+    if ok {
+        Ok(id.to_owned())
+    } else {
+        Err(Fail::args("Invalid drive id"))
+    }
+}
+
 pub fn location(id: &str) -> Result<String, Fail> {
     let ok = !id.is_empty()
         && id.len() <= MAX_ID

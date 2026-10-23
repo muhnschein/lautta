@@ -9,7 +9,8 @@
 //! as the watch can miss a mount inside the sandbox's mount namespace,
 //! Browse also rescans when it refreshes. A UDisks2 listener could feed
 //! [`VolumeEvent`]s into the same registry call without changing anything
-//! else.
+//! else. The sandbox mounts nothing itself: the bridge mounts and unmounts
+//! drives (netvfs XB-20, [`crate::app::Core::mount_drive`]).
 
 use crate::error::Result;
 use crate::paths::AppPaths;
@@ -63,6 +64,12 @@ pub fn sanitize_id(name: &OsStr) -> String {
         }
     }
     out
+}
+
+/// The location id of a volume mounted on the folder `name` of the media
+/// root (LOC-7), as [`Volume::location_id`] makes it.
+pub fn location_id_of(name: &OsStr) -> String {
+    format!("vol-{}", sanitize_id(name))
 }
 
 /// The media root of the current user: `/run/media/$USER`, with the home

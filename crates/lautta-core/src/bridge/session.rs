@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The supervisor: finds the socket, connects, says `Hello`, follows consent,
-//! locations and questions, and reconnects with backoff while the app is in the
-//! foreground (SPEC NVB-1..4, NVB-12).
+//! locations, drives and questions, and reconnects with backoff while the app
+//! is in the foreground (SPEC NVB-1..4, NVB-12, LOC-3).
 
 use super::client::Inner;
 use super::link::{rpc, Link};
-use super::types::{BridgeStatus, Consent, NearbyServer, RemoteLocation};
+use super::types::{BridgeStatus, Consent, Drive, NearbyServer, RemoteLocation};
 use crate::questions::{Answer, QuestionKind};
 use futures::{FutureExt, StreamExt};
 use lautta_bridge_proto::zvariant::{OwnedValue, Value};
-use lautta_bridge_proto::{value_i64, BridgeError, Connection, Signal, SignalStream, Zeroizing};
+use lautta_bridge_proto::{feature, value_i64, BridgeError, Connection, Signal, SignalStream, Zeroizing};
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use std::os::unix::fs::FileTypeExt;
@@ -17,6 +17,7 @@ use std::path::Path;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::watch;
 use tokio::time::{sleep, timeout};
 
 enum Attempt {
@@ -147,18 +148,38 @@ async fn attempt_session(inner: &Arc<Inner>, lost: bool) -> Attempt {
     Attempt::Ended
 }
 
-/// `Hello` (NVB-2), then the consent (NVB-3). Failure is an `Attempt`.
+/// `Hello` (NVB-2), the features, then the consent (NVB-3). Failure is an
+/// `Attempt`.
 async fn handshake(inner: &Arc<Inner>, link: &Arc<Link>) -> Result<(), Attempt> {
     let proxy = link.proxy();
     let version = rpc(proxy.hello(&inner.config.client_name).await).map_err(|_| Attempt::Failed)?;
+    let features = features(proxy.get_features().await.map_err(BridgeError::from))?;
     let consent = rpc(proxy.get_consent().await).map_err(|_| Attempt::Failed)?;
     {
         let mut info = inner.info();
         info.link = Some(link.clone());
         info.bridge_version = Some(version);
+        info.features = features;
     }
     apply_consent(inner, link, Consent::from_wire(&consent));
+    spawn_drives(inner, link);
     Ok(())
+}
+
+/// What `GetFeatures` tells (NVB-13): a bridge without the method offers
+/// none of the optional parts, and the app works as with it, without them.
+/// Only a lost connection fails the handshake.
+fn features(answer: Result<Vec<String>, BridgeError>) -> Result<Vec<String>, Attempt> {
+    match answer {
+        Ok(features) => Ok(features),
+        Err(BridgeError::Disconnected(_)) => Err(Attempt::Failed),
+        Err(e) => {
+            if !matches!(e, BridgeError::UnknownMethod(_)) {
+                log::warn!("bridge features not known: {e}");
+            }
+            Ok(Vec::new())
+        }
+    }
 }
 
 async fn run_signals(inner: &Arc<Inner>, link: &Arc<Link>, signals: &mut SignalStream) {
@@ -178,6 +199,7 @@ fn teardown(inner: &Arc<Inner>, link: &Arc<Link>) {
     let questions = {
         let mut info = inner.info();
         info.link = None;
+        info.features.clear();
         info.nearby.cancel();
         std::mem::take(&mut info.questions)
     };
@@ -189,6 +211,8 @@ fn teardown(inner: &Arc<Inner>, link: &Arc<Link>) {
         *n = Arc::new(Vec::new());
         changed
     });
+    // Without the bridge nothing mounts them (LOC-3).
+    publish(&inner.drives, Vec::new());
 }
 
 fn handle_signal(inner: &Arc<Inner>, link: &Arc<Link>, signal: Signal) {
@@ -207,6 +231,7 @@ fn handle_signal(inner: &Arc<Inner>, link: &Arc<Link>, signal: Signal) {
             show_nearby(inner, show);
         }
         Signal::Question { id, kind, details } => spawn_question(inner, link, id, &kind, &details),
+        Signal::DrivesChanged => spawn_drives(inner, link),
         _ => {}
     }
 }
@@ -308,6 +333,51 @@ async fn refresh_locations(inner: &Arc<Inner>, link: &Arc<Link>) {
         let changed = **current != list;
         if changed {
             *current = Arc::new(list);
+        }
+        changed
+    });
+}
+
+/// `ListDrives`, when the bridge has the drives (LOC-3, NVB-13); they need
+/// no consent.
+fn spawn_drives(inner: &Arc<Inner>, link: &Arc<Link>) {
+    if !inner.info().features.iter().any(|f| f == feature::DRIVES) {
+        return;
+    }
+    let inner = inner.clone();
+    let link = link.clone();
+    tokio::spawn(async move { refresh_drives(&inner, &link).await });
+}
+
+/// Of overlapping `ListDrives` the newest request wins, and only while its
+/// connection is the current one.
+async fn refresh_drives(inner: &Arc<Inner>, link: &Arc<Link>) {
+    let generation = inner.drive_refreshes.fetch_add(1, Ordering::SeqCst) + 1;
+    let wire = match rpc(link.proxy().list_drives().await) {
+        Ok(wire) => wire,
+        Err(e) => {
+            log::warn!("bridge drives not listed: {e}");
+            return;
+        }
+    };
+    let list: Vec<Drive> = wire.iter().map(Drive::from_wire).collect();
+    {
+        let mut info = inner.info();
+        let current = info.link.as_ref().is_some_and(|l| Arc::ptr_eq(l, link));
+        if generation <= info.applied_drives || !current {
+            return;
+        }
+        info.applied_drives = generation;
+    }
+    publish(&inner.drives, list);
+}
+
+/// Shows `value` unless it is what is shown.
+fn publish<T: PartialEq>(tx: &watch::Sender<Arc<T>>, value: T) {
+    tx.send_if_modified(|current| {
+        let changed = **current != value;
+        if changed {
+            *current = Arc::new(value);
         }
         changed
     });

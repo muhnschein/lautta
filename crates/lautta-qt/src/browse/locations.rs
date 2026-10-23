@@ -3,7 +3,7 @@
 //!
 //! Roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
 //! `colour`, `count`, `itemId`, `place`, `provider`, `host`, `free`,
-//! `total`, `fs`, `connection`, `connectionError`, `isFile` (see
+//! `total`, `fs`, `connection`, `connectionError`, `isFile`, `drive` (see
 //! `lautta_core::app_browse::Row` for the values).
 
 use super::{cell_data, role_names, store_changed, store_subscribe, Cell, Guard};
@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-const COLUMNS: [&str; 19] = [
+const COLUMNS: [&str; 20] = [
     "section",
     "uri",
     "name",
@@ -37,6 +37,7 @@ const COLUMNS: [&str; 19] = [
     "connection",
     "connectionError",
     "isFile",
+    "drive",
 ];
 
 /// Changes that arrive together are applied together.
@@ -63,6 +64,7 @@ fn cells(r: &Row) -> Vec<Cell> {
         Cell::s(r.connection),
         Cell::s(&r.connection_error),
         Cell::Bool(r.is_file),
+        Cell::s(&r.drive),
     ]
 }
 
@@ -148,12 +150,14 @@ impl LocationsModel {
             let mut store = store_subscribe();
             let mut status = core.bridge.as_ref().map(|b| b.watch_status());
             let mut nearby = core.bridge.as_ref().map(|b| b.watch_nearby());
+            let mut drives = core.bridge.as_ref().map(|b| b.watch_drives());
             loop {
                 tokio::select! {
                     r = locations.changed() => if r.is_err() { return },
                     r = store.changed() => if r.is_err() { return },
                     ok = changed(&mut status) => if !ok { return },
-                    ok = changed_nearby(&mut nearby) => if !ok { return },
+                    ok = changed(&mut nearby) => if !ok { return },
+                    ok = changed(&mut drives) => if !ok { return },
                     _ = stop.changed() => return,
                 }
                 tokio::time::sleep(SETTLE).await;
@@ -215,18 +219,10 @@ fn splice(old: &[String], new: &[String]) -> (usize, usize, usize) {
     (start, old.len() - start - end, new.len() - start - end)
 }
 
-/// Waits for the next bridge status change; false when the bridge is gone.
-/// Never completes without a bridge.
-async fn changed(rx: &mut Option<tokio::sync::watch::Receiver<lautta_core::bridge::BridgeStatus>>) -> bool {
-    match rx {
-        Some(rx) => rx.changed().await.is_ok(),
-        None => std::future::pending().await,
-    }
-}
-
-async fn changed_nearby(
-    rx: &mut Option<tokio::sync::watch::Receiver<Arc<Vec<lautta_core::bridge::NearbyServer>>>>,
-) -> bool {
+/// Waits for the next change of what the bridge shows (status, nearby
+/// servers, drives); false when the bridge is gone. Never completes without
+/// a bridge.
+async fn changed<T>(rx: &mut Option<tokio::sync::watch::Receiver<T>>) -> bool {
     match rx {
         Some(rx) => rx.changed().await.is_ok(),
         None => std::future::pending().await,
@@ -270,6 +266,20 @@ mod tests {
         assert_eq!(at("connection"), &Cell::s("failed"));
         assert_eq!(at("connectionError"), &Cell::s("Timeout"));
         assert_eq!(at("kind"), &Cell::s("account"));
+    }
+
+    #[test]
+    fn a_volume_row_names_its_drive() {
+        let row = Row {
+            kind: "volume",
+            status: "unmounted",
+            drive: "mmcblk1p1".into(),
+            ..Row::default()
+        };
+        let cells = cells(&row);
+        let at = |name: &str| &cells[COLUMNS.iter().position(|c| *c == name).unwrap()];
+        assert_eq!(at("drive"), &Cell::s("mmcblk1p1"));
+        assert_eq!(at("status"), &Cell::s("unmounted"));
     }
 
     fn keys(names: &[&str]) -> Vec<String> {
