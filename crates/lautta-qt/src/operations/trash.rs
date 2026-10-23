@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `TrashModel`: *Recently deleted* (OPS-8): list, restore, delete now,
-//! empty, across the bins of all locations. Call `reload()` when the page
-//! opens; it also purges what is past the retention setting.
+//! `TrashModel`: the *Trash* (OPS-8): list, restore, delete now, empty.
+//! Call `reload()` when the page opens; it also purges what is past the
+//! retention setting.
 
 use super::error_parts;
 use crate::runtime::{core, spawn_then};
@@ -104,7 +104,7 @@ impl TrashModel {
                 tokio::task::spawn_blocking(move || {
                     // What expired while the app was running goes first (OPS-8).
                     if let Err(e) = core.purge_trash(now) {
-                        log::warn!("purging Recently deleted failed: {e}");
+                        log::warn!("purging the Trash failed: {e}");
                     }
                     core.trash_entries(now)
                 })
@@ -195,7 +195,7 @@ impl TrashModel {
         );
     }
 
-    /// Empties Recently deleted (after the remorse popup).
+    /// Empties the Trash (after the remorse popup).
     fn empty(&mut self) {
         self.run(
             |core| core.empty_trash(),

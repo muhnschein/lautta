@@ -5,7 +5,7 @@
 // selection (Selection.panelButtons). With one item selected, pushing the
 // panel up offers the rest of that menu, Rename and Add to favourites, as
 // Silica's media player panel does: in grid view holding an item selects it
-// instead of opening the menu (SPEC §15.3). Opaque (UI-9). `owner` is the
+// instead of opening the menu (SPEC §15.3). Opaque (UI-10). `owner` is the
 // DirectoryView.
 import QtQuick 2.6
 import Sailfish.Silica 1.0

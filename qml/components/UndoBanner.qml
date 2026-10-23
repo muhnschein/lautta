@@ -20,7 +20,7 @@ Item {
             //% "Moved"
             return qsTrId("lautta-undo-moved")
         default:
-            //% "Moved to Recently deleted"
+            //% "Moved to trash"
             return qsTrId("lautta-undo-trashed")
         }
     }
@@ -41,7 +41,7 @@ Item {
 
         Behavior on opacity { FadeAnimator { } }
 
-        // Opaque (UI-9); under the press highlight.
+        // Opaque (UI-10); under the press highlight.
         BarBackground {
             anchors.fill: parent
             z: -1

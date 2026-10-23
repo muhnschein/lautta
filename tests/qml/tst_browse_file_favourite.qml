@@ -102,8 +102,8 @@ ApplicationWindow {
                 }
                 if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), win.file))
                     return win.fail("fixture")
-                favs.save(win.file, "Lecture notes", "", false)
-                favs.save(win.folder, "Uni", "", true)
+                favs.save(win.file, "Lecture notes", "", "", false)
+                favs.save(win.folder, "Uni", "", "", true)
                 win.next()
                 break
             case 2:

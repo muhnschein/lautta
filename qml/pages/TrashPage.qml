@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Recently deleted (OPS-8): restore, delete now, or empty it. Only items
-// deleted from this device's folders are kept here.
+// The Trash (OPS-8, boards RecentlyDeleted, RecentlyDeletedEmpty): restore,
+// delete now, or empty it. Only items deleted from this device's folders
+// are kept here; deletes on volumes and servers are permanent.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -48,17 +49,17 @@ Page {
         PullDownMenu {
             MenuItem {
                 enabled: trash.count > 0 && !trash.busy
-                //% "Empty Recently deleted"
+                //% "Empty trash"
                 text: qsTrId("lautta-trash-empty")
                 onClicked: {
-                    //% "Emptying Recently deleted"
+                    //% "Emptying trash"
                     emptyRemorse.execute(qsTrId("lautta-trash-emptying"), function() { trash.empty() }, page.remorseMs)
                 }
             }
         }
 
         header: PageHeader {
-            //% "Recently deleted"
+            //% "Trash"
             title: qsTrId("lautta-trash-title")
             //% "Kept for %n days"
             description: qsTrId("lautta-trash-kept", page.retentionDays)
@@ -147,14 +148,14 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                //% "Only files deleted from this device's folders appear here. Deletes on SD cards and servers are permanent."
+                //% "Only files deleted from this device's folders appear here. Deletes on volumes and servers are permanent."
                 text: qsTrId("lautta-trash-footer")
             }
         }
 
         ViewPlaceholder {
             enabled: trash.loaded && trash.count === 0
-            //% "Nothing deleted recently"
+            //% "Trash is empty"
             text: qsTrId("lautta-trash-placeholder")
             //% "Files you delete from this device's folders wait here before they are removed for good."
             hintText: qsTrId("lautta-trash-placeholder-hint")

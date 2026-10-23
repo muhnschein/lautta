@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The bars at the bottom on the target (real Silica, UI-9, SPEC §15.3): the
+// The bars at the bottom on the target (real Silica, UI-10, SPEC §15.3): the
 // selection panel, the paste bar, the activity bar, the undo notice and the
 // search progress have an opaque backdrop, not Silica's see-through panel
 // gradient alone. The selection panel shows its icons in the long-press

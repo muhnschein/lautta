@@ -148,13 +148,13 @@ Page {
             visible: list.count > 0
 
             MenuItem {
-                //% "Clear history"
-                text: qsTrId("lautta-xfr-menu-clear")
+                //% "Clear activity history"
+                text: qsTrId("lautta-xfr-menu-clear-activity")
                 visible: list.count > 0
                 onClicked: Remorse.popupAction(
                     page,
-                    //% "Clearing history"
-                    qsTrId("lautta-xfr-remorse-clear"),
+                    //% "Clearing activity history"
+                    qsTrId("lautta-xfr-remorse-clear-activity"),
                     function() { Transfers.clearHistory() },
                     App.setting("remorse_seconds") * 1000)
             }

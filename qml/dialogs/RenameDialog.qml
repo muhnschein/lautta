@@ -20,8 +20,7 @@ Dialog {
     readonly property bool taken: nameField.text !== oldName && parentModel.count >= 0
                                   && parentModel.nameKind(nameField.text) !== ""
     readonly property string folderUri: App.parentUri(uri)
-    // The bin of a local location sits at its root (OPS-8).
-    readonly property bool badName: Names.invalid(nameField.text, App.isLocal(folderUri) && App.parentUri(folderUri) === "")
+    readonly property bool badName: Names.invalid(nameField.text)
 
     function errorText() {
         if (taken)

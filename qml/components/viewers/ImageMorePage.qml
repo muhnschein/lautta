@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // "More" of the image viewer (board ImageViewer): the file actions of the
 // folder view for the image being shown, Rename and the folder view's More
-// actions (ContextActions.js), handled by the other areas' dialogs.
+// actions (ContextActions.js), handled by the other areas' dialogs and the
+// favourite page.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -20,10 +21,10 @@ Page {
             pageStack.replace(Qt.resolvedUrl("../../dialogs/RenameDialog.qml"), { "uri": page.uri })
             break
         case "favourite":
-            pageStack.replace(Qt.resolvedUrl("../../dialogs/FavouriteDialog.qml"), { "uri": page.uri, "isDir": false })
+            pageStack.replace(Qt.resolvedUrl("../../pages/FavouritePage.qml"), { "uri": page.uri, "isDir": false })
             break
         case "compress":
-            pageStack.replace(Qt.resolvedUrl("../../dialogs/CompressDialog.qml"), { "uris": JSON.stringify([page.uri]) })
+            pageStack.replace(Qt.resolvedUrl("../../dialogs/CompressDialog.qml"), { "uris": [page.uri] })
             break
         }
     }

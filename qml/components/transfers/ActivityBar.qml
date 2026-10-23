@@ -94,7 +94,7 @@ Item {
 
         transform: Translate { x: handle.x }
 
-        // Opaque (UI-9); under the press highlight.
+        // Opaque (UI-10); under the press highlight.
         BarBackground {
             anchors.fill: parent
             z: -1

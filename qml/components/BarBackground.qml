@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The backdrop of the bars at the bottom of a page (UI-9): the selection and
+// The backdrop of the bars at the bottom of a page (UI-10): the selection and
 // paste panels, the activity bar, the undo notice and the search progress.
 // Opaque, so what scrolls under a bar never shows through its text and
 // icons: Silica's own docked panel gradient (PanelBackground) laid on the

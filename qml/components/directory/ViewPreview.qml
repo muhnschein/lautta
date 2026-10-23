@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // A half-size picture of a folder for the view options page (BRW-4), like
 // the Browse page preview (BRW-12): sample folders and files, a hidden file
-// and a photo, drawn as DirectoryView draws a folder. It shows the global
-// view settings and follows every change at once; the order and the hidden
-// file come from the core (App.previewRows). Takes no input.
+// and a photo, drawn as DirectoryView draws a folder on a screen of the
+// page's size. It shows the global view settings and follows every change
+// at once, at a size that does not change with them; the order and the
+// hidden file come from the core (App.previewRows). Takes no input.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -264,12 +265,16 @@ Item {
         }
     }
 
+    // A half-size screen, as the Browse page preview: its size follows the
+    // page's alone, never the folder drawn in it, so that no view setting
+    // (list or grid, items per row, names, the hidden file) makes the
+    // preview grow or shrink.
     Rectangle {
         id: frame
 
         anchors.horizontalCenter: parent.horizontalCenter
         width: preview.screenWidth * preview.miniature
-        height: Math.min(folder.height, preview.screenHeight) * preview.miniature
+        height: preview.screenHeight * preview.miniature
         radius: Theme.paddingLarge
         clip: true
         color: Theme.rgba(Theme.highlightDimmerColor, Theme.opacityLow)

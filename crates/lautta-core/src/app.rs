@@ -84,8 +84,8 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     }
 }
 
-/// Moves local items to Recently deleted when their location keeps a trash
-/// (OPS-8); everything else is deleted permanently by the engine.
+/// Moves local items to the Trash when their location keeps one (OPS-8);
+/// everything else is deleted permanently by the engine.
 struct LocalTrasher {
     locations: LocationRegistry,
     trash: Trash,
@@ -94,31 +94,28 @@ struct LocalTrasher {
 #[async_trait]
 impl Trasher for LocalTrasher {
     async fn trash(&self, uri: &Uri) -> Result<bool> {
-        trash_one(&self.locations, &self.trash, uri)
-            .await
-            .map(|id| id.is_some())
+        if !self.locations.keeps_trash(&uri.location) {
+            return Ok(false);
+        }
+        trash_one(&self.locations, &self.trash, uri).await.map(|_| true)
     }
 }
 
-/// Trashes one item into its location's bin; `None` when the location does
-/// not keep a trash or the item is on another mount than the bin (then the
-/// caller deletes permanently).
-async fn trash_one(locations: &LocationRegistry, trash: &Trash, uri: &Uri) -> Result<Option<i64>> {
+/// Moves one item of a location that keeps a trash into the Trash, by copy
+/// where the sandbox mounts the two apart (§3.3), on a blocking thread
+/// (ARC-6). Returns its trash id.
+async fn trash_one(locations: &LocationRegistry, trash: &Trash, uri: &Uri) -> Result<i64> {
     // An unknown or vanished location is an error, not a permanent delete.
     locations.provider(&uri.location)?;
-    let (Some(bin), Some(path)) = (locations.trash_bin(&uri.location), locations.to_local_path(uri)) else {
-        return Ok(None);
-    };
+    let path = locations
+        .to_local_path(uri)
+        .ok_or_else(|| Error::new(ErrorKind::Unsupported, "not a local item"))?;
     let trash = trash.clone();
     let uri = uri.clone();
-    let res = tokio::task::spawn_blocking(move || trash.trash(&path, &uri, &bin))
+    tokio::task::spawn_blocking(move || trash.trash(&path, &uri))
         .await
-        .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))?;
-    match res {
-        Ok(item) => Ok(Some(item.id)),
-        Err(e) if e.kind == ErrorKind::CrossesDevice => Ok(None),
-        Err(e) => Err(e),
-    }
+        .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))?
+        .map(|item| item.id)
 }
 
 impl Core {
@@ -202,6 +199,9 @@ impl Core {
         let settings = settings.sanitised();
         self.recents.set_enabled(settings.recents_enabled);
         let previous = std::mem::replace(&mut *lock(&self.settings), settings.clone());
+        if previous.thumbnail_cache_mb != settings.thumbnail_cache_mb {
+            self.follow_thumbnail_budget(&settings);
+        }
         if previous != settings {
             self.settings_changed.send_modify(|generation| *generation += 1);
         }
@@ -279,30 +279,43 @@ impl Core {
         let _ = self.favourites.on_moved(from, to);
     }
 
-    /// Deletes items after the remorse timer (OPS-8): items in user and
-    /// Android folders go to Recently deleted, the bin at their location's
-    /// root (undoable, OPS-9); the rest are deleted permanently through the
-    /// transfer engine.
+    /// True when deleting `uri` moves it to the Trash (OPS-8): the trash is
+    /// on and the item is in one of this device's folders. Every other
+    /// delete is permanent, and the UI asks first. The one place that
+    /// decides; [`Core::delete`] follows it.
+    pub fn deletes_to_trash(&self, uri: &Uri) -> bool {
+        self.settings().recently_deleted && self.locations.keeps_trash(&uri.location)
+    }
+
+    /// Deletes items (OPS-8): to the Trash where [`Core::deletes_to_trash`]
+    /// says so (undoable, OPS-9), after the remorse timer; the rest
+    /// permanently through the transfer engine, after the confirmation.
     pub async fn delete(&self, items: &[Uri]) -> Result<Option<TransferId>> {
-        let use_trash = self.settings().recently_deleted;
         let mut trashed = Vec::new();
         let mut permanent = Vec::new();
+        let mut failed = None;
         for uri in items {
-            let id = if use_trash {
-                trash_one(&self.locations, &self.trash, uri).await?
-            } else {
-                None
-            };
-            match id {
-                Some(id) => trashed.push(id),
-                None => permanent.push(uri.clone()),
+            if !self.deletes_to_trash(uri) {
+                permanent.push(uri.clone());
+                continue;
             }
-            if let Some(parent) = uri.parent() {
-                self.invalidate(&parent);
+            match trash_one(&self.locations, &self.trash, uri).await {
+                Ok(id) => trashed.push(id),
+                Err(e) => {
+                    failed = Some(e);
+                    break;
+                }
             }
         }
+        for parent in items.iter().filter_map(Uri::parent) {
+            self.invalidate(&parent);
+        }
         if !trashed.is_empty() {
+            // What went to the Trash before a failure can be undone too.
             lock(&self.undo).record(UndoAction::Trash { ids: trashed });
+        }
+        if let Some(e) = failed {
+            return Err(e);
         }
         if permanent.is_empty() {
             return Ok(None);
@@ -408,7 +421,7 @@ impl Core {
         Ok(true)
     }
 
-    /// Restores an item from Recently deleted to where it was.
+    /// Restores an item from the Trash to where it was.
     pub async fn restore(&self, id: i64) -> Result<Uri> {
         let trash = self.trash.clone();
         let locations = self.locations.clone();

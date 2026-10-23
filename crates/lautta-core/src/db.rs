@@ -137,6 +137,19 @@ const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE favourites ADD COLUMN is_dir INTEGER NOT NULL DEFAULT 1;
     "#,
+    // 6: ORG-1, the icon chosen for a favourite (a theme icon name). NULL
+    // for the rows before and for no choice: the default icon.
+    r#"
+    ALTER TABLE favourites ADD COLUMN icon TEXT;
+    "#,
+    // 7: OPS-8, the trash is one folder in the app data again (DAT-1). The
+    // items still in the bins of schemas 4 to 6 move there with their rows
+    // (`bin` becomes NULL), then the bins go: this row stays until that is
+    // done (`Trash::tidy`).
+    r#"
+    CREATE TABLE trash_drain (due INTEGER NOT NULL);
+    INSERT INTO trash_drain VALUES (1);
+    "#,
 ];
 
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -273,6 +286,50 @@ mod tests {
     }
 
     #[test]
+    fn favourites_from_before_icons_keep_their_default_icon() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v5.db");
+        {
+            // A database as schema 5 left it, with a folder and a file.
+            let c = Connection::open(&path).unwrap();
+            for sql in &MIGRATIONS[..5] {
+                c.execute_batch(sql).unwrap();
+            }
+            c.pragma_update(None, "user_version", 5).unwrap();
+            c.execute_batch(
+                "INSERT INTO favourites(uri, label, colour, position, is_dir) \
+                 VALUES ('lautta://user-documents/Uni', 'Uni', '#e7a33c', 0, 1); \
+                 INSERT INTO favourites(uri, label, colour, position, is_dir) \
+                 VALUES ('lautta://user-documents/a.pdf', 'A', NULL, 1, 0);",
+            )
+            .unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.version().unwrap(), SCHEMA_VERSION);
+        let favourites = crate::org::favourites::Favourites::new(db.clone());
+        let list = favourites.list().unwrap();
+        assert_eq!(
+            list.iter()
+                .map(|f| (f.label.as_str(), f.colour.as_deref(), f.icon.as_deref()))
+                .collect::<Vec<_>>(),
+            [("Uni", Some("#e7a33c"), None), ("A", None, None)],
+            "rows from before keep label and colour and have no icon chosen"
+        );
+        assert_eq!(list[0].icon_source(), "image://theme/icon-m-favorite");
+        assert_eq!(list[1].icon_source(), "image://theme/icon-m-document");
+        let uni = crate::uri::Uri::parse("lautta://user-documents/Uni").unwrap();
+        let saved = favourites
+            .save(&uni, "Uni", Some("#e7a33c"), Some("home"), true)
+            .unwrap();
+        assert_eq!(saved.icon.as_deref(), Some("home"));
+        drop(favourites);
+        drop(db);
+        let reopened = crate::org::favourites::Favourites::new(Db::open(&path).unwrap());
+        let again = reopened.get_by_uri(&uni).unwrap().unwrap();
+        assert_eq!(again.icon.as_deref(), Some("home"), "the icon is stored");
+    }
+
+    #[test]
     fn newer_schema_is_refused() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("x.db");
@@ -309,6 +366,45 @@ mod tests {
             })
             .unwrap();
         assert_eq!(bin, None, "old items keep the app data folder");
+    }
+
+    #[test]
+    fn schema_7_keeps_the_items_of_the_old_bins_and_makes_their_drain_due() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v5.db");
+        {
+            // Schema 5 with an item in the bin at the root of Documents.
+            let c = Connection::open(&path).unwrap();
+            for sql in &MIGRATIONS[..5] {
+                c.execute_batch(sql).unwrap();
+            }
+            c.pragma_update(None, "user_version", 5).unwrap();
+            c.execute(
+                "INSERT INTO trash_items(original_uri, trashed_at, stored_name, bin) \
+                 VALUES ('lautta://user-documents/a', 7, 's', X'2f442f2e6c61757474612d7472617368')",
+                [],
+            )
+            .unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.version().unwrap(), SCHEMA_VERSION);
+        let c = db.lock();
+        let row: (i64, Vec<u8>) = c
+            .query_row(
+                "SELECT trashed_at, bin FROM trash_items WHERE stored_name = 's'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            row,
+            (7, b"/D/.lautta-trash".to_vec()),
+            "the row waits for the drain"
+        );
+        let due: i64 = c
+            .query_row("SELECT count(*) FROM trash_drain", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(due, 1);
     }
 
     #[test]
