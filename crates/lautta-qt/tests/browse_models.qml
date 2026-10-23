@@ -14,6 +14,9 @@ Item {
     property string failedKind: ""
     property string failedSubject: ""
     property bool relisted: false
+    property bool moved: false
+    property bool movedAtOnce: false
+    property bool refused: false
 
     LocationsModel { id: locs }
     FavouritesModel { id: favs }
@@ -82,12 +85,22 @@ Item {
         return null
     }
 
+    // The list row of a layout row, -1 when none.
+    function layoutIndex(section, item) {
+        for (var i = 0; i < layoutRows.count; ++i) {
+            var r = layoutRows.itemAt(i)
+            if (r && r.lsection === section && r.litem === item)
+                return i
+        }
+        return -1
+    }
+
     function deviceRows() {
         var names = []
         for (var i = 0; i < rows.count; ++i) {
             var r = rows.itemAt(i)
             if (r && r.rsection === "device")
-                names.push(r.rkind === "deleted" ? "deleted" : r.rname)
+                names.push(r.rkind === "deleted" || r.rkind === "recents" ? r.rkind : r.rname)
         }
         return names.join(",")
     }
@@ -230,7 +243,7 @@ Item {
              function() { layout.moveTo("device", "deleted", 0) },
              function() {
                  var d = layoutRow("device", "deleted")
-                 return deviceRows().indexOf("deleted,Documents") === 0 && d !== null && d.lplace === 0
+                 return deviceRows().indexOf("deleted,recents,Documents") === 0 && d !== null && d.lplace === 0
                         && d.marked && layoutRow("device", "user-music").marked
              })
         step("restore defaults",
@@ -240,8 +253,28 @@ Item {
              },
              function() {
                  var d = layoutRow("device", "deleted")
-                 return deviceRows().indexOf("Documents") === 0 && /,deleted$/.test(deviceRows())
+                 return deviceRows().indexOf("recents,Documents") === 0 && /,deleted$/.test(deviceRows())
                         && d !== null && d.lplace > 0
+             })
+        // A dragged row follows the finger (BRW-12): it moves at once, by
+        // the same delegate, the places follow, and the order is stored
+        // behind it without the row moving back.
+        step("a carried row moves at once and is stored",
+             function() {
+                 var at = layoutIndex("device", "recents")
+                 var nearby = layoutIndex("nearby", "nearby")
+                 layoutRow("device", "recents").marked = true
+                 root.moved = layout.moveRow(at, at + 1) && layout.moveRow(at + 1, at + 2)
+                 var r = layoutRows.itemAt(at + 2)
+                 root.movedAtOnce = r.litem === "recents" && r.marked && r.lplace === 2
+                                    && layoutRows.itemAt(at).lplace === 0
+                 root.refused = !layout.moveRow(at, at) && !layout.moveRow(nearby, nearby - 1)
+                                && !layout.moveRow(at, layoutRows.count)
+             },
+             function() {
+                 var r = layoutRow("device", "recents")
+                 return root.moved && root.movedAtOnce && root.refused
+                        && deviceRows().split(",")[2] === "recents" && r.lplace === 2 && r.marked
              })
         step("a remote folder lists",
              function() {

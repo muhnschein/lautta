@@ -5,6 +5,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../components"
 import "../components/browse"
 
 Dialog {
@@ -147,12 +148,10 @@ Dialog {
                             color: parent.parent.current ? Theme.highlightColor : Theme.primaryColor
                             truncationMode: TruncationMode.Fade
                         }
-                        Label {
+                        PlaceLabel {
                             width: parent.width
                             text: model.place
-                            font.pixelSize: Theme.fontSizeExtraSmall
-                            color: Theme.secondaryColor
-                            truncationMode: TruncationMode.Fade
+                            remote: App.isRemote(model.uri)
                         }
                     }
                 }

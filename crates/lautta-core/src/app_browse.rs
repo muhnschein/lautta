@@ -410,14 +410,16 @@ impl Core {
             .into_iter()
             .map(|p| (p.location_id.clone(), p))
             .collect();
-        let mut device = self.folder_rows("device", &LocationKind::UserFolder, &prefs);
         let settings = self.settings();
-        // Recents is a row of its own while they are remembered (§15.2, ORG-2).
+        let mut device = Vec::new();
+        // Recents is a row of its own while they are remembered, the first
+        // of the section until the user orders it (§15.2, ORG-2, BRW-12).
         if settings.recents_enabled {
             let mut row = Row::new("device", "recents");
             row.icon = "image://theme/icon-m-history".to_owned();
             device.push(row);
         }
+        device.extend(self.folder_rows("device", &LocationKind::UserFolder, &prefs));
         if settings.recently_deleted {
             let mut row = Row::new("device", "deleted");
             row.icon = "image://theme/icon-m-delete".to_owned();

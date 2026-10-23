@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Settings › Browse page (BRW-12) on the target: every row of the Browse
-// page with its switch, Recents among them, and a preview that follows the
-// switches. A switch changes its row in place: the list keeps its position
-// and its rows. A press on a drag handle shows nothing until the finger
-// moves; then only the dragged row stands out and one line shows where it
-// lands, in list rows (a favourite above makes them differ from the places
-// in the section). Restore defaults shows every row again.
+// Settings › Browse page (BRW-12) on the target, rows as Salama's tab group
+// rows: every row of the Browse page with its switch, Recents first in On
+// this device, and a preview that follows the switches. A tap on a row
+// switches it in place: the list keeps its position and its rows. A press
+// on a row's grip picks up that row only; moved by a row's height it moves
+// at once, by the same delegate (the rows it passes slide aside), it stays
+// there once let go and stored, in list rows (a favourite above makes them
+// differ from the places in the section). Restore defaults shows every row
+// again with Recents first.
 //
 // The Silica window sits in a Qt Quick window: only items in one get the
 // mouse events the drag needs.
@@ -29,7 +31,6 @@ QtQuick.Window {
     property string folder
     property var folderRow
     property real scrolledTo
-    property var handle
     property int fromRow: -1
 
     ViewerTools { id: tools }
@@ -80,6 +81,15 @@ QtQuick.Window {
         return -1
     }
 
+    // The first device row, "" when none.
+    function firstDeviceRow(layout) {
+        for (var i = 0; i < layout.count; ++i) {
+            if (layout.sectionAt(i) === "device")
+                return layout.itemAt(i)
+        }
+        return ""
+    }
+
     // The first device folder (not Recents or Recently deleted), "" when none.
     function deviceFolder(layout) {
         for (var i = 0; i < layout.count; ++i) {
@@ -98,8 +108,10 @@ QtQuick.Window {
         return out.join(", ")
     }
 
-    // The delegates on screen (headless, no render loop lays the list out).
+    // The delegates, all of them made (headless, no render loop lays the
+    // list out, and the list is shorter than the window).
     function delegates() {
+        page.listView.cacheBuffer = 100000
         page.listView.forceLayout()
         return findAll(page.listView.contentItem, function(x) { return x.layoutItem !== undefined }, [])
     }
@@ -113,18 +125,13 @@ QtQuick.Window {
         return null
     }
 
-    // "item" of every delegate that is dragged or a drop target.
+    // "item" of every delegate that is carried, or lit.
     function marked(what) {
         return delegates().filter(function(d) { return d[what] }).map(function(d) { return d.layoutItem }).join(",")
     }
 
-    function switchOf(row) {
-        var found = findAll(row, function(x) { return x.automaticCheck !== undefined && x.checked !== undefined }, [])
-        return found.length > 0 ? found[0] : null
-    }
-
-    function handleOf(row) {
-        var found = findAll(row, function(x) { return x.pressY !== undefined }, [])
+    function named(row, name) {
+        var found = findAll(row, function(x) { return x.objectName === name }, [])
         return found.length > 0 ? found[0] : null
     }
 
@@ -132,17 +139,19 @@ QtQuick.Window {
         var layout = page.layoutModel
         rows = shownRows(layout)
         folder = deviceFolder(layout)
-        if (!expect(folder !== "" && rowOf(layout, "recents") >= 0, "a device folder and Recents are listed: " + describe(layout)))
+        if (!expect(folder !== "" && firstDeviceRow(layout) === "recents",
+                    "Recents is the first row of On this device: " + describe(layout)))
             return
         expect(page.previewCount === rows, "the preview shows every row: " + page.previewCount + " of " + rows)
         folderRow = delegateOf(folder)
-        var toggle = switchOf(folderRow)
+        var toggle = named(folderRow, "layoutSwitch")
         if (!expect(toggle !== null && toggle.checked, "the row of " + folder + " has its switch on"))
             return
-        // Scrolled down a little, as when the user toggles a row further down.
+        // Scrolled down a little, as when the user switches a row further down.
         page.listView.contentY = page.listView.contentY + 40
         scrolledTo = page.listView.contentY
-        toggle.clicked(null)
+        // A tap on the row switches it.
+        folderRow.clicked(null)
     }
 
     function afterSwitch() {
@@ -152,22 +161,23 @@ QtQuick.Window {
         expect(shownRows(layout) === rows, "a hidden row stays in the settings")
     }
 
-    function pressHandle() {
-        page.listView.positionViewAtIndex(rowOf(page.layoutModel, folder), ListView.Beginning)
-        handle = handleOf(folderRow)
-        if (!expect(handle !== null && handle.visible, "the row of " + folder + " has a drag handle"))
+    function carry() {
+        var layout = page.layoutModel
+        page.listView.positionViewAtIndex(rowOf(layout, folder), ListView.Beginning)
+        var grip = named(folderRow, "layoutGrip")
+        if (!expect(grip !== null && grip.visible, "the row of " + folder + " has a grip"))
             return
-        events.mousePress(handle, handle.width / 2, handle.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
-        expect(marked("dragged") === "" && marked("target") === "", "a press alone shows no drag: dragged " + marked("dragged") + ", target " + marked("target"))
-        events.mouseMove(handle, handle.width / 2, handle.height / 2 + Theme.startDragDistance / 2, -1, Qt.LeftButton)
-        expect(marked("dragged") === "" && marked("target") === "", "nor a move shorter than a drag")
-        events.mouseMove(handle, handle.width / 2, handle.height / 2 + folderRow.height, -1, Qt.LeftButton)
-        fromRow = rowOf(page.layoutModel, folder)
-        var below = page.layoutModel.itemAt(fromRow + 1)
-        expect(marked("dragged") === folder, "only the dragged row stands out: " + marked("dragged"))
-        expect(marked("target") === below, "one line, under " + below + ": " + marked("target"))
-        events.mouseRelease(handle, handle.width / 2, handle.height / 2 + folderRow.height, Qt.LeftButton, Qt.NoModifier, -1)
-        expect(marked("dragged") === "" && marked("target") === "", "the drag ends on release")
+        fromRow = rowOf(layout, folder)
+        var below = layout.itemAt(fromRow + 1)
+        events.mousePress(grip, grip.width / 2, grip.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
+        expect(marked("carried") === folder, "a press on the grip picks up its row only: " + marked("carried"))
+        expect(marked("highlighted") === "", "and lights no row as pressed: " + marked("highlighted"))
+        events.mouseMove(grip, grip.width / 2, grip.height / 2 + folderRow.contentHeight, -1, Qt.LeftButton)
+        expect(rowOf(layout, folder) === fromRow + 1 && layout.itemAt(fromRow) === below,
+               "moved by a row it moves at once, past " + below + ": " + describe(layout))
+        expect(delegateOf(folder) === folderRow && folderRow.carried, "by the same delegate, still carried")
+        events.mouseRelease(grip, grip.width / 2, grip.height / 2 + folderRow.contentHeight, Qt.LeftButton, Qt.NoModifier, -1)
+        expect(marked("carried") === "", "let go, no row is carried")
     }
 
     Timer {
@@ -190,22 +200,24 @@ QtQuick.Window {
             case 1:
                 // The switch is off (a rebuilt row has no switch any more)
                 // and the preview followed.
-                var toggle = window.switchOf(window.folderRow)
+                var toggle = window.named(window.folderRow, "layoutSwitch")
                 if ((toggle && toggle.checked) || window.page.previewCount !== window.rows - 1)
                     return
                 window.afterSwitch()
                 if (window.scenarioRunning)
-                    window.pressHandle()
+                    window.carry()
                 break
             case 2:
-                // Moved one row down, by the same delegate.
-                if (window.rowOf(layout, window.folder) !== window.fromRow + 1)
+                // Stored and read again, the row stays where it was let go.
+                if (window.waited < 10)
                     return
+                window.expect(window.rowOf(layout, window.folder) === window.fromRow + 1,
+                              "the moved row stays once stored: " + window.describe(layout))
                 window.expect(window.delegateOf(window.folder) === window.folderRow, "the moved row is the same row")
                 layout.restoreDefaults()
                 break
             case 3:
-                if (window.page.previewCount !== window.rows)
+                if (window.page.previewCount !== window.rows || window.firstDeviceRow(layout) !== "recents")
                     return
                 favourites.removeUri("lautta://user-documents/")
                 break

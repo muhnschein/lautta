@@ -9,6 +9,7 @@ use crate::runtime::{core, handle, spawn_then};
 use lautta_core::clipboard::{Clipboard, ClipboardMode};
 use lautta_core::mime::{category_of_name, extension_of, from_extension, viewer_for, FileCategory, Viewer};
 use lautta_core::settings::Settings;
+use lautta_core::transfer::scheduler::is_bridge_location;
 use lautta_core::trash::now_secs;
 use lautta_core::undo::UndoAction;
 use lautta_core::Uri;
@@ -57,6 +58,9 @@ pub struct App {
     displayAddress: qt_method!(fn(&self, uri: QString) -> QString),
     locationName: qt_method!(fn(&self, uri: QString) -> QString),
     isLocal: qt_method!(fn(&self, uri: QString) -> bool),
+    /// Whether `uri` is on a server (LOC-7), even one that is gone: lines
+    /// that name its location mark it (§15.5).
+    isRemote: qt_method!(fn(&self, uri: QString) -> bool),
     localUrl: qt_method!(fn(&self, uri: QString) -> QString),
     categoryOf: qt_method!(fn(&self, name_or_uri: QString) -> QString),
     viewerFor: qt_method!(fn(&self, name_or_uri: QString, mime: QString) -> QString),
@@ -228,6 +232,10 @@ impl App {
 
     fn isLocal(&self, uri: QString) -> bool {
         matches!((core(), parse_uri(&uri)), (Some(c), Some(u)) if c.locations.to_local_path(&u).is_some())
+    }
+
+    fn isRemote(&self, uri: QString) -> bool {
+        parse_uri(&uri).is_some_and(|u| is_bridge_location(&u.location))
     }
 
     fn localUrl(&self, uri: QString) -> QString {
