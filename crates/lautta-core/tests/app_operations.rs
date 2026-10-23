@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The operations area on a temporary home: compress and extract through the
 //! engine, remote compress through a pipe, info, permissions, links,
-//! Recently deleted and the share probe.
+//! the Trash and the share probe.
 
 use lautta_core::app::{Core, Started};
 use lautta_core::app_operations::*;

@@ -48,7 +48,7 @@ pub struct Settings {
     pub thumbnail_cache_mb: u64,
     pub listing_cache_days: u32,
 
-    // Recently deleted (§11) and remorse timer.
+    // The Trash (OPS-8; stored as `recently_deleted`) and remorse timer.
     pub recently_deleted: bool,
     pub recently_deleted_retention_days: u32,
     pub remorse_seconds: u32,
