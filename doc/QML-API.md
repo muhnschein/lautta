@@ -153,7 +153,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `dialogs/RenameDialog.qml { uri, isDir }` (property `newName` after accept),
   `pages/ViewOptionsPage.qml { model }` (a page whose controls apply at once; `model`, the
   folder it was opened from, is absent when Settings opens it),
-  `components/directory/ViewPreview.qml` (its live preview), `components/PathMenu.qml`.
+  `components/directory/ViewPreview.qml { screenWidth, screenHeight }` (its live preview,
+  half that size whatever it shows), `components/PathMenu.qml`.
 - The item context menu is plain rows ending with *More actions*, which opens
   `components/directory/MoreActionsPage.qml { owner, info }` (the DirectoryView and the
   row's item): the item's rarer actions, one row each with its theme icon; a dialog an
@@ -250,8 +251,15 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - `SearchModel { rootUri }` — query/filters, results grouped by folder, `start()`,
   `cancel()`, `recentSearches`.
 - Pages: `pages/SearchPage.qml { rootUri }`, `pages/SearchFiltersPage.qml`,
-  `pages/SettingsPage.qml` (its *View options* row opens `pages/ViewOptionsPage.qml`
-  without a model; the view settings are not repeated, BRW-4), `pages/AboutPage.qml`.
+  `pages/SettingsPage.qml` (entries, `components/search/SettingsEntry.qml { iconSource,
+  text, value }`, whose value lines come from `components/search/SettingsText.js`; they
+  open `pages/BrowseSettingsPage.qml`, `pages/ViewOptionsPage.qml` without a model (the
+  view settings and the thumbnails are not repeated, BRW-4), `pages/SearchSettingsPage.qml`,
+  `pages/RecentsSettingsPage.qml`, `pages/DeletingSettingsPage.qml`,
+  `pages/TransfersSettingsPage.qml`, `pages/StorageSettingsPage.qml` and
+  `pages/AboutPage.qml`). A control bound to one setting is
+  `components/search/SettingSwitch.qml`, `SettingCombo.qml` or `SettingSlider.qml`
+  `{ settingKey }`.
 - The search page has no pulley: its header, search field and filter summary (which
   opens `SearchFiltersPage`) sit above the results list, not in the list's header, so
   the field keeps the keyboard while each search resets the list.

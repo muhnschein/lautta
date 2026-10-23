@@ -199,6 +199,9 @@ impl Core {
         let settings = settings.sanitised();
         self.recents.set_enabled(settings.recents_enabled);
         let previous = std::mem::replace(&mut *lock(&self.settings), settings.clone());
+        if previous.thumbnail_cache_mb != settings.thumbnail_cache_mb {
+            self.follow_thumbnail_budget(&settings);
+        }
         if previous != settings {
             self.settings_changed.send_modify(|generation| *generation += 1);
         }

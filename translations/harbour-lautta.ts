@@ -382,10 +382,6 @@
             <numerusform></numerusform>
         </translation>
     </message>
-    <message id="lautta-settings-never">
-        <source>Never</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-settings-up-to-mb">
         <source>Up to %1 MB</source>
         <translation type="unfinished"></translation>
@@ -419,10 +415,6 @@
         <source>Largest server file with a thumbnail</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-settings-thumbs-metered">
-        <source>On a metered connection</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-settings-thumb-cache">
         <source>Thumbnail cache</source>
         <translation type="unfinished"></translation>
@@ -440,15 +432,18 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-trash">
-        <source>Recently deleted</source>
+        <source>Move deleted items to Trash</source>
+        <oldsource>Recently deleted</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-trash-hint">
-        <source>Local deletes can be restored</source>
+        <source>Files deleted from this device&apos;s folders can be restored</source>
+        <oldsource>Local deletes can be restored</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-trash-days">
-        <source>Keep deleted items</source>
+        <source>Keep items in Trash</source>
+        <oldsource>Keep deleted items</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-remorse">
@@ -559,8 +554,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-clear-data-hint">
-        <source>Removes queue, history and favourites</source>
-        <oldsource>Removes queue, history, tags and favourites</oldsource>
+        <source>Removes queue, history, favourites and everything in Trash</source>
+        <oldsource>Removes queue, history and favourites</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-about">
@@ -2067,7 +2062,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-opts-thumbnails">
-        <source>Thumbnails</source>
+        <source>Show thumbnails</source>
+        <oldsource>Thumbnails</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-sel-compress">
@@ -2468,10 +2464,6 @@
         <source>View options</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-opts-every-folder">
-        <source>Used in every folder</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-opts-preview">
         <source>Preview</source>
         <translation type="unfinished"></translation>
@@ -2570,6 +2562,97 @@
     </message>
     <message id="lautta-dir-renamed-file">
         <source>File renamed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-list">
+        <source>List</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-grid-3">
+        <source>Grid of 3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-grid-4">
+        <source>Grid of 4</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-by-size">
+        <source>size</source>
+        <extracomment>How folders are sorted, in &quot;List, sorted by size&quot;</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-by-modified">
+        <source>date modified</source>
+        <extracomment>How folders are sorted, in &quot;List, sorted by date modified&quot;</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-by-type">
+        <source>type</source>
+        <extracomment>How folders are sorted, in &quot;List, sorted by type&quot;</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-by-name">
+        <source>name</source>
+        <extracomment>How folders are sorted, in &quot;List, sorted by name&quot;</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-view">
+        <source>%1, sorted by %2</source>
+        <extracomment>%1 is how folders show (&quot;List&quot;, &quot;Grid of 4&quot;), %2 their order (&quot;name&quot;)</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-trash" numerus="yes">
+        <source>Kept in Trash for %n days</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-settings-summary-no-trash">
+        <source>Deleted permanently</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-transfers" numerus="yes">
+        <source>%n at once</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-settings-summary-search" numerus="yes">
+        <source>%n folders deep on servers</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-settings-summary-recents-on">
+        <source>Remembered</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-recents-off">
+        <source>Not remembered</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-storage">
+        <source>%1 cached</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-search-depth-hint">
+        <source>Searches on this device go through every folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-files">
+        <source>Files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-thumbnails-section">
+        <source>Thumbnails</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-thumbnails-hint">
+        <source>Making thumbnails decodes files as soon as they show in a folder, including files you may not trust. When off, a file is decoded only when you open it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-thumbs-remote-hint">
+        <source>Downloads pictures from servers to make them, which uses more data and battery and can slow down browsing</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
