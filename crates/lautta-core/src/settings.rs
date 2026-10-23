@@ -130,6 +130,16 @@ impl Settings {
         self.search_remote_depth = self.search_remote_depth.clamp(1, 64);
     }
 
+    /// `thumbnail_max_remote_mb` in bytes (PRV-2).
+    pub fn thumbnail_max_remote_bytes(&self) -> u64 {
+        self.thumbnail_max_remote_mb.saturating_mul(MB)
+    }
+
+    /// `thumbnail_cache_mb` in bytes (PRV-2).
+    pub fn thumbnail_cache_bytes(&self) -> u64 {
+        self.thumbnail_cache_mb.saturating_mul(MB)
+    }
+
     pub fn sanitised(mut self) -> Settings {
         self.sanitise();
         self
@@ -346,6 +356,10 @@ mod tests {
         );
         assert!(!s.show_hidden && s.thumbnails_local && s.thumbnails_remote);
         assert_eq!(s.thumbnail_max_remote_mb, 20);
+        assert_eq!(
+            (s.thumbnail_max_remote_bytes(), s.thumbnail_cache_bytes()),
+            (20_000_000, 200_000_000)
+        );
         assert_eq!((s.thumbnail_cache_mb, s.listing_cache_days), (200, 7));
         assert!(s.recently_deleted);
         assert_eq!((s.recently_deleted_retention_days, s.remorse_seconds), (30, 5));

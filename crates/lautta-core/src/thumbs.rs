@@ -4,7 +4,8 @@
 //! * [`remote_thumbnail`]: EXIF thumbnail from the first 64 KiB when there is
 //!   one, otherwise the whole file (up to the size set in View options, 20 MB
 //!   by default) decoded and scaled, EXIF orientation applied.
-//! * [`ThumbnailCache`]: on-disk cache, 200 MB LRU, keyed by
+//! * [`ThumbnailCache`]: on-disk cache, LRU within the size set in View
+//!   options (200 MB by default, changed while in use), keyed by
 //!   sha256(URI, size, mtime, etag).
 //! * [`ThumbJobs`]: at most two jobs in flight per location, newest request
 //!   first (the delegates that are visible now), cancelable by key.
@@ -22,10 +23,9 @@ use std::future::Future;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-/// Cache budget (PRV-2).
-pub const DEFAULT_CACHE_BYTES: u64 = 200 * 1000 * 1000;
 /// Head read looking for an EXIF thumbnail.
 pub const HEAD_BYTES: u64 = 64 * 1024;
 /// Images with more pixels than this are not decoded (memory bound).
@@ -177,7 +177,8 @@ impl CacheIndex {
 /// Disk cache of generated thumbnails with least-recently-used eviction.
 pub struct ThumbnailCache {
     dir: PathBuf,
-    max_bytes: u64,
+    /// The budget; the setting changes it while the cache is in use.
+    max_bytes: AtomicU64,
     index: Mutex<CacheIndex>,
 }
 
@@ -205,7 +206,7 @@ impl ThumbnailCache {
         }
         let cache = ThumbnailCache {
             dir,
-            max_bytes,
+            max_bytes: AtomicU64::new(max_bytes),
             index: Mutex::new(index),
         };
         cache.evict_to_budget(0);
@@ -228,7 +229,14 @@ impl ThumbnailCache {
     }
 
     pub fn max_bytes(&self) -> u64 {
-        self.max_bytes
+        self.max_bytes.load(Ordering::Relaxed)
+    }
+
+    /// Takes a new budget: a smaller one evicts the least recently used
+    /// thumbnails at once (file removals: call it off the UI thread).
+    pub fn set_max_bytes(&self, max_bytes: u64) {
+        self.max_bytes.store(max_bytes, Ordering::Relaxed);
+        self.evict_to_budget(0);
     }
 
     pub fn total_bytes(&self) -> u64 {
@@ -267,7 +275,7 @@ impl ThumbnailCache {
         if !valid_key(key) {
             return Err(Error::new(ErrorKind::InvalidArgument, "bad thumbnail key"));
         }
-        if data.len() as u64 > self.max_bytes {
+        if data.len() as u64 > self.max_bytes() {
             return Ok(());
         }
         let tmp = self.dir.join(format!("{key}.tmp"));
@@ -290,7 +298,7 @@ impl ThumbnailCache {
         loop {
             let victim = {
                 let mut index = self.lock();
-                if index.total + reserve <= self.max_bytes {
+                if index.total + reserve <= self.max_bytes() {
                     return;
                 }
                 let Some(key) = index.oldest() else {
@@ -398,6 +406,11 @@ impl ThumbJobs {
             state: Arc::default(),
             rt,
         }
+    }
+
+    /// The runtime the jobs run on.
+    pub fn runtime(&self) -> &tokio::runtime::Handle {
+        &self.rt
     }
 
     /// Queues `job` for `key` at `location`. Returns false (and drops `job`)
@@ -736,6 +749,30 @@ mod tests {
         assert_eq!(c.len(), 1, "a big item pushes out several small ones");
         assert!(c.contains("k5"));
         assert!(c.total_bytes() <= c.max_bytes());
+    }
+
+    #[test]
+    fn a_new_budget_holds_at_once() {
+        let (_tmp, c) = cache(30);
+        c.put("k1", &[1; 10]).unwrap();
+        c.put("k2", &[2; 10]).unwrap();
+        c.put("k3", &[3; 10]).unwrap();
+        assert!(c.get("k1").is_some(), "k1 becomes the most recently used");
+        c.set_max_bytes(20);
+        assert_eq!(c.max_bytes(), 20);
+        assert!(
+            !c.contains("k2") && c.contains("k1") && c.contains("k3"),
+            "the oldest goes first"
+        );
+        assert!(!c.dir().join("k2.thumb").exists(), "evicted from disk too");
+        c.set_max_bytes(40);
+        assert_eq!(c.len(), 2, "a larger budget evicts nothing");
+        c.put("k4", &[4; 20]).unwrap();
+        assert_eq!(c.total_bytes(), 40, "and holds more");
+        c.set_max_bytes(5);
+        assert!(c.is_empty());
+        c.put("k5", &[5; 6]).unwrap();
+        assert!(c.is_empty(), "nothing larger than the new budget is stored");
     }
 
     #[test]

@@ -556,8 +556,9 @@ bridge).
   metered networks: the app cannot tell one. Connman's D-Bus and a network namespace
   with the real interfaces come only with the `Internet` permission (§3.3), which the
   app does not request, so Qt's bearer plugins see no connection either; netvfs reports
-  none. Cache in `~/.cache/org.netvfs/lautta/thumbs` (key: URI, size, mtime, etag),
-  200 MB LRU.
+  none. Cache in `~/.cache/org.netvfs/lautta/thumbs` (key: URI, size, mtime, etag), LRU
+  within the *Thumbnail cache* size of *View options* (200 MB by default); a smaller size
+  evicts the least recently used thumbnails at once.
 - PRV-3: Thumbnail jobs: interactive lane, lowest priority, ≤ 2 in flight per location,
   visible delegates only, canceled on scroll.
 - PRV-4: Viewers: images (zoom, swipe through the folder, EXIF panel), text/code (read-

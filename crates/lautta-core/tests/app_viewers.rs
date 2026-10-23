@@ -259,6 +259,34 @@ async fn remote_thumbnails_follow_the_size_setting() {
 }
 
 #[tokio::test]
+async fn a_smaller_thumbnail_cache_is_trimmed_at_once() {
+    let h = home().await;
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let cache = previews.cache();
+    for i in 0..12 {
+        cache.put(&format!("k{i:02}"), &vec![7u8; 1_000_000]).unwrap();
+    }
+    assert_eq!(cache.total_bytes(), 12_000_000, "within the 200 MB default");
+    let mut s = h.core.settings();
+    s.thumbnail_cache_mb = 10;
+    h.core.apply_settings(s);
+    // The files go off the caller's thread: wait for them.
+    for _ in 0..300 {
+        if cache.total_bytes() <= 10_000_000 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    assert_eq!(cache.max_bytes(), 10_000_000);
+    assert_eq!(cache.total_bytes(), 10_000_000, "trimmed to the new size");
+    assert!(
+        !cache.contains("k00") && !cache.contains("k01") && cache.contains("k02"),
+        "the oldest go first"
+    );
+    assert!(!cache.dir().join("k00.thumb").exists(), "from disk too");
+}
+
+#[tokio::test]
 async fn cancelling_the_last_waiter_cancels_the_job() {
     let h = home().await;
     h.nas.add_file("x.jpg", &jpeg(8, 8), 0);
