@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The app context end to end on a temporary home folder: user folders,
-//! rename + undo, Recently deleted + undo, copy/move through the engine,
+//! rename + undo, the Trash + undo, copy/move through the engine,
 //! listings with the cache, archives as locations.
 
 use lautta_core::app::{Core, Started};
@@ -103,7 +103,7 @@ async fn favourites_follow_renames() {
 }
 
 #[tokio::test]
-async fn delete_to_recently_deleted_and_undo() {
+async fn delete_to_the_trash_and_undo() {
     let h = home().await;
     write(&h.root.join("Documents/old.txt"), b"old");
     let item = uri("lautta://user-documents/old.txt");
@@ -117,7 +117,7 @@ async fn delete_to_recently_deleted_and_undo() {
 }
 
 #[tokio::test]
-async fn delete_permanently_when_recently_deleted_is_off() {
+async fn delete_permanently_when_the_trash_is_off() {
     let h = home().await;
     h.core.apply_settings(Settings {
         recently_deleted: false,
@@ -139,6 +139,44 @@ async fn delete_permanently_when_recently_deleted_is_off() {
     assert_eq!(done.state, TransferState::Completed);
     assert!(!h.root.join("Documents/gone").exists());
     assert!(h.core.trash.list().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn only_this_devices_folders_delete_to_the_trash() {
+    let h = home().await;
+    write(&h.root.join("media/CARD/photo.jpg"), b"p");
+    h.core.locations.refresh();
+    let doc = uri("lautta://user-documents/a");
+    let card = uri("lautta://vol-CARD/photo.jpg");
+    assert!(h.core.deletes_to_trash(&doc));
+    assert!(
+        !h.core.deletes_to_trash(&card),
+        "volumes delete permanently (OPS-8)"
+    );
+    assert!(!h.core.deletes_to_trash(&uri("lautta://nv-1/a")), "so do servers");
+
+    // Delete follows the same decision: the card's file goes for good.
+    let id = h
+        .core
+        .delete(std::slice::from_ref(&card))
+        .await
+        .unwrap()
+        .expect("a delete transfer");
+    let done = h
+        .core
+        .engine
+        .wait_for(id, |s| s.state.is_finished())
+        .await
+        .unwrap();
+    assert_eq!(done.state, TransferState::Completed);
+    assert!(!h.root.join("media/CARD/photo.jpg").exists());
+    assert!(h.core.trash.list().unwrap().is_empty());
+
+    h.core.apply_settings(Settings {
+        recently_deleted: false,
+        ..Settings::default()
+    });
+    assert!(!h.core.deletes_to_trash(&doc), "the Trash is switched off");
 }
 
 #[tokio::test]

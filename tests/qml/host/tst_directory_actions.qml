@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Host test of which actions an item offers where (ContextActions.js), SPEC
-// §15.3: the long-press menu, More actions last, and what More actions puts
-// in the menu's place. There is no Details page any more.
+// §15.3: the long-press menu, More actions last, and the rows of the More
+// actions page, each with its theme icon (OPS-12). There is no Details page
+// any more.
 import QtQuick 2.6
 import "../../../qml/components/directory/ContextActions.js" as Actions
 
@@ -42,6 +43,19 @@ Item {
         }
     }
 
+    function testIcons() {
+        var ctxs = [{ "isDir": false, "writable": true }, { "isDir": true, "writable": false }]
+        for (var i = 0; i < ctxs.length; ++i) {
+            var rows = Actions.more(ctxs[i])
+            same(rows.map(function(r) { return r.icon }),
+                 ["image://theme/icon-m-favorite", "image://theme/icon-m-file-compressed"],
+                 "More actions icons: " + JSON.stringify(ctxs[i]))
+        }
+        same(Actions.icon("favourite"), "image://theme/icon-m-favorite", "Add to favourites")
+        same(Actions.icon("compress"), "image://theme/icon-m-file-compressed", "Compress")
+        same(Actions.icon("copy"), "", "the menu's rows have no icon")
+    }
+
     function testText() {
         // On the host qsTrId gives back the id.
         var entries = Actions.menu({ "isDir": false, "writable": true }).concat(Actions.more({ "isDir": false }))
@@ -66,6 +80,7 @@ Item {
     Component.onCompleted: {
         testMenu()
         testMore()
+        testIcons()
         testText()
         testGone()
     }

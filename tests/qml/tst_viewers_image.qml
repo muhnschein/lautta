@@ -5,7 +5,7 @@
 // brings it back; a double tap zooms in (overlay away, no swiping, no back
 // navigation) and a tap zooms out again; a swipe goes to the folder's next
 // image; Delete calls remove() (its remorse runs) and the close button
-// goes back. Taps and swipes are real mouse events, so the Silica window
+// goes back; the folder goes at the end. Taps and swipes are real mouse events, so the Silica window
 // sits in a Qt Quick window: only items in one get them.
 import QtQuick 2.6
 import QtQuick.Window 2.2 as QtQuick
@@ -27,6 +27,7 @@ QtQuick.Window {
     // When the last tap went in: a single tap counts once the double-tap time is over.
     property real tappedAt
     property int readyFor
+    property bool cleaned
 
     ViewerTools { id: tools }
     TestEvent { id: events }
@@ -34,6 +35,10 @@ QtQuick.Window {
     DirectoryModel {
         id: pictures
         uri: "lautta://user-pictures/"
+    }
+    Connections {
+        target: Operations
+        onRemoved: window.cleaned = true
     }
 
     function fail(what) {
@@ -215,6 +220,13 @@ QtQuick.Window {
                 if (app.pageStack.busy || app.pageStack.currentPage === window.page)
                     return
                 window.expect(app.pageStack.depth === 1, "closed: back on the page below: " + app.pageStack.depth)
+                // Leave Pictures as it was for the scenarios after this one.
+                window.cleaned = false
+                Operations.remove(JSON.stringify(["lautta://user-pictures/ViewerSwipe"]))
+                break
+            case 9:
+                if (!window.cleaned)
+                    return
                 window.scenarioRunning = false
                 break
             }

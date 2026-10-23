@@ -35,8 +35,8 @@ function rowName(kind, name) {
         //% "Recents"
         return qsTrId("lautta-browse-recents")
     case "deleted":
-        //% "Recently deleted"
-        return qsTrId("lautta-browse-recently-deleted")
+        //% "Trash"
+        return qsTrId("lautta-browse-trash")
     default:
         return name
     }
@@ -59,28 +59,6 @@ function nearbyLine(provider, host) {
     if (host.length > 0)
         parts.push(host)
     return parts.join(" · ")
-}
-
-// Recents: "Opened · NAS › /srv/photos", "Transferred to NAS".
-function recentKindLine(kind, place) {
-    var what
-    switch (kind) {
-    case "previewed":
-        //% "Previewed"
-        what = qsTrId("lautta-recents-previewed")
-        break
-    case "transferred":
-        if (place.length > 0)
-            //% "Transferred to %1"
-            return qsTrId("lautta-recents-transferred-to").arg(place)
-        //% "Transferred"
-        return qsTrId("lautta-recents-transferred")
-    default:
-        //% "Opened"
-        what = qsTrId("lautta-recents-opened")
-        break
-    }
-    return place.length > 0 ? what + " · " + place : what
 }
 
 // Colours offered for favourites.

@@ -15,9 +15,14 @@ ApplicationWindow {
     property int step: 0
     property int waited: 0
     property var viewer
+    property bool cleaned
     readonly property string folder: "lautta://user-pictures/ViewerNeighbour/"
 
     ViewerTools { id: tools }
+    Connections {
+        target: Operations
+        onRemoved: window.cleaned = true
+    }
     // Makes the test's folder.
     DirectoryModel {
         id: pictures
@@ -91,6 +96,13 @@ ApplicationWindow {
                 var shown = view && view.currentItem ? view.currentItem.item : null
                 window.expect(shown !== null && String(shown.source).indexOf("b.jpg") >= 0,
                               "the neighbour is shown: " + (shown ? shown.source : "nothing"))
+                // Leave Pictures as it was for the scenarios after this one.
+                window.cleaned = false
+                Operations.remove(JSON.stringify([window.folder.slice(0, -1)]))
+                break
+            case 3:
+                if (!window.cleaned)
+                    return
                 window.scenarioRunning = false
                 break
             }

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Scenario on the target (real Silica): Recents' sections are the rows'
 // date groups, the Activity page's (ORG-2, SPEC §15.4), in the shared
-// DateSectionHeader; there is no Show filter and no pulley entry that
-// turns recents off; with recents off the placeholder points to Settings.
-// Fails when any of them comes back.
+// DateSectionHeader; a row's second line is where the file is, without how
+// it was used, with the server icon before a server's place (§15.5); there
+// is no Show filter and no pulley entry that turns recents off; with
+// recents off the placeholder points to Settings. Fails when any of them
+// comes back.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -116,6 +118,30 @@ ApplicationWindow {
         var boxes = findAll(win.page, function(x) { return String(x).indexOf("ComboBox") === 0 })
         if (boxes.length !== 0)
             return fail("Recents have no Show filter")
+        return checkPlaces()
+    }
+
+    // place → whether its line has the server icon, for every row.
+    readonly property var places: ({
+        "NAS › /srv/photos": true,
+        "NAS": true,
+        "Documents": false
+    })
+
+    function checkPlaces() {
+        var used = findAll(win.page, function(x) {
+            return typeof x.text === "string" && /lautta-recents-(opened|previewed|transferred)|Opened|Previewed|Transferred/.test(x.text)
+        })
+        if (used.length > 0)
+            return fail("a line says how the file was used: " + used[0].text)
+        var lines = findAll(win.page, function(x) { return x.iconShown !== undefined })
+        if (lines.length !== rows.count)
+            return fail(lines.length + " place lines for " + rows.count + " rows")
+        for (var i = 0; i < lines.length; ++i) {
+            var want = win.places[lines[i].text]
+            if (lines[i].text !== "" && lines[i].iconShown !== want)
+                return fail(lines[i].text + (want ? " has no server icon" : " has the server icon"))
+        }
         return true
     }
 

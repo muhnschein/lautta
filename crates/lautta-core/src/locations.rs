@@ -18,7 +18,6 @@ use crate::error::{Error, ErrorKind, Result};
 use crate::paths::AppPaths;
 use crate::provider::local::{lexical_normalize, new_io_semaphore, LocalProvider};
 use crate::provider::{Provider, ProviderResolver};
-use crate::trash;
 use crate::uri::{LocationId, Uri};
 use crate::volumes::{self, Volume, VolumeEvent, VolumeWatcher};
 use crate::vpath::VPath;
@@ -313,10 +312,11 @@ impl LocationRegistry {
             .collect()
     }
 
-    /// Provider for a local folder, sharing the I/O semaphore. User and
-    /// Android folders keep *Recently deleted* in a bin at their own root
-    /// (OPS-8), so no file system or mount check is needed: in the sandbox
-    /// each of them is a mount of its own, unlike `$HOME` (a tmpfs, §3.3).
+    /// Provider for a local folder, sharing the I/O semaphore. Deletes in
+    /// user and Android folders go to the *Trash* (OPS-8) whatever mount
+    /// they are on: in the sandbox each of them is a mount of its own, apart
+    /// from `$HOME` (a tmpfs) and the app data (§3.3), and the trash copies
+    /// what it cannot rename.
     fn local_provider(&self, root: &Path, keeps_trash: bool) -> Arc<dyn Provider> {
         let mut provider = LocalProvider::new(root.to_path_buf()).with_semaphore(self.inner.io.clone());
         if keeps_trash {
@@ -535,19 +535,19 @@ impl LocationRegistry {
         }
     }
 
-    /// The bin that deletes in `location` go to (OPS-8): the hidden folder
-    /// at its root, `None` when the location does not keep a trash.
-    pub fn trash_bin(&self, location: &str) -> Option<PathBuf> {
+    /// True when deletes in `location` go to the *Trash* (OPS-8): this
+    /// device's folders; not volumes, servers or archives.
+    pub fn keeps_trash(&self, location: &str) -> bool {
         self.state()
             .all()
             .find(|s| s.location.id == location)
-            .and_then(bin_of_slot)
+            .and_then(trash_root_of)
+            .is_some()
     }
 
-    /// The bins of all locations that keep a trash now, whether they hold
-    /// anything or not.
-    pub fn trash_bins(&self) -> Vec<PathBuf> {
-        self.state().all().filter_map(bin_of_slot).collect()
+    /// The roots of the locations whose deletes go to the *Trash*.
+    pub fn trash_roots(&self) -> Vec<PathBuf> {
+        self.state().all().filter_map(trash_root_of).collect()
     }
 
     /// The local path behind `uri`, `None` for remote locations and archives.
@@ -579,12 +579,9 @@ impl LocationRegistry {
     }
 }
 
-fn bin_of_slot(slot: &Slot) -> Option<PathBuf> {
-    let root = slot.location.local_root.as_deref()?;
-    slot.provider
-        .capabilities()
-        .has(cap::TRASH)
-        .then(|| trash::bin_of(root))
+fn trash_root_of(slot: &Slot) -> Option<PathBuf> {
+    let root = slot.location.local_root.as_ref()?;
+    slot.provider.capabilities().has(cap::TRASH).then(|| root.clone())
 }
 
 /// The absolute path of `uri` inside a local location.
@@ -831,7 +828,7 @@ mod tests {
     }
 
     #[test]
-    fn user_and_android_folders_keep_a_trash_in_their_own_bin() {
+    fn deletes_in_user_and_android_folders_go_to_the_trash() {
         let e = env_with(&["Documents", "android_storage/DCIM"]);
         std::fs::create_dir(e.media.join("CARD")).unwrap();
         e.reg.refresh();
@@ -849,23 +846,18 @@ mod tests {
             !card.has(cap::TRASH),
             "removable media delete permanently (OPS-8)"
         );
-        assert_eq!(
-            e.reg.trash_bin("user-documents"),
-            Some(e.home.join("Documents/.lautta-trash"))
-        );
-        assert_eq!(e.reg.trash_bin("vol-CARD"), None);
-        assert_eq!(e.reg.trash_bin("nope"), None);
+        assert!(e.reg.keeps_trash("user-documents"));
+        assert!(e.reg.keeps_trash("android-dcim"));
+        assert!(!e.reg.keeps_trash("vol-CARD"));
+        assert!(!e.reg.keeps_trash("nope"));
         e.reg.register(
             Location::local("arc-1", LocationKind::Archive, "a.zip", e.home.clone()),
             mem(),
         );
-        assert_eq!(e.reg.trash_bin("arc-1"), None, "only providers that keep a trash");
+        assert!(!e.reg.keeps_trash("arc-1"), "only providers that keep a trash");
         assert_eq!(
-            e.reg.trash_bins(),
-            [
-                e.home.join("Documents/.lautta-trash"),
-                e.home.join("android_storage/DCIM/.lautta-trash")
-            ]
+            e.reg.trash_roots(),
+            [e.home.join("Documents"), e.home.join("android_storage/DCIM")]
         );
     }
 

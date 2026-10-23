@@ -55,7 +55,9 @@ Methods:
   `/apps/harbour-lautta/settings`) and calls `App.loadSettings(json)` at start (SPEC §18).
 - `childUri(parentUri, name) → string`, `parentUri(uri) → string`, `nameOf(uri) → string`,
   `displayAddress(uri) → string` (file:// path or netvfs URL without secrets, LOC-7),
-  `locationName(uri) → string`, `isLocal(uri) → bool`.
+  `locationName(uri) → string`, `isLocal(uri) → bool`, `isRemote(uri) → bool` (on a
+  server, LOC-7, also one that is gone; archives are neither: lines naming the location
+  mark it, §15.5).
 - `copy(uris)`, `cut(uris)`, `clearClipboard()`, `canPasteInto(uri) → bool`,
   `paste(destUri)` (→ `Operations` flow).
 - `undo()`; signal `undone(ok)`.
@@ -88,13 +90,18 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `connecting` (also while the bridge reconnects, NVB-12), `disconnected` (also recent
   ad-hoc servers), `failed`, or empty when the bridge reports none; `connectionError` is
   the netvfs error name of a `failed` one (`AuthFailed`, `Timeout`, …).
-  `components/browse/ServerStatus.js` turns them into the row's line and dot. `refresh()`
+  `components/browse/ServerStatus.js` turns them into the row's status (text and dot, on
+  the right where folders show their count, §15.2). `refresh()`
   rescans the device folders and volumes first (LOC-3); the model also follows location
   changes by itself, and a changed row changes in place.
-- `FavouritesModel` (roles `itemId`, `uri`, `label`, `colour`, `place`, `isDir`; `add`
-  (a folder), `save(uri, label, colour, isDir)` adds a folder or file or relabels the
-  favourite it is, `edit`, `remove`, `removeUri(uri)`, `moveTo`, `get`, `idOf`,
-  `placeOf`).
+- `FavouritesModel` (roles `itemId`, `uri`, `label`, `colour`, `place`, `isDir`, `icon`
+  (the chosen theme icon name, empty for the default), `defaultIcon` (the icon source
+  shown without one: the star, or a file's icon); `add` (a folder),
+  `save(uri, label, colour, icon, isDir)` adds a folder or file or changes label, colour
+  and icon of the favourite it is (an empty colour or icon is none, an unknown icon is
+  none), `edit`, `remove`, `removeUri(uri)`, `moveTo`, `get`, `idOf`, `placeOf`,
+  `iconChoices()` (the icon names, the star first); `components/browse/IconPicker.qml
+  { icon, icons, defaultIcon, colour }`, signal `picked(icon)`).
 - `RecentsModel` (ORG-2, newest first, no filter; `count`, `enabled`, `loaded`,
   `reload()`, `clear()`, `remove(itemId)`, signal `failed(kind, message)`; roles:
   `itemId`, `uri`, `name`, `kind`, `place`, `at`, `dateGroup`). `dateGroup` is the date
@@ -107,15 +114,21 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - Pages: `pages/BrowsePage.qml` (initial page), `pages/RecentsPage.qml`,
   `dialogs/ConnectServerDialog.qml { url }`,
   `dialogs/ServerQuestionDialog.qml { questionId, kind, details }`,
-  `dialogs/FavouriteDialog.qml { uri, isDir }` (edits the item's favourite when it is
-  one; `isDir` defaults to true, a file passes false), `cover/CoverPage.qml`.
+  `pages/FavouritePage.qml { uri, isDir }` (saves each change; makes the item a
+  favourite when it is none; `isDir` defaults to true, a file passes false),
+  `cover/CoverPage.qml`.
 - Browse page settings (BRW-12): `LocationsModel.hide(section, kind, itemId)`;
   `BrowseLayoutModel` (roles `section`, `kind`, `item`, `name`, `hidden`, `place` (the
   place in the section; no role is called `index`, which would hide the delegate's
   `index`), `movable`; `reload()`, `setHidden(section, item, hidden)`,
-  `moveTo(section, item, index)`, `restoreDefaults()`, `sectionAt(row)`, `placeAt(row)`,
-  `itemAt(row)`; changes arrive as row changes, moves, insertions and removals, not a
-  reset); `pages/BrowseSettingsPage.qml`.
+  `moveTo(section, item, index)`, `moveRow(fromRow, toRow) → bool` (list rows of one
+  section whose rows move: the row moves at once, so a dragged row follows the finger,
+  and the order is stored behind it), `restoreDefaults()`, `sectionAt(row)`,
+  `placeAt(row)`, `itemAt(row)`; changes arrive as row changes, moves, insertions and
+  removals, not a reset); `pages/BrowseSettingsPage.qml` with
+  `components/browse/BrowseLayoutDelegate.qml { layoutModel, layoutSection, layoutItem,
+  layoutKind, layoutName, layoutHidden, layoutMovable }` (the page passes the roles;
+  signal `toggled()`).
 
 ### Directory (boards: Directory, DirectoryPulley, DirectoryContext, DirectorySelect, DirectorySelectPulley, DirectoryGrid, DirectoryLandscape, PathMenu, DirectoryRemorse, ImageDeleteRemote, ViewOptions, NewItem, Rename, FolderPicker, FolderPickerPulley, StateEmpty, StateNoAccess, StateOffline, StateError, StateLarge)
 
@@ -140,30 +153,42 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `dialogs/RenameDialog.qml { uri, isDir }` (property `newName` after accept),
   `pages/ViewOptionsPage.qml { model }` (a page whose controls apply at once; `model`, the
   folder it was opened from, is absent when Settings opens it),
-  `components/directory/ViewPreview.qml` (its live preview), `components/PathMenu.qml`.
-- The item context menu is plain rows ending with *More actions*, which keeps the menu
-  open and swaps its rows for the item's rarer actions; which actions each holds, in a
-  fixed order filtered by capabilities, is in `components/directory/ContextActions.js`
-  (`menu(ctx)`, `more(ctx)`).
+  `components/directory/ViewPreview.qml { screenWidth, screenHeight }` (its live preview,
+  half that size whatever it shows), `components/PathMenu.qml`.
+- The item context menu is plain rows ending with *More actions*, which opens
+  `components/directory/MoreActionsPage.qml { owner, info }` (the DirectoryView and the
+  row's item): the item's rarer actions, one row each with its theme icon; a dialog an
+  action opens replaces the page (`DirectoryView.openDialog`). Which actions each holds,
+  in a fixed order filtered by capabilities, and their icons, is in
+  `components/directory/ContextActions.js` (`menu(ctx)`, `more(ctx)` →
+  `[{ id, text, icon }]`, `icon(id)`).
+- After `DirectoryModel.renamed(oldUri, newUri)` the DirectoryView shows a Silica remorse on
+  the new name's row (OPS-9); every list row and grid cell holds a
+  `components/directory/RenameRemorse.qml { owner, row, uri }` so that a row made anew
+  while it runs shows the rest. Cancelling it calls `rename(newUri, oldName)`.
 - When selection mode starts and ends is in `components/directory/Selection.js`.
 - Which names New folder and Rename refuse is in `components/directory/Names.js`
-  (`invalid(name, binHere)`).
+  (`invalid(name)`).
 
 ### Operations (boards: PlanSummary, Conflict, Compress, Extract, RecentlyDeleted, RecentlyDeletedEmpty, ShareTarget, ArchiveView (open as location))
 
 - `Operations` singleton: `copyTo(uris, destUri)`, `moveTo(uris, destUri)`,
-  `remove(uris)` (after remorse; signal `removed(trashedCount, transferId)`),
+  `remove(uris)` (after the remorse timer for a delete to the Trash, after
+  `dialogs/DeleteDialog.qml` for a permanent one; signal `removed(trashedCount,
+  transferId)`), `deletesPermanently(uris)` → bool (true unless every item goes to the
+  Trash: the one place that decides between remorse and the dialog, OPS-8),
   `compress(uris, destUri, name, kind)`, `extract(archiveUri, destUri)`,
   `openArchive(uri)` → signal `archiveOpened(uri, rootUri)`;
   signals `needsSummary(planId, summary)` (`summary`: files, dirs, bytes, conflicts,
   renamed, kind, destination) → `startPlan(planId)` / `discardPlan(planId)`;
   `started(transferId)`; `failed(kind, message)`.
-- `TrashModel` — Recently deleted list of every location's bin (OPS-8), `reload()` (also
+- `TrashModel` — the Trash in the app's data (OPS-8), `reload()` (also
   purges what is past the retention setting), `restore(id)`, `remove(id)`, `empty()`.
 - Pages: `dialogs/PlanSummaryDialog.qml { planId, summary }`,
   `dialogs/ConflictDialog.qml { transferId, item, conflict }`,
   `dialogs/CompressDialog.qml { uris }`,
-  `dialogs/ExtractDialog.qml { archiveUri }`, `pages/RecentlyDeletedPage.qml`,
+  `dialogs/ExtractDialog.qml { archiveUri }`, `dialogs/DeleteDialog.qml { uris }`
+  (*Delete permanently?*; the caller deletes on `accepted`), `pages/TrashPage.qml`,
   `pages/ShareTargetPage.qml { resources }` (Sailfish.Share `ShareProvider`, INT-1).
 
 ### Transfers (boards: Transfers, TransfersPulley, TransferDetails, TransferDetailsPulley, TransfersRestored, Notifications, Covers (transfer cover))
@@ -218,7 +243,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - Pages: `viewers/ImageViewer.qml { uri, folderUri }` (Jolla Gallery's viewer, adapted in
   `components/viewers/gallery`; `remove()` deletes the image shown; its *More* is
   `components/viewers/ImageMorePage.qml { uri }`, whose Rename signals `renameChosen()` for
-  the viewer to rename), `viewers/TextViewer.qml { uri }`,
+  the viewer to rename), `viewers/TextViewer.qml { uri, wrap }`
+  (`wrap` true by default; its rows, tabs expanded and long lines split, come from
+  `components/viewers/TextRows.js`),
   `viewers/MarkdownViewer.qml { uri }`, `viewers/PdfViewer.qml { uri }`, `viewers/PdfContentsPage.qml { fileName, outline,
   pageCount, currentPage }` (signal `chosen(index)`), `viewers/MediaPlayer.qml { uri, video }`,
   `dialogs/OpenRemoteDialog.qml { uri }`, `dialogs/PdfPasswordDialog.qml { fileName, wrong }`,
@@ -229,8 +256,15 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - `SearchModel { rootUri }` — query/filters, results grouped by folder, `start()`,
   `cancel()`, `recentSearches`.
 - Pages: `pages/SearchPage.qml { rootUri }`, `pages/SearchFiltersPage.qml`,
-  `pages/SettingsPage.qml` (its *View options* row opens `pages/ViewOptionsPage.qml`
-  without a model; the view settings are not repeated, BRW-4), `pages/AboutPage.qml`.
+  `pages/SettingsPage.qml` (entries, `components/search/SettingsEntry.qml { iconSource,
+  text, value }`, whose value lines come from `components/search/SettingsText.js`; they
+  open `pages/BrowseSettingsPage.qml`, `pages/ViewOptionsPage.qml` without a model (the
+  view settings and the thumbnails are not repeated, BRW-4), `pages/SearchSettingsPage.qml`,
+  `pages/RecentsSettingsPage.qml`, `pages/DeletingSettingsPage.qml`,
+  `pages/TransfersSettingsPage.qml`, `pages/StorageSettingsPage.qml` and
+  `pages/AboutPage.qml`). A control bound to one setting is
+  `components/search/SettingSwitch.qml`, `SettingCombo.qml` or `SettingSlider.qml`
+  `{ settingKey }`.
 - The search page has no pulley: its header, search field and filter summary (which
   opens `SearchFiltersPage`) sit above the results list, not in the list's header, so
   the field keeps the keyboard while each search resets the list.
@@ -242,7 +276,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   banner and the app-wide `KeepAlive`.
 - `components/ErrorText.js`, `components/Open.js`, `components/FileIcon.qml { category,
   isDir, thumbnailSource }`, `components/IconRow.qml` (icon row for context menus),
-  `components/UndoBanner.qml`.
+  `components/UndoBanner.qml`, `components/PlaceLabel.qml { before, text, remote, color,
+  fontSize, horizontalAlignment }` (a line naming a location: a remote one gets the small
+  server icon before its name, §15.5).
 
 ## Tests
 

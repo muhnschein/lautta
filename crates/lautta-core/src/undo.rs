@@ -24,7 +24,7 @@ pub enum UndoAction {
     Move {
         pairs: Vec<(Uri, Uri)>,
     },
-    /// Items sent to Recently deleted, by `trash_items.id`.
+    /// Items sent to the Trash, by `trash_items.id`.
     Trash {
         ids: Vec<i64>,
     },

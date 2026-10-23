@@ -15,9 +15,14 @@ ApplicationWindow {
     property int step: 0
     property int waited: 0
     property var viewer
+    property bool cleaned
     readonly property string folder: "lautta://user-pictures/ViewerRename/"
 
     ViewerTools { id: tools }
+    Connections {
+        target: Operations
+        onRemoved: window.cleaned = true
+    }
     // Makes the test's folder, then lists it to see the rename.
     DirectoryModel {
         id: listing
@@ -107,6 +112,13 @@ ApplicationWindow {
                     return
                 window.expect(listing.indexOf(window.folder + "after.jpg") >= 0, "the file has its new name")
                 window.expect(listing.indexOf(window.folder + "before.jpg") < 0, "the old name is gone")
+                // Leave Pictures as it was for the scenarios after this one.
+                window.cleaned = false
+                Operations.remove(JSON.stringify([window.folder.slice(0, -1)]))
+                break
+            case 5:
+                if (!window.cleaned)
+                    return
                 window.scenarioRunning = false
                 break
             }
