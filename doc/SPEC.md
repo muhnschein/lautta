@@ -552,7 +552,12 @@ bridge).
 - PRV-3: Thumbnail jobs: interactive lane, lowest priority, ≤ 2 in flight per location,
   visible delegates only, canceled on scroll.
 - PRV-4: Viewers: images (zoom, swipe through the folder, EXIF panel), text/code (read-
-  only up to 1 MiB, then a notice), Markdown (pulldown-cmark → Qt rich text subset,
+  only up to 1 MiB, then a notice; numbered lines wrapped to the page's width by
+  default, so the page swipes back like any other, also from Markdown's *View source*;
+  *Don't wrap lines* in the pulley lets lines wider than the page scroll sideways
+  instead, and then a swipe across the text scrolls it and the back indicator goes
+  back; tabs to the next multiple of 4 columns; a line longer than 1000 characters
+  goes on over further rows), Markdown (pulldown-cmark → Qt rich text subset,
   wrapped to the page's width, code blocks and tables included), audio
   and video (QtMultimedia), archives (as locations), PDFs (PRV-12). Office documents,
   databases, packages and other binary files go to *Open with*.
