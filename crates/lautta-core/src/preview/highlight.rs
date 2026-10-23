@@ -6,10 +6,11 @@
 //! reduced to a few [`Class`]es; the viewer picks a colour of the ambience for
 //! each, so no colour ever comes from a grammar or theme file.
 //!
-//! A line is shown as Qt StyledText: every character of the file is escaped
-//! and whitespace is kept with `&nbsp;`, so nothing in a file is read as
-//! markup (no `<img>`, no links, no entities of its own); the only tags are
-//! this module's `<font color>` with a colour checked to be `#` and hex digits.
+//! The viewer shows a line in rows (TextRows.js: tabs expanded, a long line
+//! split), each as Qt StyledText: every character of the row is escaped and
+//! whitespace is kept with `&nbsp;`, so nothing in a file is read as markup
+//! (no `<img>`, no links, no entities of its own); the only tags are this
+//! module's `<font color>` with a colour checked to be `#` and hex digits.
 //!
 //! Multi-line constructs carry the parser's state from line to line, so the
 //! document is coloured as a whole, off the GUI thread and within
@@ -155,8 +156,18 @@ pub const FIRST_WAIT: Duration = Duration::from_millis(250);
 /// one line can only be cut short between lines.
 const GRACE: Duration = Duration::from_millis(500);
 
-/// TextViewer's columns per tab.
+/// Columns per tab in the viewer's rows (TextRows.js).
 const TAB_WIDTH: usize = 4;
+
+/// Columns `c` takes at `column` in the viewer's rows, which count UTF-16
+/// units as JavaScript does and expand a tab to the next tab stop.
+fn columns(column: usize, c: char) -> usize {
+    if c == '\t' {
+        TAB_WIDTH - column % TAB_WIDTH
+    } else {
+        c.len_utf16()
+    }
+}
 
 /// A piece of a line: up to byte `end` of the line (from the previous
 /// span's end), in `class`.
@@ -230,23 +241,48 @@ impl ColouredText {
         self.spans.get(start..end)
     }
 
-    /// Line `index` as StyledText (see the module docs), coloured with
-    /// `palette` when it has colours; `None` past the last line.
-    pub fn styled_line(&self, index: usize, palette: &Palette) -> Option<String> {
-        let line = self.line(index)?;
-        let mut out = StyledWriter::with_capacity(line.len());
-        let mut from = 0;
-        for span in self.spans(index).unwrap_or_default() {
-            let to = (span.end as usize).min(line.len());
-            if let (Some(piece), Some(rest)) = (line.get(from..to), line.get(to..)) {
-                out.set_colour(palette.colour(span.class));
-                out.push_text(piece, rest.chars().next());
-                from = to;
+    /// The viewer's row `row` of line `index` as StyledText (see the module
+    /// docs). The row starts at column `start` of the line as the viewer
+    /// lays it out (UTF-16 units, tabs expanded), and each of its
+    /// characters takes the colour in `palette` of the span it comes from.
+    /// The characters are the row's own: a row that does not match the line
+    /// could only get wrong colours, never other text. Lines without
+    /// colours, or past the end, are escaped all the same.
+    pub fn styled_row(&self, index: usize, start: usize, row: &str, palette: &Palette) -> String {
+        let ends = self.column_spans(index);
+        let mut spans = ends.iter().peekable();
+        let mut out = StyledWriter::with_capacity(row.len());
+        let mut column = start;
+        let mut chars = row.chars().peekable();
+        while let Some(c) = chars.next() {
+            while spans.peek().is_some_and(|(end, _)| *end <= column) {
+                spans.next();
             }
+            out.set_colour(spans.peek().and_then(|(_, class)| palette.colour(*class)));
+            out.push_char(c, chars.peek().copied());
+            column += c.len_utf16();
         }
-        out.set_colour(None);
-        out.push_text(line.get(from..).unwrap_or_default(), None);
-        Some(out.finish())
+        out.finish()
+    }
+
+    /// The column at which each span of line `index` ends, with its class;
+    /// none for a line without colours.
+    fn column_spans(&self, index: usize) -> Vec<(usize, Class)> {
+        let (Some(line), Some(spans)) = (self.line(index), self.spans(index)) else {
+            return Vec::new();
+        };
+        let mut column = 0;
+        let mut from = 0;
+        spans
+            .iter()
+            .map(|span| {
+                let to = (span.end as usize).clamp(from, line.len());
+                let piece = line.get(from..to).unwrap_or_default();
+                column = piece.chars().fold(column, |at, c| at + columns(at, c));
+                from = to;
+                (column, span.class)
+            })
+            .collect()
     }
 }
 
@@ -285,19 +321,18 @@ fn is_hex_colour(s: &str) -> bool {
         .is_some_and(|hex| matches!(hex.len(), 6 | 8) && hex.bytes().all(|b| b.is_ascii_hexdigit()))
 }
 
-/// Builds one StyledText line.
+/// Builds one StyledText row.
 ///
 /// Qt's StyledText parser collapses whitespace runs and drops leading
 /// whitespace, takes `&` up to the next `;` as an entity (unknown ones
 /// vanish) and stops at a NUL character. So `<`, `>`, `&` and `"` become
-/// entities, NUL becomes U+FFFD, a tab becomes `&nbsp;` up to the next tab
-/// stop and other whitespace `&nbsp;`, except a lone space between two
-/// visible characters, which stays a space so that wrapping can break there.
+/// entities, NUL becomes U+FFFD and whitespace `&nbsp;` (a row's tabs are
+/// already spaces), except a lone space between two visible characters,
+/// which stays a space so that wrapping can break there.
 struct StyledWriter<'a> {
     out: String,
     colour: Option<&'a str>,
     open: bool,
-    column: usize,
     after_space: bool,
 }
 
@@ -307,7 +342,6 @@ impl<'a> StyledWriter<'a> {
             out: String::with_capacity(len + len / 2),
             colour: None,
             open: false,
-            column: 0,
             after_space: true,
         }
     }
@@ -335,30 +369,12 @@ impl<'a> StyledWriter<'a> {
         }
     }
 
-    /// `text`, followed by `next` in the line.
-    fn push_text(&mut self, text: &str, next: Option<char>) {
-        if text.is_empty() {
-            return;
-        }
-        self.open();
-        let mut chars = text.chars().peekable();
-        while let Some(c) = chars.next() {
-            let following = chars.peek().copied().or(next);
-            self.push_char(c, following);
-        }
-    }
-
+    /// `c`, followed by `next` in the row.
     fn push_char(&mut self, c: char, next: Option<char>) {
+        self.open();
         let lone_space = c == ' ' && !self.after_space && next.is_some_and(|n| !n.is_whitespace());
         match c {
             _ if lone_space => self.out.push(' '),
-            '\t' => {
-                let width = TAB_WIDTH - self.column % TAB_WIDTH;
-                for _ in 0..width {
-                    self.out.push_str("&nbsp;");
-                }
-                self.column += width - 1;
-            }
             _ if c.is_whitespace() => self.out.push_str("&nbsp;"),
             '<' => self.out.push_str("&lt;"),
             '>' => self.out.push_str("&gt;"),
@@ -367,7 +383,6 @@ impl<'a> StyledWriter<'a> {
             '\0' => self.out.push('\u{FFFD}'),
             _ => self.out.push(c),
         }
-        self.column += 1;
         self.after_space = c.is_whitespace();
     }
 

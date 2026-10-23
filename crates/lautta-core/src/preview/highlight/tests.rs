@@ -238,8 +238,8 @@ fn an_overlong_line_ends_the_colours() {
     assert_eq!(doc.coloured_lines(), 1);
     assert!(doc.spans(1).is_none() && doc.spans(2).is_none());
     let palette = Palette::parse("function=#112233");
-    assert!(doc.styled_line(0, &palette).unwrap().contains("<font"));
-    assert_eq!(doc.styled_line(2, &palette).unwrap(), "echo b");
+    assert!(doc.styled_row(0, 0, "echo a", &palette).contains("<font"));
+    assert_eq!(doc.styled_row(2, 0, "echo b", &palette), "echo b");
     // A line at the limit is still coloured.
     let at_limit = format!("echo a\n{}\necho b", &long[..4096]);
     assert_eq!(coloured("x.sh", &at_limit).coloured_lines(), 3);
@@ -345,7 +345,8 @@ fn doc_of(pieces: &[(&str, Class)]) -> ColouredText {
 }
 
 #[test]
-fn styled_lines_escape_and_colour() {
+fn styled_rows_escape_and_colour() {
+    let line = "if <img src=\"a.png\"> &lt; & a;b";
     let doc = doc_of(&[
         ("if", Class::Keyword),
         (" ", Class::Plain),
@@ -353,38 +354,87 @@ fn styled_lines_escape_and_colour() {
         (" &lt; & a;b", Class::Plain),
     ]);
     assert_eq!(
-        doc.styled_line(0, &palette()).unwrap(),
+        doc.styled_row(0, 0, line, &palette()),
         "<font color=\"#000002\">if</font> <font color=\"#000004\">&lt;img src=&quot;a.png&quot;&gt;</font> \
          &amp;lt; &amp; a;b"
     );
     assert_eq!(
-        doc.styled_line(0, &Palette::default()).unwrap(),
+        doc.styled_row(0, 0, line, &Palette::default()),
         "if &lt;img src=&quot;a.png&quot;&gt; &amp;lt; &amp; a;b"
     );
-    assert_eq!(doc.styled_line(1, &palette()), None);
-    // Plain documents are escaped all the same.
+    // Past the last line, and plain documents: escaped all the same.
+    assert_eq!(doc.styled_row(1, 0, "<b>", &palette()), "&lt;b&gt;");
+    assert_eq!(
+        doc.styled_row(usize::MAX, 0, "\"x\"", &palette()),
+        "&quot;x&quot;"
+    );
     let plain = ColouredText::plain("<b>&nbsp;</b>\n\0x".to_owned());
     assert_eq!(
-        plain.styled_line(0, &palette()).unwrap(),
+        plain.styled_row(0, 0, "<b>&nbsp;</b>", &palette()),
         "&lt;b&gt;&amp;nbsp;&lt;/b&gt;"
     );
-    assert_eq!(plain.styled_line(1, &palette()).unwrap(), "\u{FFFD}x");
+    assert_eq!(plain.styled_row(1, 0, "\0x", &palette()), "\u{FFFD}x");
 }
 
 #[test]
-fn styled_lines_keep_whitespace() {
-    let line = |text: &str| {
-        ColouredText::plain(text.to_owned())
-            .styled_line(0, &Palette::default())
-            .unwrap()
-    };
-    assert_eq!(line("a b"), "a b", "a lone space can wrap");
-    assert_eq!(line(" a  b "), "&nbsp;a&nbsp;&nbsp;b&nbsp;");
-    assert_eq!(line("\tx"), "&nbsp;&nbsp;&nbsp;&nbsp;x");
-    assert_eq!(line("ab\tc\td"), "ab&nbsp;&nbsp;c&nbsp;&nbsp;&nbsp;d");
-    assert_eq!(line("a \tb"), "a&nbsp;&nbsp;&nbsp;b");
-    assert_eq!(line("a\u{a0}b\u{3000}c"), "a&nbsp;b&nbsp;c");
-    assert_eq!(line("a & b"), "a &amp; b");
+fn styled_rows_keep_whitespace() {
+    let row = |text: &str| ColouredText::plain(text.to_owned()).styled_row(0, 0, text, &Palette::default());
+    assert_eq!(row("a b"), "a b", "a lone space can wrap");
+    assert_eq!(row(" a  b "), "&nbsp;a&nbsp;&nbsp;b&nbsp;");
+    assert_eq!(row("a\u{a0}b\u{3000}c"), "a&nbsp;b&nbsp;c");
+    assert_eq!(row("a & b"), "a &amp; b");
+}
+
+#[test]
+fn colours_follow_tabs_and_rows() {
+    let p = palette();
+    // The rows of a line have their tabs expanded (TextRows.js).
+    let doc = doc_of(&[
+        ("\t", Class::Plain),
+        ("if", Class::Keyword),
+        ("\t", Class::Plain),
+        ("x", Class::String),
+    ]);
+    assert_eq!(rows_of(doc.line(0).unwrap()), [(0, "    if  x".to_owned())]);
+    assert_eq!(
+        doc.styled_row(0, 0, "    if  x", &p),
+        "&nbsp;&nbsp;&nbsp;&nbsp;<font color=\"#000002\">if</font>&nbsp;&nbsp;<font color=\"#000004\">x</font>"
+    );
+    // A tab takes the colour of its span, all its columns.
+    let doc = doc_of(&[("a", Class::Plain), ("\tb", Class::Comment)]);
+    assert_eq!(
+        doc.styled_row(0, 0, "a   b", &p),
+        "a<font color=\"#000001\">&nbsp;&nbsp;&nbsp;b</font>"
+    );
+    // Columns are UTF-16 units, as JavaScript counts them: the tab after
+    // an emoji (two units) is two columns.
+    let doc = doc_of(&[
+        ("\u{1F600}\t", Class::Plain),
+        ("x", Class::Keyword),
+        ("\u{1F600}", Class::Plain),
+        ("y", Class::Keyword),
+    ]);
+    let row = "\u{1F600}  x\u{1F600}y";
+    assert_eq!(rows_of(doc.line(0).unwrap()), [(0, row.to_owned())]);
+    assert_eq!(
+        doc.styled_row(0, 0, row, &p),
+        "\u{1F600}&nbsp;&nbsp;<font color=\"#000002\">x</font>\u{1F600}<font color=\"#000002\">y</font>"
+    );
+    // A row further on in a long line has the colours of its own part.
+    let doc = doc_of(&[
+        ("a".repeat(998).as_str(), Class::Plain),
+        ("echo", Class::Function),
+        (" b", Class::Plain),
+    ]);
+    let rows = rows_of(doc.line(0).unwrap());
+    assert_eq!(rows[1], (1000, "ho b".to_owned()));
+    assert_eq!(
+        doc.styled_row(0, 1000, "ho b", &p),
+        "<font color=\"#000008\">ho</font> b"
+    );
+    for (start, row) in &rows {
+        check_row(&doc, 0, (*start, row), &p);
+    }
 }
 
 /// What Qt's StyledText parser (qquickstyledtext.cpp, Qt 5.6) shows for
@@ -486,52 +536,101 @@ impl QtParser {
     }
 }
 
-/// What the viewer must show for `line`: its characters, tabs to the next
-/// stop, other whitespace as a space, NUL as U+FFFD.
-fn expected(line: &str) -> String {
-    let mut out = String::new();
+/// The viewer's rows of `line` as TextRows.js makes them, with where each
+/// starts: tabs to the next multiple of four columns, a row ending after
+/// 1000 columns or before (never inside a pair of surrogates), counted in
+/// UTF-16 units.
+fn rows_of(line: &str) -> Vec<(usize, String)> {
+    let mut expanded = String::new();
+    let mut column = 0;
     for c in line.chars() {
-        match c {
-            '\t' => {
-                let col = out.chars().count();
-                out.extend(std::iter::repeat_n(' ', TAB_WIDTH - col % TAB_WIDTH));
-            }
-            '\0' => out.push('\u{FFFD}'),
-            c if c.is_whitespace() => out.push(' '),
-            c => out.push(c),
+        if c == '\t' {
+            let pad = 4 - column % 4;
+            expanded.extend(std::iter::repeat_n(' ', pad));
+            column += pad;
+        } else {
+            expanded.push(c);
+            column += c.len_utf16();
         }
+    }
+    let mut rows = vec![(0, String::new())];
+    let mut column = 0;
+    for c in expanded.chars() {
+        let start = rows.last().unwrap().0;
+        if column + c.len_utf16() - start > 1000 {
+            rows.push((column, c.to_string()));
+        } else {
+            rows.last_mut().unwrap().1.push(c);
+        }
+        column += c.len_utf16();
+    }
+    rows
+}
+
+/// What the viewer must show for a row: its characters, whitespace as a
+/// space, NUL as U+FFFD.
+fn expected(row: &str) -> String {
+    row.chars()
+        .map(|c| match c {
+            '\0' => '\u{FFFD}',
+            c if c.is_whitespace() => ' ',
+            c => c,
+        })
+        .collect()
+}
+
+/// The class of each column of `doc`'s line `index`, worked out by the
+/// characters (as the rows lay them out) rather than by the spans' ends.
+fn column_classes(doc: &ColouredText, index: usize) -> Vec<Option<Class>> {
+    let line = doc.line(index).unwrap();
+    let spans = doc.spans(index).unwrap_or_default();
+    let mut out: Vec<Option<Class>> = Vec::new();
+    let mut spans = spans.iter().peekable();
+    for (at, c) in line.char_indices() {
+        while spans.peek().is_some_and(|span| span.end as usize <= at) {
+            spans.next();
+        }
+        let class = spans.peek().map(|span| span.class);
+        let width = if c == '\t' {
+            4 - out.len() % 4
+        } else {
+            c.len_utf16()
+        };
+        out.extend(std::iter::repeat_n(class, width));
     }
     out
 }
 
-/// Checks that Qt shows `doc`'s line `index` as it is, each visible
-/// character in its class's colour.
-fn check_shown(doc: &ColouredText, index: usize, palette: &Palette) {
-    let line = doc.line(index).unwrap();
-    let styled = doc.styled_line(index, palette).unwrap();
+/// Checks that Qt shows `row` (from column `start` of line `index`) as it
+/// is, each visible character in the colour of its part of the line.
+fn check_row(doc: &ColouredText, index: usize, (start, row): (usize, &str), palette: &Palette) {
+    let styled = doc.styled_row(index, start, row, palette);
     let shown = shown_by_qt(&styled);
     let text: String = shown.iter().map(|(c, _)| *c).collect();
-    assert_eq!(text, expected(line), "{line:?} became {styled:?}");
+    assert_eq!(text, expected(row), "{row:?} became {styled:?}");
+    let classes = column_classes(doc, index);
+    let mut column = start;
     let mut colours = Vec::new();
-    let mut from = 0;
-    for span in doc.spans(index).unwrap_or_default() {
-        let piece = &line[from..span.end as usize];
-        let colour = palette.colour(span.class).map(str::to_owned);
-        colours.extend(
-            piece
-                .chars()
-                .filter(|c| !c.is_whitespace())
-                .map(|_| colour.clone()),
-        );
-        from = span.end as usize;
+    for c in row.chars() {
+        if !c.is_whitespace() {
+            let class = classes.get(column).copied().flatten();
+            colours.push(class.and_then(|class| palette.colour(class)).map(str::to_owned));
+        }
+        column += c.len_utf16();
     }
-    colours.extend(line[from..].chars().filter(|c| !c.is_whitespace()).map(|_| None));
     let shown_colours: Vec<_> = shown
         .into_iter()
         .filter(|(c, _)| *c != ' ')
         .map(|(_, k)| k)
         .collect();
-    assert_eq!(shown_colours, colours, "{line:?} became {styled:?}");
+    assert_eq!(shown_colours, colours, "{row:?} became {styled:?}");
+}
+
+/// Checks every row of `doc`'s line `index` with [`check_row`].
+fn check_shown(doc: &ColouredText, index: usize, palette: &Palette) {
+    for (start, row) in rows_of(doc.line(index).unwrap()) {
+        check_row(doc, index, (start, &row), palette);
+    }
 }
 
 /// A small deterministic generator (xorshift), so failures reproduce.
@@ -560,6 +659,7 @@ const NASTY: &[&str] = &[
     "a",
     "é",
     "漢",
+    "\u{1F600}",
     "\u{a0}",
     "\u{2028}",
     "\u{3000}",
@@ -607,8 +707,9 @@ fn nasty_line(rng: &mut Rng) -> String {
 fn qt_shows_random_markup_as_text() {
     let mut rng = Rng(0x5eed_1a77a);
     let classes: Vec<Class> = CLASSES.iter().map(|(c, _)| *c).collect();
-    for _ in 0..2000 {
-        let line = nasty_line(&mut rng);
+    for n in 0..2000 {
+        // Some lines go on over rows.
+        let line = nasty_line(&mut rng).repeat(if n % 20 == 0 { 120 } else { 1 });
         let cuts: Vec<usize> = line.char_indices().map(|(i, _)| i).skip(1).collect();
         let cuts: Vec<usize> = cuts.into_iter().filter(|_| rng.below(3) == 0).collect();
         let mut pieces = Vec::new();

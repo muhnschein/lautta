@@ -39,9 +39,11 @@ function rowEnd(line, end) {
 }
 
 // `text` (lines separated by "\n") as { rows, longest, lines }: rows are
-// { number, text }, number the line's from 1 on its first row and 0 on the
-// rows it goes on over; longest is the length of the longest row and lines
-// the number of lines.
+// { number, text, line, start }, number the line's from 1 on its first row
+// and 0 on the rows it goes on over, line the line's index (from 0) and
+// start where the row starts in the line with its tabs expanded, for the
+// line's colours (PRV-13); longest is the length of the longest row and
+// lines the number of lines.
 function rows(text) {
     var lines = text.split("\n")
     var out = []
@@ -51,7 +53,7 @@ function rows(text) {
         var start = 0
         do {
             var end = rowEnd(line, start + rowLength)
-            out.push({ "number": start === 0 ? i + 1 : 0, "text": line.substring(start, end) })
+            out.push({ "number": start === 0 ? i + 1 : 0, "text": line.substring(start, end), "line": i, "start": start })
             longest = Math.max(longest, end - start)
             start = end
         } while (start < line.length)

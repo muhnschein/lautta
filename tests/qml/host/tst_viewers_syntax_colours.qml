@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Host test of the text viewer's syntax colours (PRV-13, SyntaxColours.js):
-// every class gets a colour in the form TextDocument.styledLine takes, from
+// every class gets a colour in the form TextDocument.styledRow takes, from
 // the ambience's colours, with hues apart from the highlight colour's, made
 // readable by the theme for its colour scheme.
 import QtQuick 2.6

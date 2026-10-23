@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Colours of the text viewer's syntax classes (PRV-13), in the form
-// TextDocument.styledLine takes them: "class=#rrggbb,…". They come from the
+// TextDocument.styledRow takes them: "class=#rrggbb,…". They come from the
 // ambience, so they read on light and dark ambiences alike: keywords and
 // headings take the highlight colour, operators and Markdown markup the
 // secondary highlight colour, comments the secondary colour, removed diff

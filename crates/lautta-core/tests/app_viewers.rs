@@ -137,7 +137,7 @@ async fn the_text_viewer_gets_colours_by_name_or_first_line() {
     assert_eq!(lines.syntax(), Some("Bourne Again Shell (bash)"));
     assert_eq!((lines.line_count(), lines.coloured_lines()), (2, 2));
     let palette = lautta_core::preview::highlight::Palette::parse("string=#00ff00");
-    let styled = lines.styled_line(1, &palette).unwrap();
+    let styled = lines.styled_row(1, 0, lines.line(1).unwrap(), &palette);
     assert!(
         styled.contains("<font color=\"#00ff00\">&quot;&lt;img src=x&gt;&quot;</font>"),
         "{styled}"
@@ -145,7 +145,7 @@ async fn the_text_viewer_gets_colours_by_name_or_first_line() {
 
     let plain = colours_of(h.core.view_text(&uri("lautta://nv-nas/notes.txt")).await.unwrap()).await;
     assert_eq!((plain.syntax(), plain.coloured_lines()), (None, 0));
-    assert_eq!(plain.styled_line(1, &palette).unwrap(), "echo &lt;b&gt;");
+    assert_eq!(plain.styled_row(1, 0, "echo <b>", &palette), "echo &lt;b&gt;");
     let err = h
         .core
         .view_text(&uri("lautta://nv-nas/none.sh"))

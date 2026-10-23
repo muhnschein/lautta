@@ -38,11 +38,12 @@ pub struct TextDocument {
     stateChanged: qt_signal!(),
 
     reload: qt_method!(fn(&mut self)),
-    /// Line `index` (from 0) as StyledText: every character of the file
-    /// escaped, whitespace kept, its pieces coloured with `colours`
-    /// (`class=#rrggbb,…`, components/viewers/SyntaxColours.js); "" past
-    /// the end (PRV-13).
-    styledLine: qt_method!(fn(&self, index: i32, colours: QString) -> QString),
+    /// A row of the viewer (components/viewers/TextRows.js: the row's text,
+    /// its line from 0 and where it starts in the line with tabs expanded)
+    /// as StyledText: every character escaped, whitespace kept, coloured
+    /// as its part of the line with `colours` (`class=#rrggbb,…`,
+    /// SyntaxColours.js) (PRV-13).
+    styledRow: qt_method!(fn(&self, row: QString, line: i32, start: i32, colours: QString) -> QString),
 
     generation: u64,
     lines: ColouredText,
@@ -132,12 +133,13 @@ impl TextDocument {
         self.lines = lines;
     }
 
-    fn styledLine(&self, index: i32, colours: QString) -> QString {
+    fn styledRow(&self, row: QString, line: i32, start: i32, colours: QString) -> QString {
         let palette = Palette::parse(&colours.to_string());
-        usize::try_from(index)
-            .ok()
-            .and_then(|i| self.lines.styled_line(i, &palette))
-            .map_or_else(QString::default, |s| QString::from(s.as_str()))
+        // A negative line is past every line: escaped, without colours.
+        let line = usize::try_from(line).unwrap_or(usize::MAX);
+        let start = usize::try_from(start).unwrap_or_default();
+        let styled = self.lines.styled_row(line, start, &row.to_string(), &palette);
+        QString::from(styled.as_str())
     }
 
     fn clear_content(&mut self) {

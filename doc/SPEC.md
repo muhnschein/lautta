@@ -672,12 +672,15 @@ bridge).
   that line and all after it plain, and a colouring still busy 0.5 s later is dropped
   (the whole file plain; a line cannot be cut short). The text appears with its colours
   when they are ready within 250 ms, else plain at once and coloured when they arrive.
-  Each line reaches the view as Qt StyledText made in the core: every character of the
-  file is escaped (`<`, `>`, `&`, `"`), whitespace kept as no-break spaces (a lone space
-  between words stays a space; tabs go to 4-column stops), NUL shown as U+FFFD, and the
-  only tags are `<font color>` with a colour checked to be `#` and hex digits, so a file
-  cannot bring in images, links or entities. Plain files get the same escaping without
-  colours. Markdown's *View source* is coloured as Markdown.
+  Each of the viewer's rows (PRV-4: tabs expanded, a long line split) reaches the view
+  as Qt StyledText made in the core from the row's own characters, each in the colour
+  of its part of the line, found through the same tab expansion (columns in UTF-16
+  units, as the rows count them): every character is escaped (`<`, `>`, `&`, `"`),
+  whitespace kept as no-break spaces (a lone space between words stays a space, where
+  wrapping can break), NUL shown as U+FFFD, and the only tags are `<font color>` with a
+  colour checked to be `#` and hex digits, so a file cannot bring in images, links or
+  entities. Plain files get the same escaping without colours. Markdown's *View source*
+  is coloured as Markdown.
 
 ## 13. Search and organisation
 
