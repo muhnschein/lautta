@@ -2,7 +2,9 @@
 // "More" of the image viewer (board ImageViewer): the file actions of the
 // folder view for the image being shown, Rename and the folder view's More
 // actions (ContextActions.js), handled by the other areas' dialogs and the
-// favourite page.
+// favourite page. Rename goes back to the viewer (renameChosen): RenameDialog
+// only asks, and the viewer, not this page, is there to rename once it is
+// accepted.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -13,12 +15,14 @@ Page {
 
     property string uri
 
+    signal renameChosen()
+
     allowedOrientations: Orientation.All
 
     function choose(action) {
         switch (action) {
         case "rename":
-            pageStack.replace(Qt.resolvedUrl("../../dialogs/RenameDialog.qml"), { "uri": page.uri })
+            page.renameChosen()
             break
         case "favourite":
             pageStack.replace(Qt.resolvedUrl("../../pages/FavouritePage.qml"), { "uri": page.uri, "isDir": false })

@@ -611,6 +611,14 @@ bridge).
   wrapped to the page's width, code blocks and tables included), audio
   and video (QtMultimedia), archives (as locations), PDFs (PRV-12). Office documents,
   databases, packages and other binary files go to *Open with*.
+  The image viewer is Jolla Gallery's (its BSD-3-Clause QML adapted, as
+  `Sailfish.Gallery` is not a Harbour import): full screen on black, the folder's
+  images swiped sideways in the folder's order. A tap shows or hides the overlay:
+  details top left, close top right, *Delete*, *Open with*, *Share* and *More*
+  (OPS-12) at the bottom. A pinch or a double tap zooms in and puts the overlay away;
+  zoomed, drags pan and neither swipe nor go back, and a tap zooms out. A swipe down
+  or up goes back (a hint says so the first two times). After a delete it shows the
+  neighbour; after a rename, the image under its new name.
 - PRV-5: *Open with* for local files uses the system handler as Harbour File Browser
   does (mechanism to verify in the sandbox, §24.1).
 - PRV-6: Remote files opened in another app must be readable by that sandboxed app, so

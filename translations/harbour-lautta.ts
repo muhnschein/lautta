@@ -1028,10 +1028,6 @@
         <source>Open with</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-viewers-image-count">
-        <source>%1 of %2</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-viewers-share">
         <source>Share</source>
         <translation type="unfinished"></translation>
@@ -2645,6 +2641,10 @@
     </message>
     <message id="lautta-browse-unmount">
         <source>Unmount</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-image-back-hint">
+        <source>Swipe down to go to previous view</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
