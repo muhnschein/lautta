@@ -230,7 +230,16 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 
 ### Viewers (boards: ImageViewer, ImageExif, TextViewer, TextViewerPulley, Markdown, PdfViewer, VideoPlayer, AudioPlayer, OpenRemote)
 
-- `TextDocument { uri }` (text, truncated, validUtf8, size; read-only),
+- `TextDocument { uri }` (text, truncated, validUtf8, size; read-only; PRV-13: `syntax`
+  (the grammar's name, "" for plain text), `highlighted` (the first lines, or all, have
+  colours; may turn true after `loaded`), `styledRow(text, line, start, colours)` (a
+  row of `TextRows.rows` (its `text`, `line` and `start`) as Qt StyledText for a
+  `Text.StyledText` label: every character escaped, whitespace kept, coloured with
+  `colours` as its part of the line; a line without colours, or past the end, comes
+  back escaped only)),
+  `components/viewers/SyntaxColours.js` `palette(Theme)` (the `colours` for the
+  ambience: `class=#rrggbb,…` for comment, keyword, operator, string, number,
+  constant, type, function, variable, heading, markup, link, inserted, deleted),
   `MarkdownDocument { uri }` (html), `ExifModel { uri }`, `MediaSource { uri }` (QIODevice for QtMultimedia, PRV-8),
   image provider `image://lautta-thumb/<uri>?size=N` for remote thumbnails (PRV-2) and
   `image://lautta-file/<uri>` for remote full images.
@@ -259,7 +268,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `components/viewers/ImageMorePage.qml { uri }`, whose Rename signals `renameChosen()` for
   the viewer to rename), `viewers/TextViewer.qml { uri, wrap }`
   (`wrap` true by default; its rows, tabs expanded and long lines split, come from
-  `components/viewers/TextRows.js`),
+  `components/viewers/TextRows.js` `rows(text)`: `{ rows: [{ number, text, line,
+  start }], longest, lines }`, `line` from 0 and `start` the row's first column in
+  the line with tabs expanded, in UTF-16 units),
   `viewers/MarkdownViewer.qml { uri }`, `viewers/PdfViewer.qml { uri }`, `viewers/PdfContentsPage.qml { fileName, outline,
   pageCount, currentPage }` (signal `chosen(index)`), `viewers/MediaPlayer.qml { uri, video }`,
   `dialogs/OpenRemoteDialog.qml { uri }`, `dialogs/PdfPasswordDialog.qml { fileName, wrong }`,

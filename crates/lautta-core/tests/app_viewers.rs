@@ -115,6 +115,62 @@ async fn markdown_is_rendered_and_truncation_is_reported() {
     assert!(!r.truncated);
 }
 
+/// The viewer's lines once the colouring is done.
+async fn colours_of(
+    viewed: lautta_core::app_viewers::ViewedText,
+) -> lautta_core::preview::highlight::ColouredText {
+    match viewed.colouring {
+        Some(job) => job.finish().await.unwrap(),
+        None => viewed.lines,
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_text_viewer_gets_colours_by_name_or_first_line() {
+    let h = home().await;
+    h.nas
+        .add_file("configure", b"#!/bin/sh\r\necho \"<img src=x>\"\r\n", 0);
+    h.nas.add_file("notes.txt", b"#!/bin/sh\necho <b>\n", 0);
+    let v = h.core.view_text(&uri("lautta://nv-nas/configure")).await.unwrap();
+    assert_eq!((v.size, v.truncated, v.valid_utf8), (Some(31), false, true));
+    let lines = colours_of(v).await;
+    assert_eq!(lines.syntax(), Some("Bourne Again Shell (bash)"));
+    assert_eq!((lines.line_count(), lines.coloured_lines()), (2, 2));
+    let palette = lautta_core::preview::highlight::Palette::parse("string=#00ff00");
+    let styled = lines.styled_row(1, 0, lines.line(1).unwrap(), &palette);
+    assert!(
+        styled.contains("<font color=\"#00ff00\">&quot;&lt;img src=x&gt;&quot;</font>"),
+        "{styled}"
+    );
+
+    let plain = colours_of(h.core.view_text(&uri("lautta://nv-nas/notes.txt")).await.unwrap()).await;
+    assert_eq!((plain.syntax(), plain.coloured_lines()), (None, 0));
+    assert_eq!(plain.styled_row(1, 0, "echo <b>", &palette), "echo &lt;b&gt;");
+    let err = h
+        .core
+        .view_text(&uri("lautta://nv-nas/none.sh"))
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::NotFound);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_long_file_comes_plain_and_is_coloured_later() {
+    let h = home().await;
+    let script = "for f in *; do echo \"$f\"; done # loop\n".repeat(15_000);
+    h.nas.add_file("long.sh", script.as_bytes(), 0);
+    let v = h.core.view_text(&uri("lautta://nv-nas/long.sh")).await.unwrap();
+    assert!(v.colouring.is_some(), "not done within the first wait");
+    assert_eq!((v.lines.line_count(), v.lines.coloured_lines()), (15_000, 0));
+    assert_eq!(
+        v.lines.line(14_999),
+        Some("for f in *; do echo \"$f\"; done # loop")
+    );
+    let lines = colours_of(v).await;
+    assert!(lines.coloured_lines() > 0, "the first lines at least");
+    assert_eq!(lines.line_count(), 15_000);
+}
+
 #[tokio::test]
 async fn exif_report_reads_the_head_of_the_file() {
     let h = home().await;

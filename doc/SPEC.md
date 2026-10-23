@@ -271,8 +271,8 @@ against the target rustc.
 - RS-2: Native linkage only to HBR-2 libraries. `cargo-deny` enforces an allow-list of
   crates with `links =` keys and of licences. Preferred pure-Rust backends: `zbus`
   (no libdbus), `miniz_oxide` via `flate2`, `zip`, `tar`, `image` (jpeg, png, gif, webp),
-  `kamadak-exif`, `pulldown-cmark`, `notify` (inotify), `rustix` (renameat2, statx,
-  copy_file_range). `rusqlite` links the system `libsqlite3.so.0`; `xz2` and `bzip2` link
+  `kamadak-exif`, `pulldown-cmark`, `syntect` with `fancy-regex` (PRV-13), `notify`
+  (inotify), `rustix` (renameat2, statx, copy_file_range). `rusqlite` links the system `libsqlite3.so.0`; `xz2` and `bzip2` link
   the system `liblzma`/`libbz2`. zstd, if used, is linked statically.
 - RS-3: Binary: `#![no_main]`, `#[no_mangle] pub extern "C" fn main(argc, argv)`, linked
   with `-Wl,--export-dynamic-symbol=main`, PIE. Arguments come from `main`'s parameters,
@@ -292,6 +292,21 @@ against the target rustc.
 - RS-8: Error model: `lautta_core::Error` mirrors the netvfs v2 taxonomy one-to-one
   (`AuthFailed`, `ServerIdentityChanged`, `NotFound`, `Locked`, …) plus local `io`
   mappings, so the UI has one message table (§20) for every provider.
+- RS-9: Third-party data built into the binary, with its licence: `syntect` 5.3 (MIT,
+  © Tristan Hume, Keith Hall, Google Inc and contributors) embeds its default grammar
+  set (`default_newlines.packdump`, PRV-13), made from the Sublime Text grammars of
+  github.com/sublimehq/Packages, which that repository licenses as "Permission to
+  copy, use, modify, sell and distribute this software is granted. This software is
+  provided "as is" without express or implied warranty, and with no claim as to its
+  suitability for any purpose", except files that carry a licence of their own. The
+  set holds Plain Text, ASP, ActionScript, AppleScript, Batch File, NAnt, C#, C, C++,
+  CSS, Clojure, D, Diff, Erlang, Go, Graphviz, Groovy, HTML (and its ASP, Erlang, JSP,
+  Rails, Tcl variants), Haskell, Java, JavaDoc, Java Properties, JSON, JavaScript,
+  BibTeX, LaTeX, TeX, Lisp, Lua, Makefile, Markdown, MultiMarkdown, MATLAB, OCaml,
+  Objective-C(++), PHP, Pascal, Perl, Python, R, Rd, Ruby (Haml, Rails), regular
+  expressions, reStructuredText, Rust, SQL, Scala, shell (bash), Tcl, Textile, XML and
+  YAML. Crates it links in that the app did not have: `fancy-regex`, `bincode` 1 (MIT),
+  `regex-automata`, `regex-syntax`, `bit-set`, `bit-vec`, `fnv` (MIT or Apache-2.0).
 
 ## 7. netvfs bridge integration
 
@@ -607,8 +622,9 @@ bridge).
   *Don't wrap lines* in the pulley lets lines wider than the page scroll sideways
   instead, and then a swipe across the text scrolls it and the back indicator goes
   back; tabs to the next multiple of 4 columns; a line longer than 1000 characters
-  goes on over further rows), Markdown (pulldown-cmark → Qt rich text subset,
-  wrapped to the page's width, code blocks and tables included), audio
+  goes on over further rows; coloured by language, PRV-13), Markdown (pulldown-cmark
+  → Qt rich text subset, wrapped to the page's width, code blocks and tables
+  included), audio
   and video (QtMultimedia), archives (as locations), PDFs (PRV-12). Office documents,
   databases, packages and other binary files go to *Open with*.
   The image viewer is Jolla Gallery's (its BSD-3-Clause QML adapted, as
@@ -668,6 +684,32 @@ bridge).
   "2 of 17 · page 3", or "Not found in 12 pages" once every page is searched. At
   most 10 000 hits per document, 1 000 per page, in its first 200 000 characters; an
   encrypted PDF is searchable while it is open after unlocking.
+- PRV-13: The text viewer colours a file by its language. The grammar comes from the
+  file's whole name (`Makefile`, `.bashrc`), then its extension, else its first line
+  (`#!/bin/sh` is a shell script); `.txt` and unknown types stay plain. Grammars are the
+  Sublime Text ones bundled with `syntect`, run by its pure-Rust regex engine
+  (`fancy-regex`; no oniguruma, RS-2); a grammar's scopes come down to fixed classes
+  (comment, keyword, operator, string, number, constant, type, function, variable,
+  heading, markup, link, inserted, deleted, plain) whose colours are the ambience's:
+  keywords and headings the highlight colour, operators and Markdown markup the
+  secondary highlight colour, comments the secondary colour, removed diff lines the error
+  colour, the others hues turned from the highlight colour and made readable for the
+  colour scheme by the theme; no colour comes from a grammar or theme file. The whole
+  document (≤ 1 MiB, PRV-4) is coloured on the blocking pool line after line, the
+  parser's state carried over so multi-line strings, comments and here-documents stay
+  whole, within 3 s: a line over 4 KiB, a grammar error or the end of that time leaves
+  that line and all after it plain, and a colouring still busy 0.5 s later is dropped
+  (the whole file plain; a line cannot be cut short). The text appears with its colours
+  when they are ready within 250 ms, else plain at once and coloured when they arrive.
+  Each of the viewer's rows (PRV-4: tabs expanded, a long line split) reaches the view
+  as Qt StyledText made in the core from the row's own characters, each in the colour
+  of its part of the line, found through the same tab expansion (columns in UTF-16
+  units, as the rows count them): every character is escaped (`<`, `>`, `&`, `"`),
+  whitespace kept as no-break spaces (a lone space between words stays a space, where
+  wrapping can break), NUL shown as U+FFFD, and the only tags are `<font color>` with a
+  colour checked to be `#` and hex digits, so a file cannot bring in images, links or
+  entities. Plain files get the same escaping without colours. Markdown's *View source*
+  is coloured as Markdown.
 
 ## 13. Search and organisation
 

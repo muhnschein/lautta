@@ -28,6 +28,18 @@ all = { level = "deny", priority = -1 }
 debug = "line-tables-only"
 incremental = false
 
+# The text viewer's grammars (SPEC PRV-13) compile and run their regexes in
+# these crates; unoptimised they are tens of times slower, too slow for the
+# host tests and for the QML checks on the emulated target.
+[profile.dev.package.syntect]
+opt-level = 3
+[profile.dev.package.fancy-regex]
+opt-level = 3
+[profile.dev.package.regex-automata]
+opt-level = 3
+[profile.dev.package.regex-syntax]
+opt-level = 3
+
 [profile.release]
 panic = "abort"
 lto = "fat"
