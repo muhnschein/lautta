@@ -61,28 +61,6 @@ function nearbyLine(provider, host) {
     return parts.join(" · ")
 }
 
-// Recents: "Opened · NAS › /srv/photos", "Transferred to NAS".
-function recentKindLine(kind, place) {
-    var what
-    switch (kind) {
-    case "previewed":
-        //% "Previewed"
-        what = qsTrId("lautta-recents-previewed")
-        break
-    case "transferred":
-        if (place.length > 0)
-            //% "Transferred to %1"
-            return qsTrId("lautta-recents-transferred-to").arg(place)
-        //% "Transferred"
-        return qsTrId("lautta-recents-transferred")
-    default:
-        //% "Opened"
-        what = qsTrId("lautta-recents-opened")
-        break
-    }
-    return place.length > 0 ? what + " · " + place : what
-}
-
 // Colours offered for favourites.
 var colours = ["#e7a33c", "#7ec97a", "#e5604f", "#4fa3e5", "#9bd26a", "#b57edc", "#e57fb0", "#8a9aa6"]
 

@@ -5,7 +5,8 @@
 //!
 //! A change shows in place ([`steps`]): a switch changes its row, a move
 //! moves it, so the list keeps its scroll position and its delegates, and
-//! nothing is rebuilt under the user's finger.
+//! nothing is rebuilt under the user's finger. A dragged row moves at once
+//! ([`BrowseLayoutModel::moveRow`]) and is stored behind it.
 
 use super::{cell_data, error_parts, role_names, store_changed, Cell};
 use crate::runtime::{core, spawn_then};
@@ -170,6 +171,34 @@ fn in_order(places: &[usize]) -> Vec<bool> {
     stays
 }
 
+/// The section, item and new place in its section of list row `from` moved
+/// to list row `to`; `None` unless both are rows of one section whose rows
+/// move, and different ones.
+fn carried(rows: &[Vec<Cell>], from: i32, to: i32) -> Option<(String, String, usize)> {
+    let text = |row: i32, col: usize| match cell_at(rows, row, col) {
+        Some(Cell::Str(s)) => Some(s.clone()),
+        _ => None,
+    };
+    let section = text(from, 0).filter(|s| text(to, 0).as_ref() == Some(s))?;
+    let item = text(from, 2).filter(|_| from != to)?;
+    let place = match (cell_at(rows, from, 6), cell_at(rows, to, 5)) {
+        (Some(Cell::Bool(true)), Some(Cell::Int(p))) => usize::try_from(*p).ok()?,
+        _ => return None,
+    };
+    Some((section, item, place))
+}
+
+/// Gives list rows `first..=last` of one section the places `base`,
+/// `base + 1`, …: after a move within the section the places stay where
+/// they were and the rows changed.
+fn renumber(rows: &mut [Vec<Cell>], first: usize, last: usize, base: i64) {
+    for (place, row) in (base..).zip(rows[first..=last].iter_mut()) {
+        if let Some(cell) = row.get_mut(5) {
+            *cell = Cell::Int(place);
+        }
+    }
+}
+
 /// Makes `step` on `rows`, taking the values of new rows from `new`.
 fn apply_step(rows: &mut Vec<Vec<Cell>>, new: &[Vec<Cell>], step: Step) {
     match step {
@@ -195,6 +224,10 @@ pub struct BrowseLayoutModel {
     setHidden: qt_method!(fn(&mut self, section: QString, item: QString, hidden: bool)),
     /// Moves a row to `index` within its section.
     moveTo: qt_method!(fn(&mut self, section: QString, item: QString, index: i32)),
+    /// Moves list row `from` to list row `to` of its section at once, so
+    /// the dragged row follows the finger, and stores the new order;
+    /// `false` when the rows are not of one section whose rows move.
+    moveRow: qt_method!(fn(&mut self, from: i32, to: i32) -> bool),
     /// Every row shown again, in its natural order (favourites keep theirs).
     restoreDefaults: qt_method!(fn(&mut self)),
     /// The section of list row `row`, `""` outside the list.
@@ -210,8 +243,12 @@ pub struct BrowseLayoutModel {
     /// before, so a switch and Restore defaults apply in the order made.
     last: Option<oneshot::Receiver<()>>,
     /// The last reload asked for; an older one that ends later is dropped,
-    /// it would show a switch flipping back.
+    /// it would show a switch flipping back. A change makes the reloads
+    /// under way old too.
     generation: u64,
+    /// Changes made and not stored yet. The rows are read again only once
+    /// all are stored: rows read in between would move a dragged row back.
+    pending: usize,
 }
 
 /// Runs a store write off the runtime's workers.
@@ -286,7 +323,10 @@ impl BrowseLayoutModel {
             let (kind, message) = error_parts(&e);
             model.failed(kind, message);
         }
-        model.reload();
+        model.pending = model.pending.saturating_sub(1);
+        if model.pending == 0 {
+            model.reload();
+        }
     }
 
     /// Runs `work` after the changes made before it, then shows the rows.
@@ -295,6 +335,8 @@ impl BrowseLayoutModel {
         F: Future<Output = lautta_core::Result<()>> + Send + 'static,
     {
         let Some(core) = core() else { return };
+        self.pending += 1;
+        self.generation += 1;
         let before = self.last.take();
         let (stored, after) = oneshot::channel();
         self.last = Some(after);
@@ -321,6 +363,25 @@ impl BrowseLayoutModel {
         let (section, item) = (section.to_string(), item.to_string());
         let index = usize::try_from(index).unwrap_or(0);
         self.change(move |core| async move { core.move_browse_row(&section, &item, index).await });
+    }
+
+    fn moveRow(&mut self, from: i32, to: i32) -> bool {
+        let Some((section, item, place)) = carried(&self.rows, from, to) else {
+            return false;
+        };
+        // `carried` found both rows, so both are list rows.
+        let (from, to) = (from as usize, to as usize);
+        let (first, last) = (from.min(to), from.max(to));
+        let base = match self.rows[first].get(5) {
+            Some(Cell::Int(p)) => *p,
+            _ => 0,
+        };
+        self.make(Step::Move { from, to }, &[]);
+        renumber(&mut self.rows, first, last, base);
+        let (top, bottom) = (self.row_index(first as i32), self.row_index(last as i32));
+        self.data_changed(top, bottom);
+        self.change(move |core| async move { core.move_browse_row(&section, &item, place).await });
+        true
     }
 
     fn restoreDefaults(&mut self) {
@@ -533,6 +594,54 @@ mod tests {
         assert_eq!(in_order(&[1, 2, 3, 0]), [true, true, true, false]);
         assert_eq!(in_order(&[0, 2, 1, 3]).iter().filter(|s| **s).count(), 3);
         assert!(in_order(&[]).is_empty());
+    }
+
+    fn device(names: &str) -> Vec<Vec<Cell>> {
+        cells(
+            &names
+                .chars()
+                .map(|c| row("device", "folder", &c.to_string()))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    #[test]
+    fn a_carried_row_moves_within_its_section_only() {
+        let rows = [
+            cells(&[row("favourites", "favourite", "1")]),
+            device("acd"),
+            cells(&[row("volumes", "volume", "sd"), row("volumes", "volume", "usb")]),
+        ]
+        .concat();
+        let carry = |from, to| carried(&rows, from, to);
+        assert_eq!(carry(1, 3), Some(("device".into(), "a".into(), 2)));
+        assert_eq!(carry(3, 2), Some(("device".into(), "d".into(), 1)));
+        assert_eq!(
+            (carry(1, 0), carry(0, 1)),
+            (None, None),
+            "not into another section"
+        );
+        assert_eq!(carry(4, 5), None, "volumes stay put");
+        assert_eq!(carry(2, 2), None, "nowhere to go");
+        assert_eq!((carry(3, 6), carry(-1, 1)), (None, None), "rows outside the list");
+    }
+
+    #[test]
+    fn places_follow_a_move() {
+        let mut rows = [cells(&[row("favourites", "favourite", "1")]), device("abcd")].concat();
+        apply_step(&mut rows, &[], Step::Move { from: 1, to: 3 });
+        renumber(&mut rows, 1, 3, 0);
+        let order: Vec<_> = rows.iter().map(|r| (r[2].clone(), r[5].clone())).collect();
+        assert_eq!(
+            order,
+            [
+                (Cell::s("1"), Cell::Int(0)),
+                (Cell::s("b"), Cell::Int(0)),
+                (Cell::s("c"), Cell::Int(1)),
+                (Cell::s("a"), Cell::Int(2)),
+                (Cell::s("d"), Cell::Int(3)),
+            ]
+        );
     }
 
     #[test]

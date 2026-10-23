@@ -1410,14 +1410,6 @@
         <source>Nothing was lost. Finished files stay where they are.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-xfr-menu-clear">
-        <source>Clear history</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-remorse-clear">
-        <source>Clearing history</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-xfr-menu-resume-all">
         <source>Resume all</source>
         <translation type="unfinished"></translation>
@@ -1474,22 +1466,6 @@
     </message>
     <message id="lautta-browse-server-connected">
         <source>Connected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-previewed">
-        <source>Previewed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-transferred-to">
-        <source>Transferred to %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-transferred">
-        <source>Transferred</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-opened">
-        <source>Opened</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-colour-amber">
@@ -2559,6 +2535,14 @@
     </message>
     <message id="lautta-favourite-icon">
         <source>Icon</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-menu-clear-activity">
+        <source>Clear activity history</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-remorse-clear-activity">
+        <source>Clearing activity history</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

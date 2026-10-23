@@ -55,7 +55,9 @@ Methods:
   `/apps/harbour-lautta/settings`) and calls `App.loadSettings(json)` at start (SPEC §18).
 - `childUri(parentUri, name) → string`, `parentUri(uri) → string`, `nameOf(uri) → string`,
   `displayAddress(uri) → string` (file:// path or netvfs URL without secrets, LOC-7),
-  `locationName(uri) → string`, `isLocal(uri) → bool`.
+  `locationName(uri) → string`, `isLocal(uri) → bool`, `isRemote(uri) → bool` (on a
+  server, LOC-7, also one that is gone; archives are neither: lines naming the location
+  mark it, §15.5).
 - `copy(uris)`, `cut(uris)`, `clearClipboard()`, `canPasteInto(uri) → bool`,
   `paste(destUri)` (→ `Operations` flow).
 - `undo()`; signal `undone(ok)`.
@@ -88,7 +90,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `connecting` (also while the bridge reconnects, NVB-12), `disconnected` (also recent
   ad-hoc servers), `failed`, or empty when the bridge reports none; `connectionError` is
   the netvfs error name of a `failed` one (`AuthFailed`, `Timeout`, …).
-  `components/browse/ServerStatus.js` turns them into the row's line and dot. `refresh()`
+  `components/browse/ServerStatus.js` turns them into the row's status (text and dot, on
+  the right where folders show their count, §15.2). `refresh()`
   rescans the device folders and volumes first (LOC-3); the model also follows location
   changes by itself, and a changed row changes in place.
 - `FavouritesModel` (roles `itemId`, `uri`, `label`, `colour`, `place`, `isDir`, `icon`
@@ -118,9 +121,14 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `BrowseLayoutModel` (roles `section`, `kind`, `item`, `name`, `hidden`, `place` (the
   place in the section; no role is called `index`, which would hide the delegate's
   `index`), `movable`; `reload()`, `setHidden(section, item, hidden)`,
-  `moveTo(section, item, index)`, `restoreDefaults()`, `sectionAt(row)`, `placeAt(row)`,
-  `itemAt(row)`; changes arrive as row changes, moves, insertions and removals, not a
-  reset); `pages/BrowseSettingsPage.qml`.
+  `moveTo(section, item, index)`, `moveRow(fromRow, toRow) → bool` (list rows of one
+  section whose rows move: the row moves at once, so a dragged row follows the finger,
+  and the order is stored behind it), `restoreDefaults()`, `sectionAt(row)`,
+  `placeAt(row)`, `itemAt(row)`; changes arrive as row changes, moves, insertions and
+  removals, not a reset); `pages/BrowseSettingsPage.qml` with
+  `components/browse/BrowseLayoutDelegate.qml { layoutModel, layoutSection, layoutItem,
+  layoutKind, layoutName, layoutHidden, layoutMovable }` (the page passes the roles;
+  signal `toggled()`).
 
 ### Directory (boards: Directory, DirectoryPulley, DirectoryContext, DirectorySelect, DirectorySelectPulley, DirectoryGrid, DirectoryLandscape, PathMenu, DirectoryRemorse, ImageDeleteRemote, ViewOptions, NewItem, Rename, FolderPicker, FolderPickerPulley, StateEmpty, StateNoAccess, StateOffline, StateError, StateLarge)
 
@@ -244,7 +252,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   banner and the app-wide `KeepAlive`.
 - `components/ErrorText.js`, `components/Open.js`, `components/FileIcon.qml { category,
   isDir, thumbnailSource }`, `components/IconRow.qml` (icon row for context menus),
-  `components/UndoBanner.qml`.
+  `components/UndoBanner.qml`, `components/PlaceLabel.qml { before, text, remote, color,
+  fontSize, horizontalAlignment }` (a line naming a location: a remote one gets the small
+  server icon before its name, §15.5).
 
 ## Tests
 

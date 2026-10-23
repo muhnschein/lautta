@@ -310,14 +310,15 @@ what the app does.
   (`RequestConsent`). `denied` hides the section and shows the reason in *About*.
 - NVB-4: Locations: `ListLocations` and `LocationsChanged` populate *Servers* (accounts
   and this app's ad-hoc servers) and *Nearby* (`Discover`). Attention states from netvfs
-  (`auth-failed`, `server-identity-changed`) show as badges. A server row's second line
-  tells only how its connection stands, from the `state` and `stateError` netvfs lists
-  for each location (netvfs XB-10, XB-12; every `LocationsChanged` lists again and the
-  row changes in place): *Connected* (a filled dot), *Connecting…* (busy indicator),
-  *Not connected* (a ring: never used, closed when idle or dropped; also a recent ad-hoc
-  server), *Couldn't connect* (a dot in the error colour; *Sign-in failed* or *Identity
+  (`auth-failed`, `server-identity-changed`) show as badges. A server row's status (on
+  the right, where a folder shows its item count, §15.2) tells only how its connection
+  stands, from the `state` and `stateError` netvfs lists for each location (netvfs
+  XB-10, XB-12; every `LocationsChanged` lists again and the row changes in place):
+  *Connected* (a filled dot), *Connecting…* (busy indicator), *Not connected* (a ring:
+  never used, closed when idle or dropped; also a recent ad-hoc server), *Couldn't
+  connect* (a dot in the error colour; *Sign-in failed* or *Identity
   changed* when `stateError` is `AuthFailed` or `ServerIdentityChanged`). An attention
-  comes first (warning icon and its text); a bridge that reports no state gets no line
+  comes first (warning icon and its text); a bridge that reports no state gets no status
   rather than a wrong one. No protocol or host is shown. The connection state is not the
   location's status: a server that is not connected stays browsable, and opening it
   connects.
@@ -422,13 +423,16 @@ what the app does.
   again.
 - BRW-12: The Browse page is configurable without a wall of options (prior art: iOS
   Files *Browse › Edit*, Finder sidebar settings, Dolphin *Places › Hide*). *Settings ›
-  Browse page* lists every row in Browse order: a switch per folder, *Recents*,
-  *Recently deleted*, volume and server (hiding the row only; the bin and recents keep
-  working), one switch for all nearby servers, and a drag handle to move rows within
-  their section (favourites move only; volumes and nearby stay put). A switch or a move
-  changes its row in place: the list keeps its position, and a drag shows only once the
-  finger moved on the handle. A half-size live preview of the Browse page sits
-  below, as in Salama's start page settings; the pulley has *Restore defaults*.
+  Browse page* lists every row in Browse order, laid out and moved as Salama's tab
+  group view: a switch per folder, *Recents*, *Recently deleted*, volume and server
+  (hiding the row only; the bin and recents keep working), one switch for all nearby
+  servers, a tap on the row switching it, and a grip to move rows within their section
+  (favourites move only; volumes and nearby stay put). A press on the grip picks the row
+  up at once; it follows the finger, the rows it passes slide aside and its new order is
+  stored as it moves, and let go it settles into its place. A switch or a move changes
+  its row in place: the list keeps its position and a press lights one row only. A
+  half-size live preview of the Browse page sits below, as in Salama's start page
+  settings; the pulley has *Restore defaults*, which also puts *Recents* first again.
   Long-press *Hide from Browse* is the shortcut. Stored in `browse_layout`; a removed
   account's rows are purged with it (SEC-5).
 
@@ -628,7 +632,8 @@ bridge).
   the label, the folder, colour and icon, no pulley: a pick is saved at once, the label
   when typing pauses and when the page is left. Removing is Browse's long-press menu.
 - ORG-2: Recents: files opened, previewed or transferred, newest first, in the date
-  sections of the Activity page (§15.4, without *In progress*); not filterable;
+  sections of the Activity page (§15.4, without *In progress*); each row is the file's
+  name and where it is ("NAS › /srv/photos", not how it was used); not filterable;
   clearable (pulley *Clear recents*); can be switched off in Settings. Opened from its
   row in Browse's *On this device*, there while recents are on.
 
@@ -672,11 +677,12 @@ flowchart TD
 
 ### 15.2 Browse
 
-Sections: *Favourites*, *On this device* (user folders, *Recents* while recents are
-remembered (ORG-2), *Recently deleted* while it is on), *Android*, *Volumes* (when
-present), *Servers* (bridge only: accounts, recent ad-hoc servers, each with its
-connection state and status dot (NVB-4) or attention badge), *Nearby* (bridge only,
-hidden when empty). Rows the user hid are left out and rows keep the order the user gave
+Sections: *Favourites*, *On this device* (*Recents* while recents are remembered
+(ORG-2), first until the user orders the section, then the user folders and *Recently
+deleted* while it is on), *Android*, *Volumes* (when present), *Servers* (bridge only:
+accounts, recent ad-hoc servers, each with its connection state and status dot (NVB-4)
+or attention badge on the right, where a folder shows its item count, so a server row
+is as tall as a folder row), *Nearby* (bridge only, hidden when empty). Rows the user hid are left out and rows keep the order the user gave
 them (BRW-12). Tapping a nearby or recent ad-hoc server opens *Connect to server*
 prefilled (LOC-6, NVB-6).
 
@@ -687,8 +693,8 @@ favourites*; folder: *Add to favourites*, *Copy address*, *Hide from Browse*; vo
 Browse*; account: *Edit server*, *Update sign-in* or *Review server identity* while
 netvfs asks for it (NVB-5), *Copy address*, *Hide from Browse*; ad-hoc server:
 *Connect* (recent ones), *Copy address*, *Hide from Browse*, *Remove from recents*.
-Connections are netvfs' to open and close: no menu disconnects a server. Swipe left:
-Activity.
+Connections are netvfs' to open and close: no menu disconnects a server. Nothing is
+attached to swipe to: Activity is in the pulley and the activity bar (XFR-13).
 
 ### 15.3 Directory page
 
@@ -721,7 +727,7 @@ starts at last midnight, today counts as one of the 7 and of the 30, and a time 
 now (the clock was moved back) is today. Recents use the same sections (ORG-2). Rows
 with direction icon, title (past tense once completed: "Deleted 4 items"), progress,
 "1.2 GB of 4.0 GB · 11.4 MB/s · 4 min"; the row's state (running, waiting for you,
-paused) is in its status line and context menu. Pulley: *Clear history*, *Resume all*,
+paused) is in its status line and context menu. Pulley: *Clear activity history*, *Resume all*,
 *Pause all*, as they apply. The activity bar (XFR-13) leads here from any depth.
 
 ### 15.5 Rules
@@ -737,6 +743,11 @@ paused) is in its status line and context menu. Pulley: *Clear history*, *Resume
   `%n`); `.qm` files under `/usr/share/harbour-lautta/translations`.
 - UI-8: Standalone mode shows no traces of bridge features: no empty *Servers* section,
   no disabled menu entries.
+- UI-9: A line that names a place on a server (LOC-7) has a small server icon (the
+  theme's `icon-m-computer`, the icon of Browse's server rows) right before the name, in
+  the line's colour: a favourite's place in Browse and in the favourite dialog, a
+  recent's place, the folder headers of a search on a server and the destination in an
+  Activity title. Local places have none.
 
 ## 16. Security and privacy
 

@@ -17,8 +17,6 @@ import "../components/browse/ServerStatus.js" as ServerStatus
 Page {
     id: page
 
-    // The page-stack attachment (swipe left: Transfers) is made once.
-    property bool attached
     // The rows; tests give the page a ListModel with every kind of row.
     property var listModel: locations
     readonly property bool discovering: status === PageStatus.Active
@@ -36,10 +34,6 @@ Page {
             return
         locations.refresh()
         favourites.reload()
-        if (!attached) {
-            attached = true
-            pageStack.pushAttached(Qt.resolvedUrl("TransfersPage.qml"))
-        }
     }
     Component.onCompleted: {
         locations.refresh()
@@ -193,8 +187,10 @@ Page {
             readonly property bool hasMenu: kind === "favourite" || kind === "folder" || kind === "volume"
                                             || kind === "account" || kind === "adhoc" || kind === "adhocRecent"
 
+            // A server's status sits on the right, so a server row is as
+            // tall as a folder row (§15.2).
             contentHeight: banner ? bannerContent.height + 2 * Theme.paddingMedium
-                                  : (subtitle.length > 0 || isServer ? Theme.itemSizeMedium : Theme.itemSizeSmall)
+                                  : (subtitle.length > 0 ? Theme.itemSizeMedium : Theme.itemSizeSmall)
             menu: hasMenu ? contextMenu : null
             enabled: true
 
@@ -222,7 +218,7 @@ Page {
                 anchors {
                     left: parent.left
                     leftMargin: Theme.horizontalPageMargin + Theme.iconSizeMedium + Theme.paddingLarge
-                    right: countLabel.visible ? countLabel.left : parent.right
+                    right: countLabel.visible ? countLabel.left : (statusRow.visible ? statusRow.left : parent.right)
                     rightMargin: Theme.horizontalPageMargin
                     verticalCenter: parent.verticalCenter
                 }
@@ -233,56 +229,67 @@ Page {
                     color: row.highlighted ? Theme.highlightColor : Theme.primaryColor
                     truncationMode: TruncationMode.Fade
                 }
-                Label {
+                // A remote favourite's place has the server icon (§15.5).
+                PlaceLabel {
                     visible: row.subtitle.length > 0
                     width: parent.width
                     text: row.subtitle
-                    font.pixelSize: Theme.fontSizeExtraSmall
+                    remote: row.kind === "favourite" && App.isRemote(model.uri)
                     color: row.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
-                    truncationMode: TruncationMode.Fade
                 }
-                Row {
-                    visible: row.isServer && row.serverText.length > 0
-                    width: parent.width
-                    spacing: Theme.paddingMedium
+            }
 
-                    // Connected: filled; failed: in the error colour; not
-                    // connected: a ring.
-                    Rectangle {
-                        visible: row.serverIndicator === "connected" || row.serverIndicator === "failed"
-                                 || row.serverIndicator === "disconnected"
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: Theme.paddingMedium
-                        height: width
-                        radius: width / 2
-                        color: row.serverIndicator === "connected" ? Theme.highlightColor
-                               : (row.serverIndicator === "failed" ? Theme.errorColor : "transparent")
-                        border.width: row.serverIndicator === "disconnected" ? 1 : 0
-                        border.color: Theme.secondaryColor
-                    }
-                    HighlightImage {
-                        visible: row.serverIndicator === "warning"
-                        anchors.verticalCenter: parent.verticalCenter
-                        source: "image://theme/icon-s-warning"
-                        width: Theme.iconSizeExtraSmall
-                        height: width
-                        color: Theme.primaryColor
-                        highlighted: row.highlighted
-                    }
-                    BusyIndicator {
-                        visible: row.serverIndicator === "busy"
-                        running: visible
-                        anchors.verticalCenter: parent.verticalCenter
-                        size: BusyIndicatorSize.ExtraSmall
-                    }
-                    Label {
-                        width: parent.width - x
-                        text: row.serverText
-                        font.pixelSize: Theme.fontSizeExtraSmall
-                        color: model.status === "attention" ? Theme.errorColor
-                               : (row.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor)
-                        truncationMode: TruncationMode.Fade
-                    }
+            // How a server's connection stands, where folders show their
+            // count and in its font and colour; the name gives way first.
+            Row {
+                id: statusRow
+
+                visible: !row.banner && row.isServer && row.serverText.length > 0
+                anchors {
+                    right: parent.right
+                    rightMargin: Theme.horizontalPageMargin
+                    verticalCenter: parent.verticalCenter
+                }
+                spacing: Theme.paddingSmall
+
+                // Connected: filled; failed: in the error colour; not
+                // connected: a ring.
+                Rectangle {
+                    visible: row.serverIndicator === "connected" || row.serverIndicator === "failed"
+                             || row.serverIndicator === "disconnected"
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Theme.paddingMedium
+                    height: width
+                    radius: width / 2
+                    color: row.serverIndicator === "connected" ? Theme.highlightColor
+                           : (row.serverIndicator === "failed" ? Theme.errorColor : "transparent")
+                    border.width: row.serverIndicator === "disconnected" ? 1 : 0
+                    border.color: Theme.secondaryColor
+                }
+                HighlightImage {
+                    visible: row.serverIndicator === "warning"
+                    anchors.verticalCenter: parent.verticalCenter
+                    source: "image://theme/icon-s-warning"
+                    width: Theme.iconSizeExtraSmall
+                    height: width
+                    color: Theme.primaryColor
+                    highlighted: row.highlighted
+                }
+                BusyIndicator {
+                    visible: row.serverIndicator === "busy"
+                    running: visible
+                    anchors.verticalCenter: parent.verticalCenter
+                    size: BusyIndicatorSize.ExtraSmall
+                }
+                Label {
+                    // A long translation fades rather than push the name out.
+                    width: Math.min(implicitWidth, row.width / 2)
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: row.serverText
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: model.status === "attention" ? Theme.errorColor
+                           : (row.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor)
+                    truncationMode: TruncationMode.Fade
                 }
             }
 
