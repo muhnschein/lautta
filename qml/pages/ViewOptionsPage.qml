@@ -2,7 +2,7 @@
 // View options (board ViewOptions, SPEC BRW-3/BRW-4): sort, view and grid
 // size, the same for every folder, with a live preview below them, then the
 // thumbnails: the switch for all of them, and those from servers with their
-// limits and cache (PRV-1, PRV-2). A settings page, not a dialog: every
+// size limit and cache (PRV-1, PRV-2). A settings page, not a dialog: every
 // control applies at once, and folders already open follow. `model` is the
 // DirectoryModel of the folder the page was opened from (none from
 // Settings): it also takes a choice that only differed there, such as List
@@ -214,15 +214,6 @@ Page {
                 label: qsTrId("lautta-settings-thumbs-limit")
                 settingKey: "thumbnail_max_remote_mb"
                 values: [5, 10, 20, 50, 100]
-                labels: SettingsText.megabytes(values)
-            }
-            SettingCombo {
-                objectName: "meteredThumbnailLimitBox"
-                enabled: page.thumbnails && remoteThumbnails.current
-                //% "On a metered connection"
-                label: qsTrId("lautta-settings-thumbs-metered")
-                settingKey: "thumbnail_max_metered_mb"
-                values: [0, 1, 5, 10, 20]
                 labels: SettingsText.megabytes(values)
             }
             SettingSlider {

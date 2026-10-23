@@ -403,7 +403,7 @@ what the app does.
   preview, a *Thumbnails* section, the same whether the page came from Settings or a
   folder: *Show thumbnails* (its description says that making thumbnails decodes files
   as soon as they show, untrusted ones too), *Thumbnails from servers* (its description
-  names the cost in data, battery and speed) with their size limits (PRV-2) and the
+  names the cost in data, battery and speed) with its size limit (PRV-2) and the
   thumbnail cache size. Folders already open follow a change at once; what one folder
   was switched to on its own (*Use list* over a suggested grid, §15.3) stays until that
   setting changes for all. The grid shows 4 items per row with names on icons only, or 3
@@ -550,10 +550,14 @@ bridge).
 - PRV-1: Local thumbnails via `Nemo.Thumbnailer` (`image://nemoThumbnail/` and the
   `Thumbnail` item), covering images and videos the system can thumbnail.
 - PRV-2: Remote image thumbnails: read the first 64 KiB through the bridge, use the EXIF
-  thumbnail when present; otherwise read the whole file up to 20 MB (5 MB when the bridge
-  reports a metered network) and decode with the `image` crate at the target size, EXIF
-  orientation applied. Cache in `~/.cache/org.netvfs/lautta/thumbs` (key: URI, size,
-  mtime, etag), 200 MB LRU.
+  thumbnail when present; otherwise read the whole file up to the size set in *View
+  options* (*Largest server file with a thumbnail*, 20 MB by default) and decode with the
+  `image` crate at the target size, EXIF orientation applied. There is no lower limit for
+  metered networks: the app cannot tell one. Connman's D-Bus and a network namespace
+  with the real interfaces come only with the `Internet` permission (§3.3), which the
+  app does not request, so Qt's bearer plugins see no connection either; netvfs reports
+  none. Cache in `~/.cache/org.netvfs/lautta/thumbs` (key: URI, size, mtime, etag),
+  200 MB LRU.
 - PRV-3: Thumbnail jobs: interactive lane, lowest priority, ≤ 2 in flight per location,
   visible delegates only, canceled on scroll.
 - PRV-4: Viewers: images (zoom, swipe through the folder, EXIF panel), text/code (read-
@@ -774,7 +778,7 @@ copies through the app for local↔remote).
 Global, on pages opened from *Settings*, which lists them as Salama does: an entry per
 page with an icon and, under its name, what is chosen there. *Browsing*: *Browse page*
 (BRW-12), *View options* (BRW-4; Settings links to that page instead of repeating it; the
-thumbnails are there: the switch for all of them, server thumbnails with their size limits
+thumbnails are there: the switch for all of them, server thumbnails with their size limit
 and the thumbnail cache size), *Search* (depth on servers, SRC-3), *Recents* (on/off,
 *Clear recents*, ORG-2). *Files*: *Deleting* (move deleted items to *Trash* on/off, how
 long Trash keeps them, remorse duration, OPS-8), *Transfers* (local transfer concurrency,

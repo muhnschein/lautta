@@ -2,8 +2,8 @@
 //! Remote thumbnails and the thumbnail cache (SPEC PRV-2, PRV-3).
 //!
 //! * [`remote_thumbnail`]: EXIF thumbnail from the first 64 KiB when there is
-//!   one, otherwise the whole file (≤ 20 MB, ≤ 5 MB when metered) decoded
-//!   and scaled, EXIF orientation applied.
+//!   one, otherwise the whole file (up to the size set in View options, 20 MB
+//!   by default) decoded and scaled, EXIF orientation applied.
 //! * [`ThumbnailCache`]: on-disk cache, 200 MB LRU, keyed by
 //!   sha256(URI, size, mtime, etag).
 //! * [`ThumbJobs`]: at most two jobs in flight per location, newest request
@@ -28,10 +28,6 @@ use std::sync::{Arc, Mutex, MutexGuard};
 pub const DEFAULT_CACHE_BYTES: u64 = 200 * 1000 * 1000;
 /// Head read looking for an EXIF thumbnail.
 pub const HEAD_BYTES: u64 = 64 * 1024;
-/// Largest file decoded for a thumbnail.
-pub const MAX_DECODE_BYTES: u64 = 20 * 1000 * 1000;
-/// The same on a metered network.
-pub const MAX_DECODE_BYTES_METERED: u64 = 5 * 1000 * 1000;
 /// Images with more pixels than this are not decoded (memory bound).
 const MAX_PIXELS: u64 = 64_000_000;
 const JPEG_QUALITY: u8 = 85;
@@ -107,9 +103,10 @@ pub fn render_thumbnail(bytes: &[u8], target: u32, orientation: u8) -> Result<Ve
     encode(&apply_orientation(img, orientation))
 }
 
-/// A thumbnail of a remote image (PRV-2). `metered` lowers the size limit
-/// for the whole-file fallback. Returns JPEG, or PNG for images with alpha.
-pub async fn remote_thumbnail(handle: &dyn ReadHandle, target_size: u32, metered: bool) -> Result<Vec<u8>> {
+/// A thumbnail of a remote image (PRV-2). Without an EXIF thumbnail the
+/// whole file is read, when it has at most `max_bytes` (the setting
+/// `thumbnail_max_remote_mb`). Returns JPEG, or PNG for images with alpha.
+pub async fn remote_thumbnail(handle: &dyn ReadHandle, target_size: u32, max_bytes: u64) -> Result<Vec<u8>> {
     let head = read_all(handle, HEAD_BYTES).await?;
     let orientation = exif::orientation(&head);
     if let Some(thumb) = exif::exif_thumbnail(&head) {
@@ -122,16 +119,11 @@ pub async fn remote_thumbnail(handle: &dyn ReadHandle, target_size: u32, metered
             return Ok(done);
         }
     }
-    let limit = if metered {
-        MAX_DECODE_BYTES_METERED
-    } else {
-        MAX_DECODE_BYTES
-    };
-    if handle.size().is_some_and(|s| s > limit) {
+    if handle.size().is_some_and(|s| s > max_bytes) {
         return Err(thumb_error("file too large for a remote thumbnail"));
     }
-    let bytes = read_all(handle, limit + 1).await?;
-    if bytes.len() as u64 > limit {
+    let bytes = read_all(handle, max_bytes.saturating_add(1)).await?;
+    if bytes.len() as u64 > max_bytes {
         return Err(thumb_error("file too large for a remote thumbnail"));
     }
     let orientation = exif::orientation(&bytes);
@@ -500,6 +492,9 @@ mod tests {
         (img.width(), img.height())
     }
 
+    /// The default of `thumbnail_max_remote_mb`, in bytes.
+    const LIMIT: u64 = 20 * 1000 * 1000;
+
     async fn handle_for(data: &[u8]) -> Box<dyn ReadHandle> {
         let mem = MemoryProvider::default();
         mem.add_file("img", data, 0);
@@ -511,13 +506,13 @@ mod tests {
     #[tokio::test]
     async fn decode_resize_keeps_aspect_ratio() {
         let src = jpeg_of(400, 200, [200, 30, 30]);
-        let out = remote_thumbnail(handle_for(&src).await.as_ref(), 100, false)
+        let out = remote_thumbnail(handle_for(&src).await.as_ref(), 100, LIMIT)
             .await
             .unwrap();
         assert_eq!(dims(&out), (100, 50));
         assert_eq!(&out[..2], [0xFF, 0xD8], "photo without alpha comes back as JPEG");
         let tall = jpeg_of(100, 300, [0, 0, 200]);
-        let out = remote_thumbnail(handle_for(&tall).await.as_ref(), 150, false)
+        let out = remote_thumbnail(handle_for(&tall).await.as_ref(), 150, LIMIT)
             .await
             .unwrap();
         assert_eq!(dims(&out), (50, 150));
@@ -525,7 +520,7 @@ mod tests {
 
     #[tokio::test]
     async fn small_images_are_not_upscaled_and_alpha_stays_png() {
-        let out = remote_thumbnail(handle_for(&png_of(40, 20)).await.as_ref(), 256, false)
+        let out = remote_thumbnail(handle_for(&png_of(40, 20)).await.as_ref(), 256, LIMIT)
             .await
             .unwrap();
         assert_eq!(dims(&out), (40, 20));
@@ -542,7 +537,7 @@ mod tests {
             gps: false,
         };
         let src = testutil::with_exif(&jpeg_of(400, 200, [10, 200, 10]), &spec);
-        let out = remote_thumbnail(handle_for(&src).await.as_ref(), 100, false)
+        let out = remote_thumbnail(handle_for(&src).await.as_ref(), 100, LIMIT)
             .await
             .unwrap();
         assert_eq!(dims(&out), (50, 100), "rotated by 90 degrees");
@@ -589,7 +584,7 @@ mod tests {
         // thumbnail can have produced a result.
         let mut file = testutil::bare_jpeg(&spec);
         file.extend(vec![0u8; 3_000_000]);
-        let out = remote_thumbnail(handle_for(&file).await.as_ref(), 80, false)
+        let out = remote_thumbnail(handle_for(&file).await.as_ref(), 80, LIMIT)
             .await
             .unwrap();
         assert_eq!(dims(&out), (80, 60));
@@ -609,41 +604,70 @@ mod tests {
             gps: false,
         };
         let file = testutil::bare_jpeg(&spec);
-        let out = remote_thumbnail(handle_for(&file).await.as_ref(), 1000, false)
+        let out = remote_thumbnail(handle_for(&file).await.as_ref(), 1000, LIMIT)
             .await
             .unwrap();
         assert_eq!(dims(&out), (120, 160));
     }
 
+    /// A file of `len` bytes that only decodes as a whole: a small JPEG
+    /// padded with zeros, no EXIF thumbnail.
+    fn padded_jpeg(len: usize) -> Vec<u8> {
+        let mut file = jpeg_of(64, 64, [9, 9, 9]);
+        file.resize(len, 0);
+        file
+    }
+
     #[tokio::test]
-    async fn size_limits_depend_on_the_network() {
-        let mut big = jpeg_of(64, 64, [9, 9, 9]);
-        big.resize(6_000_000, 0);
-        let h = handle_for(&big).await;
-        let metered = remote_thumbnail(h.as_ref(), 32, true).await;
-        assert_eq!(metered.err().map(|e| e.kind), Some(ErrorKind::Unsupported));
+    async fn files_over_the_size_setting_are_refused() {
+        let h = handle_for(&padded_jpeg(6_000_000)).await;
         assert!(
-            remote_thumbnail(h.as_ref(), 32, false).await.is_ok(),
-            "6 MB is fine when not metered"
+            remote_thumbnail(h.as_ref(), 32, 6_000_000).await.is_ok(),
+            "a file of exactly the limit is read"
         );
-        let mut huge = jpeg_of(64, 64, [9, 9, 9]);
-        huge.resize(20_000_001, 0);
-        let h = handle_for(&huge).await;
-        assert!(remote_thumbnail(h.as_ref(), 32, false).await.is_err());
+        let refused = remote_thumbnail(h.as_ref(), 32, 5_999_999).await;
+        assert_eq!(refused.err().map(|e| e.kind), Some(ErrorKind::Unsupported));
+        let h = handle_for(&padded_jpeg(20_000_001)).await;
+        assert!(
+            remote_thumbnail(h.as_ref(), 32, LIMIT).await.is_err(),
+            "20 MB is the default"
+        );
+    }
+
+    /// A handle that does not know its size, as some servers' files.
+    struct Unsized(Box<dyn ReadHandle>);
+
+    #[async_trait::async_trait]
+    impl ReadHandle for Unsized {
+        fn size(&self) -> Option<u64> {
+            None
+        }
+
+        async fn read_at(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
+            self.0.read_at(offset, max).await
+        }
+    }
+
+    #[tokio::test]
+    async fn files_of_unknown_size_are_read_one_byte_past_the_limit() {
+        let h = Unsized(handle_for(&padded_jpeg(3_000_000)).await);
+        assert!(remote_thumbnail(&h, 32, 3_000_000).await.is_ok());
+        let refused = remote_thumbnail(&h, 32, 2_999_999).await;
+        assert_eq!(refused.err().map(|e| e.kind), Some(ErrorKind::Unsupported));
     }
 
     #[tokio::test]
     async fn non_images_are_an_error() {
         let h = handle_for(b"this is definitely not a picture").await;
         assert_eq!(
-            remote_thumbnail(h.as_ref(), 32, false)
+            remote_thumbnail(h.as_ref(), 32, LIMIT)
                 .await
                 .err()
                 .map(|e| e.kind),
             Some(ErrorKind::Unsupported)
         );
         let h = handle_for(b"").await;
-        assert!(remote_thumbnail(h.as_ref(), 32, false).await.is_err());
+        assert!(remote_thumbnail(h.as_ref(), 32, LIMIT).await.is_err());
     }
 
     #[test]

@@ -235,6 +235,30 @@ async fn local_files_and_switched_off_thumbnails_are_refused() {
 }
 
 #[tokio::test]
+async fn remote_thumbnails_follow_the_size_setting() {
+    let h = home().await;
+    // 1.5 MB that only decode whole: no EXIF thumbnail to fall back on.
+    let mut big = jpeg(64, 64);
+    big.resize(1_500_000, 0);
+    h.nas.add_file("big.jpg", &big, 0);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let u = uri("lautta://nv-nas/big.jpg");
+    let mut s = h.core.settings();
+    s.thumbnail_max_remote_mb = 1;
+    h.core.apply_settings(s.clone());
+    let t = previews.request(h.core.clone(), u.clone(), 32);
+    assert_eq!(
+        t.rx.await.unwrap().unwrap_err().kind,
+        ErrorKind::Unsupported,
+        "larger than the 1 MB the setting allows"
+    );
+    s.thumbnail_max_remote_mb = 2;
+    h.core.apply_settings(s);
+    let t = previews.request(h.core.clone(), u, 32);
+    assert!(t.rx.await.unwrap().is_ok(), "within 2 MB it is made");
+}
+
+#[tokio::test]
 async fn cancelling_the_last_waiter_cancels_the_job() {
     let h = home().await;
     h.nas.add_file("x.jpg", &jpeg(8, 8), 0);

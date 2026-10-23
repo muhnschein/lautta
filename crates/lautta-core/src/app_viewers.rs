@@ -291,7 +291,10 @@ impl Previews {
             return Ok(Arc::new(hit));
         }
         let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
-        let bytes = remote_thumbnail(handle.as_ref(), size, false).await?;
+        // Read when asked, so a change in View options holds from the next
+        // thumbnail on.
+        let max_bytes = core.settings().thumbnail_max_remote_mb.saturating_mul(1_000_000);
+        let bytes = remote_thumbnail(handle.as_ref(), size, max_bytes).await?;
         if let Err(e) = self.cache.put(&key, &bytes) {
             log::warn!("thumbnail not cached: {e}");
         }

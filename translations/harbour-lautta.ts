@@ -381,10 +381,6 @@
             <numerusform></numerusform>
         </translation>
     </message>
-    <message id="lautta-settings-never">
-        <source>Never</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-settings-up-to-mb">
         <source>Up to %1 MB</source>
         <translation type="unfinished"></translation>
@@ -416,10 +412,6 @@
     </message>
     <message id="lautta-settings-thumbs-limit">
         <source>Largest server file with a thumbnail</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-thumbs-metered">
-        <source>On a metered connection</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-thumb-cache">

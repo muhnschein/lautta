@@ -7,7 +7,8 @@
 // page came from takes a choice that only differed there (List over a
 // suggested grid). Its Thumbnails section, there from Settings and from a
 // folder alike, has the switch for every thumbnail and those of servers
-// with their limits and cache, each saying what it costs. Fails when the
+// with their size limit and cache, each saying what it costs; there is no
+// limit for metered connections, which the app cannot tell. Fails when the
 // page waits for an Apply, the preview or an open folder keeps the old
 // view, the preview changes size, the folder keeps its suggestion, the
 // header has a description or a thumbnail setting is missing.
@@ -144,20 +145,20 @@ ApplicationWindow {
         expect(rowOf(local) > rowOf(section) && rowOf(remote) > rowOf(local),
                "both thumbnail switches are in the section: " + [rowOf(section), rowOf(local), rowOf(remote)])
         var keys = keysOf(page)
-        var wanted = ["thumbnails_remote", "thumbnail_max_remote_mb", "thumbnail_max_metered_mb", "thumbnail_cache_mb"]
+        var wanted = ["thumbnails_remote", "thumbnail_max_remote_mb", "thumbnail_cache_mb"]
         expect(JSON.stringify(keys) === JSON.stringify(wanted), "the thumbnail settings: " + keys)
         expect(local.description.length > 0 && remote.description.length > 0,
                "both thumbnail switches say what they cost")
     }
 
-    // Servers' thumbnails need thumbnails, their limits the servers' ones.
+    // Servers' thumbnails need thumbnails, their size limit the servers' ones.
     function checkRemoteThumbnails(page) {
         var remote = find(page, "remoteThumbnailsSwitch")
         var limit = find(page, "remoteThumbnailLimitBox")
         expect(remote.enabled && limit.enabled, "server thumbnails can be set while thumbnails are on")
         tap(page, "remoteThumbnailsSwitch")
         expect(App.setting("thumbnails_remote") === false, "Thumbnails from servers applies at once")
-        expect(!limit.enabled && !find(page, "meteredThumbnailLimitBox").enabled, "no limits without them")
+        expect(!limit.enabled, "no size limit without them")
         tap(page, "remoteThumbnailsSwitch")
         expect(App.setting("thumbnails_remote") === true, "and on again")
         tap(page, "thumbnailsSwitch")

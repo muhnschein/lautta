@@ -29,7 +29,7 @@ QtObject {
         same(SettingsText.search(8), "lautta-settings-summary-search", "search depth")
 
         same(SettingsText.days([7, 30]), ["lautta-settings-days", "lautta-settings-days"], "a label for each day count")
-        same(SettingsText.megabytes([0, 5]), ["lautta-settings-never", "lautta-settings-up-to-mb"],
-             "no thumbnail at 0 MB, a limit otherwise")
+        same(SettingsText.megabytes([5, 20]), ["lautta-settings-up-to-mb", "lautta-settings-up-to-mb"],
+             "a label for each size")
     }
 }

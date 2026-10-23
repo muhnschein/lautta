@@ -13,13 +13,11 @@ function days(list) {
     })
 }
 
-// "Up to 20 MB" for each size in MB; 0 is "Never".
+// "Up to 20 MB" for each size in MB.
 function megabytes(list) {
     return list.map(function (n) {
-        //% "Never"
-        var never = qsTrId("lautta-settings-never")
         //% "Up to %1 MB"
-        return n === 0 ? never : qsTrId("lautta-settings-up-to-mb").arg(n)
+        return qsTrId("lautta-settings-up-to-mb").arg(n)
     })
 }
 
