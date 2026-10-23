@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! operations area facades (doc/QML-API.md): the `Operations` singleton and
-//! the model behind Recently deleted.
+//! the model behind the Trash.
 
 mod singleton;
 mod trash;

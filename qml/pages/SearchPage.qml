@@ -16,6 +16,8 @@ Page {
     property string rootUri
     // Whether a search was run since the page opened (for the placeholder).
     property bool searched
+    // On a server: the folder headers have its icon (§15.5).
+    readonly property bool remote: App.isRemote(rootUri)
 
     allowedOrientations: Orientation.All
 
@@ -158,11 +160,28 @@ Page {
         clip: true
         model: searchModel
 
+        // A section header (its height, padding, font and colour) with
+        // the folder's name in a PlaceLabel.
         section {
             property: "section"
-            delegate: SectionHeader {
-                text: section
-                horizontalAlignment: Text.AlignRight
+            delegate: Item {
+                width: list.width
+                height: Theme.itemSizeSmall
+
+                PlaceLabel {
+                    objectName: "searchSection"
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * x
+                    anchors {
+                        verticalCenter: parent.verticalCenter
+                        verticalCenterOffset: Theme.paddingMedium / 2
+                    }
+                    text: section
+                    remote: page.remote
+                    horizontalAlignment: Text.AlignRight
+                    color: Theme.highlightColor
+                    fontSize: Theme.fontSizeSmall
+                }
             }
         }
 

@@ -13,7 +13,6 @@ use crate::browse_layout::{layout_item, Layout, NEARBY_ITEM};
 use crate::date_group::DateGroup;
 use crate::error::{Error, ErrorKind, Result};
 use crate::locations::{ConnectionState, Location, LocationKind, LocationStatus};
-use crate::mime::{category_of_name, FileCategory};
 use crate::org::favourites::Favourite;
 use crate::org::{self, Recent, RecentsFilter};
 use crate::settings::LocationPrefs;
@@ -249,22 +248,6 @@ fn account_ids(list: &[crate::bridge::RemoteLocation]) -> BTreeSet<String> {
         .collect()
 }
 
-/// The theme icon of a favourite: the star for a folder, the file's category
-/// for a file, as the folder view shows it (ORG-1).
-fn favourite_icon(f: &Favourite) -> &'static str {
-    if f.is_dir {
-        return "image://theme/icon-m-favorite";
-    }
-    match category_of_name(f.uri.name().unwrap_or_default()) {
-        FileCategory::Image => "image://theme/icon-m-file-image",
-        FileCategory::Video => "image://theme/icon-m-file-video",
-        FileCategory::Audio => "image://theme/icon-m-file-audio",
-        FileCategory::Archive => "image://theme/icon-m-file-compressed",
-        FileCategory::Package => "image://theme/icon-m-file-rpm",
-        _ => "image://theme/icon-m-document",
-    }
-}
-
 /// The location id inside a stored `lautta://<location>/…` string.
 fn location_of(uri: &str) -> Option<&str> {
     uri.strip_prefix("lautta://")?.split('/').next()
@@ -422,14 +405,16 @@ impl Core {
             .into_iter()
             .map(|p| (p.location_id.clone(), p))
             .collect();
-        let mut device = self.folder_rows("device", &LocationKind::UserFolder, &prefs);
         let settings = self.settings();
-        // Recents is a row of its own while they are remembered (§15.2, ORG-2).
+        let mut device = Vec::new();
+        // Recents is a row of its own while they are remembered, the first
+        // of the section until the user orders it (§15.2, ORG-2, BRW-12).
         if settings.recents_enabled {
             let mut row = Row::new("device", "recents");
             row.icon = "image://theme/icon-m-history".to_owned();
             device.push(row);
         }
+        device.extend(self.folder_rows("device", &LocationKind::UserFolder, &prefs));
         if settings.recently_deleted {
             let mut row = Row::new("device", "deleted");
             row.icon = "image://theme/icon-m-delete".to_owned();
@@ -473,7 +458,7 @@ impl Core {
             let mut row = Row::new("favourites", "favourite");
             row.uri = f.uri.to_string();
             row.place = self.favourite_place(&f);
-            row.icon = favourite_icon(&f).to_owned();
+            row.icon = f.icon_source();
             row.is_file = !f.is_dir;
             row.item_id = f.id.to_string();
             row.name = f.label;

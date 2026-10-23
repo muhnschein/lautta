@@ -14,6 +14,7 @@ use crate::preview::exif::{self, ExifInfo};
 use crate::preview::markdown;
 use crate::preview::text::{self as ptext, TextDoc};
 use crate::provider::{list_all, Lane, ProgressSink, ReadHandle, ReadOptions};
+use crate::settings::Settings;
 use crate::sort::sort_permutation;
 use crate::thumbs::{remote_thumbnail, thumb_key, ThumbJobs, ThumbnailCache};
 use crate::uri::Uri;
@@ -291,7 +292,10 @@ impl Previews {
             return Ok(Arc::new(hit));
         }
         let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
-        let bytes = remote_thumbnail(handle.as_ref(), size, false).await?;
+        // Read when asked, so a change in View options holds from the next
+        // thumbnail on.
+        let max_bytes = core.settings().thumbnail_max_remote_bytes();
+        let bytes = remote_thumbnail(handle.as_ref(), size, max_bytes).await?;
         if let Err(e) = self.cache.put(&key, &bytes) {
             log::warn!("thumbnail not cached: {e}");
         }
@@ -401,6 +405,22 @@ impl Core {
         Ok(FullImage { bytes, orientation })
     }
 
+    /// A changed thumbnail cache setting holds at once (§18): an open cache
+    /// takes the new budget, trimmed off the caller's thread (ARC-6); one
+    /// opened later reads the setting itself.
+    pub(crate) fn follow_thumbnail_budget(&self, settings: &Settings) {
+        let dir = self.paths.thumbs_dir();
+        let list = lock(PREVIEWS.get_or_init(Mutex::default));
+        if let Some((_, previews)) = list.iter().find(|(d, _)| *d == dir) {
+            let max = settings.thumbnail_cache_bytes();
+            let me = Arc::clone(previews);
+            previews
+                .jobs
+                .runtime()
+                .spawn_blocking(move || me.cache.set_max_bytes(max));
+        }
+    }
+
     /// The thumbnail state for this core's cache folder.
     pub fn previews(&self, rt: &Handle) -> Result<Arc<Previews>> {
         let dir = self.paths.thumbs_dir();
@@ -408,7 +428,7 @@ impl Core {
         if let Some((_, p)) = list.iter().find(|(d, _)| *d == dir) {
             return Ok(Arc::clone(p));
         }
-        let max = self.settings().thumbnail_cache_mb.saturating_mul(1_000_000);
+        let max = self.settings().thumbnail_cache_bytes();
         let previews = Arc::new(Previews {
             cache: ThumbnailCache::new(&dir, max)?,
             jobs: ThumbJobs::new(rt.clone()),

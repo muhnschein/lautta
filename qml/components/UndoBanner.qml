@@ -20,7 +20,7 @@ Item {
             //% "Moved"
             return qsTrId("lautta-undo-moved")
         default:
-            //% "Moved to Recently deleted"
+            //% "Moved to trash"
             return qsTrId("lautta-undo-trashed")
         }
     }

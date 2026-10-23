@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Scenario on the target (real Silica): Activity's sections are the rows'
 // date groups (SPEC §15.4), In progress first, then Today … Older, in the
-// shared DateSectionHeader; and its pulley has no Settings entry. Fails
-// when the sections follow anything but `dateGroup` (such as the old
-// Active / Waiting / Paused / History groups) or Settings comes back.
+// shared DateSectionHeader; and its pulley says Clear activity history and
+// has no Settings entry. Fails when the sections follow anything but
+// `dateGroup` (such as the old Active / Waiting / Paused / History groups),
+// the entry is called otherwise or Settings comes back.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
@@ -93,6 +94,24 @@ ApplicationWindow {
         return found.map(function(x) { return x.text })
     }
 
+    // A title naming a server it goes to may mark it (§15.5); one going to
+    // the device never does. Here the titles are ids without the name, so
+    // only which rows go to a server shows (PlaceText.around is host-tested).
+    function checkTitles() {
+        var rowsOf = findAll(win.page, function(x) { return x.toServer !== undefined && x.titleParts !== undefined })
+        if (rowsOf.length !== rows.count)
+            return fail(rowsOf.length + " task rows for " + rows.count + " tasks")
+        for (var i = 0; i < rowsOf.length; ++i) {
+            var d = rowsOf[i]
+            var up = d.row.direction === "upload"
+            if (d.toServer !== up)
+                fail("task " + d.row.transferId + " (" + d.row.direction + ") goes to a server: " + d.toServer)
+            var lines = findAll(d, function(x) { return x.iconShown !== undefined })
+            if (lines.length !== 1 || (!up && lines[0].iconShown))
+                fail("task " + d.row.transferId + "'s title marks a server it does not go to")
+        }
+    }
+
     function matches(got) {
         if (got.length !== expected.length)
             return false
@@ -114,10 +133,11 @@ ApplicationWindow {
             var got = win.sections()
             if (!win.matches(got))
                 return win.waited > 100 ? win.fail("sections are the date groups, got " + JSON.stringify(got)) : undefined
-            if (win.texts("lautta-xfr-menu-clear", "Clear history").length !== 1)
-                return win.fail("the pulley's entries are not where the test looks")
+            if (win.texts("lautta-xfr-menu-clear-activity", "Clear activity history").length !== 1)
+                return win.fail("the pulley does not say Clear activity history")
             if (win.texts("lautta-xfr-menu-settings", "Settings").length !== 0)
                 return win.fail("the pulley has no Settings entry")
+            win.checkTitles()
             win.scenarioRunning = false
         }
     }

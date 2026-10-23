@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Settings › Browse page (BRW-12; laid out as Salama's start page settings):
-// a switch per row of the Browse page, rows moved within their section by
-// dragging the handle, Restore defaults in the pulley and a live preview
-// below. Favourites only move; removing one stays on the Browse page.
+// Settings › Browse page (BRW-12), as Salama's tab group view: a row per row
+// of the Browse page, a tap shows or hides it, the grip carries it within
+// its section while the rows it passes move aside; Restore defaults in the
+// pulley and a live preview below (as Salama's start page settings).
+// Favourites only move; removing one stays on the Browse page.
 //
-// Rows are plain: a TextSwitch (one press target, as in Salama) and the
-// handle. A drag shows only once the finger moved on the handle, and ends
-// on release, on cancel, and when its row goes or the rows move.
+// A switch or a move changes its row in place, so the list keeps its
+// position and its rows (BrowseLayoutDelegate.qml has the carrying).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -27,33 +27,22 @@ Page {
         id: layout
 
         Component.onCompleted: reload()
-        // A switch changes its row in place; rows that come, go or move
-        // make the drag's list rows stale.
-        onRowsInserted: list.endDrag()
-        onRowsRemoved: list.endDrag()
-        onRowsMoved: list.endDrag()
-        onModelReset: list.endDrag()
+        // Rows that come or go shift the rows under a carried one; its own
+        // moves are the only moves while it is carried.
+        onRowsInserted: list.dropCarried()
+        onRowsRemoved: list.dropCarried()
+        onModelReset: list.dropCarried()
     }
 
     SilicaListView {
         id: list
 
-        // The row being dragged, the list row it started at and where it
-        // would land; none until the finger moved on a handle.
-        property Item dragItem: null
-        property int dragFrom: -1
-        property int dropAt: -1
+        // The row being carried, null when none.
+        property Item carrier: null
 
-        function startDrag(item, row) {
-            dragItem = item
-            dragFrom = row
-            dropAt = row
-        }
-
-        function endDrag() {
-            dragItem = null
-            dragFrom = -1
-            dropAt = -1
+        function dropCarried() {
+            if (carrier)
+                carrier.drop()
         }
 
         anchors.fill: parent
@@ -77,125 +66,25 @@ Page {
             text: BrowseText.sectionTitle(section)
         }
 
-        delegate: Item {
-            id: row
+        // The rows a carried row passes slide aside rather than jump.
+        moveDisplaced: Transition {
+            NumberAnimation {
+                properties: "y"
+                duration: 150
+                easing.type: Easing.OutQuad
+            }
+        }
 
-            readonly property string layoutSection: model.section
-            readonly property string layoutItem: model.item
-            readonly property bool toggles: model.kind !== "favourite"
-            readonly property bool dragged: list.dragItem === row
-            readonly property bool target: list.dragItem !== null && !dragged && list.dropAt === index
-            readonly property string title: model.kind === "nearby"
-                                            //% "Servers found nearby"
-                                            ? qsTrId("lautta-browse-layout-nearby")
-                                            : BrowseText.rowName(model.kind, model.name)
-
+        delegate: BrowseLayoutDelegate {
             width: list.width
-            height: Math.max(Theme.itemSizeSmall, toggle.visible ? toggle.height : 0)
-
-            Component.onDestruction: if (dragged) list.endDrag()
-
-            // The dragged row stands out as a pressed one does.
-            Rectangle {
-                anchors.fill: parent
-                visible: row.dragged
-                color: Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity)
-            }
-
-            TextSwitch {
-                id: toggle
-
-                visible: row.toggles
-                anchors.verticalCenter: parent.verticalCenter
-                rightMargin: handle.visible ? handle.width : Theme.horizontalPageMargin
-                automaticCheck: false
-                checked: !model.hidden
-                text: row.title
-                onClicked: layout.setHidden(row.layoutSection, row.layoutItem, !model.hidden)
-            }
-
-            // Favourites have no switch: the star sits where the switch is.
-            Item {
-                id: star
-
-                visible: !row.toggles
-                x: Theme.horizontalPageMargin - Theme.paddingLarge
-                width: Theme.itemSizeExtraSmall
-                height: parent.height
-
-                HighlightImage {
-                    anchors.centerIn: parent
-                    source: "image://theme/icon-m-favorite"
-                    highlighted: row.dragged
-                }
-            }
-            Label {
-                visible: !row.toggles
-                anchors {
-                    left: star.right
-                    right: handle.left
-                    verticalCenter: parent.verticalCenter
-                }
-                text: row.title
-                color: row.dragged ? Theme.highlightColor : Theme.primaryColor
-                truncationMode: TruncationMode.Fade
-            }
-
-            // Where the dragged row lands: a line above or below this one.
-            Rectangle {
-                visible: row.target
-                width: parent.width
-                height: Math.max(2, Theme.paddingSmall / 2)
-                y: list.dropAt < list.dragFrom ? 0 : parent.height - height
-                color: Theme.highlightColor
-            }
-
-            // Press and drag the handle to move the row within its section.
-            MouseArea {
-                id: handle
-
-                property real pressY
-
-                visible: model.movable
-                anchors {
-                    right: parent.right
-                    top: parent.top
-                    bottom: parent.bottom
-                }
-                width: Theme.itemSizeSmall + Theme.horizontalPageMargin
-                preventStealing: true
-
-                onPressed: pressY = mouse.y
-                onPositionChanged: {
-                    if (!row.dragged) {
-                        if (Math.abs(mouse.y - pressY) < Theme.startDragDistance)
-                            return
-                        list.startDrag(row, index)
-                    }
-                    var p = mapToItem(list.contentItem, mouse.x, mouse.y)
-                    var to = list.indexAt(p.x, p.y)
-                    if (to >= 0 && layout.sectionAt(to) === row.layoutSection)
-                        list.dropAt = to
-                }
-                onReleased: {
-                    if (!row.dragged)
-                        return
-                    if (list.dropAt !== list.dragFrom)
-                        layout.moveTo(row.layoutSection, row.layoutItem, layout.placeAt(list.dropAt))
-                    list.endDrag()
-                }
-                onCanceled: if (row.dragged) list.endDrag()
-
-                HighlightImage {
-                    anchors {
-                        right: parent.right
-                        rightMargin: Theme.horizontalPageMargin - Theme.paddingMedium
-                        verticalCenter: parent.verticalCenter
-                    }
-                    source: "image://theme/icon-m-menu"
-                    highlighted: handle.pressed || row.dragged
-                }
-            }
+            layoutModel: layout
+            layoutSection: model.section
+            layoutItem: model.item
+            layoutKind: model.kind
+            layoutName: model.name
+            layoutHidden: model.hidden
+            layoutMovable: model.movable
+            onToggled: layout.setHidden(layoutSection, layoutItem, shown)
         }
 
         footer: Column {

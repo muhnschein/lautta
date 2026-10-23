@@ -30,21 +30,36 @@ Page {
 
     function remove() {
         var target = page.currentUri
-        var remote = !App.isLocal(target)
-        var seconds = App.setting("remorse_seconds")
-        var text = remote
-                   //% "Deleting permanently from %1"
-                   ? qsTrId("lautta-viewers-delete-remote").arg(App.locationName(target))
-                   //% "Deleting"
-                   : qsTrId("lautta-viewers-delete")
-        remorse.execute(text, function () {
+        var deleteIt = function () {
             keepIndex = slideshow.currentIndex
             Operations.remove(JSON.stringify([target]))
+        }
+        if (Operations.deletesPermanently(JSON.stringify([target]))) {
+            // For good (volumes, servers, the Trash off, OPS-8): ask, with no
+            // timer after. Accepting for the last image leaves the viewer
+            // too: the stack cannot pop while the dialog closes.
+            var props = { "uris": [target] }
+            var below = pageStack.previousPage(page)
+            if (page.total <= 1 && below) {
+                props.acceptDestination = below
+                props.acceptDestinationAction = PageStackAction.Pop
+            }
+            var dialog = pageStack.push(Qt.resolvedUrl("../dialogs/DeleteDialog.qml"), props)
+            dialog.accepted.connect(function () {
+                deleteIt()
+                if (page.total > 1)
+                    reloadTimer.restart()
+            })
+            return
+        }
+        //% "Moving to trash"
+        remorse.execute(qsTrId("lautta-viewers-trashing"), function () {
+            deleteIt()
             if (page.total <= 1)
                 pageStack.pop()
             else
                 reloadTimer.restart()
-        }, seconds * 1000)
+        }, App.setting("remorse_seconds") * 1000)
     }
 
     allowedOrientations: Orientation.All

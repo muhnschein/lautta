@@ -79,10 +79,11 @@ async fn standalone_shows_no_trace_of_the_bridge() {
     assert!(of(&rows, "servers").is_empty());
     assert!(of(&rows, "nearby").is_empty());
     let device = of(&rows, "device");
-    assert_eq!(device[0].name, "Documents");
-    assert_eq!(device[0].uri, "lautta://user-documents/");
-    assert_eq!(device[0].count, 1, "hidden files are not counted");
-    assert_eq!(device[1].name, "Music");
+    assert_eq!(device[0].kind, "recents");
+    assert_eq!(device[1].name, "Documents");
+    assert_eq!(device[1].uri, "lautta://user-documents/");
+    assert_eq!(device[1].count, 1, "hidden files are not counted");
+    assert_eq!(device[2].name, "Music");
     let deleted = device.last().unwrap();
     assert_eq!((deleted.kind, deleted.count), ("deleted", 0));
     assert_eq!(of(&rows, "android")[0].name, "DCIM");
@@ -125,18 +126,18 @@ async fn hidden_rows_leave_browse_but_not_its_settings() {
     let rows = e.core.browse_rows().await;
     assert_eq!(
         names(&rows, "device"),
-        ["Documents", "Pictures", ""],
-        "and Recents"
+        ["", "Documents", "Pictures"],
+        "Recents and the folders"
     );
     assert_eq!(names(&rows, "favourites"), ["Docs"]);
     let layout = e.core.browse_layout_rows().await;
     assert_eq!(
         layout_of(&layout, "device"),
         [
+            ("recents".to_owned(), false),
             ("Documents".to_owned(), false),
             ("Pictures".to_owned(), false),
             ("Music".to_owned(), true),
-            ("recents".to_owned(), false),
             ("deleted".to_owned(), true)
         ]
     );
@@ -151,7 +152,7 @@ async fn hidden_rows_leave_browse_but_not_its_settings() {
         .unwrap();
     assert_eq!(
         names(&e.core.browse_rows().await, "device"),
-        ["Documents", "Pictures", "Music", ""]
+        ["", "Documents", "Pictures", "Music"]
     );
 }
 
@@ -169,7 +170,7 @@ async fn rows_move_within_their_section() {
     assert_eq!(of(&rows, "device")[1].kind, "deleted");
     assert_eq!(
         names(&rows, "device")[2..],
-        ["Documents".to_owned(), "Music".to_owned(), String::new()]
+        [String::new(), "Documents".to_owned(), "Music".to_owned()]
     );
     core.move_browse_row("device", "user-pictures", 99).await.unwrap();
     assert_eq!(
@@ -200,7 +201,7 @@ async fn rows_move_within_their_section() {
     }
     core.browse_layout.reset().unwrap();
     let rows = core.browse_rows().await;
-    assert_eq!(names(&rows, "device")[..3], ["Documents", "Pictures", "Music"]);
+    assert_eq!(names(&rows, "device")[..3], ["", "Documents", "Pictures"]);
     assert_eq!(
         names(&rows, "favourites"),
         ["B", "A"],
@@ -217,23 +218,23 @@ async fn recents_is_a_device_row_while_recents_are_remembered() {
     let e = env(None, &["Documents"]).await;
     let core = &e.core;
     let rows = core.browse_rows().await;
-    assert_eq!(kinds(&rows, "device"), ["folder", "recents", "deleted"]);
-    let recents = of(&rows, "device")[1];
+    assert_eq!(kinds(&rows, "device"), ["recents", "folder", "deleted"]);
+    let recents = of(&rows, "device")[0];
     assert_eq!(recents.icon, "image://theme/icon-m-history");
     assert_eq!((recents.count, recents.uri.as_str()), (-1, ""));
 
     core.browse_layout.set_hidden("device", "recents", true).unwrap();
     assert_eq!(kinds(&core.browse_rows().await, "device"), ["folder", "deleted"]);
     assert_eq!(
-        layout_of(&core.browse_layout_rows().await, "device")[1],
+        layout_of(&core.browse_layout_rows().await, "device")[0],
         ("recents".to_owned(), true),
         "hidden, it stays in the settings"
     );
     core.browse_layout.set_hidden("device", "recents", false).unwrap();
-    core.move_browse_row("device", "recents", 0).await.unwrap();
+    core.move_browse_row("device", "recents", 1).await.unwrap();
     assert_eq!(
         kinds(&core.browse_rows().await, "device"),
-        ["recents", "folder", "deleted"]
+        ["folder", "recents", "deleted"]
     );
 
     core.apply_settings(Settings {
@@ -247,6 +248,46 @@ async fn recents_is_a_device_row_while_recents_are_remembered() {
             .all(|(name, _)| name != "recents"),
         "nothing to switch while recents are off"
     );
+}
+
+/// Recents leads *On this device* by default (§15.2); an order the user
+/// gave the section stays, Restore defaults brings Recents back to the top.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn recents_comes_first_until_the_user_orders_the_rows() {
+    let e = env(None, &["Documents", "Music"]).await;
+    let core = &e.core;
+    let device = |rows: &[Row]| -> Vec<String> {
+        of(rows, "device")
+            .iter()
+            .map(|r| {
+                if r.name.is_empty() {
+                    r.kind.to_owned()
+                } else {
+                    r.name.clone()
+                }
+            })
+            .collect()
+    };
+    let natural = ["recents", "Documents", "Music", "deleted"];
+    assert_eq!(device(&core.browse_rows().await), natural);
+    assert_eq!(
+        layout_of(&core.browse_layout_rows().await, "device")[0],
+        ("recents".to_owned(), false),
+        "and first in Settings › Browse page"
+    );
+
+    let order: Vec<String> = ["user-documents", "user-music", "recents", "deleted"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    core.browse_layout.set_order("device", &order).unwrap();
+    assert_eq!(
+        device(&core.browse_rows().await),
+        ["Documents", "Music", "recents", "deleted"],
+        "a saved order stays"
+    );
+    core.browse_layout.reset().unwrap();
+    assert_eq!(device(&core.browse_rows().await), natural);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -302,13 +343,43 @@ async fn file_favourites_name_their_folder_and_icon() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn favourites_show_their_chosen_icon() {
+    let e = env(None, &["Documents/Uni"]).await;
+    let uni = uri("lautta://user-documents/Uni");
+    let pdf = uri("lautta://user-documents/Uni/thesis.pdf");
+    let favourites = &e.core.favourites;
+    favourites
+        .save(&uni, "Uni", Some("#4fa3e5"), Some("home"), true)
+        .unwrap();
+    favourites
+        .save(&pdf, "Thesis", None, Some("company"), false)
+        .unwrap();
+    let rows = e.core.browse_rows().await;
+    let shown: Vec<_> = of(&rows, "favourites")
+        .iter()
+        .map(|r| (r.name.as_str(), r.icon.as_str(), r.colour.as_str()))
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            ("Uni", "image://theme/icon-m-home", "#4fa3e5"),
+            ("Thesis", "image://theme/icon-m-company", ""),
+        ],
+        "the chosen icons, tinted as before"
+    );
+    favourites.save(&uni, "Uni", None, None, true).unwrap();
+    let rows = e.core.browse_rows().await;
+    assert_eq!(of(&rows, "favourites")[0].icon, "image://theme/icon-m-favorite");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn location_display_names_apply() {
     let e = env(None, &["Documents"]).await;
     let mut prefs = LocationPrefs::new("user-documents");
     prefs.display_name = Some("Papers".into());
     e.core.location_prefs.set(&prefs).unwrap();
     let rows = e.core.browse_rows().await;
-    assert_eq!(of(&rows, "device")[0].name, "Papers");
+    assert_eq!(of(&rows, "device")[1].name, "Papers");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
