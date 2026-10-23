@@ -4,8 +4,8 @@
 //! their fixed order; favourites keep their own order (ORG-1).
 //!
 //! A row is named by its section and an item: the location id of a folder,
-//! volume or server, `recents` for *Recents*, `deleted` for *Recently
-//! deleted* and `nearby` for all nearby servers together. The store is blocking: call it from
+//! volume or server, `recents` for *Recents*, `deleted` for the *Trash*
+//! and `nearby` for all nearby servers together. The store is blocking: call it from
 //! `spawn_blocking` (ARC-6).
 
 use crate::db::Db;
@@ -13,7 +13,7 @@ use crate::error::Result;
 use rusqlite::params;
 use std::collections::{BTreeMap, BTreeSet};
 
-/// The item of *Recently deleted* in the `device` section.
+/// The item of the *Trash* in the `device` section.
 pub const DELETED_ITEM: &str = "deleted";
 /// The item of *Recents* in the `device` section (ORG-2).
 pub const RECENTS_ITEM: &str = "recents";

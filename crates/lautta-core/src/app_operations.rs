@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! User-level actions of the operations area on [`Core`](crate::app::Core):
 //! plan summaries and pending plans (OPS-1), conflicts before the run
-//! (OPS-2), compress and extract (PRV-10/11) and *Recently deleted*
+//! (OPS-2), compress and extract (PRV-10/11) and the *Trash*
 //! (OPS-8). Everything is Qt-free; the Qt layer only
 //! forwards.
 
@@ -330,7 +330,7 @@ pub fn archive_folder_name(name: &str) -> String {
 
 // ------------------------------------------------------------ trash
 
-/// One row of *Recently deleted* (OPS-8).
+/// One row of the *Trash* (OPS-8).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrashEntry {
@@ -645,7 +645,7 @@ impl Core {
 
     // -------------------------------------------------------- trash
 
-    /// *Recently deleted*, newest first (OPS-8).
+    /// The *Trash*, newest first (OPS-8).
     pub fn trash_entries(&self, now_secs: i64) -> Result<Vec<TrashEntry>> {
         let retention = self.settings().recently_deleted_retention_days;
         let mut items = self.trash.list()?;
@@ -669,7 +669,7 @@ impl Core {
             .collect())
     }
 
-    /// Removes what is older than the retention setting from every bin
+    /// Removes what is older than the retention setting from the Trash
     /// (OPS-8). Returns the number of items removed.
     pub fn purge_trash(&self, now_secs: i64) -> Result<usize> {
         let retention = self.settings().recently_deleted_retention_days;
@@ -677,10 +677,20 @@ impl Core {
             .purge_before(now_secs.saturating_sub(i64::from(retention) * SECS_PER_DAY))
     }
 
-    /// Empties Recently deleted: every item, and what a crash left in the
-    /// bins of the locations (OPS-8). Returns the number of items removed.
+    /// The Trash's work at start (OPS-8), once the settings are known: the
+    /// expired items go first, so they are not moved for nothing; then
+    /// [`Trash::tidy`](crate::trash::Trash::tidy) drains the bins that
+    /// schemas 4 and 5 kept at the roots of the locations. Blocking.
+    pub fn tidy_trash(&self, now_secs: i64) -> Result<usize> {
+        let purged = self.purge_trash(now_secs);
+        let moved = self.trash.tidy(&self.locations.trash_roots());
+        purged.and(moved)
+    }
+
+    /// Empties the Trash: every item, and what a crash left in the trash
+    /// folder (OPS-8). Returns the number of items removed.
     pub fn empty_trash(&self) -> Result<usize> {
-        self.trash.empty(&self.locations.trash_bins())
+        self.trash.empty()
     }
 
     // -------------------------------------------------------- share

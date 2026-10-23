@@ -8,7 +8,6 @@ import Lautta 1.0
 import "../components"
 import "../components/Open.js" as Open
 import "../components/browse"
-import "../components/browse/BrowseText.js" as BrowseText
 
 Page {
     id: page
@@ -108,12 +107,13 @@ Page {
                     color: row.highlighted ? Theme.highlightColor : Theme.primaryColor
                     truncationMode: TruncationMode.Fade
                 }
-                Label {
+                // Where the file is, without how it was used; a server's
+                // place has its icon (§15.5).
+                PlaceLabel {
                     width: parent.width
-                    text: BrowseText.recentKindLine(model.kind, model.place)
-                    font.pixelSize: Theme.fontSizeExtraSmall
-                    color: Theme.secondaryColor
-                    truncationMode: TruncationMode.Fade
+                    text: model.place
+                    remote: App.isRemote(model.uri)
+                    color: row.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
                 }
             }
         }

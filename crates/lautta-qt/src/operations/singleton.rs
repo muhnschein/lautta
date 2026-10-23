@@ -56,6 +56,7 @@ pub struct Operations {
     conflictsJson: qt_method!(fn(&self, plan_id: i32) -> QString),
     resolveConflict: qt_method!(fn(&self, plan_id: i32, index: i32, choice: QString, apply_to_all: bool)),
     remove: qt_method!(fn(&self, uris_json: QString)),
+    deletesPermanently: qt_method!(fn(&self, uris_json: QString) -> bool),
     compress: qt_method!(fn(&self, uris_json: QString, dest_uri: QString, name: QString, kind: QString)),
     cancelJob: qt_method!(fn(&self, job_id: i32)),
     measure: qt_method!(fn(&self, uris_json: QString)),
@@ -330,6 +331,16 @@ impl Operations {
                 }
             },
         );
+    }
+
+    /// True when `remove` would delete any of the items for good: they
+    /// skip the Trash (OPS-8), so the page asks first. Junk counts as
+    /// permanent: asking is the safe side.
+    fn deletesPermanently(&self, uris_json: QString) -> bool {
+        match (core(), parse_uris(&uris_json)) {
+            (Some(core), Some(items)) => items.iter().any(|u| !core.deletes_to_trash(u)),
+            _ => true,
+        }
     }
 
     // ------------------------------------------------------ compress

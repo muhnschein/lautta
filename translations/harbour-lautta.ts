@@ -100,7 +100,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-undo-trashed">
-        <source>Moved to Recently deleted</source>
+        <source>Moved to trash</source>
+        <oldsource>Moved to Recently deleted</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-undo">
@@ -381,10 +382,6 @@
             <numerusform></numerusform>
         </translation>
     </message>
-    <message id="lautta-settings-never">
-        <source>Never</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-settings-up-to-mb">
         <source>Up to %1 MB</source>
         <translation type="unfinished"></translation>
@@ -418,10 +415,6 @@
         <source>Largest server file with a thumbnail</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-settings-thumbs-metered">
-        <source>On a metered connection</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-settings-thumb-cache">
         <source>Thumbnail cache</source>
         <translation type="unfinished"></translation>
@@ -439,15 +432,18 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-trash">
-        <source>Recently deleted</source>
+        <source>Move deleted items to Trash</source>
+        <oldsource>Recently deleted</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-trash-hint">
-        <source>Local deletes can be restored</source>
+        <source>Files deleted from this device&apos;s folders can be restored</source>
+        <oldsource>Local deletes can be restored</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-trash-days">
-        <source>Keep deleted items</source>
+        <source>Keep items in Trash</source>
+        <oldsource>Keep deleted items</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-remorse">
@@ -558,8 +554,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-clear-data-hint">
-        <source>Removes queue, history and favourites</source>
-        <oldsource>Removes queue, history, tags and favourites</oldsource>
+        <source>Removes queue, history, favourites and everything in Trash</source>
+        <oldsource>Removes queue, history and favourites</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-about">
@@ -849,15 +845,18 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-trash-empty">
-        <source>Empty Recently deleted</source>
+        <source>Empty trash</source>
+        <oldsource>Empty Recently deleted</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-trash-emptying">
-        <source>Emptying Recently deleted</source>
+        <source>Emptying trash</source>
+        <oldsource>Emptying Recently deleted</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-trash-title">
-        <source>Recently deleted</source>
+        <source>Trash</source>
+        <oldsource>Recently deleted</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-trash-kept" numerus="yes">
@@ -893,11 +892,13 @@
         </translation>
     </message>
     <message id="lautta-trash-footer">
-        <source>Only files deleted from this device&apos;s folders appear here. Deletes on SD cards and servers are permanent.</source>
+        <source>Only files deleted from this device&apos;s folders appear here. Deletes on volumes and servers are permanent.</source>
+        <oldsource>Only files deleted from this device&apos;s folders appear here. Deletes on SD cards and servers are permanent.</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-trash-placeholder">
-        <source>Nothing deleted recently</source>
+        <source>Trash is empty</source>
+        <oldsource>Nothing deleted recently</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-trash-placeholder-hint">
@@ -1025,14 +1026,6 @@
     </message>
     <message id="lautta-viewers-open-with">
         <source>Open with</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-delete-remote">
-        <source>Deleting permanently from %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-delete">
-        <source>Deleting</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-image-count">
@@ -1410,14 +1403,6 @@
         <source>Nothing was lost. Finished files stay where they are.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-xfr-menu-clear">
-        <source>Clear history</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-remorse-clear">
-        <source>Clearing history</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-xfr-menu-resume-all">
         <source>Resume all</source>
         <translation type="unfinished"></translation>
@@ -1474,22 +1459,6 @@
     </message>
     <message id="lautta-browse-server-connected">
         <source>Connected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-previewed">
-        <source>Previewed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-transferred-to">
-        <source>Transferred to %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-transferred">
-        <source>Transferred</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-recents-opened">
-        <source>Opened</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-colour-amber">
@@ -1582,20 +1551,8 @@
         <source>Nearby</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-favourite-save">
-        <source>Save</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-favourite-add">
-        <source>Add</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-favourite-edit-title">
         <source>Edit favourite</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-favourite-add-title">
-        <source>Add to favourites</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-favourite-label">
@@ -1608,14 +1565,6 @@
     </message>
     <message id="lautta-favourite-colour">
         <source>Colour</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-favourite-order">
-        <source>Order</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-favourite-order-hint">
-        <source>Long-press a favourite in Browse to move it up or down.</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-question-trust">
@@ -1706,10 +1655,6 @@
     <message id="lautta-browse-transfers">
         <source>Activity</source>
         <oldsource>Transfers</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-browse-recently-deleted">
-        <source>Recently deleted</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-browse-consent">
@@ -1867,32 +1812,13 @@
         </translation>
     </message>
     <message id="lautta-dir-menu-search">
-        <source>Search here</source>
+        <source>Search</source>
+        <oldsource>Search here</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-menu-view-options">
         <source>View options</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-deleting-permanently">
-        <source>Deleting permanently</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-deleting">
-        <source>Deleting</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-deleting-many-permanently" numerus="yes">
-        <source>Deleting %n items permanently</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message id="lautta-dir-deleting-many" numerus="yes">
-        <source>Deleting %n items</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-        </translation>
     </message>
     <message id="lautta-dir-noaccess">
         <source>Not accessible</source>
@@ -2136,7 +2062,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-opts-thumbnails">
-        <source>Thumbnails</source>
+        <source>Show thumbnails</source>
+        <oldsource>Thumbnails</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-sel-compress">
@@ -2244,10 +2171,6 @@
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
-    </message>
-    <message id="lautta-favourite-remove">
-        <source>Remove from favourites</source>
-        <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-pdf-page-error">
         <source>Can&apos;t show page %1</source>
@@ -2541,10 +2464,6 @@
         <source>View options</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-opts-every-folder">
-        <source>Used in every folder</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-opts-preview">
         <source>Preview</source>
         <translation type="unfinished"></translation>
@@ -2575,6 +2494,165 @@
     </message>
     <message id="lautta-browse-server-disconnected">
         <source>Not connected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-favourite-added">
+        <source>Added to favourites</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-favourite-icon">
+        <source>Icon</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-menu-clear-activity">
+        <source>Clear activity history</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-remorse-clear-activity">
+        <source>Clearing activity history</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-trash">
+        <source>Trash</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-trashing">
+        <source>Moving to trash</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-trashing-many" numerus="yes">
+        <source>Moving %n items to trash</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-delete-permanent-one">
+        <source>“%1” will be deleted from %2. This can&apos;t be undone.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-delete-permanent-many" numerus="yes">
+        <source>%n items will be deleted from %1. This can&apos;t be undone.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-delete-permanent-accept">
+        <source>Delete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-delete-permanent-title">
+        <source>Delete permanently?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-trashing">
+        <source>Moving to trash</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-menu-activity-count">
+        <source>Activity (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-menu-activity">
+        <source>Activity</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-renamed-folder">
+        <source>Folder renamed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-renamed-file">
+        <source>File renamed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-list">
+        <source>List</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-grid-3">
+        <source>Grid of 3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-grid-4">
+        <source>Grid of 4</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-by-size">
+        <source>size</source>
+        <extracomment>How folders are sorted, in &quot;List, sorted by size&quot;</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-by-modified">
+        <source>date modified</source>
+        <extracomment>How folders are sorted, in &quot;List, sorted by date modified&quot;</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-by-type">
+        <source>type</source>
+        <extracomment>How folders are sorted, in &quot;List, sorted by type&quot;</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-by-name">
+        <source>name</source>
+        <extracomment>How folders are sorted, in &quot;List, sorted by name&quot;</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-view">
+        <source>%1, sorted by %2</source>
+        <extracomment>%1 is how folders show (&quot;List&quot;, &quot;Grid of 4&quot;), %2 their order (&quot;name&quot;)</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-trash" numerus="yes">
+        <source>Kept in Trash for %n days</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-settings-summary-no-trash">
+        <source>Deleted permanently</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-transfers" numerus="yes">
+        <source>%n at once</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-settings-summary-search" numerus="yes">
+        <source>%n folders deep on servers</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-settings-summary-recents-on">
+        <source>Remembered</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-recents-off">
+        <source>Not remembered</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-summary-storage">
+        <source>%1 cached</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-search-depth-hint">
+        <source>Searches on this device go through every folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-files">
+        <source>Files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-thumbnails-section">
+        <source>Thumbnails</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-opts-thumbnails-hint">
+        <source>Making thumbnails decodes files as soon as they show in a folder, including files you may not trust. When off, a file is decoded only when you open it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-thumbs-remote-hint">
+        <source>Downloads pictures from servers to make them, which uses more data and battery and can slow down browsing</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

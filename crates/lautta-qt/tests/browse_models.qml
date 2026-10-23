@@ -14,6 +14,9 @@ Item {
     property string failedKind: ""
     property string failedSubject: ""
     property bool relisted: false
+    property bool moved: false
+    property bool movedAtOnce: false
+    property bool refused: false
 
     LocationsModel { id: locs }
     FavouritesModel { id: favs }
@@ -82,12 +85,22 @@ Item {
         return null
     }
 
+    // The list row of a layout row, -1 when none.
+    function layoutIndex(section, item) {
+        for (var i = 0; i < layoutRows.count; ++i) {
+            var r = layoutRows.itemAt(i)
+            if (r && r.lsection === section && r.litem === item)
+                return i
+        }
+        return -1
+    }
+
     function deviceRows() {
         var names = []
         for (var i = 0; i < rows.count; ++i) {
             var r = rows.itemAt(i)
             if (r && r.rsection === "device")
-                names.push(r.rkind === "deleted" ? "deleted" : r.rname)
+                names.push(r.rkind === "deleted" || r.rkind === "recents" ? r.rkind : r.rname)
         }
         return names.join(",")
     }
@@ -230,7 +243,7 @@ Item {
              function() { layout.moveTo("device", "deleted", 0) },
              function() {
                  var d = layoutRow("device", "deleted")
-                 return deviceRows().indexOf("deleted,Documents") === 0 && d !== null && d.lplace === 0
+                 return deviceRows().indexOf("deleted,recents,Documents") === 0 && d !== null && d.lplace === 0
                         && d.marked && layoutRow("device", "user-music").marked
              })
         step("restore defaults",
@@ -240,8 +253,28 @@ Item {
              },
              function() {
                  var d = layoutRow("device", "deleted")
-                 return deviceRows().indexOf("Documents") === 0 && /,deleted$/.test(deviceRows())
+                 return deviceRows().indexOf("recents,Documents") === 0 && /,deleted$/.test(deviceRows())
                         && d !== null && d.lplace > 0
+             })
+        // A dragged row follows the finger (BRW-12): it moves at once, by
+        // the same delegate, the places follow, and the order is stored
+        // behind it without the row moving back.
+        step("a carried row moves at once and is stored",
+             function() {
+                 var at = layoutIndex("device", "recents")
+                 var nearby = layoutIndex("nearby", "nearby")
+                 layoutRow("device", "recents").marked = true
+                 root.moved = layout.moveRow(at, at + 1) && layout.moveRow(at + 1, at + 2)
+                 var r = layoutRows.itemAt(at + 2)
+                 root.movedAtOnce = r.litem === "recents" && r.marked && r.lplace === 2
+                                    && layoutRows.itemAt(at).lplace === 0
+                 root.refused = !layout.moveRow(at, at) && !layout.moveRow(nearby, nearby - 1)
+                                && !layout.moveRow(at, layoutRows.count)
+             },
+             function() {
+                 var r = layoutRow("device", "recents")
+                 return root.moved && root.movedAtOnce && root.refused
+                        && deviceRows().split(",")[2] === "recents" && r.lplace === 2 && r.marked
              })
         step("a remote folder lists",
              function() {
@@ -320,44 +353,63 @@ Item {
                  favs.remove(favs.idOf("lautta://user-music/"))
              },
              function() { return !has("favourite") })
-        // The favourite dialog: opened on a folder, it saves by URI, adds
+        // The favourite page: opened on a folder, it saves by URI, adds
         // a second favourite next to the first and removes by URI.
-        step("dialog adds a first favourite",
-             function() { favs.save(docs, "Docs", "", true) },
+        step("page adds a first favourite",
+             function() { favs.save(docs, "Docs", "", "", true) },
              function() { return favouriteNames() === "Docs" })
-        step("dialog adds a second favourite",
-             function() { favs.save("lautta://user-music/", "Tunes", "#4fa3e5", true) },
+        step("page adds a second favourite",
+             function() { favs.save("lautta://user-music/", "Tunes", "#4fa3e5", "", true) },
              function() { return favouriteNames() === "Docs,Tunes" })
-        step("dialog relabels a favourite",
-             function() { favs.save(docs, "Papers", "", true) },
+        step("page relabels a favourite",
+             function() { favs.save(docs, "Papers", "", "", true) },
              function() { return favouriteNames() === "Papers,Tunes" })
+        // ORG-1: the chosen icon is stored and shown, tinted; an unknown one
+        // is the default star.
+        step("page gives a favourite an icon",
+             function() { favs.save(docs, "Papers", "#e5604f", "home", true) },
+             function() {
+                 var f = row("favourite", "Papers")
+                 var stored = JSON.parse(favs.get(favs.idOf(docs)))
+                 return f !== null && f.ricon === "image://theme/icon-m-home" && f.rcolour === "#e5604f"
+                        && stored.icon === "home" && stored.defaultIcon === "image://theme/icon-m-favorite"
+                        && favs.iconChoices()[0] === "favorite" && favs.iconChoices().indexOf("home") > 0
+             })
+        step("an unknown icon is the star",
+             function() { favs.save(docs, "Papers", "", "no-such-icon", true) },
+             function() {
+                 var f = row("favourite", "Papers")
+                 return f !== null && f.ricon === "image://theme/icon-m-favorite" && f.rcolour === ""
+                        && JSON.parse(favs.get(favs.idOf(docs))).icon === ""
+             })
         // ORG-1: a file is a favourite as a file, under the folder it is in.
-        step("dialog adds a file favourite",
-             function() { favs.save(a, "Notes", "", false) },
+        step("page adds a file favourite",
+             function() { favs.save(a, "Notes", "", "", false) },
              function() {
                  var f = row("favourite", "Notes")
                  var stored = JSON.parse(favs.get(favs.idOf(a)))
                  return f !== null && f.rfile && f.rplace === "Documents" && f.ricon === "image://theme/icon-m-document"
-                        && stored.isDir === false && stored.place === "Documents"
+                        && stored.isDir === false && stored.place === "Documents" && stored.icon === ""
+                        && stored.defaultIcon === "image://theme/icon-m-document"
                         && !row("favourite", "Papers").rfile && row("favourite", "Papers").ricon === "image://theme/icon-m-favorite"
              })
         step("relabelling it keeps it a file",
-             function() { favs.save(a, "Lecture notes", "", true) },
+             function() { favs.save(a, "Lecture notes", "", "", true) },
              function() {
                  var f = row("favourite", "Lecture notes")
                  return f !== null && f.rfile && JSON.parse(favs.get(favs.idOf(a))).isDir === false
              })
-        step("dialog removes favourites",
+        step("page removes favourites",
              function() {
                  favs.removeUri(docs)
                  favs.removeUri("lautta://user-music/")
                  favs.removeUri(a)
              },
              function() { return !has("favourite") && favs.idOf(docs) === -1 && favs.idOf(a) === -1 })
-        step("a closed dialog's change still reaches Browse",
+        step("a closed page's change still reaches Browse",
              function() {
                  var gone = Qt.createQmlObject("import Lautta 1.0; FavouritesModel { }", root)
-                 gone.save(docs, "Gone", "", true)
+                 gone.save(docs, "Gone", "", "", true)
                  gone.destroy()
              },
              function() { return favouriteNames() === "Gone" })

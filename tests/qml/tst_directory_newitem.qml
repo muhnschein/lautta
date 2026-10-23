@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Scenario on the target (real Silica): the folder pulley's New folder opens
 // NewItemDialog titled New folder, with the name field and no type to pick,
-// and accepting it makes a folder. Fails when the dialog offers a type, takes
-// the bin's name at the root or makes something other than a folder.
+// and accepting it makes a folder. Fails when the dialog offers a type,
+// refuses a hidden name at the root (the Trash keeps no bin there since
+// schema 6, OPS-8) or makes something other than a folder.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -88,10 +89,10 @@ ApplicationWindow {
                 var fields = findAll(win.dialog, function(x) { return x.errorHighlight !== undefined && x.visible }, [])
                 if (fields.length !== 1)
                     return win.fail("one name field: " + fields.length)
-                // The bin's name, at the location's root (OPS-8).
+                // The old bin's name is a name like any other (OPS-8).
                 fields[0].text = ".lautta-trash"
-                if (win.dialog.canAccept || !fields[0].errorHighlight)
-                    return win.fail("the bin's name is refused at the root")
+                if (!win.dialog.canAccept || fields[0].errorHighlight)
+                    return win.fail("the old bin's name is free at the root")
                 fields[0].text = "Plans"
                 win.next()
                 break
