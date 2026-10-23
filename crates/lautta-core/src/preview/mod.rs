@@ -4,5 +4,6 @@
 //! renders the results.
 
 pub mod exif;
+pub mod highlight;
 pub mod markdown;
 pub mod text;

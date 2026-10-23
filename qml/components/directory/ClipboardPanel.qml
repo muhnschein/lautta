@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The docked paste bar (SPEC OPS-10, board DirectoryPulley): what is on the
-// clipboard, where it comes from, paste here and clear. `owner` is the
-// DirectoryView.
+// clipboard, where it comes from, paste here and clear. Opaque (UI-10).
+// `owner` is the DirectoryView.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -30,6 +30,7 @@ DockedPanel {
     width: parent ? parent.width : 0
     height: Theme.itemSizeLarge
     open: owner ? App.clipboardCount > 0 && !owner.selecting : false
+    background: BarBackground { }
 
     Row {
         anchors {

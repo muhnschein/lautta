@@ -1,25 +1,22 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// New folder or empty file in `parentUri` (board NewItem). The dialog only
-// asks: after it is accepted the caller creates the item with
-// `DirectoryModel.createFolder/createFile(itemName)` (`isFolder` says which).
-// A name that already exists is shown as an error instead of a hint, and the
-// button stays off.
+// New folder in `parentUri` (board NewItem). The dialog only asks: after it
+// is accepted the caller creates the folder with
+// `DirectoryModel.createFolder(itemName)`. A name that already exists is
+// shown as an error instead of a hint, and the button stays off.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/ErrorText.js" as ErrorText
+import "../components/directory/Names.js" as Names
 
 Dialog {
     id: dialog
 
     property string parentUri
-    // Folders only (the folder picker's "New folder"): hides the type.
-    property bool foldersOnly
     readonly property string itemName: nameField.text
-    readonly property bool isFolder: foldersOnly || typeBox.currentIndex === 0
     // "folder", "file" or "" for what already has this name here.
     readonly property string clash: parentModel.count >= 0 ? parentModel.nameKind(nameField.text) : ""
-    readonly property bool badName: nameField.text.indexOf("/") >= 0 || nameField.text === "." || nameField.text === ".."
+    readonly property bool badName: Names.invalid(nameField.text)
 
     function errorText() {
         if (clash === "folder")
@@ -54,26 +51,8 @@ Dialog {
             DialogHeader {
                 //% "Create"
                 acceptText: qsTrId("lautta-dir-new-create")
-                //% "New in %1"
-                title: qsTrId("lautta-dir-new-title").arg(App.nameOf(dialog.parentUri))
-            }
-
-            ComboBox {
-                id: typeBox
-
-                visible: !dialog.foldersOnly
-                //% "Type"
-                label: qsTrId("lautta-dir-new-type")
-                menu: ContextMenu {
-                    MenuItem {
-                        //% "Folder"
-                        text: qsTrId("lautta-dir-new-type-folder")
-                    }
-                    MenuItem {
-                        //% "File"
-                        text: qsTrId("lautta-dir-new-type-file")
-                    }
-                }
+                //% "New folder"
+                title: qsTrId("lautta-dir-new-folder-title")
             }
 
             TextField {

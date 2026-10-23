@@ -38,6 +38,9 @@ screen; `design/STYLE.md` is the Silica style kit).
   goes through `crate::db::Db` (a `Mutex<rusqlite::Connection>`), only from blocking
   contexts.
 - SPDX header `// SPDX-License-Identifier: LGPL-2.1-or-later` on every source file.
+  Third-party code keeps its own licence and copyright headers: `third_party/` (crates)
+  and `qml/components/viewers/gallery/` (Jolla Gallery's viewer, BSD-3-Clause, with the
+  licence text); a `LAUTTA.md` next to it says where it comes from and what changed.
 - Comments explain *why*; cite requirement IDs where a rule comes from the spec.
 
 ## Layout
@@ -48,7 +51,7 @@ crates/lautta-bridge-proto   org.netvfs.Bridge1 types + zbus proxy + fake bridge
 crates/lautta-qt             qmetaobject models/facades, C++ glue (SailfishApp, MediaSource)
 crates/harbour-lautta        the binary (exported C main, SPEC RS-3)
 qml/                         pages/, components/, dialogs/, viewers/, cover/
-tests/bridge-contract        netvfs's protocol contract (copied from netvfs a025b1f)
+tests/bridge-contract        netvfs's protocol contract (copied from netvfs 1470242)
 ```
 
 Shared core types: `Error`/`ErrorKind` (error.rs), `VPath` (vpath.rs), `Entry`/`Kind`/

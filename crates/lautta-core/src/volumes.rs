@@ -2,12 +2,15 @@
 //! Removable volumes (SPEC LOC-3): SD cards and USB drives mounted below
 //! `/run/media/$USER/<label-or-uuid>`.
 //!
-//! SPEC LOC-3 also names UDisks2 signals as a source. That D-Bus path is out
-//! of scope here: the folder scan plus an inotify watch on the media root
-//! sees exactly the same mounts and unmounts (udisks creates and removes the
+//! No UDisks2 listener: the folder scan plus an inotify watch on the media
+//! root sees the same mounts and unmounts (udisks creates and removes the
 //! mount point directories), needs no D-Bus dependency in the core, and is
-//! trivial to test. A UDisks2 listener can later feed [`VolumeEvent`]s into
-//! the same registry call without changing anything else.
+//! trivial to test. The core keeps a [`VolumeWatcher`] for its lifetime;
+//! as the watch can miss a mount inside the sandbox's mount namespace,
+//! Browse also rescans when it refreshes. A UDisks2 listener could feed
+//! [`VolumeEvent`]s into the same registry call without changing anything
+//! else. The sandbox mounts nothing itself: the bridge mounts and unmounts
+//! drives (netvfs XB-20, [`crate::app::Core::mount_drive`]).
 
 use crate::error::Result;
 use crate::paths::AppPaths;
@@ -61,6 +64,12 @@ pub fn sanitize_id(name: &OsStr) -> String {
         }
     }
     out
+}
+
+/// The location id of a volume mounted on the folder `name` of the media
+/// root (LOC-7), as [`Volume::location_id`] makes it.
+pub fn location_id_of(name: &OsStr) -> String {
+    format!("vol-{}", sanitize_id(name))
 }
 
 /// The media root of the current user: `/run/media/$USER`, with the home

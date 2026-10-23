@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Host test of which actions an item offers where (ContextActions.js), SPEC
-// §15.3: the long-press menu and the Details page's pulley.
+// §15.3: the long-press menu, More actions last, and the rows of the More
+// actions page, each with its theme icon (OPS-12). There is no Details page
+// any more.
 import QtQuick 2.6
 import "../../../qml/components/directory/ContextActions.js" as Actions
+import "../../../qml/components/FileIcons.js" as FileIcons
 
 Item {
     function check(cond, what) {
@@ -23,40 +26,63 @@ Item {
 
     function testMenu() {
         same(ids(Actions.menu({ "isDir": false, "writable": true })),
-             ["share", "copy", "cut", "rename", "info", "delete"], "file in a writable folder")
+             ["share", "copy", "cut", "rename", "delete", "more"], "file in a writable folder")
         same(ids(Actions.menu({ "isDir": true, "writable": true })),
-             ["copy", "cut", "rename", "info", "delete"], "folder: no Share")
+             ["copy", "cut", "rename", "delete", "more"], "folder: no Share")
         same(ids(Actions.menu({ "isDir": false, "writable": false })),
-             ["share", "copy", "info"], "read-only folder: nothing that changes it")
-        same(ids(Actions.menu({ "isDir": true, "writable": false })), ["copy", "info"], "read-only folder, folder")
+             ["share", "copy", "more"], "read-only folder: nothing that changes it")
+        same(ids(Actions.menu({ "isDir": true, "writable": false })), ["copy", "more"], "read-only folder, folder")
     }
 
-    function testDetails() {
-        same(ids(Actions.details({ "isDir": false })), ["open_with", "compress"], "file")
-        same(ids(Actions.details({ "isDir": true })), ["compress"], "folder: no Open with")
+    function testMore() {
+        var ctxs = [{ "isDir": false, "writable": true }, { "isDir": true, "writable": true },
+                    { "isDir": false, "writable": false }, { "isDir": true, "writable": false }]
+        for (var i = 0; i < ctxs.length; ++i) {
+            var menu = ids(Actions.menu(ctxs[i]))
+            check(menu[menu.length - 1] === "more", "More actions is the last row: " + JSON.stringify(ctxs[i]))
+            same(ids(Actions.more(ctxs[i])), ["favourite", "compress"], "More actions: " + JSON.stringify(ctxs[i]))
+        }
+    }
+
+    function testIcons() {
+        var ctxs = [{ "isDir": false, "writable": true }, { "isDir": true, "writable": false }]
+        for (var i = 0; i < ctxs.length; ++i) {
+            var rows = Actions.more(ctxs[i])
+            same(rows.map(function(r) { return r.icon }),
+                 ["image://theme/icon-m-favorite", FileIcons.archive],
+                 "More actions icons: " + JSON.stringify(ctxs[i]))
+        }
+        same(Actions.icon("favourite"), "image://theme/icon-m-favorite", "Add to favourites")
+        same(Actions.icon("compress"), "image://theme/icon-m-file-archive-folder",
+             "Compress: the archive icon, not the off-centre zipper badge")
+        same(Actions.icon("copy"), "", "the menu's rows have no icon")
     }
 
     function testText() {
         // On the host qsTrId gives back the id.
-        var entries = Actions.menu({ "isDir": false, "writable": true }).concat(Actions.details({ "isDir": false }))
+        var entries = Actions.menu({ "isDir": false, "writable": true }).concat(Actions.more({ "isDir": false }))
         for (var i = 0; i < entries.length; ++i)
             check(entries[i].text.indexOf("lautta-dir-act-") === 0, entries[i].id + " has a translated text")
-        same(Actions.text("info"), "lautta-dir-act-details", "Info is called Details")
+        same(Actions.text("more"), "lautta-dir-act-more", "More actions")
+        same(Actions.text("favourite"), "lautta-dir-act-favourite", "Add to favourites")
+        same(Actions.text("info"), "info", "Details is gone")
         same(Actions.text("copy_to"), "copy_to", "Copy to… is gone")
     }
 
     function testGone() {
-        var gone = ["copy_to", "move_to", "download", "upload_to", "extract", "favourite", "open_remote", "select"]
+        var gone = ["info", "open_with", "copy_to", "move_to", "download", "upload_to", "extract", "open_remote", "select"]
         var ctxs = [{ "isDir": false, "writable": true }, { "isDir": true, "writable": true }]
         for (var i = 0; i < gone.length; ++i) {
             for (var j = 0; j < ctxs.length; ++j)
                 check(!Actions.applicable(gone[i], ctxs[j]), gone[i] + " is not offered")
         }
+        check(Actions.details === undefined, "no Details pulley")
     }
 
     Component.onCompleted: {
         testMenu()
-        testDetails()
+        testMore()
+        testIcons()
         testText()
         testGone()
     }

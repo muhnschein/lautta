@@ -213,7 +213,7 @@
     "ImageDeleteRemote.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Remote delete remorse",
+      "title": "Permanent delete dialog",
       "w": 400,
       "x": 4800,
       "y": 14440
@@ -234,30 +234,6 @@
       "x": 0,
       "y": 8200
     },
-    "Info.dc.html": {
-      "h": 1300,
-      "is_interactive": true,
-      "title": "Info",
-      "w": 400,
-      "x": 1920,
-      "y": 4860
-    },
-    "InfoPulley.dc.html": {
-      "h": 1300,
-      "is_interactive": true,
-      "title": "Info \u00b7 pulley (Open with, Compress)",
-      "w": 400,
-      "x": 2400,
-      "y": 4860
-    },
-    "LocationSettings.dc.html": {
-      "h": 1000,
-      "is_interactive": true,
-      "title": "Location settings",
-      "w": 400,
-      "x": 480,
-      "y": 10900
-    },
     "Main.dc.html": {
       "h": 1640,
       "is_interactive": true,
@@ -277,7 +253,7 @@
     "NewItem.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "New folder / file",
+      "title": "New folder",
       "w": 400,
       "x": 3840,
       "y": 2060
@@ -317,7 +293,7 @@
     "RecentlyDeleted.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Recently deleted",
+      "title": "Trash",
       "w": 400,
       "x": 4320,
       "y": 4860
@@ -325,7 +301,7 @@
     "RecentlyDeletedEmpty.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Empty Recently deleted",
+      "title": "Empty trash",
       "w": 400,
       "x": 2400,
       "y": 14440
@@ -337,14 +313,6 @@
       "w": 400,
       "x": 2400,
       "y": 0
-    },
-    "RecentsFilter.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Recents \u00b7 filter",
-      "w": 400,
-      "x": 1440,
-      "y": 14440
     },
     "RecentsPulley.dc.html": {
       "h": 860,
@@ -378,14 +346,6 @@
       "x": 480,
       "y": 9480
     },
-    "SearchPulley.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Search \u00b7 pulley",
-      "w": 400,
-      "x": 5280,
-      "y": 14440
-    },
     "ServerAdhocMenu.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -403,7 +363,7 @@
       "y": 0
     },
     "Settings.dc.html": {
-      "h": 2100,
+      "h": 820,
       "is_interactive": true,
       "title": "Settings",
       "w": 400,
@@ -539,7 +499,7 @@
       "y": 8200
     },
     "ViewOptions.dc.html": {
-      "h": 1100,
+      "h": 1600,
       "is_interactive": true,
       "title": "View options",
       "w": 400,
@@ -676,8 +636,6 @@
     "FolderPicker.dc.html",
     "PlanSummary.dc.html",
     "Conflict.dc.html",
-    "Info.dc.html",
-    "InfoPulley.dc.html",
     "Compress.dc.html",
     "Extract.dc.html",
     "RecentlyDeleted.dc.html",
@@ -699,19 +657,16 @@
     "Search.dc.html",
     "SearchFilters.dc.html",
     "Settings.dc.html",
-    "LocationSettings.dc.html",
     "About.dc.html",
     "DirectoryLandscape.dc.html",
     "DirectorySelectPulley.dc.html",
     "RecentsPulley.dc.html",
-    "RecentsFilter.dc.html",
     "RecentlyDeletedEmpty.dc.html",
     "FolderPickerPulley.dc.html",
     "TransferDetailsPulley.dc.html",
     "TextViewerPulley.dc.html",
     "ServerAdhocMenu.dc.html",
     "ImageDeleteRemote.dc.html",
-    "SearchPulley.dc.html",
     "ActivityBar.dc.html",
     "ActivityBarQuestion.dc.html",
     "ActivityBarDone.dc.html"

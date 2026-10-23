@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! User-level actions of the operations area on [`Core`](crate::app::Core):
 //! plan summaries and pending plans (OPS-1), conflicts before the run
-//! (OPS-2), compress and extract (PRV-10/11), the Info page (OPS-12) and
-//! *Recently deleted* (OPS-8). Everything is Qt-free; the Qt layer only
+//! (OPS-2), compress and extract (PRV-10/11) and the *Trash*
+//! (OPS-8). Everything is Qt-free; the Qt layer only
 //! forwards.
 
 use crate::app::{Core, Started};
 use crate::compress::{compress, ArchiveKind, CompressOptions};
-use crate::entry::{cap, ms_to_system_time, system_time_to_ms, Kind};
+use crate::entry::{cap, Kind};
 use crate::error::{Error, ErrorKind, Result};
-use crate::mime::{category_of, mime_of};
 use crate::ops::conflict as conflict_ops;
 use crate::ops::names::{keep_both_name, split_extension};
 use crate::ops::{Conflict, ConflictChoice, OperationKind, Plan};
-use crate::provider::{list_all, AttributeChanges, Disposition, Lane, ProgressSink, Provider, WriteOptions};
+use crate::provider::{list_all, Disposition, Lane, ProgressSink, Provider, WriteOptions};
 use crate::settings::Settings;
 use crate::sys;
 use crate::transfer::TransferId;
@@ -329,82 +328,9 @@ pub fn archive_folder_name(name: &str) -> String {
     }
 }
 
-// ------------------------------------------------------------ info
-
-/// Everything the Info page shows about one item (OPS-12).
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InfoData {
-    pub name: String,
-    pub name_is_lossy: bool,
-    pub uri: String,
-    pub parent_uri: String,
-    pub folder_name: String,
-    pub is_dir: bool,
-    pub is_symlink: bool,
-    pub link_target: Option<String>,
-    pub category: String,
-    pub mime_type: String,
-    pub size: Option<u64>,
-    pub modified: Option<i64>,
-    pub created: Option<i64>,
-    /// Permission bits (`0o7777`), when known.
-    pub mode: Option<u32>,
-    pub mode_text: String,
-    pub owner: Option<String>,
-    pub group: Option<String>,
-    pub address: String,
-    pub location_name: String,
-    pub fs_type: Option<String>,
-    pub free_bytes: Option<u64>,
-    pub total_bytes: Option<u64>,
-    pub can_symlink: bool,
-    pub can_hardlink: bool,
-    pub can_set_mtime: bool,
-}
-
-/// `rwxr-xr-x` for the permission bits.
-pub fn mode_text(mode: u32) -> String {
-    const BITS: [(u32, char); 9] = [
-        (0o400, 'r'),
-        (0o200, 'w'),
-        (0o100, 'x'),
-        (0o040, 'r'),
-        (0o020, 'w'),
-        (0o010, 'x'),
-        (0o004, 'r'),
-        (0o002, 'w'),
-        (0o001, 'x'),
-    ];
-    BITS.iter()
-        .map(|(bit, c)| if mode & bit != 0 { *c } else { '-' })
-        .collect()
-}
-
-/// Name of the file system from `statfs` magic numbers.
-pub fn fs_type_name(magic: u64) -> Option<&'static str> {
-    Some(match magic {
-        0xEF53 => "ext4",
-        0x4d44 => "vfat",
-        0x2011_BAB0 => "exFAT",
-        0x0102_1994 => "tmpfs",
-        0x9123_683E => "btrfs",
-        0xF2F5_2010 => "f2fs",
-        0x5346_544e => "ntfs",
-        0x6573_5546 => "fuse",
-        0x6969 => "nfs",
-        0xFE53_4D42 | 0xFF53_4D42 => "smb",
-        0x794c_7630 => "overlayfs",
-        0x5846_5342 => "xfs",
-        0xE0F5_E1E2 => "erofs",
-        0x7371_7368 => "squashfs",
-        _ => return None,
-    })
-}
-
 // ------------------------------------------------------------ trash
 
-/// One row of *Recently deleted* (OPS-8).
+/// One row of the *Trash* (OPS-8).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrashEntry {
@@ -717,123 +643,9 @@ impl Core {
         finished
     }
 
-    // -------------------------------------------------------- info
-
-    /// Everything the Info page shows (OPS-12).
-    pub async fn info(&self, uri: &Uri) -> Result<InfoData> {
-        let provider = self.provider(&uri.location)?;
-        let entry = provider.stat(&uri.path, false, Lane::Interactive).await?;
-        let caps = provider.capabilities();
-        let local = self.locations.to_local_path(uri);
-        let space = provider.space(&uri.path).await.ok();
-        let link_target = if entry.is_symlink() {
-            provider
-                .read_link(&uri.path)
-                .await
-                .ok()
-                .map(|t| String::from_utf8_lossy(&t).into_owned())
-        } else {
-            None
-        };
-        let parent = uri.parent();
-        let mode = entry.mode.map(|m| m & 0o7777);
-        Ok(InfoData {
-            name: if uri.path.is_root() {
-                self.location(&uri.location).map(|l| l.name).unwrap_or_default()
-            } else {
-                entry.display_name()
-            },
-            name_is_lossy: entry.name_is_lossy(),
-            uri: uri.to_string(),
-            parent_uri: parent.as_ref().map(Uri::to_string).unwrap_or_default(),
-            folder_name: self.display_folder(uri),
-            is_dir: entry.is_dir(),
-            is_symlink: entry.is_symlink(),
-            link_target,
-            category: category_of(&entry).icon_name().to_owned(),
-            mime_type: mime_of(&entry).unwrap_or_default(),
-            size: if entry.is_dir() { None } else { entry.size },
-            modified: entry.modified_ms(),
-            created: entry.created.map(system_time_to_ms),
-            mode_text: mode.map(mode_text).unwrap_or_default(),
-            mode,
-            owner: entry.owner.clone(),
-            group: entry.group.clone(),
-            address: self.locations.display_address(uri),
-            location_name: self.location(&uri.location).map(|l| l.name).unwrap_or_default(),
-            fs_type: local
-                .as_ref()
-                .and_then(|p| sys::fs_magic(p).ok())
-                .and_then(fs_type_name)
-                .map(str::to_owned),
-            free_bytes: space.map(|s| s.free),
-            total_bytes: space.map(|s| s.total),
-            can_symlink: caps.writable() && caps.has(cap::SYMLINKS),
-            can_hardlink: caps.writable() && caps.has(cap::HARDLINKS),
-            can_set_mtime: caps.writable() && caps.has(cap::SET_MTIME),
-        })
-    }
-
-    /// Sets the modification time (ms since the epoch), if the location can.
-    pub async fn set_modified(&self, uri: &Uri, ms: i64) -> Result<()> {
-        let changes = AttributeChanges {
-            mode: None,
-            modified: Some(ms_to_system_time(ms)),
-        };
-        self.provider(&uri.location)?
-            .set_attributes(&uri.path, changes)
-            .await?;
-        if let Some(parent) = uri.parent() {
-            self.invalidate(&parent);
-        }
-        Ok(())
-    }
-
-    /// A hard or symbolic link to `target` in `dest_dir`, named like the
-    /// target (numbered when taken).
-    pub async fn make_link(&self, target: &Uri, dest_dir: &Uri, hard: bool) -> Result<Uri> {
-        let provider = self.provider(&dest_dir.location)?;
-        let name = target
-            .name()
-            .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "cannot link a location"))?;
-        let taken: HashSet<Vec<u8>> = list_all(provider.as_ref(), &dest_dir.path, Lane::Interactive)
-            .await?
-            .into_iter()
-            .map(|e| e.name)
-            .collect();
-        let link = dest_dir.join(&free_name(name, &taken))?;
-        if hard {
-            if target.location != dest_dir.location {
-                return Err(Error::kind(ErrorKind::CrossesDevice));
-            }
-            provider.make_hardlink(&target.path, &link.path).await?;
-        } else {
-            let bytes = self.symlink_target(target, dest_dir)?;
-            provider.make_symlink(&bytes, &link.path).await?;
-        }
-        self.invalidate(dest_dir);
-        Ok(link)
-    }
-
-    fn symlink_target(&self, target: &Uri, dest_dir: &Uri) -> Result<Vec<u8>> {
-        use std::os::unix::ffi::OsStrExt;
-        if let (Some(real), Some(_)) = (
-            self.locations.to_local_path(target),
-            self.locations.to_local_path(dest_dir),
-        ) {
-            return Ok(real.as_os_str().as_bytes().to_vec());
-        }
-        if target.location != dest_dir.location {
-            return Err(Error::kind(ErrorKind::Unsupported));
-        }
-        let mut bytes = vec![b'/'];
-        bytes.extend_from_slice(target.path.as_bytes());
-        Ok(bytes)
-    }
-
     // -------------------------------------------------------- trash
 
-    /// *Recently deleted*, newest first (OPS-8).
+    /// The *Trash*, newest first (OPS-8).
     pub fn trash_entries(&self, now_secs: i64) -> Result<Vec<TrashEntry>> {
         let retention = self.settings().recently_deleted_retention_days;
         let mut items = self.trash.list()?;
@@ -855,6 +667,30 @@ impl Core {
                 }
             })
             .collect())
+    }
+
+    /// Removes what is older than the retention setting from the Trash
+    /// (OPS-8). Returns the number of items removed.
+    pub fn purge_trash(&self, now_secs: i64) -> Result<usize> {
+        let retention = self.settings().recently_deleted_retention_days;
+        self.trash
+            .purge_before(now_secs.saturating_sub(i64::from(retention) * SECS_PER_DAY))
+    }
+
+    /// The Trash's work at start (OPS-8), once the settings are known: the
+    /// expired items go first, so they are not moved for nothing; then
+    /// [`Trash::tidy`](crate::trash::Trash::tidy) drains the bins that
+    /// schemas 4 and 5 kept at the roots of the locations. Blocking.
+    pub fn tidy_trash(&self, now_secs: i64) -> Result<usize> {
+        let purged = self.purge_trash(now_secs);
+        let moved = self.trash.tidy(&self.locations.trash_roots());
+        purged.and(moved)
+    }
+
+    /// Empties the Trash: every item, and what a crash left in the trash
+    /// folder (OPS-8). Returns the number of items removed.
+    pub fn empty_trash(&self) -> Result<usize> {
+        self.trash.empty()
     }
 
     // -------------------------------------------------------- share

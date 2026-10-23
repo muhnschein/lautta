@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The `App` singleton (doc/QML-API.md): readiness, settings, clipboard,
-//! undo, URI helpers and opening files outside the app.
+//! undo, URI helpers, opening files outside the app and the sample folder of
+//! the view options preview.
 
+use crate::directory::preview;
 use crate::json::{from_json, json_value_to_qvariant, to_json};
-use crate::runtime::{core, spawn_then};
+use crate::runtime::{core, handle, spawn_then};
 use lautta_core::clipboard::{Clipboard, ClipboardMode};
 use lautta_core::mime::{category_of_name, extension_of, from_extension, viewer_for, FileCategory, Viewer};
 use lautta_core::settings::Settings;
+use lautta_core::transfer::scheduler::is_bridge_location;
+use lautta_core::trash::now_secs;
 use lautta_core::undo::UndoAction;
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
-use qmetaobject::{QPointer, QSingletonInit};
+use qmetaobject::{QPointer, QSingletonInit, QVariantList};
 use std::time::Duration;
 
 /// How long the undo banner stays (OPS-9).
@@ -35,6 +39,18 @@ pub struct App {
     loadSettings: qt_method!(fn(&mut self, json: QString)),
     setting: qt_method!(fn(&self, key: QString) -> QVariant),
     setSetting: qt_method!(fn(&mut self, key: QString, value_json: QString) -> bool),
+    /// The view options preview (BRW-4): the sample entries as a folder
+    /// shows them with these view settings, one map per shown entry.
+    previewRows: qt_method!(
+        fn(
+            &self,
+            entries: QString,
+            sort_key: QString,
+            descending: bool,
+            folders_first: bool,
+            show_hidden: bool,
+        ) -> QVariantList
+    ),
 
     childUri: qt_method!(fn(&self, parent: QString, name: QString) -> QString),
     parentUri: qt_method!(fn(&self, uri: QString) -> QString),
@@ -42,6 +58,9 @@ pub struct App {
     displayAddress: qt_method!(fn(&self, uri: QString) -> QString),
     locationName: qt_method!(fn(&self, uri: QString) -> QString),
     isLocal: qt_method!(fn(&self, uri: QString) -> bool),
+    /// Whether `uri` is on a server (LOC-7), even one that is gone: lines
+    /// that name its location mark it (§15.5).
+    isRemote: qt_method!(fn(&self, uri: QString) -> bool),
     localUrl: qt_method!(fn(&self, uri: QString) -> QString),
     categoryOf: qt_method!(fn(&self, name_or_uri: QString) -> QString),
     viewerFor: qt_method!(fn(&self, name_or_uri: QString, mime: QString) -> QString),
@@ -117,6 +136,13 @@ impl App {
         let map = from_json(&json.to_string()).unwrap_or_default();
         core.apply_settings(Settings::from_map(&map));
         self.publish_settings();
+        // The user's retention is known from here on: purge, then drain
+        // the bins of schemas 4 and 5 into the Trash (OPS-8).
+        handle().spawn_blocking(move || {
+            if let Err(e) = core.tidy_trash(now_secs()) {
+                log::warn!("tidying the Trash failed: {e}");
+            }
+        });
     }
 
     fn publish_settings(&mut self) {
@@ -149,6 +175,18 @@ impl App {
         core.apply_settings(settings);
         self.publish_settings();
         true
+    }
+
+    fn previewRows(
+        &self,
+        entries: QString,
+        sort_key: QString,
+        descending: bool,
+        folders_first: bool,
+        show_hidden: bool,
+    ) -> QVariantList {
+        let prefs = preview::prefs(&sort_key.to_string(), descending, folders_first, show_hidden);
+        preview::rows(&entries.to_string(), &prefs)
     }
 
     fn childUri(&self, parent: QString, name: QString) -> QString {
@@ -195,6 +233,10 @@ impl App {
 
     fn isLocal(&self, uri: QString) -> bool {
         matches!((core(), parse_uri(&uri)), (Some(c), Some(u)) if c.locations.to_local_path(&u).is_some())
+    }
+
+    fn isRemote(&self, uri: QString) -> bool {
+        parse_uri(&uri).is_some_and(|u| is_bridge_location(&u.location))
     }
 
     fn localUrl(&self, uri: QString) -> QString {

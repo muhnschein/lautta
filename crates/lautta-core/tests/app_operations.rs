@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The operations area on a temporary home: compress and extract through the
 //! engine, remote compress through a pipe, info, permissions, links,
-//! Recently deleted and the share probe.
+//! the Trash and the share probe.
 
 use lautta_core::app::{Core, Started};
 use lautta_core::app_operations::*;
@@ -340,48 +340,6 @@ async fn summary_conflicts_and_start_with_options() {
 }
 
 #[tokio::test]
-async fn info_and_links() {
-    let h = home().await;
-    write(&h.root.join("Documents/doc.txt"), b"abc");
-    let u = uri("lautta://user-documents/doc.txt");
-
-    let info = h.core.info(&u).await.unwrap();
-    assert_eq!(info.name, "doc.txt");
-    assert_eq!(info.size, Some(3));
-    assert_eq!(info.category, "text");
-    assert_eq!(info.folder_name, "Documents");
-    assert!(info.mode_text.len() == 9 && info.mode.is_some());
-    assert!(info.can_symlink);
-    assert!(info.free_bytes.is_some());
-    assert!(!info.is_dir);
-
-    let dl = uri("lautta://user-downloads/");
-    let hard = h.core.make_link(&u, &dl, true).await;
-    // Different locations: hard links are refused rather than guessed.
-    assert_eq!(hard.unwrap_err().kind, ErrorKind::CrossesDevice);
-    let sym = h.core.make_link(&u, &dl, false).await.unwrap();
-    assert_eq!(sym, uri("lautta://user-downloads/doc.txt"));
-    assert!(std::fs::symlink_metadata(h.root.join("Downloads/doc.txt"))
-        .unwrap()
-        .is_symlink());
-    let sym2 = h.core.make_link(&u, &dl, false).await.unwrap();
-    assert_eq!(sym2, uri("lautta://user-downloads/doc 2.txt"));
-    let same = uri("lautta://user-documents/");
-    let hard = h.core.make_link(&u, &same, true).await.unwrap();
-    assert_eq!(hard, uri("lautta://user-documents/doc 2.txt"));
-    assert_eq!(std::fs::read(h.root.join("Documents/doc 2.txt")).unwrap(), b"abc");
-}
-
-#[tokio::test]
-async fn set_modified_changes_the_time() {
-    let h = home().await;
-    write(&h.root.join("Documents/t.txt"), b"x");
-    let u = uri("lautta://user-documents/t.txt");
-    h.core.set_modified(&u, 1_000_000_000_000).await.unwrap();
-    assert_eq!(h.core.info(&u).await.unwrap().modified, Some(1_000_000_000_000));
-}
-
-#[tokio::test]
 async fn recently_deleted_entries_restore_and_empty() {
     let h = home().await;
     write(&h.root.join("Documents/Uni/old.txt"), b"1");
@@ -411,7 +369,7 @@ async fn recently_deleted_entries_restore_and_empty() {
     h.core.restore(old.id).await.unwrap();
     assert!(h.root.join("Documents/Uni/old.txt").is_file());
     assert_eq!(h.core.trash_entries(now).unwrap().len(), 1);
-    assert_eq!(h.core.trash.empty().unwrap(), 1);
+    assert_eq!(h.core.empty_trash().unwrap(), 1);
     assert!(h.core.trash_entries(now).unwrap().is_empty());
     assert_eq!(h.core.trash.total_size().unwrap(), 0);
 }

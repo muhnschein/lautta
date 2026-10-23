@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `TransfersModel`: the grouped list of the Transfers page (§15.4): active,
-//! waiting, paused and history.
+//! `TransfersModel`: the list of the Activity page (§15.4): what has not
+//! ended in queue order, then what ended, newest first, with each row's
+//! date section (`dateGroup`) and what it is doing (`group`: active,
+//! waiting, paused or history).
 
 use super::events;
 use crate::runtime::core;
@@ -13,9 +15,10 @@ use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
 /// Role names in role-id order (`Qt::UserRole + 1 + index`).
-const ROLES: [&str; 22] = [
+const ROLES: [&str; 23] = [
     "transferId",
     "group",
+    "dateGroup",
     "kind",
     "title",
     "state",
@@ -44,6 +47,7 @@ const FIRST_ROLE: i32 = 257;
 pub(super) struct RowData {
     pub id: i64,
     pub group: &'static str,
+    pub date_group: &'static str,
     pub kind: &'static str,
     pub title: String,
     pub state: String,
@@ -81,6 +85,7 @@ impl RowData {
         match role {
             "transferId" => QVariant::from(self.id),
             "group" => s(self.group),
+            "dateGroup" => s(self.date_group),
             "kind" => s(self.kind),
             "title" | "name" => s(&self.title),
             "state" => s(&self.state),
@@ -110,6 +115,7 @@ pub(super) fn transfer_row(r: &TransferRow) -> RowData {
     RowData {
         id: s.id,
         group: r.group.name(),
+        date_group: r.date_group.name(),
         kind: r.kind_name(),
         title: s.title.clone(),
         state: state_name(s.state).to_owned(),
@@ -252,6 +258,46 @@ mod tests {
         assert_eq!(r.progress(), 0.25);
         r.bytes_done = 500;
         assert_eq!(r.progress(), 1.0);
+    }
+
+    #[test]
+    fn rows_carry_their_date_section() {
+        use lautta_core::app_transfers::{Direction, TransferGroup};
+        use lautta_core::date_group::DateGroup;
+        use lautta_core::ops::OperationKind;
+        use lautta_core::transfer::{TransferOptions, TransferState, TransferSummary};
+        let row = TransferRow {
+            summary: TransferSummary {
+                id: 3,
+                kind: OperationKind::Copy,
+                title: "t".into(),
+                state: TransferState::Completed,
+                dest: lautta_core::Uri::root("a"),
+                position: 0,
+                created_ms: 1,
+                finished_ms: Some(2),
+                bytes_total: 0,
+                bytes_done: 0,
+                items_total: 1,
+                items_done: 1,
+                items_failed: 0,
+                error: None,
+                options: TransferOptions::default(),
+            },
+            group: TransferGroup::History,
+            date_group: DateGroup::LastSevenDays,
+            direction: Direction::Local,
+            bytes_done: 0,
+            rate: 0,
+            eta_secs: None,
+            questions: 0,
+            dest_name: String::new(),
+            dest_address: String::new(),
+        };
+        let data = transfer_row(&row);
+        assert_eq!((data.group, data.date_group), ("history", "last7Days"));
+        assert_eq!(data.value("dateGroup").to_qstring().to_string(), "last7Days");
+        assert_eq!(data.value("group").to_qstring().to_string(), "history");
     }
 
     #[test]

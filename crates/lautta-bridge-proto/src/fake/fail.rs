@@ -20,24 +20,32 @@ pub struct Fail {
 }
 
 impl Fail {
-    /// `org.netvfs.Error.<bare>`.
-    pub fn net(bare: &str, message: &str) -> Fail {
+    fn named(full: String, message: &str) -> Fail {
         Fail {
-            full: format!("org.netvfs.Error.{bare}"),
+            full,
             message: message.to_owned(),
             detail: None,
             retry_after_ms: None,
         }
     }
 
+    /// `org.netvfs.Error.<bare>`.
+    pub fn net(bare: &str, message: &str) -> Fail {
+        Fail::named(format!("org.netvfs.Error.{bare}"), message)
+    }
+
     /// `org.freedesktop.DBus.Error.InvalidArgs`.
     pub fn args(message: &str) -> Fail {
-        Fail {
-            full: "org.freedesktop.DBus.Error.InvalidArgs".to_owned(),
-            message: message.to_owned(),
-            detail: None,
-            retry_after_ms: None,
-        }
+        Fail::named("org.freedesktop.DBus.Error.InvalidArgs".to_owned(), message)
+    }
+
+    /// `org.freedesktop.DBus.Error.UnknownMethod`: what a bridge older than
+    /// `method` answers.
+    pub fn unknown_method(method: &str) -> Fail {
+        Fail::named(
+            "org.freedesktop.DBus.Error.UnknownMethod".to_owned(),
+            &format!("No such method \"{method}\""),
+        )
     }
 
     pub fn with_detail(mut self, detail: Option<String>, retry_after_ms: Option<u64>) -> Fail {
@@ -115,6 +123,9 @@ mod tests {
         let a = Fail::args("bad");
         assert_eq!(a.bare(), "org.freedesktop.DBus.Error.InvalidArgs");
         assert!(a.extra().is_empty());
+        let u = Fail::unknown_method("GetFeatures");
+        assert_eq!(u.name().as_str(), "org.freedesktop.DBus.Error.UnknownMethod");
+        assert_eq!(u.message(), "No such method \"GetFeatures\"");
         let t: Fail = TreeError {
             name: "NotFound",
             message: "x".into(),

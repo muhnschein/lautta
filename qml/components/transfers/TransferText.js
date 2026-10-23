@@ -4,6 +4,7 @@
 // formats sizes and times, doc/QML-API.md).
 .pragma library
 .import Sailfish.Silica 1.0 as Silica
+.import "../PlaceText.js" as PlaceText
 
 function size(bytes) {
     return Silica.Format.formatFileSize(bytes)
@@ -14,7 +15,7 @@ function duration(seconds) {
 }
 
 function when(ms) {
-    return Silica.Format.formatDate(new Date(ms), Silica.Formatter.TimepointRelativeCurrentDay)
+    return Silica.Format.formatDate(new Date(ms), Silica.Formatter.TimepointRelative)
 }
 
 function percent(done, total) {
@@ -137,6 +138,24 @@ function forms(r) {
 // r: { kind, direction, state, title, itemsTotal, destName }
 function title(r) {
     return forms(r)[r.state === "completed" ? ENDED : IMPERATIVE]
+}
+
+// The title split around the destination's name (PlaceText.around), for
+// a line that marks a server's name with its icon (§15.5).
+function titleParts(r) {
+    return PlaceText.around(function (dest) {
+        var marked = {}
+        for (var key in r)
+            marked[key] = r[key]
+        marked.destName = dest
+        return title(marked)
+    }, r.destName)
+}
+
+// Whether a transfer's destination is on a server (LOC-7): uploads and
+// transfers between servers go to one.
+function toServer(direction) {
+    return direction === "upload" || direction === "remote"
 }
 
 // "Copied 37 items to NAS", "Deleted notes.md", "Extracted dataset.tar.gz".

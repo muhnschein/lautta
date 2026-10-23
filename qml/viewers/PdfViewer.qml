@@ -36,6 +36,17 @@ Page {
         var item = view.itemAt(view.contentX + view.width / 2, view.contentY + view.height / 2)
         return item ? item.pageIndex + 1 : 1
     }
+    // The page at the top of the view (from 0; the first while the header
+    // shows): where reading is, as reopening puts that page at the top
+    // again (PRV-12). The page in the middle is often a later one, with
+    // short pages even at the top of the document.
+    readonly property int topPage: {
+        var x = view.contentX + view.width / 2
+        var y = Math.max(0, view.contentY)
+        // In the gap between two pages, the one below.
+        var item = view.itemAt(x, y) || view.itemAt(x, y + view.spacing)
+        return item ? item.pageIndex : 0
+    }
     // Search mode: the search field and the hits' bar are shown.
     property bool searchMode
     property alias searchText: searchField.text
@@ -235,11 +246,11 @@ Page {
     }
 
     // Where reading is, saved once scrolling has stopped for a moment.
-    onCurrentPageChanged: if (doc.loaded) remember.restart()
+    onTopPageChanged: if (doc.loaded) remember.restart()
     Timer {
         id: remember
         interval: 1000
-        onTriggered: doc.rememberPage(page.currentPage - 1)
+        onTriggered: doc.rememberPage(page.topPage)
     }
 
     Component {
@@ -355,7 +366,12 @@ Page {
                 width: view.width
                 x: view.contentX
                 title: page.fileName
-                description: doc.loaded ? PdfText.summary(doc.pageCount) : ""
+                // The list is put at its top (above the header) when the
+                // pages arrive, and a ListView keeps contentY when its
+                // header grows: a description line that came only with the
+                // page count would push the top of the header out of view
+                // (PRV-12). So the line is there, blank, from the start.
+                description: doc.loaded ? PdfText.summary(doc.pageCount) : " "
             }
 
             delegate: PdfPage {

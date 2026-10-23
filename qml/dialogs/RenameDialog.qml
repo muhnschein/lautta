@@ -1,26 +1,26 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Rename one item (board Rename). The dialog only asks: after it is
-// accepted the caller calls `DirectoryModel.rename(uri, newName)`. A name
-// that is taken is an error right away; there is no case hint.
+// Rename one item (board Rename): the plain dialog header and the name, no
+// more. The dialog only asks: after it is accepted the caller calls
+// `DirectoryModel.rename(uri, newName)`. A name that is taken is an error
+// right away; there is no case hint.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/ErrorText.js" as ErrorText
-import "../components/directory/DirFormat.js" as DirFormat
+import "../components/directory/Names.js" as Names
 
 Dialog {
     id: dialog
 
     property string uri
-    // Shown under the field when known (-1: unknown).
-    property real size: -1
-    property real modified: -1
+    // Folders are selected whole; files without their extension.
     property bool isDir
     readonly property string oldName: App.nameOf(uri)
     readonly property string newName: nameField.text
     readonly property bool taken: nameField.text !== oldName && parentModel.count >= 0
                                   && parentModel.nameKind(nameField.text) !== ""
-    readonly property bool badName: nameField.text.indexOf("/") >= 0 || nameField.text === "." || nameField.text === ".."
+    readonly property string folderUri: App.parentUri(uri)
+    readonly property bool badName: Names.invalid(nameField.text)
 
     function errorText() {
         if (taken)
@@ -36,13 +36,7 @@ Dialog {
     DirectoryModel {
         id: parentModel
 
-        uri: App.parentUri(dialog.uri)
-    }
-
-    PathModel {
-        id: where
-
-        uri: App.parentUri(dialog.uri)
+        uri: dialog.folderUri
     }
 
     SilicaFlickable {
@@ -56,9 +50,7 @@ Dialog {
 
             DialogHeader {
                 //% "Rename"
-                acceptText: qsTrId("lautta-dir-rename-accept")
-                //% "Rename · %1"
-                title: qsTrId("lautta-dir-rename-title").arg(dialog.oldName)
+                title: qsTrId("lautta-dir-rename-title")
             }
 
             TextField {
@@ -74,29 +66,6 @@ Dialog {
                 EnterKey.enabled: dialog.canAccept
                 EnterKey.iconSource: "image://theme/icon-m-enter-accept"
                 EnterKey.onClicked: dialog.accept()
-            }
-
-            Item {
-                width: 1
-                height: Theme.paddingLarge
-            }
-
-            DetailItem {
-                //% "Location"
-                label: qsTrId("lautta-dir-rename-location")
-                value: where.fullPath
-            }
-            DetailItem {
-                visible: !dialog.isDir && dialog.size >= 0
-                //% "Size"
-                label: qsTrId("lautta-dir-rename-size")
-                value: Format.formatFileSize(dialog.size)
-            }
-            DetailItem {
-                visible: dialog.modified >= 0
-                //% "Modified"
-                label: qsTrId("lautta-dir-rename-modified")
-                value: DirFormat.modified(dialog.modified)
             }
         }
     }

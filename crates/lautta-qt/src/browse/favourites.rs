@@ -1,18 +1,30 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `FavouritesModel` (ORG-1): favourites in their order, with label and
-//! colour. Roles: `itemId`, `uri`, `label`, `colour`, `place`.
+//! `FavouritesModel` (ORG-1): favourites in their order, with label, colour
+//! and icon. Roles: `itemId`, `uri`, `label`, `colour`, `place`, `isDir`,
+//! `icon` (the chosen theme icon name, empty for the default), `defaultIcon`
+//! (the icon source shown without a chosen one).
 
 use super::{cell_data, error_parts, role_names, store_changed, Cell};
 use crate::json::to_json;
 use crate::runtime::{blocking_then, core};
 use lautta_core::app::Core;
+use lautta_core::org::favourites::ICONS;
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
-use qmetaobject::QPointer;
+use qmetaobject::{QPointer, QVariantList};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-const COLUMNS: [&str; 5] = ["itemId", "uri", "label", "colour", "place"];
+const COLUMNS: [&str; 8] = [
+    "itemId",
+    "uri",
+    "label",
+    "colour",
+    "place",
+    "isDir",
+    "icon",
+    "defaultIcon",
+];
 
 fn load(core: &Core) -> lautta_core::Result<Vec<Vec<Cell>>> {
     Ok(core
@@ -20,12 +32,17 @@ fn load(core: &Core) -> lautta_core::Result<Vec<Vec<Cell>>> {
         .list()?
         .into_iter()
         .map(|f| {
+            let place = core.favourite_place(&f);
+            let default_icon = f.default_icon();
             vec![
                 Cell::Int(f.id),
                 Cell::Str(f.uri.to_string()),
                 Cell::Str(f.label),
                 Cell::Str(f.colour.unwrap_or_default()),
-                Cell::Str(core.place_of(&f.uri)),
+                Cell::Str(place),
+                Cell::Bool(f.is_dir),
+                Cell::Str(f.icon.unwrap_or_default()),
+                Cell::s(default_icon),
             ]
         })
         .collect())
@@ -45,17 +62,13 @@ fn str_at(row: &[Cell], col: usize) -> &str {
     }
 }
 
-/// No colour for an empty one.
-fn colour_of(colour: &str) -> Option<&str> {
-    Some(colour).filter(|c| !c.is_empty())
+fn bool_at(row: &[Cell], col: usize) -> bool {
+    matches!(row.get(col), Some(Cell::Bool(true)))
 }
 
-/// The index to give a favourite moved by `delta` places; `None` when it
-/// would not move.
-fn target_index(rows: &[Vec<Cell>], id: i64, delta: i32) -> Option<usize> {
-    let at = rows.iter().position(|r| int_at(r, 0) == id)?;
-    let to = (at as i64 + i64::from(delta)).clamp(0, rows.len() as i64 - 1) as usize;
-    (to != at).then_some(to)
+/// No colour or icon for an empty one: the default.
+fn chosen(value: &str) -> Option<&str> {
+    Some(value).filter(|c| !c.is_empty())
 }
 
 #[derive(QObject, Default)]
@@ -68,21 +81,28 @@ pub struct FavouritesModel {
     loadedChanged: qt_signal!(),
 
     reload: qt_method!(fn(&mut self)),
+    /// Adds a favourite for a folder.
     add: qt_method!(fn(&mut self, uri: QString, label: QString, colour: QString)),
-    /// Adds a favourite for a folder, or relabels the one it already is.
-    save: qt_method!(fn(&mut self, uri: QString, label: QString, colour: QString)),
+    /// Adds a favourite for a folder (`isDir`) or a file, or changes label,
+    /// colour and icon (a name of `iconChoices`, empty for the default) of
+    /// the one it already is.
+    save:
+        qt_method!(fn(&mut self, uri: QString, label: QString, colour: QString, icon: QString, isDir: bool)),
     edit: qt_method!(fn(&mut self, id: i32, label: QString, colour: QString)),
     remove: qt_method!(fn(&mut self, id: i32)),
-    /// Removes the favourite of a folder, if it is one.
+    /// Removes the favourite of a folder or file, if it is one.
     removeUri: qt_method!(fn(&mut self, uri: QString)),
     moveTo: qt_method!(fn(&mut self, id: i32, index: i32)),
-    moveBy: qt_method!(fn(&mut self, id: i32, delta: i32)),
-    /// `{id, uri, label, colour, place}` of a loaded favourite, or `{}`.
+    /// `{id, uri, label, colour, place, isDir, icon, defaultIcon}` of a
+    /// loaded favourite, or `{}`.
     get: qt_method!(fn(&self, id: i32) -> QString),
-    /// The id of the favourite for a folder, `-1` when it is none.
+    /// The id of the favourite for a folder or file, `-1` when it is none.
     idOf: qt_method!(fn(&self, uri: QString) -> i32),
     /// `Location › folder` for a folder URI (no I/O).
     placeOf: qt_method!(fn(&self, uri: QString) -> QString),
+    /// The icons a favourite can have, theme names (`icon-m-<name>`), the
+    /// default star first.
+    iconChoices: qt_method!(fn(&self) -> QVariantList),
     failed: qt_signal!(kind: QString, message: QString),
 
     rows: Vec<Vec<Cell>>,
@@ -147,23 +167,24 @@ impl FavouritesModel {
         let (uri, label, colour) = (uri.to_string(), label.to_string(), colour.to_string());
         self.change(move |core| {
             core.favourites
-                .add(&Uri::parse(&uri)?, &label, colour_of(&colour))
+                .add(&Uri::parse(&uri)?, &label, chosen(&colour), true)
                 .map(|_| ())
         });
     }
 
-    fn save(&mut self, uri: QString, label: QString, colour: QString) {
-        let (uri, label, colour) = (uri.to_string(), label.to_string(), colour.to_string());
+    fn save(&mut self, uri: QString, label: QString, colour: QString, icon: QString, isDir: bool) {
+        let (uri, label) = (uri.to_string(), label.to_string());
+        let (colour, icon) = (colour.to_string(), icon.to_string());
         self.change(move |core| {
             core.favourites
-                .save(&Uri::parse(&uri)?, &label, colour_of(&colour))
+                .save(&Uri::parse(&uri)?, &label, chosen(&colour), chosen(&icon), isDir)
                 .map(|_| ())
         });
     }
 
     fn edit(&mut self, id: i32, label: QString, colour: QString) {
         let (label, colour) = (label.to_string(), colour.to_string());
-        self.change(move |core| core.favourites.update(i64::from(id), &label, colour_of(&colour)));
+        self.change(move |core| core.favourites.update(i64::from(id), &label, chosen(&colour)));
     }
 
     fn remove(&mut self, id: i32) {
@@ -180,12 +201,6 @@ impl FavouritesModel {
         self.change(move |core| core.favourites.move_to(i64::from(id), index));
     }
 
-    fn moveBy(&mut self, id: i32, delta: i32) {
-        if let Some(to) = target_index(&self.rows, i64::from(id), delta) {
-            self.moveTo(id, to as i32);
-        }
-    }
-
     fn get(&self, id: i32) -> QString {
         let value = self
             .rows
@@ -194,7 +209,8 @@ impl FavouritesModel {
             .map(|r| {
                 serde_json::json!({
                     "id": int_at(r, 0), "uri": str_at(r, 1), "label": str_at(r, 2),
-                    "colour": str_at(r, 3), "place": str_at(r, 4),
+                    "colour": str_at(r, 3), "place": str_at(r, 4), "isDir": bool_at(r, 5),
+                    "icon": str_at(r, 6), "defaultIcon": str_at(r, 7),
                 })
             })
             .unwrap_or_else(|| serde_json::json!({}));
@@ -206,6 +222,13 @@ impl FavouritesModel {
             (Some(core), Ok(uri)) => QString::from(core.place_of(&uri).as_str()),
             _ => QString::default(),
         }
+    }
+
+    fn iconChoices(&self) -> QVariantList {
+        ICONS
+            .iter()
+            .map(|name| QVariant::from(QString::from(*name)))
+            .collect()
     }
 
     fn idOf(&self, uri: QString) -> i32 {
@@ -242,24 +265,31 @@ mod tests {
             Cell::s("l"),
             Cell::s(""),
             Cell::s("p"),
+            Cell::Bool(true),
+            Cell::s("home"),
+            Cell::s("image://theme/icon-m-favorite"),
         ]
     }
 
     #[test]
-    fn moves_are_clamped_and_noops_are_none() {
-        let rows = vec![row(1), row(2), row(3)];
-        assert_eq!(target_index(&rows, 2, -1), Some(0));
-        assert_eq!(target_index(&rows, 2, 1), Some(2));
-        assert_eq!(target_index(&rows, 1, -1), None);
-        assert_eq!(target_index(&rows, 3, 5), None);
-        assert_eq!(target_index(&rows, 1, 5), Some(2));
-        assert_eq!(target_index(&rows, 9, 1), None);
+    fn rows_have_every_column() {
+        assert_eq!(row(1).len(), COLUMNS.len());
+        assert_eq!((COLUMNS[6], COLUMNS[7]), ("icon", "defaultIcon"));
     }
 
     #[test]
-    fn empty_colour_is_none() {
-        assert_eq!(colour_of(""), None);
-        assert_eq!(colour_of("#f00"), Some("#f00"));
+    fn empty_colour_or_icon_is_none() {
+        assert_eq!(chosen(""), None);
+        assert_eq!(chosen("#f00"), Some("#f00"));
+        assert_eq!(chosen("home"), Some("home"));
+    }
+
+    #[test]
+    fn the_icon_choices_start_with_the_star() {
+        let list = FavouritesModel::default().iconChoices();
+        let choices: Vec<String> = list.into_iter().map(|v| v.to_qstring().to_string()).collect();
+        assert_eq!(choices.len(), ICONS.len());
+        assert_eq!((choices[0].as_str(), choices[1].as_str()), ("favorite", "home"));
     }
 
     #[test]
@@ -267,5 +297,9 @@ mod tests {
         let r = row(4);
         assert_eq!((int_at(&r, 0), int_at(&r, 1), int_at(&r, 9)), (4, -1, -1));
         assert_eq!((str_at(&r, 4), str_at(&r, 0), str_at(&r, 9)), ("p", "", ""));
+        assert_eq!(
+            (bool_at(&r, 5), bool_at(&r, 4), bool_at(&r, 9)),
+            (true, false, false)
+        );
     }
 }

@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Settings › Browse page (BRW-12; laid out as Salama's start page settings):
-// a switch per row of the Browse page, rows moved within their section by
-// dragging the handle, Restore defaults in the pulley and a live preview
-// below. Favourites only move; removing one stays on the Browse page.
+// Settings › Browse page (BRW-12), as Salama's tab group view: a row per row
+// of the Browse page, a tap shows or hides it, the grip carries it within
+// its section while the rows it passes move aside; Restore defaults in the
+// pulley and a live preview below (as Salama's start page settings).
+// Favourites only move; removing one stays on the Browse page.
+//
+// A switch or a move changes its row in place, so the list keeps its
+// position and its rows (BrowseLayoutDelegate.qml has the carrying).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -13,26 +17,32 @@ Page {
     id: page
 
     readonly property alias layoutModel: layout
-    // Rows the preview shows (tests).
+    // The list and the rows the preview shows (tests).
+    readonly property alias listView: list
     property int previewCount
 
     allowedOrientations: Orientation.All
 
     BrowseLayoutModel {
         id: layout
+
         Component.onCompleted: reload()
+        // Rows that come or go shift the rows under a carried one; its own
+        // moves are the only moves while it is carried.
+        onRowsInserted: list.dropCarried()
+        onRowsRemoved: list.dropCarried()
+        onModelReset: list.dropCarried()
     }
 
     SilicaListView {
         id: list
 
-        // The row being dragged and where it would land, -1 when none.
-        property int dragFrom: -1
-        property int dropAt: -1
+        // The row being carried, null when none.
+        property Item carrier: null
 
-        function endDrag() {
-            dragFrom = -1
-            dropAt = -1
+        function dropCarried() {
+            if (carrier)
+                carrier.drop()
         }
 
         anchors.fill: parent
@@ -56,107 +66,25 @@ Page {
             text: BrowseText.sectionTitle(section)
         }
 
-        delegate: ListItem {
-            id: row
-
-            readonly property bool toggles: model.kind !== "favourite"
-            readonly property bool dragged: list.dragFrom === index
-            readonly property bool target: list.dropAt === index && list.dragFrom !== index
-
-            contentHeight: Theme.itemSizeSmall
-            highlighted: down || dragged
-            onClicked: if (toggles) layout.setHidden(model.section, model.item, !model.hidden)
-
-            Switch {
-                id: toggle
-
-                visible: row.toggles
-                anchors {
-                    left: parent.left
-                    leftMargin: Theme.horizontalPageMargin - Theme.paddingLarge
-                    verticalCenter: parent.verticalCenter
-                }
-                automaticCheck: false
-                checked: !model.hidden
-                onClicked: layout.setHidden(model.section, model.item, !model.hidden)
+        // The rows a carried row passes slide aside rather than jump.
+        moveDisplaced: Transition {
+            NumberAnimation {
+                properties: "y"
+                duration: 150
+                easing.type: Easing.OutQuad
             }
-            HighlightImage {
-                visible: !row.toggles
-                anchors.centerIn: toggle
-                source: "image://theme/icon-m-favorite"
-                highlighted: row.highlighted
-            }
+        }
 
-            Label {
-                anchors {
-                    left: toggle.right
-                    right: handle.left
-                    verticalCenter: parent.verticalCenter
-                }
-                text: {
-                    switch (model.kind) {
-                    case "deleted":
-                        return qsTrId("lautta-browse-recently-deleted")
-                    case "nearby":
-                        //% "Servers found nearby"
-                        return qsTrId("lautta-browse-layout-nearby")
-                    default:
-                        return model.name
-                    }
-                }
-                color: row.highlighted ? Theme.highlightColor : Theme.primaryColor
-                truncationMode: TruncationMode.Fade
-            }
-
-            // Where the dragged row lands: a line above or below this one.
-            Rectangle {
-                visible: row.target
-                width: parent.width
-                height: Math.max(2, Theme.paddingSmall / 2)
-                y: list.dropAt < list.dragFrom ? 0 : parent.height - height
-                color: Theme.highlightColor
-            }
-
-            // Press and drag the handle to move the row within its section.
-            MouseArea {
-                id: handle
-
-                visible: model.movable
-                anchors {
-                    right: parent.right
-                    top: parent.top
-                    bottom: parent.bottom
-                }
-                width: Theme.itemSizeSmall + Theme.horizontalPageMargin
-                preventStealing: true
-
-                onPressed: {
-                    list.dragFrom = index
-                    list.dropAt = index
-                }
-                onPositionChanged: {
-                    var p = mapToItem(list.contentItem, mouse.x, mouse.y)
-                    var to = list.indexAt(p.x, p.y)
-                    if (to >= 0 && layout.sectionAt(to) === model.section)
-                        list.dropAt = to
-                }
-                onReleased: {
-                    if (list.dropAt >= 0 && list.dropAt !== list.dragFrom)
-                        layout.moveTo(model.section, model.item, layout.placeAt(list.dropAt))
-                    list.endDrag()
-                }
-                onCanceled: list.endDrag()
-
-                HighlightImage {
-                    anchors {
-                        right: parent.right
-                        rightMargin: Theme.horizontalPageMargin - Theme.paddingMedium
-                        verticalCenter: parent.verticalCenter
-                    }
-                    source: "image://theme/icon-m-menu"
-                    highlighted: row.highlighted || handle.pressed
-                }
-            }
+        delegate: BrowseLayoutDelegate {
+            width: list.width
+            layoutModel: layout
+            layoutSection: model.section
+            layoutItem: model.item
+            layoutKind: model.kind
+            layoutName: model.name
+            layoutHidden: model.hidden
+            layoutMovable: model.movable
+            onToggled: layout.setHidden(layoutSection, layoutItem, shown)
         }
 
         footer: Column {

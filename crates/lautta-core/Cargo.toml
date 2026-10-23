@@ -32,6 +32,9 @@ notify = { version = "6", default-features = false }
 image = { version = "0.24", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 kamadak-exif = "0.5"
 pulldown-cmark = { version = "0.9", default-features = false }
+# Text viewer highlighting (PRV-13): parsing with the bundled grammars and the
+# pure-Rust regex engine only; no oniguruma (C), no theme or grammar loading.
+syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "regex-fancy"] }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 tar = "0.4"

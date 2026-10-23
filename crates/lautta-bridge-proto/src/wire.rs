@@ -70,7 +70,71 @@ pub struct WireCapabilities {
     pub max_name_bytes: i64,
 }
 
-/// `(sssa{sv})`: id, provider, display name, info.
+/// The connection state of a location: info key `state` of
+/// `ListLocations` (netvfs SPEC-v2 XB-10, XB-12), with `stateError` (the
+/// XC-21 name) when it is [`FAILED`](location_state::FAILED).
+pub mod location_state {
+    /// The info key of the state.
+    pub const KEY: &str = "state";
+    /// The info key of the error of a failed state.
+    pub const ERROR_KEY: &str = "stateError";
+    /// No connection of the consumer's pool is established or being
+    /// established.
+    pub const DISCONNECTED: &str = "disconnected";
+    /// None is established, at least one is being established.
+    pub const CONNECTING: &str = "connecting";
+    /// At least one is established (connected and authenticated).
+    pub const CONNECTED: &str = "connected";
+    /// As [`DISCONNECTED`], but the last attempt to connect failed.
+    pub const FAILED: &str = "failed";
+}
+
+/// The names `GetFeatures` answers (netvfs SPEC-v2 XB-19): the optional parts
+/// of the interface a bridge offers. Names this client does not know are
+/// ignored; a bridge without `GetFeatures` offers none.
+pub mod feature {
+    /// `OpenStorageSettings` opens Settings › Storage (XB-15).
+    pub const STORAGE_SETTINGS: &str = "storage-settings";
+    /// `ListDrives`, `Mount`, `Unmount` and `DrivesChanged` (XB-20).
+    pub const DRIVES: &str = "drives";
+}
+
+/// `(ssaya{sv})`: a memory card or USB drive of `ListDrives`, mounted or not
+/// (netvfs SPEC-v2 XB-20).
+#[derive(Debug, Serialize, Deserialize, Type)]
+pub struct WireDrive {
+    /// Opaque to consumers (`mmcblk1p1`, `sda1`).
+    pub id: String,
+    /// The filesystem's label; empty without one.
+    pub label: String,
+    /// Where it is mounted; empty when it is not.
+    pub mount_point: Vec<u8>,
+    /// [`drive_info`] keys; unknown ones are ignored.
+    pub info: HashMap<String, OwnedValue>,
+}
+
+/// The info keys of a [`WireDrive`] (XB-20).
+pub mod drive_info {
+    /// `s`: [`KIND_SD`] or [`KIND_USB`].
+    pub const KIND: &str = "kind";
+    /// `x`: bytes.
+    pub const SIZE: &str = "size";
+    /// `s`: `vfat`, `exfat`, `ext4`, …
+    pub const FS_TYPE: &str = "fsType";
+    /// `b`.
+    pub const READ_ONLY: &str = "readOnly";
+    /// `s`, when known.
+    pub const UUID: &str = "uuid";
+    /// `s`: the drive's vendor and model, when known.
+    pub const MODEL: &str = "model";
+    /// A memory card.
+    pub const KIND_SD: &str = "sd";
+    /// A USB drive.
+    pub const KIND_USB: &str = "usb";
+}
+
+/// `(sssa{sv})`: id, provider, display name, info (`kind`, `host`, `path`,
+/// `attention`, `state`, …).
 #[derive(Debug, Serialize, Deserialize, Type)]
 pub struct WireLocation {
     pub id: String,
@@ -219,6 +283,7 @@ mod tests {
         assert_eq!(WireLocation::signature().as_str(), "(sssa{sv})");
         assert_eq!(WireNearby::signature().as_str(), "(sssq)");
         assert_eq!(WireWalkItem::signature().as_str(), "(ay(ayyyxxxxixxssqays))");
+        assert_eq!(WireDrive::signature().as_str(), "(ssaya{sv})");
     }
 
     #[test]

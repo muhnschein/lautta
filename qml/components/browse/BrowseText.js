@@ -28,112 +28,43 @@ function sectionTitle(section) {
     }
 }
 
-// "58.2 GB free of 128 GB · exFAT" (LOC-3); empty when the space is unknown.
+// The name of a Browse row: the app's own rows have none of their own.
+function rowName(kind, name) {
+    switch (kind) {
+    case "recents":
+        //% "Recents"
+        return qsTrId("lautta-browse-recents")
+    case "deleted":
+        //% "Trash"
+        return qsTrId("lautta-browse-trash")
+    default:
+        return name
+    }
+}
+
+// "58.2 GB free of 128 GB · exFAT" (LOC-3); the size alone for a drive that
+// is not mounted, the file system alone when the space is unknown.
 function volumeLine(free, total, fs) {
-    if (free < 0 || total < 0)
+    var space = ""
+    if (free >= 0 && total >= 0) {
+        //% "%1 free of %2"
+        space = qsTrId("lautta-browse-volume-space").arg(Silica.Format.formatFileSize(free)).arg(Silica.Format.formatFileSize(total))
+    } else if (total >= 0) {
+        space = Silica.Format.formatFileSize(total)
+    }
+    if (space.length === 0)
         return fs
-    //% "%1 free of %2"
-    var space = qsTrId("lautta-browse-volume-space").arg(Silica.Format.formatFileSize(free)).arg(Silica.Format.formatFileSize(total))
     return fs.length > 0 ? space + " · " + fs : space
 }
 
-function attentionText(attention) {
-    if (attention === "server-identity-changed")
-        //% "Identity changed"
-        return qsTrId("lautta-browse-attention-identity")
-    //% "Sign-in failed"
-    return qsTrId("lautta-browse-attention-auth")
-}
-
-// The part after the status of a server line: "SFTP · nas.home".
-function serverDetail(provider, host) {
+// A nearby server's line: "SFTP · raspberrypi.local".
+function nearbyLine(provider, host) {
     var parts = []
     if (provider.length > 0)
         parts.push(provider)
     if (host.length > 0)
         parts.push(host)
     return parts.join(" · ")
-}
-
-function connectedLine(provider, host) {
-    //% "Connected"
-    var text = qsTrId("lautta-browse-server-connected")
-    var detail = serverDetail(provider, host)
-    return detail.length > 0 ? text + " · " + detail : text
-}
-
-function reconnectingLine(provider) {
-    //% "Reconnecting…"
-    var text = qsTrId("lautta-browse-server-reconnecting")
-    return provider.length > 0 ? text + " · " + provider : text
-}
-
-function recentLine(provider) {
-    //% "Recent"
-    var text = qsTrId("lautta-browse-server-recent")
-    //% "not connected"
-    var off = qsTrId("lautta-browse-server-not-connected")
-    return provider.length > 0 ? text + " · " + provider + " · " + off : text + " · " + off
-}
-
-function nearbyLine(provider, host) {
-    return serverDetail(provider, host)
-}
-
-// Recents: "Opened · NAS › /srv/photos", "Transferred to NAS".
-function recentKindLine(kind, place) {
-    var what
-    switch (kind) {
-    case "previewed":
-        //% "Previewed"
-        what = qsTrId("lautta-recents-previewed")
-        break
-    case "transferred":
-        if (place.length > 0)
-            //% "Transferred to %1"
-            return qsTrId("lautta-recents-transferred-to").arg(place)
-        //% "Transferred"
-        return qsTrId("lautta-recents-transferred")
-    default:
-        //% "Opened"
-        what = qsTrId("lautta-recents-opened")
-        break
-    }
-    return place.length > 0 ? what + " · " + place : what
-}
-
-function recentDayTitle(day) {
-    switch (day) {
-    case "today":
-        //% "Today"
-        return qsTrId("lautta-recents-today")
-    case "yesterday":
-        //% "Yesterday"
-        return qsTrId("lautta-recents-yesterday")
-    case "week":
-        //% "Earlier this week"
-        return qsTrId("lautta-recents-week")
-    default:
-        //% "Earlier"
-        return qsTrId("lautta-recents-earlier")
-    }
-}
-
-function recentFilterTitle(kind) {
-    switch (kind) {
-    case "opened":
-        //% "Opened"
-        return qsTrId("lautta-recents-opened")
-    case "previewed":
-        //% "Previewed"
-        return qsTrId("lautta-recents-previewed")
-    case "transferred":
-        //% "Transferred"
-        return qsTrId("lautta-recents-transferred")
-    default:
-        //% "Everything"
-        return qsTrId("lautta-recents-everything")
-    }
 }
 
 // Colours offered for favourites.

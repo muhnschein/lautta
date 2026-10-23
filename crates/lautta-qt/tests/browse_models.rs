@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The browse facades with the real Qt event loop, a temporary HOME and a
 //! fake netvfs bridge: models load and follow changes, the `Bridge`
-//! singleton follows consent, questions, ad-hoc servers and hand-offs, and
-//! a removed account is forgotten (SPEC §7, §13, §15.2, SEC-5).
+//! singleton follows consent, questions, ad-hoc servers, drives and
+//! hand-offs, a server row follows its connection state in place, and a
+//! removed account is forgotten (SPEC §7, §13, §15.2, LOC-3, NVB-4, SEC-5).
 //!
 //! The scenario is a QML script that runs one step after the other, each
 //! with an action and a condition to wait for; the fake bridge is driven
@@ -10,7 +11,8 @@
 
 #![allow(non_snake_case)]
 
-use lautta_bridge_proto::fake::{Consent, FakeBridge, InfoValue, ScriptedQuestion};
+use lautta_bridge_proto::fake::{Consent, FakeBridge, FakeDrive, InfoValue, ScriptedQuestion};
+use lautta_bridge_proto::feature;
 use lautta_core::org::RecentKind;
 use lautta_core::paths::AppPaths;
 use lautta_core::Uri;
@@ -35,11 +37,13 @@ struct FakeWorld {
     grant: qt_method!(fn(&self)),
     consentRequests: qt_method!(fn(&self) -> i32),
     setAttention: qt_method!(fn(&self, id: QString, attention: QString)),
+    setState: qt_method!(fn(&self, id: QString, state: QString, error: QString)),
     removeAccount: qt_method!(fn(&self, id: QString)),
     scriptQuestion: qt_method!(fn(&self, kind: QString)),
     secrets: qt_method!(fn(&self) -> QString),
     answers: qt_method!(fn(&self) -> QString),
     handoffs: qt_method!(fn(&self) -> QString),
+    drives: qt_method!(fn(&self) -> QString),
     record: qt_method!(fn(&self, uri: QString, name: QString, kind: QString)),
     putFile: qt_method!(fn(&self, location: QString, path: QString)),
 }
@@ -62,6 +66,15 @@ impl FakeWorld {
         run(fake().set_attention(
             &id.to_string(),
             Some(attention.as_str()).filter(|a| !a.is_empty()),
+        ));
+    }
+
+    fn setState(&self, id: QString, state: QString, error: QString) {
+        let error = error.to_string();
+        run(fake().set_state(
+            &id.to_string(),
+            &state.to_string(),
+            Some(error.as_str()).filter(|e| !e.is_empty()),
         ));
     }
 
@@ -113,6 +126,16 @@ impl FakeWorld {
         QString::from(serde_json::to_string(&fake().handoffs()).unwrap().as_str())
     }
 
+    /// The fake's drives as `[{id, mounted}]`.
+    fn drives(&self) -> QString {
+        let list: Vec<serde_json::Value> = fake()
+            .drives()
+            .iter()
+            .map(|d| serde_json::json!({"id": d.id, "mounted": !d.mount_point.is_empty()}))
+            .collect();
+        QString::from(serde_json::to_string(&list).unwrap().as_str())
+    }
+
     fn record(&self, uri: QString, name: QString, kind: QString) {
         let core = lautta_qt::runtime::core().unwrap();
         let uri = Uri::parse(&uri.to_string()).unwrap();
@@ -150,6 +173,10 @@ fn browse_models_follow_the_core_and_the_bridge() {
     let _listener = run(async {
         bridge.set_consent(Consent::Unknown).await;
         bridge.add_account(1, "sftp", "NAS", "nas.home").await;
+        bridge.set_features(Some(&[feature::STORAGE_SETTINGS, feature::DRIVES]));
+        bridge
+            .set_drives(vec![FakeDrive::new("sda1", "STICK", "usb", 8)])
+            .await;
         bridge.listen(&paths.bridge_socket()).unwrap()
     });
     *FAKE.lock().unwrap() = Some(bridge);

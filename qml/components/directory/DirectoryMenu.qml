@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The pulley menu of a folder (boards DirectoryPulley, DirectorySelectPulley).
 // `owner` is the DirectoryView. Entries that do not apply are not shown
-// (UI-8), never disabled.
+// (UI-8), never disabled. Activity, which leads away from the folder, is
+// at the top as Sailfish places such entries; the folder's own actions sit
+// nearer the content.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -27,15 +29,24 @@ PullDownMenu {
     }
     MenuItem {
         visible: !menu.selecting
+        text: Transfers.activeCount > 0
+              //% "Activity (%1)"
+              ? qsTrId("lautta-dir-menu-activity-count").arg(Transfers.activeCount)
+              //% "Activity"
+              : qsTrId("lautta-dir-menu-activity")
+        onClicked: menu.owner.activity()
+    }
+    MenuItem {
+        visible: !menu.selecting
         //% "Select"
         text: qsTrId("lautta-dir-menu-select")
         onClicked: menu.owner.startSelection()
     }
     MenuItem {
         visible: !menu.selecting && menu.writable
-        //% "New folder or file"
-        text: qsTrId("lautta-dir-menu-new")
-        onClicked: menu.owner.newItem()
+        //% "New folder"
+        text: qsTrId("lautta-dir-menu-new-folder")
+        onClicked: menu.owner.newFolder()
     }
     MenuItem {
         visible: !menu.selecting && menu.writable && App.clipboardCount > 0 && App.canPasteInto(owner ? owner.uri : "")
@@ -45,7 +56,7 @@ PullDownMenu {
     }
     MenuItem {
         visible: !menu.selecting
-        //% "Search here"
+        //% "Search"
         text: qsTrId("lautta-dir-menu-search")
         onClicked: menu.owner.searchHere()
     }

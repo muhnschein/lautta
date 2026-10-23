@@ -4,6 +4,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../FileIcons.js" as FileIcons
 
 HighlightImage {
     id: icon
@@ -25,7 +26,7 @@ HighlightImage {
         case "audio":
             return "image://theme/icon-m-file-audio"
         case "archive":
-            return "image://theme/icon-m-file-archive-folder"
+            return FileIcons.archive
         case "pdf":
             return "image://theme/icon-m-file-download-as-pdf"
         case "package":

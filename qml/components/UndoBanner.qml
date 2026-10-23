@@ -20,7 +20,7 @@ Item {
             //% "Moved"
             return qsTrId("lautta-undo-moved")
         default:
-            //% "Moved to Recently deleted"
+            //% "Moved to trash"
             return qsTrId("lautta-undo-trashed")
         }
     }
@@ -41,9 +41,10 @@ Item {
 
         Behavior on opacity { FadeAnimator { } }
 
-        Rectangle {
+        // Opaque (UI-10); under the press highlight.
+        BarBackground {
             anchors.fill: parent
-            color: Theme.rgba(Theme.overlayBackgroundColor, 0.9)
+            z: -1
         }
         Label {
             anchors {

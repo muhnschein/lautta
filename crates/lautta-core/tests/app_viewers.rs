@@ -115,6 +115,62 @@ async fn markdown_is_rendered_and_truncation_is_reported() {
     assert!(!r.truncated);
 }
 
+/// The viewer's lines once the colouring is done.
+async fn colours_of(
+    viewed: lautta_core::app_viewers::ViewedText,
+) -> lautta_core::preview::highlight::ColouredText {
+    match viewed.colouring {
+        Some(job) => job.finish().await.unwrap(),
+        None => viewed.lines,
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_text_viewer_gets_colours_by_name_or_first_line() {
+    let h = home().await;
+    h.nas
+        .add_file("configure", b"#!/bin/sh\r\necho \"<img src=x>\"\r\n", 0);
+    h.nas.add_file("notes.txt", b"#!/bin/sh\necho <b>\n", 0);
+    let v = h.core.view_text(&uri("lautta://nv-nas/configure")).await.unwrap();
+    assert_eq!((v.size, v.truncated, v.valid_utf8), (Some(31), false, true));
+    let lines = colours_of(v).await;
+    assert_eq!(lines.syntax(), Some("Bourne Again Shell (bash)"));
+    assert_eq!((lines.line_count(), lines.coloured_lines()), (2, 2));
+    let palette = lautta_core::preview::highlight::Palette::parse("string=#00ff00");
+    let styled = lines.styled_row(1, 0, lines.line(1).unwrap(), &palette);
+    assert!(
+        styled.contains("<font color=\"#00ff00\">&quot;&lt;img src=x&gt;&quot;</font>"),
+        "{styled}"
+    );
+
+    let plain = colours_of(h.core.view_text(&uri("lautta://nv-nas/notes.txt")).await.unwrap()).await;
+    assert_eq!((plain.syntax(), plain.coloured_lines()), (None, 0));
+    assert_eq!(plain.styled_row(1, 0, "echo <b>", &palette), "echo &lt;b&gt;");
+    let err = h
+        .core
+        .view_text(&uri("lautta://nv-nas/none.sh"))
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::NotFound);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_long_file_comes_plain_and_is_coloured_later() {
+    let h = home().await;
+    let script = "for f in *; do echo \"$f\"; done # loop\n".repeat(15_000);
+    h.nas.add_file("long.sh", script.as_bytes(), 0);
+    let v = h.core.view_text(&uri("lautta://nv-nas/long.sh")).await.unwrap();
+    assert!(v.colouring.is_some(), "not done within the first wait");
+    assert_eq!((v.lines.line_count(), v.lines.coloured_lines()), (15_000, 0));
+    assert_eq!(
+        v.lines.line(14_999),
+        Some("for f in *; do echo \"$f\"; done # loop")
+    );
+    let lines = colours_of(v).await;
+    assert!(lines.coloured_lines() > 0, "the first lines at least");
+    assert_eq!(lines.line_count(), 15_000);
+}
+
 #[tokio::test]
 async fn exif_report_reads_the_head_of_the_file() {
     let h = home().await;
@@ -232,6 +288,58 @@ async fn local_files_and_switched_off_thumbnails_are_refused() {
     h.core.apply_settings(s);
     let t = previews.request(h.core.clone(), uri("lautta://nv-nas/x.jpg"), 32);
     assert_eq!(t.rx.await.unwrap().unwrap_err().kind, ErrorKind::Unsupported);
+}
+
+#[tokio::test]
+async fn remote_thumbnails_follow_the_size_setting() {
+    let h = home().await;
+    // 1.5 MB that only decode whole: no EXIF thumbnail to fall back on.
+    let mut big = jpeg(64, 64);
+    big.resize(1_500_000, 0);
+    h.nas.add_file("big.jpg", &big, 0);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let u = uri("lautta://nv-nas/big.jpg");
+    let mut s = h.core.settings();
+    s.thumbnail_max_remote_mb = 1;
+    h.core.apply_settings(s.clone());
+    let t = previews.request(h.core.clone(), u.clone(), 32);
+    assert_eq!(
+        t.rx.await.unwrap().unwrap_err().kind,
+        ErrorKind::Unsupported,
+        "larger than the 1 MB the setting allows"
+    );
+    s.thumbnail_max_remote_mb = 2;
+    h.core.apply_settings(s);
+    let t = previews.request(h.core.clone(), u, 32);
+    assert!(t.rx.await.unwrap().is_ok(), "within 2 MB it is made");
+}
+
+#[tokio::test]
+async fn a_smaller_thumbnail_cache_is_trimmed_at_once() {
+    let h = home().await;
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let cache = previews.cache();
+    for i in 0..12 {
+        cache.put(&format!("k{i:02}"), &vec![7u8; 1_000_000]).unwrap();
+    }
+    assert_eq!(cache.total_bytes(), 12_000_000, "within the 200 MB default");
+    let mut s = h.core.settings();
+    s.thumbnail_cache_mb = 10;
+    h.core.apply_settings(s);
+    // The files go off the caller's thread: wait for them.
+    for _ in 0..300 {
+        if cache.total_bytes() <= 10_000_000 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    assert_eq!(cache.max_bytes(), 10_000_000);
+    assert_eq!(cache.total_bytes(), 10_000_000, "trimmed to the new size");
+    assert!(
+        !cache.contains("k00") && !cache.contains("k01") && cache.contains("k02"),
+        "the oldest go first"
+    );
+    assert!(!cache.dir().join("k00.thumb").exists(), "from disk too");
 }
 
 #[tokio::test]

@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! User-level actions of the browse area on [`Core`](crate::app::Core): the
 //! rows of the Browse page (SPEC §15.2), recent ad-hoc servers (NVB-6),
-//! volume space (LOC-3) and the purge of what the app remembers about a
-//! removed account (SEC-5).
+//! volume space, mounting and unmounting (LOC-3) and the purge of what the
+//! app remembers about a removed account (SEC-5).
 //!
 //! Everything blocking here runs in `spawn_blocking`; the Qt layer only
 //! turns the returned values into model rows.
 
 use crate::app::Core;
-use crate::bridge::{AdHocOptions, BridgeStatus, NearbyServer, RemoteKind};
+use crate::bridge::{AdHocOptions, BridgeStatus, Drive, DriveKind, NearbyServer, RemoteKind};
 use crate::browse_layout::{layout_item, Layout, NEARBY_ITEM};
+use crate::date_group::DateGroup;
 use crate::error::{Error, ErrorKind, Result};
-use crate::locations::{Location, LocationKind, LocationStatus};
+use crate::locations::{ConnectionState, Location, LocationKind, LocationStatus};
+use crate::org::favourites::Favourite;
 use crate::org::{self, Recent, RecentsFilter};
 use crate::settings::LocationPrefs;
 use crate::uri::Uri;
@@ -19,11 +21,19 @@ use crate::vpath::{display_name, VPath};
 use crate::workcopy::blocking;
 use rusqlite::params;
 use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsStr;
+use std::path::Path;
 use std::sync::{Arc, Weak};
+use std::time::Duration;
 use zeroize::Zeroizing;
 
 /// Separator of the "Location › folder" lines.
 const PLACE_SEPARATOR: &str = " › ";
+
+/// How long a drive the bridge mounted may take to show as a volume in the
+/// sandbox (LOC-3): this many looks, this far apart.
+const MOUNT_LOOKS: u32 = 10;
+const MOUNT_LOOK_EVERY: Duration = Duration::from_millis(200);
 
 /// One row of the Browse page, with plain values only (the Qt layer maps
 /// them to model roles; QML turns engineering values into translated text).
@@ -31,22 +41,31 @@ const PLACE_SEPARATOR: &str = " › ";
 pub struct Row {
     /// `favourites`, `device`, `android`, `volumes`, `servers`, `nearby`.
     pub section: &'static str,
-    /// `favourite`, `folder`, `deleted`, `volume`, `account`, `adhoc`,
-    /// `adhocRecent`, `consent`, `unavailable`, `nearby`.
+    /// `favourite`, `folder`, `recents`, `deleted`, `volume`, `account`,
+    /// `adhoc`, `adhocRecent`, `consent`, `unavailable`, `nearby`.
     pub kind: &'static str,
     pub uri: String,
     pub name: String,
     pub icon: String,
-    /// `ready`, `connecting`, `offline`, `attention`.
+    /// `ready`, `connecting`, `offline`, `attention`; `unmounted` for a
+    /// volume the bridge can mount (LOC-3).
     pub status: &'static str,
     /// `auth-failed`, `server-identity-changed` or empty.
     pub attention: String,
+    /// A server's connection state (NVB-4, [`ConnectionState::name`]):
+    /// `connected`, `connecting`, `disconnected`, `failed`, or empty when
+    /// the bridge does not tell.
+    pub connection: &'static str,
+    /// The netvfs error name of a `failed` connection (`AuthFailed`,
+    /// `Timeout`, …), empty otherwise.
+    pub connection_error: String,
     pub colour: String,
     /// Items in the folder, `-1` when not shown.
     pub count: i64,
     /// Favourite or location id; the nearby index.
     pub item_id: String,
-    /// `Location › folder` for favourites, the address for servers.
+    /// `Location › folder` for favourites (the folder a file is in), the
+    /// address for servers.
     pub place: String,
     /// Protocol label such as `SFTP`.
     pub provider: String,
@@ -54,6 +73,11 @@ pub struct Row {
     pub free: i64,
     pub total: i64,
     pub fs: String,
+    /// A favourite that is a file (ORG-1): opened, not browsed.
+    pub is_file: bool,
+    /// The bridge's id of a volume's drive, which it mounts and unmounts
+    /// (LOC-3, netvfs XB-20); empty when it cannot.
+    pub drive: String,
 }
 
 impl Row {
@@ -80,7 +104,7 @@ impl Row {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LayoutRow {
     pub section: &'static str,
-    /// The kind of the Browse row (`favourite`, `folder`, `deleted`, …);
+    /// The kind of the Browse row (`favourite`, `folder`, `recents`, …);
     /// `nearby` stands for every nearby server.
     pub kind: &'static str,
     /// The layout item; the favourite id for favourites.
@@ -121,7 +145,8 @@ pub struct RecentRow {
     pub kind: &'static str,
     pub place: String,
     pub at_ms: i64,
-    pub day: &'static str,
+    /// The section it is listed under, by `at_ms`.
+    pub date_group: DateGroup,
 }
 
 /// The name of the file system with `statfs` magic `magic`, for the volume
@@ -192,28 +217,6 @@ pub fn url_host(url: &str) -> String {
     authority.rsplit('@').next().unwrap_or(authority).to_owned()
 }
 
-/// The recents section of `at_ms`: `today`, `yesterday`, `week` (the last
-/// seven days) or `earlier`; `offset_secs` is the local UTC offset.
-pub fn day_bucket_at(at_ms: i64, now_ms: i64, offset_secs: i64) -> &'static str {
-    let day = |ms: i64| (ms / 1000 + offset_secs).div_euclid(86_400);
-    match day(now_ms) - day(at_ms) {
-        i64::MIN..=0 => "today",
-        1 => "yesterday",
-        2..=6 => "week",
-        _ => "earlier",
-    }
-}
-
-/// [`day_bucket_at`] in the device's time zone.
-pub fn day_bucket(at_ms: i64, now_ms: i64) -> &'static str {
-    use chrono::{Local, Offset, TimeZone};
-    let offset = Local
-        .timestamp_millis_opt(now_ms)
-        .single()
-        .map_or(0, |t| i64::from(t.offset().fix().local_minus_utc()));
-    day_bucket_at(at_ms, now_ms, offset)
-}
-
 fn status_name(s: LocationStatus) -> &'static str {
     match s {
         LocationStatus::Ready => "ready",
@@ -267,6 +270,15 @@ impl Core {
         }
         let parts: Vec<String> = uri.path.components().map(display_name).collect();
         format!("{name}{PLACE_SEPARATOR}{}", parts.join(PLACE_SEPARATOR))
+    }
+
+    /// The line under a favourite: the folder itself, or the folder a file
+    /// favourite is in (ORG-1).
+    pub fn favourite_place(&self, f: &Favourite) -> String {
+        match f.uri.parent().filter(|_| !f.is_dir) {
+            Some(folder) => self.place_of(&folder),
+            None => self.place_of(&f.uri),
+        }
     }
 
     /// Visible items of the cached listing of a folder (the cover, INT-3);
@@ -362,12 +374,18 @@ impl Core {
         blocking(move || core.browse_layout.set_order(&section, &items)).await
     }
 
-    /// All rows in Browse order, hidden ones included, and the layout.
+    /// All rows in Browse order, hidden ones included, and the layout. The
+    /// local locations are rescanned first: a volume shows up (LOC-3) even
+    /// when the media watch missed its mount, which inotify can inside the
+    /// sandbox's mount namespace.
     async fn arranged_rows(self: &Arc<Self>) -> (Vec<Row>, Layout) {
         let core = self.clone();
-        let blocking = tokio::task::spawn_blocking(move || core.local_rows())
-            .await
-            .unwrap_or_default();
+        let blocking = tokio::task::spawn_blocking(move || {
+            core.locations.refresh();
+            core.local_rows()
+        })
+        .await
+        .unwrap_or_default();
         let mut rows = blocking.favourites;
         rows.extend(blocking.device);
         rows.extend(blocking.android);
@@ -387,8 +405,17 @@ impl Core {
             .into_iter()
             .map(|p| (p.location_id.clone(), p))
             .collect();
-        let mut device = self.folder_rows("device", &LocationKind::UserFolder, &prefs);
-        if self.settings().recently_deleted {
+        let settings = self.settings();
+        let mut device = Vec::new();
+        // Recents is a row of its own while they are remembered, the first
+        // of the section until the user orders it (§15.2, ORG-2, BRW-12).
+        if settings.recents_enabled {
+            let mut row = Row::new("device", "recents");
+            row.icon = "image://theme/icon-m-history".to_owned();
+            device.push(row);
+        }
+        device.extend(self.folder_rows("device", &LocationKind::UserFolder, &prefs));
+        if settings.recently_deleted {
             let mut row = Row::new("device", "deleted");
             row.icon = "image://theme/icon-m-delete".to_owned();
             row.count = clamp_i64(self.trash.list().map_or(0, |l| l.len()) as u64);
@@ -430,17 +457,20 @@ impl Core {
         for f in self.favourites.list().unwrap_or_default() {
             let mut row = Row::new("favourites", "favourite");
             row.uri = f.uri.to_string();
+            row.place = self.favourite_place(&f);
+            row.icon = f.icon_source();
+            row.is_file = !f.is_dir;
+            row.item_id = f.id.to_string();
             row.name = f.label;
             row.colour = f.colour.unwrap_or_default();
-            row.place = self.place_of(&f.uri);
-            row.icon = "image://theme/icon-m-favorite".to_owned();
-            row.item_id = f.id.to_string();
             rows.push(row);
         }
         rows
     }
 
+    /// The mounted volumes, and the drives the bridge can mount (LOC-3).
     async fn volume_rows(&self) -> Vec<Row> {
+        let drives = self.bridge.as_ref().map(|b| b.drives()).unwrap_or_default();
         let mut rows = Vec::new();
         for l in self
             .locations
@@ -453,7 +483,14 @@ impl Core {
             row.uri = uri.to_string();
             row.name = l.name.clone();
             row.item_id = l.id.clone();
-            row.icon = "image://theme/icon-m-sd-card".to_owned();
+            row.icon = drive_icon(DriveKind::Card).to_owned();
+            if let Some(d) = drives
+                .iter()
+                .find(|d| d.mount_point.is_some() && d.mount_point == l.local_root)
+            {
+                row.drive = d.id.clone();
+                row.icon = drive_icon(d.kind).to_owned();
+            }
             if let Ok(info) = self.volume_info(&uri).await {
                 row.free = clamp_i64(info.free);
                 row.total = clamp_i64(info.total);
@@ -461,7 +498,57 @@ impl Core {
             }
             rows.push(row);
         }
+        rows.extend(
+            drives
+                .iter()
+                .filter(|d| d.mount_point.is_none())
+                .map(unmounted_row),
+        );
+        rows.sort_by(|a, b| a.name.cmp(&b.name));
         rows
+    }
+
+    /// *Mount* of a drive (LOC-3): the bridge mounts it (netvfs XB-20), and
+    /// the volume's root is returned once the sandbox shows it.
+    pub async fn mount_drive(self: &Arc<Self>, drive: &str) -> Result<Uri> {
+        let point = self.drive_client()?.mount_drive(drive).await?;
+        for look in 0..MOUNT_LOOKS {
+            if look > 0 {
+                tokio::time::sleep(MOUNT_LOOK_EVERY).await;
+            }
+            let (core, point) = (self.clone(), point.clone());
+            if let Some(uri) = blocking(move || Ok(core.volume_at(&point))).await? {
+                return Ok(uri);
+            }
+        }
+        Err(Error::new(
+            ErrorKind::NotFound,
+            format!("{} is mounted but does not show", point.display()),
+        ))
+    }
+
+    /// *Unmount* of a volume's drive (LOC-3, netvfs XB-20).
+    pub async fn unmount_drive(self: &Arc<Self>, drive: &str) -> Result<()> {
+        self.drive_client()?.unmount_drive(drive).await?;
+        let core = self.clone();
+        blocking(move || Ok(core.locations.refresh_volumes())).await?;
+        Ok(())
+    }
+
+    fn drive_client(&self) -> Result<&crate::bridge::BridgeClient> {
+        self.bridge
+            .as_ref()
+            .ok_or_else(|| Error::new(ErrorKind::BridgeUnavailable, "drives are mounted by netvfs"))
+    }
+
+    /// The volume mounted on `point`, after a rescan.
+    fn volume_at(&self, point: &Path) -> Option<Uri> {
+        self.locations.refresh_volumes();
+        self.locations
+            .locations()
+            .into_iter()
+            .find(|l| l.kind == LocationKind::Volume && l.local_root.as_deref() == Some(point))
+            .map(|l| Uri::root(l.id))
     }
 
     /// The Servers section (SPEC §3.4, NVB-3, NVB-12): nothing without a
@@ -515,6 +602,8 @@ impl Core {
                 row.name = display_of(&l, prefs);
                 row.status = status_name(l.status);
                 row.attention = l.attention.clone().unwrap_or_default();
+                row.connection = l.connection.name();
+                row.connection_error = l.connection.error().to_owned();
                 row.icon = "image://theme/icon-m-computer".to_owned();
                 row.place = l.url.clone().unwrap_or_default();
                 if let Some(r) = &remote {
@@ -538,6 +627,7 @@ impl Core {
                 let mut row = Row::new("servers", "adhocRecent");
                 row.name = r.name;
                 row.status = "offline";
+                row.connection = ConnectionState::Disconnected.name();
                 row.icon = "image://theme/icon-m-computer".to_owned();
                 row.provider = r
                     .url
@@ -711,7 +801,8 @@ impl Core {
 
     // ---- recents (ORG-2) ----------------------------------------------------
 
-    /// Recents for the page, newest first, with their day sections.
+    /// Recents for the page, newest first, with their date sections (the
+    /// Activity page's, §15.4).
     pub fn recent_rows(&self, filter: &RecentsFilter) -> Result<Vec<RecentRow>> {
         let now = now_ms();
         Ok(self
@@ -737,7 +828,7 @@ impl Core {
             kind: r.kind.as_str(),
             place,
             at_ms: r.at_ms,
-            day: day_bucket(r.at_ms, now),
+            date_group: DateGroup::at(r.at_ms, now),
         }
     }
 }
@@ -749,6 +840,28 @@ struct LocalRows {
     android: Vec<Row>,
     prefs: BTreeMap<String, LocationPrefs>,
     layout: Layout,
+}
+
+fn drive_icon(kind: DriveKind) -> &'static str {
+    match kind {
+        DriveKind::Card => "image://theme/icon-m-sd-card",
+        DriveKind::Usb => "image://theme/icon-m-usb",
+    }
+}
+
+/// A drive that is not mounted (LOC-3): shown as the volume it becomes, by
+/// the folder it is mounted on, so that what the user hid or moved stays
+/// hidden or in place (BRW-12). It has no address until it is mounted.
+fn unmounted_row(d: &Drive) -> Row {
+    let name = d.mount_name();
+    let mut row = Row::new("volumes", "volume");
+    row.status = "unmounted";
+    row.item_id = crate::volumes::location_id_of(OsStr::new(&name));
+    row.name = name;
+    row.icon = drive_icon(d.kind).to_owned();
+    row.total = d.size;
+    row.drive = d.id.clone();
+    row
 }
 
 fn display_of(l: &Location, prefs: &BTreeMap<String, LocationPrefs>) -> String {
@@ -858,20 +971,6 @@ mod tests {
         assert_eq!(public_url("smb://nas/share"), "smb://nas/share");
         assert_eq!(url_host("sftp://pi@raspberrypi.local/home"), "raspberrypi.local");
         assert_eq!(url_host("nas"), "nas");
-    }
-
-    #[test]
-    fn day_buckets_follow_the_local_day() {
-        let day = 86_400_000;
-        let now = 10 * day + 3_600_000; // 01:00 UTC
-        assert_eq!(day_bucket_at(now, now, 0), "today");
-        assert_eq!(day_bucket_at(now - 2 * 3_600_000, now, 0), "yesterday");
-        // The same instants at UTC+2 are both on the same local day.
-        assert_eq!(day_bucket_at(now - 2 * 3_600_000, now, 7200), "today");
-        assert_eq!(day_bucket_at(now - 3 * day, now, 0), "week");
-        assert_eq!(day_bucket_at(now - 6 * day, now, 0), "week");
-        assert_eq!(day_bucket_at(now - 7 * day, now, 0), "earlier");
-        assert_eq!(day_bucket_at(now + day, now, 0), "today");
     }
 
     #[test]

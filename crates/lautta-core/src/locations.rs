@@ -18,7 +18,6 @@ use crate::error::{Error, ErrorKind, Result};
 use crate::paths::AppPaths;
 use crate::provider::local::{lexical_normalize, new_io_semaphore, LocalProvider};
 use crate::provider::{Provider, ProviderResolver};
-use crate::sys;
 use crate::uri::{LocationId, Uri};
 use crate::volumes::{self, Volume, VolumeEvent, VolumeWatcher};
 use crate::vpath::VPath;
@@ -89,6 +88,50 @@ pub enum LocationStatus {
     NeedsAttention,
 }
 
+/// How the connection to a network location stands, as netvfs reports it
+/// (NVB-4; netvfs XB-10, XB-12). Kept apart from [`LocationStatus`]: a
+/// server that is not connected (never used, closed when idle) is still
+/// browsable, and opening it connects.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum ConnectionState {
+    /// Not a network location, or a bridge that does not tell (an older
+    /// netvfs, a state this app does not know): nothing is shown.
+    #[default]
+    Unknown,
+    /// No connection is established or being established.
+    Disconnected,
+    /// One is being established; also while the bridge itself reconnects
+    /// (NVB-12).
+    Connecting,
+    /// At least one is established.
+    Connected,
+    /// As disconnected, but the last attempt to connect failed: the
+    /// netvfs error name (XC-21, `""` when the bridge gave none).
+    Failed(String),
+}
+
+impl ConnectionState {
+    /// The engineering name the UI gets: `disconnected`, `connecting`,
+    /// `connected`, `failed`, or `""` when unknown.
+    pub fn name(&self) -> &'static str {
+        match self {
+            ConnectionState::Unknown => "",
+            ConnectionState::Disconnected => "disconnected",
+            ConnectionState::Connecting => "connecting",
+            ConnectionState::Connected => "connected",
+            ConnectionState::Failed(_) => "failed",
+        }
+    }
+
+    /// The error name of a failed state, `""` otherwise.
+    pub fn error(&self) -> &str {
+        match self {
+            ConnectionState::Failed(error) => error,
+            _ => "",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Location {
     pub id: LocationId,
@@ -103,6 +146,8 @@ pub struct Location {
     /// Why the location needs the user (for example "Sign in again").
     pub attention: Option<String>,
     pub status: LocationStatus,
+    /// The bridge's connection state of a network location (NVB-4).
+    pub connection: ConnectionState,
 }
 
 impl Location {
@@ -120,6 +165,7 @@ impl Location {
             url: None,
             attention: None,
             status: LocationStatus::Ready,
+            connection: ConnectionState::Unknown,
         }
     }
 
@@ -137,6 +183,7 @@ impl Location {
             url,
             attention: None,
             status: LocationStatus::Ready,
+            connection: ConnectionState::Unknown,
         }
     }
 
@@ -265,25 +312,25 @@ impl LocationRegistry {
             .collect()
     }
 
-    /// Provider for a local folder: sharing the I/O semaphore, and with
-    /// *Recently deleted* when the folder is on the home filesystem (OPS-8).
-    fn local_provider(&self, root: &Path, trash_possible: bool) -> Arc<dyn Provider> {
+    /// Provider for a local folder, sharing the I/O semaphore. Deletes in
+    /// user and Android folders go to the *Trash* (OPS-8) whatever mount
+    /// they are on: in the sandbox each of them is a mount of its own, apart
+    /// from `$HOME` (a tmpfs) and the app data (§3.3), and the trash copies
+    /// what it cannot rename.
+    fn local_provider(&self, root: &Path, keeps_trash: bool) -> Arc<dyn Provider> {
         let mut provider = LocalProvider::new(root.to_path_buf()).with_semaphore(self.inner.io.clone());
-        if trash_possible && self.on_home_filesystem(root) {
+        if keeps_trash {
             provider = provider.with_capability(cap::TRASH);
         }
         Arc::new(provider)
-    }
-
-    fn on_home_filesystem(&self, root: &Path) -> bool {
-        sys::same_device(root, &self.inner.paths.home).unwrap_or(false)
     }
 
     /// Swaps in the new locations for one group, keeping unchanged slots
     /// (same id, name and root) with their provider and status. True when
     /// the list differs.
     fn replace_slots(&self, group: fn(&mut State) -> &mut Vec<Slot>, found: Vec<Location>) -> bool {
-        let trash_possible = !matches!(found.first().map(|l| &l.kind), Some(LocationKind::Volume));
+        // Deletes on removable volumes are permanent (OPS-8).
+        let keeps_trash = !matches!(found.first().map(|l| &l.kind), Some(LocationKind::Volume));
         let old: Vec<Slot> = group(&mut self.state()).clone();
         let same =
             |a: &Location, b: &Location| a.id == b.id && a.name == b.name && a.local_root == b.local_root;
@@ -293,7 +340,7 @@ impl LocationRegistry {
                 if let Some(slot) = old.iter().find(|s| same(&s.location, &loc)) {
                     return Some(slot.clone());
                 }
-                let provider = self.local_provider(loc.local_root.as_deref()?, trash_possible);
+                let provider = self.local_provider(loc.local_root.as_deref()?, keeps_trash);
                 Some(Slot {
                     location: loc,
                     provider,
@@ -488,6 +535,21 @@ impl LocationRegistry {
         }
     }
 
+    /// True when deletes in `location` go to the *Trash* (OPS-8): this
+    /// device's folders; not volumes, servers or archives.
+    pub fn keeps_trash(&self, location: &str) -> bool {
+        self.state()
+            .all()
+            .find(|s| s.location.id == location)
+            .and_then(trash_root_of)
+            .is_some()
+    }
+
+    /// The roots of the locations whose deletes go to the *Trash*.
+    pub fn trash_roots(&self) -> Vec<PathBuf> {
+        self.state().all().filter_map(trash_root_of).collect()
+    }
+
     /// The local path behind `uri`, `None` for remote locations and archives.
     pub fn to_local_path(&self, uri: &Uri) -> Option<PathBuf> {
         local_path_of(&self.get(&uri.location)?, uri)
@@ -515,6 +577,11 @@ impl LocationRegistry {
         let rel = path.strip_prefix(&root).ok()?;
         Some(Uri::new(id, VPath::parse(rel.as_os_str().as_bytes()).ok()?))
     }
+}
+
+fn trash_root_of(slot: &Slot) -> Option<PathBuf> {
+    let root = slot.location.local_root.as_ref()?;
+    slot.provider.capabilities().has(cap::TRASH).then(|| root.clone())
 }
 
 /// The absolute path of `uri` inside a local location.
@@ -564,6 +631,7 @@ mod tests {
     use super::*;
     use crate::provider::memory::MemoryProvider;
     use crate::provider::{list_all, Lane};
+    use crate::sys;
     use std::time::Duration;
 
     struct Env {
@@ -760,18 +828,59 @@ mod tests {
     }
 
     #[test]
-    fn trash_is_offered_on_the_home_filesystem_only() {
-        let e = env_with(&["Documents"]);
+    fn deletes_in_user_and_android_folders_go_to_the_trash() {
+        let e = env_with(&["Documents", "android_storage/DCIM"]);
         std::fs::create_dir(e.media.join("CARD")).unwrap();
         e.reg.refresh();
         let docs = e.reg.provider("user-documents").unwrap().capabilities();
         assert!(docs.has(cap::TRASH));
         assert!(docs.has(cap::WRITE));
+        assert!(e
+            .reg
+            .provider("android-dcim")
+            .unwrap()
+            .capabilities()
+            .has(cap::TRASH));
         let card = e.reg.provider("vol-CARD").unwrap().capabilities();
         assert!(
             !card.has(cap::TRASH),
             "removable media delete permanently (OPS-8)"
         );
+        assert!(e.reg.keeps_trash("user-documents"));
+        assert!(e.reg.keeps_trash("android-dcim"));
+        assert!(!e.reg.keeps_trash("vol-CARD"));
+        assert!(!e.reg.keeps_trash("nope"));
+        e.reg.register(
+            Location::local("arc-1", LocationKind::Archive, "a.zip", e.home.clone()),
+            mem(),
+        );
+        assert!(!e.reg.keeps_trash("arc-1"), "only providers that keep a trash");
+        assert_eq!(
+            e.reg.trash_roots(),
+            [e.home.join("Documents"), e.home.join("android_storage/DCIM")]
+        );
+    }
+
+    #[test]
+    fn folders_on_another_device_than_home_keep_a_trash() {
+        // Sailjail: $HOME is a tmpfs and every permitted folder is mounted
+        // on it from the real file system, so no folder is on $HOME's device.
+        let e = env_with(&[]);
+        let Ok(shm) = tempfile::tempdir_in("/dev/shm") else {
+            return;
+        };
+        if sys::same_device(shm.path(), &e.home).unwrap_or(true) {
+            return;
+        }
+        std::fs::create_dir(shm.path().join("Documents")).unwrap();
+        std::os::unix::fs::symlink(shm.path().join("Documents"), e.home.join("Documents")).unwrap();
+        e.reg.refresh();
+        assert!(e
+            .reg
+            .provider("user-documents")
+            .unwrap()
+            .capabilities()
+            .has(cap::TRASH));
     }
 
     #[test]
@@ -886,6 +995,32 @@ mod tests {
         assert!(!e.reg.set_status("missing", LocationStatus::Offline, None));
         assert!(e.reg.set_status("nv-1", LocationStatus::Ready, None));
         assert_eq!(e.reg.get("nv-1").unwrap().attention, None);
+    }
+
+    #[test]
+    fn connection_states_have_names_and_errors() {
+        let states = [
+            ConnectionState::Unknown,
+            ConnectionState::Disconnected,
+            ConnectionState::Connecting,
+            ConnectionState::Connected,
+            ConnectionState::Failed("Timeout".into()),
+        ];
+        let names: Vec<(&str, &str)> = states.iter().map(|c| (c.name(), c.error())).collect();
+        assert_eq!(
+            names,
+            [
+                ("", ""),
+                ("disconnected", ""),
+                ("connecting", ""),
+                ("connected", ""),
+                ("failed", "Timeout")
+            ]
+        );
+        assert_eq!(
+            Location::remote("nv-1", LocationKind::AdHoc, "x", None).connection,
+            ConnectionState::Unknown
+        );
     }
 
     #[test]

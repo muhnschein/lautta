@@ -84,7 +84,7 @@ Item {
                         rightMargin: Theme.paddingMedium
                         verticalCenter: parent.verticalCenter
                     }
-                    text: model.kind === "deleted" ? qsTrId("lautta-browse-recently-deleted") : model.name
+                    text: BrowseText.rowName(model.kind, model.name)
                     truncationMode: TruncationMode.Fade
                 }
                 Label {

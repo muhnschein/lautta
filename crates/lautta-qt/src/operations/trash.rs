@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `TrashModel`: *Recently deleted* (OPS-8): list, restore, delete now,
-//! empty. Call `reload()` when the page opens.
+//! `TrashModel`: the *Trash* (OPS-8): list, restore, delete now, empty.
+//! Call `reload()` when the page opens; it also purges what is past the
+//! retention setting.
 
 use super::error_parts;
 use crate::runtime::{core, spawn_then};
 use lautta_core::app_operations::TrashEntry;
+use lautta_core::trash::now_secs;
 use lautta_core::{Error, Result};
 use qmetaobject::prelude::*;
 use qmetaobject::QPointer;
@@ -19,12 +21,6 @@ const ROLE_IS_DIR: i32 = 0x105;
 const ROLE_SIZE: i32 = 0x106;
 const ROLE_TRASHED_AT: i32 = 0x107;
 const ROLE_DAYS_LEFT: i32 = 0x108;
-
-fn now_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
-}
 
 /// Total bytes of the entries (unknown sizes count as zero).
 fn total_size(entries: &[TrashEntry]) -> i64 {
@@ -105,9 +101,15 @@ impl TrashModel {
         spawn_then(
             async move {
                 let now = now_secs();
-                tokio::task::spawn_blocking(move || core.trash_entries(now))
-                    .await
-                    .unwrap_or_else(|e| Err(Error::new(lautta_core::ErrorKind::Internal, e.to_string())))
+                tokio::task::spawn_blocking(move || {
+                    // What expired while the app was running goes first (OPS-8).
+                    if let Err(e) = core.purge_trash(now) {
+                        log::warn!("purging the Trash failed: {e}");
+                    }
+                    core.trash_entries(now)
+                })
+                .await
+                .unwrap_or_else(|e| Err(Error::new(lautta_core::ErrorKind::Internal, e.to_string())))
             },
             move |res| {
                 let Some(p) = me.as_pinned() else { return };
@@ -193,10 +195,10 @@ impl TrashModel {
         );
     }
 
-    /// Empties Recently deleted (after the remorse popup).
+    /// Empties the Trash (after the remorse popup).
     fn empty(&mut self) {
         self.run(
-            |core| core.trash.empty(),
+            |core| core.empty_trash(),
             |this, n| this.emptied(i32::try_from(n).unwrap_or(i32::MAX)),
         );
     }

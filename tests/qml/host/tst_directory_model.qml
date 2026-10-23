@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Host test of DirectoryModel, PathModel and PickerRootsModel (no Silica):
 // listing a temp HOME's Documents, create/rename errors, sort, filter, hidden
-// files, selection, live updates, per-folder view settings and the path menu.
+// files, selection, live updates, per-folder view settings, open folders
+// following the global ones and the path menu.
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -36,12 +37,18 @@ Item {
 
     function wait(ms) { pump.pump(ms) }
 
+    // A file in Documents, copied from a fixture: the app makes folders only.
+    function install(fixture, name) {
+        check(tools.installFixture(Qt.resolvedUrl("fixtures/" + fixture), root.docs + name), "fixture " + name)
+    }
+
     PickerRootsModel { id: pump }
+    ViewerTools { id: tools }
 
     DirectoryModel {
         id: dir
         uri: root.docs
-        onCreated: root.events.push("created:" + uri + ":" + isDir)
+        onCreated: root.events.push("created:" + uri)
         onCreateFailed: root.events.push("createFailed:" + kind)
         onRenamed: root.events.push("renamed:" + oldUri + ">" + newUri)
         onRenameFailed: root.events.push("renameFailed:" + kind)
@@ -78,14 +85,16 @@ Item {
 
     function testCreate() {
         dir.createFolder("Zeta")
-        dir.createFile("alpha.txt")
-        dir.createFile("Beta.png")
-        dir.createFile("notes.md")
-        dir.createFile(".hidden")
+        install("notes-crlf.txt", "alpha.txt")
+        install("photo.jpg", "Beta.png")
+        install("doc.md", "notes.md")
+        install("data.bin", ".hidden")
+        wait(500)
+        dir.refresh()
         wait(500)
         same(names(rep), ["Zeta", "alpha.txt", "Beta.png", "notes.md"], "folders first, hidden files off")
-        check(root.events.indexOf("created:" + root.docs + "Zeta:true") >= 0, "created signal for the folder")
-        check(root.events.indexOf("created:" + root.docs + ".hidden:false") >= 0, "created signal for the hidden file")
+        same(root.events, ["created:" + root.docs + "Zeta"], "created signal for the folder")
+        check(dir.createFile === undefined, "no empty files: the app makes folders only")
         var z = row(rep, "Zeta")
         check(z.dirRow && z.cat === "folder", "folder row")
         check(row(rep, "alpha.txt").cat === "text", "category of a text file")
@@ -93,8 +102,8 @@ Item {
         check(row(rep, "notes.md").thumb === "", "no thumbnail for other files")
 
         dir.createFolder("Zeta")
-        dir.createFile("alpha.txt")
-        dir.createFile("bad/name")
+        dir.createFolder("alpha.txt")
+        dir.createFolder("bad/name")
         wait(300)
         check(root.events.filter(function (e) { return e === "createFailed:AlreadyExists" }).length === 2, "name clashes are reported: " + root.events)
         check(root.events.indexOf("createFailed:InvalidName") >= 0, "invalid names are reported")
@@ -138,6 +147,11 @@ Item {
         dir.clearSelection()
         check(dir.selectedCount === 0 && dir.selectedUris().length === 0, "clear")
         check(dir.indexOf(a) === 1 && dir.indexOf(root.docs + "none") === -1, "indexOf: " + dir.indexOf(a))
+        // Drag selection reads the rows by index, the selection panel the kind by uri.
+        same([dir.uriAt(0), dir.uriAt(1), dir.uriAt(3)], [root.docs + "Zeta", a, root.docs + "notes.md"], "uriAt")
+        check(dir.uriAt(-1) === "" && dir.uriAt(dir.count) === "", "uriAt outside the rows")
+        same([dir.kindOf(root.docs + "Zeta"), dir.kindOf(a), dir.kindOf(root.docs + "none"),
+              dir.kindOf("lautta://user-downloads/Zeta"), dir.kindOf("garbage")], ["folder", "file", "", "", ""], "kindOf")
     }
 
     function testRename() {
@@ -154,10 +168,10 @@ Item {
     }
 
     function testLiveUpdate() {
-        other.createFile("watched.txt")
+        install("notes-crlf.txt", "watched.txt")
         wait(1200)
         check(names(rep).indexOf("watched.txt") >= 0, "changes by others appear without refresh: " + names(rep))
-        other.createFile("watched2.txt")
+        install("notes-crlf.txt", "watched2.txt")
         wait(1200)
         check(dir.count === 6, "second live update")
     }
@@ -189,6 +203,35 @@ Item {
         dir.setViewPrefs(JSON.stringify({ viewMode: "list", thumbnails: true }))
     }
 
+    // BRW-4: folders already open follow a change made elsewhere (Settings,
+    // or View options in another folder) without being opened again.
+    function testOpenFoldersFollowSettings() {
+        var open = Qt.createQmlObject('import Lautta 1.0; DirectoryModel { uri: "' + root.docs + 'Zeta" }', root)
+        wait(300)
+        check(!open.descending && open.viewMode === "list", "an open folder starts with the global settings")
+        var before = names(rep)
+        // Set for this folder alone; the global settings do not touch it.
+        dir.setViewPrefs(JSON.stringify({ thumbnails: false }))
+        App.setSetting("sort_descending", JSON.stringify(true))
+        App.setSetting("view_mode", JSON.stringify("grid"))
+        wait(300)
+        check(open.descending && open.viewMode === "grid", "an open folder follows: " + open.descending + " " + open.viewMode)
+        check(dir.descending && dir.viewMode === "grid", "so does the folder on screen")
+        same(names(rep), [before[0]].concat(before.slice(1).reverse()), "its rows are in the new order")
+        check(row(rep, "Beta.png").thumb === "", "what was set for the folder alone stays")
+        App.setSetting("remorse_seconds", JSON.stringify(7))
+        wait(300)
+        check(dir.viewMode === "grid" && dir.descending, "other settings change nothing")
+        App.setSetting("sort_descending", JSON.stringify(false))
+        App.setSetting("view_mode", JSON.stringify("list"))
+        App.setSetting("remorse_seconds", JSON.stringify(5))
+        wait(300)
+        check(!open.descending && open.viewMode === "list", "and back: " + open.viewMode)
+        same(names(rep), before, "the rows are back in name order")
+        dir.setViewPrefs(JSON.stringify({ thumbnails: true }))
+        open.destroy()
+    }
+
     function testPicker() {
         check(pump.hasRemote() === false, "no servers in a plain home")
     }
@@ -202,6 +245,7 @@ Item {
         testLiveUpdate()
         testStates()
         testPrefsAreGlobal()
+        testOpenFoldersFollowSettings()
         testPicker()
     }
 }

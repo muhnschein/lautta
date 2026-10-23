@@ -3,10 +3,12 @@
 //! top of `lautta_core::listing::ListingState`. Listings stream in from the
 //! core (cached copy first, BRW-5), diffs become row inserts/removes/updates,
 //! local folders are watched (BRW-6) and the view settings are the global
-//! ones (BRW-4).
+//! ones (BRW-4), followed while the folder is open.
 
+use crate::browse::Guard;
 use crate::json::from_json;
 use crate::runtime::{self, core, spawn_then};
+use lautta_core::app::Core;
 use lautta_core::app_directory::{file_url, ListEvent};
 use lautta_core::entry::{cap, Entry, EntryFlags};
 use lautta_core::error::ErrorKind;
@@ -116,22 +118,28 @@ pub struct DirectoryModel {
     selectedUris: qt_method!(fn(&self) -> QVariantList),
     setViewPrefs: qt_method!(fn(&mut self, prefs_json: QString) -> bool),
     indexOf: qt_method!(fn(&self, uri: QString) -> i32),
+    /// The uri of row `index`, empty outside the rows (drag selection, SPEC §15.3).
+    uriAt: qt_method!(fn(&self, index: i32) -> QString),
     hasCapability: qt_method!(fn(&self, flag: QString) -> bool),
     nameKind: qt_method!(fn(&self, name: QString) -> QString),
+    /// "folder", "file" or "" for the item `uri` of this folder.
+    kindOf: qt_method!(fn(&self, uri: QString) -> QString),
     setTransferState: qt_method!(fn(&mut self, uri: QString, state: QString)),
     rename: qt_method!(fn(&mut self, uri: QString, name: QString)),
     createFolder: qt_method!(fn(&mut self, name: QString)),
-    createFile: qt_method!(fn(&mut self, name: QString)),
     renamed: qt_signal!(oldUri: QString, newUri: QString),
     renameFailed: qt_signal!(uri: QString, kind: QString, message: QString),
-    created: qt_signal!(uri: QString, isDir: bool),
+    created: qt_signal!(uri: QString),
     createFailed: qt_signal!(kind: QString, message: QString),
 
     dir: Option<Uri>,
     local_dir: Option<PathBuf>,
     state: ListingState,
     prefs: ViewPrefs,
-    /// The view was set here (`setViewPrefs`): no grid suggestion.
+    /// The global view settings `prefs` last followed (BRW-4).
+    global: ViewPrefs,
+    /// The view was set here (`setViewPrefs`) or for every folder since
+    /// the folder opened: no grid suggestion.
     prefs_set: bool,
     filter: FilterOptions,
     flags: Vec<String>,
@@ -144,6 +152,8 @@ pub struct DirectoryModel {
     /// Archives do not change while open: coming back never lists them again.
     archive: bool,
     watcher: Option<DirWatcher>,
+    /// Ends the task following the settings when the model goes.
+    settings_watch: Option<Guard>,
     transfer_states: HashMap<Vec<u8>, String>,
 }
 
@@ -169,8 +179,12 @@ impl DirectoryModel {
             return;
         };
         self.prefs = core.view_prefs();
+        self.global = self.prefs;
         self.prefs_set = false;
         self.remote_thumbs = core.settings().thumbnails_remote;
+        if self.settings_watch.is_none() {
+            self.watch_settings(&core);
+        }
         self.apply_prefs_state();
         self.flags = core.capability_flags(&dir.location);
         self.local_dir = core.locations.to_local_path(&dir);
@@ -262,6 +276,32 @@ impl DirectoryModel {
             }
         });
         self.watcher = Some(watcher);
+    }
+
+    /// Follows the settings while the model lives: a change made on another
+    /// page (Settings, or View options in another folder) shows here at
+    /// once (BRW-4), not only when the folder is opened again.
+    fn watch_settings(&mut self, core: &Core) {
+        let guard = Guard::default();
+        let mut stop = guard.subscribe();
+        let mut changes = core.watch_settings();
+        let me = QPointer::from(&*self);
+        let cb = queued_callback(move |()| {
+            if let Some(m) = me.as_pinned() {
+                m.borrow_mut().follow_settings();
+            }
+        });
+        runtime::handle().spawn(async move {
+            loop {
+                tokio::select! {
+                    r = changes.changed() => if r.is_err() { return },
+                    _ = stop.changed() => return,
+                }
+                changes.borrow_and_update();
+                cb(());
+            }
+        });
+        self.settings_watch = Some(guard);
     }
 
     fn on_watch(&mut self, generation: u64) {
@@ -491,7 +531,13 @@ impl DirectoryModel {
         self.descending = p.descending;
         self.foldersFirst = p.folders_first;
         self.showHidden = p.show_hidden;
-        self.viewMode = qs(p.view_mode.as_str());
+        // A suggested grid (SPEC 15.3) stays until a view is chosen.
+        let mode = if self.suggestGrid {
+            ViewMode::Grid
+        } else {
+            p.view_mode
+        };
+        self.viewMode = qs(mode.as_str());
         self.thumbnails = p.thumbnails;
         self.filter.show_hidden = p.show_hidden;
         self.prefsChanged();
@@ -530,17 +576,46 @@ impl DirectoryModel {
             .and_then(ViewMode::parse)
         {
             p.view_mode = m;
+            self.view_chosen();
         }
+        self.show_prefs(p);
+        true
+    }
+
+    /// The global settings changed. What changed shows here at once; what
+    /// was set for this folder alone and did not change stays (BRW-4).
+    fn follow_settings(&mut self) {
+        let Some(core) = core() else { return };
+        let global = core.view_prefs();
+        let remote_thumbs = core.settings().thumbnails_remote;
+        if global == self.global && remote_thumbs == self.remote_thumbs {
+            return;
+        }
+        if global.view_mode != self.global.view_mode {
+            self.view_chosen();
+        }
+        let prefs = self.prefs.follow(self.global, global);
+        self.global = global;
+        self.remote_thumbs = remote_thumbs;
+        self.show_prefs(prefs);
+    }
+
+    /// A view was chosen for this folder or for all: it replaces a
+    /// suggested grid and no other is suggested.
+    fn view_chosen(&mut self) {
         self.prefs_set = true;
-        self.prefs = p;
         self.suggestGrid = false;
+    }
+
+    /// Shows the folder with the view settings `p`.
+    fn show_prefs(&mut self, p: ViewPrefs) {
+        self.prefs = p;
         self.apply_prefs_state();
         let mut changes = self.state.set_sort(self.prefs.sort_options());
         changes.extend(self.state.set_filter(self.filter.clone()));
         self.apply(changes);
         self.reload_roles();
         self.publish();
-        true
     }
 
     /// Thumbnails may have been switched: every row's data changed.
@@ -620,6 +695,15 @@ impl DirectoryModel {
             .map_or(-1, |i| i as i32)
     }
 
+    fn uriAt(&self, index: i32) -> QString {
+        usize::try_from(index)
+            .ok()
+            .filter(|&i| i < self.shown)
+            .and_then(|i| self.state.entry_at(i))
+            .and_then(|e| self.entry_uri(e))
+            .map_or_else(QString::default, |u| qs(&u.to_string()))
+    }
+
     fn hasCapability(&self, flag: QString) -> bool {
         let flag = flag.to_string();
         self.flags.contains(&flag)
@@ -627,12 +711,14 @@ impl DirectoryModel {
 
     /// "folder", "file" or "" for what is called `name` here (before filtering).
     fn nameKind(&self, name: QString) -> QString {
-        let kind = match self.state.entry_named(name.to_string().as_bytes()) {
-            Some(e) if e.is_dir() => "folder",
-            Some(_) => "file",
-            None => "",
-        };
-        qs(kind)
+        qs(kind_of(self.state.entry_named(name.to_string().as_bytes())))
+    }
+
+    /// By uri, so names that are not UTF-8 are found too (the selection
+    /// panel's one item, SPEC §15.3).
+    fn kindOf(&self, uri: QString) -> QString {
+        let name = self.name_of(&uri).unwrap_or_default();
+        qs(kind_of(self.state.entry_named(&name)))
     }
 
     fn setTransferState(&mut self, uri: QString, state: QString) {
@@ -674,39 +760,34 @@ impl DirectoryModel {
     }
 
     fn createFolder(&mut self, name: QString) {
-        self.create(name, true);
-    }
-
-    fn createFile(&mut self, name: QString) {
-        self.create(name, false);
-    }
-
-    fn create(&mut self, name: QString, folder: bool) {
         let (Some(core), Some(dir)) = (core(), self.dir.clone()) else {
             return;
         };
         let me = QPointer::from(&*self);
         let new_name = name.to_string();
         spawn_then(
-            async move {
-                if folder {
-                    core.make_folder(&dir, new_name.as_bytes()).await
-                } else {
-                    core.make_file(&dir, new_name.as_bytes()).await
-                }
-            },
+            async move { core.make_folder(&dir, new_name.as_bytes()).await },
             move |res| {
                 let Some(m) = me.as_pinned() else { return };
                 let mut m = m.borrow_mut();
                 match res {
                     Ok(new) => {
-                        m.created(qs(&new.to_string()), folder);
+                        m.created(qs(&new.to_string()));
                         m.refresh();
                     }
                     Err(e) => m.createFailed(qs(e.kind.name()), qs(&e.message)),
                 }
             },
         );
+    }
+}
+
+/// What `nameKind` and `kindOf` answer for an entry or none.
+fn kind_of(entry: Option<&Entry>) -> &'static str {
+    match entry {
+        Some(e) if e.is_dir() => "folder",
+        Some(_) => "file",
+        None => "",
     }
 }
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The `Bridge` singleton: netvfs bridge status, consent, hand-offs,
-//! ad-hoc servers and the questions the bridge asks (SPEC §7).
+//! ad-hoc servers, mounting drives (LOC-3) and the questions the bridge asks
+//! (SPEC §7).
 //!
 //! `status` is one of `absent`, `connecting`, `consentUnknown`,
 //! `consentDenied`, `ready`, `reconnecting`.
@@ -14,7 +15,7 @@ use super::{error_parts, Guard};
 use crate::json::{from_json, to_json};
 use crate::runtime::{core, handle, spawn_then};
 use lautta_core::app::Core;
-use lautta_core::bridge::{AdHocOptions, BridgeStatus};
+use lautta_core::bridge::{feature, AdHocOptions, BridgeStatus};
 use lautta_core::questions::{Answer, Question, QuestionEvent, QuestionKind, Responses};
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
@@ -89,14 +90,20 @@ pub struct Bridge {
     version: qt_property!(QString; NOTIFY statusChanged),
     /// True when the Servers section and its hand-offs are usable.
     ready: qt_property!(bool; NOTIFY statusChanged),
+    /// True when the bridge opens Settings › Storage (NVB-13), whatever the
+    /// consent.
+    storageSettings: qt_property!(bool; NOTIFY statusChanged),
 
     requestConsent: qt_method!(fn(&mut self)),
     addServer: qt_method!(fn(&mut self, provider: QString)),
+    openStorageSettings: qt_method!(fn(&mut self)),
+    /// *Mount* of a volume's drive (LOC-3); `name` is the volume's.
+    mountDrive: qt_method!(fn(&mut self, drive: QString, name: QString)),
+    unmountDrive: qt_method!(fn(&mut self, drive: QString, name: QString)),
     editAccount: qt_method!(fn(&mut self, location_uri: QString)),
     connectAdHoc: qt_method!(fn(&mut self, url: QString, secret: QString, options_json: QString)),
     forgetAdHoc: qt_method!(fn(&mut self, id: QString)),
     removeRecent: qt_method!(fn(&mut self, id: QString)),
-    disconnect: qt_method!(fn(&mut self, id: QString)),
     setDiscover: qt_method!(fn(&mut self, on: bool)),
     setForeground: qt_method!(fn(&mut self, foreground: bool)),
     poke: qt_method!(fn(&mut self)),
@@ -105,6 +112,8 @@ pub struct Bridge {
 
     question: qt_signal!(questionId: QString, kind: QString, detailsJson: QString),
     questionResolved: qt_signal!(questionId: QString),
+    /// A location to open: the server *Connect to server* connected, the
+    /// volume a drive was mounted as.
     adhocConnected: qt_signal!(locationUri: QString),
     /// A call failed; `subject` names what it was about (server, address).
     failed: qt_signal!(kind: QString, message: QString, subject: QString),
@@ -127,13 +136,18 @@ impl QSingletonInit for Bridge {
 
 impl Bridge {
     fn publish_status(&mut self, core: &Core) {
-        let (status, version) = match &core.bridge {
-            Some(b) => (b.status(), b.bridge_version().unwrap_or_default()),
-            None => (BridgeStatus::Absent, String::new()),
+        let (status, version, storage) = match &core.bridge {
+            Some(b) => (
+                b.status(),
+                b.bridge_version().unwrap_or_default(),
+                b.offers(feature::STORAGE_SETTINGS),
+            ),
+            None => (BridgeStatus::Absent, String::new(), false),
         };
         self.status = QString::from(status_name(status));
         self.ready = status == BridgeStatus::Ready;
         self.version = QString::from(version.as_str());
+        self.storageSettings = storage;
         self.statusChanged();
     }
 
@@ -218,6 +232,24 @@ impl Bridge {
         });
     }
 
+    /// Runs a call that ends in a location to open, and opens it
+    /// (`adhocConnected`) or reports its failure through `failed`.
+    fn open_when<F>(&self, subject: String, f: impl FnOnce(Arc<Core>) -> F)
+    where
+        F: std::future::Future<Output = lautta_core::Result<Uri>> + Send + 'static,
+    {
+        let Some(core) = core() else { return };
+        let me = QPointer::from(self);
+        spawn_then(f(core), move |res| {
+            let Some(b) = me.as_pinned() else { return };
+            let b = b.borrow();
+            match res {
+                Ok(uri) => b.adhocConnected(QString::from(uri.to_string().as_str())),
+                Err(e) => b.report(&e, &subject),
+            }
+        });
+    }
+
     fn requestConsent(&mut self) {
         self.call(String::new(), |core| async move {
             match &core.bridge {
@@ -237,6 +269,32 @@ impl Bridge {
                 Some(b) => b.add_account(&provider).await,
                 None => Ok(()),
             }
+        });
+    }
+
+    /// *Open Storage settings* of a volume (LOC-3).
+    fn openStorageSettings(&mut self) {
+        self.call(String::new(), |core| async move {
+            match &core.bridge {
+                Some(b) => b.open_storage_settings().await,
+                None => Ok(()),
+            }
+        });
+    }
+
+    /// Mounts the drive and opens the volume (LOC-3).
+    fn mountDrive(&mut self, drive: QString, name: QString) {
+        let drive = drive.to_string();
+        self.open_when(
+            name.to_string(),
+            |core| async move { core.mount_drive(&drive).await },
+        );
+    }
+
+    fn unmountDrive(&mut self, drive: QString, name: QString) {
+        let drive = drive.to_string();
+        self.call(name.to_string(), |core| async move {
+            core.unmount_drive(&drive).await
         });
     }
 
@@ -260,19 +318,9 @@ impl Bridge {
         };
         let url = url.to_string();
         let subject = lautta_core::app_browse::url_host(&url);
-        let Some(core) = core() else { return };
-        let me = QPointer::from(&*self);
-        spawn_then(
-            async move { core.connect_adhoc(&url, secret, opts).await },
-            move |res| {
-                let Some(b) = me.as_pinned() else { return };
-                let b = b.borrow();
-                match res {
-                    Ok(id) => b.adhocConnected(QString::from(Uri::root(id).to_string().as_str())),
-                    Err(e) => b.report(&e, &subject),
-                }
-            },
-        );
+        self.open_when(subject, |core| async move {
+            core.connect_adhoc(&url, secret, opts).await.map(Uri::root)
+        });
     }
 
     fn forgetAdHoc(&mut self, id: QString) {
@@ -286,16 +334,6 @@ impl Bridge {
             tokio::task::spawn_blocking(move || core.remove_adhoc_recent(&id))
                 .await
                 .map_err(|e| lautta_core::Error::new(lautta_core::ErrorKind::Internal, e.to_string()))?
-        });
-    }
-
-    fn disconnect(&mut self, id: QString) {
-        let id = location_id(&id.to_string());
-        self.call(name_of(&id), |core| async move {
-            match &core.bridge {
-                Some(b) => b.disconnect(&id).await,
-                None => Ok(()),
-            }
         });
     }
 

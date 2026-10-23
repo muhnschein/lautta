@@ -10,7 +10,7 @@ use lautta_bridge_proto::fake::{Consent, FakeBridge};
 use lautta_core::app::{Core, Started};
 use lautta_core::bridge::BridgeStatus;
 use lautta_core::error::ErrorKind;
-use lautta_core::locations::{LocationRegistry, LocationStatus};
+use lautta_core::locations::{ConnectionState, LocationRegistry, LocationStatus};
 use lautta_core::ops::OperationKind;
 use lautta_core::paths::AppPaths;
 use lautta_core::transfer::TransferState;
@@ -177,4 +177,37 @@ async fn attention_reaches_the_location() {
         core.location(SERVER).unwrap().attention.as_deref(),
         Some("auth-failed")
     );
+}
+
+/// The location carries the bridge's connection state (NVB-4, netvfs
+/// XB-12) and follows each `LocationsChanged`; a server that is not
+/// connected stays ready to browse.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_connection_state_reaches_the_location() {
+    let fake = fake_with_files().await;
+    let (_home, core, _l) = core_with(&fake, true).await;
+    eventually("server location", || core.location(SERVER).is_some()).await;
+    let connection = || core.location(SERVER).map(|l| l.connection);
+    assert_eq!(connection(), Some(ConnectionState::Disconnected));
+    assert_eq!(core.location(SERVER).unwrap().status, LocationStatus::Ready);
+    // Listing needs a connection: the bridge connects and tells.
+    core.list(&Uri::parse("lautta://nv-account:1/photos").unwrap(), |_| {})
+        .await
+        .unwrap();
+    eventually("connected", || connection() == Some(ConnectionState::Connected)).await;
+    fake.set_state("account:1", "failed", Some("Timeout")).await;
+    eventually("failed", || {
+        connection() == Some(ConnectionState::Failed("Timeout".into()))
+    })
+    .await;
+    assert_eq!(core.location(SERVER).unwrap().status, LocationStatus::Ready);
+    fake.set_state("account:1", "connecting", None).await;
+    eventually("connecting", || connection() == Some(ConnectionState::Connecting)).await;
+    // Closed when idle: still a location to browse.
+    fake.set_state("account:1", "disconnected", None).await;
+    eventually("disconnected", || {
+        connection() == Some(ConnectionState::Disconnected)
+    })
+    .await;
+    assert_eq!(core.location(SERVER).unwrap().status, LocationStatus::Ready);
 }

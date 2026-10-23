@@ -14,7 +14,7 @@ function modified(ms) {
     var date = new Date(ms)
     var now = new Date()
     if (_sameDay(date, now))
-        return Silica.Format.formatDate(date, Silica.Formatter.TimepointRelativeCurrentDay)
+        return Silica.Format.formatDate(date, Silica.Formatter.TimepointRelative)
     var yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
     if (_sameDay(date, yesterday))
         //% "Yesterday"

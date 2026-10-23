@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The folder view of DirectoryPage (SPEC §9, §15.3): header with the path menu, list or grid, pulley,
-// context menu, selection mode with a docked panel, paste bar, remorse and
-// the placeholders for empty, not accessible, offline, large and error.
+// context menu and its More actions page, selection mode with drag
+// selection and a docked panel, paste bar, remorse (also the undo of a
+// rename, OPS-9) and the placeholders for empty, not accessible, offline,
+// large and error.
 import QtQuick 2.6
+import QtQml.Models 2.2
 import Sailfish.Silica 1.0
 import Sailfish.Share 1.0
 import Lautta 1.0
@@ -30,10 +33,18 @@ Item {
         return App.setting("grid_columns") === 3 ? 3 : 4
     }
     readonly property bool gridCaptions: gridColumns === 3
-    readonly property bool permanentDelete: !(App.setting("recently_deleted") === true && dir.hasCapability("Trash")
-                                              && App.isLocal(uri))
     property string pendingName
     property string pendingShare
+    // The list or the grid, whichever is shown.
+    readonly property Item flickable: gridMode ? grid : list
+    // The item renamed last while its remorse runs (OPS-9): { uri, oldUri,
+    // isDir, ends, revealed }. Its row shows the remorse (RenameRemorse.qml).
+    property var renamed: null
+    property bool renamingDir
+    // The item renamed back from its remorse: that rename has none.
+    property string undoingUri
+    // The More actions page while it is open.
+    property Item moreActionsPage
 
     // Asks the host page to open a folder.
     signal openFolder(string uri)
@@ -59,24 +70,101 @@ Item {
             Open.open(pageStack, App, Operations, itemUri, false, mimeType, uri)
     }
 
-    function newItem() {
+    function newFolder() {
         var dialog = pageStack.push(Qt.resolvedUrl("../../dialogs/NewItemDialog.qml"), { "parentUri": uri })
         dialog.accepted.connect(function () {
             view.pendingName = dialog.itemName
-            if (dialog.isFolder)
-                dir.createFolder(dialog.itemName)
-            else
-                dir.createFile(dialog.itemName)
+            dir.createFolder(dialog.itemName)
         })
     }
 
     function rename(info) {
         var dialog = pageStack.push(Qt.resolvedUrl("../../dialogs/RenameDialog.qml"),
-                                    { "uri": info.uri, "size": info.size, "modified": info.modified, "isDir": info.isDir })
+                                    { "uri": info.uri, "isDir": info.isDir })
         dialog.accepted.connect(function () {
             view.pendingName = dialog.newName
+            view.renamingDir = info.isDir === true
             dir.rename(info.uri, dialog.newName)
         })
+    }
+
+    // A rename is undone from a remorse on its row, not a banner (OPS-9).
+    function renameDone(oldUri, newUri) {
+        if (oldUri === undoingUri) {
+            undoingUri = ""
+            return
+        }
+        var ms = App.setting("remorse_seconds") * 1000
+        renamed = { "uri": newUri, "oldUri": oldUri, "isDir": renamingDir, "ends": Date.now() + ms, "revealed": false }
+        renamedTimer.interval = ms
+        renamedTimer.restart()
+    }
+
+    // Shows the remorse of the rename on `row` (a list row or grid cell) for
+    // the time left. Returns { rename, orphaned }; the row sets `orphaned`
+    // when it goes: its remorse ends with it then, and that is not running
+    // out.
+    function showRenameRemorse(row) {
+        var r = renamed
+        var left = r ? r.ends - Date.now() : 0
+        if (left <= 0)
+            return null
+        var shown = { "rename": r, "orphaned": false }
+        //% "Folder renamed"
+        var text = r.isDir ? qsTrId("lautta-dir-renamed-folder")
+                           //% "File renamed"
+                           : qsTrId("lautta-dir-renamed-file")
+        var keep = function () {
+            if (!shown.orphaned)
+                view.forgetRename(r)
+        }
+        var remorse = typeof row.remorseAction === "function" ? row.remorseAction(text, keep, left)
+                                                              : Remorse.itemAction(row.contentItem, text, keep, left)
+        if (remorse)
+            onceCanceled(remorse, function () { view.undoRename(r) })
+        return shown
+    }
+
+    // Silica keeps one remorse item per row for all its timers: `action`
+    // belongs to this one only.
+    function onceCanceled(remorse, action) {
+        var done = function () {
+            remorse.canceled.disconnect(canceled)
+            remorse.triggered.disconnect(done)
+        }
+        var canceled = function () {
+            done()
+            action()
+        }
+        remorse.canceled.connect(canceled)
+        remorse.triggered.connect(done)
+    }
+
+    function forgetRename(r) {
+        if (r && renamed === r) {
+            renamed = null
+            renamedTimer.stop()
+        }
+    }
+
+    // Tapping the remorse renames the item back.
+    function undoRename(r) {
+        forgetRename(r)
+        undoingUri = r.uri
+        pendingName = App.nameOf(r.oldUri)
+        dir.rename(r.uri, pendingName)
+    }
+
+    // The renamed item may have moved out of sight: bring its row, and so
+    // its remorse, into view once the listing has it.
+    function revealRenamed() {
+        if (!renamed || renamed.revealed || dir.loading)
+            return
+        var index = dir.indexOf(renamed.uri)
+        if (index < 0)
+            return
+        renamed.revealed = true
+        flickable.positionViewAtIndex(index, ListView.Contain)
     }
 
     function paste() {
@@ -97,26 +185,44 @@ Item {
         pageStack.push(Qt.resolvedUrl("../../pages/ViewOptionsPage.qml"), { "model": dir })
     }
 
+    function activity() {
+        pageStack.push(Qt.resolvedUrl("../../pages/TransfersPage.qml"))
+    }
+
+    function moreActions(info) {
+        moreActionsPage = pageStack.push(Qt.resolvedUrl("MoreActionsPage.qml"), { "owner": view, "info": info })
+    }
+
+    // A dialog opened from More actions takes that page's place, so that
+    // leaving the dialog returns to the folder.
+    function openDialog(path, properties) {
+        var url = Qt.resolvedUrl(path)
+        if (moreActionsPage && pageStack.currentPage === moreActionsPage)
+            return pageStack.replace(url, properties)
+        return pageStack.push(url, properties)
+    }
+
+    // OPS-8: to the Trash after the remorse timer; for good (volumes,
+    // servers, the Trash off) once the dialog is accepted, with no timer.
     function remove(uris, listItem) {
-        var timeout = App.setting("remorse_seconds") * 1000
         var action = function () {
             Operations.remove(JSON.stringify(uris))
             refreshTimer.restart()
             if (view.selecting)
                 view.endSelection()
         }
+        if (Operations.deletesPermanently(JSON.stringify(uris))) {
+            var dialog = pageStack.push(Qt.resolvedUrl("../../dialogs/DeleteDialog.qml"), { "uris": uris })
+            dialog.accepted.connect(action)
+            return
+        }
+        var timeout = App.setting("remorse_seconds") * 1000
         if (listItem) {
-            //% "Deleting permanently"
-            var single = view.permanentDelete ? qsTrId("lautta-dir-deleting-permanently")
-                                              //% "Deleting"
-                                              : qsTrId("lautta-dir-deleting")
-            listItem.remorseAction(single, action, timeout)
+            //% "Moving to trash"
+            listItem.remorseAction(qsTrId("lautta-dir-trashing"), action, timeout)
         } else {
-            //% "Deleting %n items permanently"
-            var many = view.permanentDelete ? qsTrId("lautta-dir-deleting-many-permanently", uris.length)
-                                            //% "Deleting %n items"
-                                            : qsTrId("lautta-dir-deleting-many", uris.length)
-            remorsePopup.execute(many, action, timeout)
+            //% "Moving %n items to trash"
+            remorsePopup.execute(qsTrId("lautta-dir-trashing-many", uris.length), action, timeout)
         }
     }
 
@@ -137,7 +243,9 @@ Item {
         shareAction.trigger()
     }
 
-    // One action on one or more items; `info` describes the first item.
+    // One action on one or more items; `info` describes the first item. A
+    // favourite is the item itself (ORG-1): a folder unless `info` says it
+    // is a file (the path menu's favourite is the folder shown).
     function runAction(id, uris, info, listItem) {
         switch (id) {
         case "share": share(uris, info.mimeType); break
@@ -145,18 +253,22 @@ Item {
         case "cut": App.cut(JSON.stringify(uris)); break
         case "rename": rename(info); break
         case "delete": remove(uris, listItem); break
-        case "info": pageStack.push(Qt.resolvedUrl("../../pages/InfoPage.qml"), { "uri": uris[0] }); break
-        case "compress": pageStack.push(Qt.resolvedUrl("../../dialogs/CompressDialog.qml"), { "uris": JSON.stringify(uris) }); break
-        case "favourite": pageStack.push(Qt.resolvedUrl("../../dialogs/FavouriteDialog.qml"), { "uri": uris[0] }); break
+        case "more": moreActions(info); break
+        // CompressDialog takes the list itself, not its JSON text.
+        case "compress": openDialog("../../dialogs/CompressDialog.qml", { "uris": uris }); break
+        case "favourite":
+            openDialog("../../pages/FavouritePage.qml", { "uri": uris[0], "isDir": info.isDir !== false })
+            break
         }
     }
 
-    // Actions of the selection panel (board DirectorySelect).
+    // Actions of the selection panel (board DirectorySelect); Rename and Add
+    // to favourites need to know whether their one item is a folder.
     function runSelectionAction(id) {
         var uris = dir.selectedUris()
         if (uris.length === 0)
             return
-        runAction(id, uris, { "uri": uris[0], "mimeType": "", "isDir": false }, null)
+        runAction(id, uris, { "uri": uris[0], "mimeType": "", "isDir": dir.kindOf(uris[0]) === "folder" }, null)
         if (Selection.endsSelection(id))
             endSelection()
     }
@@ -238,7 +350,8 @@ Item {
         case "retry": dir.refresh(); break
         case "details": detailsShown = !detailsShown; break
         case "signIn":
-            pageStack.push(Qt.resolvedUrl("../../pages/LocationSettingsPage.qml"), { "locationId": uri.split("/")[2] })
+            // The sign-in is netvfs' to update, as from the Browse menu (NVB-5).
+            Bridge.editAccount("lautta://" + uri.split("/")[2] + "/")
             break
         }
     }
@@ -251,8 +364,13 @@ Item {
         id: dir
 
         uri: view.uri
-        onRenamed: App.noteUndo()
-        onRenameFailed: view.notifyFailure(kind, message, view.pendingName)
+        onRenamed: view.renameDone(oldUri, newUri)
+        onRenameFailed: {
+            if (uri === view.undoingUri)
+                view.undoingUri = ""
+            view.notifyFailure(kind, message, view.pendingName)
+        }
+        onStateChanged: view.revealRenamed()
         onCreateFailed: view.notifyFailure(kind, message, view.pendingName)
         onSelectedCountChanged: view.setSelection(Selection.afterCount({ "selecting": view.selectionMode,
                                                                           "waiting": view.selectionWaiting },
@@ -275,6 +393,14 @@ Item {
 
     RemorsePopup {
         id: remorsePopup
+    }
+
+    // The remorse of the rename ran out, shown or not (its row may be out
+    // of view): the new name stays.
+    Timer {
+        id: renamedTimer
+
+        onTriggered: view.forgetRename(view.renamed)
     }
 
     Timer {
@@ -339,7 +465,6 @@ Item {
                 pathModel: path
                 currentUri: view.uri
                 onNavigate: view.openFolder(uri)
-                onInfoRequested: view.runAction("info", [view.uri], {}, null)
                 onFavouriteRequested: view.runAction("favourite", [view.uri], {}, null)
             }
 
@@ -417,15 +542,36 @@ Item {
                 else
                     view.openItem(model.uri, model.isDir, model.mimeType)
             }
+            // Outside selection the long-press menu opens; while selecting,
+            // holding flips the item and a drag goes on as in the grid.
             onPressAndHold: {
-                if (view.selecting)
-                    dir.toggle(model.uri)
+                if (!view.selecting)
+                    return
+                DelegateModel.inPersistedItems = true
+                dragSelect.begin(item, index, mouse.x, mouse.y)
+            }
+            onPositionChanged: if (dragSelect.holder === item) dragSelect.move(mouse.x, mouse.y)
+            onReleased: item.letGo()
+            onCanceled: item.letGo()
+
+            // Last: the view drops a row out of view once it is not held.
+            function letGo() {
+                if (dragSelect.holder !== item)
+                    return
+                dragSelect.end()
+                DelegateModel.inPersistedItems = false
             }
 
             Rectangle {
                 anchors.fill: parent
                 visible: model.selected
                 color: Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity / 2)
+            }
+
+            RenameRemorse {
+                owner: view
+                row: item
+                uri: model.uri
             }
 
             FileIcon {
@@ -530,10 +676,29 @@ Item {
                 else
                     view.openItem(model.uri, model.isDir, model.mimeType)
             }
-            // Like the list: selection starts from the pulley only.
+            // As in Photos apps, holding an item selects it (starting selection
+            // mode) and the finger then selects a range (DragSelect, §15.3).
+            // The view keeps a held item while its row scrolls out of view.
             onPressAndHold: {
-                if (view.selecting)
-                    dir.toggle(model.uri)
+                DelegateModel.inPersistedItems = true
+                dragSelect.begin(cell, index, mouse.x, mouse.y)
+            }
+            onPositionChanged: if (dragSelect.holder === cell) dragSelect.move(mouse.x, mouse.y)
+            onReleased: cell.letGo()
+            onCanceled: cell.letGo()
+
+            // Last: the view drops an item out of view once it is not held.
+            function letGo() {
+                if (dragSelect.holder !== cell)
+                    return
+                dragSelect.end()
+                DelegateModel.inPersistedItems = false
+            }
+
+            RenameRemorse {
+                owner: view
+                row: cell
+                uri: model.uri
             }
 
             Item {
@@ -674,27 +839,51 @@ Item {
         height: (view.selecting || App.clipboardCount > 0 ? Theme.itemSizeLarge : 0) + activityBar.space
     }
 
-    BusyIndicator {
-        anchors.centerIn: parent
-        size: BusyIndicatorSize.Large
-        running: dir.loading && dir.count === 0 && dir.errorKind.length === 0 && view.visible
+    // The loading, empty and error states sit in the content of the list or
+    // grid, as Silica's ViewPlaceholder does, so pulling the pulley moves
+    // them with the header. As siblings of the views they stayed put, and in
+    // an empty folder they are all there is below the header.
+    Item {
+        id: stateLayer
+
+        parent: view.flickable.contentItem
+        x: view.flickable.originX
+        y: view.flickable.originY
+        width: view.width
+        height: view.height
+
+        BusyIndicator {
+            anchors.centerIn: parent
+            size: BusyIndicatorSize.Large
+            running: dir.loading && dir.count === 0 && dir.errorKind.length === 0 && view.visible
+        }
+
+        FolderPlaceholder {
+            id: placeholder
+
+            readonly property string kind: view.placeholderKind()
+
+            visible: kind.length > 0
+            x: Theme.horizontalPageMargin
+            y: Math.round(parent.height * 0.38)
+            title: view.placeholderTitle(kind)
+            hint: view.placeholderHint(kind)
+            buttons: view.placeholderButtons(kind)
+            onTriggered: view.placeholderAction(action)
+        }
     }
 
-    FolderPlaceholder {
-        id: placeholder
+    DragSelect {
+        id: dragSelect
 
-        readonly property string kind: view.placeholderKind()
-
-        visible: kind.length > 0
-        x: Theme.horizontalPageMargin
-        y: Math.round(parent.height * 0.38)
-        title: view.placeholderTitle(kind)
-        hint: view.placeholderHint(kind)
-        buttons: view.placeholderButtons(kind)
-        onTriggered: view.placeholderAction(action)
+        view: view.flickable
+        model: dir
+        bottomInset: selectionPanel.visibleSize
     }
 
     SelectionPanel {
+        id: selectionPanel
+
         owner: view
     }
 

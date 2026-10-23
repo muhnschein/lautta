@@ -6,7 +6,7 @@
 
 use futures::StreamExt;
 use lautta_bridge_proto::fake::{Failure, FakeBridge};
-use lautta_bridge_proto::{connect, BridgeError, OptsBuilder, Signal, Zeroizing};
+use lautta_bridge_proto::{connect, BridgeError, OptsBuilder, Signal, SignalStream, Zeroizing};
 use std::time::Duration;
 
 async fn fake_with_account() -> FakeBridge {
@@ -154,6 +154,8 @@ async fn listing_signals_arrive_in_order() {
                 assert_eq!((r, error.as_str()), (req, ""));
                 break;
             }
+            // The listing connected the location: its state is told.
+            Signal::LocationsChanged => {}
             other => panic!("unexpected {other:?}"),
         }
     }
@@ -234,4 +236,173 @@ async fn keyboard_answers_are_wiped_after_the_call() {
     let e = conn.answer_wiping("q1", true, &mut answers).await.unwrap_err();
     assert_eq!(e.netvfs_name(), Some("NotFound"));
     assert!(answers.is_empty());
+}
+
+/// `state` and `stateError` of `loc` in `ListLocations`.
+async fn state_of(conn: &lautta_bridge_proto::Connection, loc: &str) -> (String, Option<String>) {
+    let locations = conn.proxy().list_locations().await.unwrap();
+    let info = &locations.iter().find(|l| l.id == loc).unwrap().info;
+    let text = |key: &str| info.get(key).and_then(|v| lautta_bridge_proto::value_str(v));
+    (text("state").unwrap(), text("stateError"))
+}
+
+/// Waits for the next `LocationsChanged`, skipping other signals.
+async fn locations_changed(signals: &mut SignalStream) {
+    let wait = async {
+        while !matches!(
+            signals.next().await.expect("the stream stays open").unwrap(),
+            Signal::LocationsChanged
+        ) {}
+    };
+    tokio::time::timeout(Duration::from_secs(5), wait)
+        .await
+        .expect("LocationsChanged arrives");
+}
+
+/// The fake reports connection states as netvfs does (XB-10, XB-12):
+/// disconnected until a call needs a connection, connected then,
+/// disconnected after `Disconnect`; a scripted failure carries its error.
+#[tokio::test]
+async fn connection_states_follow_use_disconnect_and_the_script() {
+    let fake = fake_with_account().await;
+    let conn = fake.connect().await.unwrap();
+    let mut signals = conn.signals();
+    hello(&conn).await;
+    let s = |state: &str, error: Option<&str>| (state.to_owned(), error.map(str::to_owned));
+    assert_eq!(state_of(&conn, "account:1").await, s("disconnected", None));
+    // A call that needs a connection connects it, and tells.
+    conn.proxy().capabilities("account:1").await.unwrap();
+    locations_changed(&mut signals).await;
+    assert_eq!(state_of(&conn, "account:1").await, s("connected", None));
+    conn.proxy().disconnect("account:1").await.unwrap();
+    locations_changed(&mut signals).await;
+    assert_eq!(state_of(&conn, "account:1").await, s("disconnected", None));
+    // Scripted: a failure with its error, told once.
+    fake.set_state("account:1", "failed", Some("AuthFailed")).await;
+    locations_changed(&mut signals).await;
+    assert_eq!(
+        state_of(&conn, "account:1").await,
+        s("failed", Some("AuthFailed"))
+    );
+    fake.set_state("account:1", "failed", Some("AuthFailed")).await;
+    conn.proxy().stat("account:1", b"", true, "").await.unwrap();
+    locations_changed(&mut signals).await;
+    assert_eq!(state_of(&conn, "account:1").await, s("connected", None));
+    // Work on a connected location tells nothing more.
+    conn.proxy().stat("account:1", b"", true, "").await.unwrap();
+    let quiet = tokio::time::timeout(Duration::from_millis(200), signals.next()).await;
+    assert!(quiet.is_err(), "{quiet:?}");
+    // A connected ad-hoc location.
+    let loc = conn
+        .proxy()
+        .connect_ad_hoc("sftp://h/", b"", &OptsBuilder::new().build())
+        .await
+        .unwrap();
+    assert_eq!(state_of(&conn, &loc).await, s("connected", None));
+}
+
+#[tokio::test]
+async fn features_and_the_storage_handoff_need_no_consent() {
+    let fake = fake_with_account().await;
+    fake.set_consent(lautta_bridge_proto::fake::Consent::Denied).await;
+    let conn = fake.connect().await.unwrap();
+    hello(&conn).await;
+    let p = conn.proxy();
+    assert_eq!(p.get_features().await.unwrap(), ["storage-settings"]);
+    p.open_storage_settings().await.unwrap();
+    assert_eq!(fake.handoffs(), ["storage"]);
+
+    // A bridge that offers no Storage handoff refuses it.
+    fake.set_features(Some(&[]));
+    assert!(p.get_features().await.unwrap().is_empty());
+    let e = BridgeError::from(p.open_storage_settings().await.unwrap_err());
+    assert_eq!(e.netvfs_name(), Some("Unsupported"));
+
+    // A bridge without XB-19 knows neither method.
+    fake.set_features(None);
+    let e = BridgeError::from(p.get_features().await.unwrap_err());
+    assert!(matches!(e, BridgeError::UnknownMethod(_)), "{e:?}");
+    let e = BridgeError::from(p.open_storage_settings().await.unwrap_err());
+    assert!(matches!(e, BridgeError::UnknownMethod(_)), "{e:?}");
+    assert_eq!(fake.handoffs(), ["storage"]);
+}
+
+#[tokio::test]
+async fn drives_are_listed_mounted_and_unmounted_without_consent() {
+    // netvfs XB-20.
+    use lautta_bridge_proto::fake::FakeDrive;
+    use lautta_bridge_proto::{drive_info, feature, value_i64, value_str};
+    let fake = fake_with_account().await;
+    fake.set_consent(lautta_bridge_proto::fake::Consent::Denied).await;
+    fake.set_features(Some(&[feature::STORAGE_SETTINGS, feature::DRIVES]));
+    let conn = fake.connect().await.unwrap();
+    hello(&conn).await;
+    let mut signals = conn.signals();
+    let p = conn.proxy();
+    fake.set_drives(vec![
+        FakeDrive::new("mmcblk1p1", "CARD", "sd", 64),
+        FakeDrive::new("sda1", "", "usb", 8).with_uuid("1234-ABCD"),
+    ])
+    .await;
+    assert!(drives_changed(&mut signals).await);
+    let drives = p.list_drives().await.unwrap();
+    let ids: Vec<&str> = drives.iter().map(|d| d.id.as_str()).collect();
+    assert_eq!(ids, ["mmcblk1p1", "sda1"]);
+    assert_eq!(drives[0].label, "CARD");
+    assert!(drives[0].mount_point.is_empty());
+    assert_eq!(
+        value_str(&drives[0].info[drive_info::KIND]).as_deref(),
+        Some("sd")
+    );
+    assert_eq!(value_i64(&drives[0].info[drive_info::SIZE]), Some(64));
+    assert!(!drives[0].info.contains_key(drive_info::UUID));
+    assert_eq!(
+        value_str(&drives[1].info[drive_info::UUID]).as_deref(),
+        Some("1234-ABCD")
+    );
+
+    assert_eq!(p.mount("mmcblk1p1").await.unwrap(), b"/run/media/user/CARD");
+    assert!(drives_changed(&mut signals).await);
+    // Mounted already: the same place.
+    assert_eq!(p.mount("mmcblk1p1").await.unwrap(), b"/run/media/user/CARD");
+    // Without a label, by UUID.
+    assert_eq!(p.mount("sda1").await.unwrap(), b"/run/media/user/1234-ABCD");
+    p.unmount("mmcblk1p1").await.unwrap();
+    p.unmount("mmcblk1p1").await.unwrap();
+    assert!(fake.drives()[0].mount_point.is_empty());
+
+    let e = BridgeError::from(p.mount("sdb1").await.unwrap_err());
+    assert_eq!(e.netvfs_name(), Some("NotFound"));
+    let e = BridgeError::from(p.unmount("../sda1").await.unwrap_err());
+    assert!(matches!(e, BridgeError::InvalidArgs(_)), "{e:?}");
+
+    // With a mount root the folder comes and goes.
+    let media = tempfile::tempdir().unwrap();
+    fake.set_mount_root(Some(media.path()));
+    let point = p.mount("mmcblk1p1").await.unwrap();
+    assert_eq!(point, media.path().join("CARD").as_os_str().as_encoded_bytes());
+    assert!(media.path().join("CARD").is_dir());
+    p.unmount("mmcblk1p1").await.unwrap();
+    assert!(!media.path().join("CARD").exists());
+
+    // A bridge without XB-20 has none of them.
+    fake.set_features(Some(&[feature::STORAGE_SETTINGS]));
+    let e = BridgeError::from(p.list_drives().await.unwrap_err());
+    assert!(matches!(e, BridgeError::UnknownMethod(_)), "{e:?}");
+    let e = BridgeError::from(p.mount("sda1").await.unwrap_err());
+    assert!(matches!(e, BridgeError::UnknownMethod(_)), "{e:?}");
+}
+
+/// Whether a `DrivesChanged` arrives within a second.
+async fn drives_changed(signals: &mut SignalStream) -> bool {
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while let Some(signal) = signals.next().await {
+            if matches!(signal, Ok(Signal::DrivesChanged)) {
+                return true;
+            }
+        }
+        false
+    })
+    .await
+    .unwrap_or(false)
 }
