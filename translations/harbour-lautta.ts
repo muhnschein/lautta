@@ -2635,5 +2635,17 @@
         <source>Downloads pictures from servers to make them, which uses more data and battery and can slow down browsing</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-browse-not-mounted">
+        <source>Not mounted</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-mount">
+        <source>Mount</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-unmount">
+        <source>Unmount</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

@@ -24,7 +24,10 @@ QtObject {
         check(Bridge.status === "absent", "status absent: " + Bridge.status)
         check(!Bridge.ready, "bridge not ready")
         check(Bridge.version === "", "no bridge version")
+        check(!Bridge.storageSettings, "no Storage settings without the bridge (NVB-13)")
         check(Bridge.pending() === "[]", "no questions waiting")
+        check(typeof Bridge.mountDrive === "function" && typeof Bridge.unmountDrive === "function",
+              "drives are mounted through the Bridge (LOC-3)")
         Bridge.poke()
         Bridge.setForeground(true)
         Bridge.setDiscover(false)

@@ -6,10 +6,10 @@
 mod bridge_support;
 
 use bridge_support::{config, eventually};
-use lautta_bridge_proto::fake::{Consent, FakeBridge, Listener};
+use lautta_bridge_proto::fake::{Consent, FakeBridge, FakeDrive, Listener};
 use lautta_core::app::Core;
 use lautta_core::app_browse::{LayoutRow, Row};
-use lautta_core::bridge::{AdHocOptions, BridgeStatus};
+use lautta_core::bridge::{feature, AdHocOptions, BridgeStatus};
 use lautta_core::date_group::DateGroup;
 use lautta_core::locations::LocationRegistry;
 use lautta_core::org::{RecentKind, RecentsFilter};
@@ -466,6 +466,112 @@ async fn servers_follow_the_bridge() {
         ("attention", "auth-failed", "nas.home")
     );
     assert_eq!(servers[0].uri, "lautta://nv-account:1/");
+}
+
+/// A bridge with the drives (netvfs XB-20) that mounts them in the media
+/// folder: an unlabelled USB drive and a memory card, neither mounted.
+async fn drives_env() -> (FakeBridge, Env) {
+    let fake = FakeBridge::new();
+    fake.set_features(Some(&[feature::STORAGE_SETTINGS, feature::DRIVES]));
+    fake.set_drives(vec![
+        FakeDrive::new("sda1", "", "usb", 8).with_uuid("1234-ABCD"),
+        FakeDrive::new("mmcblk1p1", "CARD", "sd", 64),
+    ])
+    .await;
+    let e = env(Some(&fake), &["Documents"]).await;
+    fake.set_mount_root(Some(&e.home.path().join("media")));
+    let client = e.core.bridge.clone().unwrap();
+    eventually("the drives", || client.drives().len() == 2).await;
+    (fake, e)
+}
+
+/// The volume rows as (name, status, drive, item id).
+fn volumes(rows: &[Row]) -> Vec<(String, &'static str, String, String)> {
+    of(rows, "volumes")
+        .iter()
+        .map(|r| (r.name.clone(), r.status, r.drive.clone(), r.item_id.clone()))
+        .collect()
+}
+
+fn volume(
+    name: &str,
+    status: &'static str,
+    drive: &str,
+    item: &str,
+) -> (String, &'static str, String, String) {
+    (name.to_owned(), status, drive.to_owned(), item.to_owned())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn drives_show_as_volumes_until_they_are_mounted() {
+    let (_fake, e) = drives_env().await;
+    let rows = e.core.browse_rows().await;
+    // By the folder each is mounted on, among the mounted volumes (LOC-3).
+    assert_eq!(
+        volumes(&rows),
+        [
+            volume("1234-ABCD", "unmounted", "sda1", "vol-1234-ABCD"),
+            volume("CARD", "unmounted", "mmcblk1p1", "vol-CARD"),
+            volume("SD", "ready", "", "vol-SD"),
+        ]
+    );
+    let vols = of(&rows, "volumes");
+    assert_eq!(vols[0].icon, "image://theme/icon-m-usb");
+    assert_eq!(vols[1].icon, "image://theme/icon-m-sd-card");
+    assert_eq!((vols[1].uri.as_str(), vols[1].total, vols[1].free), ("", 64, -1));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_mounted_drive_opens_and_unmounts() {
+    let (fake, e) = drives_env().await;
+    let client = e.core.bridge.clone().unwrap();
+    let root = e.core.mount_drive("mmcblk1p1").await.unwrap();
+    assert_eq!(root.to_string(), "lautta://vol-CARD/");
+    assert!(e.core.location("vol-CARD").is_some());
+    eventually("the mount", || client.drives()[1].mount_point.is_some()).await;
+    let rows = e.core.browse_rows().await;
+    assert_eq!(
+        volumes(&rows)[1],
+        volume("CARD", "ready", "mmcblk1p1", "vol-CARD")
+    );
+    let card = of(&rows, "volumes")[1];
+    assert_eq!(card.uri, "lautta://vol-CARD/");
+    assert!(card.total > 0, "the space of the mounted volume");
+
+    e.core.unmount_drive("mmcblk1p1").await.unwrap();
+    assert!(e.core.location("vol-CARD").is_none(), "gone at once");
+    assert!(fake.drives()[1].mount_point.is_empty());
+    eventually("the unmount", || client.drives()[1].mount_point.is_none()).await;
+    let rows = e.core.browse_rows().await;
+    assert_eq!(
+        volumes(&rows)[1],
+        volume("CARD", "unmounted", "mmcblk1p1", "vol-CARD")
+    );
+
+    let e2 = e.core.mount_drive("sdb1").await.unwrap_err();
+    assert_eq!(e2.kind, ErrorKind::NotFound);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_drive_mounted_out_of_sight_is_an_error() {
+    // The bridge mounts it where the sandbox does not see it.
+    let (fake, e) = drives_env().await;
+    fake.set_mount_root(None);
+    let err = e.core.mount_drive("mmcblk1p1").await.unwrap_err();
+    assert_eq!(err.kind, ErrorKind::NotFound);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn without_drives_the_volumes_are_as_before() {
+    // Standalone, and a netvfs without XB-20.
+    let standalone = env(None, &["Documents"]).await;
+    let (_fake, older) = ready_env().await;
+    for e in [standalone, older] {
+        let rows = e.core.browse_rows().await;
+        assert_eq!(volumes(&rows), [volume("SD", "ready", "", "vol-SD")]);
+        assert_eq!(of(&rows, "volumes")[0].icon, "image://theme/icon-m-sd-card");
+        assert!(e.core.mount_drive("mmcblk1p1").await.is_err());
+    }
 }
 
 /// What a server row says about its connection (§15.2, NVB-4).

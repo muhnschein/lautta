@@ -13,7 +13,7 @@ mod state;
 mod transfer;
 pub mod tree;
 
-pub use state::{Consent, Failure, InfoValue, JobFailure, RecordedAnswer, ScriptedQuestion};
+pub use state::{Consent, Failure, FakeDrive, InfoValue, JobFailure, RecordedAnswer, ScriptedQuestion};
 
 use crate::connect::Connection;
 use crate::errors::BridgeError;
@@ -151,6 +151,37 @@ impl FakeBridge {
     /// What `Hello` answers (the bridge version).
     pub fn set_hello(&self, version: &str) {
         self.shared.with(|s| version.clone_into(&mut s.bridge_version));
+    }
+
+    /// What `GetFeatures` answers (XB-19); `None` makes this a bridge without
+    /// the method (a netvfs without XB-19), which answers `UnknownMethod` to it and
+    /// to `OpenStorageSettings`. The drive methods answer only while it names
+    /// [`crate::feature::DRIVES`] (XB-20), which it does not by default.
+    pub fn set_features(&self, features: Option<&[&str]>) {
+        let features = features.map(|f| f.iter().map(|n| (*n).to_owned()).collect());
+        self.shared.with(|s| s.features = features);
+    }
+
+    /// Replaces what `ListDrives` lists and tells every client
+    /// (`DrivesChanged`). The fake has the drive methods only while
+    /// [`FakeBridge::set_features`] names [`crate::feature::DRIVES`].
+    pub async fn set_drives(&self, drives: Vec<FakeDrive>) {
+        self.shared.with(|s| s.drives = drives);
+        self.shared.broadcast_drives().await;
+    }
+
+    /// The drives, as mounted and unmounted.
+    pub fn drives(&self) -> Vec<FakeDrive> {
+        self.shared.with(|s| s.drives.clone())
+    }
+
+    /// Where `Mount` mounts drives: with a root, it makes the drive's folder
+    /// there and `Unmount` removes it, as udisks does in the media folder;
+    /// without one (the default) drives are mounted below `/run/media/user`
+    /// and no folder is made.
+    pub fn set_mount_root(&self, root: Option<&std::path::Path>) {
+        self.shared
+            .with(|s| s.mount_root = root.map(std::path::Path::to_path_buf));
     }
 
     // ---- consent --------------------------------------------------------
@@ -363,7 +394,7 @@ impl FakeBridge {
         self.shared.with(|s| s.calls.clear());
     }
 
-    /// `settings:<loc>` and `add:<provider>` handoffs.
+    /// `settings:<loc>`, `add:<provider>` and `storage` handoffs.
     pub fn handoffs(&self) -> Vec<String> {
         self.shared.with(|s| s.handoffs.clone())
     }

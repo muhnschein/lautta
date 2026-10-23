@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Handshake, consent, locations, attention, discovery and handoff of the
-//! bridge client against the fake bridge (SPEC NVB-1..6, LOC-6, LOC-7).
+//! Handshake, consent, locations, attention, discovery, drives and handoff of
+//! the bridge client against the fake bridge (SPEC NVB-1..6, LOC-3, LOC-6,
+//! LOC-7).
 
 mod bridge_support;
 
-use bridge_support::{eventually, Rig, ACCOUNT};
-use lautta_bridge_proto::fake::{Consent, FakeBridge};
+use bridge_support::{eventually, quick_backoff, Rig, ACCOUNT};
+use lautta_bridge_proto::fake::{Consent, FakeBridge, FakeDrive};
 use lautta_bridge_proto::WireNearby;
-use lautta_core::bridge::{AdHocOptions, Attention, BridgeConfig, BridgeStatus, RemoteKind};
+use lautta_core::bridge::{
+    feature, AdHocOptions, Attention, BridgeConfig, BridgeStatus, DriveKind, RemoteKind,
+};
 use lautta_core::error::ErrorKind;
 use lautta_core::provider::{Lane, Provider};
 use lautta_core::vpath::VPath;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use zeroize::Zeroizing;
@@ -332,6 +336,155 @@ async fn account_management_is_handed_off() {
     assert_eq!(e.kind, ErrorKind::NotFound);
     let e = rig.client.add_account("Not A Token").await.unwrap_err();
     assert_eq!(e.kind, ErrorKind::InvalidArgument);
+}
+
+#[tokio::test]
+async fn the_bridge_opens_storage_settings_whatever_the_consent() {
+    let fake = FakeBridge::new();
+    fake.set_consent(Consent::Denied).await;
+    let rig = Rig::with_fake(fake, true, |c| c).await;
+    rig.client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
+    let order: Vec<String> = rig.fake.calls().into_iter().map(|c| c.method).collect();
+    assert_eq!(order, ["Hello", "GetFeatures", "GetConsent"]);
+    assert!(rig.client.offers(feature::STORAGE_SETTINGS));
+    rig.client.open_storage_settings().await.unwrap();
+    assert_eq!(rig.fake.handoffs(), ["storage"]);
+}
+
+#[tokio::test]
+async fn a_bridge_without_features_works_as_before() {
+    let fake = FakeBridge::new();
+    fake.add_account(1, "fake", "Fake 1", "fake.example").await;
+    fake.set_features(None);
+    let rig = Rig::with_fake(fake, true, |c| c).await;
+    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    assert_eq!(rig.client.locations().len(), 1);
+    assert!(!rig.client.offers(feature::STORAGE_SETTINGS));
+    let e = rig.client.open_storage_settings().await.unwrap_err();
+    assert_eq!(e.kind, ErrorKind::Unsupported);
+    assert!(rig.fake.handoffs().is_empty());
+}
+
+#[tokio::test]
+async fn features_that_fail_are_none_and_unknown_ones_are_ignored() {
+    let fake = FakeBridge::new();
+    fake.add_account(1, "fake", "Fake 1", "fake.example").await;
+    fake.fail_next("GetFeatures", "Internal", "no");
+    let rig = Rig::with_fake(fake, true, |c| c).await;
+    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    assert!(!rig.client.offers(feature::STORAGE_SETTINGS));
+
+    let fake = FakeBridge::new();
+    fake.set_features(Some(&["teleport", feature::STORAGE_SETTINGS]));
+    let rig = Rig::with_fake(fake, true, |c| c).await;
+    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    assert!(rig.client.offers(feature::STORAGE_SETTINGS));
+    assert!(!rig.client.offers("drives"));
+}
+
+#[tokio::test]
+async fn features_are_asked_again_on_every_connection() {
+    let rig = Rig::ready_with(quick_backoff).await;
+    assert!(rig.client.offers(feature::STORAGE_SETTINGS));
+    // Without a connection nothing is offered.
+    rig.fake.set_accepting(false);
+    rig.fake.disconnect_clients().await;
+    rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
+    assert!(!rig.client.offers(feature::STORAGE_SETTINGS));
+
+    rig.fake.set_features(Some(&[]));
+    rig.fake.set_accepting(true);
+    eventually("the second GetFeatures", || {
+        rig.fake.calls_of("GetFeatures").len() == 2
+    })
+    .await;
+    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    assert!(!rig.client.offers(feature::STORAGE_SETTINGS));
+}
+
+/// A bridge with the drives (netvfs XB-20) and a memory card.
+async fn drives_fake() -> FakeBridge {
+    let fake = FakeBridge::new();
+    fake.set_features(Some(&[feature::STORAGE_SETTINGS, feature::DRIVES]));
+    fake.set_drives(vec![FakeDrive::new("mmcblk1p1", "CARD", "sd", 64)])
+        .await;
+    fake
+}
+
+#[tokio::test]
+async fn drives_need_no_consent_and_follow_the_bridge() {
+    let fake = drives_fake().await;
+    fake.set_consent(Consent::Denied).await;
+    let rig = Rig::with_fake(fake, true, |c| c).await;
+    rig.client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
+    eventually("the card", || rig.client.drives().len() == 1).await;
+    let card = rig.client.drives()[0].clone();
+    assert_eq!(
+        (card.id.as_str(), card.label.as_str(), card.kind, card.size),
+        ("mmcblk1p1", "CARD", DriveKind::Card, 64)
+    );
+    assert_eq!(card.mount_point, None);
+    let mut watch = rig.client.watch_drives();
+    watch.borrow_and_update();
+
+    // DrivesChanged lists them again.
+    rig.fake
+        .set_drives(vec![
+            FakeDrive::new("mmcblk1p1", "CARD", "sd", 64),
+            FakeDrive::new("sda1", "STICK", "usb", 8),
+        ])
+        .await;
+    eventually("the stick", || rig.client.drives().len() == 2).await;
+    assert_eq!(rig.client.drives()[1].kind, DriveKind::Usb);
+    assert!(watch.has_changed().unwrap(), "watchers are told");
+
+    let point = rig.client.mount_drive("mmcblk1p1").await.unwrap();
+    assert_eq!(point, Path::new("/run/media/user/CARD"));
+    eventually("the mount", || {
+        rig.client.drives()[0].mount_point.as_deref() == Some(point.as_path())
+    })
+    .await;
+    rig.client.unmount_drive("mmcblk1p1").await.unwrap();
+    eventually("the unmount", || rig.client.drives()[0].mount_point.is_none()).await;
+    let e = rig.client.mount_drive("sdb1").await.unwrap_err();
+    assert_eq!(e.kind, ErrorKind::NotFound);
+}
+
+#[tokio::test]
+async fn drives_go_with_the_connection() {
+    let rig = Rig::with_fake(drives_fake().await, true, quick_backoff).await;
+    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    eventually("the card", || rig.client.drives().len() == 1).await;
+    rig.fake.set_accepting(false);
+    rig.fake.disconnect_clients().await;
+    rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
+    assert!(rig.client.drives().is_empty(), "nothing mounts them now");
+    let e = rig.client.mount_drive("mmcblk1p1").await.unwrap_err();
+    assert_eq!(e.kind, ErrorKind::ConnectionLost);
+
+    rig.fake.set_accepting(true);
+    eventually("the card again", || rig.client.drives().len() == 1).await;
+}
+
+#[tokio::test]
+async fn an_older_bridge_is_not_asked_for_drives() {
+    // A netvfs without XB-20 (no `drives` feature), or one without features.
+    for features in [Some(&[feature::STORAGE_SETTINGS][..]), None] {
+        let fake = FakeBridge::new();
+        fake.add_account(1, "fake", "Fake 1", "fake.example").await;
+        fake.set_features(features);
+        let rig = Rig::with_fake(fake, true, |c| c).await;
+        rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+        eventually("the account", || rig.client.locations().len() == 1).await;
+        rig.fake
+            .set_drives(vec![FakeDrive::new("sda1", "STICK", "usb", 8)])
+            .await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(rig.fake.calls_of("ListDrives").is_empty(), "{features:?}");
+        assert!(rig.client.drives().is_empty());
+        let e = rig.client.mount_drive("sda1").await.unwrap_err();
+        assert_eq!(e.kind, ErrorKind::Unsupported, "{features:?}");
+    }
 }
 
 #[tokio::test]
