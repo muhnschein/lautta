@@ -1,0 +1,691 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
+//! Highlighting tests (PRV-13): grammar choice, classes of real samples,
+//! state across lines, the limits, and that Qt shows exactly the file's
+//! characters (a model of Qt's StyledText parser reads the output back,
+//! for fixed and pseudo-random lines full of markup).
+
+use super::*;
+
+fn syntax_name(name: &str, first_line: &str) -> Option<&'static str> {
+    syntax_for(name.as_bytes(), first_line).map(|s| s.name.as_str())
+}
+
+fn coloured(name: &str, text: &str) -> ColouredText {
+    let limits = Limits {
+        budget: Duration::from_secs(600),
+        max_line_bytes: 4096,
+    };
+    colour(name.as_bytes(), text.to_owned(), &limits)
+}
+
+/// The pieces of line `index` with their classes.
+fn pieces(doc: &ColouredText, index: usize) -> Vec<(&str, Class)> {
+    let line = doc.line(index).unwrap_or_default();
+    let mut from = 0;
+    let mut out = Vec::new();
+    for span in doc.spans(index).unwrap_or_default() {
+        out.push((&line[from..span.end as usize], span.class));
+        from = span.end as usize;
+    }
+    out
+}
+
+/// The class of the first piece of line `index` that contains `text`.
+fn class_of(doc: &ColouredText, index: usize, text: &str) -> Option<Class> {
+    pieces(doc, index)
+        .into_iter()
+        .find(|(p, _)| p.contains(text))
+        .map(|(_, c)| c)
+}
+
+#[test]
+fn grammars_by_name_extension_and_first_line() {
+    let bash = Some("Bourne Again Shell (bash)");
+    assert_eq!(syntax_name("build.sh", ""), bash);
+    assert_eq!(syntax_name(".bashrc", ""), bash);
+    assert_eq!(syntax_name("README.MD", ""), Some("Markdown"));
+    assert_eq!(syntax_name("Makefile", ""), Some("Makefile"));
+    assert_eq!(syntax_name("main.rs", ""), Some("Rust"));
+    assert_eq!(syntax_name("\u{FFFD}.rs", ""), Some("Rust"));
+    assert_eq!(
+        syntax_name("x.h", ""),
+        Some("C"),
+        "a header is C, not Objective-C"
+    );
+    assert_eq!(syntax_name("Main.qml", ""), Some("JavaScript"));
+    assert_eq!(syntax_name("harbour-lautta.desktop", ""), Some("Java Properties"));
+    // The first line decides when the name does not.
+    assert_eq!(syntax_name("configure", "#!/bin/sh"), bash);
+    assert_eq!(syntax_name("run", "#!/usr/bin/env bash"), bash);
+    assert_eq!(syntax_name("tool", "#!/usr/bin/python3"), Some("Python"));
+    assert_eq!(syntax_name("meson.build", "#!/bin/sh"), bash, "not NAnt");
+    // Plain text stays plain.
+    assert_eq!(syntax_name("notes.txt", "#!/bin/sh"), None);
+    assert_eq!(syntax_name("meson.build", "project('x')"), None);
+    assert_eq!(syntax_name("start.s", ""), None);
+    assert_eq!(syntax_name("data.xyz", "hello"), None);
+    assert_eq!(syntax_name("", ""), None);
+}
+
+#[test]
+fn class_names_round_trip() {
+    for (i, (class, name)) in CLASSES.iter().enumerate() {
+        assert_eq!(*class as usize, i, "{name}: CLASSES is in declaration order");
+        assert_eq!(class.name(), *name);
+        assert_eq!(Class::from_name(name), Some(*class));
+    }
+    assert_eq!(Class::from_name("Keyword"), None);
+    assert_eq!(Class::from_name(""), None);
+}
+
+#[test]
+fn rules_refine_before_they_generalise() {
+    let scopes: Vec<Scope> = RULES.iter().map(|(p, _)| Scope::new(p).unwrap()).collect();
+    for (i, general) in scopes.iter().enumerate() {
+        for (j, special) in scopes.iter().enumerate().skip(i + 1) {
+            assert!(
+                !general.is_prefix_of(*special),
+                "{} hides {} after it",
+                RULES[i].0,
+                RULES[j].0
+            );
+        }
+    }
+}
+
+const BASH: &str = "#!/bin/sh
+# list the text files
+for f in *.txt; do
+  echo \"$f is ${f%.txt}\" > /dev/null
+done
+name=lautta
+cat <<EOF
+here $name
+EOF
+show() { ls -l; }";
+
+#[test]
+fn a_shell_script_has_its_classes() {
+    let doc = coloured("x.sh", BASH);
+    assert_eq!(doc.syntax(), Some("Bourne Again Shell (bash)"));
+    assert_eq!(doc.coloured_lines(), doc.line_count());
+    assert_eq!(pieces(&doc, 1), vec![("# list the text files", Class::Comment)]);
+    assert_eq!(class_of(&doc, 2, "for"), Some(Class::Keyword));
+    assert_eq!(class_of(&doc, 2, ";"), Some(Class::Operator));
+    assert_eq!(class_of(&doc, 3, "echo"), Some(Class::Function));
+    assert_eq!(class_of(&doc, 3, "\""), Some(Class::String));
+    assert_eq!(class_of(&doc, 3, " is "), Some(Class::String));
+    assert_eq!(
+        class_of(&doc, 3, "$f"),
+        Some(Class::Variable),
+        "{:?}",
+        pieces(&doc, 3)
+    );
+    assert_eq!(class_of(&doc, 3, "%"), Some(Class::Operator));
+    assert_eq!(class_of(&doc, 3, ">"), Some(Class::Operator));
+    assert_eq!(class_of(&doc, 4, "done"), Some(Class::Keyword));
+    assert_eq!(class_of(&doc, 5, "name"), Some(Class::Variable));
+    // The here-document is one string over three lines.
+    assert_eq!(class_of(&doc, 7, "here "), Some(Class::String));
+    assert_eq!(class_of(&doc, 8, "EOF"), Some(Class::Keyword));
+    assert_eq!(class_of(&doc, 9, "show"), Some(Class::Function));
+    assert_eq!(class_of(&doc, 9, "ls"), Some(Class::Function));
+    assert_eq!(
+        class_of(&doc, 9, "-l"),
+        Some(Class::Variable),
+        "options are parameters"
+    );
+}
+
+const MARKDOWN: &str = "# Title
+
+Some *emphasis*, **bold** and `code`.
+
+- item with [a link](https://example.org)
+
+> quoted
+
+```
+let x = 1;
+```
+Back to text.";
+
+#[test]
+fn markdown_has_its_classes() {
+    let doc = coloured("README.md", MARKDOWN);
+    assert_eq!(doc.syntax(), Some("Markdown"));
+    assert_eq!(class_of(&doc, 0, "#"), Some(Class::Heading));
+    assert_eq!(class_of(&doc, 0, "Title"), Some(Class::Heading));
+    assert_eq!(class_of(&doc, 2, "Some"), Some(Class::Plain));
+    assert_eq!(class_of(&doc, 2, "emphasis"), Some(Class::Markup));
+    assert_eq!(class_of(&doc, 2, "bold"), Some(Class::Markup));
+    assert_eq!(class_of(&doc, 2, "code"), Some(Class::String));
+    assert_eq!(class_of(&doc, 4, "-"), Some(Class::Markup));
+    assert_eq!(class_of(&doc, 4, "item"), Some(Class::Plain));
+    assert_eq!(class_of(&doc, 4, "a link"), Some(Class::Link));
+    assert_eq!(class_of(&doc, 4, "https://example.org"), Some(Class::Link));
+    assert_eq!(class_of(&doc, 6, "quoted"), Some(Class::Markup));
+    // A fenced block is code until it closes.
+    assert_eq!(pieces(&doc, 9), vec![("let x = 1;", Class::String)]);
+    assert_eq!(class_of(&doc, 11, "Back"), Some(Class::Plain));
+}
+
+#[test]
+fn a_comment_over_lines_keeps_its_state() {
+    let doc = coloured("x.c", "int a; /* starts\nall comment, int b;\nends */ int c = 2;");
+    assert_eq!(pieces(&doc, 1), vec![("all comment, int b;", Class::Comment)]);
+    assert_eq!(class_of(&doc, 2, "ends */"), Some(Class::Comment));
+    assert_eq!(class_of(&doc, 2, "int"), Some(Class::Keyword));
+    assert_eq!(class_of(&doc, 2, "2"), Some(Class::Number));
+    assert_eq!(class_of(&doc, 0, "int"), Some(Class::Keyword));
+}
+
+#[test]
+fn a_diff_has_its_classes() {
+    let doc = coloured("fix.patch", "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n same");
+    assert_eq!(class_of(&doc, 0, "a/x"), Some(Class::Heading));
+    assert_eq!(class_of(&doc, 2, "-1"), Some(Class::Heading));
+    assert_eq!(pieces(&doc, 3), vec![("-old", Class::Deleted)]);
+    assert_eq!(pieces(&doc, 4), vec![("+new", Class::Inserted)]);
+    assert_eq!(class_of(&doc, 5, "same"), Some(Class::Plain));
+}
+
+#[test]
+fn spans_are_ordered_and_cover_their_lines() {
+    for (name, text) in [("x.sh", BASH), ("x.md", MARKDOWN)] {
+        let doc = coloured(name, text);
+        for i in 0..doc.line_count() {
+            let spans = doc.spans(i).unwrap();
+            let line = doc.line(i).unwrap();
+            let mut end = 0;
+            for (k, span) in spans.iter().enumerate() {
+                assert!(span.end as usize > end, "{name}:{i} span {k} is empty");
+                if k > 0 {
+                    assert_ne!(span.class, spans[k - 1].class, "{name}:{i} like spans merge");
+                }
+                end = span.end as usize;
+            }
+            assert_eq!(end, line.len(), "{name}:{i}");
+        }
+    }
+}
+
+#[test]
+fn lines_split_as_the_viewer_splits_them() {
+    let doc = ColouredText::plain("a\n\nb\n".to_owned());
+    assert_eq!(doc.line_count(), 4);
+    let lines: Vec<_> = (0..5).map(|i| doc.line(i)).collect();
+    assert_eq!(lines, [Some("a"), Some(""), Some("b"), Some(""), None]);
+    assert_eq!(ColouredText::plain(String::new()).line_count(), 1);
+    assert_eq!(doc.coloured_lines(), 0);
+    assert_eq!(doc.spans(0), None);
+    assert_eq!(doc.syntax(), None);
+    assert_eq!(doc.text(), "a\n\nb\n");
+}
+
+#[test]
+fn plain_text_gets_no_grammar() {
+    let doc = coloured("notes.txt", "for x in y; do\n# no comment\n");
+    assert_eq!((doc.syntax(), doc.coloured_lines()), (None, 0));
+    assert_eq!(doc.line(1), Some("# no comment"));
+}
+
+#[test]
+fn an_overlong_line_ends_the_colours() {
+    let long = "echo ".to_owned() + &"x".repeat(5000);
+    let text = format!("echo a\n{long}\necho b");
+    let doc = coloured("x.sh", &text);
+    assert_eq!(doc.coloured_lines(), 1);
+    assert!(doc.spans(1).is_none() && doc.spans(2).is_none());
+    let palette = Palette::parse("function=#112233");
+    assert!(doc.styled_line(0, &palette).unwrap().contains("<font"));
+    assert_eq!(doc.styled_line(2, &palette).unwrap(), "echo b");
+    // A line at the limit is still coloured.
+    let at_limit = format!("echo a\n{}\necho b", &long[..4096]);
+    assert_eq!(coloured("x.sh", &at_limit).coloured_lines(), 3);
+}
+
+#[test]
+fn colours_stop_when_time_is_up() {
+    let syntax = syntax_for(b"x.sh", "").unwrap();
+    let mut asked = 0;
+    let doc = colour_with("a\nb\nc\nd\ne".to_owned(), syntax, 4096, || {
+        asked += 1;
+        asked > 2
+    });
+    assert_eq!(doc.coloured_lines(), 2);
+    assert_eq!(doc.line_count(), 5);
+    assert_eq!(doc.syntax(), Some("Bourne Again Shell (bash)"));
+}
+
+/// Colours `text` against a real clock with a short budget, checking that
+/// it comes back soon after the budget, coloured lines first.
+fn colour_against_the_clock(name: &str, text: String) -> ColouredText {
+    let limits = Limits {
+        budget: Duration::from_millis(200),
+        max_line_bytes: 4096,
+    };
+    let started = std::time::Instant::now();
+    let doc = colour(name.as_bytes(), text, &limits);
+    let took = started.elapsed();
+    assert!(
+        took < limits.budget + Duration::from_secs(5),
+        "{name} took {took:?}"
+    );
+    assert!(
+        doc.spans(doc.coloured_lines()).is_none(),
+        "{name}: plain after the coloured lines"
+    );
+    doc
+}
+
+#[test]
+fn pathological_files_stay_within_their_limits() {
+    // Minified: one line of a whole MiB.
+    let doc = colour_against_the_clock("x.sh", "$((".repeat(350_000));
+    assert_eq!((doc.coloured_lines(), doc.line_count()), (0, 1));
+    // Deep nesting over many lines.
+    let doc = colour_against_the_clock("x.sh", "echo \"$(echo \"$( [[ ${a[(((1\n".repeat(100_000));
+    assert!(doc.coloured_lines() > 0);
+    // Lines of nothing but markup openers, each just under the limit: tens
+    // of milliseconds a line on a fast machine, so the time runs out.
+    let doc = colour_against_the_clock("x.md", ("*_[`<".repeat(800) + "\n").repeat(2000));
+    assert!(doc.coloured_lines() > 0 && doc.coloured_lines() < doc.line_count());
+    let doc = colour_against_the_clock("x.html", "<a href=\"".repeat(400).repeat(1000));
+    assert_eq!(doc.coloured_lines(), 0, "one long line");
+}
+
+#[test]
+fn palettes_take_only_hex_colours_of_known_classes() {
+    let p = Palette::parse(
+        " keyword = #A1b2C3 ,string=#80ff0000,comment=red,number=#12345g,\
+         type=#123,link=#1234567,function=#abcdef\" onload=\"x,plain=#ffffff,\
+         nonsense=#000000,variable,=#000000,heading=#010203",
+    );
+    assert_eq!(p.colour(Class::Keyword), Some("#A1b2C3"));
+    assert_eq!(p.colour(Class::String), Some("#80ff0000"));
+    assert_eq!(p.colour(Class::Heading), Some("#010203"));
+    for class in [
+        Class::Comment,
+        Class::Number,
+        Class::Type,
+        Class::Link,
+        Class::Function,
+        Class::Plain,
+        Class::Variable,
+    ] {
+        assert_eq!(p.colour(class), None, "{class:?}");
+    }
+    assert_eq!(Palette::parse(""), Palette::default());
+}
+
+fn palette() -> Palette {
+    let spec: Vec<String> = CLASSES
+        .iter()
+        .enumerate()
+        .map(|(i, (_, name))| format!("{name}=#0000{i:02x}"))
+        .collect();
+    Palette::parse(&spec.join(","))
+}
+
+/// One line with the given pieces, as `ColouredText` would hold it.
+fn doc_of(pieces: &[(&str, Class)]) -> ColouredText {
+    let line: String = pieces.iter().map(|(p, _)| *p).collect();
+    let mut doc = ColouredText::plain(line);
+    let mut end = 0;
+    for (piece, class) in pieces {
+        end += piece.len();
+        doc.spans.push(Span {
+            end: end as u32,
+            class: *class,
+        });
+    }
+    doc.span_starts.push(0);
+    doc
+}
+
+#[test]
+fn styled_lines_escape_and_colour() {
+    let doc = doc_of(&[
+        ("if", Class::Keyword),
+        (" ", Class::Plain),
+        ("<img src=\"a.png\">", Class::String),
+        (" &lt; & a;b", Class::Plain),
+    ]);
+    assert_eq!(
+        doc.styled_line(0, &palette()).unwrap(),
+        "<font color=\"#000002\">if</font> <font color=\"#000004\">&lt;img src=&quot;a.png&quot;&gt;</font> \
+         &amp;lt; &amp; a;b"
+    );
+    assert_eq!(
+        doc.styled_line(0, &Palette::default()).unwrap(),
+        "if &lt;img src=&quot;a.png&quot;&gt; &amp;lt; &amp; a;b"
+    );
+    assert_eq!(doc.styled_line(1, &palette()), None);
+    // Plain documents are escaped all the same.
+    let plain = ColouredText::plain("<b>&nbsp;</b>\n\0x".to_owned());
+    assert_eq!(
+        plain.styled_line(0, &palette()).unwrap(),
+        "&lt;b&gt;&amp;nbsp;&lt;/b&gt;"
+    );
+    assert_eq!(plain.styled_line(1, &palette()).unwrap(), "\u{FFFD}x");
+}
+
+#[test]
+fn styled_lines_keep_whitespace() {
+    let line = |text: &str| {
+        ColouredText::plain(text.to_owned())
+            .styled_line(0, &Palette::default())
+            .unwrap()
+    };
+    assert_eq!(line("a b"), "a b", "a lone space can wrap");
+    assert_eq!(line(" a  b "), "&nbsp;a&nbsp;&nbsp;b&nbsp;");
+    assert_eq!(line("\tx"), "&nbsp;&nbsp;&nbsp;&nbsp;x");
+    assert_eq!(line("ab\tc\td"), "ab&nbsp;&nbsp;c&nbsp;&nbsp;&nbsp;d");
+    assert_eq!(line("a \tb"), "a&nbsp;&nbsp;&nbsp;b");
+    assert_eq!(line("a\u{a0}b\u{3000}c"), "a&nbsp;b&nbsp;c");
+    assert_eq!(line("a & b"), "a &amp; b");
+}
+
+/// What Qt's StyledText parser (qquickstyledtext.cpp, Qt 5.6) shows for
+/// `styled`: each character with its colour. Any tag but lautta's font
+/// tags, any entity but the five escapes, and NUL (where Qt stops) fail.
+fn shown_by_qt(styled: &str) -> Vec<(char, Option<String>)> {
+    let mut qt = QtParser {
+        shown: Vec::new(),
+        colours: Vec::new(),
+        pending: String::new(),
+        has_space: true,
+        prepend_space: false,
+    };
+    let mut rest = styled;
+    while let Some(c) = rest.chars().next() {
+        rest = &rest[c.len_utf8()..];
+        match c {
+            '<' => rest = qt.tag(rest),
+            '&' => rest = qt.entity(rest),
+            '\0' => panic!("NUL ends Qt's parsing: {styled:?}"),
+            c if c.is_whitespace() => {
+                qt.append_pending();
+                qt.prepend_space = !qt.has_space;
+                rest = rest.trim_start_matches(char::is_whitespace);
+            }
+            c => qt.pending.push(c),
+        }
+    }
+    qt.append_pending();
+    qt.shown
+}
+
+struct QtParser {
+    shown: Vec<(char, Option<String>)>,
+    colours: Vec<String>,
+    pending: String,
+    has_space: bool,
+    prepend_space: bool,
+}
+
+impl QtParser {
+    fn colour(&self) -> Option<String> {
+        self.colours.last().cloned()
+    }
+
+    fn append_text(&mut self) {
+        let colour = self.colour();
+        if self.prepend_space {
+            self.shown.push((' ', colour.clone()));
+        }
+        for c in std::mem::take(&mut self.pending).chars() {
+            self.shown.push((c, colour.clone()));
+        }
+        self.prepend_space = false;
+        self.has_space = false;
+    }
+
+    fn append_pending(&mut self) {
+        if !self.pending.is_empty() {
+            self.append_text();
+        }
+    }
+
+    fn tag<'a>(&mut self, rest: &'a str) -> &'a str {
+        if !self.pending.is_empty() {
+            self.append_text();
+        } else if self.prepend_space {
+            self.shown.push((' ', self.colour()));
+            self.prepend_space = false;
+            self.has_space = true;
+        }
+        let (tag, rest) = rest.split_once('>').expect("an open tag");
+        if tag == "/font" {
+            self.colours.pop().expect("a font tag to close");
+        } else {
+            let colour = tag
+                .strip_prefix("font color=\"")
+                .and_then(|t| t.strip_suffix('"'));
+            let colour = colour.unwrap_or_else(|| panic!("a tag from the file: <{tag}>"));
+            assert!(is_hex_colour(colour), "colour {colour}");
+            self.colours.push(colour.to_owned());
+        }
+        rest
+    }
+
+    fn entity<'a>(&mut self, rest: &'a str) -> &'a str {
+        self.append_text();
+        let (entity, rest) = rest.split_once(';').expect("an open entity");
+        let c = match entity {
+            "lt" => '<',
+            "gt" => '>',
+            "amp" => '&',
+            "quot" => '"',
+            "nbsp" => ' ',
+            other => panic!("an entity from the file: &{other};"),
+        };
+        self.shown.push((c, self.colour()));
+        rest
+    }
+}
+
+/// What the viewer must show for `line`: its characters, tabs to the next
+/// stop, other whitespace as a space, NUL as U+FFFD.
+fn expected(line: &str) -> String {
+    let mut out = String::new();
+    for c in line.chars() {
+        match c {
+            '\t' => {
+                let col = out.chars().count();
+                out.extend(std::iter::repeat_n(' ', TAB_WIDTH - col % TAB_WIDTH));
+            }
+            '\0' => out.push('\u{FFFD}'),
+            c if c.is_whitespace() => out.push(' '),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Checks that Qt shows `doc`'s line `index` as it is, each visible
+/// character in its class's colour.
+fn check_shown(doc: &ColouredText, index: usize, palette: &Palette) {
+    let line = doc.line(index).unwrap();
+    let styled = doc.styled_line(index, palette).unwrap();
+    let shown = shown_by_qt(&styled);
+    let text: String = shown.iter().map(|(c, _)| *c).collect();
+    assert_eq!(text, expected(line), "{line:?} became {styled:?}");
+    let mut colours = Vec::new();
+    let mut from = 0;
+    for span in doc.spans(index).unwrap_or_default() {
+        let piece = &line[from..span.end as usize];
+        let colour = palette.colour(span.class).map(str::to_owned);
+        colours.extend(
+            piece
+                .chars()
+                .filter(|c| !c.is_whitespace())
+                .map(|_| colour.clone()),
+        );
+        from = span.end as usize;
+    }
+    colours.extend(line[from..].chars().filter(|c| !c.is_whitespace()).map(|_| None));
+    let shown_colours: Vec<_> = shown
+        .into_iter()
+        .filter(|(c, _)| *c != ' ')
+        .map(|(_, k)| k)
+        .collect();
+    assert_eq!(shown_colours, colours, "{line:?} became {styled:?}");
+}
+
+/// A small deterministic generator (xorshift), so failures reproduce.
+struct Rng(u64);
+
+impl Rng {
+    fn below(&mut self, n: usize) -> usize {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        (self.0 % n as u64) as usize
+    }
+}
+
+const NASTY: &[&str] = &[
+    "<",
+    ">",
+    "&",
+    ";",
+    "\"",
+    "'",
+    " ",
+    "  ",
+    "\t",
+    "\0",
+    "a",
+    "é",
+    "漢",
+    "\u{a0}",
+    "\u{2028}",
+    "\u{3000}",
+    "#",
+    "/",
+    "\\",
+    "1",
+    "x;",
+    "<img src=\"http://example.org/a.png\">",
+    "<img src=image://lautta-thumb/x>",
+    "&lt;",
+    "&amp;",
+    "&nbsp;",
+    "&#60;",
+    "&quot",
+    "<font color=\"#ff0000\">",
+    "</font>",
+    "<b>",
+    "</a>",
+    "<a href=\"x\">",
+    "<br>",
+    "<p",
+    "-->",
+    "<!--",
+    "`",
+    "*",
+    "$(",
+    "\"$x\"",
+    "'''",
+    "/*",
+    "*/",
+    "#!/bin/sh",
+    "```",
+    "> ",
+    "- ",
+];
+
+fn nasty_line(rng: &mut Rng) -> String {
+    (0..rng.below(24))
+        .map(|_| NASTY[rng.below(NASTY.len())])
+        .collect()
+}
+
+#[test]
+fn qt_shows_random_markup_as_text() {
+    let mut rng = Rng(0x5eed_1a77a);
+    let classes: Vec<Class> = CLASSES.iter().map(|(c, _)| *c).collect();
+    for _ in 0..2000 {
+        let line = nasty_line(&mut rng);
+        let cuts: Vec<usize> = line.char_indices().map(|(i, _)| i).skip(1).collect();
+        let cuts: Vec<usize> = cuts.into_iter().filter(|_| rng.below(3) == 0).collect();
+        let mut pieces = Vec::new();
+        let mut from = 0;
+        for cut in cuts {
+            pieces.push((&line[from..cut], classes[rng.below(classes.len())]));
+            from = cut;
+        }
+        pieces.push((&line[from..], classes[rng.below(classes.len())]));
+        check_shown(&doc_of(&pieces), 0, &palette());
+        check_shown(&ColouredText::plain(line.clone()), 0, &palette());
+    }
+}
+
+#[test]
+fn qt_shows_highlighted_random_files_as_text() {
+    let mut rng = Rng(0xc0de);
+    let names = [
+        "x.sh", "x.md", "x.html", "x.rs", "x.py", "x.js", "x.xml", "x.diff", "x.c", "Makefile",
+    ];
+    for name in names {
+        for _ in 0..3 {
+            let text: Vec<String> = (0..40).map(|_| nasty_line(&mut rng)).collect();
+            let doc = coloured(name, &text.join("\n"));
+            assert_eq!(doc.coloured_lines(), doc.line_count(), "{name}");
+            for i in 0..doc.line_count() {
+                check_shown(&doc, i, &palette());
+            }
+        }
+    }
+}
+
+#[test]
+fn the_model_of_qt_catches_unescaped_text() {
+    // The checks above bite: raw markup, an unknown entity and a collapsed
+    // space all fail the model.
+    for styled in ["<img src=x>", "&apos;", "a\0b"] {
+        assert!(
+            std::panic::catch_unwind(|| shown_by_qt(styled)).is_err(),
+            "{styled}"
+        );
+    }
+    let text: String = shown_by_qt("a  b").iter().map(|(c, _)| *c).collect();
+    assert_eq!(text, "a b");
+    let text: String = shown_by_qt(" a").iter().map(|(c, _)| *c).collect();
+    assert_eq!(text, "a");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_job_colours_off_the_runtime() {
+    let job = start(b"x.sh".to_vec(), BASH.to_owned());
+    let doc = job.wait(Duration::from_secs(600)).await;
+    let doc = doc.unwrap().unwrap();
+    assert_eq!(doc.syntax(), Some("Bourne Again Shell (bash)"));
+    assert_eq!(doc.coloured_lines(), doc.line_count());
+    // A job that is not done yet comes back, and finishes later.
+    let job = start(b"x.md".to_vec(), MARKDOWN.repeat(200));
+    let job = job.wait(Duration::ZERO).await.unwrap_err();
+    let doc = job.finish().await.unwrap();
+    assert_eq!(doc.syntax(), Some("Markdown"));
+    assert!(doc.coloured_lines() > 0);
+}
+
+#[test]
+fn a_job_that_overruns_its_time_is_dropped() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let limits = Limits {
+        budget: Duration::from_millis(200),
+        max_line_bytes: usize::MAX,
+    };
+    // One line takes seconds, and lines are only cut between lines.
+    let line = "echo \"$x\" 'y' ${z} # c ".repeat(80_000);
+    let finished = rt.block_on(async {
+        start_with(b"x.sh".to_vec(), line, limits, Duration::ZERO)
+            .finish()
+            .await
+    });
+    assert!(finished.is_none());
+    rt.shutdown_background();
+}

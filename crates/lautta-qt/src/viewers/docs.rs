@@ -3,8 +3,9 @@
 
 use super::{parse_uri, qstr, run_then};
 use crate::runtime::core;
-use lautta_core::app_viewers::LoadedText;
+use lautta_core::app_viewers::ViewedText;
 use lautta_core::org::recents::RecentKind;
+use lautta_core::preview::highlight::{ColourJob, ColouredText, Palette};
 use lautta_core::Error;
 use qmetaobject::prelude::*;
 use qmetaobject::qml_register_type;
@@ -30,11 +31,21 @@ pub struct TextDocument {
     size: qt_property!(f64; NOTIFY stateChanged),
     errorKind: qt_property!(QString; NOTIFY stateChanged),
     errorMessage: qt_property!(QString; NOTIFY stateChanged),
+    /// The grammar of the colours, "" without (PRV-13).
+    syntax: qt_property!(QString; NOTIFY stateChanged),
+    /// The first lines (or all) have colours; they may come after the text.
+    highlighted: qt_property!(bool; NOTIFY stateChanged),
     stateChanged: qt_signal!(),
 
     reload: qt_method!(fn(&mut self)),
+    /// Line `index` (from 0) as StyledText: every character of the file
+    /// escaped, whitespace kept, its pieces coloured with `colours`
+    /// (`class=#rrggbb,…`, components/viewers/SyntaxColours.js); "" past
+    /// the end (PRV-13).
+    styledLine: qt_method!(fn(&self, index: i32, colours: QString) -> QString),
 
     generation: u64,
+    lines: ColouredText,
 }
 
 impl TextDocument {
@@ -61,7 +72,7 @@ impl TextDocument {
         self.stateChanged();
         let seen = uri.clone();
         let c = core.clone();
-        run_then(self, async move { core.load_text(&uri).await }, move |me, res| {
+        run_then(self, async move { core.view_text(&uri).await }, move |me, res| {
             if me.generation == gen {
                 me.loaded_with(res, &c, &seen);
             }
@@ -70,14 +81,16 @@ impl TextDocument {
 
     fn loaded_with(
         &mut self,
-        res: lautta_core::Result<LoadedText>,
+        res: lautta_core::Result<ViewedText>,
         core: &lautta_core::app::Core,
         uri: &lautta_core::Uri,
     ) {
         self.loading = false;
         match res {
-            Ok(l) => {
-                self.apply(l);
+            Ok(v) => {
+                if let Some(job) = self.apply(v) {
+                    self.colour_later(job);
+                }
                 core.note_viewed(uri, RecentKind::Previewed);
             }
             Err(e) => {
@@ -88,12 +101,43 @@ impl TextDocument {
         self.stateChanged();
     }
 
-    fn apply(&mut self, l: LoadedText) {
+    /// Shows the text; returns the colouring still at work.
+    fn apply(&mut self, v: ViewedText) -> Option<ColourJob> {
         self.loaded = true;
-        self.size = l.size.map_or(-1.0, |s| s as f64);
-        self.text = QString::from(l.doc.text.as_str());
-        self.truncated = l.doc.truncated;
-        self.validUtf8 = l.doc.valid_utf8;
+        self.size = v.size.map_or(-1.0, |s| s as f64);
+        self.text = QString::from(v.lines.text());
+        self.truncated = v.truncated;
+        self.validUtf8 = v.valid_utf8;
+        self.set_lines(v.lines);
+        v.colouring
+    }
+
+    /// The colours, once they come, for the text that is still shown.
+    fn colour_later(&mut self, job: ColourJob) {
+        let gen = self.generation;
+        run_then(self, async move { Ok(job.finish().await) }, move |me, res| {
+            if let (true, Ok(Some(lines))) = (me.generation == gen, res) {
+                if lines.coloured_lines() > 0 {
+                    me.set_lines(lines);
+                    me.stateChanged();
+                }
+            }
+        });
+    }
+
+    fn set_lines(&mut self, lines: ColouredText) {
+        self.highlighted = lines.coloured_lines() > 0;
+        let syntax = lines.syntax().filter(|_| self.highlighted);
+        self.syntax = qstr(syntax.unwrap_or_default());
+        self.lines = lines;
+    }
+
+    fn styledLine(&self, index: i32, colours: QString) -> QString {
+        let palette = Palette::parse(&colours.to_string());
+        usize::try_from(index)
+            .ok()
+            .and_then(|i| self.lines.styled_line(i, &palette))
+            .map_or_else(QString::default, |s| QString::from(s.as_str()))
     }
 
     fn clear_content(&mut self) {
@@ -102,6 +146,7 @@ impl TextDocument {
         self.validUtf8 = false;
         self.size = -1.0;
         self.text = QString::default();
+        self.set_lines(ColouredText::default());
     }
 
     fn clear_error(&mut self) {

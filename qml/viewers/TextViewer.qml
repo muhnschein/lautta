@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Text and code viewer (PRV-4, boards TextViewer, TextViewerPulley): read-only
-// up to 1 MiB with line numbers.
+// up to 1 MiB with line numbers, coloured by the file's language (PRV-13).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components"
 import "../components/viewers"
 import "../components/ErrorText.js" as ErrorText
+import "../components/viewers/SyntaxColours.js" as SyntaxColours
 
 Page {
     id: page
@@ -24,6 +25,8 @@ Page {
     }
     readonly property real charWidth: metrics.advanceWidth
     readonly property real gutter: Math.max(2, String(lines.length).length) * charWidth + Theme.paddingLarge
+    // The ambience's colours for the syntax classes (PRV-13).
+    readonly property string colours: SyntaxColours.palette(Theme)
 
     allowedOrientations: Orientation.All
 
@@ -111,11 +114,13 @@ Page {
                 id: line
                 x: page.gutter
                 width: page.wrap ? view.width - page.gutter - Theme.horizontalPageMargin : implicitWidth
-                text: modelData
+                // Every character comes escaped from the core, so nothing in
+                // the file is read as markup (PRV-13).
+                text: doc.styledLine(index, doc.highlighted ? page.colours : "")
                 font.family: "monospace"
                 font.pixelSize: Theme.fontSizeExtraSmall
                 wrapMode: page.wrap ? Text.WrapAnywhere : Text.NoWrap
-                textFormat: Text.PlainText
+                textFormat: Text.StyledText
             }
         }
 

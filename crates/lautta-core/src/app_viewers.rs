@@ -11,6 +11,7 @@ use crate::error::{Error, ErrorKind, Result};
 use crate::mime::{category_of, FileCategory};
 use crate::org::recents::RecentKind;
 use crate::preview::exif::{self, ExifInfo};
+use crate::preview::highlight::{self, ColourJob, ColouredText};
 use crate::preview::markdown;
 use crate::preview::text::{self as ptext, TextDoc};
 use crate::provider::{list_all, Lane, ProgressSink, ReadHandle, ReadOptions};
@@ -38,6 +39,18 @@ pub const MAX_THUMB: u32 = 1024;
 pub struct LoadedText {
     pub doc: TextDoc,
     pub size: Option<u64>,
+}
+
+/// A text file for the text viewer, with its colours (PRV-13).
+#[derive(Debug)]
+pub struct ViewedText {
+    pub size: Option<u64>,
+    pub truncated: bool,
+    pub valid_utf8: bool,
+    /// The lines: coloured when that was quick, else plain until
+    /// `colouring` finishes.
+    pub lines: ColouredText,
+    pub colouring: Option<ColourJob>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -332,6 +345,33 @@ impl Core {
         Ok(LoadedText {
             doc,
             size: entry.size,
+        })
+    }
+
+    /// Reads a text file for the text viewer and colours it (PRV-13). The
+    /// colours come with the text when they are ready within
+    /// [`highlight::FIRST_WAIT`]; otherwise the text comes plain and the
+    /// colouring goes on.
+    pub async fn view_text(&self, uri: &Uri) -> Result<ViewedText> {
+        let loaded = self.load_text(uri).await?;
+        let TextDoc {
+            text,
+            truncated,
+            valid_utf8,
+        } = loaded.doc;
+        let name = uri.path.name().unwrap_or_default().to_vec();
+        let job = highlight::start(name, text.clone());
+        let (lines, colouring) = match job.wait(highlight::FIRST_WAIT).await {
+            Ok(Some(lines)) => (lines, None),
+            Ok(None) => (ColouredText::plain(text), None),
+            Err(job) => (ColouredText::plain(text), Some(job)),
+        };
+        Ok(ViewedText {
+            size: loaded.size,
+            truncated,
+            valid_utf8,
+            lines,
+            colouring,
         })
     }
 

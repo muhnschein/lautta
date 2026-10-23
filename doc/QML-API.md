@@ -191,7 +191,14 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 
 ### Viewers (boards: ImageViewer, ImageExif, TextViewer, TextViewerPulley, Markdown, PdfViewer, VideoPlayer, AudioPlayer, OpenRemote)
 
-- `TextDocument { uri }` (text, truncated, validUtf8, size; read-only),
+- `TextDocument { uri }` (text, truncated, validUtf8, size; read-only; PRV-13: `syntax`
+  (the grammar's name, "" for plain text), `highlighted` (the first lines, or all, have
+  colours; may turn true after `loaded`), `styledLine(index, colours)` (line `index`
+  from 0 as Qt StyledText for a `Text.StyledText` label: every character escaped,
+  whitespace kept, tabs to 4-column stops, coloured with `colours`, "" past the end)),
+  `components/viewers/SyntaxColours.js` `palette(Theme)` (the `colours` for the
+  ambience: `class=#rrggbb,…` for comment, keyword, operator, string, number,
+  constant, type, function, variable, heading, markup, link, inserted, deleted),
   `MarkdownDocument { uri }` (html), `ExifModel { uri }`, `MediaSource { uri }` (QIODevice for QtMultimedia, PRV-8),
   image provider `image://lautta-thumb/<uri>?size=N` for remote thumbnails (PRV-2) and
   `image://lautta-file/<uri>` for remote full images.
