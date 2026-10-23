@@ -581,7 +581,12 @@ bridge).
 - PRV-3: Thumbnail jobs: interactive lane, lowest priority, ≤ 2 in flight per location,
   visible delegates only, canceled on scroll.
 - PRV-4: Viewers: images (zoom, swipe through the folder, EXIF panel), text/code (read-
-  only up to 1 MiB, then a notice), Markdown (pulldown-cmark → Qt rich text subset,
+  only up to 1 MiB, then a notice; numbered lines wrapped to the page's width by
+  default, so the page swipes back like any other, also from Markdown's *View source*;
+  *Don't wrap lines* in the pulley lets lines wider than the page scroll sideways
+  instead, and then a swipe across the text scrolls it and the back indicator goes
+  back; tabs to the next multiple of 4 columns; a line longer than 1000 characters
+  goes on over further rows), Markdown (pulldown-cmark → Qt rich text subset,
   wrapped to the page's width, code blocks and tables included), audio
   and video (QtMultimedia), archives (as locations), PDFs (PRV-12). Office documents,
   databases, packages and other binary files go to *Open with*.
@@ -618,11 +623,13 @@ bridge).
   so the app itself never fetches it. The app's sandbox has no `Internet` permission
   either. *Contents and pages* in the pulley shows the outline (the section being read
   highlighted) and a *Go to page* field. Files up to 200 MB; pages at most 4096 px on an edge.
-  The pulley header shows the page count. A password-protected PDF asks for its
+  The pulley header shows the page count; a PDF without a page to return to starts at
+  its top, the whole header in view. A password-protected PDF asks for its
   password in a dialog (swipe forward unlocks; a wrong one asks again); the password
   opens that one parse and is never stored, so reopening asks again (the empty user
   password opens without asking). Reopening a PDF starts at the page where reading
-  stopped, remembered with the recents (off and cleared with them, ORG-2).
+  stopped (the page at the top of the view, put at the top again), remembered with
+  the recents (off and cleared with them, ORG-2).
   *Search* in the pulley finds text in the document: a search field stays at the top
   of the page (its close button leaves search mode), typing searches once it pauses,
   case-insensitive with whitespace runs alike. The search runs off the GUI thread page
