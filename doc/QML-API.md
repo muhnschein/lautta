@@ -103,7 +103,10 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - `Bridge` singleton: `status` (`absent`, `connecting`, `consentUnknown`, `consentDenied`,
   `ready`, `reconnecting`), `requestConsent()`, `addServer(provider)`,
   `editAccount(locationUri)`, `connectAdHoc(url, secret, options)`, `forgetAdHoc(id)`,
-  signal `question(id, kind, details)`, `answer(id, answer)`.
+  signal `question(id, kind, details)`, `answer(id, answer)`; `storageSettings` (the
+  bridge can open Settings › Storage, NVB-13; changes with `statusChanged`) and
+  `openStorageSettings()` (a failure arrives as `failed`). `BrowsePage`'s
+  `storageSettings` follows it; tests set it.
 - Pages: `pages/BrowsePage.qml` (initial page), `pages/RecentsPage.qml`,
   `dialogs/ConnectServerDialog.qml { url }`,
   `dialogs/ServerQuestionDialog.qml { questionId, kind, details }`,

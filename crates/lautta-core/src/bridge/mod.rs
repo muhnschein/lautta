@@ -16,6 +16,8 @@ mod session;
 mod types;
 
 pub use client::BridgeClient;
+/// The names of the bridge's optional parts (NVB-13).
+pub use lautta_bridge_proto::feature;
 pub use link::JobOutcome;
 pub use types::{
     bridge_id, location_id, AdHocOptions, Attention, BridgeConfig, BridgeStatus, Consent, NearbyServer,

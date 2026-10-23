@@ -22,6 +22,8 @@ use tokio::task::JoinHandle;
 pub(super) struct Info {
     pub link: Option<Arc<Link>>,
     pub bridge_version: Option<String>,
+    /// What `GetFeatures` answered on the current connection (NVB-13).
+    pub features: Vec<String>,
     pub consent: Option<Consent>,
     /// Hub ids of questions the bridge asked on the current connection.
     pub questions: Vec<String>,
@@ -175,6 +177,12 @@ impl BridgeClient {
         self.inner.info().bridge_version.clone()
     }
 
+    /// True when the connected bridge offers `feature` (NVB-13,
+    /// [`lautta_bridge_proto::feature`]); false while there is none.
+    pub fn offers(&self, feature: &str) -> bool {
+        self.inner.info().features.iter().any(|f| f == feature)
+    }
+
     // ---- lifecycle -------------------------------------------------------
 
     /// Tells the client whether the app is in the foreground. Coming back
@@ -248,6 +256,12 @@ impl BridgeClient {
             .proxy()
             .open_account_settings(bridge_id(loc))
             .await)
+    }
+
+    /// *Open Storage settings* of a volume (LOC-3): the bridge opens Settings ›
+    /// Storage, which the sandbox cannot (NVB-13). Needs no consent.
+    pub async fn open_storage_settings(&self) -> Result<()> {
+        rpc(self.link()?.proxy().open_storage_settings().await)
     }
 
     /// *Connect to server* (NVB-6). The secret is wiped before this returns,

@@ -89,6 +89,14 @@ pub mod location_state {
     pub const FAILED: &str = "failed";
 }
 
+/// The names `GetFeatures` answers (netvfs SPEC-v2 XB-19): the optional parts
+/// of the interface a bridge offers. Names this client does not know are
+/// ignored; a bridge without `GetFeatures` offers none.
+pub mod feature {
+    /// `OpenStorageSettings` opens Settings › Storage (XB-15).
+    pub const STORAGE_SETTINGS: &str = "storage-settings";
+}
+
 /// `(sssa{sv})`: id, provider, display name, info (`kind`, `host`, `path`,
 /// `attention`, `state`, …).
 #[derive(Debug, Serialize, Deserialize, Type)]

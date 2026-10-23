@@ -14,7 +14,7 @@ use super::{error_parts, Guard};
 use crate::json::{from_json, to_json};
 use crate::runtime::{core, handle, spawn_then};
 use lautta_core::app::Core;
-use lautta_core::bridge::{AdHocOptions, BridgeStatus};
+use lautta_core::bridge::{feature, AdHocOptions, BridgeStatus};
 use lautta_core::questions::{Answer, Question, QuestionEvent, QuestionKind, Responses};
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
@@ -89,9 +89,13 @@ pub struct Bridge {
     version: qt_property!(QString; NOTIFY statusChanged),
     /// True when the Servers section and its hand-offs are usable.
     ready: qt_property!(bool; NOTIFY statusChanged),
+    /// True when the bridge opens Settings › Storage (NVB-13), whatever the
+    /// consent.
+    storageSettings: qt_property!(bool; NOTIFY statusChanged),
 
     requestConsent: qt_method!(fn(&mut self)),
     addServer: qt_method!(fn(&mut self, provider: QString)),
+    openStorageSettings: qt_method!(fn(&mut self)),
     editAccount: qt_method!(fn(&mut self, location_uri: QString)),
     connectAdHoc: qt_method!(fn(&mut self, url: QString, secret: QString, options_json: QString)),
     forgetAdHoc: qt_method!(fn(&mut self, id: QString)),
@@ -126,13 +130,18 @@ impl QSingletonInit for Bridge {
 
 impl Bridge {
     fn publish_status(&mut self, core: &Core) {
-        let (status, version) = match &core.bridge {
-            Some(b) => (b.status(), b.bridge_version().unwrap_or_default()),
-            None => (BridgeStatus::Absent, String::new()),
+        let (status, version, storage) = match &core.bridge {
+            Some(b) => (
+                b.status(),
+                b.bridge_version().unwrap_or_default(),
+                b.offers(feature::STORAGE_SETTINGS),
+            ),
+            None => (BridgeStatus::Absent, String::new(), false),
         };
         self.status = QString::from(status_name(status));
         self.ready = status == BridgeStatus::Ready;
         self.version = QString::from(version.as_str());
+        self.storageSettings = storage;
         self.statusChanged();
     }
 
@@ -234,6 +243,16 @@ impl Bridge {
         self.call(String::new(), |core| async move {
             match &core.bridge {
                 Some(b) => b.add_account(&provider).await,
+                None => Ok(()),
+            }
+        });
+    }
+
+    /// *Open Storage settings* of a volume (LOC-3).
+    fn openStorageSettings(&mut self) {
+        self.call(String::new(), |core| async move {
+            match &core.bridge {
+                Some(b) => b.open_storage_settings().await,
                 None => Ok(()),
             }
         });

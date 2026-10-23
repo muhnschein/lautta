@@ -21,6 +21,9 @@ Page {
     property bool attached
     // The rows; tests give the page a ListModel with every kind of row.
     property var listModel: locations
+    // netvfs opens Settings › Storage, which the sandbox cannot (LOC-3,
+    // NVB-13); tests set it.
+    property bool storageSettings: Bridge.storageSettings
     readonly property bool discovering: status === PageStatus.Active
                                         && Qt.application.state === Qt.ApplicationActive && Bridge.ready
 
@@ -401,11 +404,10 @@ Page {
                         onClicked: page.copyAddress(row.kind === "adhocRecent" ? model.place : App.displayAddress(model.uri))
                     }
                     MenuItem {
-                        visible: row.kind === "volume"
+                        visible: row.kind === "volume" && page.storageSettings
                         //% "Open Storage settings"
                         text: qsTrId("lautta-browse-open-storage-settings")
-                        // The hand-off to the platform's Storage page is verified on device (SPEC §24.1).
-                        onClicked: Qt.openUrlExternally("settings://system/storage")
+                        onClicked: Bridge.openStorageSettings()
                     }
                     MenuItem {
                         visible: row.kind === "folder" || row.kind === "volume" || row.isServer

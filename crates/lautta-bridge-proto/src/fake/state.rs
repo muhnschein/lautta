@@ -2,7 +2,7 @@
 //! Shared state of the fake bridge and of one client session.
 
 use super::tree::Tree;
-use crate::wire::{location_state, WireCapabilities, WireLocation, WireNearby};
+use crate::wire::{feature, location_state, WireCapabilities, WireLocation, WireNearby};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -168,6 +168,9 @@ pub struct State {
     pub consent_requests: u32,
     pub auto_consent: Option<Consent>,
     pub bridge_version: String,
+    /// What `GetFeatures` answers (XB-19); `None`: a bridge without the
+    /// method, which answers `UnknownMethod`.
+    pub features: Option<Vec<String>>,
     pub locations: BTreeMap<String, LocationRec>,
     pub trees: HashMap<String, Tree>,
     pub caps: HashMap<String, WireCapabilities>,
@@ -196,6 +199,7 @@ impl Default for State {
             consent_requests: 0,
             auto_consent: None,
             bridge_version: "0.2.0-fake".to_owned(),
+            features: Some(vec![feature::STORAGE_SETTINGS.to_owned()]),
             locations: BTreeMap::new(),
             trees: HashMap::new(),
             caps: HashMap::new(),

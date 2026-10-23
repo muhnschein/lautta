@@ -3,7 +3,8 @@
 // they offer (SPEC §15.2): the pulley has no Connect to server and no
 // Recents, servers' menus have Edit server and neither Disconnect nor
 // Location settings, favourites' menus have Copy address and no Move up or
-// down, and the Recents row of On this device opens Recents. Fails naming
+// down, a volume's has Open Storage settings only while the bridge offers it
+// (NVB-13), and the Recents row of On this device opens Recents. Fails naming
 // the row whose menu differs.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -30,8 +31,12 @@ ApplicationWindow {
         { "name": "files.kotisivu.fi", "items": ["connect-recent", "copy-address", "hide", "remove-recent"] }
     ]
 
+    // Without the bridge's storage-settings the volume's menu lacks it.
+    readonly property var withoutStorage: { "name": "SD card", "items": ["add-favourite", "copy-address", "hide"] }
+
     initialPage: Component {
         BrowsePage {
+            storageSettings: true
             listModel: ListModel {
         ListElement { section: "favourites"; uri: "lautta://user-documents/Uni"; name: "Thesis"; kind: "favourite"; icon: "image://theme/icon-m-favorite"; status: "ready"; attention: ""; colour: "#e7a33c"; count: -1; itemId: "1"; place: "Documents › Uni"; provider: ""; host: ""; free: -1; total: -1; fs: "" }
         ListElement { section: "device"; uri: "lautta://user-documents/"; name: "Documents"; kind: "folder"; icon: "image://theme/icon-m-file-folder"; status: "ready"; attention: ""; colour: ""; count: 214; itemId: "user-documents"; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: "" }
@@ -144,6 +149,9 @@ ApplicationWindow {
             win.checkPulley(list)
             for (var i = 0; i < win.menus.length && win.scenarioRunning; ++i)
                 win.checkMenu(list, win.menus[i])
+            pageStack.currentPage.storageSettings = false
+            if (win.scenarioRunning)
+                win.checkMenu(list, win.withoutStorage)
             if (win.scenarioRunning)
                 win.checkRecentsRow(list)
             win.step = 1

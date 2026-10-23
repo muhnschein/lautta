@@ -179,6 +179,9 @@ Item {
         step("consent row while the user has not decided",
              function() { locs.refresh() },
              function() { return Bridge.status === "consentUnknown" && has("consent") && !Bridge.ready })
+        step("Settings › Storage opens without the consent (NVB-13)",
+             function() { if (Bridge.storageSettings) Bridge.openStorageSettings() },
+             function() { return JSON.parse(FakeWorld.handoffs()).indexOf("storage") >= 0 })
         step("no account without consent", null, function() { return !has("account") && !has("adhocRecent") })
         step("ask again reaches the bridge",
              function() { Bridge.requestConsent() },

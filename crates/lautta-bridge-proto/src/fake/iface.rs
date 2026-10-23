@@ -11,7 +11,7 @@ use super::transfer::{self, Env};
 use super::tree::Tree;
 use super::{tree::TreeError, DEFAULT_CAPS};
 use crate::wire::{
-    location_state, WireCapabilities, WireEntry, WireLocation, WireNearby, WireWalkItem, INTERFACE,
+    feature, location_state, WireCapabilities, WireEntry, WireLocation, WireNearby, WireWalkItem, INTERFACE,
     OBJECT_PATH,
 };
 use sha2::Digest;
@@ -373,6 +373,14 @@ impl Iface {
             self.ask_consent();
         }
         Ok(())
+    }
+
+    async fn get_features(&self) -> Result<Vec<String>, Fail> {
+        let Some(features) = self.shared.with(|s| s.features.clone()) else {
+            return Err(Fail::unknown_method("GetFeatures"));
+        };
+        self.begin("GetFeatures", "interactive", "", false).await?;
+        Ok(features)
     }
 
     // ---- Locations -------------------------------------------------------
@@ -795,6 +803,20 @@ impl Iface {
         let provider = args::token(&provider, 32)?;
         self.begin("AddAccount", "interactive", &provider, true).await?;
         self.shared.with(|s| s.handoffs.push(format!("add:{provider}")));
+        Ok(())
+    }
+
+    async fn open_storage_settings(&self) -> Result<(), Fail> {
+        let offered = self.shared.with(|s| s.features.clone());
+        let Some(offered) = offered else {
+            return Err(Fail::unknown_method("OpenStorageSettings"));
+        };
+        self.begin("OpenStorageSettings", "interactive", "", false)
+            .await?;
+        if !offered.iter().any(|f| f == feature::STORAGE_SETTINGS) {
+            return Err(Fail::net("Unsupported", "Settings > Storage cannot be opened"));
+        }
+        self.shared.with(|s| s.handoffs.push("storage".to_owned()));
         Ok(())
     }
 

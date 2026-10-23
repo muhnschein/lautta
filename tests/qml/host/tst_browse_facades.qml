@@ -24,6 +24,7 @@ QtObject {
         check(Bridge.status === "absent", "status absent: " + Bridge.status)
         check(!Bridge.ready, "bridge not ready")
         check(Bridge.version === "", "no bridge version")
+        check(!Bridge.storageSettings, "no Storage settings without the bridge (NVB-13)")
         check(Bridge.pending() === "[]", "no questions waiting")
         Bridge.poke()
         Bridge.setForeground(true)

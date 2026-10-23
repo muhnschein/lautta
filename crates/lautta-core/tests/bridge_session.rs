@@ -4,10 +4,10 @@
 
 mod bridge_support;
 
-use bridge_support::{eventually, Rig, ACCOUNT};
+use bridge_support::{eventually, quick_backoff, Rig, ACCOUNT};
 use lautta_bridge_proto::fake::{Consent, FakeBridge};
 use lautta_bridge_proto::WireNearby;
-use lautta_core::bridge::{AdHocOptions, Attention, BridgeConfig, BridgeStatus, RemoteKind};
+use lautta_core::bridge::{feature, AdHocOptions, Attention, BridgeConfig, BridgeStatus, RemoteKind};
 use lautta_core::error::ErrorKind;
 use lautta_core::provider::{Lane, Provider};
 use lautta_core::vpath::VPath;
@@ -332,6 +332,70 @@ async fn account_management_is_handed_off() {
     assert_eq!(e.kind, ErrorKind::NotFound);
     let e = rig.client.add_account("Not A Token").await.unwrap_err();
     assert_eq!(e.kind, ErrorKind::InvalidArgument);
+}
+
+#[tokio::test]
+async fn the_bridge_opens_storage_settings_whatever_the_consent() {
+    let fake = FakeBridge::new();
+    fake.set_consent(Consent::Denied).await;
+    let rig = Rig::with_fake(fake, true, |c| c).await;
+    rig.client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
+    let order: Vec<String> = rig.fake.calls().into_iter().map(|c| c.method).collect();
+    assert_eq!(order, ["Hello", "GetFeatures", "GetConsent"]);
+    assert!(rig.client.offers(feature::STORAGE_SETTINGS));
+    rig.client.open_storage_settings().await.unwrap();
+    assert_eq!(rig.fake.handoffs(), ["storage"]);
+}
+
+#[tokio::test]
+async fn a_bridge_without_features_works_as_before() {
+    let fake = FakeBridge::new();
+    fake.add_account(1, "fake", "Fake 1", "fake.example").await;
+    fake.set_features(None);
+    let rig = Rig::with_fake(fake, true, |c| c).await;
+    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    assert_eq!(rig.client.locations().len(), 1);
+    assert!(!rig.client.offers(feature::STORAGE_SETTINGS));
+    let e = rig.client.open_storage_settings().await.unwrap_err();
+    assert_eq!(e.kind, ErrorKind::Unsupported);
+    assert!(rig.fake.handoffs().is_empty());
+}
+
+#[tokio::test]
+async fn features_that_fail_are_none_and_unknown_ones_are_ignored() {
+    let fake = FakeBridge::new();
+    fake.add_account(1, "fake", "Fake 1", "fake.example").await;
+    fake.fail_next("GetFeatures", "Internal", "no");
+    let rig = Rig::with_fake(fake, true, |c| c).await;
+    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    assert!(!rig.client.offers(feature::STORAGE_SETTINGS));
+
+    let fake = FakeBridge::new();
+    fake.set_features(Some(&["teleport", feature::STORAGE_SETTINGS]));
+    let rig = Rig::with_fake(fake, true, |c| c).await;
+    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    assert!(rig.client.offers(feature::STORAGE_SETTINGS));
+    assert!(!rig.client.offers("drives"));
+}
+
+#[tokio::test]
+async fn features_are_asked_again_on_every_connection() {
+    let rig = Rig::ready_with(quick_backoff).await;
+    assert!(rig.client.offers(feature::STORAGE_SETTINGS));
+    // Without a connection nothing is offered.
+    rig.fake.set_accepting(false);
+    rig.fake.disconnect_clients().await;
+    rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
+    assert!(!rig.client.offers(feature::STORAGE_SETTINGS));
+
+    rig.fake.set_features(Some(&[]));
+    rig.fake.set_accepting(true);
+    eventually("the second GetFeatures", || {
+        rig.fake.calls_of("GetFeatures").len() == 2
+    })
+    .await;
+    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    assert!(!rig.client.offers(feature::STORAGE_SETTINGS));
 }
 
 #[tokio::test]

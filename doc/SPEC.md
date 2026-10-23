@@ -354,6 +354,12 @@ what the app does.
   *Connecting…* (NVB-4); the app reconnects with backoff (1, 2, 4, 8 s, then 15 s) while in the
   foreground; running transfers become *waiting* and resume (XFR-12). The bridge cancels
   jobs of a disconnected client itself (netvfs XB-13).
+- NVB-13: Features: after `Hello` the app asks `GetFeatures` (netvfs XB-19) and offers
+  what depends on an optional part of the interface only while the bridge names it:
+  `storage-settings` → *Open Storage settings* (LOC-3). Names the app does not know are
+  ignored. A bridge without the method (`UnknownMethod`) names none, and the app behaves
+  as with a bridge that offers nothing more; only a lost connection fails the handshake.
+  The features are asked again on every connection.
 
 ## 8. Locations
 
@@ -368,8 +374,11 @@ what the app does.
   until it exists) runs for the app's lifetime, and Browse rescans whenever it refreshes,
   also when the app comes back to the foreground, for mounts the watch missed (§3.3). The
   UDisks2 signals would tell the same, so they are not used. Mount, unmount and format are
-  not available to sandboxed apps; the app shows *Open Storage settings* instead (verify
-  the handoff, §24.1). Transfers to a vanishing volume pause with "Insert the card to
+  not available to sandboxed apps. *Open Storage settings* asks the bridge to open
+  Settings › Storage (`OpenStorageSettings`, netvfs XB-15) and is offered only while it
+  has the `storage-settings` feature (NVB-13): the sandbox can open no `settings:` URL
+  (no handler, "schema not supported") and may not call the Settings app's D-Bus service
+  itself (verify the Storage page, §24.1). Transfers to a vanishing volume pause with "Insert the card to
   continue".
 - LOC-4: netvfs accounts and ad-hoc servers (NVB-4, NVB-6).
 - LOC-5: Archives opened as read-only locations (PRV-11).
@@ -675,8 +684,8 @@ prefilled (LOC-6, NVB-6).
 Pulley: *Settings*, *Add server* (bridge only, NVB-5), *Activity* (live count).
 Long-press menus: favourite: *Edit favourite*, *Copy address*, *Remove from
 favourites*; folder: *Add to favourites*, *Copy address*, *Hide from Browse*; volume:
-*Add to favourites*, *Copy address*, *Open Storage settings* (LOC-3), *Hide from
-Browse*; account: *Edit server*, *Update sign-in* or *Review server identity* while
+*Add to favourites*, *Copy address*, *Open Storage settings* (bridge only, LOC-3,
+NVB-13), *Hide from Browse*; account: *Edit server*, *Update sign-in* or *Review server identity* while
 netvfs asks for it (NVB-5), *Copy address*, *Hide from Browse*; ad-hoc server:
 *Connect* (recent ones), *Copy address*, *Hide from Browse*, *Remove from recents*.
 Connections are netvfs' to open and close: no menu disconnects a server. Swipe left:
@@ -901,7 +910,8 @@ when the netvfs bridge they depend on is released.
   when it is created after the app started.
 - File descriptor passing over p2p D-Bus between the sandboxed app and the unsandboxed
   bridge (no proxy is involved on a direct socket; still test it).
-- *Open with* and the settings handoff (Storage) from a sandboxed app (PRV-5, LOC-3).
+- *Open with* from a sandboxed app (PRV-5), and that netvfs' `OpenStorageSettings`
+  (Settings' `showPage("system_settings/system/storage")`) opens the Storage page (LOC-3).
 - Inside the sandbox: a volume mounted from Settings while the app runs appears without
   leaving Browse (inotify on `/run/media/<user>`, LOC-3), and a delete in `~/Documents`
   and in `~/android_storage/DCIM` lands in that folder's bin (OPS-8); whether Gallery or

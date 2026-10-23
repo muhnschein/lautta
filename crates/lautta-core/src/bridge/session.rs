@@ -147,18 +147,37 @@ async fn attempt_session(inner: &Arc<Inner>, lost: bool) -> Attempt {
     Attempt::Ended
 }
 
-/// `Hello` (NVB-2), then the consent (NVB-3). Failure is an `Attempt`.
+/// `Hello` (NVB-2), the features, then the consent (NVB-3). Failure is an
+/// `Attempt`.
 async fn handshake(inner: &Arc<Inner>, link: &Arc<Link>) -> Result<(), Attempt> {
     let proxy = link.proxy();
     let version = rpc(proxy.hello(&inner.config.client_name).await).map_err(|_| Attempt::Failed)?;
+    let features = features(proxy.get_features().await.map_err(BridgeError::from))?;
     let consent = rpc(proxy.get_consent().await).map_err(|_| Attempt::Failed)?;
     {
         let mut info = inner.info();
         info.link = Some(link.clone());
         info.bridge_version = Some(version);
+        info.features = features;
     }
     apply_consent(inner, link, Consent::from_wire(&consent));
     Ok(())
+}
+
+/// What `GetFeatures` tells (NVB-13): a bridge without the method offers
+/// none of the optional parts, and the app works as with it, without them.
+/// Only a lost connection fails the handshake.
+fn features(answer: Result<Vec<String>, BridgeError>) -> Result<Vec<String>, Attempt> {
+    match answer {
+        Ok(features) => Ok(features),
+        Err(BridgeError::Disconnected(_)) => Err(Attempt::Failed),
+        Err(e) => {
+            if !matches!(e, BridgeError::UnknownMethod(_)) {
+                log::warn!("bridge features not known: {e}");
+            }
+            Ok(Vec::new())
+        }
+    }
 }
 
 async fn run_signals(inner: &Arc<Inner>, link: &Arc<Link>, signals: &mut SignalStream) {
@@ -178,6 +197,7 @@ fn teardown(inner: &Arc<Inner>, link: &Arc<Link>) {
     let questions = {
         let mut info = inner.info();
         info.link = None;
+        info.features.clear();
         info.nearby.cancel();
         std::mem::take(&mut info.questions)
     };

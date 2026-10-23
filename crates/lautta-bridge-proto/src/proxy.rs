@@ -21,6 +21,9 @@ pub trait Bridge1 {
     fn request_consent(&self) -> zbus::Result<()>;
     #[zbus(signal)]
     fn consent_changed(&self, consent: String) -> zbus::Result<()>;
+    /// The optional parts this bridge offers (XB-19, [`crate::feature`]); an
+    /// older bridge answers `UnknownMethod`.
+    fn get_features(&self) -> zbus::Result<Vec<String>>;
 
     // Locations
     fn list_locations(&self) -> zbus::Result<Vec<WireLocation>>;
@@ -107,4 +110,6 @@ pub trait Bridge1 {
     // Handoff
     fn open_account_settings(&self, loc: &str) -> zbus::Result<()>;
     fn add_account(&self, provider: &str) -> zbus::Result<()>;
+    /// Opens Settings › Storage (XB-15); needs no consent.
+    fn open_storage_settings(&self) -> zbus::Result<()>;
 }

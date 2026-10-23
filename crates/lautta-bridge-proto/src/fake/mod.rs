@@ -153,6 +153,14 @@ impl FakeBridge {
         self.shared.with(|s| version.clone_into(&mut s.bridge_version));
     }
 
+    /// What `GetFeatures` answers (XB-19); `None` makes this a bridge without
+    /// the method (a netvfs without XB-19), which answers `UnknownMethod` to it and
+    /// to `OpenStorageSettings`.
+    pub fn set_features(&self, features: Option<&[&str]>) {
+        let features = features.map(|f| f.iter().map(|n| (*n).to_owned()).collect());
+        self.shared.with(|s| s.features = features);
+    }
+
     // ---- consent --------------------------------------------------------
 
     pub fn consent(&self) -> Consent {
@@ -363,7 +371,7 @@ impl FakeBridge {
         self.shared.with(|s| s.calls.clear());
     }
 
-    /// `settings:<loc>` and `add:<provider>` handoffs.
+    /// `settings:<loc>`, `add:<provider>` and `storage` handoffs.
     pub fn handoffs(&self) -> Vec<String> {
         self.shared.with(|s| s.handoffs.clone())
     }

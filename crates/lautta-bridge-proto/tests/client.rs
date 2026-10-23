@@ -300,3 +300,29 @@ async fn connection_states_follow_use_disconnect_and_the_script() {
         .unwrap();
     assert_eq!(state_of(&conn, &loc).await, s("connected", None));
 }
+
+#[tokio::test]
+async fn features_and_the_storage_handoff_need_no_consent() {
+    let fake = fake_with_account().await;
+    fake.set_consent(lautta_bridge_proto::fake::Consent::Denied).await;
+    let conn = fake.connect().await.unwrap();
+    hello(&conn).await;
+    let p = conn.proxy();
+    assert_eq!(p.get_features().await.unwrap(), ["storage-settings"]);
+    p.open_storage_settings().await.unwrap();
+    assert_eq!(fake.handoffs(), ["storage"]);
+
+    // A bridge that offers no Storage handoff refuses it.
+    fake.set_features(Some(&[]));
+    assert!(p.get_features().await.unwrap().is_empty());
+    let e = BridgeError::from(p.open_storage_settings().await.unwrap_err());
+    assert_eq!(e.netvfs_name(), Some("Unsupported"));
+
+    // A bridge without XB-19 knows neither method.
+    fake.set_features(None);
+    let e = BridgeError::from(p.get_features().await.unwrap_err());
+    assert!(matches!(e, BridgeError::UnknownMethod(_)), "{e:?}");
+    let e = BridgeError::from(p.open_storage_settings().await.unwrap_err());
+    assert!(matches!(e, BridgeError::UnknownMethod(_)), "{e:?}");
+    assert_eq!(fake.handoffs(), ["storage"]);
+}
