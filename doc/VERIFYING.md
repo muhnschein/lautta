@@ -31,9 +31,10 @@ clone under `~/.cache/lautta-verify`, never in your tree: ~4 GB, checks for
 
 - Package build time and file dates: commit's time (`SOURCE_DATE_EPOCH`, set
   by `tools/ci/build-rpm.sh`); build host fixed (spec).
-- Build paths: binary records none. `tools/ci/cross-build.sh` maps checkout,
-  cargo output, lifted SDK and cargo home to `/lautta`, `/out`, `/sdk`,
-  `/cargo` (rustc `--remap-path-prefix`, gcc `-ffile-prefix-map`).
+- Build paths: binary records none. `tools/ci/cross-build.sh` maps lifted
+  SDK and cargo home to `/sdk`, `/cargo` (rustc `--remap-path-prefix`, gcc
+  `-ffile-prefix-map`); cargo names the workspace's own sources relative to
+  the checkout.
 - Build environment: SDK image pinned by digest (`Makefile` `SDK_IMAGE`:
   cross compiler, sysroot, Qt, rpm); Rust pinned (`rust-toolchain.toml`).
   Packaged in the image at a fixed path.
