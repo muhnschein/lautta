@@ -48,8 +48,10 @@ User tests RPM on phone; that test judges feel, lag, transitions. Say exactly wh
 ## Comments and docs
 
 - Caveman-full = drop articles, filler, pleasantries, hedging. Fragments OK, short words. Identifiers, paths, code, errors exact. E.g. "`Cargo.lock` from stable cargo with fallback resolver: no crate newer than `rust-version` allows."
-- This file: caveman-full.
-- Code comments, `doc/*.md`: as existing ones (CONTRIBUTING-CODE.md): short plain prose, explain why, cite requirement IDs. SPDX header on every source file. Behaviour change → SPEC updated, same PR.
+- Code comments, `doc/*.md`, this file: caveman-full. What is true now and why; keep constraints; cite requirement IDs. No changelog, bug report, history, story (git's job): delete comment rather than turn it into history. Existing prose: rewrite what you touch, not more.
+- SPDX header on every source file. Behaviour change → SPEC updated, same PR.
+- `README.md`, `CHANGELOG.md`, release notes, store and forum posts: plain prose for users, as short and to the point as possible.
+- User-visible change → line in `CHANGELOG.md` under `## Unreleased` (file or section missing → create it), same PR.
 - No plans, research notes, scratch files in repo.
 
 ## Git and PRs
@@ -65,7 +67,7 @@ User tests RPM on phone; that test judges feel, lag, transitions. Say exactly wh
 
 ## Releases
 
-- Only on user's go. None cut yet: no tags, no changelog. Latest `main` commit green first, Sonar included: check main, not just PR.
+- Only on user's go. None cut yet, no tags. Latest `main` commit green first, Sonar included: check main, not just PR.
 - Strict semver: nothing breaking → minor.
 - Harbour upload stays with user.
 
