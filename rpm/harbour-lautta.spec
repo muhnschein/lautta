@@ -34,6 +34,12 @@ Requires:   qt5-qtsvg-plugin-imageformat-svg
 
 # No debug info in the package (HBR-6).
 %define debug_package %{nil}
+# Reproducible package (PKG-4, doc/VERIFYING.md). SOURCE_DATE_EPOCH set
+# (tools/ci/build-rpm.sh: commit's time): build time = it, file dates clamped
+# to it. Host name fixed either way: rpm records it.
+%define use_source_date_epoch_as_buildtime 1
+%define clamp_mtime_to_source_date_epoch 1
+%define _buildhost lautta-build
 %define __provides_exclude_from ^%{_datadir}/.*$
 
 %description

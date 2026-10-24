@@ -34,8 +34,24 @@ export LIBSQLITE3_SYS_USE_PKG_CONFIG=1
 # xz is compiled in, as before the switch (lzma-sys builds it whenever the
 # variable is set): the validator refuses liblzma's versioned symbols.
 export LZMA_API_STATIC=0
+# Reproducible binary (PKG-4): build paths recorded in it (panic locations,
+# `__FILE__` of Qt's inline asserts) mapped to fixed names, so checkout, SDK
+# and cargo home may live anywhere. General to specific: rustc and gcc apply
+# the last matching map. No spaces in these paths (RUSTFLAGS splits on them).
+rust_maps=""
+c_maps=""
+map() {
+    rust_maps="$rust_maps --remap-path-prefix=$1=$2"
+    c_maps="$c_maps -ffile-prefix-map=$1=$2"
+}
+map "$root" /lautta
+map "$out" /out
+map "$sdk" /sdk
+map "${CARGO_HOME:-$HOME/.cargo}" /cargo
+export TARGET_CFLAGS="$c_maps"
+export TARGET_CXXFLAGS="$c_maps"
 # Hardening as before the switch (PIE is rustc's default for this target).
-export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=-Wl,--as-needed -C link-arg=-Wl,-z,relro,-z,now"
+export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=-Wl,--as-needed -C link-arg=-Wl,-z,relro,-z,now$rust_maps"
 export CARGO_TARGET_DIR="$out/target"
 export CARGO_INCREMENTAL=0
 

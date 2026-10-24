@@ -78,3 +78,31 @@ jobs:
         with:
           name: harbour-lautta-aarch64
           path: RPMS/harbour-lautta-*.rpm
+
+  # PKG-4: the RPM job's package rebuilt the way doc/VERIFYING.md tells users
+  # (tools/verify-rpm.sh): fresh clone, other runner, path, cargo home, time
+  # zone, umask and time. Not byte for byte: red.
+  reproducible:
+    name: RPM rebuilds byte for byte
+    needs: rpm
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install dependencies
+        run: ./tools/ci/install-host-deps.sh cross
+      - name: Fetch the RPM job's package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" -n harbour-lautta-aarch64 --dir "$RUNNER_TEMP/rpms"
+      # The commit from this checkout: a pull request's merge commit is on no
+      # branch a fresh clone from GitHub fetches.
+      - name: Rebuild and compare
+        env:
+          TZ: Pacific/Chatham
+        run: |
+          umask 0002
+          CARGO_HOME="$RUNNER_TEMP/cargo" LAUTTA_REPO="$GITHUB_WORKSPACE" \
+            ./tools/verify-rpm.sh --ref "$GITHUB_SHA" "$RUNNER_TEMP"/rpms/*.rpm
