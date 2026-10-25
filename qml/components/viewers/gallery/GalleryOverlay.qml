@@ -128,7 +128,10 @@ Item {
                 id: moreButton
 
                 objectName: "moreButton"
-                icon.source: "image://theme/icon-m-other"
+                // The app's own icon, drawn like the theme's (the theme has no
+                // circle with dots); the button's Icon tints it as a theme glyph.
+                icon.source: Qt.resolvedUrl("../../../icons/more.svg")
+                icon.sourceSize: Qt.size(Theme.iconSizeMedium, Theme.iconSizeMedium)
                 anchors.verticalCenter: parent.verticalCenter
                 onClicked: overlay.more()
             }

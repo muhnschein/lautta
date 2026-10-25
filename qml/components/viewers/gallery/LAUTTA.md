@@ -26,7 +26,8 @@ They are copied, not imported: `Sailfish.Gallery`, `com.jolla.gallery` and
   through `image://lautta-file/`.
 - The overlay's buttons are lautta's actions, signalled to the page
   (`../../../viewers/ImageViewer.qml`): details, Delete, Open with (where the
-  Gallery's Edit is), Share, More; the close button is Silica's
+  Gallery's Edit is), Share, More (the app's own `qml/icons/more.svg`, a
+  circle with three dots: the theme has none); the close button is Silica's
   DismissButton's; the fades are `../FadeGradient.qml`.
 - Texts are lautta's (`qsTrId("lautta-…")`), the back hint's counter is
   under `/apps/harbour-lautta/hints/`.
