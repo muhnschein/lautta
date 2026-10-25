@@ -8,8 +8,9 @@ mod bridge_support;
 use bridge_support::{config, eventually};
 use lautta_bridge_proto::fake::{Consent, FakeBridge, FakeDrive, Listener};
 use lautta_core::app::Core;
-use lautta_core::app_browse::{LayoutRow, Row};
+use lautta_core::app_browse::{LayoutRow, Row, SECTION_KIND};
 use lautta_core::bridge::{feature, AdHocOptions, BridgeStatus};
+use lautta_core::browse_layout::SECTION_ITEM;
 use lautta_core::date_group::DateGroup;
 use lautta_core::locations::LocationRegistry;
 use lautta_core::org::{RecentKind, RecentsFilter};
@@ -866,4 +867,254 @@ async fn the_cover_counts_the_cached_listing() {
     ];
     e.core.dircache.put(&docs, &entries).unwrap();
     assert_eq!(e.core.cached_folder_count(&docs), Some(2));
+}
+
+/// The settings rows of a section as (kind, item, hidden).
+fn section_of(rows: &[LayoutRow], section: &str) -> Vec<(&'static str, String, bool)> {
+    rows.iter()
+        .filter(|r| r.section == section)
+        .map(|r| (r.kind, r.item.clone(), r.hidden))
+        .collect()
+}
+
+fn switch(on: bool) -> (&'static str, String, bool) {
+    (SECTION_KIND, SECTION_ITEM.to_owned(), !on)
+}
+
+fn row_of(kind: &'static str, item: &str, hidden: bool) -> (&'static str, String, bool) {
+    (kind, item.to_owned(), hidden)
+}
+
+/// Turns a section on or off, as its switch in the settings does.
+fn set_section(core: &Core, section: &str, on: bool) {
+    core.browse_layout.set_hidden(section, SECTION_ITEM, !on).unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_volumes_switch_hides_the_section_and_keeps_the_choices_of_its_rows() {
+    let e = env(None, &["Documents"]).await;
+    let core = &e.core;
+    core.locations.refresh_volumes();
+    let sd = row_of("volume", "vol-SD", false);
+    assert_eq!(
+        section_of(&core.browse_layout_rows().await, "volumes"),
+        [switch(true), sd.clone()],
+        "the switch leads the section"
+    );
+    assert_eq!(names(&core.browse_rows().await, "volumes"), ["SD"]);
+
+    set_section(core, "volumes", false);
+    assert!(
+        of(&core.browse_rows().await, "volumes").is_empty(),
+        "off: gone from Browse"
+    );
+    assert_eq!(
+        section_of(&core.browse_layout_rows().await, "volumes"),
+        [switch(false)],
+        "off: its rows are gone from the settings, not dimmed"
+    );
+    assert!(
+        !of(&core.browse_rows().await, "device").is_empty(),
+        "other sections stay"
+    );
+
+    set_section(core, "volumes", true);
+    assert_eq!(names(&core.browse_rows().await, "volumes"), ["SD"]);
+
+    // A row hidden before the section was switched off is hidden after.
+    core.browse_layout.set_hidden("volumes", "vol-SD", true).unwrap();
+    set_section(core, "volumes", false);
+    set_section(core, "volumes", true);
+    assert!(of(&core.browse_rows().await, "volumes").is_empty());
+    assert_eq!(
+        section_of(&core.browse_layout_rows().await, "volumes"),
+        [switch(true), row_of("volume", "vol-SD", true)]
+    );
+    core.browse_layout.set_hidden("volumes", "vol-SD", false).unwrap();
+    assert_eq!(names(&core.browse_rows().await, "volumes"), ["SD"]);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_volumes_switch_is_there_while_it_is_off_or_there_are_volumes() {
+    let e = env(None, &["Documents"]).await;
+    let core = &e.core;
+    std::fs::remove_dir(e.home.path().join("media/SD")).unwrap();
+    core.locations.refresh_volumes();
+    assert!(
+        section_of(&core.browse_layout_rows().await, "volumes").is_empty(),
+        "no volume, no switch"
+    );
+    set_section(core, "volumes", false);
+    assert_eq!(
+        section_of(&core.browse_layout_rows().await, "volumes"),
+        [switch(false)],
+        "off, it can be turned on again"
+    );
+    set_section(core, "volumes", true);
+    assert!(section_of(&core.browse_layout_rows().await, "volumes").is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_servers_switch_hides_servers_that_come_later_and_restores_the_rows() {
+    let (fake, e) = ready_env().await;
+    let core = &e.core;
+    assert_eq!(
+        section_of(&core.browse_layout_rows().await, "servers"),
+        [switch(true), row_of("account", "nv-account:1", false)]
+    );
+    core.browse_layout
+        .set_hidden("servers", "nv-account:1", true)
+        .unwrap();
+    set_section(core, "servers", false);
+    assert!(of(&core.browse_rows().await, "servers").is_empty());
+    assert_eq!(
+        section_of(&core.browse_layout_rows().await, "servers"),
+        [switch(false)]
+    );
+
+    fake.add_account(2, "sftp", "Office", "office.home").await;
+    eventually("second account", || core.location("nv-account:2").is_some()).await;
+    assert!(
+        of(&core.browse_rows().await, "servers").is_empty(),
+        "a server added later"
+    );
+    assert_eq!(
+        section_of(&core.browse_layout_rows().await, "servers"),
+        [switch(false)]
+    );
+
+    set_section(core, "servers", true);
+    assert_eq!(
+        names(&core.browse_rows().await, "servers"),
+        ["Office"],
+        "NAS stays hidden"
+    );
+    assert_eq!(
+        section_of(&core.browse_layout_rows().await, "servers"),
+        [
+            switch(true),
+            row_of("account", "nv-account:1", true),
+            row_of("account", "nv-account:2", false)
+        ]
+    );
+    assert_eq!(of(&core.browse_rows().await, "nearby").len(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_settings_list_keeps_the_sections_in_browse_order() {
+    let fake = account_fake().await;
+    let e = env(Some(&fake), &["Documents", "android_storage/DCIM"]).await;
+    e.core
+        .bridge
+        .as_ref()
+        .unwrap()
+        .wait_status(|s| s == BridgeStatus::Ready)
+        .await;
+    eventually("the account", || e.core.location("nv-account:1").is_some()).await;
+    e.core
+        .favourites
+        .add(&uri("lautta://user-documents/"), "Docs", None, true)
+        .unwrap();
+    let mut order: Vec<&str> = e
+        .core
+        .browse_layout_rows()
+        .await
+        .iter()
+        .map(|r| r.section)
+        .collect();
+    order.dedup();
+    assert_eq!(
+        order,
+        ["favourites", "device", "android", "volumes", "servers", "nearby"]
+    );
+    // Off, the sections keep their places.
+    set_section(&e.core, "volumes", false);
+    set_section(&e.core, "servers", false);
+    let mut order: Vec<&str> = e
+        .core
+        .browse_layout_rows()
+        .await
+        .iter()
+        .map(|r| r.section)
+        .collect();
+    order.dedup();
+    assert_eq!(
+        order,
+        ["favourites", "device", "android", "volumes", "servers", "nearby"]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn moving_a_server_leaves_the_switch_out_of_the_order() {
+    let (fake, e) = ready_env().await;
+    let core = &e.core;
+    fake.add_account(2, "sftp", "Office", "office.home").await;
+    eventually("second account", || core.location("nv-account:2").is_some()).await;
+    core.move_browse_row("servers", "nv-account:2", 0).await.unwrap();
+    assert_eq!(
+        section_of(&core.browse_layout_rows().await, "servers"),
+        [
+            switch(true),
+            row_of("account", "nv-account:2", false),
+            row_of("account", "nv-account:1", false)
+        ]
+    );
+    let layout = core.browse_layout.load().unwrap();
+    assert_eq!(layout.position("servers", SECTION_ITEM), None);
+    assert_eq!(layout.position("servers", "nv-account:2"), Some(0));
+    assert_eq!(layout.position("servers", "nv-account:1"), Some(1));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn servers_off_hides_the_consent_notice_too() {
+    let fake = account_fake().await;
+    fake.set_consent(Consent::Unknown).await;
+    let e = env(Some(&fake), &["Documents"]).await;
+    let client = e.core.bridge.clone().unwrap();
+    client.wait_status(|s| s == BridgeStatus::ConsentUnknown).await;
+    assert!(
+        section_of(&e.core.browse_layout_rows().await, "servers").is_empty(),
+        "the notice is no row of the settings, so no switch"
+    );
+    set_section(&e.core, "servers", false);
+    assert!(of(&e.core.browse_rows().await, "servers").is_empty());
+    assert_eq!(
+        section_of(&e.core.browse_layout_rows().await, "servers"),
+        [switch(false)]
+    );
+    set_section(&e.core, "servers", true);
+    assert_eq!(of(&e.core.browse_rows().await, "servers")[0].kind, "consent");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn standalone_has_no_servers_switch_even_when_it_was_off() {
+    let e = env(None, &["Documents"]).await;
+    set_section(&e.core, "servers", false);
+    assert!(section_of(&e.core.browse_layout_rows().await, "servers").is_empty());
+
+    // A client that finds no netvfs: nothing answers, standalone (UI-8).
+    let home = tempfile::tempdir().unwrap();
+    let paths = AppPaths::new(home.path());
+    let registry = LocationRegistry::with_media_root(paths.clone(), home.path().join("media"));
+    let core = Core::open_full(paths.clone(), registry, Some(config(&paths)))
+        .await
+        .unwrap();
+    set_section(&core, "servers", false);
+    assert_eq!(core.bridge.as_ref().unwrap().status(), BridgeStatus::Absent);
+    assert!(section_of(&core.browse_layout_rows().await, "servers").is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn restore_defaults_switches_both_sections_on() {
+    let (_fake, e) = ready_env().await;
+    let core = &e.core;
+    set_section(core, "volumes", false);
+    set_section(core, "servers", false);
+    assert!(of(&core.browse_rows().await, "servers").is_empty());
+    core.browse_layout.reset().unwrap();
+    assert_eq!(names(&core.browse_rows().await, "servers"), ["NAS"]);
+    assert_eq!(names(&core.browse_rows().await, "volumes"), ["SD"]);
+    let layout = core.browse_layout_rows().await;
+    assert_eq!(section_of(&layout, "servers")[0], switch(true));
+    assert_eq!(section_of(&layout, "volumes")[0], switch(true));
 }

@@ -1440,18 +1440,6 @@
         <source>%1 free of %2</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-browse-attention-identity">
-        <source>Identity changed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-browse-attention-auth">
-        <source>Sign-in failed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-browse-server-connected">
-        <source>Connected</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-colour-amber">
         <source>Amber</source>
         <translation type="unfinished"></translation>
@@ -2443,18 +2431,6 @@
         <source>New folder</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-browse-server-failed">
-        <source>Couldn&apos;t connect</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-browse-server-connecting">
-        <source>Connecting…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-browse-server-disconnected">
-        <source>Not connected</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-favourite-added">
         <source>Added to favourites</source>
         <translation type="unfinished"></translation>
@@ -2614,10 +2590,6 @@
         <source>Downloads pictures from servers to make them, which uses more data and battery and can slow down browsing</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-browse-not-mounted">
-        <source>Not mounted</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-browse-mount">
         <source>Mount</source>
         <translation type="unfinished"></translation>
@@ -2636,6 +2608,14 @@
     </message>
     <message id="lautta-trash-note">
         <source>Only files deleted from this device&apos;s folders appear here. Deletes on volumes and servers are permanent.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-layout-volumes">
+        <source>Memory cards and USB drives</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-layout-servers">
+        <source>Servers</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

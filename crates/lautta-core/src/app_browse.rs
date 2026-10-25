@@ -9,7 +9,7 @@
 
 use crate::app::Core;
 use crate::bridge::{AdHocOptions, BridgeStatus, Drive, DriveKind, NearbyServer, RemoteKind};
-use crate::browse_layout::{layout_item, Layout, NEARBY_ITEM};
+use crate::browse_layout::{layout_item, Layout, NEARBY_ITEM, SECTION_ITEM, SWITCHED_SECTIONS};
 use crate::date_group::DateGroup;
 use crate::error::{Error, ErrorKind, Result};
 use crate::locations::{ConnectionState, Location, LocationKind, LocationStatus};
@@ -96,23 +96,80 @@ impl Row {
     }
 }
 
+/// The kind of the row that switches a whole section (BRW-12).
+pub const SECTION_KIND: &str = "section";
+
+/// The sections of the Browse page in order.
+const SECTIONS: [&str; 5] = ["favourites", "device", "android", "volumes", "servers"];
+
 /// One row of Settings › Browse page (BRW-12): every row the user can hide
 /// or move, hidden ones included, in Browse order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LayoutRow {
     pub section: &'static str,
     /// The kind of the Browse row (`favourite`, `folder`, `recents`, …);
-    /// `nearby` stands for every nearby server.
+    /// `nearby` stands for every nearby server and [`SECTION_KIND`] for
+    /// the switch of *Volumes* or *Servers*, which leads its section.
     pub kind: &'static str,
     /// The layout item; the favourite id for favourites.
     pub item: String,
     pub name: String,
+    /// For a section's switch: the section is off.
     pub hidden: bool,
 }
 
 /// Whether the layout hides `row`.
 fn is_hidden(layout: &Layout, row: &Row) -> bool {
     layout_item(row.kind, &row.item_id).is_some_and(|item| layout.is_hidden(row.section, &item))
+}
+
+/// The settings row of a Browse row; `None` for rows the layout does not
+/// cover.
+fn layout_row(layout: &Layout, row: &Row) -> Option<LayoutRow> {
+    let item = match row.kind {
+        "favourite" => Some(row.item_id.clone()),
+        _ => layout_item(row.kind, &row.item_id),
+    }?;
+    Some(LayoutRow {
+        section: row.section,
+        kind: row.kind,
+        hidden: is_hidden(layout, row),
+        item,
+        name: row.name.clone(),
+    })
+}
+
+/// The settings rows of one section. *Volumes* and *Servers* lead with
+/// their switch and list their rows only while it is on; the switch is
+/// there while the section has rows or is off, so that it can be turned on
+/// again. The Servers switch is a trace of the bridge, so standalone (no
+/// bridge answers) has none (UI-8).
+fn section_rows(
+    section: &'static str,
+    rows: Vec<LayoutRow>,
+    layout: &Layout,
+    bridge_there: bool,
+) -> Vec<LayoutRow> {
+    if !SWITCHED_SECTIONS.contains(&section) {
+        return rows;
+    }
+    let shown = layout.section_shown(section);
+    let wanted = !shown || !rows.is_empty();
+    if !wanted || (section == "servers" && !bridge_there) {
+        return Vec::new();
+    }
+    let switch = LayoutRow {
+        section,
+        kind: SECTION_KIND,
+        item: SECTION_ITEM.to_owned(),
+        name: String::new(),
+        hidden: !shown,
+    };
+    let mut out = vec![switch];
+    if shown {
+        out.extend(rows);
+    }
+    out
 }
 
 /// Free and total space and the file system of a volume (LOC-3).
@@ -297,31 +354,33 @@ impl Core {
     }
 
     /// Every row of the Browse page in display order (SPEC §15.2), without
-    /// the rows the user hid (BRW-12).
+    /// the rows the user hid and the sections the user switched off
+    /// (BRW-12).
     pub async fn browse_rows(self: &Arc<Self>) -> Vec<Row> {
         let (rows, layout) = self.arranged_rows().await;
-        rows.into_iter().filter(|r| !is_hidden(&layout, r)).collect()
+        rows.into_iter()
+            .filter(|r| layout.section_shown(r.section) && !is_hidden(&layout, r))
+            .collect()
     }
 
     /// The rows of Settings › Browse page (BRW-12), in Browse order. Nearby
     /// servers are one row, there whenever the bridge is.
     pub async fn browse_layout_rows(self: &Arc<Self>) -> Vec<LayoutRow> {
         let (rows, layout) = self.arranged_rows().await;
-        let mut out: Vec<LayoutRow> = rows
+        let bridge_there = self
+            .bridge
+            .as_ref()
+            .is_some_and(|b| b.status() != BridgeStatus::Absent);
+        let items: Vec<LayoutRow> = rows
             .iter()
             .filter(|r| r.kind != "nearby")
-            .filter_map(|r| {
-                let item = match r.kind {
-                    "favourite" => Some(r.item_id.clone()),
-                    _ => layout_item(r.kind, &r.item_id),
-                }?;
-                Some(LayoutRow {
-                    section: r.section,
-                    kind: r.kind,
-                    hidden: is_hidden(&layout, r),
-                    item,
-                    name: r.name.clone(),
-                })
+            .filter_map(|r| layout_row(&layout, r))
+            .collect();
+        let mut out: Vec<LayoutRow> = SECTIONS
+            .into_iter()
+            .flat_map(|section| {
+                let own = items.iter().filter(|r| r.section == section).cloned().collect();
+                section_rows(section, own, &layout, bridge_there)
             })
             .collect();
         if self.bridge.is_some() {
@@ -348,7 +407,7 @@ impl Core {
             .browse_layout_rows()
             .await
             .into_iter()
-            .filter(|r| r.section == section)
+            .filter(|r| r.section == section && r.kind != SECTION_KIND)
             .map(|r| r.item)
             .collect();
         let from = items

@@ -7,7 +7,8 @@
 // the model moves the row itself as the finger passes a row (moveRow), so
 // the list never shows an order that is not stored. Favourites have no
 // switch (removing one stays on the Browse page): their star sits where
-// the switch is.
+// the switch is. The first row of Volumes and Servers switches the whole
+// section; the rows of such a section stand a step in from it.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "BrowseText.js" as BrowseText
@@ -34,13 +35,22 @@ ListItem {
     property string layoutName
     property bool layoutHidden: false
     property bool layoutMovable: false
+    property bool layoutNested: false
 
     readonly property bool toggles: layoutKind !== "favourite"
     readonly property bool shown: !layoutHidden
-    readonly property string title: layoutKind === "nearby"
-                                    //% "Servers found nearby"
-                                    ? qsTrId("lautta-browse-layout-nearby")
-                                    : BrowseText.rowName(layoutKind, layoutName)
+    readonly property real indent: layoutNested ? 2 * Theme.paddingLarge : 0
+    readonly property string title: {
+        switch (layoutKind) {
+        case "nearby":
+            //% "Servers found nearby"
+            return qsTrId("lautta-browse-layout-nearby")
+        case "section":
+            return BrowseText.sectionSwitchTitle(layoutSection)
+        default:
+            return BrowseText.rowName(layoutKind, layoutName)
+        }
+    }
 
     // Asks the page to show or hide the row.
     signal toggled()
@@ -62,7 +72,8 @@ ListItem {
     function sectionEnds(row) {
         var first = row
         var last = row
-        while (first > 0 && layoutModel.sectionAt(first - 1) === layoutSection)
+        // The switch of a section is no row to pass: it has no place.
+        while (first > 0 && layoutModel.sectionAt(first - 1) === layoutSection && layoutModel.placeAt(first - 1) >= 0)
             --first
         while (last + 1 < layoutModel.count && layoutModel.sectionAt(last + 1) === layoutSection)
             ++last
@@ -135,7 +146,7 @@ ListItem {
         Item {
             id: lead
 
-            x: Theme.horizontalPageMargin - Theme.paddingLarge
+            x: Theme.horizontalPageMargin - Theme.paddingLarge + delegate.indent
             width: Theme.itemSizeExtraSmall
             height: parent.height
 

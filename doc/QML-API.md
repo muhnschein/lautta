@@ -93,8 +93,11 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `connecting` (also while the bridge reconnects, NVB-12), `disconnected` (also recent
   ad-hoc servers), `failed`, or empty when the bridge reports none; `connectionError` is
   the netvfs error name of a `failed` one (`AuthFailed`, `Timeout`, …).
-  `components/browse/ServerStatus.js` turns them into the row's status (text and dot, on
-  the right, §15.2). `refresh()`
+  `components/browse/RowStatus.js` `indicator(kind, status, connection, connectionError,
+  drive)` turns them into the row's status icon (`on`, `busy`, `off`, `failed`,
+  `warning`, `""` for none; servers and volumes, LOC-3), which
+  `components/browse/RowStatusIcon.qml { indicator, highlighted }` draws at the right
+  margin, no text (§15.2). `refresh()`
   rescans the device folders and volumes first (LOC-3); the model also follows location
   changes by itself, and a changed row changes in place.
 - `FavouritesModel` (roles `itemId`, `uri`, `label`, `colour`, `place`, `isDir`, `icon`
@@ -128,18 +131,23 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `cover/CoverPage.qml`.
 - Browse page settings (BRW-12): `BrowseLayoutModel` (roles `section`, `kind`, `item`,
   `name`, `hidden`, `place` (the place in the section; no role is called `index`, which
-  would hide the delegate's `index`), `movable`; `reload()` reads the rows and starts
+  would hide the delegate's `index`; -1 for the switch of Volumes or Servers), `movable`,
+  `nested` (a row of a section with such a switch); the switch is a row of kind `section`
+  and item `section` that leads its section, `hidden` telling that the section is off
+  (set with `setHidden(section, "section", hidden)`), and a section that is off lists
+  no other row; `reload()` reads the rows and starts
   following what `LocationsModel` follows (a row that comes or goes arrives as an
   insertion or removal), except while a change of its own is not stored,
   `setHidden(section, item, hidden)`,
   `moveTo(section, item, index)`, `moveRow(fromRow, toRow) → bool` (list rows of one
   section whose rows move: the row moves at once, so a dragged row follows the finger,
   and the order is stored behind it), `restoreDefaults()`, `sectionAt(row)`,
-  `placeAt(row)`, `itemAt(row)`; changes arrive as row changes, moves, insertions and
+  `placeAt(row)` (-1 outside the list and for a section's switch), `itemAt(row)`;
+  changes arrive as row changes, moves, insertions and
   removals, not a reset); `pages/BrowseSettingsPage.qml` with
   `components/browse/BrowseLayoutDelegate.qml { layoutModel, layoutSection, layoutItem,
-  layoutKind, layoutName, layoutHidden, layoutMovable }` (the page passes the roles;
-  signal `toggled()`).
+  layoutKind, layoutName, layoutHidden, layoutMovable, layoutNested }` (the page passes
+  the roles; signal `toggled()`).
 
 ### Directory (boards: Directory, DirectoryPulley, DirectoryContext, DirectorySelect, DirectorySelectPulley, DirectoryGrid, DirectoryLandscape, PathMenu, DirectoryRemorse, ImageDeleteRemote, ViewOptions, NewItem, Rename, FolderPicker, FolderPickerPulley, StateEmpty, StateNoAccess, StateOffline, StateError, StateLarge)
 

@@ -71,6 +71,7 @@ Item {
             property bool lhidden: hidden
             property int lplace: place
             property bool lmovable: movable
+            property bool lnested: nested
             // Set by a step to tell whether this delegate survived a change.
             property bool marked: false
         }
@@ -93,6 +94,17 @@ Item {
                 return i
         }
         return -1
+    }
+
+    // The items of a section in the settings list, in order.
+    function layoutKeys(section) {
+        var items = []
+        for (var i = 0; i < layoutRows.count; ++i) {
+            var r = layoutRows.itemAt(i)
+            if (r && r.lsection === section)
+                items.push(r.litem)
+        }
+        return items
     }
 
     function deviceRows() {
@@ -314,6 +326,76 @@ Item {
                  return root.moved && root.movedAtOnce && root.refused
                         && deviceRows().split(",")[2] === "recents" && r.lplace === 2 && r.marked
              })
+        // Volumes and Servers lead with a switch each; off, the section's
+        // rows leave the settings list and the Browse page (and so the
+        // preview, which is the Browse page's model) and come back as they
+        // were (BRW-12). Rows change in place, no model reset.
+        step("Volumes and Servers lead with their switch",
+             function() { layout.reload() },
+             function() {
+                 var v = layoutRow("volumes", "section")
+                 var s = layoutRow("servers", "section")
+                 var card = layoutRow("volumes", "vol-CARD")
+                 var nas = layoutRow("servers", "nv-account:1")
+                 return v !== null && s !== null && !v.lhidden && !s.lhidden && v.lplace === -1 && s.lplace === -1
+                        && !v.lmovable && !v.lnested && card !== null && card.lnested && nas !== null && nas.lnested
+                        && layoutIndex("volumes", "section") + 1 === layoutIndex("volumes", "vol-CARD")
+                        && layoutIndex("servers", "section") + 1 === layoutIndex("servers", "nv-account:1")
+                        && layoutRow("device", "recents").lnested === false
+             })
+        step("Servers off hides its rows, not the other sections",
+             function() {
+                 layout.setHidden("servers", "nv-account:1", true)
+                 layoutRow("servers", "section").marked = true
+                 layoutRow("volumes", "section").marked = true
+                 layoutRow("volumes", "vol-CARD").marked = true
+                 layout.setHidden("servers", "section", true)
+             },
+             function() {
+                 var s = layoutRow("servers", "section")
+                 return s !== null && s.lhidden && s.marked && layoutRow("servers", "nv-account:1") === null
+                        && !has("account") && !has("adhocRecent")
+                        && layoutRow("volumes", "section").marked && layoutRow("volumes", "vol-CARD").marked
+                        && has("volume", "CARD") && has("folder", "Music")
+             })
+        step("a server that comes while Servers is off shows nowhere",
+             function() { FakeWorld.addAccount(2, "Office") },
+             function() {
+                 return FakeWorld.locationKnown("nv-account:2") && layoutRow("servers", "section").lhidden
+                        && !has("account") && layoutRow("servers", "nv-account:2") === null
+                        && JSON.stringify(layoutKeys("servers")) === '["section"]'
+             })
+        step("Servers on shows its rows again with their earlier switches",
+             function() {
+                 layoutRow("servers", "section").marked = true
+                 layout.setHidden("servers", "section", false)
+             },
+             function() {
+                 var s = layoutRow("servers", "section")
+                 var nas = layoutRow("servers", "nv-account:1")
+                 var office = layoutRow("servers", "nv-account:2")
+                 return s !== null && !s.lhidden && s.marked && nas !== null && nas.lhidden
+                        && office !== null && !office.lhidden && has("account", "Office") && !has("account", "NAS")
+             })
+        step("Volumes off removes the volumes from the Browse page",
+             function() { layout.setHidden("volumes", "section", true) },
+             function() {
+                 var v = layoutRow("volumes", "section")
+                 return v !== null && v.lhidden && layoutRow("volumes", "vol-CARD") === null
+                        && !has("volume") && has("account", "Office")
+                        && JSON.stringify(layoutKeys("volumes")) === '["section"]'
+             })
+        step("restore defaults switches both sections on and shows every row",
+             function() { layout.restoreDefaults() },
+             function() {
+                 return !layoutRow("volumes", "section").lhidden && !layoutRow("servers", "section").lhidden
+                        && has("volume", "CARD") && has("account", "NAS") && has("account", "Office")
+                        && !layoutRow("servers", "nv-account:1").lhidden
+             })
+        step("the second server goes away",
+             function() { FakeWorld.removeAccount("account:2") },
+             function() { return !has("account", "Office") && layoutRow("servers", "nv-account:2") === null })
+
         step("a remote folder lists",
              function() {
                  FakeWorld.putFile("account:1", "r1.txt")
