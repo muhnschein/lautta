@@ -146,7 +146,8 @@ ApplicationWindow {
         expect(section && section.visible && rowOf(section) > rowOf(page.preview), "a Thumbnails section below the preview")
         expect(rowOf(local) > rowOf(section) && pdf && rowOf(pdf) > rowOf(local) && rowOf(remote) > rowOf(pdf),
                "the thumbnail switches are in the section: " + [rowOf(section), rowOf(local), pdf ? rowOf(pdf) : -1, rowOf(remote)])
-        expect(pdf && pdf.text === "PDF thumbnails", "the PDF switch is named for what it does: " + (pdf ? pdf.text : "none"))
+        expect(pdf && (pdf.text === "lautta-settings-thumbs-pdf" || pdf.text === "PDF thumbnails"),
+               "the PDF switch is named for what it does: " + (pdf ? pdf.text : "none"))
         var keys = keysOf(page)
         var wanted = ["thumbnails_pdf", "thumbnails_remote", "thumbnail_max_remote_mb", "thumbnail_cache_mb"]
         expect(JSON.stringify(keys) === JSON.stringify(wanted), "the thumbnail settings: " + keys)

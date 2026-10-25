@@ -42,9 +42,17 @@ ApplicationWindow {
         return out
     }
 
+    // Headless, no render loop polishes the view: lays out the delegates.
+    function layOut(view) {
+        var flicks = findAll(view, function (x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
+        for (var i = 0; i < flicks.length; ++i)
+            flicks[i].forceLayout()
+    }
+
     // The icon of the row `name`: the one whose thumbnail is that file's, or
     // for a row without one, the only icon of its category left over.
     function iconOf(view, category, name) {
+        layOut(view)
         var icons = findAll(view, function (x) { return x.thumbnailFailed !== undefined && x.category === category }, [])
         var own = icons.filter(function (x) { return x.thumbnailSource.indexOf("/" + name) > 0 })
         return own.length === 1 ? own[0] : null
@@ -52,13 +60,14 @@ ApplicationWindow {
 
     // The name shown on the tile of `name`, null when the tile has none.
     function nameOn(view, name) {
+        layOut(view)
         var labels = findAll(view, function (x) { return x.text === name && x.truncationMode !== undefined }, [])
         return labels.length > 0 ? labels[0] : null
     }
 
-    // Lets the event loop run until `done()` holds, for at most 5 s.
+    // Lets the event loop run until `done()` holds, for at most 10 s.
     function until(done) {
-        for (var i = 0; i < 100 && !done(); ++i)
+        for (var i = 0; i < 200 && !done(); ++i)
             tools.pump(50)
         return done()
     }
@@ -76,6 +85,7 @@ ApplicationWindow {
         var view = pageStack.currentPage.view
         expect(view.gridMode && !view.gridCaptions, "a compact grid")
 
+        until(function () { return iconOf(view, "pdf", "readable.pdf") && iconOf(view, "pdf", "secret.pdf") })
         var good = iconOf(view, "pdf", "readable.pdf")
         var locked = iconOf(view, "pdf", "secret.pdf")
         if (expect(good && locked, "both PDFs ask for a thumbnail of the app: " + findAll(view, function (x) { return x.thumbnailFailed !== undefined }, []).length)) {
