@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): the folder pulley's New folder opens
+// Scenario on the target (real Silica): the folder pulley's New opens
 // NewItemDialog titled New folder, with the name field and no type to pick,
 // and accepting it makes a folder. Fails when the dialog offers a type,
 // refuses a hidden name at the root (the Trash keeps no bin there since

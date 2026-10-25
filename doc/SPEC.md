@@ -805,9 +805,10 @@ attached to swipe to: Activity is in the pulley and the activity bar (XFR-13).
 
 Header with the folder name only (no breadcrumb); tap → path menu. Slim progress line while listing
 or receiving transfers. List view with icon or thumbnail and "size · modified"; grid view
-for media folders (suggested when > 60 % images). Pulley: *Activity* (live count, as in
-Browse; at the top, as it leads away), *Select*, *New folder*, *Paste* (with clipboard),
-*Search*, *View options* (BRW-4; no *Refresh*, BRW-11); while selecting *Select all* and
+for media folders (suggested when > 60 % images). Pulley, top to bottom: *Activity* (live
+count, as in Browse; at the top, as it leads away), *View options* (BRW-4; no *Refresh*,
+BRW-11), *Search*, *Select*, *Paste* (with clipboard), *New* (makes a folder): the
+folder's own actions nearest the content. While selecting *Select all* and
 *Clear selection*. The folder picker and the share target, dialogs that choose a
 destination, have no *Activity*. The
 folder itself is made a favourite from the path menu (BRW-9). Context menu: plain
@@ -815,7 +816,7 @@ Silica rows *Share* (files), *Copy*, *Cut*, *Rename*, *Delete*, *More actions*; 
 order, capability-filtered. *More actions* opens a page of *Add to favourites* and
 *Compress* for that item (OPS-12); there is no details page. *Rename*
 is a dialog of the plain Silica dialog header, titled *Rename*, and the name field
-only; *New folder* has its header (titled *New folder*, accept *Create*) and the name
+only; *New* opens one titled *New folder* (accept *Create*) with the name
 field. A taken or invalid name is an error in the field's label. Archives need no *Extract* row: they open as a location with *Extract all*. Selection starts from the pulley's *Select*, in list and grid alike,
 and in grid view also by holding an item, as in photo apps (iOS Photos, Immich): holding
 selects the item and starts selection, and there is no long-press menu in the grid.

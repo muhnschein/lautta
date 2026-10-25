@@ -2452,10 +2452,6 @@
         <source>Add to favourites</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-menu-new-folder">
-        <source>New folder</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-new-folder-title">
         <source>New folder</source>
         <translation type="unfinished"></translation>
@@ -2645,6 +2641,10 @@
     </message>
     <message id="lautta-viewers-image-back-hint">
         <source>Swipe down to go to previous view</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-menu-new">
+        <source>New</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
