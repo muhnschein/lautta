@@ -2587,7 +2587,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-thumbs-remote-hint">
-        <source>Downloads pictures from servers to make them, which uses more data and battery and can slow down browsing</source>
+        <source>Downloads pictures and PDFs from servers to make them, which uses more data and battery and can slow down browsing</source>
+        <oldsource>Downloads pictures from servers to make them, which uses more data and battery and can slow down browsing</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-browse-mount">

@@ -153,8 +153,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 
 - `DirectoryModel { uri }` — roles per BRW-1 (`name`, `nameIsLossy`, `uri`, `isDir`,
   `isSymlink`, `size`, `modified`, `created`, `mode`, `owner`, `group`, `hidden`,
-  `readonly`, `mimeType`, `category`, `icon`, `thumbnailSource`, `selected`,
-  `transferState`); properties `loading`, `stale`, `large`, `offline`,
+  `readonly`, `mimeType`, `category`, `icon`, `thumbnailSource` (`file://` URL for
+  `Nemo.Thumbnailer`, `image://lautta-thumb/` URL, or empty; PRV-1, PRV-2, PRV-14),
+  `selected`, `transferState`); properties `loading`, `stale`, `large`, `offline`,
   `errorKind`, `errorMessage`, `count`, `selectedCount`, `sortKey`, `descending`,
   `foldersFirst`, `showHidden`, `viewMode`, `filterText`, `suggestGrid`,
   `capabilities` (list of flag strings), `locationName`, `title`;
@@ -172,7 +173,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   accept, the caller calls `DirectoryModel.createFolder(name)`),
   `dialogs/RenameDialog.qml { uri, isDir }` (property `newName` after accept),
   `pages/ViewOptionsPage.qml { model }` (a page whose controls apply at once; `model`, the
-  folder it was opened from, is absent when Settings opens it),
+  folder it was opened from, is absent when Settings opens it; its Thumbnails section sets
+  `thumbnails_local`, `thumbnails_remote`,
+  `thumbnail_max_remote_mb`, `thumbnail_cache_mb`),
   `components/directory/ViewPreview.qml { screenWidth, screenHeight }` (its live preview,
   half that size whatever it shows), `components/PathMenu.qml`.
 - The item context menu is plain rows ending with *More actions*, which opens
@@ -216,7 +219,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   Roles: `trashId`, `name`, `originalUri`, `folderUri`, `folderName`, `isDir`, `size`
   (-1 unknown), `trashedAt`, `daysLeft`, `mimeType` (from the original name, "" for
   folders and unknown types) and `thumbnailSource` (`file://` URL of the stored copy of
-  an image or video while *Show thumbnails* is on, else ""; for `FileIcon`).
+  an image or video, or `image://lautta-thumb/lautta://trash/<id>/<stored name>` for a
+  PDF (PRV-14), while *Show thumbnails* is on, else ""; for `FileIcon`).
 - Pages: `dialogs/PlanSummaryDialog.qml { planId, summary }`,
   `dialogs/ConflictDialog.qml { transferId, item, conflict }`,
   `dialogs/CompressDialog.qml { uris }`,
@@ -260,8 +264,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   ambience: `class=#rrggbb,…` for comment, keyword, operator, string, number,
   constant, type, function, variable, heading, markup, link, inserted, deleted),
   `MarkdownDocument { uri }` (html), `ExifModel { uri }`, `MediaSource { uri }` (QIODevice for QtMultimedia, PRV-8),
-  image provider `image://lautta-thumb/<uri>?size=N` for remote thumbnails (PRV-2) and
-  `image://lautta-file/<uri>` for remote full images.
+  image provider `image://lautta-thumb/<uri>?size=N` for thumbnails of remote images
+  (PRV-2) and of PDFs, local and trashed too (PRV-14; fails with an error for anything
+  else, which `Image` shows as status Error), and `image://lautta-file/<uri>` for remote full images.
 - `PdfDocument { uri }` (PRV-12): `loading`, `loaded`, `pageCount`, `size`, `errorKind`
   (file not readable, ErrorText.js), `problem` (`invalid`, `encrypted`, `empty`,
   `tooLarge`), `wrongPassword` (the last `unlock` failed), `lastPage` (where reading
@@ -320,8 +325,10 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   for `Operations.needsSummary`, `Transfers.needsAnswer`, `Bridge.question`, the undo
   banner and the app-wide `KeepAlive`.
 - `components/ErrorText.js`, `components/Open.js`, `components/FileIcon.qml { category,
-  isDir, thumbnailSource, mimeType }`, `components/FileIcons.js` (icons every file view shares:
-  `archive`), `components/IconRow.qml` (icon row for context menus),
+  isDir, thumbnailSource, mimeType }` (read-only `thumbnailReady`, `thumbnailFailed`: the
+  thumbnail shows / could not be made, so the category icon stays),
+  `components/FileIcons.js` (icons every file view shares: `archive`),
+  `components/IconRow.qml` (icon row for context menus),
   `components/UndoBanner.qml`, `components/BarBackground.qml` (the opaque backdrop of
   bottom bars, UI-10), `components/PlaceLabel.qml { before, text, remote, color,
   fontSize, horizontalAlignment }` (a line naming a location: a remote one gets the small

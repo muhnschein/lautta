@@ -239,7 +239,7 @@ flowchart LR
 | `Planner` | expands operations into steps, scans, detects conflicts |
 | `TransferQueue` | persistent queue and history in SQLite, resume bookkeeping |
 | `DirCache` | memory LRU + SQLite listing cache, stale-while-revalidate |
-| `Thumbs` | local thumbnails via `Nemo.Thumbnailer`; remote thumbnails decoded in Rust |
+| `Thumbs` | local image and video thumbnails via `Nemo.Thumbnailer`; remote images and PDFs decoded in Rust |
 | `MediaSource` | random-access byte source for the player (PRV-9) |
 | `WorkingCopies` | copies of remote files opened in other apps, expiry (PRV-6) |
 | `Trash` | app-private *Trash* for this device's folders |
@@ -541,11 +541,11 @@ bridge).
   copy when that crosses a mount; never overwriting), deletes and empties the items, and
   says that only files deleted from this device's folders appear there, in a note under
   the page header (not shown while the Trash is empty, when the placeholder has its own
-  hint). Images and videos show their thumbnail as a folder's rows do (PRV-1), made from
-  the stored copy and, as its stored name has no extension, the type of the original
-  name; the setting *Show thumbnails* (BRW-4) switches them off, and a stored item that
-  is a link or is gone keeps its glyph, as folders and other files do. Items are purged
-  after the retention setting (30 days) when the settings are loaded at start and
+  hint). Images, videos and PDFs show their thumbnail as a folder's rows do (PRV-1,
+  PRV-14), made from the stored copy and, as its stored name has no extension, the type
+  of the original name; the setting *Show thumbnails* (BRW-4) switches them off, and a
+  stored item that is a link or is gone keeps its glyph, as folders and other files do.
+  Items are purged after the retention setting (30 days) when the settings are loaded at start and
   whenever the Trash opens. The round-1 builds (schema 4–5) kept a hidden bin
   `.lautta-trash` at the root of each folder: at start the items in them are moved into
   the Trash (their rows, and so their deletion times, kept) and the emptied bins
@@ -627,7 +627,7 @@ bridge).
 
 - PRV-1: Local thumbnails via `Nemo.Thumbnailer` (`image://nemoThumbnail/` and the
   `Thumbnail` item), covering images and videos the system can thumbnail. The Trash page
-  (OPS-8) uses them too.
+  (OPS-8) uses them too. PDFs not among them: app makes those, local too (PRV-14).
 - PRV-2: Remote image thumbnails: read the first 64 KiB through the bridge, use the EXIF
   thumbnail when present; otherwise read the whole file up to the size set in *View
   options* (*Largest server file with a thumbnail*, 20 MB by default) and decode with the
@@ -639,7 +639,7 @@ bridge).
   within the *Thumbnail cache* size of *View options* (200 MB by default); a smaller size
   evicts the least recently used thumbnails at once.
 - PRV-3: Thumbnail jobs: interactive lane, lowest priority, ≤ 2 in flight per location,
-  visible delegates only, canceled on scroll.
+  visible delegates only, canceled on scroll. PDF thumbnails (PRV-14) use same jobs.
 - PRV-4: Viewers: images (zoom, swipe through the folder, EXIF panel), text/code (read-
   only up to 1 MiB, then a notice; numbered lines wrapped to the page's width by
   default, so the page swipes back like any other, also from Markdown's *View source*;
@@ -736,6 +736,25 @@ bridge).
   colour checked to be `#` and hex digits, so a file cannot bring in images, links or
   entities. Plain files get the same escaping without colours. Markdown's *View source*
   is coloured as Markdown.
+- PRV-14: PDF thumbnails in every list that shows thumbnails (folder list, grid, Trash).
+  Thumbnail = first page, drawn by `lautta-pdf` (PRV-12) as wide as the thumbnail; page
+  taller than wide cut to square from its top. Served as JPEG by
+  `image://lautta-thumb/<uri>?size=N`, cached like PRV-2's (key: URI, size, mtime, etag):
+  one draw per file version and size. One rule (`thumbs::thumbnail_source`) picks files
+  with a thumbnail and who makes it. A PDF follows the switches of an image: *Show
+  thumbnails* for a local PDF, also *Thumbnails from servers* for a server PDF. Open
+  folders follow a change at once. Read limit: local 20 MB; server = size limit of PRV-2,
+  never above the viewer's 200 MB. Larger: not read, icon shows. Encrypted, damaged or
+  page-less PDF: icon, no message; a compact grid tile then shows the file name. Drawing =
+  CPU work on the blocking pool, one PDF at a time app-wide (stricter than ARC-7: battery,
+  heat). Job whose delegate left before its turn never runs; one already drawing finishes.
+  PDF that cannot be drawn is remembered for the session, so scrolling back reads nothing.
+  PDF whose drawing killed the process gets a marker file in the thumbnail folder and is
+  never tried again. Local images and videos stay with `Nemo.Thumbnailer` (PRV-1). A
+  trashed PDF is asked by Trash item (`lautta://trash/<id>/<stored name>`: an id comes
+  back after the newest item goes, a stored name never): the stored copy has no extension,
+  so the rule goes by the original name; a link or a copy gone from the Trash has no
+  thumbnail.
 
 ## 13. Search and organisation
 

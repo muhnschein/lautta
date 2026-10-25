@@ -15,8 +15,9 @@ use lautta_core::error::ErrorKind;
 use lautta_core::filter::FilterOptions;
 use lautta_core::listing::{ListChange, ListingState};
 use lautta_core::locations::{LocationKind, LocationStatus};
-use lautta_core::mime::{self, FileCategory};
+use lautta_core::mime;
 use lautta_core::sort::SortKey;
+use lautta_core::thumbs::{app_thumbnail_url, thumbnail_source, ThumbSettings, ThumbSource};
 use lautta_core::viewprefs::{suggest_grid, ViewMode, ViewPrefs};
 use lautta_core::watch::{DirWatcher, DIR_DEBOUNCE};
 use lautta_core::{Error, Uri};
@@ -143,7 +144,9 @@ pub struct DirectoryModel {
     prefs_set: bool,
     filter: FilterOptions,
     flags: Vec<String>,
-    remote_thumbs: bool,
+    /// The settings that pick the files with a thumbnail, as of the last
+    /// load or change; none before the folder is open.
+    thumb_settings: Option<ThumbSettings>,
     shown: usize,
     generation: u64,
     task: Option<AbortHandle>,
@@ -181,7 +184,7 @@ impl DirectoryModel {
         self.prefs = core.view_prefs();
         self.global = self.prefs;
         self.prefs_set = false;
-        self.remote_thumbs = core.settings().thumbnails_remote;
+        self.thumb_settings = Some(ThumbSettings::new(&core.settings()));
         if self.settings_watch.is_none() {
             self.watch_settings(&core);
         }
@@ -476,20 +479,21 @@ impl DirectoryModel {
     }
 
     fn thumbnail_source(&self, e: &Entry) -> String {
-        if !self.prefs.thumbnails || !self.state.thumbnails_enabled() {
+        let Some(settings) = &self.thumb_settings else {
+            return String::new();
+        };
+        if !self.state.thumbnails_enabled() {
             return String::new();
         }
-        let category = mime::category_of(e);
-        let media = matches!(category, FileCategory::Image | FileCategory::Video);
-        if !media || e.flags.contains(EntryFlags::NOT_ACCESSIBLE) {
-            return String::new();
-        }
-        if let Some(dir) = &self.local_dir {
-            return file_url(&dir.join(OsStr::from_bytes(&e.name)));
-        }
-        match (category, &self.remote_thumbs, self.entry_uri(e)) {
-            (FileCategory::Image, true, Some(u)) => format!("image://lautta-thumb/{u}"),
-            _ => String::new(),
+        let local = self.local_dir.as_ref();
+        match thumbnail_source(e, local.is_some(), self.prefs.thumbnails, settings) {
+            ThumbSource::Icon => String::new(),
+            ThumbSource::System => {
+                local.map_or_else(String::new, |dir| file_url(&dir.join(OsStr::from_bytes(&e.name))))
+            }
+            ThumbSource::App => self
+                .entry_uri(e)
+                .map_or_else(String::new, |u| app_thumbnail_url(&u)),
         }
     }
 
@@ -587,8 +591,8 @@ impl DirectoryModel {
     fn follow_settings(&mut self) {
         let Some(core) = core() else { return };
         let global = core.view_prefs();
-        let remote_thumbs = core.settings().thumbnails_remote;
-        if global == self.global && remote_thumbs == self.remote_thumbs {
+        let thumbs = Some(ThumbSettings::new(&core.settings()));
+        if global == self.global && thumbs == self.thumb_settings {
             return;
         }
         if global.view_mode != self.global.view_mode {
@@ -596,7 +600,7 @@ impl DirectoryModel {
         }
         let prefs = self.prefs.follow(self.global, global);
         self.global = global;
-        self.remote_thumbs = remote_thumbs;
+        self.thumb_settings = thumbs;
         self.show_prefs(prefs);
     }
 
