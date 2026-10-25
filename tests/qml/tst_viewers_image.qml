@@ -4,7 +4,8 @@
 // listing with the overlay shown; a tap hides the overlay and another
 // brings it back; a double tap zooms in (overlay away, no swiping, no back
 // navigation) and a tap zooms out again; the close button goes back; the
-// folder goes at the end. Swiping and Delete are tst_viewers_image_swipe's
+// folder goes at the end; the overlay's More button shows the app's own
+// circle with three dots. Swiping and Delete are tst_viewers_image_swipe's
 // (one scenario has 60 s). Taps are real mouse events, so the Silica window
 // sits in a Qt Quick window: only items in one get them.
 import QtQuick 2.6
@@ -117,6 +118,14 @@ QtQuick.Window {
         expect(page.currentUri === "lautta://user-pictures/ViewerOpen/one.jpg", "on the opened image: " + page.currentUri)
         expect(view.currentIndex === 0, "the opened image first in the folder's order: " + view.currentIndex)
         expect(view.overlay.active && view.overlay.opacity > 0, "the overlay shows at first")
+        var more = named(view.overlay, "moreButton")
+        if (expect(more !== null, "the overlay has More")) {
+            // The theme has no circle with dots: the app's own icon, tinted and sized as a theme glyph.
+            expect(String(more.icon.source).slice(-15) === "/icons/more.svg", "More shows the app's icon: " + more.icon.source)
+            expect(more.icon.status === Image.Ready, "the More icon loaded: " + more.icon.status)
+            expect(more.icon.width === Theme.iconSizeMedium && more.icon.height === Theme.iconSizeMedium,
+                   "the More icon has the theme icons' size: " + more.icon.width + "x" + more.icon.height)
+        }
         var photo = named(image(), "zoomableImage")
         expect(photo !== null && photo.status === Image.Ready, "the image loaded")
         expect(!image().zoomed && view.interactive && page.backNavigation, "fitted: swipes and back navigation")

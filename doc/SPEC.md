@@ -529,7 +529,13 @@ bridge).
   after it. The decision is one call, `Operations.deletesPermanently` (QML-API). The
   *Trash* page lists, restores (to the original folder, made again if it is gone; a
   copy when that crosses a mount; never overwriting), deletes and empties the items, and
-  says that only files deleted from this device's folders appear there. Items are purged
+  says that only files deleted from this device's folders appear there, in a note under
+  the page header (not shown while the Trash is empty, when the placeholder has its own
+  hint). Images, videos and PDFs show their thumbnail as a folder's rows do (PRV-1,
+  PRV-14), made from the stored copy and, as its stored name has no extension, the type
+  of the original name; the setting *Show thumbnails* (BRW-4), for PDFs also *PDF
+  thumbnails*, switches them off, and a stored item that is a link or is gone keeps its
+  glyph, as folders and other files do. Items are purged
   after the retention setting (30 days) when the settings are loaded at start and
   whenever the Trash opens. The round-1 builds (schema 4–5) kept a hidden bin
   `.lautta-trash` at the root of each folder: at start the items in them are moved into
@@ -551,7 +557,12 @@ bridge).
   *Add to favourites* (the item itself, file or folder, ORG-1) and *Compress*. Tapping
   a row runs the action and leaves the page; a dialog it opens takes the page's place,
   so leaving the dialog returns to the folder. The image viewer's *More* offers the same
-  next to *Rename*.
+  next to *Rename*. The selection's *More actions* button (§15.3) opens the same page for
+  the selected items: header the item's name, or the count when several; rows *Rename*
+  (theme icon `icon-m-edit`), *Add to favourites* and *Compress* for one item, *Compress*
+  alone for several. The *More actions* icon, a circle with three dots, is the app's own
+  (`qml/icons/more.svg`; the platform theme has none), on the selection panel and in the
+  image viewer.
 
 ## 11. Transfers
 
@@ -606,8 +617,8 @@ bridge).
 ## 12. Preview, open, stream
 
 - PRV-1: Local thumbnails via `Nemo.Thumbnailer` (`image://nemoThumbnail/` and the
-  `Thumbnail` item), covering images and videos the system can thumbnail. PDFs not
-  among them: app makes those, local too (PRV-14).
+  `Thumbnail` item), covering images and videos the system can thumbnail. The Trash page
+  (OPS-8) uses them too. PDFs not among them: app makes those, local too (PRV-14).
 - PRV-2: Remote image thumbnails: read the first 64 KiB through the bridge, use the EXIF
   thumbnail when present; otherwise read the whole file up to the size set in *View
   options* (*Largest server file with a thumbnail*, 20 MB by default) and decode with the
@@ -626,7 +637,9 @@ bridge).
   *Don't wrap lines* in the pulley lets lines wider than the page scroll sideways
   instead, and then a swipe across the text scrolls it and the back indicator goes
   back; tabs to the next multiple of 4 columns; a line longer than 1000 characters
-  goes on over further rows; coloured by language, PRV-13), Markdown (pulldown-cmark
+  goes on over further rows; coloured by language, PRV-13; on a backdrop over the whole
+  page, Silica's overlay colour at 60 % opacity (black on a dark ambience, light grey on
+  a light one), so the text reads over any wallpaper), Markdown (pulldown-cmark
   → Qt rich text subset, wrapped to the page's width, code blocks and tables
   included), audio
   and video (QtMultimedia), archives (as locations), PDFs (PRV-12). Office documents,
@@ -635,7 +648,7 @@ bridge).
   `Sailfish.Gallery` is not a Harbour import): full screen on black, the folder's
   images swiped sideways in the folder's order. A tap shows or hides the overlay:
   details top left, close top right, *Delete*, *Open with*, *Share* and *More*
-  (OPS-12) at the bottom. A pinch or a double tap zooms in and puts the overlay away;
+  (OPS-12, a circle with three dots) at the bottom. A pinch or a double tap zooms in and puts the overlay away;
   zoomed, drags pan and neither swipe nor go back, and a tap zooms out. A swipe down
   or up goes back (a hint says so the first two times). After a delete it shows the
   neighbour; after a rename, the image under its new name.
@@ -714,7 +727,7 @@ bridge).
   colour checked to be `#` and hex digits, so a file cannot bring in images, links or
   entities. Plain files get the same escaping without colours. Markdown's *View source*
   is coloured as Markdown.
-- PRV-14: PDF thumbnails in every list that shows thumbnails (folder list, grid). Thumbnail
+- PRV-14: PDF thumbnails in every list that shows thumbnails (folder list, grid, Trash). Thumbnail
   = first page, drawn by `lautta-pdf` (PRV-12) as wide as the thumbnail; page taller than
   wide cut to square from its top. Served as JPEG by `image://lautta-thumb/<uri>?size=N`,
   cached like PRV-2's (key: URI, size, mtime, etag): one draw per file version and size.
@@ -729,7 +742,10 @@ bridge).
   runs; one already drawing finishes. PDF that cannot be drawn is remembered for the
   session, so scrolling back reads nothing. PDF whose drawing killed the process gets a
   marker file in the thumbnail folder and is never tried again. Local images and videos
-  stay with `Nemo.Thumbnailer` (PRV-1).
+  stay with `Nemo.Thumbnailer` (PRV-1). A trashed PDF is asked by Trash item
+  (`lautta://trash/<id>/<stored name>`: an id comes back after the newest item goes, a
+  stored name never): the stored copy has no extension, so the rule goes by the original
+  name; a link or a copy gone from the Trash has no thumbnail.
 
 ## 13. Search and organisation
 
@@ -850,11 +866,14 @@ on by itself, faster nearer the edge, with the range following. While selecting,
 a list row does the same; outside selection a list row's long-press menu stays.
 Tapping an icon opens the item like the rest of the row. The selection's actions sit in a
 `DockedPanel` that stays open while selecting: icons spread over its width in the
-long-press menu's order (*Share*, *Copy*, *Cut*, *Delete*, *Compress*) and a last button
-that leaves selection; with one item selected, pushing the panel up offers the rest of
-that menu (*Rename*, *Add to favourites*), so every action of an item is reachable from
-the grid. The panel's actions, a finished delete and deselecting the last item leave
-selection too. Archives and *Compress* show the platform's archive icon
+long-press menu's order (*Share*, *Copy*, *Cut*, *Delete*), *More actions* and a last
+button that leaves selection, set apart on a key of the ambience's highlight background
+with its icon in the highlight colour. The panel is the same for one item or several, with no
+push-up menu. *More actions* opens a page of its own (OPS-12): *Compress* for any number
+of items, and for one item also *Rename* and *Add to favourites*, so every action of an
+item is reachable from the grid. Backing out of the page keeps the selection. The panel's
+*Share*, *Copy* and *Cut*, an action of the page, a finished delete and deselecting the
+last item leave selection. Archives and *Compress* show the platform's archive icon
 (`icon-m-file-archive-folder`) everywhere.
 Placeholders: empty, no permission, offline, error with *Retry*/*Details*. They and the
 loading indicator are part of the view's content, so pulling the pulley moves them with

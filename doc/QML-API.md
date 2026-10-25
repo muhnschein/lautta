@@ -173,7 +173,7 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - The item context menu is plain rows ending with *More actions*, which opens
   `components/directory/MoreActionsPage.qml { owner, info }` (the DirectoryView and the
   row's item): the item's rarer actions, one row each with its theme icon; a dialog an
-  action opens replaces the page (`DirectoryView.openDialog`). Which actions each holds,
+  action opens (Rename's too) replaces the page (`DirectoryView.openDialog`). Which actions each holds,
   in a fixed order filtered by capabilities, and their icons, is in
   `components/directory/ContextActions.js` (`menu(ctx)`, `more(ctx)` →
   `[{ id, text, icon }]`, `icon(id)`).
@@ -182,10 +182,15 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `components/directory/RenameRemorse.qml { owner, row, uri }` so that a row made anew
   while it runs shows the rest. Cancelling it calls `rename(newUri, oldName)`.
 - When selection mode starts and ends, what its panel offers (`panelButtons(count,
-  writable)`, `panelMore(count, writable)`, the push-up menu with one item) and how a drag
-  selects a range (`dragStart`, `dragTo`, `autoScroll`) is in
-  `components/directory/Selection.js`; `components/directory/DragSelect.qml` runs the
-  drag for the grid and list delegates (§15.3).
+  writable)`: Share, Copy, Cut, Delete, More actions, Stop selecting (`DockButton.key`:
+  highlight key); `moreRows(count, ctx)`:
+  the rows of the page behind More actions) and how a drag selects a range (`dragStart`,
+  `dragTo`, `autoScroll`) is in `components/directory/Selection.js`;
+  `components/directory/DragSelect.qml` runs the drag for the grid and list delegates (§15.3).
+  The panel's More actions button calls `DirectoryView.moreSelection()`, which pushes
+  `MoreActionsPage.qml { owner, info, selection: true, count }` (`info` the first selected
+  item, `count` fixed at push): its rows run `DirectoryView.runSelectionAction(id)` on the
+  whole selection.
 - Which names New folder and Rename refuse is in `components/directory/Names.js`
   (`invalid(name)`).
 
@@ -203,6 +208,11 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `started(transferId)`; `failed(kind, message)`.
 - `TrashModel` — the Trash in the app's data (OPS-8), `reload()` (also
   purges what is past the retention setting), `restore(id)`, `remove(id)`, `empty()`.
+  Roles: `trashId`, `name`, `originalUri`, `folderUri`, `folderName`, `isDir`, `size`
+  (-1 unknown), `trashedAt`, `daysLeft`, `mimeType` (from the original name, "" for
+  folders and unknown types) and `thumbnailSource` (`file://` URL of the stored copy of
+  an image or video, or `image://lautta-thumb/lautta://trash/<id>/<stored name>` for a
+  PDF (PRV-14), while *Show thumbnails* is on, else ""; for `FileIcon`).
 - Pages: `dialogs/PlanSummaryDialog.qml { planId, summary }`,
   `dialogs/ConflictDialog.qml { transferId, item, conflict }`,
   `dialogs/CompressDialog.qml { uris }`,
@@ -247,7 +257,7 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   constant, type, function, variable, heading, markup, link, inserted, deleted),
   `MarkdownDocument { uri }` (html), `ExifModel { uri }`, `MediaSource { uri }` (QIODevice for QtMultimedia, PRV-8),
   image provider `image://lautta-thumb/<uri>?size=N` for thumbnails of remote images
-  (PRV-2) and of PDFs, local too (PRV-14; fails with an error for anything else, which
+  (PRV-2) and of PDFs, local and trashed too (PRV-14; fails with an error for anything else, which
   `Image` shows as status Error), and `image://lautta-file/<uri>` for remote full images.
 - `PdfDocument { uri }` (PRV-12): `loading`, `loaded`, `pageCount`, `size`, `errorKind`
   (file not readable, ErrorText.js), `problem` (`invalid`, `encrypted`, `empty`,
@@ -273,7 +283,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `components/viewers/gallery`; `remove()` deletes the image shown; its *More* is
   `components/viewers/ImageMorePage.qml { uri }`, whose Rename signals `renameChosen()` for
   the viewer to rename), `viewers/TextViewer.qml { uri, wrap }`
-  (`wrap` true by default; its rows, tabs expanded and long lines split, come from
+  (`wrap` true by default; a `textBackdrop` rectangle fills the page under the text,
+  PRV-4; its rows, tabs expanded and long lines split, come from
   `components/viewers/TextRows.js` `rows(text)`: `{ rows: [{ number, text, line,
   start }], longest, lines }`, `line` from 0 and `start` the row's first column in
   the line with tabs expanded, in UTF-16 units),
@@ -306,9 +317,10 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   for `Operations.needsSummary`, `Transfers.needsAnswer`, `Bridge.question`, the undo
   banner and the app-wide `KeepAlive`.
 - `components/ErrorText.js`, `components/Open.js`, `components/FileIcon.qml { category,
-  isDir, thumbnailSource }` (read-only `thumbnailReady`, `thumbnailFailed`: the thumbnail
-  shows / could not be made, so the category icon stays), `components/FileIcons.js`
-  (icons every file view shares: `archive`), `components/IconRow.qml` (icon row for context menus),
+  isDir, thumbnailSource, mimeType }` (read-only `thumbnailReady`, `thumbnailFailed`: the
+  thumbnail shows / could not be made, so the category icon stays),
+  `components/FileIcons.js` (icons every file view shares: `archive`),
+  `components/IconRow.qml` (icon row for context menus),
   `components/UndoBanner.qml`, `components/BarBackground.qml` (the opaque backdrop of
   bottom bars, UI-10), `components/PlaceLabel.qml { before, text, remote, color,
   fontSize, horizontalAlignment }` (a line naming a location: a remote one gets the small

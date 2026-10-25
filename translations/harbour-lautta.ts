@@ -891,11 +891,6 @@
             <numerusform></numerusform>
         </translation>
     </message>
-    <message id="lautta-trash-footer">
-        <source>Only files deleted from this device&apos;s folders appear here. Deletes on volumes and servers are permanent.</source>
-        <oldsource>Only files deleted from this device&apos;s folders appear here. Deletes on SD cards and servers are permanent.</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-trash-placeholder">
         <source>Trash is empty</source>
         <oldsource>Nothing deleted recently</oldsource>
@@ -2638,6 +2633,10 @@
     </message>
     <message id="lautta-dir-menu-new">
         <source>New</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-trash-note">
+        <source>Only files deleted from this device&apos;s folders appear here. Deletes on volumes and servers are permanent.</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-thumbs-pdf">

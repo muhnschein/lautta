@@ -21,6 +21,8 @@ const ROLE_IS_DIR: i32 = 0x105;
 const ROLE_SIZE: i32 = 0x106;
 const ROLE_TRASHED_AT: i32 = 0x107;
 const ROLE_DAYS_LEFT: i32 = 0x108;
+const ROLE_MIME_TYPE: i32 = 0x109;
+const ROLE_THUMBNAIL: i32 = 0x10a;
 
 /// Total bytes of the entries (unknown sizes count as zero).
 fn total_size(entries: &[TrashEntry]) -> i64 {
@@ -75,6 +77,8 @@ impl QAbstractListModel for TrashModel {
             ROLE_SIZE => e.size.and_then(|s| i64::try_from(s).ok()).unwrap_or(-1).into(),
             ROLE_TRASHED_AT => e.trashed_at.into(),
             ROLE_DAYS_LEFT => e.days_left.into(),
+            ROLE_MIME_TYPE => text(&e.mime_type),
+            ROLE_THUMBNAIL => text(&e.thumbnail_source),
             _ => QVariant::default(),
         }
     }
@@ -90,6 +94,8 @@ impl QAbstractListModel for TrashModel {
         names.insert(ROLE_SIZE, "size".into());
         names.insert(ROLE_TRASHED_AT, "trashedAt".into());
         names.insert(ROLE_DAYS_LEFT, "daysLeft".into());
+        names.insert(ROLE_MIME_TYPE, "mimeType".into());
+        names.insert(ROLE_THUMBNAIL, "thumbnailSource".into());
         names
     }
 }
@@ -219,6 +225,8 @@ mod tests {
             size,
             trashed_at: 0,
             days_left: 30,
+            mime_type: String::new(),
+            thumbnail_source: String::new(),
         }
     }
 

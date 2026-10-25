@@ -40,9 +40,11 @@ function text(id) {
 }
 
 // The theme icon of a row of the More actions page; Compress shows the
-// archive icon archives show (FileIcons.js), as the selection panel does.
+// archive icon archives show (FileIcons.js). Rename is a row there only for
+// the selection's one item (Selection.js).
 function icon(id) {
     switch (id) {
+    case "rename": return "image://theme/icon-m-edit"
     case "favourite": return "image://theme/icon-m-favorite"
     case "compress": return FileIcons.archive
     }
