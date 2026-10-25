@@ -128,11 +128,8 @@ pub fn trash_item_uri(id: i64, stored_name: &str) -> Option<Uri> {
 }
 
 /// Id and stored name of the Trash item a thumbnail URI names, if it is one
-/// of [`trash_item_uri`]'s.
+/// of [`trash_item_uri`]'s: the location is part of the comparison.
 pub fn trash_item_ref(uri: &Uri) -> Option<(i64, String)> {
-    if uri.location != TRASH_LOCATION {
-        return None;
-    }
     let mut parts = uri.path.components();
     let id: i64 = std::str::from_utf8(parts.next()?).ok()?.parse().ok()?;
     let stored = std::str::from_utf8(parts.next()?).ok()?.to_owned();

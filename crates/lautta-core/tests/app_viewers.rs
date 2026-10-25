@@ -460,6 +460,39 @@ async fn a_trashed_pdf_gets_its_thumbnail_from_the_stored_copy() {
 }
 
 #[tokio::test]
+async fn trashed_pdfs_are_cached_each_under_its_own_item() {
+    use lautta_pdf::sample::{build, page};
+    let h = home().await;
+    let same = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+    for (name, fill) in [
+        ("red.pdf", "1 0 0 rg 0 0 595 842 re f"),
+        ("blue.pdf", "0 0 1 rg 0 0 595 842 re f"),
+    ] {
+        let path = h.root.join("Documents").join(name);
+        std::fs::write(&path, build(&[page(595, 842, fill)])).unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(same)
+            .unwrap();
+    }
+    let (_, red) = trash_document(&h, "red.pdf").await;
+    let (_, blue) = trash_document(&h, "blue.pdf").await;
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+
+    let at = |bytes: &[u8]| thumb_pixels(bytes).get_pixel(16, 16).0;
+    let first = at(&thumbnail(&h, &previews, &red, 32).await.unwrap());
+    let second = at(&thumbnail(&h, &previews, &blue, 32).await.unwrap());
+    assert!(first[0] > 200 && first[2] < 60, "red: {first:?}");
+    assert!(
+        second[2] > 200 && second[0] < 60,
+        "not the cached red one: {second:?}"
+    );
+    assert_eq!(previews.cache().len(), 2, "same size and mtime, two items");
+}
+
+#[tokio::test]
 async fn trash_thumbnails_are_for_regular_pdfs_that_are_still_there() {
     let h = home().await;
     std::fs::write(h.root.join("Documents/t.pdf"), pdf()).unwrap();
@@ -493,7 +526,8 @@ async fn trash_thumbnails_are_for_regular_pdfs_that_are_still_there() {
     // A stored copy swapped for a link is not followed.
     let item = h.core.trash.get(pdf_id).unwrap();
     std::fs::remove_file(item.stored_path()).unwrap();
-    std::os::unix::fs::symlink(h.root.join("Documents"), item.stored_path()).unwrap();
+    std::fs::write(h.root.join("Documents/target.pdf"), pdf()).unwrap();
+    std::os::unix::fs::symlink(h.root.join("Documents/target.pdf"), item.stored_path()).unwrap();
     let err = thumbnail(&h, &previews, &pdf_uri, 32).await.unwrap_err();
     assert_eq!(err.kind, ErrorKind::Unsupported);
     std::fs::remove_file(item.stored_path()).unwrap();
@@ -557,6 +591,12 @@ async fn pdfs_that_cannot_be_drawn_are_refused_and_not_read_again() {
     assert!(previews.cache().is_empty());
     let leftovers: Vec<_> = std::fs::read_dir(previews.cache().dir()).unwrap().collect();
     assert!(leftovers.is_empty(), "no markers stay behind");
+
+    // The verdict is on one version of the file: a new one is tried.
+    h.nas.add_file("broken.pdf", &pdf(), 2);
+    thumbnail(&h, &previews, "lautta://nv-nas/broken.pdf", 32)
+        .await
+        .expect("the file was replaced");
 }
 
 #[tokio::test]

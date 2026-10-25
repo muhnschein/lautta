@@ -24,6 +24,16 @@ Item {
     DirectoryModel { id: remoteDir }
     DirectoryModel { id: localDir }
 
+    // The thumbnail source of each row of the remote folder.
+    Repeater {
+        id: remoteRows
+        model: remoteDir
+        delegate: Item {
+            property string rname: name
+            property string rthumb: thumbnailSource
+        }
+    }
+
     Repeater {
         id: rows
         model: locs
@@ -135,6 +145,15 @@ Item {
                 names.push(r.rname)
         }
         return names.join(",")
+    }
+
+    // What the remote folder gives the file `name` as thumbnail, null without it.
+    function thumbOf(name) {
+        for (var i = 0; i < remoteRows.count; ++i) {
+            if (remoteRows.itemAt(i).rname === name)
+                return remoteRows.itemAt(i).rthumb
+        }
+        return null
     }
 
     function step(label, act, ok) {
@@ -327,6 +346,25 @@ Item {
                  root.relisted = remoteDir.loading
              },
              function() { return root.relisted && !remoteDir.loading && remoteDir.count === 2 })
+        // A server's pictures and PDFs are made by the app, with the switch
+        // of servers (PRV-2, PRV-14); an open folder follows it at once.
+        step("a server's pictures and PDFs have the app's thumbnails",
+             function() {
+                 FakeWorld.putFile("account:1", "p.jpg")
+                 FakeWorld.putFile("account:1", "d.pdf")
+                 remoteDir.revisit()
+             },
+             function() {
+                 var base = "image://lautta-thumb/lautta://nv-account:1/"
+                 return !remoteDir.loading && remoteDir.count === 4 && thumbOf("p.jpg") === base + "p.jpg"
+                        && thumbOf("d.pdf") === base + "d.pdf" && thumbOf("r1.txt") === ""
+             })
+        step("Thumbnails from servers off takes them from the open folder",
+             function() { App.setSetting("thumbnails_remote", JSON.stringify(false)) },
+             function() { return thumbOf("p.jpg") === "" && thumbOf("d.pdf") === "" })
+        step("and on again gives them back",
+             function() { App.setSetting("thumbnails_remote", JSON.stringify(true)) },
+             function() { return thumbOf("p.jpg") !== "" && thumbOf("d.pdf") !== "" })
         step("listing connected the server",
              null,
              function() {

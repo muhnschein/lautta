@@ -432,6 +432,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_marker_that_cannot_be_written_is_not_a_verdict_on_the_pdf() {
+        let dir = tempfile::tempdir().unwrap();
+        let gone = dir.path().join("not-there");
+        let pdfs = PdfThumbs::default();
+        let h = Counting::new(pdf_bytes());
+        let err = pdfs.make(&gone, "v", &h, 32, 1_000_000).await.unwrap_err();
+        assert_ne!(
+            err.kind,
+            ErrorKind::Unsupported,
+            "a folder problem, not the PDF's"
+        );
+        assert!(!pdfs.is_refused("v"));
+        assert!(
+            pdfs.make(dir.path(), "v", &h, 32, 1_000_000).await.is_ok(),
+            "drawn once the folder is there"
+        );
+    }
+
+    #[tokio::test]
     async fn a_marker_from_a_crash_refuses_the_file_once_then_it_is_remembered() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("v.crash"), []).unwrap();
