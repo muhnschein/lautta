@@ -470,16 +470,25 @@ what the app does.
   group view: a switch per folder, *Recents*, *Trash*, volume and server
   (hiding the row only; the Trash and recents keep working), one switch for all nearby
   servers, a tap on the row switching it, and a grip to move rows within their section
-  (favourites move only; volumes and nearby stay put). A press on the grip picks the row
+  (favourites move only; volumes and nearby stay put). *Volumes* ("Memory cards
+  and USB drives") and *Servers* lead with a switch for the whole section, no subtitle,
+  and their rows stand a step in from it. Off, the section's rows are gone from this
+  list (not dimmed) and the section is gone from the Browse page and its preview, drives
+  connected and servers added later included; the switches of the rows keep what they
+  said, so that switching the section on restores them. That switch is there while
+  the section has rows or is off, and the *Servers* one only while a bridge answers
+  (UI-8). A press on the grip picks the row
   up at once; it follows the finger, the rows it passes slide aside and its new order is
   stored as it moves, and let go it settles into its place. A switch or a move changes
   its row in place: the list keeps its position and a press lights one row only. A
   half-size live preview of the Browse page sits below, as in Salama's start page
-  settings; the pulley has *Restore defaults*, which also puts *Recents* first again.
+  settings; the pulley has *Restore defaults*, which also puts *Recents* first again and
+  switches both sections on.
   The list and the preview follow what the Browse page follows (a volume, drive, server
   or favourite that comes or goes), except while a change of the user's own is not
   stored yet. No menu on the Browse page hides a row; this page is the one place.
-  Stored in `browse_layout`; a removed account's rows are purged with it (SEC-5).
+  Stored in `browse_layout` (a section's switch is the hidden flag of the item
+  `section`); a removed account's rows are purged with it (SEC-5).
 
 ## 10. File operations
 
@@ -790,8 +799,9 @@ it is on), *Android*, *Volumes* (when present), *Servers* (bridge only:
 accounts, recent ad-hoc servers, each with its connection state as one icon on the
 right (NVB-4), so a server row is as tall as a folder row), *Nearby*
 (bridge only, hidden when empty). Rows show no item counts (folders, *Recents*, *Trash*)
-and no text about a connection or a mount. Rows the user hid are left out and rows keep
-the order the user gave them (BRW-12).
+and no text about a connection or a mount. Rows the user hid are left out, so is a
+*Volumes* or *Servers* section the user switched off, and rows keep the order the user
+gave them (BRW-12).
 Tapping a nearby or recent ad-hoc server opens *Connect to server* prefilled (LOC-6,
 NVB-6).
 

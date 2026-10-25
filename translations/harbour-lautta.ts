@@ -2611,5 +2611,13 @@
         <source>New</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-browse-layout-volumes">
+        <source>Memory cards and USB drives</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-layout-servers">
+        <source>Servers</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

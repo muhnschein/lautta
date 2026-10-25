@@ -28,6 +28,16 @@ function sectionTitle(section) {
     }
 }
 
+// The switch that shows or hides the whole of Volumes or Servers in
+// Settings › Browse page (BRW-12).
+function sectionSwitchTitle(section) {
+    if (section === "volumes")
+        //% "Memory cards and USB drives"
+        return qsTrId("lautta-browse-layout-volumes")
+    //% "Servers"
+    return qsTrId("lautta-browse-layout-servers")
+}
+
 // The name of a Browse row: the app's own rows have none of their own.
 function rowName(kind, name) {
     switch (kind) {

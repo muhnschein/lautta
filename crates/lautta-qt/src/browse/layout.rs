@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! `BrowseLayoutModel`: the rows of Settings › Browse page (BRW-12), hidden
 //! ones included, in Browse order. Roles: `section`, `kind`, `item`, `name`,
-//! `hidden`, `place` (the row's place in its section), `movable`.
+//! `hidden`, `place` (the row's place in its section, -1 for the switch of
+//! *Volumes* or *Servers*, which leads its section), `movable`, `nested`
+//! (a row of a section that has such a switch, below it).
 //!
 //! A change shows in place ([`steps`]): a switch changes its row, a move
 //! moves it, so the list keeps its scroll position and its delegates, and
@@ -11,7 +13,8 @@
 use super::{cell_data, error_parts, role_names, store_changed, watch_sources, Cell, Guard};
 use crate::runtime::{core, spawn_then};
 use lautta_core::app::Core;
-use lautta_core::app_browse::LayoutRow;
+use lautta_core::app_browse::{LayoutRow, SECTION_KIND};
+use lautta_core::browse_layout::SWITCHED_SECTIONS;
 use lautta_core::error::{Error, ErrorKind};
 use qmetaobject::prelude::*;
 use qmetaobject::QPointer;
@@ -22,27 +25,38 @@ use tokio::sync::oneshot;
 
 /// `place`, not `index`: a role named `index` hides the delegate's own
 /// `index` (its list row) in QML, and the page's drag code needs that.
-const COLUMNS: [&str; 7] = ["section", "kind", "item", "name", "hidden", "place", "movable"];
+const COLUMNS: [&str; 8] = [
+    "section", "kind", "item", "name", "hidden", "place", "movable", "nested",
+];
 
 /// Sections whose rows the user can reorder; volumes come and go and nearby
 /// servers are one switch.
 const MOVABLE: [&str; 4] = ["favourites", "device", "android", "servers"];
 
 fn cells(rows: &[LayoutRow]) -> Vec<Vec<Cell>> {
+    // The rows of the section that take part in its order: not its switch.
+    let own = |r: &LayoutRow, o: &&LayoutRow| o.section == r.section && o.kind != SECTION_KIND;
     rows.iter()
         .enumerate()
         .map(|(i, r)| {
-            let index = rows[..i].iter().filter(|o| o.section == r.section).count();
-            let size = rows.iter().filter(|o| o.section == r.section).count();
-            let movable = MOVABLE.contains(&r.section) && size > 1;
+            let switch = r.kind == SECTION_KIND;
+            let index = if switch {
+                -1
+            } else {
+                rows[..i].iter().filter(|o| own(r, o)).count() as i64
+            };
+            let size = rows.iter().filter(|o| own(r, o)).count();
+            let movable = !switch && MOVABLE.contains(&r.section) && size > 1;
+            let nested = !switch && SWITCHED_SECTIONS.contains(&r.section);
             vec![
                 Cell::s(r.section),
                 Cell::s(r.kind),
                 Cell::s(&r.item),
                 Cell::s(&r.name),
                 Cell::Bool(r.hidden),
-                Cell::Int(index as i64),
+                Cell::Int(index),
                 Cell::Bool(movable),
+                Cell::Bool(nested),
             ]
         })
         .collect()
@@ -232,7 +246,8 @@ pub struct BrowseLayoutModel {
     restoreDefaults: qt_method!(fn(&mut self)),
     /// The section of list row `row`, `""` outside the list.
     sectionAt: qt_method!(fn(&self, row: i32) -> QString),
-    /// The place of list row `row` in its section, `-1` outside the list.
+    /// The place of list row `row` in its section, `-1` outside the list and
+    /// for the switch of a section.
     placeAt: qt_method!(fn(&self, row: i32) -> i32),
     /// The item of list row `row`, `""` outside the list.
     itemAt: qt_method!(fn(&self, row: i32) -> QString),
@@ -490,6 +505,70 @@ mod tests {
             cells[2][..4],
             [Cell::s("device"), Cell::s("folder"), Cell::s("b"), Cell::s("B")]
         );
+    }
+
+    fn switch(section: &'static str) -> LayoutRow {
+        LayoutRow {
+            section,
+            kind: SECTION_KIND,
+            item: "section".to_owned(),
+            name: String::new(),
+            hidden: false,
+        }
+    }
+
+    /// (place, movable, nested) of each row.
+    fn shape(rows: &[LayoutRow]) -> Vec<(Cell, Cell, Cell)> {
+        cells(rows)
+            .into_iter()
+            .map(|c| (c[5].clone(), c[6].clone(), c[7].clone()))
+            .collect()
+    }
+
+    #[test]
+    fn a_section_switch_leads_its_section_and_takes_no_place() {
+        let (no, yes) = (Cell::Bool(false), Cell::Bool(true));
+        let rows = [
+            row("device", "folder", "a"),
+            switch("volumes"),
+            row("volumes", "volume", "sd"),
+            row("volumes", "volume", "usb"),
+            switch("servers"),
+            row("servers", "account", "nv-account:1"),
+            row("servers", "account", "nv-account:2"),
+        ];
+        assert_eq!(
+            shape(&rows),
+            [
+                (Cell::Int(0), no.clone(), no.clone()),
+                (Cell::Int(-1), no.clone(), no.clone()),
+                (Cell::Int(0), no.clone(), yes.clone()),
+                (Cell::Int(1), no.clone(), yes.clone()),
+                (Cell::Int(-1), no.clone(), no.clone()),
+                (Cell::Int(0), yes.clone(), yes.clone()),
+                (Cell::Int(1), yes.clone(), yes.clone()),
+            ]
+        );
+        // The switch is no row to move among: one server stays put.
+        assert_eq!(
+            shape(&rows[4..6]),
+            [(Cell::Int(-1), no.clone(), no.clone()), (Cell::Int(0), no, yes)]
+        );
+    }
+
+    #[test]
+    fn a_carried_row_stops_below_the_switch() {
+        let rows = cells(&[
+            switch("servers"),
+            row("servers", "account", "nv-account:1"),
+            row("servers", "account", "nv-account:2"),
+        ]);
+        assert_eq!(
+            carried(&rows, 2, 1),
+            Some(("servers".into(), "nv-account:2".into(), 0))
+        );
+        assert_eq!(carried(&rows, 1, 0), None, "not onto the switch");
+        assert_eq!(carried(&rows, 0, 1), None, "the switch does not move");
     }
 
     #[test]
