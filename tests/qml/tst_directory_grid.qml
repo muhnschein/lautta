@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The grid view in both sizes (View options, BRW-4): 4 per row with names on
-// icons only, 3 per row with name and size under every tile. Fails when the
-// view does not follow the grid_columns setting.
+// The grid view in both sizes (View options, BRW-4): 4 per row with icons
+// only, 3 per row with name and caption lines under every tile (their text
+// is checked in tst_directory_grid_captions.qml). Fails when the view does
+// not follow the grid_columns setting.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0

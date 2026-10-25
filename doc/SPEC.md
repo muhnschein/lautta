@@ -446,7 +446,8 @@ what the app does.
   thumbnail cache size. Folders already open follow a change at once; what one folder
   was switched to on its own (*Use list* over a suggested grid, §15.3) stays until that
   setting changes for all. The grid shows 4 items per row with names on icons only, or 3
-  per row with name and size under every item; landscape keeps the tile size.
+  per row with larger icons and the name and caption lines under every item (§15.3);
+  landscape keeps the tile size.
 - BRW-5: Stale-while-revalidate: cached listing shown immediately (≤ 7 days old, marked
   stale), refresh on the interactive lane, diff applied in place without losing scroll
   or selection.
@@ -854,7 +855,18 @@ attached to swipe to: Activity is in the pulley and the activity bar (XFR-13).
 
 Header with the folder name only (no breadcrumb); tap → path menu. Slim progress line while listing
 or receiving transfers. List view with icon or thumbnail and "size · modified"; grid view
-for media folders (suggested when > 60 % images). Pulley, top to bottom: *Activity* (live
+for media folders (suggested when > 60 % images). The grid at 4 per row has the name inside
+the tile, cut at the end. At 3 per row the icon is about half the tile wide (thumbnails fill
+it) and under it stand the name on up to two lines, centred (a name that does not fit keeps
+its start on the first line and its end, the extension, on the second behind an ellipsis in
+the middle), and two small lines in the secondary colour, each cut at the end: a file's
+modified time and size; a folder's item count ("N items") on this device and on drives,
+hidden files left out unless shown, "More than N items" past 10 000 entries, none while
+counting or when the folder cannot be read; a folder on a server or in an archive its
+modified time (counting would list it over the network). A folder is counted when its cell
+appears and again when its modified time or the hidden files setting changes, once per
+cell and off the GUI thread, from its names alone, with no timer or polling (PRF-8). All
+cells have the height of two name and two caption lines. Pulley, top to bottom: *Activity* (live
 count, as in Browse; at the top, as it leads away), *View options* (BRW-4; no *Refresh*,
 BRW-11), *Search*, *Select*, *Paste* (with clipboard), *New* (makes a folder): the
 folder's own actions nearest the content. While selecting *Select all* and

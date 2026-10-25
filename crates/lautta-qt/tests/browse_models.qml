@@ -17,22 +17,14 @@ Item {
     property bool moved: false
     property bool movedAtOnce: false
     property bool refused: false
+    property int polls: 0
+    property int remoteChanges: 0
 
     LocationsModel { id: locs }
     FavouritesModel { id: favs }
     RecentsModel { id: recents }
     DirectoryModel { id: remoteDir }
     DirectoryModel { id: localDir }
-
-    // The thumbnail source of each row of the remote folder.
-    Repeater {
-        id: remoteRows
-        model: remoteDir
-        delegate: Item {
-            property string rname: name
-            property string rthumb: thumbnailSource
-        }
-    }
 
     Repeater {
         id: rows
@@ -55,6 +47,20 @@ Item {
             property string rdrive: drive
             // Set by a step to tell whether this delegate survived a change.
             property bool marked: false
+        }
+    }
+
+    // What each row of the remote folder gives: its thumbnail, and for a folder
+    // its modified time and item count.
+    Repeater {
+        id: remoteRows
+        model: remoteDir
+        delegate: Item {
+            property string rname: name
+            property bool rfolder: isDir
+            property real rmodified: modified
+            property int ritems: itemCount
+            property string rthumb: thumbnailSource
         }
     }
 
@@ -157,6 +163,13 @@ Item {
                 names.push(r.rname)
         }
         return names.join(",")
+    }
+
+    function remoteRow(name) {
+        for (var i = 0; i < remoteRows.count; ++i)
+            if (remoteRows.itemAt(i).rname === name)
+                return remoteRows.itemAt(i)
+        return null
     }
 
     // What the remote folder gives the file `name` as thumbnail, null without it.
@@ -447,6 +460,26 @@ Item {
         step("and on again gives them back",
              function() { App.setSetting("thumbnails_remote", JSON.stringify(true)) },
              function() { return thumbOf("p.jpg") !== "" && thumbOf("d.pdf") !== "" })
+        // A folder on a server shows its modified time in the grid, never an
+        // item count: counting would list it over the network (SPEC §15.3).
+        step("a remote folder is listed with a folder in it",
+             function() {
+                 FakeWorld.putFile("account:1", "sub/inner.txt")
+                 remoteDir.revisit()
+             },
+             function() { return !remoteDir.loading && remoteDir.count === 5 })
+        step("a folder on a server is not counted",
+             function() {
+                 root.polls = 0
+                 root.remoteChanges = 0
+                 remoteDir.dataChanged.connect(function () { root.remoteChanges += 1 })
+                 remoteDir.requestCount("lautta://nv-account:1/sub")
+             },
+             function() {
+                 var sub = remoteRow("sub")
+                 return ++root.polls > 4 && sub !== null && sub.rfolder && sub.rmodified > 0
+                        && sub.ritems === -1 && !remoteDir.folderCounts && root.remoteChanges === 0
+             })
         step("listing connected the server",
              null,
              function() {

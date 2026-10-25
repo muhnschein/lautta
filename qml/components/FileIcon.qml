@@ -21,6 +21,8 @@ Item {
     property bool selected
     property string mimeType
     property real size: Theme.iconSizeMedium
+    // The side of the theme glyph inside; the grid at 3 per row draws it large.
+    property real glyphSize: Theme.iconSizeMedium
     readonly property bool thumbnailReady: thumbnailLoader.item ? thumbnailLoader.item.ready : false
     readonly property bool thumbnailFailed: thumbnailLoader.item ? thumbnailLoader.item.failed : false
 
@@ -51,8 +53,11 @@ Item {
     height: size
 
     AppIcon {
+        objectName: "fileGlyph"
+
         anchors.centerIn: parent
         icon: icon.iconFor(icon.category, icon.isDir)
+        iconSize: icon.glyphSize
         visible: !icon.thumbnailReady
     }
 
