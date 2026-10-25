@@ -6,9 +6,11 @@
 //! forwards.
 
 use crate::app::{Core, Started};
+use crate::app_directory::file_url;
 use crate::compress::{compress, ArchiveKind, CompressOptions};
 use crate::entry::{cap, Kind};
 use crate::error::{Error, ErrorKind, Result};
+use crate::mime::{self, FileCategory};
 use crate::ops::conflict as conflict_ops;
 use crate::ops::names::{keep_both_name, split_extension};
 use crate::ops::{Conflict, ConflictChoice, OperationKind, Plan};
@@ -16,6 +18,7 @@ use crate::provider::{list_all, Disposition, Lane, ProgressSink, Provider, Write
 use crate::settings::Settings;
 use crate::sys;
 use crate::transfer::TransferId;
+use crate::trash::TrashItem;
 use crate::uri::Uri;
 use crate::vpath::{display_name, validate_name, VPath};
 use serde::Serialize;
@@ -344,6 +347,29 @@ pub struct TrashEntry {
     /// Unix seconds.
     pub trashed_at: i64,
     pub days_left: i64,
+    /// From the original name's extension; empty when none is known. Stored
+    /// copy has no extension, so the system thumbnailer goes by this.
+    pub mime_type: String,
+    /// `file://` URL of the stored copy of an image or video that gets a
+    /// thumbnail, else empty ([`trash_thumbnail`]).
+    pub thumbnail_source: String,
+}
+
+/// Stored copy of a trashed image or video as system thumbnailer input
+/// (OPS-8, PRV-1). Empty = row keeps its glyph: thumbnails off (BRW-4),
+/// extension says no image or video, or stored item is no regular file. A
+/// trashed link would show its target, maybe outside the sandbox (BRW-10); a
+/// copy gone from the trash folder has nothing to show.
+fn trash_thumbnail(item: &TrashItem, category: Option<FileCategory>, thumbnails: bool) -> String {
+    if !thumbnails || !matches!(category, Some(FileCategory::Image | FileCategory::Video)) {
+        return String::new();
+    }
+    let stored = item.stored_path();
+    if std::fs::symlink_metadata(&stored).is_ok_and(|m| m.is_file()) {
+        file_url(&stored)
+    } else {
+        String::new()
+    }
 }
 
 /// Whole days left before purge, never negative (OPS-8).
@@ -647,16 +673,23 @@ impl Core {
 
     /// The *Trash*, newest first (OPS-8).
     pub fn trash_entries(&self, now_secs: i64) -> Result<Vec<TrashEntry>> {
-        let retention = self.settings().recently_deleted_retention_days;
+        let settings = self.settings();
+        let retention = settings.recently_deleted_retention_days;
         let mut items = self.trash.list()?;
         items.sort_by(|a, b| b.trashed_at.cmp(&a.trashed_at).then(b.id.cmp(&a.id)));
         Ok(items
             .into_iter()
             .map(|item| {
                 let folder = item.original_uri.parent();
+                let name = item.original_uri.name().unwrap_or_default();
+                let kind = if item.is_dir {
+                    None
+                } else {
+                    mime::extension_of(name).and_then(|e| mime::from_extension(&e))
+                };
                 TrashEntry {
                     id: item.id,
-                    name: item.original_uri.name().map(display_name).unwrap_or_default(),
+                    name: display_name(name),
                     original_uri: item.original_uri.to_string(),
                     folder_uri: folder.as_ref().map(Uri::to_string).unwrap_or_default(),
                     folder_name: self.display_folder(&item.original_uri),
@@ -664,6 +697,8 @@ impl Core {
                     size: item.size,
                     trashed_at: item.trashed_at,
                     days_left: days_left(item.trashed_at, now_secs, retention),
+                    mime_type: kind.map_or_else(String::new, |(m, _)| m.to_owned()),
+                    thumbnail_source: trash_thumbnail(&item, kind.map(|(_, c)| c), settings.thumbnails_local),
                 }
             })
             .collect())

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Scenario on the target (real Silica): a file deleted from Documents is in
 // the Trash page (OPS-8), titled Trash, with the note that deletes on
-// volumes and servers are permanent; Restore from its menu puts the file
-// back in Documents.
+// volumes and servers are permanent under the header, above the rows;
+// Restore from its menu puts the file back in Documents.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -62,6 +62,12 @@ ApplicationWindow {
         return text === english || text === id
     }
 
+    function isInside(ancestor, item) {
+        while (item && item !== ancestor)
+            item = item.parent
+        return item === ancestor
+    }
+
     function next() {
         step++
         waited = 0
@@ -101,13 +107,20 @@ ApplicationWindow {
                 var note = findAll(win.page, function(x) {
                     return x.wrapMode !== undefined && x.visible && either(x.text,
                         "Only files deleted from this device's folders appear here. Deletes on volumes and servers are permanent.",
-                        "lautta-trash-footer")
+                        "lautta-trash-note")
                 }, [])
                 if (note.length !== 1)
                     return win.fail("the note says volumes and servers")
                 var names = findAll(win.page, function(x) { return x.text === "trash-page.md" && x.truncationMode !== undefined }, [])
                 if (names.length !== 1)
                     break
+                var list = views[0]
+                if (!isInside(list.headerItem, note[0]) || list.footerItem)
+                    return win.fail("the note is in the list's header, which is the only one")
+                var noteY = note[0].mapToItem(list.contentItem, 0, 0).y
+                var nameY = names[0].mapToItem(list.contentItem, 0, 0).y
+                if (noteY >= nameY)
+                    return win.fail("the note is above the rows: " + noteY + " vs " + nameY)
                 var row = names[0]
                 while (row && row.openMenu === undefined)
                     row = row.parent

@@ -374,6 +374,99 @@ async fn recently_deleted_entries_restore_and_empty() {
     assert_eq!(h.core.trash.total_size().unwrap(), 0);
 }
 
+/// Trashes `names` from Documents and returns the Trash's rows by name.
+async fn trashed(h: &Home, names: &[&str]) -> std::collections::HashMap<String, TrashEntry> {
+    let uris: Vec<Uri> = names
+        .iter()
+        .map(|n| uri(&format!("lautta://user-documents/{n}")))
+        .collect();
+    h.core.delete(&uris).await.unwrap();
+    h.core
+        .trash_entries(lautta_core::trash::now_secs())
+        .unwrap()
+        .into_iter()
+        .map(|e| (e.name.clone(), e))
+        .collect()
+}
+
+fn stored_url(h: &Home, row: &TrashEntry) -> String {
+    let item = h
+        .core
+        .trash
+        .list()
+        .unwrap()
+        .into_iter()
+        .find(|i| i.id == row.id)
+        .unwrap();
+    lautta_core::app_directory::file_url(&item.stored_path())
+}
+
+#[tokio::test]
+async fn trashed_images_and_videos_carry_what_the_thumbnailer_needs() {
+    let h = home().await;
+    write(&h.root.join("Documents/photo.JPG"), b"jpeg");
+    write(&h.root.join("Documents/clip.mp4"), b"video");
+    write(&h.root.join("Documents/notes.txt"), b"text");
+    write(&h.root.join("Documents/no extension"), b"jpeg");
+    write(&h.root.join("Documents/album.png/inner.txt"), b"x");
+    std::os::unix::fs::symlink("photo.JPG", h.root.join("Documents/link.png")).unwrap();
+    let rows = trashed(
+        &h,
+        &[
+            "photo.JPG",
+            "clip.mp4",
+            "notes.txt",
+            "no extension",
+            "album.png",
+            "link.png",
+        ],
+    )
+    .await;
+    assert_eq!(rows.len(), 6);
+
+    // The stored copy has no extension: the type comes from the original name.
+    let photo = &rows["photo.JPG"];
+    assert_eq!(photo.mime_type, "image/jpeg");
+    assert_eq!(photo.thumbnail_source, stored_url(&h, photo));
+    assert!(photo.thumbnail_source.starts_with("file://"));
+    let clip = &rows["clip.mp4"];
+    assert_eq!(clip.mime_type, "video/mp4");
+    assert_eq!(clip.thumbnail_source, stored_url(&h, clip));
+    // Folders and other files keep their icons.
+    assert_eq!(rows["notes.txt"].mime_type, "text/plain");
+    assert_eq!(rows["notes.txt"].thumbnail_source, "");
+    assert_eq!(rows["no extension"].mime_type, "");
+    assert_eq!(rows["no extension"].thumbnail_source, "");
+    assert_eq!(rows["album.png"].mime_type, "", "a folder has no file type");
+    assert_eq!(rows["album.png"].thumbnail_source, "");
+    // A link would show its target, maybe outside the sandbox.
+    assert_eq!(rows["link.png"].thumbnail_source, "");
+}
+
+#[tokio::test]
+async fn the_thumbnails_setting_decides_whether_trashed_media_show_them() {
+    let h = home().await;
+    write(&h.root.join("Documents/photo.png"), b"png");
+    let rows = trashed(&h, &["photo.png"]).await;
+    assert!(!rows["photo.png"].thumbnail_source.is_empty());
+
+    let mut settings = h.core.settings();
+    settings.thumbnails_local = false;
+    h.core.apply_settings(settings);
+    let off = h.core.trash_entries(lautta_core::trash::now_secs()).unwrap();
+    assert_eq!(off[0].thumbnail_source, "", "thumbnails switched off");
+    assert_eq!(off[0].mime_type, "image/png", "the type does not depend on it");
+
+    // A copy that is gone has nothing to show.
+    let mut settings = h.core.settings();
+    settings.thumbnails_local = true;
+    h.core.apply_settings(settings);
+    let item = h.core.trash.list().unwrap().remove(0);
+    std::fs::remove_file(item.stored_path()).unwrap();
+    let gone = h.core.trash_entries(lautta_core::trash::now_secs()).unwrap();
+    assert_eq!(gone[0].thumbnail_source, "");
+}
+
 #[tokio::test]
 async fn share_probe_and_destinations() {
     let h = home().await;

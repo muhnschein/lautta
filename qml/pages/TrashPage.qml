@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The Trash (OPS-8, boards RecentlyDeleted, RecentlyDeletedEmpty): restore,
 // delete now, or empty it. Only items deleted from this device's folders
-// are kept here; deletes on volumes and servers are permanent.
+// are kept here; deletes on volumes and servers are permanent (note under the
+// header). Images and videos show thumbnails.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -58,11 +59,33 @@ Page {
             }
         }
 
-        header: PageHeader {
-            //% "Trash"
-            title: qsTrId("lautta-trash-title")
-            //% "Kept for %n days"
-            description: qsTrId("lautta-trash-kept", page.retentionDays)
+        header: Column {
+            width: list.width
+
+            PageHeader {
+                //% "Trash"
+                title: qsTrId("lautta-trash-title")
+                //% "Kept for %n days"
+                description: qsTrId("lautta-trash-kept", page.retentionDays)
+            }
+
+            Item {
+                width: parent.width
+                height: note.height + Theme.paddingLarge
+                visible: trash.count > 0
+
+                Label {
+                    id: note
+
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * Theme.horizontalPageMargin
+                    wrapMode: Text.Wrap
+                    color: Theme.secondaryColor
+                    font.pixelSize: Theme.fontSizeSmall
+                    //% "Only files deleted from this device's folders appear here. Deletes on volumes and servers are permanent."
+                    text: qsTrId("lautta-trash-note")
+                }
+            }
         }
 
         delegate: ListItem {
@@ -91,12 +114,29 @@ Page {
                 }
             }
 
-            OpIcon {
+            Item {
                 id: glyph
+
                 x: Theme.horizontalPageMargin
                 anchors.verticalCenter: parent.verticalCenter
-                isDir: model.isDir
-                category: App.categoryOf(model.name)
+                width: Theme.iconSizeMedium
+                height: width
+
+                // Image or video: thumbnail of the stored copy, as folder rows
+                // have; other rows keep their glyph (OPS-8, PRV-1).
+                FileIcon {
+                    anchors.fill: parent
+                    visible: model.thumbnailSource.length > 0
+                    category: App.categoryOf(model.name)
+                    thumbnailSource: model.thumbnailSource
+                    mimeType: model.mimeType
+                }
+                OpIcon {
+                    anchors.centerIn: parent
+                    visible: model.thumbnailSource.length === 0
+                    isDir: model.isDir
+                    category: App.categoryOf(model.name)
+                }
             }
             Column {
                 anchors {
@@ -132,24 +172,6 @@ Page {
                 font.pixelSize: Theme.fontSizeSmall
                 //% "%n days"
                 text: qsTrId("lautta-trash-days-left", model.daysLeft)
-            }
-        }
-
-        footer: Item {
-            width: list.width
-            height: trash.count > 0 ? footerLabel.height + 2 * Theme.paddingLarge : 0
-            visible: trash.count > 0
-
-            Label {
-                id: footerLabel
-                x: Theme.horizontalPageMargin
-                y: Theme.paddingLarge
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                wrapMode: Text.Wrap
-                color: Theme.secondaryColor
-                font.pixelSize: Theme.fontSizeSmall
-                //% "Only files deleted from this device's folders appear here. Deletes on volumes and servers are permanent."
-                text: qsTrId("lautta-trash-footer")
             }
         }
 
