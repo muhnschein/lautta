@@ -2,7 +2,7 @@
 // Host test of DirectoryModel, PathModel and PickerRootsModel (no Silica):
 // listing a temp HOME's Documents, create/rename errors, sort, filter, hidden
 // files, selection, live updates, per-folder view settings, open folders
-// following the global ones and the path menu.
+// following the global ones, thumbnails of PDFs and the path menu.
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -232,6 +232,29 @@ Item {
         open.destroy()
     }
 
+    // PRV-14: the thumbnail of a PDF is the app's, in a local folder too, and
+    // needs PDF thumbnails as well as Show thumbnails.
+    function testPdfThumbnails() {
+        install("two-pages.pdf", "Doc.pdf")
+        wait(500)
+        dir.refresh()
+        wait(500)
+        var want = "image://lautta-thumb/" + root.docs + "Doc.pdf"
+        check(row(rep, "Doc.pdf").thumb === want, "a local PDF has the app's thumbnail: " + row(rep, "Doc.pdf").thumb)
+        check(row(rep, "Beta.png").thumb.indexOf("file://") === 0, "local pictures stay with the system")
+        check(App.setSetting("thumbnails_pdf", JSON.stringify(false)), "PDF thumbnails off")
+        wait(300)
+        check(row(rep, "Doc.pdf").thumb === "", "no thumbnail for a PDF without its switch")
+        check(row(rep, "Beta.png").thumb.indexOf("file://") === 0, "pictures are not affected")
+        App.setSetting("thumbnails_pdf", JSON.stringify(true))
+        wait(300)
+        check(row(rep, "Doc.pdf").thumb === want, "back on")
+        dir.setViewPrefs(JSON.stringify({ thumbnails: false }))
+        check(row(rep, "Doc.pdf").thumb === "", "no thumbnails in the folder: no PDF thumbnail")
+        dir.setViewPrefs(JSON.stringify({ thumbnails: true }))
+        check(row(rep, "Doc.pdf").thumb === want, "and on again")
+    }
+
     function testPicker() {
         check(pump.hasRemote() === false, "no servers in a plain home")
     }
@@ -246,6 +269,7 @@ Item {
         testStates()
         testPrefsAreGlobal()
         testOpenFoldersFollowSettings()
+        testPdfThumbnails()
         testPicker()
     }
 }

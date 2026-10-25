@@ -314,6 +314,205 @@ async fn remote_thumbnails_follow_the_size_setting() {
     assert!(t.rx.await.unwrap().is_ok(), "within 2 MB it is made");
 }
 
+/// A PDF of two pages: a red square in the top left corner of the first,
+/// the second all blue.
+fn pdf() -> Vec<u8> {
+    use lautta_pdf::sample::{build, page};
+    build(&[
+        page(595, 842, "1 0 0 rg 0 792 50 50 re f"),
+        page(595, 842, "0 0 1 rg 0 0 595 842 re f"),
+    ])
+}
+
+fn thumb_pixels(bytes: &[u8]) -> image::RgbImage {
+    image::load_from_memory(bytes).unwrap().to_rgb8()
+}
+
+async fn thumbnail(
+    h: &Home,
+    previews: &Arc<lautta_core::app_viewers::Previews>,
+    u: &str,
+    size: u32,
+) -> Result<Vec<u8>, lautta_core::Error> {
+    let t = previews.request(h.core.clone(), uri(u), size);
+    t.rx.await.unwrap().map(|b| b.to_vec())
+}
+
+#[tokio::test]
+async fn a_remote_pdf_thumbnail_is_its_first_page_made_once_per_version() {
+    let h = home().await;
+    h.nas.add_file("d/a.pdf", &pdf(), 9_000);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let u = "lautta://nv-nas/d/a.pdf";
+
+    let bytes = thumbnail(&h, &previews, u, 64).await.unwrap();
+    let img = thumb_pixels(&bytes);
+    assert_eq!(img.dimensions(), (64, 64), "the size asked for (PRV-14)");
+    let corner = img.get_pixel(2, 2).0;
+    assert!(
+        corner[0] > 200 && corner[1] < 60 && corner[2] < 60,
+        "page 1's red corner: {corner:?}"
+    );
+    let inside = img.get_pixel(40, 40).0;
+    assert!(
+        inside.iter().all(|c| *c > 235),
+        "page 2 is blue and not drawn: {inside:?}"
+    );
+    assert_eq!(previews.cache().len(), 1);
+
+    let before = open_reads(&h.nas);
+    assert_eq!(thumbnail(&h, &previews, u, 64).await.unwrap(), bytes);
+    assert_eq!(before, open_reads(&h.nas), "the second one comes from the cache");
+    assert_eq!(previews.cache().len(), 1);
+
+    thumbnail(&h, &previews, u, 100).await.unwrap();
+    assert_eq!(previews.cache().len(), 2, "another size is another thumbnail");
+    h.nas.add_file("d/a.pdf", &pdf(), 10_000);
+    thumbnail(&h, &previews, u, 64).await.unwrap();
+    assert_eq!(previews.cache().len(), 3, "a changed file is drawn again");
+}
+
+#[tokio::test]
+async fn a_local_pdf_is_made_by_the_app_and_needs_only_the_local_switch() {
+    let h = home().await;
+    std::fs::write(h.root.join("Documents/l.pdf"), pdf()).unwrap();
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let bytes = thumbnail(&h, &previews, "lautta://user-documents/l.pdf", 48)
+        .await
+        .unwrap();
+    assert_eq!(thumb_pixels(&bytes).dimensions(), (48, 48));
+
+    let mut s = h.core.settings();
+    s.thumbnails_remote = false;
+    h.core.apply_settings(s);
+    thumbnail(&h, &previews, "lautta://user-documents/l.pdf", 40)
+        .await
+        .expect("Thumbnails from servers is for servers");
+}
+
+#[tokio::test]
+async fn pdf_thumbnails_follow_their_switch_and_the_one_of_their_place() {
+    let h = home().await;
+    h.nas.add_file("a.pdf", &pdf(), 1);
+    std::fs::write(h.root.join("Documents/l.pdf"), pdf()).unwrap();
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let (remote, local) = ("lautta://nv-nas/a.pdf", "lautta://user-documents/l.pdf");
+
+    let mut s = h.core.settings();
+    s.thumbnails_pdf = false;
+    h.core.apply_settings(s.clone());
+    for u in [remote, local] {
+        let err = thumbnail(&h, &previews, u, 32).await.unwrap_err();
+        assert_eq!(err.kind, ErrorKind::Unsupported, "PDF thumbnails off: {u}");
+    }
+    assert_eq!(open_reads(&h.nas), 0, "refused before reading");
+    assert!(previews.cache().is_empty());
+
+    s.thumbnails_pdf = true;
+    s.thumbnails_remote = false;
+    h.core.apply_settings(s.clone());
+    assert_eq!(
+        thumbnail(&h, &previews, remote, 32).await.unwrap_err().kind,
+        ErrorKind::Unsupported,
+        "a PDF on a server needs Thumbnails from servers"
+    );
+    assert_eq!(open_reads(&h.nas), 0);
+    assert!(thumbnail(&h, &previews, local, 32).await.is_ok());
+
+    s.thumbnails_remote = true;
+    h.core.apply_settings(s);
+    assert!(
+        thumbnail(&h, &previews, remote, 32).await.is_ok(),
+        "both on: made"
+    );
+}
+
+#[tokio::test]
+async fn pdfs_over_the_size_limit_are_refused_before_they_are_read() {
+    let h = home().await;
+    // Valid, with spaces after the end marker.
+    let mut big = pdf();
+    big.resize(1_500_000, b' ');
+    h.nas.add_file("big.pdf", &big, 0);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let mut s = h.core.settings();
+    s.thumbnail_max_remote_mb = 1;
+    h.core.apply_settings(s.clone());
+    let err = thumbnail(&h, &previews, "lautta://nv-nas/big.pdf", 32)
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::Unsupported);
+    assert_eq!(open_reads(&h.nas), 0, "the server limit holds PDFs too");
+    s.thumbnail_max_remote_mb = 2;
+    h.core.apply_settings(s);
+    assert!(thumbnail(&h, &previews, "lautta://nv-nas/big.pdf", 32)
+        .await
+        .is_ok());
+
+    // A local file of 20 MB and a byte: its size is enough to refuse it.
+    let local = std::fs::File::create(h.root.join("Documents/huge.pdf")).unwrap();
+    local
+        .set_len(lautta_core::thumbs::LOCAL_PDF_MAX_BYTES + 1)
+        .unwrap();
+    let err = thumbnail(&h, &previews, "lautta://user-documents/huge.pdf", 32)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err.message, "no app thumbnail for this file",
+        "not a PDF it tried to read"
+    );
+}
+
+#[tokio::test]
+async fn pdfs_that_cannot_be_drawn_are_refused_and_not_read_again() {
+    use lautta_pdf::sample::{build, LOCKED_AES256};
+    let h = home().await;
+    h.nas.add_file("locked.pdf", LOCKED_AES256, 1);
+    h.nas.add_file("broken.pdf", b"%PDF-1.4 and then nothing", 1);
+    h.nas.add_file("empty.pdf", &build(&[]), 1);
+    h.nas.add_file("zero.pdf", b"", 1);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    for (n, name) in ["locked", "broken", "empty", "zero"].into_iter().enumerate() {
+        let u = format!("lautta://nv-nas/{name}.pdf");
+        for _ in 0..3 {
+            let err = thumbnail(&h, &previews, &u, 32).await.unwrap_err();
+            assert_eq!(err.kind, ErrorKind::Unsupported, "{name}");
+        }
+        assert_eq!(open_reads(&h.nas), n + 1, "{name} was read once");
+    }
+    assert!(previews.cache().is_empty());
+    let leftovers: Vec<_> = std::fs::read_dir(previews.cache().dir()).unwrap().collect();
+    assert!(leftovers.is_empty(), "no markers stay behind");
+}
+
+#[tokio::test]
+async fn a_pdf_request_that_is_cancelled_while_queued_never_runs() {
+    let h = home().await;
+    h.nas.add_file("a.pdf", &pdf(), 0);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let gate = Arc::new(tokio::sync::Notify::new());
+    for i in 0..2 {
+        let g = gate.clone();
+        previews
+            .jobs()
+            .request(&format!("block{i}"), "nv-nas", async move { g.notified().await });
+    }
+    let t = previews.request(h.core.clone(), uri("lautta://nv-nas/a.pdf"), 32);
+    assert_eq!(
+        previews.jobs().queued("nv-nas"),
+        1,
+        "PDFs wait in the same queue (PRV-3)"
+    );
+    t.cancel();
+    assert_eq!(
+        previews.jobs().queued("nv-nas"),
+        0,
+        "a delegate that left takes its request along"
+    );
+    gate.notify_waiters();
+    assert_eq!(open_reads(&h.nas), 0);
+}
+
 #[tokio::test]
 async fn a_smaller_thumbnail_cache_is_trimmed_at_once() {
     let h = home().await;

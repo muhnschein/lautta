@@ -6,9 +6,10 @@
 // stays the same; a folder already open follows too, and the folder the
 // page came from takes a choice that only differed there (List over a
 // suggested grid). Its Thumbnails section, there from Settings and from a
-// folder alike, has the switch for every thumbnail and those of servers
-// with their size limit and cache, each saying what it costs; there is no
-// limit for metered connections, which the app cannot tell. Fails when the
+// folder alike, has the switch for every thumbnail, the one for PDFs and
+// those of servers with their size limit and cache, each saying what it
+// costs; there is no limit for metered connections, which the app cannot
+// tell. Fails when the
 // page waits for an Apply, the preview or an open folder keeps the old
 // view, the preview changes size, the folder keeps its suggestion, the
 // header has a description or a thumbnail setting is missing.
@@ -133,22 +134,42 @@ ApplicationWindow {
     }
 
     // No "Used in every folder" under the title; the thumbnails, those of
-    // servers too, in a section of their own below the preview, each switch
-    // saying what it costs.
+    // PDFs and servers too, in a section of their own below the preview,
+    // each switch saying what it costs.
     function checkLayout(page) {
         var header = find(page, "viewOptionsHeader")
         expect(header && header.description === "", "the header has no description: " + (header ? header.description : "none"))
         var section = find(page, "thumbnailsSection")
         var local = find(page, "thumbnailsSwitch")
+        var pdf = find(page, "pdfThumbnailsSwitch")
         var remote = find(page, "remoteThumbnailsSwitch")
         expect(section && section.visible && rowOf(section) > rowOf(page.preview), "a Thumbnails section below the preview")
-        expect(rowOf(local) > rowOf(section) && rowOf(remote) > rowOf(local),
-               "both thumbnail switches are in the section: " + [rowOf(section), rowOf(local), rowOf(remote)])
+        expect(rowOf(local) > rowOf(section) && pdf && rowOf(pdf) > rowOf(local) && rowOf(remote) > rowOf(pdf),
+               "the thumbnail switches are in the section: " + [rowOf(section), rowOf(local), pdf ? rowOf(pdf) : -1, rowOf(remote)])
+        expect(pdf && pdf.text === "PDF thumbnails", "the PDF switch is named for what it does: " + (pdf ? pdf.text : "none"))
         var keys = keysOf(page)
-        var wanted = ["thumbnails_remote", "thumbnail_max_remote_mb", "thumbnail_cache_mb"]
+        var wanted = ["thumbnails_pdf", "thumbnails_remote", "thumbnail_max_remote_mb", "thumbnail_cache_mb"]
         expect(JSON.stringify(keys) === JSON.stringify(wanted), "the thumbnail settings: " + keys)
-        expect(local.description.length > 0 && remote.description.length > 0,
-               "both thumbnail switches say what they cost")
+        expect(local.description.length > 0 && pdf.description.length > 0 && remote.description.length > 0,
+               "the thumbnail switches say what they cost")
+    }
+
+    // PDFs' thumbnails need thumbnails; their switch applies at once and
+    // leaves the servers' alone.
+    function checkPdfThumbnails(page) {
+        var pdf = find(page, "pdfThumbnailsSwitch")
+        expect(App.setting("thumbnails_pdf") === true && pdf.checked && pdf.enabled,
+               "PDF thumbnails start on and can be set while thumbnails are on")
+        tap(page, "pdfThumbnailsSwitch")
+        expect(App.setting("thumbnails_pdf") === false && !pdf.checked, "PDF thumbnails applies at once")
+        expect(find(page, "remoteThumbnailsSwitch").enabled && App.setting("thumbnails_remote") === true,
+               "the servers' switch is its own")
+        tap(page, "pdfThumbnailsSwitch")
+        expect(App.setting("thumbnails_pdf") === true && pdf.checked, "and on again")
+        tap(page, "thumbnailsSwitch")
+        expect(!pdf.enabled, "no PDF thumbnails without thumbnails")
+        tap(page, "thumbnailsSwitch")
+        expect(pdf.enabled && pdf.checked, "back with thumbnails")
     }
 
     // Servers' thumbnails need thumbnails, their size limit the servers' ones.
@@ -309,6 +330,7 @@ ApplicationWindow {
         var page = pageStack.currentPage
         expect(page.objectName === "viewOptionsPage" && page.canAccept === undefined, "a page, not a dialog")
         checkLayout(page)
+        checkPdfThumbnails(page)
         checkRemoteThumbnails(page)
         checkControls(page)
         checkOpenFolderFollowed()

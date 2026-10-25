@@ -2616,7 +2616,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-thumbs-remote-hint">
-        <source>Downloads pictures from servers to make them, which uses more data and battery and can slow down browsing</source>
+        <source>Downloads pictures and PDFs from servers to make them, which uses more data and battery and can slow down browsing</source>
+        <oldsource>Downloads pictures from servers to make them, which uses more data and battery and can slow down browsing</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-browse-not-mounted">
@@ -2637,6 +2638,14 @@
     </message>
     <message id="lautta-dir-menu-new">
         <source>New</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-thumbs-pdf">
+        <source>PDF thumbnails</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-thumbs-pdf-hint">
+        <source>Draws the first page of a PDF, which uses more battery than showing a picture. On servers it also needs Thumbnails from servers</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

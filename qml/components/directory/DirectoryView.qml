@@ -730,7 +730,7 @@ Item {
 
                 // Compact grid: the name inside the tile, cut at the end only.
                 Label {
-                    visible: !view.gridCaptions && model.thumbnailSource.length === 0
+                    visible: !view.gridCaptions && (model.thumbnailSource.length === 0 || tileIcon.thumbnailFailed)
                     anchors {
                         left: parent.left
                         right: parent.right

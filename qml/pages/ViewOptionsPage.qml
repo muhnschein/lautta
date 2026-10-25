@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // View options (board ViewOptions, SPEC BRW-3/BRW-4): sort, view and grid
 // size, the same for every folder, with a live preview below them, then the
-// thumbnails: the switch for all of them, and those from servers with their
-// size limit and cache (PRV-1, PRV-2). A settings page, not a dialog: every
-// control applies at once, and folders already open follow. `model` is the
-// DirectoryModel of the folder the page was opened from (none from
-// Settings): it also takes a choice that only differed there, such as List
-// over a suggested grid.
+// thumbnails: the switch for all of them, the one for PDFs, those from
+// servers with their size limit, and the cache (PRV-1, PRV-2, PRV-14). A
+// settings page, not a dialog: every control applies at once, and folders
+// already open follow. `model` is the DirectoryModel of the folder the page
+// was opened from (none from Settings): it also takes a choice that only
+// differed there, such as List over a suggested grid.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -178,9 +178,9 @@ Page {
             }
 
             // Global like everything on this page (BRW-4), whichever folder
-            // it was opened from; the server ones are not view settings but
-            // belong with the switch that turns every thumbnail off (PRV-1,
-            // PRV-2).
+            // it was opened from; the PDF and server ones are not view
+            // settings but belong with the switch that turns every thumbnail
+            // off (PRV-1, PRV-2, PRV-14).
             SectionHeader {
                 objectName: "thumbnailsSection"
                 //% "Thumbnails"
@@ -196,6 +196,17 @@ Page {
                 description: qsTrId("lautta-dir-opts-thumbnails-hint")
                 onClicked: page.choose("thumbnails_local", "thumbnails", !checked)
             }
+            // A PDF's thumbnail is its first page, made in the app (PRV-14);
+            // it needs the switch of its place, this one or servers'.
+            SettingSwitch {
+                objectName: "pdfThumbnailsSwitch"
+                enabled: page.thumbnails
+                //% "PDF thumbnails"
+                text: qsTrId("lautta-settings-thumbs-pdf")
+                //% "Draws the first page of a PDF, which uses more battery than showing a picture. On servers it also needs Thumbnails from servers"
+                description: qsTrId("lautta-settings-thumbs-pdf-hint")
+                settingKey: "thumbnails_pdf"
+            }
             SettingSwitch {
                 id: remoteThumbnails
 
@@ -203,7 +214,7 @@ Page {
                 enabled: page.thumbnails
                 //% "Thumbnails from servers"
                 text: qsTrId("lautta-settings-thumbs-remote")
-                //% "Downloads pictures from servers to make them, which uses more data and battery and can slow down browsing"
+                //% "Downloads pictures and PDFs from servers to make them, which uses more data and battery and can slow down browsing"
                 description: qsTrId("lautta-settings-thumbs-remote-hint")
                 settingKey: "thumbnails_remote"
             }

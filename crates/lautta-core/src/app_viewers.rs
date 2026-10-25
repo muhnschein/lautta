@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! User-level actions of the viewers area on [`Core`](crate::app::Core):
 //! loading text (PRV-4), Markdown and EXIF sources, the folder's images,
-//! remote thumbnails and full images (PRV-2, PRV-3), media for playback
-//! (PRV-8, PRV-9) and recents (ORG-2).
+//! thumbnails of remote images and of PDFs, remote full images (PRV-2,
+//! PRV-3, PRV-14), media for playback (PRV-8, PRV-9) and recents (ORG-2).
 //! Everything is Qt-free; the Qt layer forwards to these functions.
 
 use crate::app::Core;
@@ -17,7 +17,10 @@ use crate::preview::text::{self as ptext, TextDoc};
 use crate::provider::{list_all, Lane, ProgressSink, ReadHandle, ReadOptions};
 use crate::settings::Settings;
 use crate::sort::sort_permutation;
-use crate::thumbs::{remote_thumbnail, thumb_key, ThumbJobs, ThumbnailCache};
+use crate::thumbs::{
+    remote_thumbnail, thumb_key, thumbnail_source, ThumbJobs, ThumbSettings, ThumbSource, ThumbnailCache,
+};
+use crate::thumbs_pdf::PdfThumbs;
 use crate::uri::Uri;
 use std::collections::HashMap;
 use std::os::fd::OwnedFd;
@@ -180,6 +183,7 @@ impl ReadAhead {
 pub struct Previews {
     cache: ThumbnailCache,
     jobs: ThumbJobs,
+    pdf: PdfThumbs,
     waiters: Mutex<HashMap<String, Vec<(u64, ThumbSender)>>>,
     next_waiter: AtomicU64,
 }
@@ -224,8 +228,8 @@ impl Previews {
         &self.jobs
     }
 
-    /// Queues the thumbnail of a remote image. Several requests for the same
-    /// image and size share one job.
+    /// Queues the thumbnail of a remote image or of a PDF. Several requests
+    /// for the same file and size share one job.
     pub fn request(self: &Arc<Self>, core: Arc<Core>, uri: Uri, size: u32) -> ThumbTicket {
         let job_key = thumb_key(&uri.to_string(), size, None, None);
         let waiter = self.next_waiter.fetch_add(1, Ordering::Relaxed);
@@ -283,32 +287,43 @@ impl Previews {
         }
     }
 
-    /// The thumbnail itself: cache first, then the first 64 KiB or the whole
-    /// file (PRV-2).
+    /// The thumbnail itself, if `thumbnail_source` says the app makes it:
+    /// cache first, then for an image the first 64 KiB or the whole file
+    /// (PRV-2), for a PDF its first page (PRV-14).
     async fn make(&self, core: &Core, uri: &Uri, size: u32) -> ThumbResult {
-        if !core.settings().thumbnails_remote {
-            return Err(Error::new(ErrorKind::Unsupported, "remote thumbnails are off"));
-        }
-        if core.locations.to_local_path(uri).is_some() {
-            return Err(Error::new(
-                ErrorKind::Unsupported,
-                "local files use the system thumbnailer",
-            ));
-        }
+        let local = core.locations.to_local_path(uri).is_some();
         let provider = core.provider(&uri.location)?;
         let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
         if entry.is_dir() {
             return Err(Error::kind(ErrorKind::IsADirectory));
         }
-        let key = thumb_key(&uri.to_string(), size, entry.modified_ms(), entry.etag.as_deref());
+        // The folder's own *Show thumbnails* was asked where the row was made.
+        // Read when asked, so a change in View options holds from the next
+        // thumbnail on.
+        let settings = ThumbSettings::new(&core.settings());
+        if thumbnail_source(&entry, local, true, &settings) != ThumbSource::App {
+            return Err(Error::new(
+                ErrorKind::Unsupported,
+                "no app thumbnail for this file",
+            ));
+        }
+        let pdf = category_of(&entry) == FileCategory::Pdf;
+        let uri_text = uri.to_string();
+        let version = thumb_key(&uri_text, 0, entry.modified_ms(), entry.etag.as_deref());
+        if pdf && self.pdf.is_refused(&version) {
+            return Err(Error::new(ErrorKind::Unsupported, "PDF cannot be drawn"));
+        }
+        let key = thumb_key(&uri_text, size, entry.modified_ms(), entry.etag.as_deref());
         if let Some(hit) = self.cache.get(&key) {
             return Ok(Arc::new(hit));
         }
         let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
-        // Read when asked, so a change in View options holds from the next
-        // thumbnail on.
-        let max_bytes = core.settings().thumbnail_max_remote_bytes();
-        let bytes = remote_thumbnail(handle.as_ref(), size, max_bytes).await?;
+        let bytes = if pdf {
+            let (dir, limit) = (self.cache.dir(), settings.pdf_limit(local));
+            self.pdf.make(dir, &version, handle.as_ref(), size, limit).await?
+        } else {
+            remote_thumbnail(handle.as_ref(), size, settings.max_remote_bytes).await?
+        };
         if let Err(e) = self.cache.put(&key, &bytes) {
             log::warn!("thumbnail not cached: {e}");
         }
@@ -472,6 +487,7 @@ impl Core {
         let previews = Arc::new(Previews {
             cache: ThumbnailCache::new(&dir, max)?,
             jobs: ThumbJobs::new(rt.clone()),
+            pdf: PdfThumbs::default(),
             waiters: Mutex::default(),
             next_waiter: AtomicU64::new(1),
         });
