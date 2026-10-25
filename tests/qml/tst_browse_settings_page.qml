@@ -8,7 +8,12 @@
 // there once let go and stored, in list rows (a favourite above makes them
 // differ from the places in the section). Restore defaults shows every row
 // again with Recents first. A favourite added elsewhere shows in the list
-// and the preview, as the Browse page shows it.
+// and the preview, as the Browse page shows it. Volumes and Servers lead
+// with a switch for the whole section: off, it is a row of its own with its
+// switch off and no grip (the target has no volumes, so it shows only
+// because it is off, and no servers, which need the bridge), a tap on it or
+// Restore defaults turns the section on and the row goes; the rows of such a
+// section stand a step in from the switch.
 //
 // The Silica window sits in a Qt Quick window: only items in one get the
 // mouse events the drag needs.
@@ -18,6 +23,7 @@ import QtTest 1.0
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../../qml/pages"
+import "../../qml/components/browse"
 
 QtQuick.Window {
     id: window
@@ -69,6 +75,16 @@ QtQuick.Window {
         var n = 0
         for (var i = 0; i < layout.count; ++i) {
             if (layout.sectionAt(i) !== "nearby")
+                ++n
+        }
+        return n
+    }
+
+    // How many rows of `section` the list has.
+    function sectionRows(layout, section) {
+        var n = 0
+        for (var i = 0; i < layout.count; ++i) {
+            if (layout.sectionAt(i) === section)
                 ++n
         }
         return n
@@ -130,6 +146,54 @@ QtQuick.Window {
     // "item" of every delegate that is carried, or lit.
     function marked(what) {
         return delegates().filter(function(d) { return d[what] }).map(function(d) { return d.layoutItem }).join(",")
+    }
+
+    // The delegate of the switch of `section`, null when it has none.
+    function switchOf(section) {
+        var all = delegates()
+        for (var i = 0; i < all.length; ++i) {
+            if (all[i].layoutSection === section && all[i].layoutKind === "section")
+                return all[i]
+        }
+        return null
+    }
+
+    // The switch row of Volumes, off: its row, its switch and no grip.
+    function checkSectionSwitch(row) {
+        var toggle = named(row, "layoutSwitch")
+        var grip = named(row, "layoutGrip")
+        expect(toggle !== null && toggle.visible && !toggle.checked, "the Volumes switch is off")
+        expect(grip === null || !grip.visible, "the Volumes switch has no grip")
+        expect(row.title === "lautta-browse-layout-volumes", "the Volumes switch is named by its own text: " + row.title)
+        expect(!row.layoutNested && row.layoutMovable === false, "the switch is neither nested nor movable")
+        var layout = page.layoutModel
+        for (var i = 0; i < layout.count; ++i) {
+            if (layout.sectionAt(i) === "volumes" && layout.itemAt(i) === "section")
+                expect(layout.placeAt(i) === -1, "the switch takes no place in its section: " + layout.placeAt(i))
+        }
+    }
+
+    // A row of a section with a switch stands in from it by two paddings.
+    function checkIndent() {
+        var flat = indentComponent.createObject(window.contentItem, { "layoutNested": false })
+        var nested = indentComponent.createObject(window.contentItem, { "layoutNested": true })
+        var at = function(row) { return named(row, "layoutSwitch").mapToItem(row, 0, 0).x }
+        expect(at(nested) - at(flat) === 2 * Theme.paddingLarge,
+               "a nested row's switch stands in by " + (at(nested) - at(flat)) + ", not " + 2 * Theme.paddingLarge)
+        var label = function(row) { return findAll(row, function(x) { return x.text === row.title }, [])[0].mapToItem(row, 0, 0).x }
+        expect(label(nested) - label(flat) === 2 * Theme.paddingLarge, "and so does its name")
+        flat.destroy()
+        nested.destroy()
+    }
+
+    // The rows a carried row can pass are the section's own: the switch
+    // that leads the section has no place and is not one of them.
+    function checkSectionEnds() {
+        var row = indentComponent.createObject(window.contentItem, { "layoutModel": sectionStub })
+        row.sectionEnds(2)
+        expect(row.firstRow === 1, "a carried row stops below the section's switch: first row " + row.firstRow)
+        expect(row.lastRow === 2, "and at the section's last row: " + row.lastRow)
+        row.destroy()
     }
 
     function named(row, name) {
@@ -232,8 +296,41 @@ QtQuick.Window {
                 favourites.removeUri("lautta://user-documents/")
                 break
             case 5:
-                if (favourites.idOf("lautta://user-documents/") !== -1 || favourites.idOf("lautta://user-music/") !== -1)
+                // Removed and gone from the list, which follows the store.
+                if (favourites.idOf("lautta://user-documents/") !== -1 || favourites.idOf("lautta://user-music/") !== -1
+                        || window.sectionRows(layout, "favourites") > 0)
                     return
+                window.checkIndent()
+                window.checkSectionEnds()
+                window.listed = layout.count
+                // The section is off: its switch shows although there is
+                // no volume, and nothing else changes.
+                layout.setHidden("volumes", "section", true)
+                break
+            case 6:
+                var volumes = window.switchOf("volumes")
+                if (layout.count !== window.listed + 1 || !volumes)
+                    return
+                window.checkSectionSwitch(volumes)
+                // A tap on the row turns the section on, as on any row.
+                volumes.clicked(null)
+                break
+            case 7:
+                if (layout.count !== window.listed)
+                    return
+                window.expect(window.switchOf("volumes") === null, "a section that is on and empty has no switch")
+                layout.setHidden("volumes", "section", true)
+                break
+            case 8:
+                if (layout.count !== window.listed + 1)
+                    return
+                // Restore defaults turns the sections on.
+                layout.restoreDefaults()
+                break
+            case 9:
+                if (layout.count !== window.listed)
+                    return
+                window.expect(window.switchOf("volumes") === null, "Restore defaults leaves Volumes off")
                 window.scenarioRunning = false
                 break
             }
@@ -259,5 +356,25 @@ QtQuick.Window {
     Component {
         id: pageComponent
         BrowseSettingsPage { }
+    }
+
+    // The list of Servers: its switch, then two rows with places 0 and 1.
+    QtObject {
+        id: sectionStub
+
+        readonly property int count: 3
+        function sectionAt(row) { return "servers" }
+        function placeAt(row) { return row - 1 }
+    }
+
+    Component {
+        id: indentComponent
+        BrowseLayoutDelegate {
+            width: 540
+            layoutSection: "servers"
+            layoutItem: "nv-account:1"
+            layoutKind: "account"
+            layoutName: "NAS"
+        }
     }
 }

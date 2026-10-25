@@ -52,6 +52,7 @@ pub mod workcopy;
 pub mod compress;
 pub mod preview;
 pub mod thumbs;
+pub mod thumbs_pdf;
 
 // Search, organisation
 pub mod org;

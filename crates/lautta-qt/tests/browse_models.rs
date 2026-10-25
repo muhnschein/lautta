@@ -38,6 +38,8 @@ struct FakeWorld {
     consentRequests: qt_method!(fn(&self) -> i32),
     setAttention: qt_method!(fn(&self, id: QString, attention: QString)),
     setState: qt_method!(fn(&self, id: QString, state: QString, error: QString)),
+    addAccount: qt_method!(fn(&self, n: i32, name: QString)),
+    locationKnown: qt_method!(fn(&self, id: QString) -> bool),
     removeAccount: qt_method!(fn(&self, id: QString)),
     scriptQuestion: qt_method!(fn(&self, kind: QString)),
     secrets: qt_method!(fn(&self) -> QString),
@@ -77,6 +79,15 @@ impl FakeWorld {
             &state.to_string(),
             Some(error.as_str()).filter(|e| !e.is_empty()),
         ));
+    }
+
+    fn addAccount(&self, n: i32, name: QString) {
+        run(fake().add_account(n, "sftp", &name.to_string(), "office.home"));
+    }
+
+    /// The app's core has the location, shown or not.
+    fn locationKnown(&self, id: QString) -> bool {
+        lautta_qt::runtime::core().is_some_and(|core| core.location(&id.to_string()).is_some())
     }
 
     fn removeAccount(&self, id: QString) {

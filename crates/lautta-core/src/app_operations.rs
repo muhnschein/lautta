@@ -8,15 +8,16 @@
 use crate::app::{Core, Started};
 use crate::app_directory::file_url;
 use crate::compress::{compress, ArchiveKind, CompressOptions};
-use crate::entry::{cap, Kind};
+use crate::entry::{cap, Entry, Kind};
 use crate::error::{Error, ErrorKind, Result};
-use crate::mime::{self, FileCategory};
+use crate::mime;
 use crate::ops::conflict as conflict_ops;
 use crate::ops::names::{keep_both_name, split_extension};
 use crate::ops::{Conflict, ConflictChoice, OperationKind, Plan};
 use crate::provider::{list_all, Disposition, Lane, ProgressSink, Provider, WriteOptions};
 use crate::settings::Settings;
 use crate::sys;
+use crate::thumbs::{app_thumbnail_url, thumbnail_source, trash_item_uri, ThumbSettings, ThumbSource};
 use crate::transfer::TransferId;
 use crate::trash::TrashItem;
 use crate::uri::Uri;
@@ -350,25 +351,35 @@ pub struct TrashEntry {
     /// From the original name's extension; empty when none is known. Stored
     /// copy has no extension, so the system thumbnailer goes by this.
     pub mime_type: String,
-    /// `file://` URL of the stored copy of an image or video that gets a
-    /// thumbnail, else empty ([`trash_thumbnail`]).
+    /// `file://` URL of the stored copy of an image or video, or the
+    /// `image://lautta-thumb/` URL of a PDF, that gets a thumbnail, else empty
+    /// ([`trash_thumbnail`]).
     pub thumbnail_source: String,
 }
 
-/// Stored copy of a trashed image or video as system thumbnailer input
-/// (OPS-8, PRV-1). Empty = row keeps its glyph: thumbnails off (BRW-4),
-/// extension says no image or video, or stored item is no regular file. A
-/// trashed link would show its target, maybe outside the sandbox (BRW-10); a
-/// copy gone from the trash folder has nothing to show.
-fn trash_thumbnail(item: &TrashItem, category: Option<FileCategory>, thumbnails: bool) -> String {
-    if !thumbnails || !matches!(category, Some(FileCategory::Image | FileCategory::Video)) {
+/// What a trashed file shows as its thumbnail (OPS-8, PRV-1, PRV-14): the
+/// shared rule ([`thumbnail_source`]) decides by the original name, which
+/// the stored copy has lost. An image or video gives the stored copy's
+/// `file://` URL for the system thumbnailer, a PDF an app thumbnail of the
+/// Trash item. Empty = row keeps its glyph: thumbnails off (BRW-4), the rule
+/// says none, or stored item is no regular file. A trashed link would show
+/// its target, maybe outside the sandbox (BRW-10); a copy gone from the trash
+/// folder has nothing to show.
+fn trash_thumbnail(item: &TrashItem, settings: &Settings) -> String {
+    let kind = if item.is_dir { Kind::Dir } else { Kind::File };
+    let mut entry = Entry::new(item.original_uri.name().unwrap_or_default(), kind);
+    entry.size = item.size;
+    let set = ThumbSettings::new(settings);
+    let source = thumbnail_source(&entry, true, settings.thumbnails_local, &set);
+    let stored = item.stored_path();
+    if source == ThumbSource::Icon || !std::fs::symlink_metadata(&stored).is_ok_and(|m| m.is_file()) {
         return String::new();
     }
-    let stored = item.stored_path();
-    if std::fs::symlink_metadata(&stored).is_ok_and(|m| m.is_file()) {
-        file_url(&stored)
-    } else {
-        String::new()
+    match source {
+        ThumbSource::App => {
+            trash_item_uri(item.id, &item.stored_name).map_or_else(String::new, |uri| app_thumbnail_url(&uri))
+        }
+        _ => file_url(&stored),
     }
 }
 
@@ -698,7 +709,7 @@ impl Core {
                     trashed_at: item.trashed_at,
                     days_left: days_left(item.trashed_at, now_secs, retention),
                     mime_type: kind.map_or_else(String::new, |(m, _)| m.to_owned()),
-                    thumbnail_source: trash_thumbnail(&item, kind.map(|(_, c)| c), settings.thumbnails_local),
+                    thumbnail_source: trash_thumbnail(&item, &settings),
                 }
             })
             .collect())

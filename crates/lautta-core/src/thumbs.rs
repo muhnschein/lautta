@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Remote thumbnails and the thumbnail cache (SPEC PRV-2, PRV-3).
+//! Remote thumbnails, the rule for which files get one and the thumbnail
+//! cache (SPEC PRV-1 to PRV-3, PRV-14).
 //!
+//! * [`thumbnail_source`]: the one rule for which files get a thumbnail and
+//!   who makes it. Every list that shows thumbnails asks it.
 //! * [`remote_thumbnail`]: EXIF thumbnail from the first 64 KiB when there is
 //!   one, otherwise the whole file (up to the size set in View options, 20 MB
 //!   by default) decoded and scaled, EXIF orientation applied.
@@ -10,11 +13,18 @@
 //! * [`ThumbJobs`]: at most two jobs in flight per location, newest request
 //!   first (the delegates that are visible now), cancelable by key.
 //!
-//! Local thumbnails come from `Nemo.Thumbnailer` in QML (PRV-1), not from here.
+//! Local images and videos get theirs from `Nemo.Thumbnailer` in QML
+//! (PRV-1), not from here; PDFs, local or not, are made by
+//! [`crate::thumbs_pdf`].
 
+use crate::entry::{Entry, EntryFlags};
 use crate::error::{Error, ErrorKind, Result};
+use crate::mime::{category_of, FileCategory};
 use crate::preview::exif;
 use crate::provider::{read_all, ReadHandle};
+use crate::settings::Settings;
+use crate::uri::Uri;
+use crate::vpath::{validate_name, VPath};
 use image::imageops::FilterType;
 use image::{DynamicImage, ImageOutputFormat};
 use sha2::{Digest, Sha256};
@@ -33,6 +43,98 @@ const MAX_PIXELS: u64 = 64_000_000;
 const JPEG_QUALITY: u8 = 85;
 /// Simultaneous jobs per location (PRV-3).
 pub const MAX_IN_FLIGHT_PER_LOCATION: usize = 2;
+/// Largest local PDF a thumbnail is made from (PRV-14); remote ones are
+/// held to the size limit of View options.
+pub const LOCAL_PDF_MAX_BYTES: u64 = 20_000_000;
+
+/// Who makes a file's thumbnail (PRV-1, PRV-2, PRV-14).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThumbSource {
+    /// No thumbnail: the category's icon shows.
+    Icon,
+    /// `Nemo.Thumbnailer`, given the file's `file://` URL: local images and
+    /// videos.
+    System,
+    /// The app, through [`app_thumbnail_url`]: remote images and PDFs.
+    App,
+}
+
+/// The settings that decide which files get a thumbnail, apart from the
+/// folder's *Show thumbnails* (BRW-4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ThumbSettings {
+    /// *Thumbnails from servers*.
+    pub remote: bool,
+    /// *Largest server file with a thumbnail*, in bytes.
+    pub max_remote_bytes: u64,
+}
+
+impl ThumbSettings {
+    pub fn new(s: &Settings) -> ThumbSettings {
+        ThumbSettings {
+            remote: s.thumbnails_remote,
+            max_remote_bytes: s.thumbnail_max_remote_bytes(),
+        }
+    }
+
+    /// Largest PDF a thumbnail is made from: nothing larger is read.
+    pub fn pdf_limit(&self, local: bool) -> u64 {
+        if local {
+            LOCAL_PDF_MAX_BYTES
+        } else {
+            self.max_remote_bytes.min(lautta_pdf::MAX_PDF_BYTES)
+        }
+    }
+}
+
+/// Who makes the thumbnail of `entry`, for a file of a local folder (`local`)
+/// or not. `shown` is the folder's *Show thumbnails*. A PDF follows the
+/// switches an image does: *Show thumbnails* for a local one and also
+/// *Thumbnails from servers* for a remote one; one larger than
+/// [`ThumbSettings::pdf_limit`] has none.
+pub fn thumbnail_source(entry: &Entry, local: bool, shown: bool, set: &ThumbSettings) -> ThumbSource {
+    if !shown || entry.flags.contains(EntryFlags::NOT_ACCESSIBLE) {
+        return ThumbSource::Icon;
+    }
+    match (category_of(entry), local) {
+        (FileCategory::Image | FileCategory::Video, true) => ThumbSource::System,
+        (FileCategory::Image, false) if set.remote => ThumbSource::App,
+        (FileCategory::Pdf, _)
+            if (local || set.remote) && entry.size.is_none_or(|s| s <= set.pdf_limit(local)) =>
+        {
+            ThumbSource::App
+        }
+        _ => ThumbSource::Icon,
+    }
+}
+
+/// The `Image` source of an app thumbnail; QML adds `?size=N`.
+pub fn app_thumbnail_url(uri: &Uri) -> String {
+    format!("image://lautta-thumb/{uri}")
+}
+
+/// Location id of the Trash in thumbnail URIs: a trashed file's stored copy
+/// has no location of its own, and no real location has this id (LOC-7).
+pub const TRASH_LOCATION: &str = "trash";
+
+/// The thumbnail URI of the Trash item `id` stored as `stored_name`:
+/// `lautta://trash/<id>/<stored name>`. Ids are reused after the newest item
+/// goes, stored names are not, and QML caches pictures by URL: one URI never
+/// names two files. `None` when the name is no path component.
+pub fn trash_item_uri(id: i64, stored_name: &str) -> Option<Uri> {
+    validate_name(stored_name.as_bytes()).ok()?;
+    let path = VPath::parse(format!("{id}/{stored_name}").as_bytes()).ok()?;
+    Some(Uri::new(TRASH_LOCATION, path))
+}
+
+/// Id and stored name of the Trash item a thumbnail URI names, if it is one
+/// of [`trash_item_uri`]'s: the location is part of the comparison.
+pub fn trash_item_ref(uri: &Uri) -> Option<(i64, String)> {
+    let mut parts = uri.path.components();
+    let id: i64 = std::str::from_utf8(parts.next()?).ok()?.parse().ok()?;
+    let stored = std::str::from_utf8(parts.next()?).ok()?.to_owned();
+    (trash_item_uri(id, &stored).as_ref() == Some(uri)).then_some((id, stored))
+}
 
 /// Cache key: hex sha256 over URI, requested size, mtime and etag.
 pub fn thumb_key(uri: &str, size: u32, mtime_ms: Option<i64>, etag: Option<&[u8]>) -> String {
@@ -69,7 +171,7 @@ pub fn apply_orientation(img: DynamicImage, orientation: u8) -> DynamicImage {
     }
 }
 
-fn encode(img: &DynamicImage) -> Result<Vec<u8>> {
+pub(crate) fn encode(img: &DynamicImage) -> Result<Vec<u8>> {
     let mut out = Cursor::new(Vec::new());
     let result = if img.color().has_alpha() {
         img.write_to(&mut out, ImageOutputFormat::Png)
@@ -709,6 +811,195 @@ mod tests {
         assert_ne!(base, thumb_key("srv:/a.jpg", 128, None, Some(b"e1")));
         assert_ne!(base, thumb_key("srv:/a.jpg", 128, Some(5), None));
         assert_ne!(thumb_key("a", 1, None, Some(b"")), thumb_key("a", 1, None, None));
+    }
+
+    fn file(name: &str, size: Option<u64>) -> Entry {
+        let mut e = Entry::new(name.as_bytes(), crate::entry::Kind::File);
+        e.size = size;
+        e
+    }
+
+    fn settings() -> ThumbSettings {
+        ThumbSettings::new(&Settings::default())
+    }
+
+    #[test]
+    fn local_images_and_videos_use_the_system_thumbnailer() {
+        for name in ["a.jpg", "b.PNG", "c.mp4"] {
+            assert_eq!(
+                thumbnail_source(&file(name, Some(5)), true, true, &settings()),
+                ThumbSource::System,
+                "{name}"
+            );
+        }
+        let off = ThumbSettings {
+            remote: false,
+            ..settings()
+        };
+        assert_eq!(
+            thumbnail_source(&file("a.jpg", None), true, true, &off),
+            ThumbSource::System,
+            "the server switch does not touch local pictures"
+        );
+        assert_eq!(
+            thumbnail_source(&file("a.jpg", None), true, false, &settings()),
+            ThumbSource::Icon,
+            "Show thumbnails off"
+        );
+    }
+
+    #[test]
+    fn remote_images_are_the_apps_and_need_the_server_switch() {
+        let on = settings();
+        assert_eq!(
+            thumbnail_source(&file("a.jpg", None), false, true, &on),
+            ThumbSource::App
+        );
+        let off = ThumbSettings { remote: false, ..on };
+        assert_eq!(
+            thumbnail_source(&file("a.jpg", None), false, true, &off),
+            ThumbSource::Icon
+        );
+        assert_eq!(
+            thumbnail_source(&file("c.mp4", None), false, true, &on),
+            ThumbSource::Icon,
+            "no thumbnails of videos on servers"
+        );
+        assert_eq!(
+            thumbnail_source(&file("a.jpg", None), false, false, &on),
+            ThumbSource::Icon,
+            "Show thumbnails off"
+        );
+    }
+
+    #[test]
+    fn pdfs_follow_the_switches_of_their_place() {
+        let on = settings();
+        let pdf = file("a.pdf", Some(1_000));
+        for local in [true, false] {
+            assert_eq!(
+                thumbnail_source(&pdf, local, true, &on),
+                ThumbSource::App,
+                "{local}"
+            );
+            assert_eq!(
+                thumbnail_source(&pdf, local, false, &on),
+                ThumbSource::Icon,
+                "Show thumbnails off, local {local}"
+            );
+        }
+        let no_servers = ThumbSettings { remote: false, ..on };
+        assert_eq!(thumbnail_source(&pdf, true, true, &no_servers), ThumbSource::App);
+        assert_eq!(
+            thumbnail_source(&pdf, false, true, &no_servers),
+            ThumbSource::Icon,
+            "a PDF on a server needs Thumbnails from servers"
+        );
+        let by_type = Entry {
+            content_type: Some("application/pdf".into()),
+            ..file("download", Some(1_000))
+        };
+        assert_eq!(thumbnail_source(&by_type, false, true, &on), ThumbSource::App);
+    }
+
+    #[test]
+    fn pdfs_over_the_limit_have_no_thumbnail() {
+        let on = settings();
+        let at = |size| thumbnail_source(&file("a.pdf", size), true, true, &on);
+        assert_eq!(at(Some(LOCAL_PDF_MAX_BYTES)), ThumbSource::App);
+        assert_eq!(at(Some(LOCAL_PDF_MAX_BYTES + 1)), ThumbSource::Icon);
+        assert_eq!(at(None), ThumbSource::App, "an unknown size is checked when read");
+        let remote = |size, set: &ThumbSettings| thumbnail_source(&file("a.pdf", size), false, true, set);
+        assert_eq!(
+            remote(Some(20_000_000), &on),
+            ThumbSource::App,
+            "the server limit is 20 MB"
+        );
+        assert_eq!(remote(Some(20_000_001), &on), ThumbSource::Icon);
+        let big = ThumbSettings {
+            max_remote_bytes: 100_000_000,
+            ..on
+        };
+        assert_eq!(
+            remote(Some(20_000_001), &big),
+            ThumbSource::App,
+            "the setting decides"
+        );
+        assert_eq!(
+            thumbnail_source(&file("a.pdf", Some(20_000_001)), true, true, &big),
+            ThumbSource::Icon,
+            "but not for local files"
+        );
+    }
+
+    #[test]
+    fn the_pdf_limit_never_passes_what_the_viewer_opens() {
+        let set = ThumbSettings {
+            max_remote_bytes: 1_000_000_000,
+            ..settings()
+        };
+        assert_eq!(set.pdf_limit(false), lautta_pdf::MAX_PDF_BYTES);
+        assert_eq!(set.pdf_limit(true), LOCAL_PDF_MAX_BYTES);
+        assert_eq!(settings().pdf_limit(false), 20_000_000);
+    }
+
+    #[test]
+    fn other_files_and_unreachable_ones_have_none() {
+        let on = settings();
+        for local in [true, false] {
+            for name in ["a.txt", "a.zip", "noext"] {
+                assert_eq!(
+                    thumbnail_source(&file(name, Some(5)), local, true, &on),
+                    ThumbSource::Icon,
+                    "{name}"
+                );
+            }
+            let dir = Entry::new(b"photos.jpg", crate::entry::Kind::Dir);
+            assert_eq!(thumbnail_source(&dir, local, true, &on), ThumbSource::Icon);
+            for name in ["a.jpg", "a.pdf"] {
+                let mut e = file(name, Some(5));
+                e.flags |= EntryFlags::NOT_ACCESSIBLE;
+                assert_eq!(
+                    thumbnail_source(&e, local, true, &on),
+                    ThumbSource::Icon,
+                    "{name} behind a link out of the sandbox, local {local}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn trash_items_have_thumbnail_uris_of_their_own() {
+        let uri = trash_item_uri(42, "0000a-1f-3").unwrap();
+        assert_eq!(uri.to_string(), "lautta://trash/42/0000a-1f-3");
+        assert_eq!(trash_item_ref(&uri), Some((42, "0000a-1f-3".to_owned())));
+        // The id alone is not enough: it is reused.
+        assert_ne!(uri, trash_item_uri(42, "0000a-1f-4").unwrap());
+        assert_eq!(
+            trash_item_ref(&trash_item_uri(0, "x").unwrap()),
+            Some((0, "x".to_owned()))
+        );
+        assert_eq!(trash_item_uri(1, "a/b"), None, "a name is one component");
+        assert_eq!(trash_item_uri(1, ".."), None);
+        for other in [
+            "lautta://user-documents/42/x",
+            "lautta://trash",
+            "lautta://trash/42",
+            "lautta://trash/x/y",
+            "lautta://trash/+42/y",
+            "lautta://trash/42/y/z",
+        ] {
+            assert_eq!(trash_item_ref(&Uri::parse(other).unwrap()), None, "{other}");
+        }
+    }
+
+    #[test]
+    fn app_thumbnails_are_asked_from_the_provider_by_uri() {
+        let uri = Uri::parse("lautta://nv-a/p/a%20b.pdf").unwrap();
+        assert_eq!(
+            app_thumbnail_url(&uri),
+            "image://lautta-thumb/lautta://nv-a/p/a%20b.pdf"
+        );
     }
 
     fn cache(max: u64) -> (tempfile::TempDir, ThumbnailCache) {

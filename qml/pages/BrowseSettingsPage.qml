@@ -3,7 +3,10 @@
 // of the Browse page, a tap shows or hides it, the grip carries it within
 // its section while the rows it passes move aside; Restore defaults in the
 // pulley and a live preview below (as Salama's start page settings).
-// Favourites only move; removing one stays on the Browse page.
+// Favourites only move; removing one stays on the Browse page. Volumes and
+// Servers lead with a switch for the whole section: off, the section's rows
+// leave this list and the Browse page, and what each row's switch said comes
+// back with the section.
 //
 // A switch or a move changes its row in place, so the list keeps its
 // position and its rows (BrowseLayoutDelegate.qml has the carrying).
@@ -84,6 +87,7 @@ Page {
             layoutName: model.name
             layoutHidden: model.hidden
             layoutMovable: model.movable
+            layoutNested: model.nested
             onToggled: layout.setHidden(layoutSection, layoutItem, shown)
         }
 

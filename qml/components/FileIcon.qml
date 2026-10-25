@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The icon of a file or folder (doc/QML-API.md): a theme icon per category,
 // the system thumbnail for local images and videos (Nemo.Thumbnailer, PRV-1)
-// and the app's thumbnail provider for remote ones (PRV-2). `thumbnailSource`
-// is what DirectoryModel's role gives: a file:// URL, an image://lautta-thumb/
-// URL or empty.
+// and the app's thumbnail provider for remote images and PDFs (PRV-2,
+// PRV-14). `thumbnailSource` is what DirectoryModel's role gives: a file://
+// URL, an image://lautta-thumb/ URL or empty. A thumbnail that cannot be
+// made (an encrypted PDF) leaves the category's icon, and `thumbnailFailed`
+// says so.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.Thumbnailer 1.0
@@ -22,6 +24,7 @@ Item {
     // The side of the theme glyph inside; the grid at 3 per row draws it large.
     property real glyphSize: Theme.iconSizeMedium
     readonly property bool thumbnailReady: thumbnailLoader.item ? thumbnailLoader.item.ready : false
+    readonly property bool thumbnailFailed: thumbnailLoader.item ? thumbnailLoader.item.failed : false
 
     function iconFor(name, dir) {
         if (dir)
@@ -71,6 +74,7 @@ Item {
 
         Thumbnail {
             readonly property bool ready: status === Thumbnail.Ready
+            readonly property bool failed: status === Thumbnail.Error
 
             source: icon.thumbnailSource
             mimeType: icon.mimeType
@@ -86,6 +90,7 @@ Item {
 
         Image {
             readonly property bool ready: status === Image.Ready
+            readonly property bool failed: status === Image.Error
 
             source: icon.thumbnailSource + "?size=" + Math.round(icon.size)
             sourceSize.width: icon.width

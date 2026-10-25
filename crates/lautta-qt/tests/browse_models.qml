@@ -50,6 +50,8 @@ Item {
         }
     }
 
+    // What each row of the remote folder gives: its thumbnail, and for a folder
+    // its modified time and item count.
     Repeater {
         id: remoteRows
         model: remoteDir
@@ -58,6 +60,7 @@ Item {
             property bool rfolder: isDir
             property real rmodified: modified
             property int ritems: itemCount
+            property string rthumb: thumbnailSource
         }
     }
 
@@ -84,6 +87,7 @@ Item {
             property bool lhidden: hidden
             property int lplace: place
             property bool lmovable: movable
+            property bool lnested: nested
             // Set by a step to tell whether this delegate survived a change.
             property bool marked: false
         }
@@ -106,6 +110,17 @@ Item {
                 return i
         }
         return -1
+    }
+
+    // The items of a section in the settings list, in order.
+    function layoutKeys(section) {
+        var items = []
+        for (var i = 0; i < layoutRows.count; ++i) {
+            var r = layoutRows.itemAt(i)
+            if (r && r.lsection === section)
+                items.push(r.litem)
+        }
+        return items
     }
 
     function deviceRows() {
@@ -154,6 +169,15 @@ Item {
         for (var i = 0; i < remoteRows.count; ++i)
             if (remoteRows.itemAt(i).rname === name)
                 return remoteRows.itemAt(i)
+        return null
+    }
+
+    // What the remote folder gives the file `name` as thumbnail, null without it.
+    function thumbOf(name) {
+        for (var i = 0; i < remoteRows.count; ++i) {
+            if (remoteRows.itemAt(i).rname === name)
+                return remoteRows.itemAt(i).rthumb
+        }
         return null
     }
 
@@ -334,6 +358,76 @@ Item {
                  return root.moved && root.movedAtOnce && root.refused
                         && deviceRows().split(",")[2] === "recents" && r.lplace === 2 && r.marked
              })
+        // Volumes and Servers lead with a switch each; off, the section's
+        // rows leave the settings list and the Browse page (and so the
+        // preview, which is the Browse page's model) and come back as they
+        // were (BRW-12). Rows change in place, no model reset.
+        step("Volumes and Servers lead with their switch",
+             function() { layout.reload() },
+             function() {
+                 var v = layoutRow("volumes", "section")
+                 var s = layoutRow("servers", "section")
+                 var card = layoutRow("volumes", "vol-CARD")
+                 var nas = layoutRow("servers", "nv-account:1")
+                 return v !== null && s !== null && !v.lhidden && !s.lhidden && v.lplace === -1 && s.lplace === -1
+                        && !v.lmovable && !v.lnested && card !== null && card.lnested && nas !== null && nas.lnested
+                        && layoutIndex("volumes", "section") + 1 === layoutIndex("volumes", "vol-CARD")
+                        && layoutIndex("servers", "section") + 1 === layoutIndex("servers", "nv-account:1")
+                        && layoutRow("device", "recents").lnested === false
+             })
+        step("Servers off hides its rows, not the other sections",
+             function() {
+                 layout.setHidden("servers", "nv-account:1", true)
+                 layoutRow("servers", "section").marked = true
+                 layoutRow("volumes", "section").marked = true
+                 layoutRow("volumes", "vol-CARD").marked = true
+                 layout.setHidden("servers", "section", true)
+             },
+             function() {
+                 var s = layoutRow("servers", "section")
+                 return s !== null && s.lhidden && s.marked && layoutRow("servers", "nv-account:1") === null
+                        && !has("account") && !has("adhocRecent")
+                        && layoutRow("volumes", "section").marked && layoutRow("volumes", "vol-CARD").marked
+                        && has("volume", "CARD") && has("folder", "Music")
+             })
+        step("a server that comes while Servers is off shows nowhere",
+             function() { FakeWorld.addAccount(2, "Office") },
+             function() {
+                 return FakeWorld.locationKnown("nv-account:2") && layoutRow("servers", "section").lhidden
+                        && !has("account") && layoutRow("servers", "nv-account:2") === null
+                        && JSON.stringify(layoutKeys("servers")) === '["section"]'
+             })
+        step("Servers on shows its rows again with their earlier switches",
+             function() {
+                 layoutRow("servers", "section").marked = true
+                 layout.setHidden("servers", "section", false)
+             },
+             function() {
+                 var s = layoutRow("servers", "section")
+                 var nas = layoutRow("servers", "nv-account:1")
+                 var office = layoutRow("servers", "nv-account:2")
+                 return s !== null && !s.lhidden && s.marked && nas !== null && nas.lhidden
+                        && office !== null && !office.lhidden && has("account", "Office") && !has("account", "NAS")
+             })
+        step("Volumes off removes the volumes from the Browse page",
+             function() { layout.setHidden("volumes", "section", true) },
+             function() {
+                 var v = layoutRow("volumes", "section")
+                 return v !== null && v.lhidden && layoutRow("volumes", "vol-CARD") === null
+                        && !has("volume") && has("account", "Office")
+                        && JSON.stringify(layoutKeys("volumes")) === '["section"]'
+             })
+        step("restore defaults switches both sections on and shows every row",
+             function() { layout.restoreDefaults() },
+             function() {
+                 return !layoutRow("volumes", "section").lhidden && !layoutRow("servers", "section").lhidden
+                        && has("volume", "CARD") && has("account", "NAS") && has("account", "Office")
+                        && !layoutRow("servers", "nv-account:1").lhidden
+             })
+        step("the second server goes away",
+             function() { FakeWorld.removeAccount("account:2") },
+             function() { return !has("account", "Office") && layoutRow("servers", "nv-account:2") === null })
+
         step("a remote folder lists",
              function() {
                  FakeWorld.putFile("account:1", "r1.txt")
@@ -347,6 +441,25 @@ Item {
                  root.relisted = remoteDir.loading
              },
              function() { return root.relisted && !remoteDir.loading && remoteDir.count === 2 })
+        // A server's pictures and PDFs are made by the app, with the switch
+        // of servers (PRV-2, PRV-14); an open folder follows it at once.
+        step("a server's pictures and PDFs have the app's thumbnails",
+             function() {
+                 FakeWorld.putFile("account:1", "p.jpg")
+                 FakeWorld.putFile("account:1", "d.pdf")
+                 remoteDir.revisit()
+             },
+             function() {
+                 var base = "image://lautta-thumb/lautta://nv-account:1/"
+                 return !remoteDir.loading && remoteDir.count === 4 && thumbOf("p.jpg") === base + "p.jpg"
+                        && thumbOf("d.pdf") === base + "d.pdf" && thumbOf("r1.txt") === ""
+             })
+        step("Thumbnails from servers off takes them from the open folder",
+             function() { App.setSetting("thumbnails_remote", JSON.stringify(false)) },
+             function() { return thumbOf("p.jpg") === "" && thumbOf("d.pdf") === "" })
+        step("and on again gives them back",
+             function() { App.setSetting("thumbnails_remote", JSON.stringify(true)) },
+             function() { return thumbOf("p.jpg") !== "" && thumbOf("d.pdf") !== "" })
         // A folder on a server shows its modified time in the grid, never an
         // item count: counting would list it over the network (SPEC §15.3).
         step("a remote folder is listed with a folder in it",
@@ -354,7 +467,7 @@ Item {
                  FakeWorld.putFile("account:1", "sub/inner.txt")
                  remoteDir.revisit()
              },
-             function() { return !remoteDir.loading && remoteDir.count === 3 })
+             function() { return !remoteDir.loading && remoteDir.count === 5 })
         step("a folder on a server is not counted",
              function() {
                  root.polls = 0
