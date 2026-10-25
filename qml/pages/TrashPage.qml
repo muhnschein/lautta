@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The Trash (OPS-8, boards RecentlyDeleted, RecentlyDeletedEmpty): restore,
 // delete now, or empty it. Only items deleted from this device's folders
-// are kept here; deletes on volumes and servers are permanent.
+// are kept here; deletes on volumes and servers are permanent. Images and
+// videos show their thumbnails.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -91,12 +92,29 @@ Page {
                 }
             }
 
-            OpIcon {
+            Item {
                 id: glyph
+
                 x: Theme.horizontalPageMargin
                 anchors.verticalCenter: parent.verticalCenter
-                isDir: model.isDir
-                category: App.categoryOf(model.name)
+                width: Theme.iconSizeMedium
+                height: width
+
+                // The stored copy of an image or video, drawn like a folder
+                // row's; every other row keeps its glyph (OPS-8, PRV-1).
+                FileIcon {
+                    anchors.fill: parent
+                    visible: model.thumbnailSource.length > 0
+                    category: App.categoryOf(model.name)
+                    thumbnailSource: model.thumbnailSource
+                    mimeType: model.mimeType
+                }
+                OpIcon {
+                    anchors.centerIn: parent
+                    visible: model.thumbnailSource.length === 0
+                    isDir: model.isDir
+                    category: App.categoryOf(model.name)
+                }
             }
             Column {
                 anchors {

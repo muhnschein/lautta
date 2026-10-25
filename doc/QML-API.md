@@ -198,6 +198,10 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `started(transferId)`; `failed(kind, message)`.
 - `TrashModel` — the Trash in the app's data (OPS-8), `reload()` (also
   purges what is past the retention setting), `restore(id)`, `remove(id)`, `empty()`.
+  Roles: `trashId`, `name`, `originalUri`, `folderUri`, `folderName`, `isDir`, `size`
+  (-1 unknown), `trashedAt`, `daysLeft`, `mimeType` (from the original name, "" for
+  folders and unknown types) and `thumbnailSource` (`file://` URL of the stored copy of
+  an image or video while *Show thumbnails* is on, else ""; for `FileIcon`).
 - Pages: `dialogs/PlanSummaryDialog.qml { planId, summary }`,
   `dialogs/ConflictDialog.qml { transferId, item, conflict }`,
   `dialogs/CompressDialog.qml { uris }`,
@@ -300,7 +304,7 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   for `Operations.needsSummary`, `Transfers.needsAnswer`, `Bridge.question`, the undo
   banner and the app-wide `KeepAlive`.
 - `components/ErrorText.js`, `components/Open.js`, `components/FileIcon.qml { category,
-  isDir, thumbnailSource }`, `components/FileIcons.js` (icons every file view shares:
+  isDir, thumbnailSource, mimeType }`, `components/FileIcons.js` (icons every file view shares:
   `archive`), `components/IconRow.qml` (icon row for context menus),
   `components/UndoBanner.qml`, `components/BarBackground.qml` (the opaque backdrop of
   bottom bars, UI-10), `components/PlaceLabel.qml { before, text, remote, color,

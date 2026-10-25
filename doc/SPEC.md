@@ -526,7 +526,11 @@ bridge).
   after it. The decision is one call, `Operations.deletesPermanently` (QML-API). The
   *Trash* page lists, restores (to the original folder, made again if it is gone; a
   copy when that crosses a mount; never overwriting), deletes and empties the items, and
-  says that only files deleted from this device's folders appear there. Items are purged
+  says that only files deleted from this device's folders appear there. Images and
+  videos show their thumbnail as a folder's rows do (PRV-1), made from the stored copy
+  and, as its stored name has no extension, the type of the original name; the setting
+  *Show thumbnails* (BRW-4) switches them off, and a stored item that is a link or is
+  gone keeps its glyph, as folders and other files do. Items are purged
   after the retention setting (30 days) when the settings are loaded at start and
   whenever the Trash opens. The round-1 builds (schema 4–5) kept a hidden bin
   `.lautta-trash` at the root of each folder: at start the items in them are moved into
@@ -603,7 +607,8 @@ bridge).
 ## 12. Preview, open, stream
 
 - PRV-1: Local thumbnails via `Nemo.Thumbnailer` (`image://nemoThumbnail/` and the
-  `Thumbnail` item), covering images and videos the system can thumbnail.
+  `Thumbnail` item), covering images and videos the system can thumbnail. The Trash page
+  (OPS-8) uses them too.
 - PRV-2: Remote image thumbnails: read the first 64 KiB through the bridge, use the EXIF
   thumbnail when present; otherwise read the whole file up to the size set in *View
   options* (*Largest server file with a thumbnail*, 20 MB by default) and decode with the
