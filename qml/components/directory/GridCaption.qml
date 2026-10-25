@@ -27,6 +27,8 @@ Column {
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignTop
         wrapMode: Text.NoWrap
+        // A name is text, never markup.
+        textFormat: Text.PlainText
         text: caption.nameLines.join("\n")
         font.pixelSize: Theme.fontSizeExtraSmall
         color: caption.emphasised ? Theme.highlightColor : Theme.primaryColor

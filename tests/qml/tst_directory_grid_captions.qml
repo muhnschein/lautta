@@ -263,6 +263,10 @@ ApplicationWindow {
         expect(!label.truncated && label.contentWidth <= label.width,
                "the lines fit the cell: " + label.contentWidth + " of " + label.width)
         expect(label.height >= label.contentHeight, "and the room: " + label.contentHeight + " of " + label.height)
+        caption.name = "bold"
+        var word = label.contentWidth
+        caption.name = "<b>bold</b>"
+        expect(label.contentWidth > 2 * word, "a name is text, its tags shown: " + label.contentWidth + " for " + word)
         caption.destroy()
     }
 
@@ -335,6 +339,7 @@ ApplicationWindow {
         same(DirFormat.modifiedWithTime(now.getTime()), DirFormat.modified(now.getTime()), "today as the list says it")
         same(DirFormat.modifiedWithTime(-1), "", "no time known")
         same(DirFormat.items(-1, false), "", "no count")
+        same(DirFormat.items(1, false), qsTrId("lautta-dir-grid-item"), "one item, not one items")
         expect(DirFormat.items(14, false) === qsTrId("lautta-dir-grid-items", 14)
                && DirFormat.items(10000, true) === qsTrId("lautta-dir-grid-items-more", 10000)
                && DirFormat.items(14, false) !== DirFormat.items(14, true), "a capped count says more than")

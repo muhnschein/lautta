@@ -2635,5 +2635,9 @@
         <source>Servers</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-dir-grid-item">
+        <source>1 item</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

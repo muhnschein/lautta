@@ -36,14 +36,18 @@ function modifiedWithTime(ms) {
     return qsTrId("lautta-dir-date-time").arg(day).arg(Silica.Format.formatDate(date, Silica.Formatter.TimeValue))
 }
 
-// "14 items", "More than 10000 items" for a count that stopped at its cap;
-// empty while there is none (`count` < 0).
+// "1 item", "14 items", "More than 10000 items" for a count that stopped at
+// its cap; empty while there is none (`count` < 0).
 function items(count, capped) {
     if (count < 0)
         return ""
     if (capped)
         //% "More than %n items"
         return qsTrId("lautta-dir-grid-items-more", count)
+    // Engineering English has one plural form: one item has its own string.
+    if (count === 1)
+        //% "1 item"
+        return qsTrId("lautta-dir-grid-item")
     //% "%n items"
     return qsTrId("lautta-dir-grid-items", count)
 }
