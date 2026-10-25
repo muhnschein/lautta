@@ -37,6 +37,9 @@ pub struct ViewerTools {
     /// Test support: copies the local file `sourceUrl` (a `file://` URL) to
     /// the local location path of `destUri`; true when it worked.
     installFixture: qt_method!(fn(&self, source_url: QString, dest_uri: QString) -> bool),
+    /// Test support: sets the modified time of the local item `uri` to `ms`
+    /// milliseconds after the epoch; true when it worked.
+    setModified: qt_method!(fn(&self, uri: QString, ms: f64) -> bool),
     /// Test support: a finger's `kind` ("press", "move" or "release") at
     /// (`x`, `y`) of `item`, sent to its window as the mouse event Qt makes of
     /// a touch, so gestures run through the real mouse areas and flickables.
@@ -107,6 +110,19 @@ impl ViewerTools {
             QCoreApplication::sendEvent(window, &event);
             return true;
         })
+    }
+
+    fn setModified(&self, uri: QString, ms: f64) -> bool {
+        let (Some(core), Some(item)) = (core(), parse_uri(&uri)) else {
+            return false;
+        };
+        let Some(path) = core.locations.to_local_path(&item) else {
+            return false;
+        };
+        let when = std::time::UNIX_EPOCH + std::time::Duration::from_millis(ms as u64);
+        std::fs::File::open(path)
+            .and_then(|file| file.set_modified(when))
+            .is_ok()
     }
 
     fn installFixture(&self, source_url: QString, dest_uri: QString) -> bool {

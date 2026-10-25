@@ -146,17 +146,34 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - `DirectoryModel { uri }` — roles per BRW-1 (`name`, `nameIsLossy`, `uri`, `isDir`,
   `isSymlink`, `size`, `modified`, `created`, `mode`, `owner`, `group`, `hidden`,
   `readonly`, `mimeType`, `category`, `icon`, `thumbnailSource`, `selected`,
-  `transferState`); properties `loading`, `stale`, `large`, `offline`,
+  `transferState`, `inaccessible`, `itemCount` (items of a folder, `-1` until
+  `requestCount` has made it, for files, and for folders that are not counted),
+  `itemCountCapped` (the folder has more entries than were counted)); properties
+  `loading`, `stale`, `large`, `offline`,
   `errorKind`, `errorMessage`, `count`, `selectedCount`, `sortKey`, `descending`,
   `foldersFirst`, `showHidden`, `viewMode`, `filterText`, `suggestGrid`,
-  `capabilities` (list of flag strings), `locationName`, `title`;
+  `capabilities` (list of flag strings), `locationName`, `title`, `folderCounts`
+  (folders here have an item count: the folder is on this device or a drive, not on a
+  server or in an archive);
   methods `refresh()`, `revisit()` (lists again unless watched or an archive, BRW-11),
   `select(uri)`, `toggle(uri)`, `selectAll()`, `clearSelection()`,
   `selectedUris() → list`, `setViewPrefs(map)` (shows this folder with other view
   settings without storing them, `App.setSetting` does that; a `viewMode` replaces a
   suggested grid), `indexOf(uri)`, `uriAt(index)` (empty outside the rows), `kindOf(uri)`
-  (`folder`, `file` or empty, like `nameKind(name)` but by uri). An open model follows
+  (`folder`, `file` or empty, like `nameKind(name)` but by uri), `requestCount(uri)` (counts
+  the items of that folder off the GUI thread, from its names, at most 10 000 entries; the
+  `itemCount` role of its row changes when done; asking again for an unchanged folder does
+  nothing, a changed modified time or `showHidden` counts anew). An open model follows
   every change of the global view settings at once (BRW-4).
+- The grid (SPEC §15.3): `components/directory/GridMetrics.qml` (`cellHeight(cellWidth,
+  captioned)`, `gap(captioned)`, `glyphSize(tileWidth, captioned)`, `nameLines(name,
+  tileWidth)`; the one place for the sizes of DirectoryView's and ViewPreview's cells),
+  `components/directory/GridCaption.qml { metrics, name, captions, emphasised, pressed }`
+  (the name on up to two lines and two caption lines under a tile at 3 per row),
+  `components/directory/GridName.js` (`lines(name, width, measure)`: the cut of a long name,
+  its end kept, no Silica), `components/directory/DirFormat.js` (`modifiedWithTime(ms)`,
+  `items(count, capped)`, `gridCaptions(isDir, size, modifiedMs, counted, count, capped)` →
+  the caption lines). A grid cell asks `requestCount` for its folder when it appears.
 - `PathModel { uri }` — ancestors (roles `uri`, `name`), `complete(prefix) → list`.
 - Pages: `pages/DirectoryPage.qml { uri }`, `dialogs/FolderPickerDialog.qml { title,
   acceptText, startUri }` (property `selectedUri` after accept),
@@ -312,7 +329,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   for `Operations.needsSummary`, `Transfers.needsAnswer`, `Bridge.question`, the undo
   banner and the app-wide `KeepAlive`.
 - `components/ErrorText.js`, `components/Open.js`, `components/FileIcon.qml { category,
-  isDir, thumbnailSource, mimeType }`, `components/FileIcons.js` (icons every file view shares:
+  isDir, thumbnailSource, mimeType, size, glyphSize }` (`glyphSize`: the side of the theme
+  glyph in the tile, `AppIcon.iconSize`), `components/FileIcons.js` (icons every file view shares:
   `archive`), `components/IconRow.qml` (icon row for context menus),
   `components/UndoBanner.qml`, `components/BarBackground.qml` (the opaque backdrop of
   bottom bars, UI-10), `components/PlaceLabel.qml { before, text, remote, color,

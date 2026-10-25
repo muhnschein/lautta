@@ -30,18 +30,19 @@ Item {
     readonly property real tileWidth: Math.min(Screen.width, Screen.height) / gridColumns
     readonly property int columns: tileWidth > 0 ? Math.max(gridColumns, Math.round(screenWidth / tileWidth)) : gridColumns
     readonly property real cellWidth: screenWidth / columns
-    readonly property real cellHeight: cellWidth + (gridCaptions ? nameMetrics.height + sizeMetrics.height + Theme.paddingSmall : 0)
+    readonly property real cellHeight: gridMetrics.cellHeight(cellWidth, gridCaptions)
     // Modified times count back from now, so the rows read like a real
-    // folder's. File names keep their extensions out of the translations.
+    // folder's; folders have a number of items, as on the device. File names
+    // keep their extensions out of the translations.
     readonly property var sampleEntries: {
         var now = Date.now()
         var minute = 60 * 1000
         var day = 24 * 60 * minute
         return [
             //% "Photos"
-            { "name": qsTrId("lautta-view-preview-photos"), "dir": true, "modified": now - 2 * day },
+            { "name": qsTrId("lautta-view-preview-photos"), "dir": true, "items": 24, "modified": now - 2 * day },
             //% "Work"
-            { "name": qsTrId("lautta-view-preview-work"), "dir": true, "modified": now - 190 * minute },
+            { "name": qsTrId("lautta-view-preview-work"), "dir": true, "items": 6, "modified": now - 190 * minute },
             //% "beach"
             { "name": qsTrId("lautta-view-preview-photo") + ".jpg", "size": 2400000, "modified": now - day - 30 * minute },
             //% "notes"
@@ -65,27 +66,32 @@ Item {
         return App.setting(key)
     }
 
-    // The rows as drawn, in order (tests): { name, isDir, size, photo }.
+    // The items of the sample folder called `name`, -1 for a file.
+    function itemsOf(name) {
+        for (var i = 0; i < sampleEntries.length; ++i) {
+            if (sampleEntries[i].name === name && sampleEntries[i].dir)
+                return sampleEntries[i].items
+        }
+        return -1
+    }
+
+    // The rows as drawn, in order (tests): { name, isDir, size, photo,
+    // captions }, the captions as the lines under a tile at 3 per row.
     function shown() {
         var drawn = gridMode ? tiles : listRows
         var out = []
         for (var i = 0; i < drawn.count; ++i) {
             var row = drawn.itemAt(i)
-            out.push({ "name": row.name, "isDir": row.isDir, "size": row.size, "photo": row.photo })
+            out.push({ "name": row.name, "isDir": row.isDir, "size": row.size, "photo": row.photo,
+                       "captions": row.captions })
         }
         return out
     }
 
     height: frame.height
 
-    FontMetrics {
-        id: nameMetrics
-        font.pixelSize: Theme.fontSizeExtraSmall
-    }
-
-    FontMetrics {
-        id: sizeMetrics
-        font.pixelSize: Theme.fontSizeTiny
+    GridMetrics {
+        id: gridMetrics
     }
 
     // A stand-in for the photo's thumbnail: sky, sun and a hill.
@@ -127,6 +133,7 @@ Item {
             readonly property bool isDir: modelData.isDir
             readonly property real size: modelData.size
             readonly property bool photo: rowIcon.photo
+            readonly property var captions: []
 
             width: folder.width
             height: Theme.itemSizeMedium
@@ -180,8 +187,8 @@ Item {
         }
     }
 
-    // A tile of DirectoryView's grid: 4 per row with names on icons only,
-    // 3 per row with name and size under every tile.
+    // A tile of DirectoryView's grid: 4 per row with names on icons only, 3
+    // per row with the name and the caption lines under every tile.
     Component {
         id: gridTile
 
@@ -192,7 +199,11 @@ Item {
             readonly property bool isDir: modelData.isDir
             readonly property real size: modelData.size
             readonly property bool photo: preview.thumbnails && modelData.category === "image"
-            readonly property real gap: preview.gridCaptions ? Theme.paddingSmall : Math.round(Theme.paddingSmall / 4)
+            readonly property real gap: gridMetrics.gap(preview.gridCaptions)
+            readonly property var captions: preview.gridCaptions
+                                            ? DirFormat.gridCaptions(modelData.isDir, modelData.size, modelData.modified,
+                                                                     true, preview.itemsOf(modelData.name), false)
+                                            : []
 
             width: preview.cellWidth
             height: preview.cellHeight
@@ -214,6 +225,7 @@ Item {
                     anchors.fill: parent
                     visible: !cell.photo
                     size: tile.width
+                    glyphSize: gridMetrics.glyphSize(tile.width, preview.gridCaptions)
                     category: modelData.category
                     isDir: modelData.isDir
                 }
@@ -237,7 +249,7 @@ Item {
                 }
             }
 
-            Column {
+            GridCaption {
                 visible: preview.gridCaptions
                 anchors {
                     top: tile.bottom
@@ -245,22 +257,9 @@ Item {
                     left: tile.left
                     right: tile.right
                 }
-
-                Label {
-                    width: parent.width
-                    horizontalAlignment: Text.AlignHCenter
-                    text: modelData.name
-                    truncationMode: TruncationMode.Elide
-                    font.pixelSize: Theme.fontSizeExtraSmall
-                }
-                Label {
-                    width: parent.width
-                    horizontalAlignment: Text.AlignHCenter
-                    text: !modelData.isDir && modelData.size >= 0 ? Format.formatFileSize(modelData.size) : ""
-                    truncationMode: TruncationMode.Elide
-                    font.pixelSize: Theme.fontSizeTiny
-                    color: Theme.secondaryColor
-                }
+                metrics: gridMetrics
+                name: modelData.name
+                captions: cell.captions
             }
         }
     }

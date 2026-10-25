@@ -2638,5 +2638,21 @@
         <source>Only files deleted from this device&apos;s folders appear here. Deletes on volumes and servers are permanent.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-dir-date-time">
+        <source>%1, %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-grid-items-more" numerus="yes">
+        <source>More than %n items</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message id="lautta-dir-grid-items" numerus="yes">
+        <source>%n items</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

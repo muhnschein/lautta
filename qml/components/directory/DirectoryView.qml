@@ -27,7 +27,8 @@ Item {
     property alias model: dir
     readonly property bool selecting: selectionMode
     readonly property bool gridMode: dir.viewMode === "grid"
-    // Grid items per row in portrait (View options): 4, or 3 with name and size.
+    // Grid items per row in portrait (View options): 4, or 3 with the name
+    // and caption lines under every tile (SPEC §15.3).
     readonly property int gridColumns: {
         var dependency = App.settingsJson
         return App.setting("grid_columns") === 3 ? 3 : 4
@@ -682,10 +683,23 @@ Item {
         BackgroundItem {
             id: cell
 
-            readonly property real gap: view.gridCaptions ? Theme.paddingSmall : Math.round(Theme.paddingSmall / 4)
+            // Three per row: a folder here (device, drives) shows its item
+            // count, asked for when the cell appears and again when the
+            // folder or the hidden files setting changed.
+            readonly property string itemName: model.name
+            readonly property int items: model.itemCount
+            readonly property bool counting: view.gridCaptions && model.isDir && dir.folderCounts
+            readonly property string countKey: counting + "/" + model.modified + "/" + dir.showHidden
+            readonly property var captions: view.gridCaptions
+                                            ? DirFormat.gridCaptions(model.isDir, model.size, model.modified,
+                                                                     dir.folderCounts, items, model.itemCountCapped)
+                                            : []
+            readonly property real gap: gridMetrics.gap(view.gridCaptions)
 
             width: grid.cellWidth
             height: grid.cellHeight
+            onCountKeyChanged: cell.countItems()
+            Component.onCompleted: cell.countItems()
             onClicked: {
                 if (view.selecting)
                     dir.toggle(model.uri)
@@ -702,6 +716,11 @@ Item {
             onPositionChanged: if (dragSelect.holder === cell) dragSelect.move(mouse.x, mouse.y)
             onReleased: cell.letGo()
             onCanceled: cell.letGo()
+
+            function countItems() {
+                if (counting)
+                    dir.requestCount(model.uri)
+            }
 
             // Last: the view drops an item out of view once it is not held.
             function letGo() {
@@ -736,6 +755,7 @@ Item {
 
                     anchors.fill: parent
                     size: tile.width
+                    glyphSize: gridMetrics.glyphSize(tile.width, view.gridCaptions)
                     category: model.category
                     isDir: model.isDir
                     isSymlink: model.isSymlink
@@ -761,8 +781,7 @@ Item {
                 }
             }
 
-            // Three per row: name and size under every tile.
-            Column {
+            GridCaption {
                 visible: view.gridCaptions
                 anchors {
                     top: tile.bottom
@@ -770,35 +789,17 @@ Item {
                     left: tile.left
                     right: tile.right
                 }
-
-                Label {
-                    width: parent.width
-                    horizontalAlignment: Text.AlignHCenter
-                    text: model.name
-                    truncationMode: TruncationMode.Elide
-                    font.pixelSize: Theme.fontSizeExtraSmall
-                    color: cell.highlighted || model.selected ? Theme.highlightColor : Theme.primaryColor
-                }
-                Label {
-                    width: parent.width
-                    horizontalAlignment: Text.AlignHCenter
-                    text: !model.isDir && model.size >= 0 ? Format.formatFileSize(model.size) : ""
-                    truncationMode: TruncationMode.Elide
-                    font.pixelSize: Theme.fontSizeTiny
-                    color: cell.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
-                }
+                metrics: gridMetrics
+                name: cell.itemName
+                captions: cell.captions
+                emphasised: cell.highlighted || model.selected
+                pressed: cell.highlighted
             }
         }
     }
 
-    FontMetrics {
-        id: nameMetrics
-        font.pixelSize: Theme.fontSizeExtraSmall
-    }
-
-    FontMetrics {
-        id: sizeMetrics
-        font.pixelSize: Theme.fontSizeTiny
+    GridMetrics {
+        id: gridMetrics
     }
 
     SilicaListView {
@@ -832,7 +833,7 @@ Item {
         visible: view.gridMode
         model: view.gridMode ? dir : null
         cellWidth: width / columns
-        cellHeight: cellWidth + (view.gridCaptions ? nameMetrics.height + sizeMetrics.height + Theme.paddingSmall : 0)
+        cellHeight: gridMetrics.cellHeight(cellWidth, view.gridCaptions)
         header: headerComponent
         delegate: gridDelegate
         footer: Item {

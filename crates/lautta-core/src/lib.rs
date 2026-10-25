@@ -24,6 +24,7 @@ pub mod vpath;
 pub mod browse_layout;
 pub mod dircache;
 pub mod filter;
+pub mod foldercount;
 pub mod listing;
 pub mod locations;
 pub mod mime;

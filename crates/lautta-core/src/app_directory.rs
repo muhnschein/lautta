@@ -7,6 +7,7 @@ use crate::app::Core;
 use crate::entry::Entry;
 use crate::error::Result;
 use crate::filter::fold_text;
+use crate::foldercount::{count_entries, FolderCount, COUNT_CAP};
 use crate::locations::Location;
 use crate::provider::Lane;
 use crate::uri::Uri;
@@ -177,6 +178,22 @@ impl Core {
             .into_iter()
             .filter_map(|e| parent.join(&e.name).ok())
             .collect()
+    }
+
+    /// The items of the folder `uri` for the grid captions (SPEC §15.3):
+    /// counted with the other file system work (ARC-6), local folders
+    /// only. `None` for servers and archives, where counting would list
+    /// the folder over the network, and for a folder that cannot be read.
+    pub async fn count_folder(&self, uri: &Uri, show_hidden: bool) -> Option<FolderCount> {
+        let path = self.locations.to_local_path(uri)?;
+        let permit = self.locations.io_semaphore().acquire_owned().await.ok()?;
+        tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            count_entries(&path, show_hidden, COUNT_CAP).ok()
+        })
+        .await
+        .ok()
+        .flatten()
     }
 
     /// The locations the folder picker starts from (OPS-10), in display

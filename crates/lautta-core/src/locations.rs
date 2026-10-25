@@ -267,6 +267,11 @@ impl LocationRegistry {
         reg
     }
 
+    /// The permits blocking file system work shares (ARC-6).
+    pub fn io_semaphore(&self) -> Arc<Semaphore> {
+        self.inner.io.clone()
+    }
+
     fn state(&self) -> MutexGuard<'_, State> {
         match self.inner.state.lock() {
             Ok(g) => g,

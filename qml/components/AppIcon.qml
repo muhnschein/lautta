@@ -10,11 +10,13 @@ HighlightImage {
     // "image://theme/icon-m-share" or an app icon name such as "cut".
     property string icon
     property bool small
+    // The picture's side, `small` or medium unless set (the grid at 3 per row).
+    property real iconSize: small ? Theme.iconSizeSmall : Theme.iconSizeMedium
     readonly property bool themed: icon.indexOf(":") >= 0
 
     source: icon.length === 0 ? "" : (themed ? icon : Qt.resolvedUrl("../icons/" + icon + ".svg"))
-    sourceSize.width: small ? Theme.iconSizeSmall : Theme.iconSizeMedium
-    sourceSize.height: small ? Theme.iconSizeSmall : Theme.iconSizeMedium
+    sourceSize.width: iconSize
+    sourceSize.height: iconSize
     width: sourceSize.width
     height: sourceSize.height
     color: Theme.primaryColor
