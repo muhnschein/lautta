@@ -44,6 +44,7 @@ struct FakeWorld {
     answers: qt_method!(fn(&self) -> QString),
     handoffs: qt_method!(fn(&self) -> QString),
     drives: qt_method!(fn(&self) -> QString),
+    addDrive: qt_method!(fn(&self, id: QString, label: QString)),
     record: qt_method!(fn(&self, uri: QString, name: QString, kind: QString)),
     putFile: qt_method!(fn(&self, location: QString, path: QString)),
 }
@@ -134,6 +135,13 @@ impl FakeWorld {
             .map(|d| serde_json::json!({"id": d.id, "mounted": !d.mount_point.is_empty()}))
             .collect();
         QString::from(serde_json::to_string(&list).unwrap().as_str())
+    }
+
+    /// A memory card the bridge can mount comes (`DrivesChanged`).
+    fn addDrive(&self, id: QString, label: QString) {
+        let mut drives = fake().drives();
+        drives.push(FakeDrive::new(&id.to_string(), &label.to_string(), "sd", 8));
+        run(fake().set_drives(drives));
     }
 
     fn record(&self, uri: QString, name: QString, kind: QString) {

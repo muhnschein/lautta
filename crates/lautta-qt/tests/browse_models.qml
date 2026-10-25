@@ -39,7 +39,6 @@ Item {
             property string rprovider: provider
             property string ruri: uri
             property string ritem: itemId
-            property int rcount: count
             property string rsection: section
             property string ricon: icon
             property bool rfile: isFile
@@ -239,23 +238,32 @@ Item {
                  var nas = row("account", "NAS")
                  return nas !== null && nas.rconnection === "disconnected" && nas.rconnectionError === ""
              })
-        step("folders with visible item counts",
+        step("folders, Recents and Trash are rows",
              null,
-             function() {
-                 var d = row("folder", "Documents")
-                 return d !== null && d.rcount === 1 && has("folder", "Music") && has("deleted")
-             })
+             function() { return has("folder", "Documents") && has("folder", "Music") && has("recents") && has("deleted") })
 
-        step("hide a folder from Browse",
-             function() { locs.hide("device", "folder", "user-music") },
-             function() { return !has("folder", "Music") && has("folder", "Documents") })
-        step("Browse page settings still list it, hidden",
+        step("Browse page settings list every row",
              function() { layout.reload() },
              function() {
                  var m = layoutRow("device", "user-music")
                  var n = layoutRow("nearby", "nearby")
-                 return m !== null && m.lhidden && m.lmovable && n !== null && !n.lhidden && !n.lmovable
+                 return m !== null && !m.lhidden && m.lmovable && n !== null && !n.lhidden && !n.lmovable
                         && layoutRow("device", "deleted") !== null
+             })
+        step("hide a folder in the settings",
+             function() { layout.setHidden("device", "user-music", true) },
+             function() {
+                 var m = layoutRow("device", "user-music")
+                 return !has("folder", "Music") && has("folder", "Documents") && m !== null && m.lhidden
+             })
+        // Settings › Browse page follows what the Browse page follows: a
+        // drive that comes shows in both (BRW-12, LOC-3).
+        step("a drive that comes shows in the Browse page and its settings",
+             function() { FakeWorld.addDrive("mmcblk1p1", "CARD") },
+             function() {
+                 var v = row("volume", "CARD")
+                 var l = layoutRow("volumes", "vol-CARD")
+                 return v !== null && v.rdrive === "mmcblk1p1" && l !== null && !l.lhidden
              })
         // The settings page keeps its rows (and the user's place in the
         // list) on a switch and a move: no row is rebuilt.
@@ -359,6 +367,9 @@ Item {
                  var f = row("favourite", "Docs")
                  return f !== null && f.rplace === "Documents" && f.rcolour === "#e7a33c"
              })
+        step("the settings list shows it",
+             null,
+             function() { return layoutRow("favourites", String(favs.idOf(docs))) !== null })
         step("edit it",
              function() { favs.edit(favs.idOf(docs), "Papers", "#4fa3e5") },
              function() { return has("favourite", "Papers") && !has("favourite", "Docs") })

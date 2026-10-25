@@ -80,23 +80,12 @@ Item {
                     anchors {
                         left: parent.left
                         leftMargin: Theme.horizontalPageMargin + Theme.iconSizeMedium + Theme.paddingLarge
-                        right: countLabel.left
-                        rightMargin: Theme.paddingMedium
-                        verticalCenter: parent.verticalCenter
-                    }
-                    text: BrowseText.rowName(model.kind, model.name)
-                    truncationMode: TruncationMode.Fade
-                }
-                Label {
-                    id: countLabel
-                    anchors {
                         right: parent.right
                         rightMargin: Theme.horizontalPageMargin
                         verticalCenter: parent.verticalCenter
                     }
-                    text: model.count >= 0 ? model.count : ""
-                    font.pixelSize: Theme.fontSizeSmall
-                    color: Theme.secondaryColor
+                    text: BrowseText.rowName(model.kind, model.name)
+                    truncationMode: TruncationMode.Fade
                 }
             }
         }

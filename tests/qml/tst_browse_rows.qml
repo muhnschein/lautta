@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Browse rows on the target (real Silica, SPEC §15.2, §15.5): a server row
-// is as tall as a folder row, its status on the right where a folder shows
-// its count, in the count's font; a favourite on a server has the server
-// icon before its place and a local one has none; a drive that is not
+// Browse rows on the target (real Silica, SPEC §15.2, §15.5): a folder row
+// shows no item count; a server row is as tall as a folder row, its status
+// at the right margin in the small font; a favourite on a server has the
+// server icon before its place and a local one has none; a drive that is not
 // mounted is as tall as a mounted volume, with its size below its name and
 // "Not mounted" on the right like a server's status (LOC-3); and nothing is
 // attached to the page to swipe to (Activity is in the pulley). Fails when
-// server rows grow a second line again, the status leaves the right edge,
-// the icon marks the wrong place or Activity is attached again.
+// a count comes back, server rows grow a second line again, the status
+// leaves the right margin, the icon marks the wrong place or Activity is
+// attached again.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -25,15 +26,17 @@ ApplicationWindow {
             id: browsePage
 
             Component.onCompleted: win.browse = browsePage
+            // The Documents row still has a count in the model: the page
+            // shows none.
             listModel: ListModel {
-                ListElement { section: "favourites"; uri: "lautta://nv-account:1/srv/photos"; name: "Photos"; kind: "favourite"; icon: "image://theme/icon-m-favorite"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; count: -1; itemId: "1"; place: "NAS › /srv/photos"; provider: ""; host: ""; free: -1; total: -1; fs: "" }
-                ListElement { section: "favourites"; uri: "lautta://user-documents/Uni"; name: "Thesis"; kind: "favourite"; icon: "image://theme/icon-m-favorite"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; count: -1; itemId: "2"; place: "Documents › Uni"; provider: ""; host: ""; free: -1; total: -1; fs: "" }
+                ListElement { section: "favourites"; uri: "lautta://nv-account:1/srv/photos"; name: "Photos"; kind: "favourite"; icon: "image://theme/icon-m-favorite"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "1"; place: "NAS › /srv/photos"; provider: ""; host: ""; free: -1; total: -1; fs: "" }
+                ListElement { section: "favourites"; uri: "lautta://user-documents/Uni"; name: "Thesis"; kind: "favourite"; icon: "image://theme/icon-m-favorite"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "2"; place: "Documents › Uni"; provider: ""; host: ""; free: -1; total: -1; fs: "" }
                 ListElement { section: "device"; uri: "lautta://user-documents/"; name: "Documents"; kind: "folder"; icon: "image://theme/icon-m-file-folder"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; count: 214; itemId: "user-documents"; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: "" }
-                ListElement { section: "volumes"; uri: "lautta://vol-SD/"; name: "SD card"; kind: "volume"; icon: "image://theme/icon-m-sd-card"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; count: -1; itemId: "vol-SD"; place: ""; provider: ""; host: ""; free: 62500000000; total: 128000000000; fs: "exFAT"; drive: "mmcblk1p1" }
-                ListElement { section: "volumes"; uri: ""; name: "STICK"; kind: "volume"; icon: "image://theme/icon-m-usb"; status: "unmounted"; attention: ""; connection: ""; connectionError: ""; colour: ""; count: -1; itemId: "vol-STICK"; place: ""; provider: ""; host: ""; free: -1; total: 8000000000; fs: ""; drive: "sda1" }
-                ListElement { section: "servers"; uri: "lautta://nv-account:1/"; name: "NAS"; kind: "account"; icon: "image://theme/icon-m-computer"; status: "ready"; attention: ""; connection: "connected"; connectionError: ""; colour: ""; count: -1; itemId: "nv-account:1"; place: "sftp://nas.home/"; provider: "SFTP"; host: "nas.home"; free: -1; total: -1; fs: "" }
-                ListElement { section: "servers"; uri: "lautta://nv-account:2/"; name: "Office"; kind: "account"; icon: "image://theme/icon-m-computer"; status: "attention"; attention: "auth-failed"; connection: "failed"; connectionError: "AuthFailed"; colour: ""; count: -1; itemId: "nv-account:2"; place: ""; provider: "SMB"; host: ""; free: -1; total: -1; fs: "" }
-                ListElement { section: "servers"; uri: "lautta://nv-account:3/"; name: "Old"; kind: "account"; icon: "image://theme/icon-m-computer"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; count: -1; itemId: "nv-account:3"; place: ""; provider: "SFTP"; host: ""; free: -1; total: -1; fs: "" }
+                ListElement { section: "volumes"; uri: "lautta://vol-SD/"; name: "SD card"; kind: "volume"; icon: "image://theme/icon-m-sd-card"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "vol-SD"; place: ""; provider: ""; host: ""; free: 62500000000; total: 128000000000; fs: "exFAT"; drive: "mmcblk1p1" }
+                ListElement { section: "volumes"; uri: ""; name: "STICK"; kind: "volume"; icon: "image://theme/icon-m-usb"; status: "unmounted"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "vol-STICK"; place: ""; provider: ""; host: ""; free: -1; total: 8000000000; fs: ""; drive: "sda1" }
+                ListElement { section: "servers"; uri: "lautta://nv-account:1/"; name: "NAS"; kind: "account"; icon: "image://theme/icon-m-computer"; status: "ready"; attention: ""; connection: "connected"; connectionError: ""; colour: ""; itemId: "nv-account:1"; place: "sftp://nas.home/"; provider: "SFTP"; host: "nas.home"; free: -1; total: -1; fs: "" }
+                ListElement { section: "servers"; uri: "lautta://nv-account:2/"; name: "Office"; kind: "account"; icon: "image://theme/icon-m-computer"; status: "attention"; attention: "auth-failed"; connection: "failed"; connectionError: "AuthFailed"; colour: ""; itemId: "nv-account:2"; place: ""; provider: "SMB"; host: ""; free: -1; total: -1; fs: "" }
+                ListElement { section: "servers"; uri: "lautta://nv-account:3/"; name: "Old"; kind: "account"; icon: "image://theme/icon-m-computer"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "nv-account:3"; place: ""; provider: "SFTP"; host: ""; free: -1; total: -1; fs: "" }
             }
         }
     }
@@ -94,10 +97,19 @@ ApplicationWindow {
         return found.length > 0 ? found[0] : null
     }
 
+    // Where a status ends: the page margin from the right edge of the row.
+    function statusEdge(row) {
+        return Math.round(row.width - Theme.horizontalPageMargin)
+    }
+
+    function checkNoCount() {
+        var numbers = findAll(rowOf("Documents"), function(x) { return x.font !== undefined && /^[0-9]+$/.test(String(x.text)) }, [])
+        expect(numbers.length === 0, "a folder row shows its count: " + (numbers.length > 0 ? numbers[0].text : ""))
+    }
+
     function checkHeights() {
         var folder = rowOf("Documents")
-        var count = labelOf(folder, "214")
-        var edge = rightEdge(count, folder)
+        var edge = statusEdge(folder)
         var servers = [["NAS", "lautta-browse-server-connected"], ["Office", "lautta-browse-attention-auth"], ["Old", ""]]
         for (var i = 0; i < servers.length; ++i) {
             var row = rowOf(servers[i][0])
@@ -111,8 +123,8 @@ ApplicationWindow {
                 continue
             }
             expect(rightEdge(status, row) === edge,
-                   servers[i][0] + "'s status ends at " + rightEdge(status, row) + ", the count at " + edge)
-            expect(status.font.pixelSize === count.font.pixelSize, servers[i][0] + "'s status is in the count's font")
+                   servers[i][0] + "'s status ends at " + rightEdge(status, row) + ", the margin is at " + edge)
+            expect(status.font.pixelSize === Theme.fontSizeSmall, servers[i][0] + "'s status is in the small font")
             var name = labelOf(row, servers[i][0])
             expect(name && rightEdge(name, row) <= status.mapToItem(row, 0, 0).x,
                    servers[i][0] + "'s name ends before its status")
@@ -120,8 +132,6 @@ ApplicationWindow {
     }
 
     function checkVolumes() {
-        var folder = rowOf("Documents")
-        var count = labelOf(folder, "214")
         var mounted = rowOf("SD card")
         var stick = rowOf("STICK")
         expect(stick.height === mounted.height,
@@ -132,9 +142,9 @@ ApplicationWindow {
         var status = labelOf(stick, "lautta-browse-not-mounted")
         if (!status || !status.visible)
             return fail("STICK does not say that it is not mounted")
-        expect(rightEdge(status, stick) === rightEdge(count, folder),
-               "STICK's status ends at " + rightEdge(status, stick) + ", the count at " + rightEdge(count, folder))
-        expect(status.font.pixelSize === count.font.pixelSize, "STICK's status is in the count's font")
+        expect(rightEdge(status, stick) === statusEdge(stick),
+               "STICK's status ends at " + rightEdge(status, stick) + ", the margin is at " + statusEdge(stick))
+        expect(status.font.pixelSize === Theme.fontSizeSmall, "STICK's status is in the small font")
         var name = labelOf(stick, "STICK")
         expect(name && rightEdge(name, stick) <= status.mapToItem(stick, 0, 0).x, "STICK's name ends before its status")
         var other = labelOf(mounted, "lautta-browse-not-mounted")
@@ -160,6 +170,7 @@ ApplicationWindow {
                 return win.fail("the Browse page did not become active")
             if (!win.browse || win.browse.status !== PageStatus.Active || !win.rowOf("Old"))
                 return
+            win.checkNoCount()
             win.checkHeights()
             win.checkVolumes()
             win.checkPlaces()

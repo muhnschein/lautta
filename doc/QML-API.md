@@ -83,7 +83,7 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 
 - `LocationsModel` — sections `favourites`, `device`, `android`, `volumes`, `servers`,
   `nearby` (roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
-  `colour`, `count`, `itemId`, `place`, `provider`, `host`, `free`, `total`, `fs`,
+  `colour`, `itemId`, `place`, `provider`, `host`, `free`, `total`, `fs`,
   `connection`, `connectionError`, `isFile` (a file favourite: opened, not browsed),
   `drive` (the bridge's id of a volume's drive, empty when the bridge does not mount it,
   LOC-3)); a `volume` with `status` `unmounted` is a drive that is not mounted: no `uri`,
@@ -94,7 +94,7 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   ad-hoc servers), `failed`, or empty when the bridge reports none; `connectionError` is
   the netvfs error name of a `failed` one (`AuthFailed`, `Timeout`, …).
   `components/browse/ServerStatus.js` turns them into the row's status (text and dot, on
-  the right where folders show their count, §15.2). `refresh()`
+  the right, §15.2). `refresh()`
   rescans the device folders and volumes first (LOC-3); the model also follows location
   changes by itself, and a changed row changes in place.
 - `FavouritesModel` (roles `itemId`, `uri`, `label`, `colour`, `place`, `isDir`, `icon`
@@ -126,10 +126,12 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `pages/FavouritePage.qml { uri, isDir }` (saves each change; makes the item a
   favourite when it is none; `isDir` defaults to true, a file passes false),
   `cover/CoverPage.qml`.
-- Browse page settings (BRW-12): `LocationsModel.hide(section, kind, itemId)`;
-  `BrowseLayoutModel` (roles `section`, `kind`, `item`, `name`, `hidden`, `place` (the
-  place in the section; no role is called `index`, which would hide the delegate's
-  `index`), `movable`; `reload()`, `setHidden(section, item, hidden)`,
+- Browse page settings (BRW-12): `BrowseLayoutModel` (roles `section`, `kind`, `item`,
+  `name`, `hidden`, `place` (the place in the section; no role is called `index`, which
+  would hide the delegate's `index`), `movable`; `reload()` reads the rows and starts
+  following what `LocationsModel` follows (a row that comes or goes arrives as an
+  insertion or removal), except while a change of its own is not stored,
+  `setHidden(section, item, hidden)`,
   `moveTo(section, item, index)`, `moveRow(fromRow, toRow) → bool` (list rows of one
   section whose rows move: the row moves at once, so a dragged row follows the finger,
   and the order is stored behind it), `restoreDefaults()`, `sectionAt(row)`,

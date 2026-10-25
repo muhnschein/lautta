@@ -234,9 +234,8 @@ Page {
                 anchors {
                     left: parent.left
                     leftMargin: Theme.horizontalPageMargin + Theme.iconSizeMedium + Theme.paddingLarge
-                    right: countLabel.visible ? countLabel.left
-                                              : (statusRow.visible ? statusRow.left
-                                                                   : (mountLabel.visible ? mountLabel.left : parent.right))
+                    right: statusRow.visible ? statusRow.left
+                                             : (mountLabel.visible ? mountLabel.left : parent.right)
                     rightMargin: Theme.horizontalPageMargin
                     verticalCenter: parent.verticalCenter
                 }
@@ -257,8 +256,7 @@ Page {
                 }
             }
 
-            // How a server's connection stands, where folders show their
-            // count and in its font and colour; the name gives way first.
+            // How a server's connection stands; the name gives way first.
             Row {
                 id: statusRow
 
@@ -311,8 +309,8 @@ Page {
                 }
             }
 
-            // A drive that is not mounted says so where a folder shows its
-            // count, as a server tells its connection (LOC-3).
+            // A drive that is not mounted says so on the right, as a server
+            // tells its connection (LOC-3).
             Label {
                 id: mountLabel
 
@@ -328,19 +326,6 @@ Page {
                 font.pixelSize: Theme.fontSizeSmall
                 color: row.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
                 truncationMode: TruncationMode.Fade
-            }
-
-            Label {
-                id: countLabel
-                visible: !row.banner && model.count >= 0
-                anchors {
-                    right: parent.right
-                    rightMargin: Theme.horizontalPageMargin
-                    verticalCenter: parent.verticalCenter
-                }
-                text: model.count
-                font.pixelSize: Theme.fontSizeSmall
-                color: row.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
             }
 
             // The consent row (NVB-3) and the reconnecting notice (NVB-12).
@@ -465,17 +450,6 @@ Page {
                         onClicked: Bridge.openStorageSettings()
                     }
                     MenuItem {
-                        visible: row.kind === "folder" || row.kind === "volume" || row.isServer
-                        //% "Hide from Browse"
-                        text: qsTrId("lautta-browse-hide")
-                        onClicked: {
-                            //% "%1 hidden. Settings › Browse page shows it again."
-                            hiddenNotice.text = qsTrId("lautta-browse-hidden").arg(model.name)
-                            hiddenNotice.show()
-                            locations.hide(model.section, model.kind, model.itemId)
-                        }
-                    }
-                    MenuItem {
                         visible: row.kind === "favourite"
                         //% "Remove from favourites"
                         text: qsTrId("lautta-browse-remove-favourite")
@@ -501,10 +475,5 @@ Page {
 
     ActivityBar {
         id: activityBar
-    }
-
-    Notice {
-        id: hiddenNotice
-        duration: Notice.Long
     }
 }
