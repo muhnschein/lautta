@@ -27,6 +27,11 @@ struct Env {
 }
 
 async fn env(fake: Option<&FakeBridge>, folders: &[&str]) -> Env {
+    open(fake, fake.is_some(), folders).await
+}
+
+/// `bridge` gives Core a bridge client; `fake`, if any, listens on its socket.
+async fn open(fake: Option<&FakeBridge>, bridge: bool, folders: &[&str]) -> Env {
     let home = tempfile::tempdir().unwrap();
     for d in folders {
         std::fs::create_dir_all(home.path().join(d)).unwrap();
@@ -35,7 +40,7 @@ async fn env(fake: Option<&FakeBridge>, folders: &[&str]) -> Env {
     let paths = AppPaths::new(home.path());
     let listener = fake.map(|f| f.listen(&paths.bridge_socket()).unwrap());
     let registry = LocationRegistry::with_media_root(paths.clone(), home.path().join("media"));
-    let bridge = fake.map(|_| config(&paths));
+    let bridge = bridge.then(|| config(&paths));
     let core = Core::open_full(paths, registry, bridge).await.unwrap();
     Env {
         home,
@@ -632,10 +637,10 @@ async fn consent_row_until_allowed_and_nothing_when_denied() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn no_socket_means_no_servers_section() {
-    let fake = account_fake().await;
-    let e = env(Some(&fake), &["Documents"]).await;
-    // The bridge client is there but nothing listens: standalone (UI-8).
-    drop(e._listener);
+    // Bridge client there, no socket: standalone (UI-8). Never listen: dropping
+    // a `Listener` keeps a session that already connected.
+    let e = open(None, true, &["Documents"]).await;
+    assert_eq!(e.core.bridge.as_ref().unwrap().status(), BridgeStatus::Absent);
     let rows = e.core.browse_rows().await;
     assert!(of(&rows, "servers").is_empty());
     assert!(of(&rows, "nearby").is_empty());
