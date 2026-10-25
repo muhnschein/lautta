@@ -628,7 +628,9 @@ bridge).
   *Don't wrap lines* in the pulley lets lines wider than the page scroll sideways
   instead, and then a swipe across the text scrolls it and the back indicator goes
   back; tabs to the next multiple of 4 columns; a line longer than 1000 characters
-  goes on over further rows; coloured by language, PRV-13), Markdown (pulldown-cmark
+  goes on over further rows; coloured by language, PRV-13; on a backdrop over the whole
+  page, Silica's overlay colour at 60 % opacity (black on a dark ambience, light grey on
+  a light one), so the text reads over any wallpaper), Markdown (pulldown-cmark
   → Qt rich text subset, wrapped to the page's width, code blocks and tables
   included), audio
   and video (QtMultimedia), archives (as locations), PDFs (PRV-12). Office documents,

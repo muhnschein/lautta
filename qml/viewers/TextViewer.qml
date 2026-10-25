@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Text and code viewer (PRV-4, boards TextViewer, TextViewerPulley): read-only
 // up to 1 MiB with line numbers, the lines wrapped to the page's width
-// unless the pulley says otherwise, coloured by the file's language (PRV-13).
+// unless the pulley says otherwise, coloured by the file's language (PRV-13),
+// on a backdrop that darkens a dark ambience and lightens a light one.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -48,6 +49,15 @@ Page {
     }
 
     Notice { id: notice }
+
+    // Colour Page.highContrast dims a page with, stronger: black on a dark
+    // ambience, light grey on a light one. Opaque enough for text and syntax
+    // colours to read over any wallpaper (PRV-4).
+    Rectangle {
+        objectName: "textBackdrop"
+        anchors.fill: parent
+        color: Theme.rgba(palette.overlayBackgroundColor, Theme.opacityHigh)
+    }
 
     TextMetrics {
         id: metrics

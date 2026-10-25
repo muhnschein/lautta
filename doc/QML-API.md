@@ -271,7 +271,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `components/viewers/gallery`; `remove()` deletes the image shown; its *More* is
   `components/viewers/ImageMorePage.qml { uri }`, whose Rename signals `renameChosen()` for
   the viewer to rename), `viewers/TextViewer.qml { uri, wrap }`
-  (`wrap` true by default; its rows, tabs expanded and long lines split, come from
+  (`wrap` true by default; a `textBackdrop` rectangle fills the page under the text,
+  PRV-4; its rows, tabs expanded and long lines split, come from
   `components/viewers/TextRows.js` `rows(text)`: `{ rows: [{ number, text, line,
   start }], longest, lines }`, `line` from 0 and `start` the row's first column in
   the line with tabs expanded, in UTF-16 units),
