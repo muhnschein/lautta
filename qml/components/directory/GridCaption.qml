@@ -17,13 +17,13 @@ Column {
     // The name in the highlight colour, for a pressed or selected cell.
     property bool emphasised
     property bool pressed
-    readonly property var nameLines: visible ? metrics.nameLines(name, width) : []
+    readonly property var nameLines: visible && metrics ? metrics.nameLines(name, width) : []
 
     Label {
         objectName: "gridName"
 
         width: caption.width
-        height: caption.metrics.nameHeight
+        height: caption.metrics ? caption.metrics.nameHeight : 0
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignTop
         wrapMode: Text.NoWrap
@@ -38,7 +38,7 @@ Column {
             objectName: "gridCaption" + index
 
             width: caption.width
-            height: caption.metrics.captionHeight
+            height: caption.metrics ? caption.metrics.captionHeight : 0
             horizontalAlignment: Text.AlignHCenter
             text: index < caption.captions.length ? caption.captions[index] : ""
             truncationMode: TruncationMode.Elide

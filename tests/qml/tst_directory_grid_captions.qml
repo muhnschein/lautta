@@ -193,6 +193,49 @@ ApplicationWindow {
         pageStack.pop(null, PageStackAction.Immediate)
     }
 
+    // The icon of a cell: the item that knows whether its thumbnail failed.
+    function iconIn(item) {
+        if (!item)
+            return null
+        if (item.thumbnailFailed !== undefined)
+            return item
+        var kids = item.children || []
+        for (var i = 0; i < kids.length; ++i) {
+            var found = iconIn(kids[i])
+            if (found)
+                return found
+        }
+        return null
+    }
+
+    // Under a tile at 3 per row the name and the lines stay whether a PDF's
+    // first page covers the tile or the page could not be made (encrypted).
+    function checkPdfThumbnails() {
+        var pdfs = "lautta://user-downloads/GridCaptionsPdf/"
+        downloads.createFolder("GridCaptionsPdf")
+        waitFor(function () { return downloads.indexOf("lautta://user-downloads/GridCaptionsPdf") >= 0 }, "the PDF folder")
+        expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/two-pages.pdf"), pdfs + "readable.pdf"), "readable PDF")
+        expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/secret.pdf"), pdfs + "secret.pdf"), "encrypted PDF")
+        App.setSetting("thumbnails_local", JSON.stringify(true))
+        var view = push(pdfs)
+        waitFor(function () { return cells(view).length === 2 }, "both PDFs")
+        var good = cellNamed(view, "readable.pdf")
+        var locked = cellNamed(view, "secret.pdf")
+        waitFor(function () { return iconIn(good).thumbnailReady }, "the first page of the readable PDF")
+        waitFor(function () { return iconIn(locked).thumbnailFailed }, "the encrypted PDF to fail")
+        var both = [good, locked]
+        for (var i = 0; i < both.length; ++i) {
+            var cell = both[i]
+            var label = find(cell, "gridName")
+            expect(label.visible && label.text === metrics.nameLines(cell.itemName, cell.width - 2 * cell.gap).join("\n"),
+                   "the name of " + cell.itemName + " is under its tile: " + label.text)
+            same(cell.captions.length, 2, "and two lines under " + cell.itemName)
+            same(textOf(cell, "gridCaption1"), cell.captions[1], "shown")
+        }
+        pageStack.pop(null, PageStackAction.Immediate)
+        App.setSetting("thumbnails_local", JSON.stringify(false))
+    }
+
     // A file added to the folder changes its modified time: the cell counts again.
     function checkChangedFolder(view) {
         var folder = cellNamed(view, "Inner")
@@ -347,6 +390,7 @@ ApplicationWindow {
         checkHiddenCount(view)
         checkChangedFolder(view)
         checkHugeFolder()
+        checkPdfThumbnails()
         checkNames()
         checkCells(view, true)
         checkPreview(view)
