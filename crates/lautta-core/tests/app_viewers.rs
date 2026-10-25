@@ -427,6 +427,87 @@ async fn pdf_thumbnails_follow_their_switch_and_the_one_of_their_place() {
     );
 }
 
+/// Moves `Documents/<name>` to the Trash and gives the id of its item and
+/// the URI its thumbnail is asked by.
+async fn trash_document(h: &Home, name: &str) -> (i64, String) {
+    h.core
+        .delete(&[uri(&format!("lautta://user-documents/{name}"))])
+        .await
+        .unwrap();
+    let rows = h.core.trash_entries(lautta_core::trash::now_secs()).unwrap();
+    let id = rows.iter().find(|r| r.name == name).unwrap().id;
+    let stored = h.core.trash.get(id).unwrap().stored_name;
+    (id, format!("lautta://trash/{id}/{stored}"))
+}
+
+#[tokio::test]
+async fn a_trashed_pdf_gets_its_thumbnail_from_the_stored_copy() {
+    let h = home().await;
+    std::fs::write(h.root.join("Documents/t.pdf"), pdf()).unwrap();
+    let (_, u) = trash_document(&h, "t.pdf").await;
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+
+    let bytes = thumbnail(&h, &previews, &u, 64).await.unwrap();
+    let img = thumb_pixels(&bytes);
+    assert_eq!(img.dimensions(), (64, 64));
+    let corner = img.get_pixel(2, 2).0;
+    assert!(
+        corner[0] > 200 && corner[1] < 60 && corner[2] < 60,
+        "page 1's red corner: {corner:?}"
+    );
+    assert_eq!(previews.cache().len(), 1);
+    assert_eq!(thumbnail(&h, &previews, &u, 64).await.unwrap(), bytes);
+    assert_eq!(previews.cache().len(), 1, "the second one is the cached one");
+
+    let mut s = h.core.settings();
+    s.thumbnails_pdf = false;
+    h.core.apply_settings(s);
+    let err = thumbnail(&h, &previews, &u, 64).await.unwrap_err();
+    assert_eq!(err.kind, ErrorKind::Unsupported, "PDF thumbnails off");
+}
+
+#[tokio::test]
+async fn trash_thumbnails_are_for_regular_pdfs_that_are_still_there() {
+    let h = home().await;
+    std::fs::write(h.root.join("Documents/t.pdf"), pdf()).unwrap();
+    std::fs::write(h.root.join("Documents/p.jpg"), jpeg(8, 8)).unwrap();
+    std::fs::write(h.root.join("Documents/n.txt"), b"x").unwrap();
+    let (pdf_id, pdf_uri) = trash_document(&h, "t.pdf").await;
+    let (_, jpg_uri) = trash_document(&h, "p.jpg").await;
+    let (_, txt_uri) = trash_document(&h, "n.txt").await;
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    for u in [&jpg_uri, &txt_uri] {
+        let err = thumbnail(&h, &previews, u, 32).await.unwrap_err();
+        assert_eq!(
+            err.message, "no app thumbnail for this file",
+            "the system does pictures"
+        );
+    }
+    let err = thumbnail(&h, &previews, "lautta://trash/9999/x", 32)
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::NotFound, "no such item");
+    let err = thumbnail(&h, &previews, "lautta://trash/abc", 32)
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::NotFound, "not a Trash item's URI");
+    // The id of a gone item may be another's by now: the stored name tells.
+    let err = thumbnail(&h, &previews, &format!("lautta://trash/{pdf_id}/other"), 32)
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::NotFound, "the id of another stored copy");
+
+    // A stored copy swapped for a link is not followed.
+    let item = h.core.trash.get(pdf_id).unwrap();
+    std::fs::remove_file(item.stored_path()).unwrap();
+    std::os::unix::fs::symlink(h.root.join("Documents"), item.stored_path()).unwrap();
+    let err = thumbnail(&h, &previews, &pdf_uri, 32).await.unwrap_err();
+    assert_eq!(err.kind, ErrorKind::Unsupported);
+    std::fs::remove_file(item.stored_path()).unwrap();
+    let err = thumbnail(&h, &previews, &pdf_uri, 32).await.unwrap_err();
+    assert_eq!(err.kind, ErrorKind::NotFound, "the copy is gone");
+}
+
 #[tokio::test]
 async fn pdfs_over_the_size_limit_are_refused_before_they_are_read() {
     let h = home().await;

@@ -443,6 +443,77 @@ async fn trashed_images_and_videos_carry_what_the_thumbnailer_needs() {
     assert_eq!(rows["link.png"].thumbnail_source, "");
 }
 
+fn pdf() -> Vec<u8> {
+    use lautta_pdf::sample::{build, page};
+    build(&[page(100, 200, "1 0 0 rg 0 0 50 50 re f")])
+}
+
+#[tokio::test]
+async fn trashed_pdfs_carry_an_app_thumbnail_of_their_trash_item() {
+    let h = home().await;
+    write(&h.root.join("Documents/doc.PDF"), &pdf());
+    write(&h.root.join("Documents/dir.pdf/inner.txt"), b"x");
+    write(&h.root.join("Documents/huge.pdf"), b"");
+    std::fs::File::options()
+        .write(true)
+        .open(h.root.join("Documents/huge.pdf"))
+        .unwrap()
+        .set_len(lautta_core::thumbs::LOCAL_PDF_MAX_BYTES + 1)
+        .unwrap();
+    std::os::unix::fs::symlink("doc.PDF", h.root.join("Documents/link.pdf")).unwrap();
+    let rows = trashed(&h, &["doc.PDF", "dir.pdf", "huge.pdf", "link.pdf"]).await;
+    assert_eq!(rows.len(), 4);
+
+    let doc = &rows["doc.PDF"];
+    assert_eq!(
+        doc.mime_type, "application/pdf",
+        "the type comes from the original name"
+    );
+    let stored = h.core.trash.get(doc.id).unwrap().stored_name;
+    assert_eq!(
+        doc.thumbnail_source,
+        format!("image://lautta-thumb/lautta://trash/{}/{stored}", doc.id),
+        "the app makes it: the stored copy has no location, and the id alone can come back (PRV-14)"
+    );
+    assert_eq!(rows["dir.pdf"].thumbnail_source, "", "a folder");
+    assert_eq!(rows["huge.pdf"].thumbnail_source, "", "over the local limit");
+    assert_eq!(
+        rows["link.pdf"].thumbnail_source, "",
+        "a link would show its target"
+    );
+}
+
+#[tokio::test]
+async fn trashed_pdfs_follow_both_thumbnail_switches() {
+    let h = home().await;
+    write(&h.root.join("Documents/doc.pdf"), &pdf());
+    let rows = trashed(&h, &["doc.pdf"]).await;
+    assert!(!rows["doc.pdf"].thumbnail_source.is_empty());
+    let source = |h: &Home| {
+        h.core.trash_entries(lautta_core::trash::now_secs()).unwrap()[0]
+            .thumbnail_source
+            .clone()
+    };
+
+    let mut settings = h.core.settings();
+    settings.thumbnails_pdf = false;
+    h.core.apply_settings(settings.clone());
+    assert_eq!(source(&h), "", "PDF thumbnails off");
+    settings.thumbnails_pdf = true;
+    settings.thumbnails_local = false;
+    h.core.apply_settings(settings.clone());
+    assert_eq!(source(&h), "", "thumbnails off");
+    settings.thumbnails_local = true;
+    settings.thumbnails_remote = false;
+    h.core.apply_settings(settings);
+    assert!(!source(&h).is_empty(), "the servers' switch is for servers");
+
+    // A copy that is gone has nothing to show.
+    let item = h.core.trash.list().unwrap().remove(0);
+    std::fs::remove_file(item.stored_path()).unwrap();
+    assert_eq!(source(&h), "");
+}
+
 #[tokio::test]
 async fn the_thumbnails_setting_decides_whether_trashed_media_show_them() {
     let h = home().await;

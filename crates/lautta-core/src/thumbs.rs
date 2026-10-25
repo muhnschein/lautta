@@ -24,6 +24,7 @@ use crate::preview::exif;
 use crate::provider::{read_all, ReadHandle};
 use crate::settings::Settings;
 use crate::uri::Uri;
+use crate::vpath::{validate_name, VPath};
 use image::imageops::FilterType;
 use image::{DynamicImage, ImageOutputFormat};
 use sha2::{Digest, Sha256};
@@ -102,7 +103,7 @@ pub fn thumbnail_source(entry: &Entry, local: bool, shown: bool, set: &ThumbSett
         (FileCategory::Image | FileCategory::Video, true) => ThumbSource::System,
         (FileCategory::Image, false) if set.remote => ThumbSource::App,
         (FileCategory::Pdf, _)
-            if set.pdf && (local || set.remote) && !entry.size.is_some_and(|s| s > set.pdf_limit(local)) =>
+            if set.pdf && (local || set.remote) && entry.size.is_none_or(|s| s <= set.pdf_limit(local)) =>
         {
             ThumbSource::App
         }
@@ -113,6 +114,32 @@ pub fn thumbnail_source(entry: &Entry, local: bool, shown: bool, set: &ThumbSett
 /// The `Image` source of an app thumbnail; QML adds `?size=N`.
 pub fn app_thumbnail_url(uri: &Uri) -> String {
     format!("image://lautta-thumb/{uri}")
+}
+
+/// Location id of the Trash in thumbnail URIs: a trashed file's stored copy
+/// has no location of its own, and no real location has this id (LOC-7).
+pub const TRASH_LOCATION: &str = "trash";
+
+/// The thumbnail URI of the Trash item `id` stored as `stored_name`:
+/// `lautta://trash/<id>/<stored name>`. Ids are reused after the newest item
+/// goes, stored names are not, and QML caches pictures by URL: one URI never
+/// names two files. `None` when the name is no path component.
+pub fn trash_item_uri(id: i64, stored_name: &str) -> Option<Uri> {
+    validate_name(stored_name.as_bytes()).ok()?;
+    let path = VPath::parse(format!("{id}/{stored_name}").as_bytes()).ok()?;
+    Some(Uri::new(TRASH_LOCATION, path))
+}
+
+/// Id and stored name of the Trash item a thumbnail URI names, if it is one
+/// of [`trash_item_uri`]'s.
+pub fn trash_item_ref(uri: &Uri) -> Option<(i64, String)> {
+    if uri.location != TRASH_LOCATION {
+        return None;
+    }
+    let mut parts = uri.path.components();
+    let id: i64 = std::str::from_utf8(parts.next()?).ok()?.parse().ok()?;
+    let stored = std::str::from_utf8(parts.next()?).ok()?.to_owned();
+    (trash_item_uri(id, &stored).as_ref() == Some(uri)).then_some((id, stored))
 }
 
 /// Cache key: hex sha256 over URI, requested size, mtime and etag.
@@ -951,6 +978,31 @@ mod tests {
                     "{name} behind a link out of the sandbox, local {local}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn trash_items_have_thumbnail_uris_of_their_own() {
+        let uri = trash_item_uri(42, "0000a-1f-3").unwrap();
+        assert_eq!(uri.to_string(), "lautta://trash/42/0000a-1f-3");
+        assert_eq!(trash_item_ref(&uri), Some((42, "0000a-1f-3".to_owned())));
+        // The id alone is not enough: it is reused.
+        assert_ne!(uri, trash_item_uri(42, "0000a-1f-4").unwrap());
+        assert_eq!(
+            trash_item_ref(&trash_item_uri(0, "x").unwrap()),
+            Some((0, "x".to_owned()))
+        );
+        assert_eq!(trash_item_uri(1, "a/b"), None, "a name is one component");
+        assert_eq!(trash_item_uri(1, ".."), None);
+        for other in [
+            "lautta://user-documents/42/x",
+            "lautta://trash",
+            "lautta://trash/42",
+            "lautta://trash/x/y",
+            "lautta://trash/+42/y",
+            "lautta://trash/42/y/z",
+        ] {
+            assert_eq!(trash_item_ref(&Uri::parse(other).unwrap()), None, "{other}");
         }
     }
 
