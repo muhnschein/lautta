@@ -170,7 +170,7 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - The item context menu is plain rows ending with *More actions*, which opens
   `components/directory/MoreActionsPage.qml { owner, info }` (the DirectoryView and the
   row's item): the item's rarer actions, one row each with its theme icon; a dialog an
-  action opens replaces the page (`DirectoryView.openDialog`). Which actions each holds,
+  action opens (Rename's too) replaces the page (`DirectoryView.openDialog`). Which actions each holds,
   in a fixed order filtered by capabilities, and their icons, is in
   `components/directory/ContextActions.js` (`menu(ctx)`, `more(ctx)` →
   `[{ id, text, icon }]`, `icon(id)`).
@@ -179,10 +179,14 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `components/directory/RenameRemorse.qml { owner, row, uri }` so that a row made anew
   while it runs shows the rest. Cancelling it calls `rename(newUri, oldName)`.
 - When selection mode starts and ends, what its panel offers (`panelButtons(count,
-  writable)`, `panelMore(count, writable)`, the push-up menu with one item) and how a drag
-  selects a range (`dragStart`, `dragTo`, `autoScroll`) is in
-  `components/directory/Selection.js`; `components/directory/DragSelect.qml` runs the
-  drag for the grid and list delegates (§15.3).
+  writable)`: Share, Copy, Cut, Delete, More actions, Stop selecting; `moreRows(count, ctx)`:
+  the rows of the page behind More actions) and how a drag selects a range (`dragStart`,
+  `dragTo`, `autoScroll`) is in `components/directory/Selection.js`;
+  `components/directory/DragSelect.qml` runs the drag for the grid and list delegates (§15.3).
+  The panel's More actions button calls `DirectoryView.moreSelection()`, which pushes
+  `MoreActionsPage.qml { owner, info, selection: true, count }` (`info` the first selected
+  item, `count` fixed at push): its rows run `DirectoryView.runSelectionAction(id)` on the
+  whole selection.
 - Which names New folder and Rename refuse is in `components/directory/Names.js`
   (`invalid(name)`).
 

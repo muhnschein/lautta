@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Host test of selection mode (Selection.js), SPEC §15.3: when it starts and
-// ends, what its panel offers (every action of an item's long-press menu
-// with one item selected, as grid view selects on hold) and how a drag
-// selects a range and scrolls at the edges.
+// ends, what its panel and its More actions page offer (every action of an
+// item's long-press menu with one item selected, as grid view selects on
+// hold; Compress for several) and how a drag selects a range and scrolls at
+// the edges.
 import QtQuick 2.6
 import "../../../qml/components/directory/Selection.js" as Selection
 import "../../../qml/components/directory/ContextActions.js" as Actions
@@ -46,35 +47,57 @@ Item {
     }
 
     function testPanel() {
-        same(ids(Selection.panelButtons(3, true)), ["share", "copy", "cut", "delete", "compress", "done"],
-             "the menu's order, then leaving")
-        same(ids(Selection.panelButtons(3, false)), ["share", "copy", "compress", "done"], "read-only folder")
+        same(ids(Selection.panelButtons(3, true)), ["share", "copy", "cut", "delete", "more", "done"],
+             "the menu's order, then More actions, then leaving")
+        same(ids(Selection.panelButtons(1, true)), ["share", "copy", "cut", "delete", "more", "done"],
+             "one item: the same buttons, no push-up menu")
+        same(ids(Selection.panelButtons(3, false)), ["share", "copy", "more", "done"], "read-only folder")
+        same(ids(Selection.panelButtons(1, false)), ["share", "copy", "more", "done"],
+             "read-only folder, one item: Add to favourites and Compress stay")
         same(ids(Selection.panelButtons(0, true)), ["done"], "waiting for the first item")
         var buttons = Selection.panelButtons(1, true)
         same(buttons.map(function (b) { return b.icon }),
              ["image://theme/icon-m-share", "dir-copy", "dir-cut", "image://theme/icon-m-delete",
-              "image://theme/icon-m-file-archive-folder", "image://theme/icon-m-dismiss"], "icons")
-        check(buttons[4].icon === FileIcons.archive, "Compress shows the archive icon files show")
-        check(buttons[0].text === Actions.text("share") && buttons[5].text === qsTrId("lautta-dir-sel-done"), "spoken names")
-        same(ids(Selection.panelMore(1, true)), ["rename", "favourite"], "one item: the rest of its menu")
-        same(ids(Selection.panelMore(1, false)), ["favourite"], "no rename in a read-only folder")
-        same(Selection.panelMore(2, true), [], "several items: no single-item actions")
-        same(Selection.panelMore(0, true), [], "nothing selected")
-        check(Selection.panelMore(1, true)[0].text === Actions.text("rename"), "menu texts")
+              "more", "image://theme/icon-m-dismiss"], "icons")
+        check(buttons[4].text === Actions.text("more") && buttons[0].text === Actions.text("share")
+              && buttons[5].text === qsTrId("lautta-dir-sel-done"), "spoken names")
+        check(Selection.panelMore === undefined, "no push-up menu")
+    }
+
+    function testMoreRows() {
+        var file = { "isDir": false, "writable": true }
+        same(ids(Selection.moreRows(1, file)), ["rename", "favourite", "compress"],
+             "one item: Rename, then its own More actions page")
+        same(ids(Selection.moreRows(1, { "isDir": true, "writable": true })), ["rename", "favourite", "compress"],
+             "one folder")
+        same(ids(Selection.moreRows(1, { "isDir": false, "writable": false })), ["favourite", "compress"],
+             "no Rename in a read-only folder")
+        same(ids(Selection.moreRows(2, file)), ["compress"], "several items: only what works on several")
+        same(ids(Selection.moreRows(5, { "isDir": false, "writable": false })), ["compress"], "several, read-only")
+        same(Selection.moreRows(0, file), [], "nothing selected")
+        same(Selection.moreRows(1, file).map(function (r) { return r.icon }),
+             ["image://theme/icon-m-edit", "image://theme/icon-m-favorite", FileIcons.archive], "icons")
+        same(Selection.moreRows(2, file).map(function (r) { return r.icon }), [FileIcons.archive],
+             "Compress shows the archive icon files show")
+        check(Selection.moreRows(1, file)[0].text === Actions.text("rename"), "menu texts")
+        check(Selection.moreRows(1, file)[2].text === Actions.text("compress"), "menu texts, second")
     }
 
     // Grid view holds to select instead of opening the long-press menu: with
-    // one item selected the panel must offer every action of that menu.
+    // one item selected the panel and its More actions page must offer every
+    // action of that menu.
     function testPanelParity() {
         var contexts = [{ "isDir": false, "writable": true }, { "isDir": true, "writable": true },
                         { "isDir": false, "writable": false }, { "isDir": true, "writable": false }]
         for (var c = 0; c < contexts.length; ++c) {
             var ctx = contexts[c]
-            var offered = ids(Selection.panelButtons(1, ctx.writable)).concat(ids(Selection.panelMore(1, ctx.writable)))
+            var offered = ids(Selection.panelButtons(1, ctx.writable)).concat(ids(Selection.moreRows(1, ctx)))
             var menu = ids(Actions.menu(ctx)).concat(ids(Actions.more(ctx)))
             for (var i = 0; i < menu.length; ++i)
                 check(menu[i] === "more" || offered.indexOf(menu[i]) >= 0,
-                      menu[i] + " of the long-press menu is on the panel for " + JSON.stringify(ctx))
+                      menu[i] + " of the long-press menu is on the panel or its page for " + JSON.stringify(ctx))
+            same(ids(Selection.moreRows(1, ctx)).filter(function (id) { return id !== "rename" }), ids(Actions.more(ctx)),
+                 "the page holds the item's own More actions rows: " + JSON.stringify(ctx))
         }
     }
 
@@ -146,6 +169,7 @@ Item {
         testSelectionStartEnd()
         testSelectionActions()
         testPanel()
+        testMoreRows()
         testPanelParity()
         testDragRange()
         testDragSteps()

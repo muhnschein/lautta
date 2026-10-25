@@ -53,6 +53,7 @@ Item {
                  "More actions icons: " + JSON.stringify(ctxs[i]))
         }
         same(Actions.icon("favourite"), "image://theme/icon-m-favorite", "Add to favourites")
+        same(Actions.icon("rename"), "image://theme/icon-m-edit", "Rename, a row for the selection's one item")
         same(Actions.icon("compress"), "image://theme/icon-m-file-archive-folder",
              "Compress: the archive icon, not the off-centre zipper badge")
         same(Actions.icon("copy"), "", "the menu's rows have no icon")

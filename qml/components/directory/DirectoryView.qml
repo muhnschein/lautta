@@ -79,8 +79,7 @@ Item {
     }
 
     function rename(info) {
-        var dialog = pageStack.push(Qt.resolvedUrl("../../dialogs/RenameDialog.qml"),
-                                    { "uri": info.uri, "isDir": info.isDir })
+        var dialog = openDialog("../../dialogs/RenameDialog.qml", { "uri": info.uri, "isDir": info.isDir })
         dialog.accepted.connect(function () {
             view.pendingName = dialog.newName
             view.renamingDir = info.isDir === true
@@ -193,6 +192,17 @@ Item {
         moreActionsPage = pageStack.push(Qt.resolvedUrl("MoreActionsPage.qml"), { "owner": view, "info": info })
     }
 
+    // The More actions page of the selected items (SPEC §15.3, OPS-12),
+    // opened by the panel's More actions button.
+    function moreSelection() {
+        var uris = dir.selectedUris()
+        if (uris.length === 0)
+            return
+        moreActionsPage = pageStack.push(Qt.resolvedUrl("MoreActionsPage.qml"), {
+            "owner": view, "info": selectionInfo(uris), "selection": true, "count": uris.length
+        })
+    }
+
     // A dialog opened from More actions takes that page's place, so that
     // leaving the dialog returns to the folder.
     function openDialog(path, properties) {
@@ -262,13 +272,19 @@ Item {
         }
     }
 
-    // Actions of the selection panel (board DirectorySelect); Rename and Add
+    // The first of the selected `uris` as a row describes it; Rename and Add
     // to favourites need to know whether their one item is a folder.
+    function selectionInfo(uris) {
+        return { "uri": uris[0], "mimeType": "", "isDir": dir.kindOf(uris[0]) === "folder" }
+    }
+
+    // Actions of the selection panel and of its More actions page (board
+    // DirectorySelect).
     function runSelectionAction(id) {
         var uris = dir.selectedUris()
         if (uris.length === 0)
             return
-        runAction(id, uris, { "uri": uris[0], "mimeType": "", "isDir": dir.kindOf(uris[0]) === "folder" }, null)
+        runAction(id, uris, selectionInfo(uris), null)
         if (Selection.endsSelection(id))
             endSelection()
     }
