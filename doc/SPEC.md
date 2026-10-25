@@ -838,7 +838,8 @@ a list row does the same; outside selection a list row's long-press menu stays.
 Tapping an icon opens the item like the rest of the row. The selection's actions sit in a
 `DockedPanel` that stays open while selecting: icons spread over its width in the
 long-press menu's order (*Share*, *Copy*, *Cut*, *Delete*), *More actions* and a last
-button that leaves selection. The panel is the same for one item or several, with no
+button that leaves selection, set apart on a key of the ambience's highlight background
+with its icon in the highlight colour. The panel is the same for one item or several, with no
 push-up menu. *More actions* opens a page of its own (OPS-12): *Compress* for any number
 of items, and for one item also *Rename* and *Add to favourites*, so every action of an
 item is reachable from the grid. Backing out of the page keeps the selection. The panel's

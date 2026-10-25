@@ -179,7 +179,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `components/directory/RenameRemorse.qml { owner, row, uri }` so that a row made anew
   while it runs shows the rest. Cancelling it calls `rename(newUri, oldName)`.
 - When selection mode starts and ends, what its panel offers (`panelButtons(count,
-  writable)`: Share, Copy, Cut, Delete, More actions, Stop selecting; `moreRows(count, ctx)`:
+  writable)`: Share, Copy, Cut, Delete, More actions, Stop selecting (`DockButton.key`:
+  highlight key); `moreRows(count, ctx)`:
   the rows of the page behind More actions) and how a drag selects a range (`dragStart`,
   `dragTo`, `autoScroll`) is in `components/directory/Selection.js`;
   `components/directory/DragSelect.qml` runs the drag for the grid and list delegates (§15.3).

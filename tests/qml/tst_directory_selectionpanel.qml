@@ -173,6 +173,13 @@ ApplicationWindow {
               "more", "image://theme/icon-m-dismiss"], "the panel's icons")
         expect(buttons.every(function (b) { return Math.abs(b.width - sel.width / 6) < 1 }),
                "the icons share the width evenly")
+        same(buttons.map(function (b) { return named(b, "dockKey")[0].visible }),
+             [false, false, false, false, false, true], "only Stop selecting sits on a key")
+        same(String(named(buttons[5], "dockKey")[0].color),
+             String(Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity)),
+             "the key is the ambience's highlight background")
+        same(findAll(buttons[5], function (x) { return x.themed !== undefined })[0].highlighted, true,
+             "Stop selecting shows in the highlight colour")
         var menus = findAll(sel, function (x) { return x._activationPermitted !== undefined || x.hasOwnProperty("__silica_menuitem") })
         expect(menus.length === 0, "one item: no push-up menu on the panel: " + menus.length)
         view.endSelection()

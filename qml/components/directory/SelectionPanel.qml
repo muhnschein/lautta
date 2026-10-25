@@ -3,8 +3,9 @@
 // open for as long as selection mode is, of icons spread evenly over its
 // width in the long-press menu's order, then More actions, which opens the
 // rest on a page of its own (MoreActionsPage.qml), and the button that leaves
-// selection (Selection.panelButtons). The same buttons for one item or
-// several (SPEC §15.3). Opaque (UI-10). `owner` is the DirectoryView.
+// selection, on a highlight key (Selection.panelButtons). The same buttons for
+// one item or several (SPEC §15.3). Opaque (UI-10). `owner` is the
+// DirectoryView.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "../"
@@ -49,6 +50,7 @@ DockedPanel {
                 height: content.height
                 icon: modelData.icon
                 description: modelData.text
+                key: modelData.id === "done"
                 onClicked: panel.run(modelData.id)
             }
         }
