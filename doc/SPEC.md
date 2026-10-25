@@ -526,11 +526,12 @@ bridge).
   after it. The decision is one call, `Operations.deletesPermanently` (QML-API). The
   *Trash* page lists, restores (to the original folder, made again if it is gone; a
   copy when that crosses a mount; never overwriting), deletes and empties the items, and
-  says that only files deleted from this device's folders appear there. Images and
-  videos show their thumbnail as a folder's rows do (PRV-1), made from the stored copy
-  and, as its stored name has no extension, the type of the original name; the setting
-  *Show thumbnails* (BRW-4) switches them off, and a stored item that is a link or is
-  gone keeps its glyph, as folders and other files do. Items are purged
+  says that only files deleted from this device's folders appear there, in a note under
+  the page header (not shown while the Trash is empty, when the placeholder has its own
+  hint). Images and videos show their thumbnail as a folder's rows do (PRV-1), made from
+  the stored copy and, as its stored name has no extension, the type of the original
+  name; the setting *Show thumbnails* (BRW-4) switches them off, and a stored item that
+  is a link or is gone keeps its glyph, as folders and other files do. Items are purged
   after the retention setting (30 days) when the settings are loaded at start and
   whenever the Trash opens. The round-1 builds (schema 4–5) kept a hidden bin
   `.lautta-trash` at the root of each folder: at start the items in them are moved into
