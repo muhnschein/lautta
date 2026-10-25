@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Scenario on the target (real Silica): the pulley of a folder (SPEC §15.3,
-// board DirectoryPulley) holds Activity at the top, then Select, New folder,
-// Search and View options (Paste only with a clipboard); Activity opens the
-// Activity page as the Browse pulley does. While selecting it holds only
+// board DirectoryPulley) holds, top to bottom, Activity, View options,
+// Search, Select and New (Paste above New only with a clipboard), so New is
+// nearest the content; Activity opens the Activity page as the Browse
+// pulley does. While selecting it holds only
 // Select all and Clear selection. Fails when an entry is missing, extra or
 // out of order, or Activity leads elsewhere. On the target the entries show
 // their ids (no translation is loaded).
@@ -108,8 +109,8 @@ ApplicationWindow {
                 view = win.folderView()
                 if (!view || view.model.loading || !view.model.writable || App.clipboardCount > 0)
                     break
-                if (!win.expectTexts(["lautta-dir-menu-activity", "lautta-dir-menu-select", "lautta-dir-menu-new-folder",
-                                      "lautta-dir-menu-search", "lautta-dir-menu-view-options"], "folder pulley"))
+                if (!win.expectTexts(["lautta-dir-menu-activity", "lautta-dir-menu-view-options", "lautta-dir-menu-search",
+                                      "lautta-dir-menu-select", "lautta-dir-menu-new"], "folder pulley"))
                     break
                 view.startSelection()
                 win.next()
