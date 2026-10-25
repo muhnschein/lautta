@@ -8,7 +8,7 @@
 //! nothing is rebuilt under the user's finger. A dragged row moves at once
 //! ([`BrowseLayoutModel::moveRow`]) and is stored behind it.
 
-use super::{cell_data, error_parts, role_names, store_changed, Cell};
+use super::{cell_data, error_parts, role_names, store_changed, watch_sources, Cell, Guard};
 use crate::runtime::{core, spawn_then};
 use lautta_core::app::Core;
 use lautta_core::app_browse::LayoutRow;
@@ -249,6 +249,8 @@ pub struct BrowseLayoutModel {
     /// Changes made and not stored yet. The rows are read again only once
     /// all are stored: rows read in between would move a dragged row back.
     pending: usize,
+    watching: bool,
+    guard: Guard,
 }
 
 /// Runs a store write off the runtime's workers.
@@ -261,10 +263,21 @@ async fn blocking(
 }
 
 impl BrowseLayoutModel {
+    /// Reads the rows again; the first call also starts following what the
+    /// Browse page follows: a volume or server that comes shows here too.
     fn reload(&mut self) {
-        let Some(core) = core() else { return };
         self.generation += 1;
         let generation = self.generation;
+        let Some(core) = core() else { return };
+        if !self.watching {
+            self.watching = true;
+            watch_sources(
+                QPointer::from(&*self),
+                &core,
+                &self.guard,
+                Self::reload_when_stored,
+            );
+        }
         let me = QPointer::from(&*self);
         spawn_then(async move { core.browse_layout_rows().await }, move |rows| {
             if let Some(model) = me.as_pinned() {
@@ -274,6 +287,14 @@ impl BrowseLayoutModel {
                 }
             }
         });
+    }
+
+    /// Reads the rows again unless a change of the user's own is not stored
+    /// yet; the end of the last one reads again ([`Self::changed`]).
+    fn reload_when_stored(&mut self) {
+        if self.pending == 0 {
+            self.reload();
+        }
     }
 
     fn show(&mut self, rows: Vec<Vec<Cell>>) {
@@ -324,9 +345,7 @@ impl BrowseLayoutModel {
             model.failed(kind, message);
         }
         model.pending = model.pending.saturating_sub(1);
-        if model.pending == 0 {
-            model.reload();
-        }
+        model.reload_when_stored();
     }
 
     /// Runs `work` after the changes made before it, then shows the rows.
@@ -494,6 +513,19 @@ mod tests {
         assert_eq!((model.placeAt(0), model.placeAt(1)), (0, 1));
         assert_eq!(model.sectionAt(2).to_string(), "");
         assert_eq!((model.placeAt(2), model.placeAt(-1)), (-1, -1));
+    }
+
+    #[test]
+    fn a_source_change_waits_for_a_change_of_the_users_own() {
+        let mut model = BrowseLayoutModel {
+            pending: 1,
+            ..BrowseLayoutModel::default()
+        };
+        model.reload_when_stored();
+        assert_eq!(model.generation, 0, "no read while a change is not stored");
+        model.pending = 0;
+        model.reload_when_stored();
+        assert_eq!(model.generation, 1, "read once all are stored");
     }
 
     /// Rows named by single letters, all in one section; an upper-case

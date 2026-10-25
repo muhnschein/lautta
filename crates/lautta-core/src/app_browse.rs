@@ -60,8 +60,6 @@ pub struct Row {
     /// `Timeout`, …), empty otherwise.
     pub connection_error: String,
     pub colour: String,
-    /// Items in the folder, `-1` when not shown.
-    pub count: i64,
     /// Favourite or location id; the nearby index.
     pub item_id: String,
     /// `Location › folder` for favourites (the folder a file is in), the
@@ -86,7 +84,6 @@ impl Row {
             section,
             kind,
             status: "ready",
-            count: -1,
             free: -1,
             total: -1,
             ..Row::default()
@@ -228,16 +225,6 @@ fn status_name(s: LocationStatus) -> &'static str {
 
 fn clamp_i64(v: u64) -> i64 {
     i64::try_from(v).unwrap_or(i64::MAX)
-}
-
-/// Visible items of a local folder (hidden files are not counted).
-fn visible_count(path: &std::path::Path) -> Option<i64> {
-    let n = std::fs::read_dir(path)
-        .ok()?
-        .filter_map(Result::ok)
-        .filter(|e| !e.file_name().as_encoded_bytes().starts_with(b"."))
-        .count();
-    Some(clamp_i64(n as u64))
 }
 
 /// The account ids (`nv-account:…`) of a bridge location list.
@@ -418,7 +405,6 @@ impl Core {
         if settings.recently_deleted {
             let mut row = Row::new("device", "deleted");
             row.icon = "image://theme/icon-m-delete".to_owned();
-            row.count = clamp_i64(self.trash.list().map_or(0, |l| l.len()) as u64);
             device.push(row);
         }
         LocalRows {
@@ -445,7 +431,6 @@ impl Core {
                 row.uri = Uri::root(l.id.clone()).to_string();
                 row.name = display_of(&l, prefs);
                 row.icon = "image://theme/icon-m-file-folder".to_owned();
-                row.count = l.local_root.as_deref().and_then(visible_count).unwrap_or(-1);
                 row.item_id = l.id;
                 row
             })
@@ -981,16 +966,6 @@ mod tests {
     }
 
     #[test]
-    fn visible_items_are_counted() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("a"), "").unwrap();
-        std::fs::write(dir.path().join(".hidden"), "").unwrap();
-        std::fs::create_dir(dir.path().join("d")).unwrap();
-        assert_eq!(visible_count(dir.path()), Some(2));
-        assert_eq!(visible_count(&dir.path().join("none")), None);
-    }
-
-    #[test]
     fn row_keys_tell_rows_apart() {
         let mut a = Row::new("favourites", "favourite");
         a.item_id = "1".into();
@@ -998,6 +973,5 @@ mod tests {
         assert_eq!(a.key(), b.key());
         b.item_id = "2".into();
         assert_ne!(a.key(), b.key());
-        assert_eq!(a.count, -1);
     }
 }

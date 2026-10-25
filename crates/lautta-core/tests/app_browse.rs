@@ -73,8 +73,6 @@ async fn ready_env() -> (FakeBridge, Env) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn standalone_shows_no_trace_of_the_bridge() {
     let e = env(None, &["Documents", "Music", "android_storage/DCIM"]).await;
-    std::fs::write(e.home.path().join("Documents/a.txt"), "").unwrap();
-    std::fs::write(e.home.path().join("Documents/.hidden"), "").unwrap();
     let rows = e.core.browse_rows().await;
     assert!(of(&rows, "servers").is_empty());
     assert!(of(&rows, "nearby").is_empty());
@@ -82,10 +80,9 @@ async fn standalone_shows_no_trace_of_the_bridge() {
     assert_eq!(device[0].kind, "recents");
     assert_eq!(device[1].name, "Documents");
     assert_eq!(device[1].uri, "lautta://user-documents/");
-    assert_eq!(device[1].count, 1, "hidden files are not counted");
     assert_eq!(device[2].name, "Music");
     let deleted = device.last().unwrap();
-    assert_eq!((deleted.kind, deleted.count), ("deleted", 0));
+    assert_eq!(deleted.kind, "deleted");
     assert_eq!(of(&rows, "android")[0].name, "DCIM");
 }
 
@@ -221,7 +218,7 @@ async fn recents_is_a_device_row_while_recents_are_remembered() {
     assert_eq!(kinds(&rows, "device"), ["recents", "folder", "deleted"]);
     let recents = of(&rows, "device")[0];
     assert_eq!(recents.icon, "image://theme/icon-m-history");
-    assert_eq!((recents.count, recents.uri.as_str()), (-1, ""));
+    assert_eq!(recents.uri, "");
 
     core.browse_layout.set_hidden("device", "recents", true).unwrap();
     assert_eq!(kinds(&core.browse_rows().await, "device"), ["folder", "deleted"]);

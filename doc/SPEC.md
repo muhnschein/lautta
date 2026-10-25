@@ -326,8 +326,8 @@ what the app does.
 - NVB-4: Locations: `ListLocations` and `LocationsChanged` populate *Servers* (accounts
   and this app's ad-hoc servers) and *Nearby* (`Discover`). Attention states from netvfs
   (`auth-failed`, `server-identity-changed`) show as badges. A server row's status (on
-  the right, where a folder shows its item count, §15.2) tells only how its connection
-  stands, from the `state` and `stateError` netvfs lists for each location (netvfs
+  the right, §15.2) tells only how its connection stands, from the `state` and
+  `stateError` netvfs lists for each location (netvfs
   XB-10, XB-12; every `LocationsChanged` lists again and the row changes in place):
   *Connected* (a filled dot), *Connecting…* (busy indicator), *Not connected* (a ring:
   never used, closed when idle or dropped; also a recent ad-hoc server), *Couldn't
@@ -394,9 +394,9 @@ what the app does.
   bridge has the `drives` feature (NVB-13) it lists the memory cards and USB drives it can
   mount (`ListDrives`, netvfs XB-20, also without the consent, followed by
   `DrivesChanged`): one that is not mounted is a dimmed *Volumes* row with its size and
-  "Not mounted" on the right (where a folder shows its count, as tall as a mounted
-  volume), named and placed (BRW-12) as the volume it becomes, by the folder UDisks2
-  mounts it on (label, else UUID, else `disk`). Tapping it, or its *Mount*, has the
+  "Not mounted" on the right (as tall as a mounted volume), named and placed (BRW-12) as
+  the volume it becomes, by the folder UDisks2 mounts it on (label, else UUID, else
+  `disk`). Tapping it, or its *Mount*, has the
   bridge mount it (`Mount`, as Settings › Storage does, without a question) and opens the
   volume once the sandbox shows its folder (up to 2 s; otherwise "not found", naming it). A mounted volume of
   such a drive has *Unmount* (`Unmount`); a failure (busy, not allowed) is told with the
@@ -474,8 +474,10 @@ what the app does.
   its row in place: the list keeps its position and a press lights one row only. A
   half-size live preview of the Browse page sits below, as in Salama's start page
   settings; the pulley has *Restore defaults*, which also puts *Recents* first again.
-  Long-press *Hide from Browse* is the shortcut. Stored in `browse_layout`; a removed
-  account's rows are purged with it (SEC-5).
+  The list and the preview follow what the Browse page follows (a volume, drive, server
+  or favourite that comes or goes), except while a change of the user's own is not
+  stored yet. No menu on the Browse page hides a row; this page is the one place.
+  Stored in `browse_layout`; a removed account's rows are purged with it (SEC-5).
 
 ## 10. File operations
 
@@ -784,20 +786,22 @@ Sections: *Favourites*, *On this device* (*Recents* while recents are remembered
 (ORG-2), first until the user orders the section, then the user folders and *Trash* while
 it is on), *Android*, *Volumes* (when present), *Servers* (bridge only:
 accounts, recent ad-hoc servers, each with its connection state and status dot (NVB-4)
-or attention badge on the right, where a folder shows its item count, so a server row
-is as tall as a folder row), *Nearby* (bridge only, hidden when empty). Rows the user hid are left out and rows keep the order the user gave
-them (BRW-12). Tapping a nearby or recent ad-hoc server opens *Connect to server*
-prefilled (LOC-6, NVB-6).
+or attention badge on the right, so a server row is as tall as a folder row), *Nearby*
+(bridge only, hidden when empty). Rows show no item counts (folders, *Recents*, *Trash*).
+Rows the user hid are left out and rows keep the order the user gave them (BRW-12).
+Tapping a nearby or recent ad-hoc server opens *Connect to server* prefilled (LOC-6,
+NVB-6).
 
 Pulley: *Settings*, *Add server* (bridge only, NVB-5), *Activity* (live count).
 Long-press menus: favourite: *Edit favourite*, *Copy address*, *Remove from
-favourites*; folder: *Add to favourites*, *Copy address*, *Hide from Browse*; volume:
+favourites*; folder: *Add to favourites*, *Copy address*; volume:
 *Add to favourites*, *Copy address*, *Unmount* (drives the bridge mounts, LOC-3),
-*Open Storage settings* (bridge only, LOC-3, NVB-13), *Hide from Browse*; a drive that
-is not mounted: *Mount*, *Open Storage settings*, *Hide from Browse*; account: *Edit
+*Open Storage settings* (bridge only, LOC-3, NVB-13); a drive that
+is not mounted: *Mount*, *Open Storage settings*; account: *Edit
 server*, *Update sign-in* or *Review server identity* while
-netvfs asks for it (NVB-5), *Copy address*, *Hide from Browse*; ad-hoc server:
-*Connect* (recent ones), *Copy address*, *Hide from Browse*, *Remove from recents*.
+netvfs asks for it (NVB-5), *Copy address*; ad-hoc server:
+*Connect* (recent ones), *Copy address*, *Remove from recents*. Hiding a row is
+*Settings › Browse page* only (BRW-12).
 Connections are netvfs' to open and close: no menu disconnects a server. Nothing is
 attached to swipe to: Activity is in the pulley and the activity bar (XFR-13).
 

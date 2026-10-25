@@ -130,8 +130,6 @@ async fn deletes_go_to_the_app_data_trash_across_mounts() {
     // Nothing is left in the folder: no bin, no copy.
     assert!(s.core.list(&docs, |_| {}).await.unwrap().is_empty());
     assert_eq!(std::fs::read_dir(s.home.join("Documents")).unwrap().count(), 0);
-    let rows = s.core.browse_rows().await;
-    assert_eq!(rows.iter().find(|r| r.kind == "deleted").unwrap().count, 1);
 
     assert!(s.core.undo().await.unwrap(), "undo copies it back");
     assert_project(&s.home.join("Documents/Uni"), when);
@@ -214,8 +212,6 @@ async fn restore_purge_and_empty_cover_every_item() {
         .collect();
     listed.sort();
     assert_eq!(listed, ["a.txt", "b.txt", "c.txt"]);
-    let rows = s.core.browse_rows().await;
-    assert_eq!(rows.iter().find(|r| r.kind == "deleted").unwrap().count, 3);
 
     // The old item goes back across mounts.
     let c = s.core.trash.list().unwrap();

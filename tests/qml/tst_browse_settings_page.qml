@@ -7,7 +7,8 @@
 // at once, by the same delegate (the rows it passes slide aside), it stays
 // there once let go and stored, in list rows (a favourite above makes them
 // differ from the places in the section). Restore defaults shows every row
-// again with Recents first.
+// again with Recents first. A favourite added elsewhere shows in the list
+// and the preview, as the Browse page shows it.
 //
 // The Silica window sits in a Qt Quick window: only items in one get the
 // mouse events the drag needs.
@@ -32,6 +33,7 @@ QtQuick.Window {
     property var folderRow
     property real scrolledTo
     property int fromRow: -1
+    property int listed
 
     ViewerTools { id: tools }
     TestEvent { id: events }
@@ -219,10 +221,18 @@ QtQuick.Window {
             case 3:
                 if (window.page.previewCount !== window.rows || window.firstDeviceRow(layout) !== "recents")
                     return
-                favourites.removeUri("lautta://user-documents/")
+                window.listed = layout.count
+                favourites.add("lautta://user-music/", "Tunes", "")
                 break
             case 4:
-                if (favourites.idOf("lautta://user-documents/") !== -1)
+                // Both follow the store; the list has no reload of its own here.
+                if (layout.count !== window.listed + 1 || window.page.previewCount !== window.rows + 1)
+                    return
+                favourites.removeUri("lautta://user-music/")
+                favourites.removeUri("lautta://user-documents/")
+                break
+            case 5:
+                if (favourites.idOf("lautta://user-documents/") !== -1 || favourites.idOf("lautta://user-music/") !== -1)
                     return
                 window.scenarioRunning = false
                 break
