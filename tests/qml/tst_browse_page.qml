@@ -6,8 +6,9 @@
 // Location settings, favourites' menus have Copy address and no Move up or
 // down, a volume's has Open Storage settings only while the bridge offers it
 // (NVB-13) and Unmount only when the bridge mounted it, a drive that is not
-// mounted is dimmed, says so, has Mount and mounts when tapped instead of
-// opening (LOC-3), and the Recents row of On this device opens Recents.
+// mounted is dimmed, shows an empty ring where a mounted one has a glowing
+// dot, has Mount and mounts when tapped instead of opening (LOC-3), and the
+// Recents row of On this device opens Recents.
 // Fails naming the row whose menu differs.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -133,18 +134,25 @@ ApplicationWindow {
         return findAll(row, function(x) { return x.opacity === Theme.opacityHigh }, []).length
     }
 
-    // A drive that is not mounted (LOC-3): dimmed, saying so, and a tap
+    // The status icons `row` shows (objectNames).
+    function statusIcons(row) {
+        var names = ["statusOn", "statusRing", "statusBusy", "statusWarning"]
+        return findAll(row, function(x) { return x.visible && names.indexOf(x.objectName) >= 0 }, [])
+            .map(function(icon) { return icon.objectName }).join(",")
+    }
+
+    // A drive that is not mounted (LOC-3): dimmed, an empty ring, and a tap
     // mounts it instead of opening a page for a volume that is not there.
     function checkUnmountedRow(list) {
         var row = rowOf(list, "STICK")
         if (!row || !row.unmounted)
             return fail("STICK is not shown as not mounted")
-        if (findAll(row, function(x) { return x.text === "lautta-browse-not-mounted" && x.visible }, []).length !== 1)
-            return fail("STICK does not say that it is not mounted")
+        if (statusIcons(row) !== "statusRing")
+            return fail("STICK shows [" + statusIcons(row) + "], not an empty ring")
         var stickDimmed = dimmed(row)
         var mounted = rowOf(list, "CARD")
-        if (mounted.unmounted || findAll(mounted, function(x) { return x.text === "lautta-browse-not-mounted" && x.visible }, []).length > 0)
-            return fail("CARD is shown as not mounted")
+        if (mounted.unmounted || statusIcons(mounted) !== "statusOn")
+            return fail("CARD is shown as not mounted: [" + statusIcons(mounted) + "]")
         // Its icon and its labels, and nothing of the mounted one.
         if (stickDimmed < dimmed(mounted) + 2)
             return fail("STICK is not dimmed")

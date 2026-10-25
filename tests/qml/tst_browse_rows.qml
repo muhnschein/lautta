@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Browse rows on the target (real Silica, SPEC §15.2, §15.5): a folder row
-// shows no item count; a server row is as tall as a folder row, its status
-// at the right margin in the small font; a favourite on a server has the
+// shows no item count; a server row is as tall as a folder row, its status an
+// icon at the right margin and no text; a favourite on a server has the
 // server icon before its place and a local one has none; a drive that is not
 // mounted is as tall as a mounted volume, with its size below its name and
-// "Not mounted" on the right like a server's status (LOC-3); and nothing is
-// attached to the page to swipe to (Activity is in the pulley). Fails when
-// a count comes back, server rows grow a second line again, the status
-// leaves the right margin, the icon marks the wrong place or Activity is
-// attached again.
+// an empty ring on the right like a server's status, a mounted drive a
+// glowing dot and a volume the bridge does not mount none (LOC-3); and
+// nothing is attached to the page to swipe to (Activity is in the pulley).
+// Fails when a count comes back, server rows grow a second line again, a
+// state is told in words, the status icon leaves the right margin, the
+// icon marks the wrong place or Activity is attached again.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -34,6 +35,7 @@ ApplicationWindow {
                 ListElement { section: "device"; uri: "lautta://user-documents/"; name: "Documents"; kind: "folder"; icon: "image://theme/icon-m-file-folder"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; count: 214; itemId: "user-documents"; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: "" }
                 ListElement { section: "volumes"; uri: "lautta://vol-SD/"; name: "SD card"; kind: "volume"; icon: "image://theme/icon-m-sd-card"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "vol-SD"; place: ""; provider: ""; host: ""; free: 62500000000; total: 128000000000; fs: "exFAT"; drive: "mmcblk1p1" }
                 ListElement { section: "volumes"; uri: ""; name: "STICK"; kind: "volume"; icon: "image://theme/icon-m-usb"; status: "unmounted"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "vol-STICK"; place: ""; provider: ""; host: ""; free: -1; total: 8000000000; fs: ""; drive: "sda1" }
+                ListElement { section: "volumes"; uri: "lautta://vol-CARD/"; name: "CARD"; kind: "volume"; icon: "image://theme/icon-m-sd-card"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "vol-CARD"; place: ""; provider: ""; host: ""; free: 1000; total: 2000; fs: "vfat"; drive: "" }
                 ListElement { section: "servers"; uri: "lautta://nv-account:1/"; name: "NAS"; kind: "account"; icon: "image://theme/icon-m-computer"; status: "ready"; attention: ""; connection: "connected"; connectionError: ""; colour: ""; itemId: "nv-account:1"; place: "sftp://nas.home/"; provider: "SFTP"; host: "nas.home"; free: -1; total: -1; fs: "" }
                 ListElement { section: "servers"; uri: "lautta://nv-account:2/"; name: "Office"; kind: "account"; icon: "image://theme/icon-m-computer"; status: "attention"; attention: "auth-failed"; connection: "failed"; connectionError: "AuthFailed"; colour: ""; itemId: "nv-account:2"; place: ""; provider: "SMB"; host: ""; free: -1; total: -1; fs: "" }
                 ListElement { section: "servers"; uri: "lautta://nv-account:3/"; name: "Old"; kind: "account"; icon: "image://theme/icon-m-computer"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "nv-account:3"; place: ""; provider: "SFTP"; host: ""; free: -1; total: -1; fs: "" }
@@ -82,9 +84,21 @@ ApplicationWindow {
         return null
     }
 
-    // The label in `row` that says `text` (its id here: no translations).
+    // The status icons `row` shows, by what each is.
+    function icons(row) {
+        var names = ["statusOn", "statusRing", "statusBusy", "statusWarning"]
+        return findAll(row, function(x) { return x.visible && names.indexOf(x.objectName) >= 0 }, [])
+            .map(function(icon) { return icon.objectName })
+    }
+
+    // The status icon item of `row`, which sits at the page margin.
+    function statusSlot(row) {
+        return findAll(row, function(x) { return x.indicator !== undefined && x.dotSize !== undefined }, [])[0]
+    }
+
+    // The label in `row` that says `text`.
     function labelOf(row, text) {
-        var found = findAll(row, function(x) { return x.font !== undefined && x.text === text }, [])
+        var found = findAll(row, function(x) { return x.font !== undefined && x.text === text && x.visible }, [])
         return found.length > 0 ? found[0] : null
     }
 
@@ -102,6 +116,12 @@ ApplicationWindow {
         return Math.round(row.width - Theme.horizontalPageMargin)
     }
 
+    // The texts `row` shows: its name and its line, no word about its state.
+    function texts(row) {
+        return findAll(row, function(x) { return x.visible && x.font !== undefined && typeof x.text === "string" && x.text.length > 0 }, [])
+            .map(function(label) { return label.text })
+    }
+
     function checkNoCount() {
         var numbers = findAll(rowOf("Documents"), function(x) { return x.font !== undefined && /^[0-9]+$/.test(String(x.text)) }, [])
         expect(numbers.length === 0, "a folder row shows its count: " + (numbers.length > 0 ? numbers[0].text : ""))
@@ -110,23 +130,22 @@ ApplicationWindow {
     function checkHeights() {
         var folder = rowOf("Documents")
         var edge = statusEdge(folder)
-        var servers = [["NAS", "lautta-browse-server-connected"], ["Office", "lautta-browse-attention-auth"], ["Old", ""]]
+        // name: the icon of its row
+        var servers = [["NAS", "statusOn"], ["Office", "statusWarning"], ["Old", ""]]
         for (var i = 0; i < servers.length; ++i) {
             var row = rowOf(servers[i][0])
             expect(row.height === folder.height,
                    servers[i][0] + " is " + row.height + " tall, a folder " + folder.height)
+            expect(texts(row).join("|") === servers[i][0], servers[i][0] + " shows " + texts(row).join("|") + ", only its name")
+            var shown = icons(row)
+            expect(shown.join(",") === servers[i][1], servers[i][0] + " shows icons [" + shown.join(",") + "], not [" + servers[i][1] + "]")
             if (servers[i][1] === "")
                 continue
-            var status = labelOf(row, servers[i][1])
-            if (!status) {
-                fail(servers[i][0] + " shows no status")
-                continue
-            }
-            expect(rightEdge(status, row) === edge,
-                   servers[i][0] + "'s status ends at " + rightEdge(status, row) + ", the margin is at " + edge)
-            expect(status.font.pixelSize === Theme.fontSizeSmall, servers[i][0] + "'s status is in the small font")
+            var slot = statusSlot(row)
+            expect(rightEdge(slot, row) === edge,
+                   servers[i][0] + "'s status ends at " + rightEdge(slot, row) + ", the margin is at " + edge)
             var name = labelOf(row, servers[i][0])
-            expect(name && rightEdge(name, row) <= status.mapToItem(row, 0, 0).x,
+            expect(name && rightEdge(name, row) <= slot.mapToItem(row, 0, 0).x,
                    servers[i][0] + "'s name ends before its status")
         }
     }
@@ -134,21 +153,23 @@ ApplicationWindow {
     function checkVolumes() {
         var mounted = rowOf("SD card")
         var stick = rowOf("STICK")
+        var card = rowOf("CARD")
         expect(stick.height === mounted.height,
                "STICK is " + stick.height + " tall, a mounted volume " + mounted.height)
         var size = placeLine(stick)
         expect(size && size.visible && size.text === Format.formatFileSize(8000000000),
                "STICK's line is " + (size ? size.text : "missing"))
-        var status = labelOf(stick, "lautta-browse-not-mounted")
-        if (!status || !status.visible)
-            return fail("STICK does not say that it is not mounted")
-        expect(rightEdge(status, stick) === statusEdge(stick),
-               "STICK's status ends at " + rightEdge(status, stick) + ", the margin is at " + statusEdge(stick))
-        expect(status.font.pixelSize === Theme.fontSizeSmall, "STICK's status is in the small font")
+        expect(texts(stick).join("|") === "STICK|" + Format.formatFileSize(8000000000),
+               "STICK shows " + texts(stick).join("|") + ", only its name and size")
+        expect(icons(stick).join(",") === "statusRing", "STICK shows [" + icons(stick).join(",") + "], an empty ring")
+        var slot = statusSlot(stick)
+        expect(slot && rightEdge(slot, stick) === statusEdge(stick),
+               "STICK's status ends at " + (slot ? rightEdge(slot, stick) : "nowhere") + ", the margin is at " + statusEdge(stick))
         var name = labelOf(stick, "STICK")
-        expect(name && rightEdge(name, stick) <= status.mapToItem(stick, 0, 0).x, "STICK's name ends before its status")
-        var other = labelOf(mounted, "lautta-browse-not-mounted")
-        expect(!other || !other.visible, "a mounted volume says that it is not mounted")
+        expect(name && slot && rightEdge(name, stick) <= slot.mapToItem(stick, 0, 0).x, "STICK's name ends before its status")
+        expect(icons(mounted).join(",") === "statusOn", "a mounted drive shows [" + icons(mounted).join(",") + "], a glowing dot")
+        expect(texts(mounted).length === 2, "a mounted volume shows " + texts(mounted).join("|") + ", only its name and line")
+        expect(icons(card).length === 0, "a volume the bridge does not mount shows [" + icons(card).join(",") + "]")
     }
 
     function checkPlaces() {

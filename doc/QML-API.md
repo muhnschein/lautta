@@ -93,8 +93,11 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `connecting` (also while the bridge reconnects, NVB-12), `disconnected` (also recent
   ad-hoc servers), `failed`, or empty when the bridge reports none; `connectionError` is
   the netvfs error name of a `failed` one (`AuthFailed`, `Timeout`, …).
-  `components/browse/ServerStatus.js` turns them into the row's status (text and dot, on
-  the right, §15.2). `refresh()`
+  `components/browse/RowStatus.js` `indicator(kind, status, connection, connectionError,
+  drive)` turns them into the row's status icon (`on`, `busy`, `off`, `failed`,
+  `warning`, `""` for none; servers and volumes, LOC-3), which
+  `components/browse/RowStatusIcon.qml { indicator, highlighted }` draws at the right
+  margin, no text (§15.2). `refresh()`
   rescans the device folders and volumes first (LOC-3); the model also follows location
   changes by itself, and a changed row changes in place.
 - `FavouritesModel` (roles `itemId`, `uri`, `label`, `colour`, `place`, `isDir`, `icon`

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // A half-size picture of the Browse page for Settings › Browse page (BRW-12),
-// as Salama's start page preview: the real rows, drawn small, following
-// every change. Takes no input.
+// as Salama's start page preview: the real rows, drawn small, with their
+// status icons, following every change. Takes no input.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "BrowseText.js" as BrowseText
+import "RowStatus.js" as RowStatus
 
 Item {
     id: preview
@@ -80,12 +81,23 @@ Item {
                     anchors {
                         left: parent.left
                         leftMargin: Theme.horizontalPageMargin + Theme.iconSizeMedium + Theme.paddingLarge
-                        right: parent.right
-                        rightMargin: Theme.horizontalPageMargin
+                        right: statusIcon.indicator.length > 0 ? statusIcon.left : parent.right
+                        rightMargin: statusIcon.indicator.length > 0 ? Theme.paddingLarge : Theme.horizontalPageMargin
                         verticalCenter: parent.verticalCenter
                     }
                     text: BrowseText.rowName(model.kind, model.name)
                     truncationMode: TruncationMode.Fade
+                }
+                RowStatusIcon {
+                    id: statusIcon
+
+                    indicator: RowStatus.indicator(model.kind, model.status, model.connection,
+                                                   model.connectionError, model.drive)
+                    anchors {
+                        right: parent.right
+                        rightMargin: Theme.horizontalPageMargin
+                        verticalCenter: parent.verticalCenter
+                    }
                 }
             }
         }

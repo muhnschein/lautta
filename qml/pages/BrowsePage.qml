@@ -12,7 +12,7 @@ import "../components/transfers"
 import "../components/ErrorText.js" as ErrorText
 import "../components/Open.js" as Open
 import "../components/browse/BrowseText.js" as BrowseText
-import "../components/browse/ServerStatus.js" as ServerStatus
+import "../components/browse/RowStatus.js" as RowStatus
 
 Page {
     id: page
@@ -177,7 +177,6 @@ Page {
 
             readonly property string kind: model.kind
             readonly property bool banner: kind === "consent" || kind === "unavailable"
-            readonly property bool isServer: kind === "account" || kind === "adhoc" || kind === "adhocRecent"
             // A drive the bridge can mount, and the bridge's id of a
             // volume's drive (LOC-3).
             readonly property bool unmounted: kind === "volume" && model.status === "unmounted"
@@ -194,14 +193,14 @@ Page {
                     return ""
                 }
             }
-            // Only how the connection stands, no protocol or host (NVB-4).
-            readonly property string serverText: ServerStatus.text(model.status, model.attention,
-                                                                   model.connection, model.connectionError)
-            readonly property string serverIndicator: ServerStatus.indicator(model.status, model.connection)
+            // Only how the connection or mount stands, as an icon, no
+            // protocol or host (NVB-4, LOC-3).
+            readonly property string statusIndicator: RowStatus.indicator(kind, model.status, model.connection,
+                                                                          model.connectionError, drive)
             readonly property bool hasMenu: kind === "favourite" || kind === "folder" || kind === "volume"
                                             || kind === "account" || kind === "adhoc" || kind === "adhocRecent"
 
-            // A server's status sits on the right, so a server row is as
+            // The status icon sits on the right, so a server row is as
             // tall as a folder row (§15.2).
             contentHeight: banner ? bannerContent.height + 2 * Theme.paddingMedium
                                   : (subtitle.length > 0 ? Theme.itemSizeMedium : Theme.itemSizeSmall)
@@ -234,9 +233,8 @@ Page {
                 anchors {
                     left: parent.left
                     leftMargin: Theme.horizontalPageMargin + Theme.iconSizeMedium + Theme.paddingLarge
-                    right: statusRow.visible ? statusRow.left
-                                             : (mountLabel.visible ? mountLabel.left : parent.right)
-                    rightMargin: Theme.horizontalPageMargin
+                    right: statusIcon.indicator.length > 0 ? statusIcon.left : parent.right
+                    rightMargin: statusIcon.indicator.length > 0 ? Theme.paddingLarge : Theme.horizontalPageMargin
                     verticalCenter: parent.verticalCenter
                 }
 
@@ -256,76 +254,18 @@ Page {
                 }
             }
 
-            // How a server's connection stands; the name gives way first.
-            Row {
-                id: statusRow
+            // How a server's connection or a drive's mount stands; the name
+            // gives way first.
+            RowStatusIcon {
+                id: statusIcon
 
-                visible: !row.banner && row.isServer && row.serverText.length > 0
+                indicator: row.statusIndicator
+                highlighted: row.highlighted
                 anchors {
                     right: parent.right
                     rightMargin: Theme.horizontalPageMargin
                     verticalCenter: parent.verticalCenter
                 }
-                spacing: Theme.paddingSmall
-
-                // Connected: filled; failed: in the error colour; not
-                // connected: a ring.
-                Rectangle {
-                    visible: row.serverIndicator === "connected" || row.serverIndicator === "failed"
-                             || row.serverIndicator === "disconnected"
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Theme.paddingMedium
-                    height: width
-                    radius: width / 2
-                    color: row.serverIndicator === "connected" ? Theme.highlightColor
-                           : (row.serverIndicator === "failed" ? Theme.errorColor : "transparent")
-                    border.width: row.serverIndicator === "disconnected" ? 1 : 0
-                    border.color: Theme.secondaryColor
-                }
-                HighlightImage {
-                    visible: row.serverIndicator === "warning"
-                    anchors.verticalCenter: parent.verticalCenter
-                    source: "image://theme/icon-s-warning"
-                    width: Theme.iconSizeExtraSmall
-                    height: width
-                    color: Theme.primaryColor
-                    highlighted: row.highlighted
-                }
-                BusyIndicator {
-                    visible: row.serverIndicator === "busy"
-                    running: visible
-                    anchors.verticalCenter: parent.verticalCenter
-                    size: BusyIndicatorSize.ExtraSmall
-                }
-                Label {
-                    // A long translation fades rather than push the name out.
-                    width: Math.min(implicitWidth, row.width / 2)
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: row.serverText
-                    font.pixelSize: Theme.fontSizeSmall
-                    color: model.status === "attention" ? Theme.errorColor
-                           : (row.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor)
-                    truncationMode: TruncationMode.Fade
-                }
-            }
-
-            // A drive that is not mounted says so on the right, as a server
-            // tells its connection (LOC-3).
-            Label {
-                id: mountLabel
-
-                visible: row.unmounted
-                width: Math.min(implicitWidth, row.width / 2)
-                anchors {
-                    right: parent.right
-                    rightMargin: Theme.horizontalPageMargin
-                    verticalCenter: parent.verticalCenter
-                }
-                //% "Not mounted"
-                text: qsTrId("lautta-browse-not-mounted")
-                font.pixelSize: Theme.fontSizeSmall
-                color: row.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
-                truncationMode: TruncationMode.Fade
             }
 
             // The consent row (NVB-3) and the reconnecting notice (NVB-12).

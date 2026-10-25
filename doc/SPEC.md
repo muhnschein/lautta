@@ -325,18 +325,18 @@ what the app does.
   (`RequestConsent`). `denied` hides the section and shows the reason in *About*.
 - NVB-4: Locations: `ListLocations` and `LocationsChanged` populate *Servers* (accounts
   and this app's ad-hoc servers) and *Nearby* (`Discover`). Attention states from netvfs
-  (`auth-failed`, `server-identity-changed`) show as badges. A server row's status (on
+  (`auth-failed`, `server-identity-changed`) show as warnings. A server row's status (on
   the right, §15.2) tells only how its connection stands, from the `state` and
   `stateError` netvfs lists for each location (netvfs
-  XB-10, XB-12; every `LocationsChanged` lists again and the row changes in place):
-  *Connected* (a filled dot), *Connecting…* (busy indicator), *Not connected* (a ring:
-  never used, closed when idle or dropped; also a recent ad-hoc server), *Couldn't
-  connect* (a dot in the error colour; *Sign-in failed* or *Identity
-  changed* when `stateError` is `AuthFailed` or `ServerIdentityChanged`). An attention
-  comes first (warning icon and its text); a bridge that reports no state gets no status
-  rather than a wrong one. No protocol or host is shown. The connection state is not the
-  location's status: a server that is not connected stays browsable, and opening it
-  connects.
+  XB-10, XB-12; every `LocationsChanged` lists again and the row changes in place), as
+  one icon and no text: connected is a glowing dot, connecting a busy indicator, not
+  connected an empty ring (never used, closed when idle or dropped; also a recent ad-hoc
+  server), could not connect a ring in the error colour, and a warning icon in the error
+  colour for a sign-in or identity that needs the user (`stateError` `AuthFailed` or
+  `ServerIdentityChanged`, or an attention, which comes first). A bridge that reports
+  no state gets no icon rather than a wrong one. No protocol or host is shown. The
+  connection state is not the location's status: a server that is not connected stays
+  browsable, and opening it connects.
 - NVB-5: Account management is handed off: *Add server* → `AddAccount(provider)`;
   *Edit server*, *Update sign-in*, *Review server identity* → `OpenAccountSettings(id)`.
   The bridge opens Settings; the app never edits accounts, pins or secrets, and never
@@ -394,13 +394,15 @@ what the app does.
   bridge has the `drives` feature (NVB-13) it lists the memory cards and USB drives it can
   mount (`ListDrives`, netvfs XB-20, also without the consent, followed by
   `DrivesChanged`): one that is not mounted is a dimmed *Volumes* row with its size and
-  "Not mounted" on the right (as tall as a mounted volume), named and placed (BRW-12) as
+  an empty ring on the right (as tall as a mounted volume), named and placed (BRW-12) as
   the volume it becomes, by the folder UDisks2 mounts it on (label, else UUID, else
   `disk`). Tapping it, or its *Mount*, has the
   bridge mount it (`Mount`, as Settings › Storage does, without a question) and opens the
   volume once the sandbox shows its folder (up to 2 s; otherwise "not found", naming it). A mounted volume of
-  such a drive has *Unmount* (`Unmount`); a failure (busy, not allowed) is told with the
-  volume's name. A drive that is mounted where the sandbox does not see it is not shown.
+  such a drive has *Unmount* (`Unmount`) and the glowing dot of a connected server on the
+  right; a failure (busy, not allowed) is told with the volume's name. A volume the
+  bridge does not mount has no icon: it is there because it is mounted. A drive that is
+  mounted where the sandbox does not see it is not shown.
   Without the feature (older netvfs, standalone) volumes are only the mounted ones and
   have neither entry. *Open Storage settings* asks the bridge to open
   Settings › Storage (`OpenStorageSettings`, netvfs XB-15) and is offered only while it
@@ -785,10 +787,11 @@ flowchart TD
 Sections: *Favourites*, *On this device* (*Recents* while recents are remembered
 (ORG-2), first until the user orders the section, then the user folders and *Trash* while
 it is on), *Android*, *Volumes* (when present), *Servers* (bridge only:
-accounts, recent ad-hoc servers, each with its connection state and status dot (NVB-4)
-or attention badge on the right, so a server row is as tall as a folder row), *Nearby*
-(bridge only, hidden when empty). Rows show no item counts (folders, *Recents*, *Trash*).
-Rows the user hid are left out and rows keep the order the user gave them (BRW-12).
+accounts, recent ad-hoc servers, each with its connection state as one icon on the
+right (NVB-4), so a server row is as tall as a folder row), *Nearby*
+(bridge only, hidden when empty). Rows show no item counts (folders, *Recents*, *Trash*)
+and no text about a connection or a mount. Rows the user hid are left out and rows keep
+the order the user gave them (BRW-12).
 Tapping a nearby or recent ad-hoc server opens *Connect to server* prefilled (LOC-6,
 NVB-6).
 
