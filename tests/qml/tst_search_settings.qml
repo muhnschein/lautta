@@ -27,7 +27,7 @@ ApplicationWindow {
         { "entry": "recentsEntry", "page": "recentsSettingsPage", "keys": ["recents_enabled"] },
         { "entry": "storageEntry", "page": "storageSettingsPage", "keys": ["listing_cache_days"] }
     ]
-    readonly property var thumbnailKeys: ["thumbnails_pdf", "thumbnails_remote", "thumbnail_max_remote_mb", "thumbnail_cache_mb"]
+    readonly property var thumbnailKeys: ["thumbnails_remote", "thumbnail_max_remote_mb", "thumbnail_cache_mb"]
     // Set on View options by its own controls, and by "Ask before large
     // operations" two at once.
     readonly property var viewKeys: ["sort_key", "sort_descending", "folders_first", "show_hidden", "view_mode",

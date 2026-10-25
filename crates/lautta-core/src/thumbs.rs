@@ -65,8 +65,6 @@ pub enum ThumbSource {
 pub struct ThumbSettings {
     /// *Thumbnails from servers*.
     pub remote: bool,
-    /// *PDF thumbnails*.
-    pub pdf: bool,
     /// *Largest server file with a thumbnail*, in bytes.
     pub max_remote_bytes: u64,
 }
@@ -75,7 +73,6 @@ impl ThumbSettings {
     pub fn new(s: &Settings) -> ThumbSettings {
         ThumbSettings {
             remote: s.thumbnails_remote,
-            pdf: s.thumbnails_pdf,
             max_remote_bytes: s.thumbnail_max_remote_bytes(),
         }
     }
@@ -91,10 +88,10 @@ impl ThumbSettings {
 }
 
 /// Who makes the thumbnail of `entry`, for a file of a local folder (`local`)
-/// or not. `shown` is the folder's *Show thumbnails*. A PDF needs
-/// *PDF thumbnails* and the switch of its place, *Show thumbnails* for a
-/// local one and also *Thumbnails from servers* for a remote one; one larger
-/// than [`ThumbSettings::pdf_limit`] has none.
+/// or not. `shown` is the folder's *Show thumbnails*. A PDF follows the
+/// switches an image does: *Show thumbnails* for a local one and also
+/// *Thumbnails from servers* for a remote one; one larger than
+/// [`ThumbSettings::pdf_limit`] has none.
 pub fn thumbnail_source(entry: &Entry, local: bool, shown: bool, set: &ThumbSettings) -> ThumbSource {
     if !shown || entry.flags.contains(EntryFlags::NOT_ACCESSIBLE) {
         return ThumbSource::Icon;
@@ -103,7 +100,7 @@ pub fn thumbnail_source(entry: &Entry, local: bool, shown: bool, set: &ThumbSett
         (FileCategory::Image | FileCategory::Video, true) => ThumbSource::System,
         (FileCategory::Image, false) if set.remote => ThumbSource::App,
         (FileCategory::Pdf, _)
-            if set.pdf && (local || set.remote) && entry.size.is_none_or(|s| s <= set.pdf_limit(local)) =>
+            if (local || set.remote) && entry.size.is_none_or(|s| s <= set.pdf_limit(local)) =>
         {
             ThumbSource::App
         }
@@ -840,13 +837,12 @@ mod tests {
         }
         let off = ThumbSettings {
             remote: false,
-            pdf: false,
             ..settings()
         };
         assert_eq!(
             thumbnail_source(&file("a.jpg", None), true, true, &off),
             ThumbSource::System,
-            "the server and PDF switches do not touch local pictures"
+            "the server switch does not touch local pictures"
         );
         assert_eq!(
             thumbnail_source(&file("a.jpg", None), true, false, &settings()),
@@ -880,7 +876,7 @@ mod tests {
     }
 
     #[test]
-    fn pdfs_need_their_switch_and_the_one_of_their_place() {
+    fn pdfs_follow_the_switches_of_their_place() {
         let on = settings();
         let pdf = file("a.pdf", Some(1_000));
         for local in [true, false] {
@@ -893,12 +889,6 @@ mod tests {
                 thumbnail_source(&pdf, local, false, &on),
                 ThumbSource::Icon,
                 "Show thumbnails off, local {local}"
-            );
-            let no_pdf = ThumbSettings { pdf: false, ..on };
-            assert_eq!(
-                thumbnail_source(&pdf, local, true, &no_pdf),
-                ThumbSource::Icon,
-                "PDF thumbnails off, local {local}"
             );
         }
         let no_servers = ThumbSettings { remote: false, ..on };

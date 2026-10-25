@@ -166,7 +166,7 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `dialogs/RenameDialog.qml { uri, isDir }` (property `newName` after accept),
   `pages/ViewOptionsPage.qml { model }` (a page whose controls apply at once; `model`, the
   folder it was opened from, is absent when Settings opens it; its Thumbnails section sets
-  `thumbnails_local`, `thumbnails_pdf` (*PDF thumbnails*, PRV-14), `thumbnails_remote`,
+  `thumbnails_local`, `thumbnails_remote`,
   `thumbnail_max_remote_mb`, `thumbnail_cache_mb`),
   `components/directory/ViewPreview.qml { screenWidth, screenHeight }` (its live preview,
   half that size whatever it shows), `components/PathMenu.qml`.
@@ -257,8 +257,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   constant, type, function, variable, heading, markup, link, inserted, deleted),
   `MarkdownDocument { uri }` (html), `ExifModel { uri }`, `MediaSource { uri }` (QIODevice for QtMultimedia, PRV-8),
   image provider `image://lautta-thumb/<uri>?size=N` for thumbnails of remote images
-  (PRV-2) and of PDFs, local and trashed too (PRV-14; fails with an error for anything else, which
-  `Image` shows as status Error), and `image://lautta-file/<uri>` for remote full images.
+  (PRV-2) and of PDFs, local and trashed too (PRV-14; fails with an error for anything
+  else, which `Image` shows as status Error), and `image://lautta-file/<uri>` for remote full images.
 - `PdfDocument { uri }` (PRV-12): `loading`, `loaded`, `pageCount`, `size`, `errorKind`
   (file not readable, ErrorText.js), `problem` (`invalid`, `encrypted`, `empty`,
   `tooLarge`), `wrongPassword` (the last `unlock` failed), `lastPage` (where reading

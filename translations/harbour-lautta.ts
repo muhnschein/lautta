@@ -2639,13 +2639,5 @@
         <source>Only files deleted from this device&apos;s folders appear here. Deletes on volumes and servers are permanent.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-settings-thumbs-pdf">
-        <source>PDF thumbnails</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-thumbs-pdf-hint">
-        <source>Draws the first page of a PDF, which uses more battery than showing a picture. On servers it also needs Thumbnails from servers</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 </TS>

@@ -55,7 +55,6 @@ ApplicationWindow {
 
     function finish() {
         App.setSetting("thumbnails_local", JSON.stringify(true))
-        App.setSetting("thumbnails_pdf", JSON.stringify(true))
         for (var i = 0; i < stored.count; ++i) {
             var row = stored.objectAt(i)
             if (row.title === photo || row.title === paper || row.title === note)

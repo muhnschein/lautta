@@ -484,7 +484,7 @@ async fn trashed_pdfs_carry_an_app_thumbnail_of_their_trash_item() {
 }
 
 #[tokio::test]
-async fn trashed_pdfs_follow_both_thumbnail_switches() {
+async fn trashed_pdfs_follow_the_local_thumbnail_switch() {
     let h = home().await;
     write(&h.root.join("Documents/doc.pdf"), &pdf());
     let rows = trashed(&h, &["doc.pdf"]).await;
@@ -496,19 +496,17 @@ async fn trashed_pdfs_follow_both_thumbnail_switches() {
     };
 
     let mut settings = h.core.settings();
-    settings.thumbnails_pdf = false;
-    h.core.apply_settings(settings.clone());
-    assert_eq!(source(&h), "", "PDF thumbnails off");
-    settings.thumbnails_pdf = true;
-    settings.thumbnails_local = false;
-    h.core.apply_settings(settings.clone());
-    assert_eq!(source(&h), "", "thumbnails off");
-    settings.thumbnails_local = true;
     settings.thumbnails_remote = false;
-    h.core.apply_settings(settings);
+    h.core.apply_settings(settings.clone());
     assert!(!source(&h).is_empty(), "the servers' switch is for servers");
+    settings.thumbnails_local = false;
+    h.core.apply_settings(settings);
+    assert_eq!(source(&h), "", "thumbnails off");
 
     // A copy that is gone has nothing to show.
+    let mut settings = h.core.settings();
+    settings.thumbnails_local = true;
+    h.core.apply_settings(settings);
     let item = h.core.trash.list().unwrap().remove(0);
     std::fs::remove_file(item.stored_path()).unwrap();
     assert_eq!(source(&h), "");

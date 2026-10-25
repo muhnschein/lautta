@@ -3,8 +3,8 @@
 // trashed image has the stored copy as thumbnailSource and its type from the
 // original name as mimeType, a trashed PDF has the app's thumbnail of its
 // Trash item, a trashed text file has the type and no thumbnail, and the
-// Thumbnails settings (BRW-4) switch them off at the next reload, the PDF's
-// on its own switch too. The Trash page draws its rows from these roles.
+// Show thumbnails setting (BRW-4) switches them off at the next reload. The
+// Trash page draws its rows from these roles.
 import QtQuick 2.6
 import QtQml 2.2
 import Lautta 1.0
@@ -45,7 +45,6 @@ Item {
 
     function finish() {
         App.setSetting("thumbnails_local", JSON.stringify(true))
-        App.setSetting("thumbnails_pdf", JSON.stringify(true))
         for (var i = 0; i < rows.count; ++i) {
             var row = rows.objectAt(i)
             if (row.title === "trash-roles.jpg" || row.title === "trash-roles.pdf" || row.title === "trash-roles.md")
@@ -119,38 +118,20 @@ Item {
                     return test.fail("the PDF's thumbnail is its Trash item: " + test.paper.thumb)
                 if (test.note.mime !== "text/markdown" || test.note.thumb !== "")
                     return test.fail("a text file has a type and no thumbnail: " + test.note.mime + ", " + test.note.thumb)
-                if (!App.setSetting("thumbnails_pdf", JSON.stringify(false)))
-                    return test.fail("thumbnails_pdf not set")
-                trash.reload()
-                test.next()
-                break
-            case 3:
-                // PDF thumbnails off: the PDF's row loses its thumbnail, the
-                // image keeps its. The reload replaces the rows: wait for the
-                // PDF's to be the one without.
-                var noPaper = test.rowNamed("trash-roles.pdf")
-                if (!noPaper || noPaper.thumb !== "")
-                    break
-                if (noPaper.mime !== "application/pdf")
-                    return test.fail("the PDF's type stays with its thumbnails off: " + noPaper.mime)
-                var kept = test.rowNamed("trash-roles.jpg")
-                if (!kept || kept.thumb.indexOf("file://") !== 0)
-                    return test.fail("the image keeps its thumbnail")
-                if (!App.setSetting("thumbnails_pdf", JSON.stringify(true))
-                        || !App.setSetting("thumbnails_local", JSON.stringify(false)))
+                if (!App.setSetting("thumbnails_local", JSON.stringify(false)))
                     return test.fail("thumbnails_local not set")
                 trash.reload()
                 test.next()
                 break
-            case 4:
-                // Local thumbnails off switch the PDF's too, though its own
-                // switch is on again.
+            case 3:
+                // The reload replaces the rows: wait for the new ones, the
+                // PDF's without a thumbnail like the image's.
                 var again = test.rowNamed("trash-roles.jpg")
                 var paperAgain = test.rowNamed("trash-roles.pdf")
                 if (!again || again.thumb !== "" || !paperAgain || paperAgain.thumb !== "")
                     break
-                if (again.mime !== "image/jpeg")
-                    return test.fail("the type stays with thumbnails off: " + again.mime)
+                if (again.mime !== "image/jpeg" || paperAgain.mime !== "application/pdf")
+                    return test.fail("the types stay with thumbnails off: " + again.mime + ", " + paperAgain.mime)
                 test.finish()
                 break
             }

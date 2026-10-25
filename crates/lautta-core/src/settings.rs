@@ -40,9 +40,6 @@ pub struct Settings {
     // Thumbnails (PRV).
     pub thumbnails_local: bool,
     pub thumbnails_remote: bool,
-    /// First pages of PDFs as thumbnails, local and remote (PRV-14). Needs
-    /// the switch of their place.
-    pub thumbnails_pdf: bool,
     /// Largest remote file read whole for a thumbnail (PRV-2). There is no
     /// lower limit for metered connections: the app cannot tell one.
     pub thumbnail_max_remote_mb: u64,
@@ -83,7 +80,6 @@ impl Default for Settings {
             grid_columns: 4,
             thumbnails_local: true,
             thumbnails_remote: true,
-            thumbnails_pdf: true,
             thumbnail_max_remote_mb: 20,
             thumbnail_cache_mb: 200,
             listing_cache_days: 7,
@@ -359,10 +355,6 @@ mod tests {
             ("name", false, true)
         );
         assert!(!s.show_hidden && s.thumbnails_local && s.thumbnails_remote);
-        assert!(
-            s.thumbnails_pdf,
-            "PDF thumbnails are on until switched off (PRV-14)"
-        );
         assert_eq!(s.thumbnail_max_remote_mb, 20);
         assert_eq!(
             (s.thumbnail_max_remote_bytes(), s.thumbnail_cache_bytes()),
@@ -484,21 +476,6 @@ mod tests {
         assert_eq!(s.thumbnail_max_remote_mb, 50);
         assert!(!s.to_map().contains_key("thumbnail_max_metered_mb"));
         assert!(!s.set("thumbnail_max_metered_mb", json!(5)));
-    }
-
-    #[test]
-    fn the_pdf_thumbnail_switch_is_stored_like_the_others() {
-        let mut s = Settings::default();
-        assert!(s.set("thumbnails_pdf", json!(false)));
-        assert!(!s.thumbnails_pdf && s.thumbnails_remote && s.thumbnails_local);
-        assert_eq!(s.to_map()["thumbnails_pdf"], json!(false));
-        assert_eq!(Settings::from_json(&s.to_json()), s);
-        assert!(!s.set("thumbnails_pdf", json!("yes")), "a switch takes a boolean");
-        assert!(!s.thumbnails_pdf);
-        assert!(
-            Settings::from_json("{}").thumbnails_pdf,
-            "a store from before the switch has it on"
-        );
     }
 
     #[test]

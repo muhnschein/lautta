@@ -373,7 +373,7 @@ async fn a_remote_pdf_thumbnail_is_its_first_page_made_once_per_version() {
 }
 
 #[tokio::test]
-async fn a_local_pdf_is_made_by_the_app_and_needs_only_the_local_switch() {
+async fn a_local_pdf_is_made_by_the_app_whatever_the_server_switch_says() {
     let h = home().await;
     std::fs::write(h.root.join("Documents/l.pdf"), pdf()).unwrap();
     let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
@@ -391,7 +391,7 @@ async fn a_local_pdf_is_made_by_the_app_and_needs_only_the_local_switch() {
 }
 
 #[tokio::test]
-async fn pdf_thumbnails_follow_their_switch_and_the_one_of_their_place() {
+async fn server_pdfs_follow_the_server_thumbnail_switch() {
     let h = home().await;
     h.nas.add_file("a.pdf", &pdf(), 1);
     std::fs::write(h.root.join("Documents/l.pdf"), pdf()).unwrap();
@@ -399,16 +399,6 @@ async fn pdf_thumbnails_follow_their_switch_and_the_one_of_their_place() {
     let (remote, local) = ("lautta://nv-nas/a.pdf", "lautta://user-documents/l.pdf");
 
     let mut s = h.core.settings();
-    s.thumbnails_pdf = false;
-    h.core.apply_settings(s.clone());
-    for u in [remote, local] {
-        let err = thumbnail(&h, &previews, u, 32).await.unwrap_err();
-        assert_eq!(err.kind, ErrorKind::Unsupported, "PDF thumbnails off: {u}");
-    }
-    assert_eq!(open_reads(&h.nas), 0, "refused before reading");
-    assert!(previews.cache().is_empty());
-
-    s.thumbnails_pdf = true;
     s.thumbnails_remote = false;
     h.core.apply_settings(s.clone());
     assert_eq!(
@@ -416,14 +406,15 @@ async fn pdf_thumbnails_follow_their_switch_and_the_one_of_their_place() {
         ErrorKind::Unsupported,
         "a PDF on a server needs Thumbnails from servers"
     );
-    assert_eq!(open_reads(&h.nas), 0);
+    assert_eq!(open_reads(&h.nas), 0, "refused before reading");
+    assert!(previews.cache().is_empty());
     assert!(thumbnail(&h, &previews, local, 32).await.is_ok());
 
     s.thumbnails_remote = true;
     h.core.apply_settings(s);
     assert!(
         thumbnail(&h, &previews, remote, 32).await.is_ok(),
-        "both on: made"
+        "switched on: made"
     );
 }
 
@@ -460,10 +451,12 @@ async fn a_trashed_pdf_gets_its_thumbnail_from_the_stored_copy() {
     assert_eq!(previews.cache().len(), 1, "the second one is the cached one");
 
     let mut s = h.core.settings();
-    s.thumbnails_pdf = false;
+    s.thumbnails_remote = false;
     h.core.apply_settings(s);
-    let err = thumbnail(&h, &previews, &u, 64).await.unwrap_err();
-    assert_eq!(err.kind, ErrorKind::Unsupported, "PDF thumbnails off");
+    assert!(
+        thumbnail(&h, &previews, &u, 48).await.is_ok(),
+        "the Trash is on this device: the servers' switch is not its"
+    );
 }
 
 #[tokio::test]

@@ -2,8 +2,8 @@
 // PDF thumbnails in a folder on the target (PRV-14): the first page of a PDF
 // is its thumbnail, made by the app, and the name stays off a compact grid's
 // tile only while a thumbnail covers the tile. A PDF that cannot be drawn
-// (encrypted) keeps its icon and gets its name back; with PDF thumbnails off
-// no PDF has one. Fails when a readable PDF shows no thumbnail, an
+// (encrypted) keeps its icon and gets its name back; with Show thumbnails
+// off no PDF has one. Fails when a readable PDF shows no thumbnail, an
 // unreadable one shows no name, or the switch changes nothing.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -98,14 +98,14 @@ ApplicationWindow {
             expect(name && name.visible, "so its tile shows its name")
         }
 
-        App.setSetting("thumbnails_pdf", JSON.stringify(false))
+        App.setSetting("thumbnails_local", JSON.stringify(false))
         tools.pump(300)
         expect(findAll(view, function (x) { return x.thumbnailFailed !== undefined && x.category === "pdf" && x.thumbnailSource.length > 0 }, []).length === 0,
-               "without PDF thumbnails no PDF asks for one")
+               "without thumbnails no PDF asks for one")
         var plain = nameOn(view, "readable.pdf")
         expect(plain && plain.visible, "and every PDF tile shows its name")
 
-        App.setSetting("thumbnails_pdf", JSON.stringify(true))
+        App.setSetting("thumbnails_local", JSON.stringify(true))
         App.setSetting("view_mode", JSON.stringify("list"))
         App.setSetting("grid_columns", JSON.stringify(4))
     }

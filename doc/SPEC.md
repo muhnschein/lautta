@@ -438,14 +438,13 @@ what the app does.
   a hidden file, a photo) in the order and view a real folder would get, drawn on a
   half-size screen of the page's size that no setting makes larger or smaller. Below the
   preview, a *Thumbnails* section, the same whether the page came from Settings or a
-  folder: *Show thumbnails* (its description says that making thumbnails decodes files as
-  soon as they show, untrusted ones too), *PDF thumbnails* (PRV-14; default on, disabled
-  while thumbnails are off; its description names the battery cost), *Thumbnails from
-  servers* (its description names the cost in data, battery and speed) with its size limit
-  (PRV-2) and the thumbnail cache size. Folders already open follow a change at once; what
-  one folder was switched to on its own (*Use list* over a suggested grid, §15.3) stays
-  until that setting changes for all. The grid shows 4 items per row with names on icons
-  only, or 3 per row with name and size under every item; landscape keeps the tile size.
+  folder: *Show thumbnails* (its description says that making thumbnails decodes files
+  as soon as they show, untrusted ones too), *Thumbnails from servers* (its description
+  names the cost in data, battery and speed) with its size limit (PRV-2) and the
+  thumbnail cache size. Folders already open follow a change at once; what one folder
+  was switched to on its own (*Use list* over a suggested grid, §15.3) stays until that
+  setting changes for all. The grid shows 4 items per row with names on icons only, or 3
+  per row with name and size under every item; landscape keeps the tile size.
 - BRW-5: Stale-while-revalidate: cached listing shown immediately (≤ 7 days old, marked
   stale), refresh on the interactive lane, diff applied in place without losing scroll
   or selection.
@@ -533,10 +532,9 @@ bridge).
   the page header (not shown while the Trash is empty, when the placeholder has its own
   hint). Images, videos and PDFs show their thumbnail as a folder's rows do (PRV-1,
   PRV-14), made from the stored copy and, as its stored name has no extension, the type
-  of the original name; the setting *Show thumbnails* (BRW-4), for PDFs also *PDF
-  thumbnails*, switches them off, and a stored item that is a link or is gone keeps its
-  glyph, as folders and other files do. Items are purged
-  after the retention setting (30 days) when the settings are loaded at start and
+  of the original name; the setting *Show thumbnails* (BRW-4) switches them off, and a
+  stored item that is a link or is gone keeps its glyph, as folders and other files do.
+  Items are purged after the retention setting (30 days) when the settings are loaded at start and
   whenever the Trash opens. The round-1 builds (schema 4–5) kept a hidden bin
   `.lautta-trash` at the root of each folder: at start the items in them are moved into
   the Trash (their rows, and so their deletion times, kept) and the emptied bins
@@ -727,25 +725,25 @@ bridge).
   colour checked to be `#` and hex digits, so a file cannot bring in images, links or
   entities. Plain files get the same escaping without colours. Markdown's *View source*
   is coloured as Markdown.
-- PRV-14: PDF thumbnails in every list that shows thumbnails (folder list, grid, Trash). Thumbnail
-  = first page, drawn by `lautta-pdf` (PRV-12) as wide as the thumbnail; page taller than
-  wide cut to square from its top. Served as JPEG by `image://lautta-thumb/<uri>?size=N`,
-  cached like PRV-2's (key: URI, size, mtime, etag): one draw per file version and size.
-  One rule (`thumbs::thumbnail_source`) picks files with a thumbnail and who makes it. A
-  PDF gets one when *PDF thumbnails* (`thumbnails_pdf`, default on) and the switch of its
-  place are on: *Show thumbnails* for a local PDF, also *Thumbnails from servers* for a
-  server PDF. Open folders follow a change at once. Read limit: local 20 MB; server = size
-  limit of PRV-2, never above the viewer's 200 MB. Larger: not read, icon shows.
-  Encrypted, damaged or page-less PDF: icon, no message; a compact grid tile then shows
-  the file name. Drawing = CPU work on the blocking pool, one PDF at a time app-wide
-  (stricter than ARC-7: battery, heat). Job whose delegate left before its turn never
-  runs; one already drawing finishes. PDF that cannot be drawn is remembered for the
-  session, so scrolling back reads nothing. PDF whose drawing killed the process gets a
-  marker file in the thumbnail folder and is never tried again. Local images and videos
-  stay with `Nemo.Thumbnailer` (PRV-1). A trashed PDF is asked by Trash item
-  (`lautta://trash/<id>/<stored name>`: an id comes back after the newest item goes, a
-  stored name never): the stored copy has no extension, so the rule goes by the original
-  name; a link or a copy gone from the Trash has no thumbnail.
+- PRV-14: PDF thumbnails in every list that shows thumbnails (folder list, grid, Trash).
+  Thumbnail = first page, drawn by `lautta-pdf` (PRV-12) as wide as the thumbnail; page
+  taller than wide cut to square from its top. Served as JPEG by
+  `image://lautta-thumb/<uri>?size=N`, cached like PRV-2's (key: URI, size, mtime, etag):
+  one draw per file version and size. One rule (`thumbs::thumbnail_source`) picks files
+  with a thumbnail and who makes it. A PDF follows the switches of an image: *Show
+  thumbnails* for a local PDF, also *Thumbnails from servers* for a server PDF. Open
+  folders follow a change at once. Read limit: local 20 MB; server = size limit of PRV-2,
+  never above the viewer's 200 MB. Larger: not read, icon shows. Encrypted, damaged or
+  page-less PDF: icon, no message; a compact grid tile then shows the file name. Drawing =
+  CPU work on the blocking pool, one PDF at a time app-wide (stricter than ARC-7: battery,
+  heat). Job whose delegate left before its turn never runs; one already drawing finishes.
+  PDF that cannot be drawn is remembered for the session, so scrolling back reads nothing.
+  PDF whose drawing killed the process gets a marker file in the thumbnail folder and is
+  never tried again. Local images and videos stay with `Nemo.Thumbnailer` (PRV-1). A
+  trashed PDF is asked by Trash item (`lautta://trash/<id>/<stored name>`: an id comes
+  back after the newest item goes, a stored name never): the stored copy has no extension,
+  so the rule goes by the original name; a link or a copy gone from the Trash has no
+  thumbnail.
 
 ## 13. Search and organisation
 
@@ -957,16 +955,15 @@ copies through the app for local↔remote).
 Global, on pages opened from *Settings*, which lists them as Salama does: an entry per
 page with an icon and, under its name, what is chosen there. *Browsing*: *Browse page*
 (BRW-12), *View options* (BRW-4; Settings links to that page instead of repeating it; the
-thumbnails are there: the switch for all of them, PDF thumbnails, server thumbnails with
-their size limit and the thumbnail cache size), *Search* (depth on servers, SRC-3),
-*Recents* (on/off, *Clear recents*, ORG-2). *Files*: *Deleting* (move deleted items to
-*Trash* on/off, how long Trash keeps them, remorse duration, OPS-8), *Transfers* (local
-transfer concurrency, connections per server, preserve mtimes/permissions, verify with
-checksums, auto-resume, history retention, large-operation threshold), *Storage* (how long
-stored listings are kept, cache size, *Clear cache*, *Clear app data*, which says it
-empties Trash too, DAT-3). Then *About Lautta*. There is no date format setting: every
-date follows the system's formats (Silica `Format`); a value an earlier version stored is
-ignored.
+thumbnails are there: the switch for all of them, server thumbnails with their size limit
+and the thumbnail cache size), *Search* (depth on servers, SRC-3), *Recents* (on/off,
+*Clear recents*, ORG-2). *Files*: *Deleting* (move deleted items to *Trash* on/off, how
+long Trash keeps them, remorse duration, OPS-8), *Transfers* (local transfer concurrency,
+connections per server, preserve mtimes/permissions, verify with checksums, auto-resume,
+history retention, large-operation threshold), *Storage* (how long stored listings are
+kept, cache size, *Clear cache*, *Clear app data*, which says it empties Trash too,
+DAT-3). Then *About Lautta*. There is no date format setting: every date follows the
+system's formats (Silica `Format`); a value an earlier version stored is ignored.
 
 Per location (app DB): lane sizes (remote), start folder, listing/thumbnail cache opt-out,
 display name override. The app has no page for them: a server's name, start folder and
