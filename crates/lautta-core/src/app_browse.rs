@@ -382,7 +382,7 @@ impl Core {
                 section_rows(section, own, &layout, bridge_there)
             })
             .collect();
-        if self.bridge.is_some() {
+        if bridge_there {
             out.push(LayoutRow {
                 section: "nearby",
                 kind: "nearby",

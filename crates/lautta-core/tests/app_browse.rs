@@ -1159,6 +1159,14 @@ async fn standalone_has_no_servers_switch_even_when_it_was_off() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_client_without_netvfs_has_no_nearby_switch() {
+    // Bridge client there, no socket: standalone (UI-8), no trace of nearby servers.
+    let e = open(None, true, &["Documents"]).await;
+    assert_eq!(e.core.bridge.as_ref().unwrap().status(), BridgeStatus::Absent);
+    assert!(section_of(&e.core.browse_layout_rows().await, "nearby").is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn restore_defaults_switches_both_sections_on() {
     let (_fake, e) = ready_env().await;
     let core = &e.core;
