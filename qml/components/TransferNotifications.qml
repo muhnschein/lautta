@@ -50,7 +50,7 @@ Item {
 
     function progressSummary() {
         var percent = TransferText.percent(Transfers.bytesDone, Transfers.bytesTotal)
-        //% "%n task(s) · %1%"
+        //% "%n tasks · %1%"
         var text = qsTrId("lautta-xfr-note-progress", Transfers.activeCount).arg(percent)
         return Transfers.eta >= 0 ? text + " · " + TransferText.duration(Transfers.eta) : text
     }
@@ -66,7 +66,7 @@ Item {
     function publishPending() {
         progressNote.close()
         if (Transfers.pendingCount > 0) {
-            //% "%n task(s) will resume"
+            //% "%n tasks will resume"
             pendingNote.summary = qsTrId("lautta-xfr-note-pending", Transfers.pendingCount)
             pendingNote.publish()
         }
@@ -90,7 +90,7 @@ Item {
             "transferId": id,
             //% "%1 failed"
             "summary": qsTrId("lautta-xfr-note-failed").arg(titleOf(id)),
-            //% "%n file(s) couldn't be transferred. Tap to retry."
+            //% "%n files couldn't be transferred. Tap to retry."
             "body": qsTrId("lautta-xfr-note-failed-body", Math.max(1, failures))
         })
         failedNote.publish()
@@ -105,7 +105,7 @@ Item {
             note = questionComponent.createObject(root, { "transferId": id })
             questionNotes[id] = note
         }
-        //% "%n conflict(s) in %1"
+        //% "%n conflicts in %1"
         note.body = qsTrId("lautta-xfr-note-question-body", Math.max(1, count)).arg(titleOf(id))
         note.publish()
     }
@@ -148,7 +148,7 @@ Item {
         category: "x-lautta.transfer.finished"
         //% "Tasks finished"
         summary: qsTrId("lautta-xfr-note-finished")
-        //% "%n task(s)"
+        //% "%n tasks"
         body: qsTrId("lautta-xfr-note-finished-count", root.finishedCount)
         itemCount: root.finishedCount
         remoteActions: root.remoteAction("transfers")

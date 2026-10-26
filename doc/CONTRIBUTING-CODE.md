@@ -42,6 +42,11 @@ screen; `design/STYLE.md` is the Silica style kit).
   and `qml/components/viewers/gallery/` (Jolla Gallery's viewer, BSD-3-Clause, with the
   licence text); a `LAUTTA.md` next to it says where it comes from and what changed.
 - Comments explain *why*; cite requirement IDs where a rule comes from the spec.
+- Strings: `qsTrId("lautta-…")` with `//%` engineering English (UI-7). A count in a text is
+  one plural string with `%n`, called as `qsTrId(id, n)`: never "(s)", never a separate id
+  for "1 item". `make translations` refreshes `translations/harbour-lautta.ts` and adds the
+  English singular of new plural strings: read the pairs it prints, and write a singular
+  by hand where it says it cannot tell. `make check` fails on any gap.
 
 ## Layout
 

@@ -926,8 +926,18 @@ paused) is in its status line and context menu. Pulley: *Clear activity history*
 - UI-5: Destructive actions use remorse; a permanent delete (volumes, servers, the Trash
   switched off) asks first in a dialog instead (OPS-8).
 - UI-6: Text follows the system font size; touch targets ≥ `Theme.itemSizeSmall`.
-- UI-7: All strings translatable (`qsTrId` with `//%` engineering English, plurals with
-  `%n`); `.qm` files under `/usr/share/harbour-lautta/translations`.
+- UI-7: All strings translatable (`qsTrId` with `//%` engineering English); `.qm` files
+  under `/usr/share/harbour-lautta/translations`, built by `lrelease -idbased` from every
+  `translations/*.ts`. A text with a count is one string with `%n` in its plural form,
+  called as `qsTrId(id, n)`; never "(s)", never a separate id for the singular. The engineering
+  English catalogue `translations/harbour-lautta.ts` has `language="en"` and both English
+  forms of every `%n` string ("%n item", "%n items"), so every language without its own
+  catalogue reads "1 item", not "1 items". `make translations` makes the forms: the plural
+  is the `//%` text, the singular follows by rule (`tools/english-plurals.py`, a singular
+  the rule misses is written by hand and stays until the text changes). `make check` fails
+  when a form is missing. A language catalogue is installed after it and asked first; it
+  lists only what it translates, as an unfinished plural there would hide the English
+  forms.
 - UI-8: Standalone mode shows no traces of bridge features: no empty *Servers* section,
   no disabled menu entries.
 - UI-9: A line that names a place on a server (LOC-7) has a small server icon (the
@@ -1053,7 +1063,10 @@ One table for all providers (RS-8); examples:
 - TST-5: Mutation testing (`cargo-mutants`) on planner, queue and conflict modules and the PDF document handling (PRV-12);
   `clippy -D warnings`; `miri` for the `sys` module tests that can run under it.
 - TST-6: QML tests (`TestCase` in the SDK target) for page logic; load test of every QML
-  file; screenshot checklist (light/dark/landscape, standalone/bridge modes).
+  file; screenshot checklist (light/dark/landscape, standalone/bridge modes). The
+  English plural forms (UI-7) are read from the built catalogue by QML's `qsTrId`
+  (`tests/translations`): on the host from `lrelease` of the `.ts`, in the SDK target
+  from the catalogue the RPM installed.
 - TST-7: Every CI build runs `sdk-harbour-rpmvalidator` on the RPM; any error fails the
   build; warnings must be listed in `doc/harbour-warnings.md` with a reason.
 - TST-8: Device matrix before release: Jolla phone on 5.2, one other aarch64 device on the

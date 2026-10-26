@@ -6,7 +6,8 @@
 #   make mutants    mutation check: tests must catch changed code (needs cargo-mutants)
 #   make mutants-diff  the same, only for the lines a diff changes (MUTANTS_DIFF=file)
 #   make clippy-report  clippy JSON for SonarCloud -> coverage/clippy.json
-#   make translations  refresh translations/harbour-lautta.ts from the QML (qsTrId ids)
+#   make translations  refresh translations/harbour-lautta.ts from the QML (qsTrId ids),
+#                   English plural forms of the `%n` strings included
 #   make rpm        aarch64 RPM: cross-built binary, packaged in the Sailfish SDK
 #                   container (tools/ci/build-rpm.sh; needs docker and libc6-i386)
 #
@@ -20,6 +21,9 @@ TARGET ?= SailfishOS-5.2.0.15-aarch64
 export SDK_IMAGE TARGET
 
 LUPDATE ?= lupdate
+# Engineering English with its plural forms (UI-7): `language="en"` makes lrelease
+# write English plural rules; tools/english-plurals.py fills the forms.
+LUPDATE_ARGS = -silent -locations none -no-obsolete -target-language en
 
 .PHONY: translations translations-check check fmt-check clippy test coverage mutants mutants-diff mutants-paths clippy-report rpm check-rpm clean
 
@@ -72,12 +76,15 @@ check-rpm:
 	./tools/ci/check-rpm.sh
 
 translations:
-	$(LUPDATE) -silent -locations none -no-obsolete qml -ts translations/harbour-lautta.ts
+	$(LUPDATE) $(LUPDATE_ARGS) qml -ts translations/harbour-lautta.ts
+	python3 tools/english-plurals.py fill translations/harbour-lautta.ts
 
-# The engineering English catalogue must match the QML (UI-7).
+# The engineering English catalogue must match the QML, plural forms included (UI-7):
+# regenerating it changes nothing.
 translations-check:
 	cp translations/harbour-lautta.ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
-	$(LUPDATE) -silent -locations none -no-obsolete qml -ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
+	$(LUPDATE) $(LUPDATE_ARGS) qml -ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
+	python3 tools/english-plurals.py fill $${TMPDIR:-/tmp}/lautta-ts-check.ts
 	diff -u translations/harbour-lautta.ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
 
 clean:
