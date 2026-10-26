@@ -402,6 +402,13 @@ what the app does.
   bridge mount it (`Mount`, as Settings › Storage does, without a question) and opens the
   volume once the sandbox shows its folder (up to 2 s; otherwise "not found", naming it). A mounted volume of
   such a drive has *Unmount* (`Unmount`) and a connected-server dot on the right.
+  An encrypted (LUKS) card or USB drive that is not unlocked (netvfs lists it `locked`)
+  is a dimmed *Volumes* row with its size as well, named and placed by the same rule (its LUKS label,
+  else its LUKS UUID), with Silica's padlock on the right instead of a dot and no text
+  about it. Tapping it, or its only menu entry *Open Storage settings*, opens Settings ›
+  Storage, which unlocks it: no passphrase passes through the app or netvfs. Without
+  `storage-settings` it has no menu and a tap does nothing. Once unlocked it is gone,
+  and its filesystem is a drive like any other.
   While a mount or unmount is under way the drive's dot pulses, as a connecting
   server's. A failure (busy, not allowed) is told with the volume's name. A volume the
   bridge does not mount has no dot: it is there because it is mounted. A drive that is
@@ -847,7 +854,8 @@ Long-press menus: favourite: *Edit favourite*, *Copy address*, *Remove from
 favourites*; folder: *Add to favourites*, *Copy address*; volume:
 *Add to favourites*, *Copy address*, *Unmount* (drives the bridge mounts, LOC-3),
 *Open Storage settings* (bridge only, LOC-3, NVB-13); a drive that
-is not mounted: *Mount*, *Open Storage settings*; account: *Edit
+is not mounted: *Mount*, *Open Storage settings*; a locked drive: *Open Storage settings*
+only (none without it); account: *Edit
 server*, *Update sign-in* or *Review server identity* while
 netvfs asks for it (NVB-5), *Copy address*; ad-hoc server:
 *Connect* (recent ones), *Copy address*, *Remove from recents*. Hiding a row is

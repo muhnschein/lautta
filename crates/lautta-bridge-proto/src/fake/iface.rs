@@ -187,6 +187,13 @@ impl Iface {
         self.require_drives(method)?;
         let drive = args::drive(drive)?;
         self.begin(method, "interactive", &drive, false).await?;
+        if mount
+            && self
+                .shared
+                .with(|s| s.drives.iter().any(|d| d.id == drive && d.locked))
+        {
+            return Err(Fail::net("Unsupported", "The drive is locked"));
+        }
         let Some((before, after)) = self.shared.with(|s| s.mount(&drive, mount)) else {
             return Err(Fail::net("NotFound", "No such drive"));
         };
