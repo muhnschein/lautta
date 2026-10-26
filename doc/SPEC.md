@@ -278,8 +278,13 @@ against the target rustc.
   with `-Wl,--export-dynamic-symbol=main`, PIE. Arguments come from `main`'s parameters,
   not `std::env::args`. The app starts directly (`no-invoker`, HBR-4), not through
   the booster.
-- RS-4: `panic = "abort"` in release. Every closure invoked from C++ is a thin trampoline
-  that cannot unwind.
+- RS-4: Release builds unwind (`panic = "unwind"`), but only inside `panics::catch`,
+  which wraps PDF parsing, drawing and search (PRV-12, PRV-14): a panic there fails that
+  one request and the app goes on. A hook installed at start aborts on every other panic
+  before it unwinds, as `panic = "abort"` would: a bug elsewhere stops the app, no task
+  dies alone, nothing unwinds into C++. Every closure invoked from C++ is a thin
+  trampoline that cannot unwind. Stack overflow, out of memory and an abort are not
+  caught: they end the process.
 - RS-5: `unsafe` is allowed only in `lautta-qt` (FFI) and in a single `sys` module of
   `lautta-core` (fd passing, `statx`, `renameat2`). `#![forbid(unsafe_code)]` elsewhere.
 - RS-6: `Cargo.lock` is committed. The binary is cross-built with the pinned host
@@ -632,7 +637,10 @@ bridge).
 
 - PRV-1: Local thumbnails via `Nemo.Thumbnailer` (`image://nemoThumbnail/` and the
   `Thumbnail` item), covering images and videos the system can thumbnail. The Trash page
-  (OPS-8) uses them too. PDFs not among them: app makes those, local too (PRV-14).
+  (OPS-8) uses them too. PDFs not among them: `Nemo.Thumbnailer` draws one by running
+  `/usr/bin/thumbnaild-pdf` from the app's process (HBR-7), which Sailjail's `private-bin`
+  leaves out without the `Thumbnails` permission, and Harbour does not allow that
+  permission. App makes PDF thumbnails, local too (PRV-14).
 - PRV-2: Remote image thumbnails: read the first 64 KiB through the bridge, use the EXIF
   thumbnail when present; otherwise read the whole file up to the size set in *View
   options* (*Largest server file with a thumbnail*, 20 MB by default) and decode with the
@@ -705,7 +713,10 @@ bridge).
   opens that one parse and is never stored, so reopening asks again (the empty user
   password opens without asking). Reopening a PDF starts at the page where reading
   stopped (the page at the top of the view, put at the top again), remembered with
-  the recents (off and cleared with them, ORG-2).
+  the recents (off and cleared with them, ORG-2). A panic while parsing, drawing or
+  searching (RS-4) shows as a file that cannot be read as a PDF, or as *Can't show page
+  N* for a page; that parse is dropped (it may hold locks the panic left poisoned), so the
+  next request reads the file again.
   *Search* in the pulley finds text in the document: a search field stays at the top
   of the page (its close button leaves search mode), typing searches once it pauses,
   case-insensitive with whitespace runs alike. The search runs off the GUI thread page
@@ -753,13 +764,14 @@ bridge).
   page-less PDF: icon, no message; a compact grid tile then shows the file name. Drawing =
   CPU work on the blocking pool, one PDF at a time app-wide (stricter than ARC-7: battery,
   heat). Job whose delegate left before its turn never runs; one already drawing finishes.
-  PDF that cannot be drawn is remembered for the session, so scrolling back reads nothing.
-  PDF whose drawing killed the process gets a marker file in the thumbnail folder and is
-  never tried again. Local images and videos stay with `Nemo.Thumbnailer` (PRV-1). A
-  trashed PDF is asked by Trash item (`lautta://trash/<id>/<stored name>`: an id comes
-  back after the newest item goes, a stored name never): the stored copy has no extension,
-  so the rule goes by the original name; a link or a copy gone from the Trash has no
-  thumbnail.
+  PDF that cannot be drawn, a draw that panicked included (RS-4), is remembered for the
+  session, so scrolling back reads nothing. PDF whose drawing killed the process (stack
+  overflow, out of memory) gets a marker file in the thumbnail folder and is never tried
+  again. Local images and videos stay with `Nemo.Thumbnailer`, which cannot draw PDFs in
+  the sandbox (PRV-1). A trashed PDF is asked by Trash item
+  (`lautta://trash/<id>/<stored name>`: an id comes back after the newest item goes, a
+  stored name never): the stored copy has no extension, so the rule goes by the original
+  name; a link or a copy gone from the Trash has no thumbnail.
 
 ## 13. Search and organisation
 

@@ -4,11 +4,13 @@
 //! outline and links and searching its text. Parsing, drawing and matching
 //! are `lautta-pdf`'s; this module reads the file, keeps the open
 //! documents, runs the search page by page and moves the CPU work off the
-//! runtime's threads.
+//! runtime's threads. A panic in that work (a PDF that trips hayro or the
+//! code around it) fails that one request, not the app (RS-4).
 
 use crate::app::Core;
 use crate::error::{Error, ErrorKind, Result};
 use crate::org::recents::RecentKind;
+use crate::panics::catch;
 use crate::provider::Lane;
 use crate::uri::Uri;
 use lautta_pdf::{PdfDocument, RenderedPage, MAX_PDF_BYTES};
@@ -92,6 +94,11 @@ fn kept(uri: &Uri) -> Option<Arc<PdfDocument>> {
         .iter()
         .find(|(u, _)| u == uri)
         .map(|(_, d)| Arc::clone(d))
+}
+
+/// Stops keeping this parse; a newer parse of its file stays.
+fn forget(doc: &Arc<PdfDocument>) {
+    documents().retain(|(_, d)| !Arc::ptr_eq(d, doc));
 }
 
 /// The hits of a search on one searched page (0-based), none or more.
@@ -247,6 +254,28 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
         .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))
 }
 
+/// `work`, with a panic in it as [`PdfError::Invalid`]: the viewer shows
+/// the file or the page as one it cannot read. `lost` runs after a panic.
+fn caught<T>(
+    work: impl FnOnce() -> std::result::Result<T, PdfError>,
+    lost: impl FnOnce(),
+) -> std::result::Result<T, PdfError> {
+    catch(work).unwrap_or_else(|_| {
+        lost();
+        Err(PdfError::Invalid)
+    })
+}
+
+/// Runs `work` on `doc` on the blocking pool. After a panic the document
+/// is no longer kept: hayro unwraps its locks, so a lock the panic poisoned
+/// would trip every later use; the next request parses the file again.
+async fn run_on<T: Send + 'static>(
+    doc: Arc<PdfDocument>,
+    work: impl FnOnce(&PdfDocument) -> std::result::Result<T, PdfError> + Send + 'static,
+) -> std::result::Result<T, PdfFailure> {
+    Ok(blocking(move || caught(|| work(&doc), || forget(&doc))).await??)
+}
+
 impl Core {
     /// Reads and parses a PDF (always afresh, so a changed file is seen) and
     /// keeps it for [`Core::pdf_page`]. `password` opens an encrypted one
@@ -271,14 +300,17 @@ impl Core {
         let bytes = crate::provider::read_all(handle.as_ref(), MAX_PDF_BYTES).await?;
         let password = password.map(str::to_owned);
         let (doc, outline) = blocking(move || {
-            match password {
-                Some(password) => PdfDocument::open_with_password(bytes, &password),
-                None => PdfDocument::open(bytes),
-            }
-            .map(|d| {
-                let outline = d.outline();
-                (Arc::new(d), outline)
-            })
+            let parse = || {
+                match password {
+                    Some(password) => PdfDocument::open_with_password(bytes, &password),
+                    None => PdfDocument::open(bytes),
+                }
+                .map(|d| {
+                    let outline = d.outline();
+                    (Arc::new(d), outline)
+                })
+            };
+            caught(parse, || ())
         })
         .await??;
         keep(uri, &doc);
@@ -316,8 +348,7 @@ impl Core {
         page: usize,
         width: u32,
     ) -> std::result::Result<RenderedPage, PdfFailure> {
-        let doc = self.pdf_document(uri).await?;
-        Ok(blocking(move || doc.render(page, width)).await??)
+        self.on_document(uri, move |doc| doc.render(page, width)).await
     }
 
     /// Searches a PDF's text for `query` (case-insensitive, whitespace runs
@@ -338,22 +369,29 @@ impl Core {
         if query.trim().is_empty() {
             return Ok(());
         }
-        let doc = self.pdf_document(uri).await?;
         let query = query.to_owned();
-        blocking(move || {
-            search_pages(&doc, &query, from, MAX_SEARCH_HITS, &cancel, |p| {
+        self.on_document(uri, move |doc| {
+            search_pages(doc, &query, from, MAX_SEARCH_HITS, &cancel, |p| {
                 out.blocking_send(p).is_ok()
             });
+            Ok(())
         })
-        .await?;
-        Ok(())
+        .await
     }
 
     /// The links of page `page` (0-based) of a PDF: to its own pages and to
     /// http(s) URIs, nothing else.
     pub async fn pdf_links(&self, uri: &Uri, page: usize) -> std::result::Result<Vec<Link>, PdfFailure> {
-        let doc = self.pdf_document(uri).await?;
-        Ok(blocking(move || doc.links(page)).await??)
+        self.on_document(uri, move |doc| doc.links(page)).await
+    }
+
+    /// [`run_on`] with the kept document of `uri`, opened when not kept.
+    async fn on_document<T: Send + 'static>(
+        &self,
+        uri: &Uri,
+        work: impl FnOnce(&PdfDocument) -> std::result::Result<T, PdfError> + Send + 'static,
+    ) -> std::result::Result<T, PdfFailure> {
+        run_on(self.pdf_document(uri).await?, work).await
     }
 
     /// The kept document, opening the file when it is not kept (an
@@ -370,12 +408,21 @@ impl Core {
 #[cfg(test)]
 mod tests {
     use super::{
-        keep, kept, parse_page_id, pdf_error_name, search_pages, HitArea, PageHits, PageRect, PdfDocument,
-        PdfError, PdfSearchResults, TextHit,
+        caught, forget, keep, kept, parse_page_id, pdf_error_name, run_on, search_pages, HitArea, PageHits,
+        PageRect, PdfDocument, PdfError, PdfFailure, PdfSearchResults, TextHit,
     };
     use crate::uri::Uri;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
+
+    /// Tests that keep documents take turns: the kept list is the process's.
+    static KEPT_LIST: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    /// A parse of a one-page PDF `width` points wide.
+    fn parse(width: u32) -> Arc<PdfDocument> {
+        use lautta_pdf::sample::{build, page};
+        Arc::new(PdfDocument::open(build(&[page(width, 10, "")])).unwrap())
+    }
 
     #[test]
     fn page_ids_parse() {
@@ -582,11 +629,8 @@ mod tests {
 
     #[test]
     fn two_documents_are_kept_newest_first() {
-        let doc = |w| {
-            Arc::new(
-                PdfDocument::open(lautta_pdf::sample::build(&[lautta_pdf::sample::page(w, 10, "")])).unwrap(),
-            )
-        };
+        let _turn = KEPT_LIST.blocking_lock();
+        let doc = parse;
         let (a, b, c) = (
             Uri::parse("lautta://kept-test/a.pdf").unwrap(),
             Uri::parse("lautta://kept-test/b.pdf").unwrap(),
@@ -604,5 +648,66 @@ mod tests {
         keep(&c, &doc(4));
         assert!(kept(&b).is_none(), "the oldest goes");
         assert!(kept(&a).is_some() && kept(&c).is_some());
+    }
+
+    #[test]
+    fn a_panic_is_a_pdf_that_cannot_be_read() {
+        let lost = AtomicUsize::new(0);
+        let note = || {
+            lost.fetch_add(1, Ordering::Relaxed);
+        };
+        assert_eq!(
+            caught(|| -> Result<u8, PdfError> { panic!("hayro tripped") }, note),
+            Err(PdfError::Invalid)
+        );
+        assert_eq!(lost.load(Ordering::Relaxed), 1, "told once");
+        assert_eq!(caught(|| Ok(7), note), Ok(7));
+        assert_eq!(
+            caught(|| Err::<u8, _>(PdfError::NoSuchPage), note),
+            Err(PdfError::NoSuchPage),
+            "the work's own error is kept"
+        );
+        assert_eq!(lost.load(Ordering::Relaxed), 1, "only a panic is told");
+    }
+
+    #[test]
+    fn forgetting_a_parse_leaves_the_others_and_a_newer_one() {
+        let _turn = KEPT_LIST.blocking_lock();
+        let a = Uri::parse("lautta://forget-test/a.pdf").unwrap();
+        let b = Uri::parse("lautta://forget-test/b.pdf").unwrap();
+        let old = parse(1);
+        keep(&a, &old);
+        keep(&b, &parse(2));
+        forget(&old);
+        assert!(kept(&a).is_none());
+        assert!(kept(&b).is_some(), "other documents stay");
+        let newer = parse(3);
+        keep(&a, &newer);
+        forget(&old);
+        assert!(
+            kept(&a).is_some_and(|d| Arc::ptr_eq(&d, &newer)),
+            "a newer parse of the file stays"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_panic_on_a_kept_document_is_an_error_and_forgets_it() {
+        let _turn = KEPT_LIST.lock().await;
+        let u = Uri::parse("lautta://forget-test/c.pdf").unwrap();
+        let doc = parse(5);
+        keep(&u, &doc);
+        let res = run_on(Arc::clone(&doc), |_| -> Result<(), PdfError> {
+            panic!("hayro tripped")
+        })
+        .await;
+        assert_eq!(
+            res,
+            Err(PdfFailure::Pdf(PdfError::Invalid)),
+            "what the viewer shows as unreadable"
+        );
+        assert!(kept(&u).is_none(), "parsed again on the next request");
+        keep(&u, &doc);
+        assert_eq!(run_on(Arc::clone(&doc), |d| Ok(d.page_count())).await, Ok(1));
+        assert!(kept(&u).is_some(), "kept while nothing panics");
     }
 }

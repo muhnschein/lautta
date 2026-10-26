@@ -4,11 +4,13 @@
 //!
 //! A phone has the CPU for one page at a time: [`PdfThumbs`] lets a render
 //! wait for the one before it, also when the delegate that asked has gone
-//! (a render cannot be stopped). A PDF that cannot be drawn is remembered,
-//! so scrolling back to it costs nothing, and one whose render took the
-//! process down is marked on disk, so the next start does not try it again.
+//! (a render cannot be stopped). A PDF that cannot be drawn, a render that
+//! panicked included (RS-4), is remembered, so scrolling back to it costs
+//! nothing, and one whose render took the process down (stack overflow,
+//! out of memory) is marked on disk, so the next start does not try it again.
 
 use crate::error::{Error, ErrorKind, Result};
+use crate::panics::catch;
 use crate::provider::{read_all, ReadHandle};
 use crate::thumbs::encode;
 use image::{DynamicImage, Rgb, RgbImage};
@@ -55,6 +57,15 @@ pub fn first_page(bytes: Vec<u8>, size: u32) -> Result<Vec<u8>> {
     });
     encode(&DynamicImage::ImageRgb8(rgb))
 }
+
+/// `draw(bytes, size)`, with a panic in it (a PDF that trips hayro or the
+/// code around it) as a refusal of the PDF, not the end of the app (RS-4).
+fn drawn(draw: Draw, bytes: Vec<u8>, size: u32) -> Result<Vec<u8>> {
+    catch(|| draw(bytes, size)).unwrap_or_else(|_| Err(unsupported("drawing the PDF failed")))
+}
+
+/// What draws a thumbnail: [`first_page`]; tests give one that panics.
+type Draw = fn(Vec<u8>, u32) -> Result<Vec<u8>>;
 
 /// Runs `work` between a marker file and its removal. A marker that is
 /// there already means an earlier run did not end, and `work` does not run.
@@ -122,6 +133,20 @@ impl PdfThumbs {
         size: u32,
         max_bytes: u64,
     ) -> Result<Vec<u8>> {
+        self.make_with(first_page, dir, version, handle, size, max_bytes)
+            .await
+    }
+
+    /// [`PdfThumbs::make`], drawn by `draw`.
+    async fn make_with(
+        &self,
+        draw: Draw,
+        dir: &Path,
+        version: &str,
+        handle: &dyn ReadHandle,
+        size: u32,
+        max_bytes: u64,
+    ) -> Result<Vec<u8>> {
         if self.is_refused(version) {
             return Err(unsupported("PDF cannot be drawn"));
         }
@@ -136,7 +161,7 @@ impl PdfThumbs {
         }
         let marker = dir.join(format!("{version}.crash"));
         let made = self
-            .exclusive(move || guarded(&marker, || first_page(bytes, size)))
+            .exclusive(move || guarded(&marker, || drawn(draw, bytes, size)))
             .await
             .and_then(|r| r);
         if let Err(e) = &made {
@@ -466,6 +491,33 @@ mod tests {
         assert!(
             pdfs.make(dir.path(), "w", &h, 32, 1_000_000).await.is_ok(),
             "other PDFs are not affected"
+        );
+    }
+
+    /// A draw that trips over the PDF as hayro might.
+    fn boom(_: Vec<u8>, _: u32) -> Result<Vec<u8>> {
+        panic!("hayro tripped")
+    }
+
+    #[tokio::test]
+    async fn a_render_that_panics_is_refused_and_the_app_goes_on() {
+        let dir = tempfile::tempdir().unwrap();
+        let pdfs = PdfThumbs::default();
+        let h = Counting::new(pdf_bytes());
+        let err = pdfs
+            .make_with(boom, dir.path(), "v", &h, 32, 1_000_000)
+            .await
+            .unwrap_err();
+        assert_eq!(err.kind, ErrorKind::Unsupported, "a verdict on the PDF: {err:?}");
+        assert!(pdfs.is_refused("v"), "not drawn again this session");
+        assert_eq!(
+            std::fs::read_dir(dir.path()).unwrap().count(),
+            0,
+            "no marker: only a render that took the process down leaves one"
+        );
+        assert!(
+            pdfs.make(dir.path(), "w", &h, 32, 1_000_000).await.is_ok(),
+            "the next PDF gets its turn and is drawn"
         );
     }
 
