@@ -8,10 +8,12 @@
 // content's and shows under the header; the empty-folder placeholder sits in
 // the area below it. Opening a folder starts at its very top, also while it
 // still loads and when a notice comes after the rows (a photo folder shown
-// as grid); going back shows the folder where it was left. Fails when the
-// header scrolls, overlaps or leaves a gap, when a view starts anywhere but
-// its top or when going back loses the position. Headless there is no render
-// loop, so how the header's height settles on a device is not seen here.
+// as grid); going back shows the folder where it was left, the same item at
+// its top, also in a grid whose rows differ in height (long names take two
+// lines). Fails when the header scrolls, overlaps or leaves a gap, when a
+// view starts anywhere but its top or when going back loses the position.
+// Headless there is no render loop, so how the header's height settles on a
+// device is not seen here.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -21,7 +23,9 @@ ApplicationWindow {
     id: win
 
     readonly property string base: "lautta://user-documents/FolderHeader/"
-    readonly property int files: 60
+    // Names of one line in the grid, and every fifth one again with a name
+    // of two lines: grid rows of different heights all down the folder.
+    readonly property int files: 72
 
     ViewerTools { id: tools }
 
@@ -75,8 +79,23 @@ ApplicationWindow {
         return false
     }
 
+    // a0 to f9, short enough for one line on the checks' small screen, then
+    // a0, a5 to f5 again with a long name.
     function nameOf(i) {
-        return "f" + (i < 10 ? "00" : (i < 100 ? "0" : "")) + i + ".md"
+        var n = i < 60 ? i : (i - 60) * 5
+        var name = String.fromCharCode(97 + Math.floor(n / 10)) + n % 10
+        return i < 60 ? name : name + " and a name long enough for two lines in the grid.md"
+    }
+
+    // The heights of the grid's rows made, each once.
+    function rowHeights(f) {
+        var out = []
+        var kids = f.contentItem.children
+        for (var i = 0; i < kids.length; ++i) {
+            if (kids[i].regroup !== undefined && out.indexOf(kids[i].height) < 0)
+                out.push(kids[i].height)
+        }
+        return out
     }
 
     function makeFolders() {
@@ -253,14 +272,21 @@ ApplicationWindow {
         f.forceLayout()
         f.contentY = f.originY + f.height * 3
         tools.pump(100)
+        f.forceLayout()
         var left = f.contentY
-        expect(left > f.originY + f.height, mode + ": the parent is scrolled: " + left)
+        var topItem = f.itemIndexAt(f.width / 2, left + 1)
+        expect(left > f.originY + f.height && topItem > 0, mode + ": the parent is scrolled: " + left + " " + topItem)
+        if (mode === "grid")
+            expect(rowHeights(f).length > 1, "grid rows of different heights: " + rowHeights(f))
         var child = openAtTop(parentView, base + "Child/", files, mode + " child")
         pageStack.pop()
         waitFor(settled, "going back")
         waitFor(function () { return pageStack.currentPage === parentPage && !parentView.model.loading }, "the parent again")
         tools.pump(200)
+        f.forceLayout()
         expect(Math.abs(f.contentY - left) < 1, mode + ": back at the old position: " + f.contentY + " vs " + left)
+        var again = f.itemIndexAt(f.width / 2, f.contentY + 1)
+        expect(again === topItem, mode + ": the same item at the top: " + again + " vs " + topItem)
         // And down again: the folder starts at its top once more.
         openAtTop(parentView, base + "Child/", files, mode + " child again")
         pageStack.pop(null, PageStackAction.Immediate)

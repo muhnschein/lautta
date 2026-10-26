@@ -20,15 +20,18 @@ ApplicationWindow {
             console.error("FAILED: " + what)
     }
 
-    // The tiles on screen, which are those that hold captions.
-    // Laid out by hand: headless, no render loop polishes the view.
+    // The tiles on screen, which are those that hold captions, in the
+    // grid's rows. Laid out by hand: headless, no render loop polishes the view.
     function tiles(grid) {
         var out = []
         grid.forceLayout()
-        var kids = grid.contentItem.children
-        for (var i = 0; i < kids.length; ++i) {
-            if (kids[i].captions !== undefined && kids[i].itemName !== undefined)
-                out.push(kids[i])
+        var rows = grid.contentItem.children
+        for (var i = 0; i < rows.length; ++i) {
+            var kids = rows[i].children
+            for (var j = 0; j < kids.length; ++j) {
+                if (kids[j].captions !== undefined && kids[j].itemName !== undefined)
+                    out.push(kids[j])
+            }
         }
         return out
     }

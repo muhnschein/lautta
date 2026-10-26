@@ -89,16 +89,25 @@ ApplicationWindow {
             views[i].forceLayout()
     }
 
+    // The list rows or grid cells of `shown`: a grid's cells sit in its rows.
+    function rowsIn(shown) {
+        var out = []
+        var kids = shown ? shown.contentItem.children : []
+        for (var i = 0; i < kids.length; ++i) {
+            var cells = kids[i].regroup !== undefined ? kids[i].children : [kids[i]]
+            for (var j = 0; j < cells.length; ++j)
+                out.push(cells[j])
+        }
+        return out
+    }
+
     // The row of `uri` in the list or grid shown: a list row by its item, a
     // grid cell by its name.
     function rowOf(uri) {
-        var shown = shownView()
-        if (!shown)
-            return null
         var name = App.nameOf(uri)
-        var kids = shown.contentItem.children
-        for (var i = 0; i < kids.length; ++i) {
-            var x = kids[i]
+        var rows = rowsIn(shownView())
+        for (var i = 0; i < rows.length; ++i) {
+            var x = rows[i]
             if (x.info !== undefined ? x.info.uri === uri : x.itemName === name)
                 return x
         }
@@ -169,10 +178,9 @@ ApplicationWindow {
     }
 
     function anyRemorse() {
-        var shown = shownView()
-        var kids = shown ? shown.contentItem.children : []
-        for (var i = 0; i < kids.length; ++i) {
-            if (kids[i].data && activeRemorse(kids[i]))
+        var rows = rowsIn(shownView())
+        for (var i = 0; i < rows.length; ++i) {
+            if (rows[i].data && activeRemorse(rows[i]))
                 return true
         }
         return false
