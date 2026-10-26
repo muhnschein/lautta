@@ -23,5 +23,6 @@
 - The text viewer always wraps lines, colours code by its language, and puts the text on a backdrop for contrast. Markdown previews wrap code blocks.
 - The image viewer works like Jolla Gallery's. Its More button is a circle with three dots, and More › Rename renames.
 - PDFs open at the top with the whole header in view.
+- A PDF that trips the PDF renderer shows as unreadable instead of closing Lautta.
 - Photos show the date they were taken, in the system's formats.
 - Settings › Storage opens from Lautta where the system allows it.
