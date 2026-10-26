@@ -10,7 +10,7 @@ HighlightImage {
     // "image://theme/icon-m-share" or an app icon name such as "cut".
     property string icon
     property bool small
-    // The picture's side, `small` or medium unless set (the grid at 3 per row).
+    // The picture's side, `small` or medium unless set (the grid).
     property real iconSize: small ? Theme.iconSizeSmall : Theme.iconSizeMedium
     readonly property bool themed: icon.indexOf(":") >= 0
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// What stands under a tile of the grid at 3 per row (SPEC §15.3): the name on
+// What stands under a tile of the grid (SPEC §15.3): the name on
 // up to two lines, the middle of a long one cut so that its end stays
 // (GridName.js), then the caption lines, small and in the secondary colour
 // (DirFormat.gridCaptions). It always has the height of GridMetrics, so

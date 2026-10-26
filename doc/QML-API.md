@@ -182,15 +182,23 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `itemCount` role of its row changes when done; asking again for an unchanged folder does
   nothing, a changed modified time or `showHidden` counts anew). An open model follows
   every change of the global view settings at once (BRW-4).
-- The grid (SPEC §15.3): `components/directory/GridMetrics.qml` (`cellHeight(cellWidth,
-  captioned)`, `gap(captioned)`, `glyphSize(tileWidth, captioned)`, `nameLines(name,
-  tileWidth)`; the one place for the sizes of DirectoryView's and ViewPreview's cells),
+- The grid (SPEC §15.3): `components/directory/GridMetrics.qml` (`portraitColumns` (3), `gap`,
+  `cellHeight(cellWidth)`, `glyphSize(tileWidth)`, `nameLines(name, tileWidth)`; the one place
+  for the sizes of DirectoryView's and ViewPreview's cells; there is no setting for the number
+  of tiles per row),
   `components/directory/GridCaption.qml { metrics, name, captions, emphasised, pressed }`
-  (the name on up to two lines and two caption lines under a tile at 3 per row),
+  (the name on up to two lines and two caption lines under a tile),
   `components/directory/GridName.js` (`lines(name, width, measure)`: the cut of a long name,
   its end kept, no Silica), `components/directory/DirFormat.js` (`modifiedWithTime(ms)`,
   `items(count, capped)`, `gridCaptions(isDir, size, modifiedMs, counted, count, capped)` →
   the caption lines). A grid cell asks `requestCount` for its folder when it appears.
+- `components/directory/DirectoryView.qml` keeps the folder's header (`PageHeader`, `SlimProgress`,
+  `PathMenu`, the notices) in an item stacked by anchors (`folderHeader`) at the top of the page,
+  outside the list and the grid: a list keeps `contentY` when its header grows, which scrolled a
+  folder away from its top. The `SilicaListView` and `SilicaGridView` have no `header`, are
+  anchored below it and clipped; the pulley and the empty, loading and error states
+  (`stateLayer`) sit in them. `PathMenu.maxHeight` caps the open menu (it scrolls); less than 0:
+  no cap.
 - `PathModel { uri }` — ancestors (roles `uri`, `name`), `complete(prefix) → list`.
 - Pages: `pages/DirectoryPage.qml { uri }`, `dialogs/FolderPickerDialog.qml { title,
   acceptText, startUri }` (property `selectedUri` after accept),

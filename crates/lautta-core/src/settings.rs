@@ -17,8 +17,6 @@ use std::collections::BTreeMap;
 pub const REMORSE_RANGE: (u32, u32) = (3, 10);
 pub const LOCAL_CONCURRENCY_RANGE: (u32, u32) = (1, 4);
 pub const REMOTE_LANES_RANGE: (u32, u32) = (1, 6);
-/// Items per row of the portrait grid view: 4 (compact) or 3 (with names).
-pub const GRID_COLUMNS_RANGE: (u32, u32) = (3, 4);
 const RETENTION_DAYS_MAX: u32 = 365;
 const MB: u64 = 1_000_000;
 const GB: u64 = 1_000_000_000;
@@ -35,7 +33,6 @@ pub struct Settings {
     pub folders_first: bool,
     pub show_hidden: bool,
     pub view_mode: String,
-    pub grid_columns: u32,
 
     // Thumbnails (PRV).
     pub thumbnails_local: bool,
@@ -77,7 +74,6 @@ impl Default for Settings {
             folders_first: true,
             show_hidden: false,
             view_mode: "list".to_owned(),
-            grid_columns: 4,
             thumbnails_local: true,
             thumbnails_remote: true,
             thumbnail_max_remote_mb: 20,
@@ -124,7 +120,6 @@ impl Settings {
         self.remorse_seconds = clamp(self.remorse_seconds, REMORSE_RANGE);
         self.local_concurrency = clamp(self.local_concurrency, LOCAL_CONCURRENCY_RANGE);
         self.remote_lanes = clamp(self.remote_lanes, REMOTE_LANES_RANGE);
-        self.grid_columns = clamp(self.grid_columns, GRID_COLUMNS_RANGE);
         self.large_op_items = self.large_op_items.max(1);
         self.large_op_bytes = self.large_op_bytes.max(MB);
         self.search_remote_depth = self.search_remote_depth.clamp(1, 64);
@@ -369,7 +364,6 @@ mod tests {
         assert_eq!((s.large_op_items, s.large_op_bytes), (1_000, 1_000_000_000));
         assert!(s.recents_enabled);
         assert_eq!(s.search_remote_depth, 8);
-        assert_eq!(s.grid_columns, 4);
         assert_eq!(s.clone().sanitised(), s, "defaults are already valid");
     }
 
@@ -386,7 +380,6 @@ mod tests {
             large_op_items: 0,
             large_op_bytes: 0,
             search_remote_depth: 0,
-            grid_columns: 2,
             sort_key: "bogus".into(),
             view_mode: "".into(),
             ..Settings::default()
@@ -401,14 +394,12 @@ mod tests {
         assert_eq!(s.history_retention_days, 365);
         assert_eq!((s.large_op_items, s.large_op_bytes), (1, MB));
         assert_eq!(s.search_remote_depth, 1);
-        assert_eq!(s.grid_columns, 3);
         assert_eq!((s.sort_key.as_str(), s.view_mode.as_str()), ("name", "list"));
         s.remorse_seconds = 99;
         s.remote_lanes = 99;
-        s.grid_columns = 5;
         s.thumbnail_max_remote_mb = 5_000;
         s.sanitise();
-        assert_eq!((s.remorse_seconds, s.remote_lanes, s.grid_columns), (10, 6, 4));
+        assert_eq!((s.remorse_seconds, s.remote_lanes), (10, 6));
         assert_eq!(s.thumbnail_max_remote_mb, 1_000);
     }
 
@@ -419,14 +410,12 @@ mod tests {
             sort_descending: true,
             show_hidden: true,
             remote_lanes: 5,
-            grid_columns: 3,
             ..Settings::default()
         }
         .sanitised();
         assert_eq!(Settings::from_json(&s.to_json()), s);
         let map = s.to_map();
         assert_eq!(map["remote_lanes"], json!(5));
-        assert_eq!(map["grid_columns"], json!(3));
         assert_eq!(Settings::from_map(&map), s);
     }
 
@@ -465,6 +454,21 @@ mod tests {
         assert!(!s.to_map().contains_key("date_format"));
         assert!(!s.to_json().contains("date_format"));
         assert!(!s.set("date_format", json!("locale")));
+    }
+
+    #[test]
+    fn a_stored_grid_size_is_ignored() {
+        // The grid has one size (BRW-4): the number of tiles per row an
+        // earlier version stored is dropped like any unknown key.
+        let stored = r#"{"grid_columns":3,"view_mode":"grid"}"#;
+        let mut s = Settings::from_json(stored);
+        assert_eq!(s.view_mode, "grid");
+        assert!(!s.to_map().contains_key("grid_columns"));
+        assert!(!s.to_json().contains("grid_columns"));
+        assert!(!s.set("grid_columns", json!(4)));
+        let mut map = BTreeMap::new();
+        map.insert("grid_columns".to_owned(), json!(4));
+        assert_eq!(Settings::from_map(&map), Settings::default());
     }
 
     #[test]

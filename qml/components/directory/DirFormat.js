@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Text of directory rows: "size · modified", and of grid cells at 3 per row
+// Text of directory rows: "size · modified", and of grid cells
 // (SPEC §15.3, boards Directory and DirectoryGrid).
 .pragma library
 .import Sailfish.Silica 1.0 as Silica
@@ -48,7 +48,7 @@ function items(count, capped) {
     return qsTrId("lautta-dir-grid-items", count)
 }
 
-// The caption lines under a grid cell at 3 per row, none of them empty: a
+// The caption lines under a grid cell, none of them empty: a
 // file has its modified time and its size; a folder its item count when the
 // folder view counts (`counted`: this device and drives), else its modified
 // time (servers, archives: counting would list them). A folder not counted

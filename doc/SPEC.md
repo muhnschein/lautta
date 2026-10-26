@@ -441,8 +441,8 @@ what the app does.
   in the binary), size, modified, type; folders first toggle; stable.
 - BRW-3: Instant filter (substring, case- and diacritics-insensitive), hidden files
   toggle (dot names and the hidden attribute).
-- BRW-4: View settings (sort, folders first, hidden files, list or grid, grid size,
-  thumbnails) are global: the same for every folder and location. They are set on one
+- BRW-4: View settings (sort, folders first, hidden files, list or grid, thumbnails) are global:
+  the same for every folder and location. They are set on one
   *View options* page, opened from a folder's pulley or from *Settings*: a plain page
   whose controls apply at once, with a live preview of a sample folder (folders, files,
   a hidden file, a photo) in the order and view a real folder would get, drawn on a
@@ -453,9 +453,9 @@ what the app does.
   names the cost in data, battery and speed) with its size limit (PRV-2) and the
   thumbnail cache size. Folders already open follow a change at once; what one folder
   was switched to on its own (*Use list* over a suggested grid, §15.3) stays until that
-  setting changes for all. The grid shows 4 items per row with names on icons only, or 3
-  per row with larger icons and the name and caption lines under every item (§15.3);
-  landscape keeps the tile size.
+  setting changes for all. The grid has one size: 3 items per row in portrait with the name
+  and caption lines under every item (§15.3); landscape keeps the tile size and shows more
+  per row.
 - BRW-5: Stale-while-revalidate: cached listing shown immediately (≤ 7 days old, marked
   stale), refresh on the interactive lane, diff applied in place without losing scroll
   or selection.
@@ -772,7 +772,7 @@ bridge).
   thumbnails* for a local PDF, also *Thumbnails from servers* for a server PDF. Open
   folders follow a change at once. Read limit: local 20 MB; server = size limit of PRV-2,
   never above the viewer's 200 MB. Larger: not read, icon shows. Encrypted, damaged or
-  page-less PDF: icon, no message; a compact grid tile then shows the file name. Drawing =
+  page-less PDF: icon, no message. Drawing =
   CPU work on the blocking pool, one PDF at a time app-wide (stricter than ARC-7: battery,
   heat). Job whose delegate left before its turn never runs; one already drawing finishes.
   PDF that cannot be drawn, a draw that panicked included (RS-4), is remembered for the
@@ -881,12 +881,17 @@ attached to swipe to: Activity is in the pulley and the activity bar (XFR-13).
 ### 15.3 Directory page
 
 Header with the folder name only (no breadcrumb); tap → path menu. Slim progress line while listing
-or receiving transfers. List view with icon or thumbnail and "size · modified"; grid view
-for media folders (suggested when > 60 % images). The grid at 4 per row has the name inside
-the tile, cut at the end. At 3 per row the icon is about half the tile wide (thumbnails fill
-it) and under it stand the name on up to two lines, centred (a name that does not fit keeps
-its start on the first line and its end, the extension, on the second behind an ellipsis in
-the middle), and two small lines in the secondary colour, each cut at the end: a file's
+or receiving transfers. Header, progress line, path menu and notices (offline, large, suggested
+grid, error) are fixed at the top of the page: list or grid scrolls under them, clipped, in portrait
+and landscape, and the pulley stays on the content. The path menu scrolls when taller than the
+rest of the page. Opening a folder starts at its very top (nothing in the scroller can grow above
+the first item); going back to a folder on the page stack shows it where it was left. List view
+with icon or thumbnail and "size · modified"; grid view for media folders (suggested when > 60 %
+images). The grid has 3 tiles per row in portrait (landscape keeps the tile size, so it fits
+more); the icon is about half the tile wide (thumbnails fill it) and under it stand the name on
+up to two lines, centred (a name that does not fit keeps its start on the first line and its end,
+the extension, on the second behind an ellipsis in the middle), and two small lines in the
+secondary colour, each cut at the end: a file's
 modified time and size; a folder's item count ("N items") on this device and on drives,
 hidden files left out unless shown, "More than N items" past 10 000 entries, none while
 counting or when the folder cannot be read; a folder on a server or in an archive its

@@ -21,15 +21,12 @@ function megabytes(list) {
     })
 }
 
-function viewName(viewMode, gridColumns) {
+function viewName(viewMode) {
     if (viewMode !== "grid")
         //% "List"
         return qsTrId("lautta-settings-summary-list")
-    return gridColumns === 3
-            //% "Grid of 3"
-            ? qsTrId("lautta-settings-summary-grid-3")
-            //% "Grid of 4"
-            : qsTrId("lautta-settings-summary-grid-4")
+    //% "Grid"
+    return qsTrId("lautta-settings-summary-grid")
 }
 
 function sortName(sortKey) {
@@ -53,11 +50,11 @@ function sortName(sortKey) {
     }
 }
 
-// View options (BRW-4): "Grid of 3, sorted by size".
-function viewOptions(viewMode, gridColumns, sortKey) {
-    //: %1 is how folders show ("List", "Grid of 4"), %2 their order ("name")
+// View options (BRW-4): "Grid, sorted by size".
+function viewOptions(viewMode, sortKey) {
+    //: %1 is how folders show ("List", "Grid"), %2 their order ("name")
     //% "%1, sorted by %2"
-    return qsTrId("lautta-settings-summary-view").arg(viewName(viewMode, gridColumns)).arg(sortName(sortKey))
+    return qsTrId("lautta-settings-summary-view").arg(viewName(viewMode)).arg(sortName(sortKey))
 }
 
 // Deleting (OPS-8): where deletes go and for how long.
