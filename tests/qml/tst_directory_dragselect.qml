@@ -222,9 +222,12 @@ ApplicationWindow {
         Page {
             property alias view: folder
 
+            // Taller than the page: the checks' small screen leaves no room for rows
+            // between the header and the selection panel.
             DirectoryView {
                 id: folder
-                anchors.fill: parent
+                width: parent.width
+                height: 720
                 uri: win.base
             }
         }

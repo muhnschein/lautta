@@ -854,7 +854,12 @@ attached to swipe to: Activity is in the pulley and the activity bar (XFR-13).
 ### 15.3 Directory page
 
 Header with the folder name only (no breadcrumb); tap → path menu. Slim progress line while listing
-or receiving transfers. List view with icon or thumbnail and "size · modified"; grid view
+or receiving transfers. Header, progress line, path menu and notices (offline, large, suggested
+grid, error) are fixed at the top of the page: list or grid scrolls under them, clipped, in portrait
+and landscape, and the pulley stays on the content. The path menu scrolls when taller than the
+rest of the page. Opening a folder starts at its very top (nothing in the scroller can grow above
+the first item); going back to a folder on the page stack shows it where it was left. List view
+with icon or thumbnail and "size · modified"; grid view
 for media folders (suggested when > 60 % images). The grid at 4 per row has the name inside
 the tile, cut at the end. At 3 per row the icon is about half the tile wide (thumbnails fill
 it) and under it stand the name on up to two lines, centred (a name that does not fit keeps
