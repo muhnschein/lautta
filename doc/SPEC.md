@@ -407,6 +407,13 @@ what the app does.
   bridge mount it (`Mount`, as Settings › Storage does, without a question) and opens the
   volume once the sandbox shows its folder (up to 2 s; otherwise "not found", naming it). A mounted volume of
   such a drive has *Unmount* (`Unmount`) and a connected-server dot on the right.
+  An encrypted (LUKS) card or USB drive that is not unlocked (netvfs lists it `locked`)
+  is a dimmed *Volumes* row with its size as well, named and placed by the same rule (its LUKS label,
+  else its LUKS UUID), with Silica's padlock on the right instead of a dot and no text
+  about it. Tapping it, or its only menu entry *Open Storage settings*, opens Settings ›
+  Storage, which unlocks it: no passphrase passes through the app or netvfs. Without
+  `storage-settings` it has no menu and a tap does nothing. Once unlocked it is gone,
+  and its filesystem is a drive like any other.
   While a mount or unmount is under way the drive's dot pulses, as a connecting
   server's. A failure (busy, not allowed) is told with the volume's name. A volume the
   bridge does not mount has no dot: it is there because it is mounted. A drive that is
@@ -870,7 +877,8 @@ Long-press menus: favourite: *Edit favourite*, *Copy address*, *Remove from
 favourites*; folder: *Add to favourites*, *Copy address*; volume:
 *Add to favourites*, *Copy address*, *Unmount* (drives the bridge mounts, LOC-3),
 *Open Storage settings* (bridge only, LOC-3, NVB-13); a drive that
-is not mounted: *Mount*, *Open Storage settings*; account: *Edit
+is not mounted: *Mount*, *Open Storage settings*; a locked drive: *Open Storage settings*
+only (none without it); account: *Edit
 server*, *Update sign-in* or *Review server identity* while
 netvfs asks for it (NVB-5), *Copy address*; ad-hoc server:
 *Connect* (recent ones), *Copy address*, *Remove from recents*. Hiding a row is
@@ -893,7 +901,7 @@ up to two lines, centred (a name that does not fit keeps its start on the first 
 the extension, on the second behind an ellipsis in the middle), and two small lines in the
 secondary colour, each cut at the end: a file's
 modified time and size; a folder's item count ("N items") on this device and on drives,
-hidden files left out unless shown, "More than N items" past 10 000 entries, none while
+hidden files left out unless shown, "More than N items" past 1000 entries, none while
 counting or when the folder cannot be read; a folder on a server or in an archive its
 modified time (counting would list it over the network). A folder is counted when its cell
 appears and again when its modified time or the hidden files setting changes, once per
@@ -924,15 +932,17 @@ Tapping an icon opens the item like the rest of the row. The selection's actions
 long-press menu's order (*Share*, *Copy*, *Cut*, *Delete*), *More actions* and a last
 button that leaves selection, set apart on a key of the ambience's highlight background
 with its icon in the highlight colour. The panel is the same for one item or several, with no
-push-up menu. *More actions* opens a page of its own (OPS-12): *Compress* and *Move to
-new folder* for any number of items, and for one item also *Rename* and *Add to
-favourites*, so every action of an item is reachable from the grid. Backing out of the page keeps the selection. The panel's
+push-up menu; waiting for the first item it has only the last button, and ending selection
+leaves it with the buttons it had while it slides out. *More actions* opens a page of its
+own (OPS-12): *Compress* and *Move to new folder* for any number of items, and for one item
+also *Rename* and *Add to favourites*, so every action of an item is reachable from the
+grid. Backing out of the page keeps the selection. The panel's
 *Share*, *Copy* and *Cut*, an action of the page, a finished delete and deselecting the
 last item leave selection. Archives and *Compress* show the platform's archive icon
 (`icon-m-file-archive-folder`) everywhere.
 Placeholders: empty, no permission, offline, error with *Retry*/*Details*. They and the
-loading indicator are part of the view's content, so pulling the pulley moves them with
-the header.
+loading indicator are part of the view's content, so pulling the pulley moves them while
+the header stays.
 
 ### 15.4 Activity page
 

@@ -2641,10 +2641,6 @@
         <source>Servers</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-settings-summary-grid">
-        <source>Grid</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-act-move-new-folder">
         <source>Move to new folder</source>
         <translation type="unfinished"></translation>
@@ -2659,6 +2655,10 @@
             <numerusform>Moving %n item</numerusform>
             <numerusform>Moving %n items</numerusform>
         </translation>
+    </message>
+    <message id="lautta-settings-summary-grid">
+        <source>Grid</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>

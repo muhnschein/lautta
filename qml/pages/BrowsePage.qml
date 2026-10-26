@@ -69,11 +69,17 @@ Page {
             connectTo(row.uri)
             break
         case "volume":
-            // A drive that is not mounted is mounted, then opens (LOC-3).
-            if (row.status === "unmounted")
+            // A locked drive: Settings › Storage unlocks it, when the bridge
+            // can open it; otherwise nothing. A drive that is not mounted is
+            // mounted, then opens (LOC-3).
+            if (row.status === "locked") {
+                if (storageSettings)
+                    Bridge.openStorageSettings()
+            } else if (row.status === "unmounted") {
                 Bridge.mountDrive(row.drive, row.name)
-            else
+            } else {
                 openDirectory(row.uri)
+            }
             break
         case "account":
         case "adhoc":
@@ -178,9 +184,12 @@ Page {
 
             readonly property string kind: model.kind
             readonly property bool banner: kind === "consent" || kind === "unavailable"
-            // A drive the bridge can mount, and the bridge's id of a
-            // volume's drive (LOC-3).
+            // A drive the bridge can mount, one Settings › Storage unlocks
+            // first, and the bridge's id of a volume's drive (LOC-3). Neither
+            // of the first two has an address yet; both are dimmed.
             readonly property bool unmounted: kind === "volume" && model.status === "unmounted"
+            readonly property bool locked: kind === "volume" && model.status === "locked"
+            readonly property bool notMounted: unmounted || locked
             readonly property string drive: model.drive || ""
             readonly property string subtitle: {
                 switch (kind) {
@@ -199,7 +208,9 @@ Page {
             readonly property string statusIndicator: RowStatus.indicator(kind, model.status, model.connection,
                                                                           model.connectionError, drive,
                                                                           Bridge.busyDrives)
-            readonly property bool hasMenu: kind === "favourite" || kind === "folder" || kind === "volume"
+            // A locked drive's menu has Open Storage settings only.
+            readonly property bool hasMenu: kind === "favourite" || kind === "folder"
+                                            || (kind === "volume" && (!locked || page.storageSettings))
                                             || kind === "account" || kind === "adhoc" || kind === "adhocRecent"
 
             // The status icon sits on the right, so a server row is as
@@ -215,7 +226,7 @@ Page {
             // (FileIcons.js).
             AppIcon {
                 visible: !row.banner
-                opacity: row.unmounted ? Theme.opacityHigh : 1.0
+                opacity: row.notMounted ? Theme.opacityHigh : 1.0
                 anchors {
                     left: parent.left
                     leftMargin: Theme.horizontalPageMargin
@@ -228,7 +239,7 @@ Page {
 
             Column {
                 visible: !row.banner
-                opacity: row.unmounted ? Theme.opacityHigh : 1.0
+                opacity: row.notMounted ? Theme.opacityHigh : 1.0
                 anchors {
                     left: parent.left
                     leftMargin: Theme.horizontalPageMargin + Theme.iconSizeMedium + Theme.paddingLarge
@@ -363,7 +374,7 @@ Page {
                         onClicked: Bridge.mountDrive(row.drive, model.name)
                     }
                     MenuItem {
-                        visible: (row.kind === "folder" || row.kind === "volume") && !row.unmounted
+                        visible: (row.kind === "folder" || row.kind === "volume") && !row.notMounted
                         //% "Add to favourites"
                         text: qsTrId("lautta-browse-add-favourite")
                         onClicked: page.openFavourite(model.uri)
@@ -371,13 +382,13 @@ Page {
                     // Every row with a menu, favourites too, but a drive
                     // that is not mounted has no address yet.
                     MenuItem {
-                        visible: !row.unmounted
+                        visible: !row.notMounted
                         //% "Copy address"
                         text: qsTrId("lautta-browse-copy-address")
                         onClicked: page.copyAddress(row.kind === "adhocRecent" ? model.place : App.displayAddress(model.uri))
                     }
                     MenuItem {
-                        visible: row.kind === "volume" && !row.unmounted && row.drive.length > 0
+                        visible: row.kind === "volume" && !row.notMounted && row.drive.length > 0
                         //% "Unmount"
                         text: qsTrId("lautta-browse-unmount")
                         onClicked: Bridge.unmountDrive(row.drive, model.name)

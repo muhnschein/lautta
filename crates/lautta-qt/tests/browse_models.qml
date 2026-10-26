@@ -315,11 +315,21 @@ Item {
         // Settings › Browse page follows what the Browse page follows: a
         // drive that comes shows in both (BRW-12, LOC-3).
         step("a drive that comes shows in the Browse page and its settings",
-             function() { FakeWorld.addDrive("mmcblk1p1", "CARD") },
+             function() { FakeWorld.addDrive("mmcblk1p1", "CARD", false) },
              function() {
                  var v = row("volume", "CARD")
                  var l = layoutRow("volumes", "vol-CARD")
                  return v !== null && v.rdrive === "mmcblk1p1" && l !== null && !l.lhidden
+             })
+        // A LUKS device not unlocked as well, as a locked volume without an
+        // address (LOC-3).
+        step("a locked drive shows as locked in the Browse page and its settings",
+             function() { FakeWorld.addDrive("mmcblk1p2", "VAULT", true) },
+             function() {
+                 var v = row("volume", "VAULT")
+                 var l = layoutRow("volumes", "vol-VAULT")
+                 return v !== null && v.rstatus === "locked" && v.rdrive === "mmcblk1p2" && v.ruri === ""
+                        && v.ricon === "image://theme/icon-m-sd-card" && l !== null && !l.lhidden
              })
         // The settings page keeps its rows (and the user's place in the
         // list) on a switch and a move: no row is rebuilt.
@@ -433,8 +443,8 @@ Item {
              function() { layout.restoreDefaults() },
              function() {
                  return !layoutRow("volumes", "section").lhidden && !layoutRow("servers", "section").lhidden
-                        && has("volume", "CARD") && has("account", "NAS") && has("account", "Office")
-                        && !layoutRow("servers", "nv-account:1").lhidden
+                        && has("volume", "CARD") && has("volume", "VAULT") && has("account", "NAS")
+                        && has("account", "Office") && !layoutRow("servers", "nv-account:1").lhidden
              })
         step("the second server goes away",
              function() { FakeWorld.removeAccount("account:2") },

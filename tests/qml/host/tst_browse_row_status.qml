@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Host test of the status dot of Browse's rows (SPEC §15.2, NVB-4, NVB-5,
 // NVB-12, LOC-3): a server's connection and a drive's mount or unmount under
-// way, an attention first, and no dot when the state is not told, for a
-// volume the bridge does not mount and for every other row.
+// way, an attention first, a padlock for a locked drive, and no dot when the
+// state is not told, for a volume the bridge does not mount and for every
+// other row.
 import QtQuick 2.6
 import "../../../qml/components/browse/RowStatus.js" as RowStatus
 
@@ -50,6 +51,11 @@ QtObject {
             ["volume", "unmounted", "", "", "sda1", "off", ["mmcblk1p1"]],
             ["volume", "ready", "", "", "sda1", "on", []],
             ["volume", "ready", "", "", "sda1", "on", undefined],
+            // A drive Settings › Storage unlocks first: a padlock, never busy
+            // (the app does not mount it).
+            ["volume", "locked", "", "", "mmcblk1p2", "locked"],
+            ["volume", "locked", "", "", "mmcblk1p2", "locked", ["mmcblk1p2"]],
+            ["folder", "locked", "", "", "", ""],
             // A volume without a drive is never busy, and neither is any other row.
             ["volume", "ready", "", "", "", "", [""]],
             ["account", "ready", "connected", "", "sda1", "on", ["sda1"]],

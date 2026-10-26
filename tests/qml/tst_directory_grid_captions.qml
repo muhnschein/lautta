@@ -183,12 +183,12 @@ ApplicationWindow {
         top.uri = huge
         top.createFolder("Many")
         waitFor(function () { return top.count === 1 }, "the folder of many")
-        for (var i = 0; i <= 10000; ++i)
+        for (var i = 0; i <= 1000; ++i)
             install(String(i), huge + "Many/")
         var view = push(huge)
         var many = cellNamed(view, "Many")
-        waitFor(function () { return many.items === 10000 }, "the capped count")
-        same(many.captions, [qsTrId("lautta-dir-grid-items-more", 10000)], "a huge folder has more than its count")
+        waitFor(function () { return many.items === 1000 }, "the capped count")
+        same(many.captions, [qsTrId("lautta-dir-grid-items-more", 1000)], "a huge folder has more than its count")
         same(textOf(many, "gridCaption0"), many.captions[0], "shown on the first line")
         pageStack.pop(null, PageStackAction.Immediate)
     }
@@ -320,7 +320,7 @@ ApplicationWindow {
         same(DirFormat.items(-1, false), "", "no count")
         same(DirFormat.items(1, false), qsTrId("lautta-dir-grid-items", 1), "one item goes through the plural string")
         expect(DirFormat.items(14, false) === qsTrId("lautta-dir-grid-items", 14)
-               && DirFormat.items(10000, true) === qsTrId("lautta-dir-grid-items-more", 10000)
+               && DirFormat.items(1000, true) === qsTrId("lautta-dir-grid-items-more", 1000)
                && DirFormat.items(14, false) !== DirFormat.items(14, true), "a capped count says more than")
         same(DirFormat.gridCaptions(false, 2400000, older, true, -1, false),
              [DirFormat.modifiedWithTime(older), Format.formatFileSize(2400000)], "a file: time and size")

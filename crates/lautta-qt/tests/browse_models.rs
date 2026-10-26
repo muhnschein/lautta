@@ -46,7 +46,7 @@ struct FakeWorld {
     answers: qt_method!(fn(&self) -> QString),
     handoffs: qt_method!(fn(&self) -> QString),
     drives: qt_method!(fn(&self) -> QString),
-    addDrive: qt_method!(fn(&self, id: QString, label: QString)),
+    addDrive: qt_method!(fn(&self, id: QString, label: QString, locked: bool)),
     record: qt_method!(fn(&self, uri: QString, name: QString, kind: QString)),
     putFile: qt_method!(fn(&self, location: QString, path: QString)),
 }
@@ -148,10 +148,12 @@ impl FakeWorld {
         QString::from(serde_json::to_string(&list).unwrap().as_str())
     }
 
-    /// A memory card the bridge can mount comes (`DrivesChanged`).
-    fn addDrive(&self, id: QString, label: QString) {
+    /// A memory card comes (`DrivesChanged`): one the bridge can mount, or
+    /// a LUKS device not unlocked (`locked`).
+    fn addDrive(&self, id: QString, label: QString, locked: bool) {
         let mut drives = fake().drives();
-        drives.push(FakeDrive::new(&id.to_string(), &label.to_string(), "sd", 8));
+        let drive = FakeDrive::new(&id.to_string(), &label.to_string(), "sd", 8);
+        drives.push(if locked { drive.locked() } else { drive });
         run(fake().set_drives(drives));
     }
 
