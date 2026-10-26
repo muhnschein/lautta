@@ -135,7 +135,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `nested` (a row of a section with such a switch); the switch is a row of kind `section`
   and item `section` that leads its section, `hidden` telling that the section is off
   (set with `setHidden(section, "section", hidden)`), and a section that is off lists
-  no other row; `reload()` reads the rows and starts
+  no other row; Volumes switch always there, Servers switch whenever a bridge answers;
+  `reload()` reads the rows and starts
   following what `LocationsModel` follows (a row that comes or goes arrives as an
   insertion or removal), except while a change of its own is not stored,
   `setHidden(section, item, hidden)`,

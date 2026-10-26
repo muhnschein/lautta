@@ -476,9 +476,10 @@ what the app does.
   and their rows stand a step in from it. Off, the section's rows are gone from this
   list (not dimmed) and the section is gone from the Browse page and its preview, drives
   connected and servers added later included; the switches of the rows keep what they
-  said, so that switching the section on restores them. That switch is there while
-  the section has rows or is off, and the *Servers* one only while a bridge answers
-  (UI-8). A press on the grip picks the row
+  said, so that switching the section on restores them. *Volumes* switch is always
+  there, *Servers* switch whenever a bridge answers (UI-8), rows or not: a section on and
+  empty is just its switch and shows nothing on Browse page and its preview. A press on
+  the grip picks the row
   up at once; it follows the finger, the rows it passes slide aside and its new order is
   stored as it moves, and let go it settles into its place. A switch or a move changes
   its row in place: the list keeps its position and a press lights one row only. A

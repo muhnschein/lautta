@@ -9,11 +9,12 @@
 // differ from the places in the section). Restore defaults shows every row
 // again with Recents first. A favourite added elsewhere shows in the list
 // and the preview, as the Browse page shows it. Volumes and Servers lead
-// with a switch for the whole section: off, it is a row of its own with its
-// switch off and no grip (the target has no volumes, so it shows only
-// because it is off, and no servers, which need the bridge), a tap on it or
-// Restore defaults turns the section on and the row goes; the rows of such a
-// section stand a step in from the switch.
+// with a switch for the whole section, a row of its own with a switch and no
+// grip: the Volumes one is there without a volume (the target has none), on
+// or off, a tap on it or Restore defaults turns the section on again, in
+// place; the Servers one needs the bridge, which the target has not, so it
+// is not there either way (UI-8); the rows of such a section stand a step in
+// from the switch.
 //
 // The Silica window sits in a Qt Quick window: only items in one get the
 // mouse events the drag needs.
@@ -70,11 +71,12 @@ QtQuick.Window {
         return out
     }
 
-    // Settings rows the Browse page shows as rows of its own.
+    // Settings rows the Browse page shows as rows of its own: not the switch
+    // of a section, nor the one for all nearby servers.
     function shownRows(layout) {
         var n = 0
         for (var i = 0; i < layout.count; ++i) {
-            if (layout.sectionAt(i) !== "nearby")
+            if (layout.sectionAt(i) !== "nearby" && layout.itemAt(i) !== "section")
                 ++n
         }
         return n
@@ -158,11 +160,11 @@ QtQuick.Window {
         return null
     }
 
-    // The switch row of Volumes, off: its row, its switch and no grip.
-    function checkSectionSwitch(row) {
+    // The switch row of Volumes: its row, its switch, set as `on` says, and no grip.
+    function checkSectionSwitch(row, on) {
         var toggle = named(row, "layoutSwitch")
         var grip = named(row, "layoutGrip")
-        expect(toggle !== null && toggle.visible && !toggle.checked, "the Volumes switch is off")
+        expect(toggle !== null && toggle.visible && toggle.checked === on, "the Volumes switch is " + (on ? "on" : "off"))
         expect(grip === null || !grip.visible, "the Volumes switch has no grip")
         expect(row.title === "lautta-browse-layout-volumes", "the Volumes switch is named by its own text: " + row.title)
         expect(!row.layoutNested && row.layoutMovable === false, "the switch is neither nested nor movable")
@@ -303,34 +305,44 @@ QtQuick.Window {
                 window.checkIndent()
                 window.checkSectionEnds()
                 window.listed = layout.count
-                // The section is off: its switch shows although there is
-                // no volume, and nothing else changes.
+                // Without a volume the section is its switch, on; there is
+                // none for Servers, which need the bridge (UI-8).
+                var volumesOn = window.switchOf("volumes")
+                if (!window.expect(volumesOn !== null, "the Volumes switch is there without a volume: " + window.describe(layout)))
+                    return
+                window.checkSectionSwitch(volumesOn, true)
+                window.expect(window.sectionRows(layout, "volumes") === 1, "an empty Volumes section is more than its switch: " + window.describe(layout))
+                window.expect(window.switchOf("servers") === null && window.sectionRows(layout, "servers") === 0,
+                              "standalone shows the Servers switch: " + window.describe(layout))
+                // Switched off, the same row changes in place.
                 layout.setHidden("volumes", "section", true)
                 break
             case 6:
                 var volumes = window.switchOf("volumes")
-                if (layout.count !== window.listed + 1 || !volumes)
+                if (!volumes || !volumes.layoutHidden)
                     return
-                window.checkSectionSwitch(volumes)
+                window.expect(layout.count === window.listed, "switching Volumes off changed the rows: " + window.describe(layout))
+                window.checkSectionSwitch(volumes, false)
                 // A tap on the row turns the section on, as on any row.
                 volumes.clicked(null)
                 break
             case 7:
-                if (layout.count !== window.listed)
+                var volumesBack = window.switchOf("volumes")
+                if (!volumesBack || volumesBack.layoutHidden)
                     return
-                window.expect(window.switchOf("volumes") === null, "a section that is on and empty has no switch")
+                window.expect(layout.count === window.listed, "a section that is on and empty is more than its switch: " + window.describe(layout))
                 layout.setHidden("volumes", "section", true)
                 break
             case 8:
-                if (layout.count !== window.listed + 1)
+                if (!window.switchOf("volumes") || !window.switchOf("volumes").layoutHidden)
                     return
                 // Restore defaults turns the sections on.
                 layout.restoreDefaults()
                 break
             case 9:
-                if (layout.count !== window.listed)
+                if (!window.switchOf("volumes") || window.switchOf("volumes").layoutHidden)
                     return
-                window.expect(window.switchOf("volumes") === null, "Restore defaults leaves Volumes off")
+                window.expect(layout.count === window.listed, "Restore defaults changed the rows: " + window.describe(layout))
                 window.scenarioRunning = false
                 break
             }

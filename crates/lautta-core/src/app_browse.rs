@@ -139,11 +139,11 @@ fn layout_row(layout: &Layout, row: &Row) -> Option<LayoutRow> {
     })
 }
 
-/// The settings rows of one section. *Volumes* and *Servers* lead with
-/// their switch and list their rows only while it is on; the switch is
-/// there while the section has rows or is off, so that it can be turned on
-/// again. The Servers switch is a trace of the bridge, so standalone (no
-/// bridge answers) has none (UI-8).
+/// The settings rows of one section. *Volumes* and *Servers* lead with their
+/// switch and list their rows only while it is on. Switch is always there,
+/// rows or not, so an empty section can be switched before its first row
+/// comes. Servers switch is a trace of the bridge, so standalone (no bridge
+/// answers) has none (UI-8).
 fn section_rows(
     section: &'static str,
     rows: Vec<LayoutRow>,
@@ -153,11 +153,10 @@ fn section_rows(
     if !SWITCHED_SECTIONS.contains(&section) {
         return rows;
     }
-    let shown = layout.section_shown(section);
-    let wanted = !shown || !rows.is_empty();
-    if !wanted || (section == "servers" && !bridge_there) {
+    if section == "servers" && !bridge_there {
         return Vec::new();
     }
+    let shown = layout.section_shown(section);
     let switch = LayoutRow {
         section,
         kind: SECTION_KIND,
