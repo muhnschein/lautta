@@ -6,9 +6,11 @@
 // failed, orange that is none of the theme's own = sign-in or identity needs
 // user, nothing without a state. Pressed row lights a primary-colour dot
 // only. Pulse runs only while row busy, page shown and app in front; a
-// stopped pulse leaves dot at full brightness (PRF-8).
+// stopped pulse leaves dot at full brightness (PRF-8). A locked drive shows
+// Silica's padlock instead of a dot, at the same right edge (LOC-3).
 // Fails when a state is no dot, two states look alike, a dot differs in size
-// or place from the "on" dot, or the pulse runs when it must not.
+// or place from the "on" dot, the padlock is missing, has a dot or sits
+// elsewhere, or the pulse runs when it must not.
 // Target never has app in front (Qt.application.state is Inactive): running
 // side is driven through `appActive`; "stops in background" is checked as
 // app not in front -> no pulse. Looks: device test.
@@ -24,7 +26,7 @@ ApplicationWindow {
     property int step: 0
     property real dimmest: 1.0
     // Every dot but the busy ones.
-    readonly property var others: [on, off, failed, warning, none]
+    readonly property var others: [on, off, failed, warning, none, locked]
 
     // Straight in the window, as other component tests do.
     Column {
@@ -35,6 +37,7 @@ ApplicationWindow {
         RowStatusIcon { id: failed; indicator: "failed" }
         RowStatusIcon { id: warning; indicator: "warning" }
         RowStatusIcon { id: none; indicator: "" }
+        RowStatusIcon { id: locked; indicator: "locked" }
         // Keeps the default `appActive`, bound to the app's state.
         RowStatusIcon { id: busy; indicator: "busy" }
         // Busy dot on a page that is not shown.
@@ -63,6 +66,36 @@ ApplicationWindow {
                 return kids[i]
         }
         return null
+    }
+
+    function lockOf(slot) {
+        var kids = slot.children
+        for (var i = 0; i < kids.length; ++i) {
+            if (kids[i].objectName === "statusLock")
+                return kids[i]
+        }
+        return null
+    }
+
+    // Padlock, no dot, its right edge where the dot's core ends; primary
+    // colour, highlight colour when pressed. Back to a dot once unlocked.
+    function checkLock() {
+        var lock = lockOf(locked)
+        if (!expect(lock !== null && lock.visible && locked.visible, "a locked drive shows no padlock"))
+            return
+        expect(String(lock.source) === "image://theme/icon-s-secure", "the padlock is " + lock.source)
+        expect(!dotOf(locked).visible, "a locked drive shows a dot too")
+        expect(lock.width > 0 && Math.round(lock.x + lock.width) === Math.round(locked.width),
+               "the padlock ends at " + (lock.x + lock.width) + ", not at " + locked.width)
+        expect(Math.round(lock.y + lock.height / 2) === Math.round(locked.height / 2), "the padlock is not centred")
+        expect(String(lock.color) === String(Theme.primaryColor) && !lock.highlighted, "the padlock is " + lock.color)
+        locked.highlighted = true
+        expect(lock.highlighted, "a pressed row's padlock is not highlighted")
+        locked.highlighted = false
+        expect(!lockOf(on).visible && !lockOf(off).visible && !lockOf(none).visible, "a dot comes with a padlock")
+        locked.indicator = "off"
+        expect(!lock.visible && dotOf(locked).visible && locked.width === off.width, "an unlocked drive keeps its padlock")
+        locked.indicator = "locked"
     }
 
     function pulseOf(slot) {
@@ -185,6 +218,7 @@ ApplicationWindow {
                 win.checkSameDot("warning", warning)
                 win.checkColours()
                 win.checkHighlighted()
+                win.checkLock()
                 win.checkStill()
                 // App comes to front: busy dot pulses, no other does.
                 for (var k = 0; k < win.others.length; ++k)

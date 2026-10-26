@@ -556,6 +556,56 @@ async fn a_mounted_drive_opens_and_unmounts() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_locked_drive_is_a_locked_volume_until_it_is_unlocked() {
+    let (fake, e) = drives_env().await;
+    let client = e.core.bridge.clone().unwrap();
+    let mut drives = fake.drives();
+    drives.push(
+        FakeDrive::new("mmcblk1p2", "", "sd", 32)
+            .with_uuid("5c1e0a4f")
+            .locked(),
+    );
+    fake.set_drives(drives).await;
+    eventually("the locked drive", || client.drives().len() == 3).await;
+    let rows = e.core.browse_rows().await;
+    // Named and placed by the name rule of every drive (LOC-3).
+    assert_eq!(
+        volumes(&rows),
+        [
+            volume("1234-ABCD", "unmounted", "sda1", "vol-1234-ABCD"),
+            volume("5c1e0a4f", "locked", "mmcblk1p2", "vol-5c1e0a4f"),
+            volume("CARD", "unmounted", "mmcblk1p1", "vol-CARD"),
+            volume("SD", "ready", "", "vol-SD"),
+        ]
+    );
+    let vault = of(&rows, "volumes")[1];
+    assert_eq!(
+        (vault.uri.as_str(), vault.total, vault.icon.as_str()),
+        ("", 32, "image://theme/icon-m-sd-card")
+    );
+
+    // Unlocked in Settings › Storage: its filesystem instead, not mounted.
+    let mut drives = fake.drives();
+    drives.retain(|d| d.id != "mmcblk1p2");
+    drives.push(FakeDrive::new("dm_2d0", "SECRET", "sd", 31));
+    fake.set_drives(drives).await;
+    eventually("the unlocked drive", || {
+        client.drives().iter().any(|d| d.id == "dm_2d0")
+    })
+    .await;
+    let rows = e.core.browse_rows().await;
+    assert_eq!(
+        volumes(&rows),
+        [
+            volume("1234-ABCD", "unmounted", "sda1", "vol-1234-ABCD"),
+            volume("CARD", "unmounted", "mmcblk1p1", "vol-CARD"),
+            volume("SD", "ready", "", "vol-SD"),
+            volume("SECRET", "unmounted", "dm_2d0", "vol-SECRET"),
+        ]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_drive_mounted_out_of_sight_is_an_error() {
     // The bridge mounts it where the sandbox does not see it.
     let (fake, e) = drives_env().await;

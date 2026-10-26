@@ -48,7 +48,8 @@ pub struct Row {
     pub name: String,
     pub icon: String,
     /// `ready`, `connecting`, `offline`, `attention`; `unmounted` for a
-    /// volume the bridge can mount (LOC-3).
+    /// volume the bridge can mount, `locked` for one Settings › Storage
+    /// unlocks first (LOC-3).
     pub status: &'static str,
     /// `auth-failed`, `server-identity-changed` or empty.
     pub attention: String,
@@ -894,11 +895,13 @@ fn drive_icon(kind: DriveKind) -> &'static str {
 
 /// A drive that is not mounted (LOC-3): shown as the volume it becomes, by
 /// the folder it is mounted on, so that what the user hid or moved stays
-/// hidden or in place (BRW-12). It has no address until it is mounted.
+/// hidden or in place (BRW-12). It has no address until it is mounted. A
+/// locked one is named by its LUKS label or UUID: its filesystem is not
+/// known before Settings › Storage unlocks it.
 fn unmounted_row(d: &Drive) -> Row {
     let name = d.mount_name();
     let mut row = Row::new("volumes", "volume");
-    row.status = "unmounted";
+    row.status = if d.locked { "locked" } else { "unmounted" };
     row.item_id = crate::volumes::location_id_of(OsStr::new(&name));
     row.name = name;
     row.icon = drive_icon(d.kind).to_owned();

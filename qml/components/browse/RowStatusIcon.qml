@@ -3,16 +3,17 @@
 // dot, as TextSwitch draws. Highlight colour = connected, mounted. Primary
 // colour (white on dark ambience, dark on light) = not connected, not
 // mounted. Same dot pulsing = connecting, mounting, unmounting. Red =
-// connecting failed. Orange = sign-in or identity needs user. Dot sits at
-// right edge of this item; row puts item at page margin. No text
-// (RowStatus.js has the states).
+// connecting failed. Orange = sign-in or identity needs user. Locked drive:
+// Silica's padlock instead, as the WLAN list marks a secured network (LOC-3).
+// Dot or padlock sits at right edge of this item; row puts item at page
+// margin. No text (RowStatus.js has the states).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
 Item {
     id: status
 
-    // "on", "busy", "off", "failed" or "warning"; "" shows nothing.
+    // "on", "busy", "off", "failed", "warning" or "locked"; "" shows nothing.
     property string indicator
     // Row pressed: dot of primary colour takes highlight colour, as row
     // labels do.
@@ -34,15 +35,28 @@ Item {
     // pulsing, so a stopped pulse leaves full brightness.
     property real glow: 1.0
 
-    width: Theme.iconSizeExtraSmall
-    height: Theme.iconSizeExtraSmall
+    readonly property bool locked: indicator === "locked"
+
+    width: locked ? lock.width : Theme.iconSizeExtraSmall
+    height: locked ? lock.height : Theme.iconSizeExtraSmall
     visible: indicator !== ""
+
+    HighlightImage {
+        id: lock
+        objectName: "statusLock"
+        visible: status.locked
+        anchors.verticalCenter: parent.verticalCenter
+        source: status.locked ? "image://theme/icon-s-secure" : ""
+        color: Theme.primaryColor
+        highlighted: status.highlighted
+    }
 
     // Silica's glass item, as TextSwitch uses it. Its radius is the core's
     // share of its width, so item is as wide as dot needs; glow reaches past
     // core by same share.
     GlassItem {
         objectName: "statusDot"
+        visible: !status.locked
         width: status.dotSize / (2 * radius)
         height: width
         x: parent.width - (status.dotSize + width) / 2

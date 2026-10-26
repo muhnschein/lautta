@@ -2,9 +2,10 @@
 // How a Browse row's connection or mount stands (SPEC §15.2), as one glowing
 // dot at its right edge: "on" (connected, mounted), "busy" (connecting,
 // mounting, unmounting), "off" (not connected, not mounted), "failed" (could
-// not connect), "warning" (sign-in or identity), "" for nothing. No text: dot
-// says it (NVB-4). Computed from row roles; no Silica here, so host tests can
-// check it.
+// not connect), "warning" (sign-in or identity), "" for nothing; "locked"
+// (drive Settings › Storage unlocks first) is a padlock instead of a dot. No
+// text: icon says it (NVB-4). Computed from row roles; no Silica here, so
+// host tests can check it.
 .pragma library
 
 // A failed connection: the sign-in and identity failures are the ones the
@@ -36,10 +37,12 @@ function server(status, connection, connectionError) {
 
 // A volume (LOC-3). Only a drive the bridge mounts can be mounted or not; any
 // other volume is there because it is mounted, as device folders always are,
-// and has no dot. Drive listed in `busyDrives` (Bridge.busyDrives: mount or
-// unmount under way) is busy, as a server connecting is. Failure arrives as
-// a notice.
+// and has no dot. A locked drive is never mounted here: padlock. Drive listed
+// in `busyDrives` (Bridge.busyDrives: mount or unmount under way) is busy, as
+// a server connecting is. Failure arrives as a notice.
 function volume(status, drive, busyDrives) {
+    if (status === "locked")
+        return "locked"
     if (drive.length > 0 && busyDrives && busyDrives.indexOf(drive) >= 0)
         return "busy"
     if (status === "unmounted")

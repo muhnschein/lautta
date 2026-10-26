@@ -88,8 +88,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `colour`, `itemId`, `place`, `provider`, `host`, `free`, `total`, `fs`,
   `connection`, `connectionError`, `isFile` (a file favourite: opened, not browsed),
   `drive` (the bridge's id of a volume's drive, empty when the bridge does not mount it,
-  LOC-3)); a `volume` with `status` `unmounted` is a drive that is not mounted: no `uri`,
-  `total` its size, `free` -1;
+  LOC-3)); a `volume` with `status` `unmounted` is a drive that is not mounted, with
+  `locked` one Settings › Storage unlocks first (LUKS): no `uri`, `total` its size, `free`
+  -1;
   kinds `recents` and `deleted` are the app's own rows of `device` (`BrowseText.rowName`
   names them). `connection` is a server's connection state (NVB-4): `connected`,
   `connecting` (also while the bridge reconnects, NVB-12), `disconnected` (also recent
@@ -98,10 +99,11 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `components/browse/RowStatus.js` `indicator(kind, status, connection, connectionError,
   drive, busyDrives)` turns them into the row's status dot (`on`, `busy`, `off`, `failed`,
   `warning`, `""` for none; servers and volumes, LOC-3; a drive listed in `busyDrives`
-  (`Bridge.busyDrives`) is `busy`), which
+  (`Bridge.busyDrives`) is `busy`; a `locked` volume is `locked`), which
   `components/browse/RowStatusIcon.qml { indicator, highlighted }` draws at the right
   margin as one `GlassItem`, no text (§15.2): `on` highlight colour, `off` and `busy`
-  primary colour, `failed` error colour, `warning` `warningColor` (Silica's orange).
+  primary colour, `failed` error colour, `warning` `warningColor` (Silica's orange);
+  `locked` is Silica's padlock (`icon-s-secure`) instead of the dot.
   `busy` pulses while `pulsing` (busy, item `visible`, `appActive` = app in front, from
   `Qt.application.state`). `refresh()`
   rescans the device folders and volumes first (LOC-3); the model also follows location

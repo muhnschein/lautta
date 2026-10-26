@@ -5,6 +5,7 @@
 - Browse rows have even heights. Servers, memory cards and USB drives show their state as a glowing dot. It pulses while a server connects or a drive mounts or unmounts, and turns red or orange on failure or warning.
 - Browse shows no item counts any more.
 - Memory cards and USB drives can be mounted and unmounted from Browse, including drives Sailfish OS does not mount on its own. This needs netvfs with drive mounting.
+- A locked encrypted memory card or USB drive shows on Browse as a dimmed row with a padlock. Tapping it opens Settings › Storage to unlock it. This needs netvfs that lists locked drives.
 - Settings › Browse page edits the Browse page in place, with a live preview. It follows drives and servers as they come and go. Volumes and Servers can each be hidden as a whole, and come back with their earlier choices. "Hide from Browse" is gone from the menus.
 - Recents is a row on Browse. Activity and Recents are grouped by date.
 - Deleted files go to a Trash in the app's own data instead of a folder in each location. Deleting for good asks first. The Trash shows thumbnails, and its note sits at the top.

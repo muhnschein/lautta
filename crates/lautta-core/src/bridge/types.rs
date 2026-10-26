@@ -8,7 +8,8 @@ use crate::paths::AppPaths;
 use crate::uri::LocationId;
 use crate::vpath::VPath;
 use lautta_bridge_proto::{
-    drive_info, location_state, value_bytes, value_i64, value_str, WireDrive, WireLocation, WireNearby,
+    drive_info, location_state, value_bool, value_bytes, value_i64, value_str, WireDrive, WireLocation,
+    WireNearby,
 };
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
@@ -224,6 +225,9 @@ pub struct Drive {
     pub kind: DriveKind,
     /// Bytes, -1 when unknown.
     pub size: i64,
+    /// A LUKS device not unlocked: Settings › Storage unlocks it; the
+    /// bridge never mounts it (LOC-3, netvfs XB-20).
+    pub locked: bool,
 }
 
 impl Drive {
@@ -245,6 +249,11 @@ impl Drive {
                 .get(drive_info::SIZE)
                 .and_then(|v| value_i64(v))
                 .unwrap_or(-1),
+            locked: w
+                .info
+                .get(drive_info::LOCKED)
+                .and_then(|v| value_bool(v))
+                .unwrap_or(false),
         }
     }
 
@@ -495,6 +504,7 @@ mod tests {
             Some(PathBuf::from("/run/media/defaultuser/CARD"))
         );
         assert_eq!(card.mount_name(), "CARD");
+        assert!(!card.locked);
         // Unknown kinds, no size, not mounted.
         let other = Drive::from_wire(&wire_drive("a/b", b"", OptsBuilder::new().str("kind", "nvme")));
         assert_eq!(
@@ -502,6 +512,15 @@ mod tests {
             (DriveKind::Usb, -1, None)
         );
         assert_eq!(other.mount_name(), "a_b");
+    }
+
+    #[test]
+    fn a_locked_drive_from_wire() {
+        let locked = |info: OptsBuilder| Drive::from_wire(&wire_drive("VAULT", b"", info)).locked;
+        assert!(locked(OptsBuilder::new().str("kind", "sd").bool("locked", true)));
+        assert!(!locked(OptsBuilder::new().bool("locked", false)));
+        // Of another type: not told.
+        assert!(!locked(OptsBuilder::new().str("locked", "yes")));
     }
 
     #[test]
