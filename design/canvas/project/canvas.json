@@ -210,6 +210,14 @@
       "x": 2880,
       "y": 14440
     },
+    "GridIcons.dc.html": {
+      "h": 2250,
+      "is_interactive": true,
+      "title": "File icons \u00b7 grid and list",
+      "w": 860,
+      "x": 4800,
+      "y": 2060
+    },
     "ImageDeleteRemote.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -626,6 +634,7 @@
     "ViewOptions.dc.html",
     "NewItem.dc.html",
     "Rename.dc.html",
+    "GridIcons.dc.html",
     "StateEmpty.dc.html",
     "StateNoAccess.dc.html",
     "StateOffline.dc.html",
