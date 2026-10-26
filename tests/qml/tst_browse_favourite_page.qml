@@ -6,12 +6,14 @@
 // label once typing pauses and when the page is left while typing. Back in
 // Browse the row shows the chosen icon in the chosen colour. Opened on a
 // file that is no favourite yet (Add to favourites), the page makes it one
-// at once, as a file, offering the file's own icon first as its default.
+// at once, as a file, offering the file's own icon first as its default;
+// file-type icons are the app's glyphs (UI-2).
 // Both favourites are removed again at the end, so later scenarios sharing
 // the database see none of them.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../../qml/components/FileIcons.js" as FileIcons
 
 ApplicationWindow {
     id: win
@@ -244,8 +246,16 @@ ApplicationWindow {
                 if (!first || first.name !== "" || !first.chosen || win.iconCells().length !== favs.iconChoices().length + 1)
                     return win.fail("a file offers its own icon first, chosen")
                 var image = win.findAll(first, function(x) { return x.source !== undefined }, [])
-                if (image.length === 0 || String(image[0].source) !== "image://theme/icon-m-document")
+                var document = String(Qt.resolvedUrl("../../qml/icons/"
+                                                      + FileIcons.glyph("markdown", false, Theme.iconSizeMedium) + ".svg"))
+                if (image.length === 0 || String(image[0].source) !== document)
                     return win.fail("the file's own icon: " + (image.length > 0 ? image[0].source : "none"))
+                // A file-type choice is the app's glyph, as Browse shows it (UI-2).
+                var folderImage = win.findAll(win.iconCell("file-folder"), function(x) { return x.source !== undefined }, [])
+                var folderGlyph = String(Qt.resolvedUrl("../../qml/icons/"
+                                                         + FileIcons.sized("file-folder", Theme.iconSizeMedium) + ".svg"))
+                if (folderImage.length === 0 || String(folderImage[0].source) !== folderGlyph)
+                    return win.fail("the folder to choose: " + (folderImage.length > 0 ? folderImage[0].source : "none"))
                 win.iconCell("favorite").clicked(null)
                 win.next()
                 break

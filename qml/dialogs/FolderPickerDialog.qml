@@ -167,6 +167,7 @@ Dialog {
                     isDir: true
                     category: "folder"
                     isSymlink: model.isSymlink
+                    highlighted: parent.parent.highlighted
                 }
                 Label {
                     anchors.verticalCenter: parent.verticalCenter

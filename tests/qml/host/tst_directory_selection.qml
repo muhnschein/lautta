@@ -7,7 +7,6 @@
 import QtQuick 2.6
 import "../../../qml/components/directory/Selection.js" as Selection
 import "../../../qml/components/directory/ContextActions.js" as Actions
-import "../../../qml/components/FileIcons.js" as FileIcons
 
 Item {
     function check(cond, what) {
@@ -78,11 +77,9 @@ Item {
              "several, read-only: no Move to new folder")
         same(Selection.moreRows(0, file), [], "nothing selected")
         same(Selection.moreRows(1, file).map(function (r) { return r.icon }),
-             ["image://theme/icon-m-edit", "image://theme/icon-m-favorite", FileIcons.archive,
-              "image://theme/icon-m-file-folder"], "icons")
-        same(Selection.moreRows(2, file).map(function (r) { return r.icon }),
-             [FileIcons.archive, "image://theme/icon-m-file-folder"],
-             "Compress shows the archive icon files show")
+             ["image://theme/icon-m-edit", "image://theme/icon-m-favorite", "file-archive", "file-folder"], "icons")
+        same(Selection.moreRows(2, file).map(function (r) { return r.icon }), ["file-archive", "file-folder"],
+             "Compress shows the glyph archives show")
         check(Selection.moreRows(1, file)[0].text === Actions.text("rename"), "menu texts")
         check(Selection.moreRows(1, file)[2].text === Actions.text("compress"), "menu texts, second")
         check(Selection.moreRows(1, file)[3].text === Actions.text("moveToNewFolder"), "menu texts, third")

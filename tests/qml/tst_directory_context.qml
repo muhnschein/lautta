@@ -2,7 +2,8 @@
 // Scenario on the target (real Silica): the long-press menu of a file ends
 // with More actions (SPEC §15.3, OPS-12); tapping it closes the menu and
 // opens the More actions page, its header naming the file and one row per
-// action with its theme icon. Add to favourites opens the favourite page
+// action with its icon (Compress and Move to new folder the app's archive and
+// folder glyphs). Add to favourites opens the favourite page
 // in the page's place, which makes the file itself a favourite at once, as a
 // file;
 // Compress opens the compress dialog for the file in the page's place, ready
@@ -110,6 +111,11 @@ ApplicationWindow {
         return page
     }
 
+    // The app's glyph of `kind` at a medium icon's size (FileIcons.js).
+    function glyph(kind) {
+        return String(Qt.resolvedUrl("../../qml/icons/" + FileIcons.glyph(kind, false, Theme.iconSizeMedium) + ".svg"))
+    }
+
     // The rows of the More actions page: [{ row, icon, text }].
     function pageRows(page) {
         var icons = findAll(page, function(x) {
@@ -132,8 +138,8 @@ ApplicationWindow {
         var rows = pageRows(page)
         var got = JSON.stringify(rows.map(function(r) { return [r.text, r.icon] }))
         var want = JSON.stringify([[Actions.text("favourite"), "image://theme/icon-m-favorite"],
-                                   [Actions.text("compress"), FileIcons.archive],
-                                   [Actions.text("moveToNewFolder"), "image://theme/icon-m-file-folder"]])
+                                   [Actions.text("compress"), glyph("archive")],
+                                   [Actions.text("moveToNewFolder"), glyph("folder")]])
         if (got !== want)
             return fail("More actions rows: " + got + " != " + want)
         return rows

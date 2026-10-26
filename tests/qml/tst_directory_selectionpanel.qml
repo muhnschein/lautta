@@ -9,13 +9,13 @@
 // several Compress and Move to new folder, the header naming the item or
 // counting them; a dialog it opens takes the
 // page's place and ends selection, leaving the page keeps it. Archives show
-// the same archive icon in a folder, in search, in the operations pages and
-// in Recents. Ending selection, by Stop selecting or by deselecting the last
-// item, leaves the panel with the buttons it had while it fades out, not the
-// ones of no selection (just Stop selecting); waiting for the first item it
-// has only that one. Fails when a bar lets content through, an action of the
-// long-press menu is missing, an archive shows another icon or the panel
-// changes its buttons on its way out.
+// the app's archive glyph (FileIcons.js) in a folder, in search, in the
+// operations pages, in Recents and on Compress. Ending selection, by Stop
+// selecting or by deselecting the last item, leaves the panel with the
+// buttons it had while it fades out, not the ones of no selection (just Stop
+// selecting); waiting for the first item it has only that one. Fails when a
+// bar lets content through, an action of the long-press menu is missing, an
+// archive shows another icon or the panel changes its buttons on its way out.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -126,6 +126,11 @@ ApplicationWindow {
                 "row": row
             }
         })
+    }
+
+    // The app's glyph of `kind` at a medium icon's size (FileIcons.js).
+    function glyph(kind) {
+        return String(Qt.resolvedUrl("../../qml/icons/" + FileIcons.glyph(kind, false, Theme.iconSizeMedium) + ".svg"))
     }
 
     function pageTitle(page) {
@@ -250,8 +255,8 @@ ApplicationWindow {
         same(page.actions.map(function (a) { return [a.text, a.icon] }),
              [[qsTrId("lautta-dir-act-rename"), "image://theme/icon-m-edit"],
               [qsTrId("lautta-dir-act-favourite"), "image://theme/icon-m-favorite"],
-              [qsTrId("lautta-dir-act-compress"), FileIcons.archive],
-              [qsTrId("lautta-dir-act-move-new-folder"), "image://theme/icon-m-file-folder"]],
+              [qsTrId("lautta-dir-act-compress"), "file-archive"],
+              [qsTrId("lautta-dir-act-move-new-folder"), "file-folder"]],
              "one item: Rename, Add to favourites, Compress, Move to new folder, each with its icon")
         pageStack.pop(null, PageStackAction.Immediate)
         tools.pump(300)
@@ -287,9 +292,9 @@ ApplicationWindow {
             return
         same(pageTitle(page), qsTrId("lautta-dir-selected", 3), "the header counts the selected items")
         same(pageRows(page).map(function (r) { return [r.text, r.icon] }),
-             [[qsTrId("lautta-dir-act-compress"), FileIcons.archive],
-              [qsTrId("lautta-dir-act-move-new-folder"), "image://theme/icon-m-file-folder"]],
-             "several items: Compress and Move to new folder")
+             [[qsTrId("lautta-dir-act-compress"), glyph("archive")],
+              [qsTrId("lautta-dir-act-move-new-folder"), glyph("folder")]],
+             "several items: Compress and Move to new folder, the app's glyphs")
         // A dialog takes the page's place while selection ends: the header
         // and the rows stay as they were.
         folderView.endSelection()
@@ -334,14 +339,13 @@ ApplicationWindow {
         // Headless, no render loop polishes the list: lay it out by hand.
         findAll(view, function (x) { return x.forceLayout !== undefined }).forEach(function (v) { v.forceLayout() })
         var rows = findAll(view, function (x) { return x.category === "archive" && x.thumbnailReady !== undefined })
+        var archive = glyph("archive")
         if (expect(rows.length === 1, "the archive's row has a file icon"))
-            same(findAll(rows[0], function (x) { return x.themed !== undefined })[0].icon, FileIcons.archive,
-                 "a folder shows archives with the archive icon")
-        same([fileIcon.iconFor("archive", false), opIcon.icon, resultIcon.icon, String(itemIcon.source)],
-             [FileIcons.archive, FileIcons.archive, FileIcons.archive, FileIcons.archive],
-             "folders, operations, search and Recents show the same archive icon")
-        expect(FileIcons.archive === "image://theme/icon-m-file-archive-folder",
-               "the platform's archive icon, not the off-centre zipper badge")
+            same(String(findAll(rows[0], function (x) { return x.themed !== undefined })[0].source), archive,
+                 "a folder shows archives with the archive glyph")
+        same([String(named(fileIcon, "fileGlyph")[0].source), String(opIcon.source), String(resultIcon.source),
+              String(itemIcon.source)], [archive, archive, archive, archive],
+             "folders, operations, search and Recents show the same archive glyph")
     }
 
     Component.onCompleted: {

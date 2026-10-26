@@ -489,7 +489,7 @@ impl Core {
                 let mut row = Row::new(section, "folder");
                 row.uri = Uri::root(l.id.clone()).to_string();
                 row.name = display_of(&l, prefs);
-                row.icon = "image://theme/icon-m-file-folder".to_owned();
+                row.icon = "file-folder".to_owned();
                 row.item_id = l.id;
                 row
             })

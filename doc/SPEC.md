@@ -122,8 +122,11 @@ is the authority.
 - HBR-5: `[X-Sailjail]` uses only `Permissions`, `OrganizationName`, `ApplicationName`,
   `ExecDBus`. `OrganizationName` must not be `com.jolla` or `org.sailfishos`.
 - HBR-6: No setuid/setgid bits, no debug info in the package, no source-control files.
-- HBR-7: The app must not spawn other programs. Sailjail's `private-bin` only provides
-  the app's own binary, so the design contains no subprocesses at all.
+- HBR-7: Lautta starts no other program. Sailjail's `private-bin` provides the app's own
+  binary and only the helpers its permissions add. The system thumbnail library
+  (`Nemo.Thumbnailer`, PRV-1) starts its own helpers, `/usr/bin/thumbnaild-pdf` and
+  `/usr/bin/thumbnaild-video`, under the `Thumbnails` permission, which `UserDirs` brings
+  (§3.3).
 
 ### 3.3 Sandbox profile
 
@@ -137,7 +140,7 @@ ExecDBus=harbour-lautta
 
 | Permission | Why | What it grants (sailjail-permissions) |
 |---|---|---|
-| `UserDirs` | the user's files | `~/Documents`, `~/Downloads`, `~/Pictures`, `~/Music`, `~/Playlists`, `~/Videos`, `~/Public`, and `~/android_storage/{Documents,Download,Pictures,DCIM,Music,Podcasts,Movies}` |
+| `UserDirs` | the user's files, their thumbnails (PRV-1) | `~/Documents`, `~/Downloads`, `~/Pictures`, `~/Music`, `~/Playlists`, `~/Videos`, `~/Public`, and `~/android_storage/{Documents,Download,Pictures,DCIM,Music,Podcasts,Movies}`; through `Pictures` and `Videos` also `Thumbnails`: `private-bin thumbnaild-pdf,thumbnaild-video` (HBR-7), `~/.cache/org.nemomobile/thumbnails`, D-Bus `org.nemomobile.Thumbnailer` |
 | `RemovableMedia` | SD cards and USB drives | `/run/media` (via `ignore disable-mnt`), listening to UDisks2 signals |
 | `Audio` | sound in audio/video preview | PulseAudio, GStreamer cache |
 
@@ -205,7 +208,8 @@ flowchart LR
   LP --> FS[(user folders, /run/media)]
 ```
 
-- ARC-1: One process. No helper binaries (HBR-7), no daemon (HBR-1). Work that must
+- ARC-1: One process: Lautta ships and starts no helper binary (HBR-7; the system
+  thumbnail library's own helpers are the system's), no daemon (HBR-1). Work that must
   outlive a page lives in `lautta-core`; work that must outlive the process is persisted
   and resumed at the next start (XFR-11).
 - ARC-2: `lautta-core` has no Qt dependency. It is testable on the host with
@@ -239,7 +243,7 @@ flowchart LR
 | `Planner` | expands operations into steps, scans, detects conflicts |
 | `TransferQueue` | persistent queue and history in SQLite, resume bookkeeping |
 | `DirCache` | memory LRU + SQLite listing cache, stale-while-revalidate |
-| `Thumbs` | local image and video thumbnails via `Nemo.Thumbnailer`; remote images and PDFs decoded in Rust |
+| `Thumbs` | local image, video and PDF thumbnails via `Nemo.Thumbnailer`; remote images and PDFs decoded in Rust |
 | `MediaSource` | random-access byte source for the player (PRV-9) |
 | `WorkingCopies` | copies of remote files opened in other apps, expiry (PRV-6) |
 | `Trash` | app-private *Trash* for this device's folders |
@@ -581,9 +585,9 @@ bridge).
   A cut is taken off the clipboard when its move starts (OPS-9), a copy stays.
 - OPS-12: There is no details page for an item. The rarer actions on one item sit
   behind *More actions*, the last row of its long-press menu: tapping it opens a Silica
-  page whose header names the item, one row (theme icon and name) per action:
-  *Add to favourites* (the item itself, file or folder, ORG-1), *Compress* and, in a
-  writable folder, *Move to new folder* (OPS-13). Tapping a row runs the action and
+  page whose header names the item, one row (icon and name) per action:
+  *Add to favourites* (the item itself, file or folder, ORG-1), *Compress* (the archive
+  glyph, UI-2) and, in a writable folder, *Move to new folder* (OPS-13; the folder glyph). Tapping a row runs the action and
   leaves the page; a dialog it opens takes the page's place, so leaving the dialog
   returns to the folder. The image viewer's *More* offers the same next to *Rename*,
   without *Move to new folder*. The selection's *More actions* button (§15.3) opens the
@@ -655,11 +659,19 @@ bridge).
 ## 12. Preview, open, stream
 
 - PRV-1: Local thumbnails via `Nemo.Thumbnailer` (`image://nemoThumbnail/` and the
-  `Thumbnail` item), covering images and videos the system can thumbnail. The Trash page
-  (OPS-8) uses them too. PDFs not among them: `Nemo.Thumbnailer` draws one by running
-  `/usr/bin/thumbnaild-pdf` from the app's process (HBR-7), which Sailjail's `private-bin`
-  leaves out without the `Thumbnails` permission, and Harbour does not allow that
-  permission. App makes PDF thumbnails, local too (PRV-14).
+  `Thumbnail` item): images, videos and PDFs (PRV-14) the system can thumbnail, in this
+  device's folders and on the Trash page (OPS-8). The item gets the file's `file://` URL,
+  its MIME type and the icon's size: the library draws a PDF (`application/pdf`) or a
+  video (`video/*`) only when told that type, each in a helper process of its own
+  (HBR-7), other types in its own thread. A file that crashes a helper keeps its icon,
+  the app runs on. The library draws one thumbnail at a time: a helper that hangs holds
+  back the other local thumbnails, not the app. No size limit: the app reads nothing of
+  the file. A shown video thumbnail keeps the video glyph (UI-2) at its bottom left on a
+  dark gradient over its lower half (`Theme.opacityOverlay`, transparent to
+  `Theme.highlightDimmerColor`), as Jolla Gallery's video thumbnails: else a video reads
+  as a photo. Badge side: largest multiple of 28 or 32 px up to ⅜ of the thumbnail and
+  up to `Theme.iconSizeSmall`, at least 28 (sharp, UI-2). No badge on a plain glyph or
+  a thumbnail that failed.
 - PRV-2: Remote image thumbnails: read the first 64 KiB through the bridge, use the EXIF
   thumbnail when present; otherwise read the whole file up to the size set in *View
   options* (*Largest server file with a thumbnail*, 20 MB by default) and decode with the
@@ -671,7 +683,7 @@ bridge).
   within the *Thumbnail cache* size of *View options* (200 MB by default); a smaller size
   evicts the least recently used thumbnails at once.
 - PRV-3: Thumbnail jobs: interactive lane, lowest priority, ≤ 2 in flight per location,
-  visible delegates only, canceled on scroll. PDF thumbnails (PRV-14) use same jobs.
+  visible delegates only, canceled on scroll. Server PDF thumbnails (PRV-14) use same jobs.
 - PRV-4: Viewers: images (zoom, swipe through the folder, EXIF panel), text/code (read-
   only up to 1 MiB, then a notice; numbered lines always wrapped to the page's width, so
   the list never scrolls sideways and the page swipes back like any other, also from
@@ -771,25 +783,24 @@ bridge).
   entities. Plain files get the same escaping without colours. Markdown's *View source*
   is coloured as Markdown.
 - PRV-14: PDF thumbnails in every list that shows thumbnails (folder list, grid, Trash).
-  Thumbnail = first page, drawn by `lautta-pdf` (PRV-12) as wide as the thumbnail; page
-  taller than wide cut to square from its top. Served as JPEG by
-  `image://lautta-thumb/<uri>?size=N`, cached like PRV-2's (key: URI, size, mtime, etag):
-  one draw per file version and size. One rule (`thumbs::thumbnail_source`) picks files
-  with a thumbnail and who makes it. A PDF follows the switches of an image: *Show
-  thumbnails* for a local PDF, also *Thumbnails from servers* for a server PDF. Open
-  folders follow a change at once. Read limit: local 20 MB; server = size limit of PRV-2,
-  never above the viewer's 200 MB. Larger: not read, icon shows. Encrypted, damaged or
-  page-less PDF: icon, no message. Drawing =
-  CPU work on the blocking pool, one PDF at a time app-wide (stricter than ARC-7: battery,
-  heat). Job whose delegate left before its turn never runs; one already drawing finishes.
-  PDF that cannot be drawn, a draw that panicked included (RS-4), is remembered for the
-  session, so scrolling back reads nothing. PDF whose drawing killed the process (stack
-  overflow, out of memory) gets a marker file in the thumbnail folder and is never tried
-  again. Local images and videos stay with `Nemo.Thumbnailer`, which cannot draw PDFs in
-  the sandbox (PRV-1). A trashed PDF is asked by Trash item
-  (`lautta://trash/<id>/<stored name>`: an id comes back after the newest item goes, a
-  stored name never): the stored copy has no extension, so the rule goes by the original
-  name; a link or a copy gone from the Trash has no thumbnail.
+  Thumbnail = first page. One rule (`thumbs::thumbnail_source`) picks files with a
+  thumbnail and who makes it. A PDF follows the switches of an image: *Show thumbnails*
+  for a local PDF, also *Thumbnails from servers* for a server PDF. Open folders follow a
+  change at once. Encrypted, damaged or page-less PDF: icon, no message.
+  - Local PDF, a trashed one too: `Nemo.Thumbnailer` (PRV-1), told type
+    `application/pdf`; a trashed one's stored copy has no extension, so the type comes
+    from the original name. No size limit. A link or a copy gone from the Trash has no
+    thumbnail.
+  - Server PDF: drawn by `lautta-pdf` (PRV-12) as wide as the thumbnail; page taller than
+    wide cut to square from its top. Served as JPEG by `image://lautta-thumb/<uri>?size=N`,
+    cached like PRV-2's (key: URI, size, mtime, etag): one draw per file version and size.
+    Read limit = size limit of PRV-2, never above the viewer's 200 MB. Larger: not read,
+    icon shows. Drawing = CPU work on the blocking pool, one PDF at a time app-wide
+    (stricter than ARC-7: battery, heat). Job whose delegate left before its turn never
+    runs; one already drawing finishes. PDF that cannot be drawn, a draw that panicked
+    included (RS-4), is remembered for the session, so scrolling back reads nothing. PDF
+    whose drawing killed the process (stack overflow, out of memory) gets a marker file
+    in the thumbnail folder and is never tried again.
 
 ## 13. Search and organisation
 
@@ -805,9 +816,10 @@ bridge).
   page, BRW-12), with label, colour and icon. The icon is one of a range of theme icons
   (star, home, work, person, people, documents, pictures, camera, videos, music, downloads,
   folder, cloud, computer, games, calendar, mail, internet, travel, car, health, kids,
-  private, Android), shown in Browse tinted with the colour; without a chosen one (or with
-  one the app does not know) a folder favourite shows the star and a file favourite its
-  file's icon. A file favourite shows the folder it is in, and opens like the file does in
+  private, Android; pictures, videos, music and folder are the app's file-type glyphs,
+  UI-2), shown in Browse tinted with the colour; without a chosen one (or with one the
+  app does not know) a folder favourite shows the star and a file favourite its file's
+  glyph. A file favourite shows the folder it is in, and opens like the file does in
   its folder (viewer or *Open with*); a folder favourite opens the folder. Whether a
   favourite is a folder is stored with it (DAT-2), so Browse never asks the location.
   The favourite page (*Edit favourite*, and *Add to favourites*, which makes the item a
@@ -896,7 +908,8 @@ rest of the page. Opening a folder starts at its very top (nothing in the scroll
 the first item); going back to a folder on the page stack shows it where it was left. List view
 with icon or thumbnail and "size · modified"; grid view for media folders (suggested when > 60 %
 images). The grid has 3 tiles per row in portrait (landscape keeps the tile size, so it fits
-more); the icon is about half the tile wide (thumbnails fill it) and under it stand the name on
+more); the glyph is about half the tile wide, snapped to a multiple of 28 px (UI-2;
+thumbnails fill the tile, a video's with its badge, PRV-1) and under it stand the name on
 up to two lines, centred (a name that does not fit keeps its start on the first line and its end,
 the extension, on the second behind an ellipsis in the middle), and right under the name up to two
 small lines in the secondary colour, each cut at the end: a file's
@@ -942,8 +955,9 @@ own (OPS-12): *Compress* and *Move to new folder* for any number of items, and f
 also *Rename* and *Add to favourites*, so every action of an item is reachable from the
 grid. Backing out of the page keeps the selection. The panel's
 *Share*, *Copy* and *Cut*, an action of the page, a finished delete and deselecting the
-last item leave selection. Archives and *Compress* show the platform's archive icon
-(`icon-m-file-archive-folder`) everywhere.
+last item leave selection. Archives and *Compress* show the app's archive glyph
+everywhere (UI-2). An item's glyph takes the highlight colour with its name: pressed or
+selected, in list and grid.
 Placeholders: empty, no permission, offline, error with *Retry*/*Details*. They and the
 loading indicator are part of the view's content, so pulling the pulley moves them while
 the header stays.
@@ -966,7 +980,19 @@ paused) is in its status line and context menu. Pulley: *Clear activity history*
 
 - UI-1: Silica components only; no custom chrome.
 - UI-2: Theme colours and sizes; light and dark ambiences; theme icons where they exist,
-  otherwise SVG at all scale factors under `/usr/share/harbour-lautta`.
+  otherwise SVG at all scale factors under `/usr/share/harbour-lautta`. File-type glyphs
+  (folder, image, video, audio, archive, package, database, document) are the app's own
+  SVGs (`qml/icons/file-<kind>-<set>.svg`) wherever a kind of file shows: folder list and
+  grid, Trash, search, Recents, operations pages, *More actions*, Browse rows and
+  favourites, folder picker, cover. Why: the theme's are soft at the grid's sizes and
+  have no database glyph. Text, code, PDF and office files share the document glyph.
+  Three sets, edges on whole pixels at their sizes: `-28` (28-unit grid, any multiple of
+  28 px), `-32` (32-unit grid, multiples of 32 px: list at scale 1.0, 1.5, 2.0), `-80`
+  (drawn for 80 px: list at 1.25). Size rule: multiple of 28 → `-28`, else of 32 →
+  `-32`, else of 80 → `-80`, else `-28` (soft). The grid's glyph and the cover's snap to
+  a multiple of 28 px, the video badge to a multiple of 28 or 32 (PRV-1). White with
+  partly transparent parts, tinted as theme icons: primary colour, highlight colour when
+  pressed or selected.
 - UI-3: Portrait and landscape.
 - UI-4: Nothing modal blocks navigation; all long work is visible and cancelable.
 - UI-5: Destructive actions use remorse; a permanent delete (volumes, servers, the Trash
@@ -1062,7 +1088,7 @@ SQLite for everything structured.
   unused.
 - DAT-2: Schema with `PRAGMA user_version`, forward migrations only: `favourites`
   (`is_dir`: folder or file, ORG-1, schema 5; older rows are folders; `icon`: the chosen
-  theme icon name, ORG-1, schema 6; NULL for the default icon and for older rows),
+  icon's name, ORG-1, schema 6; NULL for the default icon and for older rows),
   `recents`, `transfers`, `transfer_items`, `working_copies`, `dircache`,
   `trash_items(id, original_uri, trashed_at, stored_name, is_dir, size)` (OPS-8; the
   table also has a `bin` column and the schema a `trash_drain` table, left by schemas 4

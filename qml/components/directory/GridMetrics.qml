@@ -6,6 +6,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "GridName.js" as GridName
+import "../FileIcons.js" as FileIcons
 
 Item {
     id: metrics
@@ -28,9 +29,10 @@ Item {
         return cellWidth + textHeight + Theme.paddingSmall
     }
 
-    // The theme glyph in a tile: about half the tile.
+    // The glyph in a tile: about half the tile, at a multiple of 28 px, where
+    // the glyphs' 28-unit set is sharp (FileIcons.js, UI-2).
     function glyphSize(tileWidth) {
-        return Math.round(tileWidth / 2)
+        return FileIcons.snap(tileWidth / 2)
     }
 
     // The lines of a name under a tile `tileWidth` wide.

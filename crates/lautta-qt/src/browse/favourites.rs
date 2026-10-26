@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! `FavouritesModel` (ORG-1): favourites in their order, with label, colour
 //! and icon. Roles: `itemId`, `uri`, `label`, `colour`, `place`, `isDir`,
-//! `icon` (the chosen theme icon name, empty for the default), `defaultIcon`
-//! (the icon source shown without a chosen one).
+//! `icon` (the chosen icon name, empty for the default), `defaultIcon`
+//! (the icon shown without a chosen one: a theme icon URL or a glyph token,
+//! `Favourite::icon_source`).
 
 use super::{cell_data, error_parts, role_names, store_changed, Cell};
 use crate::json::to_json;

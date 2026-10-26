@@ -22,6 +22,10 @@ ApplicationWindow {
     property int step: 0
     property int waited: 0
     property int trashBefore: -1
+    // Trash loads done, and how many were done when the last reload was asked:
+    // `reload` answers later, `loaded` stays true from the load before.
+    property int trashLoads: 0
+    property int loadsAsked: -1
     property var row
     property var menu
     property var view
@@ -34,7 +38,10 @@ ApplicationWindow {
         uri: win.folder
     }
 
-    TrashModel { id: trash }
+    TrashModel {
+        id: trash
+        onChanged: win.trashLoads++
+    }
 
     initialPage: Component {
         DirectoryPage {
@@ -111,6 +118,16 @@ ApplicationWindow {
         return docs.nameKind(App.nameOf(uri)) === "file"
     }
 
+    function reloadTrash() {
+        loadsAsked = trashLoads
+        trash.reload()
+    }
+
+    // The reload asked last has answered.
+    function trashReloaded() {
+        return trash.loaded && !trash.busy && trashLoads > loadsAsked
+    }
+
     function next() {
         step++
         waited = 0
@@ -133,11 +150,11 @@ ApplicationWindow {
                     return win.fail("fixtures")
                 App.setSetting("recently_deleted", JSON.stringify(false))
                 App.setSetting("remorse_seconds", JSON.stringify(3))
-                trash.reload()
+                win.reloadTrash()
                 win.next()
                 break
             case 1:
-                if (!trash.loaded || trash.busy || !win.rowOf(win.kept))
+                if (!win.trashReloaded() || !win.rowOf(win.kept))
                     break
                 win.trashBefore = trash.count
                 win.next()
@@ -198,11 +215,11 @@ ApplicationWindow {
                     break
                 if (win.waited > 25)
                     return win.fail("deleted only after a delay")
-                trash.reload()
+                win.reloadTrash()
                 win.next()
                 break
             case 8:
-                if (!trash.loaded || trash.busy || win.waited < 3)
+                if (!win.trashReloaded())
                     break
                 if (trash.count !== win.trashBefore)
                     return win.fail("a permanent delete went to the Trash")
@@ -229,15 +246,19 @@ ApplicationWindow {
                     docs.refresh()
                 if (win.has(win.trashed))
                     break
-                trash.reload()
+                win.reloadTrash()
                 win.next()
                 break
             case 12:
-                if (!trash.loaded || trash.busy || win.waited < 3)
+                if (!win.trashReloaded())
                     break
-                if (trash.count !== win.trashBefore + 1)
+                if (trash.count === win.trashBefore + 1)
+                    return win.finish("")
+                // File leaves its folder at the rename, Trash row comes
+                // after (`Trash::trash`): a reload in between misses it.
+                if (win.waited > 50)
                     return win.fail("the file is in the Trash: " + trash.count + " after " + win.trashBefore)
-                win.finish("")
+                win.reloadTrash()
                 break
             }
         }

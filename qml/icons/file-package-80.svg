@@ -1,0 +1,3 @@
+<!-- SPDX-License-Identifier: LGPL-2.1-or-later -->
+<!-- Drawn in pixels for 80 px (list at scale 1.25), stroke 3: edges on whole pixels. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 27l27 15.5 27-15.5M40.5 42.5v26" stroke-opacity="0.6"/><path d="M40.5 11.5l27 15.5v26l-27 15.5-27-15.5V27z"/></svg>

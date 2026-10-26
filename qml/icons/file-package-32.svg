@@ -1,0 +1,4 @@
+<!-- SPDX-License-Identifier: LGPL-2.1-or-later -->
+<!-- 32-unit grid, stroke 1: edges on whole units, so whole pixels at 64, 96 and 128 px (list at scale 1.0, 1.5, 2.0). -->
+<!-- Centre line on half units: soft at 96 px. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" stroke="#ffffff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 10.5l10.5 6 10.5-6M16 16.5v11" stroke-opacity="0.6"/><path d="M16 4.5l10.5 6v11l-10.5 6-10.5-6v-11z"/></svg>

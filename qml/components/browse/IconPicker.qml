@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The icons a favourite can have (ORG-1), laid out like ColourPicker. `icon`
-// is the chosen theme icon name; "" stands for the default icon, which
+// is the chosen icon name; "" stands for the default icon, which
 // `defaultIcon` shows. Tapping an icon emits `picked`, the owner sets `icon`.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import "../"
+import "../FileIcons.js" as FileIcons
 
 Flow {
     id: picker
 
     property string icon
-    // Theme icon names (`icon-m-<name>`, FavouritesModel.iconChoices()).
+    // Icon names (FavouritesModel.iconChoices()).
     property var icons: []
     property string defaultIcon
     // The favourite's colour: the icons are tinted as Browse shows them.
@@ -19,8 +21,12 @@ Flow {
 
     signal picked(string icon)
 
+    // As the core's Favourite::icon_source: a file-type name is the app's
+    // own glyph (FileIcons.js), any other a theme icon.
     function sourceOf(name) {
-        return name.length > 0 ? "image://theme/icon-m-" + name : defaultIcon
+        if (name.length === 0)
+            return defaultIcon
+        return name.indexOf("file-") === 0 ? name : "image://theme/icon-m-" + name
     }
 
     x: Theme.horizontalPageMargin
@@ -50,16 +56,11 @@ Flow {
                 border.width: Theme.paddingSmall / 2
                 border.color: Theme.highlightColor
             }
-            HighlightImage {
+            AppIcon {
                 anchors.centerIn: parent
-                source: picker.sourceOf(modelData)
-                width: Theme.iconSizeMedium
-                height: width
-                sourceSize.width: width
-                sourceSize.height: height
+                icon: FileIcons.sized(picker.sourceOf(modelData), iconSize)
                 color: picker.colour.length > 0 ? picker.colour : Theme.primaryColor
                 highlighted: cell.pressed
-                highlightColor: Theme.highlightColor
             }
         }
     }

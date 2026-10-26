@@ -136,8 +136,9 @@ const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE favourites ADD COLUMN is_dir INTEGER NOT NULL DEFAULT 1;
     "#,
-    // 6: ORG-1, the icon chosen for a favourite (a theme icon name). NULL
-    // for the rows before and for no choice: the default icon.
+    // 6: ORG-1, the icon chosen for a favourite (a name of
+    // `org::favourites::ICONS`). NULL for the rows before and for no choice:
+    // the default icon.
     r#"
     ALTER TABLE favourites ADD COLUMN icon TEXT;
     "#,
@@ -313,7 +314,7 @@ mod tests {
             "rows from before keep label and colour and have no icon chosen"
         );
         assert_eq!(list[0].icon_source(), "image://theme/icon-m-favorite");
-        assert_eq!(list[1].icon_source(), "image://theme/icon-m-document");
+        assert_eq!(list[1].icon_source(), "file-document");
         let uni = crate::uri::Uri::parse("lautta://user-documents/Uni").unwrap();
         let saved = favourites
             .save(&uni, "Uni", Some("#e7a33c"), Some("home"), true)

@@ -14,9 +14,11 @@
 - The folder pulley reads, from the bottom: New, Select, Search, View options, Activity. "New folder" is now "New".
 - View options is a settings page with a live preview, and open folders follow it at once.
 - Settings are split into pages. The thumbnail cache size applies without a restart. A size limit replaces the metered-network limit for server thumbnails.
-- PDFs get thumbnails of their first page, under the same thumbnail switches as images.
+- PDFs get thumbnails of their first page, under the same thumbnail switches as images. For PDFs on the phone the system draws them, as it does for photos and videos.
 - In grid view, holding and dragging selects a range. Bars at the bottom are opaque.
 - The grid has one size, so View options offers just grid or list. Its icons are bigger, names take two lines and keep their extension, and each tile shows the date and size, or how many items a folder on the phone or a drive holds, counting up to 1000.
+- File icons are Lautta's own drawings, sharp in the grid and in every list at any screen scale. An icon turns the highlight colour with its name when pressed or selected.
+- Video thumbnails carry a small video badge, so they stand apart from photos.
 - A folder's header stays in place while its contents scroll. A folder opens at its top, and going back returns to where you were.
 - Closing the selection bar no longer flashes its empty state as it slides away.
 - Counts read correctly in English: 1 item, 1 day, 1 task, not 1 items, 1 days, 1 tasks.

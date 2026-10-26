@@ -84,7 +84,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 ### Browse (boards: Main, BrowsePulley, BrowseStandalone, BrowseServerMenu, BrowseVolume, ConnectServer, ServerQuestion, ServerAdhocMenu, FavouriteEdit, Recents, RecentsPulley, StateReconnecting, StateIdentity, Covers)
 
 - `LocationsModel` — sections `favourites`, `device`, `android`, `volumes`, `servers`,
-  `nearby` (roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
+  `nearby` (roles: `section`, `uri`, `name`, `kind`, `icon` (a theme icon URL, or a
+  glyph token such as `file-folder` that QML sizes with `FileIcons.sized`), `status`, `attention`,
   `colour`, `itemId`, `place`, `provider`, `host`, `free`, `total`, `fs`,
   `connection`, `connectionError`, `isFile` (a file favourite: opened, not browsed),
   `drive` (the bridge's id of a volume's drive, empty when the bridge does not mount it,
@@ -109,8 +110,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   rescans the device folders and volumes first (LOC-3); the model also follows location
   changes by itself, and a changed row changes in place.
 - `FavouritesModel` (roles `itemId`, `uri`, `label`, `colour`, `place`, `isDir`, `icon`
-  (the chosen theme icon name, empty for the default), `defaultIcon` (the icon source
-  shown without one: the star, or a file's icon); `add` (a folder),
+  (the chosen icon name, empty for the default: a theme icon's `icon-m-` name, or a
+  `file-…` glyph token, UI-2), `defaultIcon` (the icon shown without one: the star's
+  theme URL, or a file's glyph token); `add` (a folder),
   `save(uri, label, colour, icon, isDir)` adds a folder or file or changes label, colour
   and icon of the favourite it is (an empty colour or icon is none, an unknown icon is
   none), `edit`, `remove`, `removeUri(uri)`, `moveTo`, `get`, `idOf`, `placeOf`,
@@ -227,12 +229,13 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   half that size whatever it shows), `components/PathMenu.qml`.
 - The item context menu is plain rows ending with *More actions*, which opens
   `components/directory/MoreActionsPage.qml { owner, info }` (the DirectoryView and the
-  row's item): the item's rarer actions, one row each with its theme icon; a dialog an
+  row's item): the item's rarer actions, one row each with its icon; a dialog an
   action opens (Rename's too) replaces the page (`DirectoryView.openDialog`). Which actions each holds,
   in a fixed order filtered by capabilities, and their icons, is in
   `components/directory/ContextActions.js` (`menu(ctx)`, `more(ctx)` →
-  `[{ id, text, icon }]`, `icon(id)`; `ctx.writable` true is what *Move to new folder*
-  needs).
+  `[{ id, text, icon }]`, `icon(id)`: a theme icon URL, or the glyph token `file-archive`
+  (*Compress*) or `file-folder` (*Move to new folder*); `ctx.writable` true is what
+  *Move to new folder* needs).
 - `DirectoryView.paste()` (pulley *Paste*, paste bar *Paste here*): a copy starts at once;
   a cut shows the view's `RemorsePopup`, *Moving “name”* or *Moving N items*, for
   `remorse_seconds`, and moves when it runs out (OPS-9). Cancelling leaves the clipboard
@@ -276,8 +279,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   Roles: `trashId`, `name`, `originalUri`, `folderUri`, `folderName`, `isDir`, `size`
   (-1 unknown), `trashedAt`, `daysLeft`, `mimeType` (from the original name, "" for
   folders and unknown types) and `thumbnailSource` (`file://` URL of the stored copy of
-  an image or video, or `image://lautta-thumb/lautta://trash/<id>/<stored name>` for a
-  PDF (PRV-14), while *Show thumbnails* is on, else ""; for `FileIcon`).
+  an image, video or PDF while *Show thumbnails* is on, else ""; for `FileIcon`, with
+  `mimeType`: PRV-1, PRV-14).
 - Pages: `dialogs/PlanSummaryDialog.qml { planId, summary }`,
   `dialogs/ConflictDialog.qml { transferId, item, conflict }`,
   `dialogs/CompressDialog.qml { uris }`,
@@ -322,8 +325,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   constant, type, function, variable, heading, markup, link, inserted, deleted),
   `MarkdownDocument { uri }` (html), `ExifModel { uri }`, `MediaSource { uri }` (QIODevice for QtMultimedia, PRV-8),
   image provider `image://lautta-thumb/<uri>?size=N` for thumbnails of remote images
-  (PRV-2) and of PDFs, local and trashed too (PRV-14; fails with an error for anything
-  else, which `Image` shows as status Error), and `image://lautta-file/<uri>` for remote full images.
+  (PRV-2) and remote PDFs (PRV-14; fails with an error for anything else, which `Image`
+  shows as status Error), and `image://lautta-file/<uri>` for remote full images.
 - `PdfDocument { uri }` (PRV-12): `loading`, `loaded`, `pageCount`, `size`, `errorKind`
   (file not readable, ErrorText.js), `problem` (`invalid`, also when parsing panicked,
   RS-4; `encrypted`, `empty`, `tooLarge`), `wrongPassword` (the last `unlock` failed),
@@ -383,10 +386,18 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   for `Operations.needsSummary`, `Transfers.needsAnswer`, `Bridge.question` and the
   app-wide `KeepAlive`.
 - `components/ErrorText.js`, `components/Open.js`, `components/FileIcon.qml { category,
-  isDir, thumbnailSource, mimeType, size, glyphSize }` (`glyphSize`: the side of the theme
-  glyph in the tile, `AppIcon.iconSize`; read-only `thumbnailReady`, `thumbnailFailed`: the
-  thumbnail shows / could not be made, so the category icon stays),
-  `components/FileIcons.js` (icons every file view shares: `archive`),
+  isDir, thumbnailSource, mimeType, size, glyphSize, highlighted }` (`glyphSize`: the side
+  of the glyph in the tile, `AppIcon.iconSize`; `highlighted`: glyph and video badge in
+  the highlight colour, bound to the row's or tile's pressed or selected state; read-only
+  `thumbnailReady`, `thumbnailFailed`: the thumbnail shows / could not be made, so the
+  category's glyph stays; a shown video thumbnail has the video badge, PRV-1),
+  `components/FileIcons.js` (the own file-type glyphs every place shares, UI-2:
+  `kind(category, isDir)` → `folder`, `image`, `video`, `audio`, `archive`, `package`,
+  `database` or `document`; `setFor(px)` → 28, 32 or 80, the set sharp at that side;
+  `snap(px)` → nearest multiple of 28, at least 28; `sharpAtMost(px)` → largest multiple
+  of 28 or 32 up to `px`, at least 28; `sized(icon, px)` → a glyph token `file-<kind>`
+  with its set, `file-folder-32`, anything else as it is; `glyph(category, isDir, px)` →
+  the item's glyph at `px`; `AppIcon` draws a sized name from `qml/icons/`),
   `components/IconRow.qml` (icon row for context menus),
   `components/BarBackground.qml` (the opaque backdrop of bottom bars, UI-10),
   `components/PlaceLabel.qml { before, text, remote, color, fontSize,

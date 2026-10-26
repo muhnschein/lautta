@@ -60,6 +60,7 @@ Item {
             property string nm: name
             property bool dirRow: isDir
             property string thumb: thumbnailSource
+            property string mime: mimeType
             property bool sel: selected
             property string cat: category
         }
@@ -232,16 +233,20 @@ Item {
         open.destroy()
     }
 
-    // PRV-14: the thumbnail of a PDF is the app's, in a local folder too, and
-    // follows Show thumbnails like a picture's, not the servers' switch.
+    // PRV-1, PRV-14: a local PDF is the system thumbnailer's, as a picture
+    // is: its file:// URL and its PDF type, which Nemo.Thumbnailer draws by.
+    // It follows Show thumbnails, not the servers' switch.
     function testPdfThumbnails() {
         install("two-pages.pdf", "Doc.pdf")
         wait(500)
         dir.refresh()
         wait(500)
-        var want = "image://lautta-thumb/" + root.docs + "Doc.pdf"
-        check(row(rep, "Doc.pdf").thumb === want, "a local PDF has the app's thumbnail: " + row(rep, "Doc.pdf").thumb)
-        check(row(rep, "Beta.png").thumb.indexOf("file://") === 0, "local pictures stay with the system")
+        var want = row(rep, "Doc.pdf").thumb
+        var path = "/Documents/Doc.pdf"
+        check(want.indexOf("file://") === 0 && want.slice(-path.length) === path,
+              "a local PDF has the system's thumbnail of its file: " + want)
+        same(row(rep, "Doc.pdf").mime, "application/pdf", "with the type the system draws PDFs by")
+        check(row(rep, "Beta.png").thumb.indexOf("file://") === 0, "as local pictures have")
         check(App.setSetting("thumbnails_remote", JSON.stringify(false)), "thumbnails from servers off")
         wait(300)
         check(row(rep, "Doc.pdf").thumb === want, "a local PDF is not a server's")
