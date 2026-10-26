@@ -9,8 +9,12 @@
 // header naming the item or counting them; a dialog it opens takes the
 // page's place and ends selection, leaving the page keeps it. Archives show
 // the same archive icon in a folder, in search, in the operations pages and
-// in Recents. Fails when a bar lets content through, an action of the
-// long-press menu is missing or an archive shows another icon.
+// in Recents. Ending selection, by Stop selecting or by deselecting the last
+// item, leaves the panel with the buttons it had while it fades out, not the
+// ones of no selection (just Stop selecting); waiting for the first item it
+// has only that one. Fails when a bar lets content through, an action of the
+// long-press menu is missing, an archive shows another icon or the panel
+// changes its buttons on its way out.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -186,6 +190,56 @@ ApplicationWindow {
         tools.pump(300)
     }
 
+    function ids(buttons) {
+        return buttons.map(function (b) { return b.id })
+    }
+
+    // The texts of the buttons the panel draws.
+    function drawn(sel) {
+        return findAll(sel, function (x) { return x.description !== undefined && x.icon !== undefined })
+            .map(function (b) { return b.description })
+    }
+
+    // Ending selection zeroes the count while the panel is still on its way
+    // out: from the first moment of the fade-out to its end the buttons stay.
+    function checkLeavingKeepsButtons(sel) {
+        var full = ["share", "copy", "cut", "delete", "more", "done"]
+        view.startSelection()
+        tools.pump(300)
+        same(ids(sel.buttons), ["done"], "waiting for the first item: just Stop selecting")
+        view.model.toggle(base + "a.md")
+        tools.pump(700)
+        same(ids(sel.buttons), full, "one item selected")
+        var before = drawn(sel)
+        panelButton(sel, qsTrId("lautta-dir-sel-done")).clicked(null)
+        expect(!view.selecting && view.model.selectedCount === 0, "Stop selecting ends it")
+        for (var i = 0; i < 20 && (i === 0 || sel.visibleSize > 0); ++i) {
+            if (i === 0)
+                expect(sel.visibleSize > 0, "the panel is still on screen as it leaves")
+            same(ids(sel.buttons), full, "fading out after Stop selecting, step " + i)
+            same(drawn(sel), before, "and it draws them, step " + i)
+            tools.pump(20)
+        }
+        tools.pump(500)
+        expect(!sel.open, "the panel is gone")
+
+        view.startSelection()
+        view.model.toggle(base + "a.md")
+        tools.pump(700)
+        same(ids(sel.buttons), full, "selecting again")
+        view.model.toggle(base + "a.md")
+        expect(!view.selecting, "deselecting the last item ends selection")
+        same(ids(sel.buttons), full, "the buttons stay as the panel leaves after the last item")
+        same(drawn(sel), before, "and it draws them")
+        tools.pump(700)
+
+        view.startSelection()
+        tools.pump(300)
+        same(ids(sel.buttons), ["done"], "waiting again: just Stop selecting")
+        view.endSelection()
+        tools.pump(500)
+    }
+
     function checkMoreOfOne(sel) {
         var page = openMore(sel, [base + "a.md"])
         if (!page)
@@ -298,6 +352,7 @@ ApplicationWindow {
         if (expect(view && view.model.count === 3, "the folder lists its files")) {
             checkSelectionPanel()
             var sel = panel("buttons")
+            checkLeavingKeepsButtons(sel)
             checkMoreOfOne(sel)
             checkMoreOfSeveral(sel)
             // Grid view holds to select: the same panel and page there.

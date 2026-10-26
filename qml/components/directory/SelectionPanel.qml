@@ -17,7 +17,17 @@ DockedPanel {
     property var owner
     readonly property bool writable: owner ? owner.model.writable : false
     readonly property int count: owner ? owner.model.selectedCount : 0
-    readonly property var buttons: Selection.panelButtons(count, writable)
+    readonly property bool waiting: owner ? owner.selectionWaiting : false
+    // Buttons of the selection as it last was. Ending selection zeroes `count`
+    // while the panel still fades out: no switch to the no-selection set (just
+    // Stop selecting) on the way. They change only with an item selected or
+    // waiting for the first.
+    property var buttons: Selection.panelButtons(0, false)
+
+    function refreshButtons() {
+        if (count > 0 || waiting)
+            buttons = Selection.panelButtons(count, writable)
+    }
 
     function run(id) {
         if (!owner)
@@ -34,6 +44,9 @@ DockedPanel {
     width: parent ? parent.width : 0
     height: Theme.itemSizeLarge
     open: owner ? owner.selecting : false
+    onCountChanged: refreshButtons()
+    onWritableChanged: refreshButtons()
+    onWaitingChanged: refreshButtons()
     background: BarBackground { }
 
     Row {
