@@ -6,9 +6,10 @@
 // Location settings, favourites' menus have Copy address and no Move up or
 // down, a volume's has Open Storage settings only while the bridge offers it
 // (NVB-13) and Unmount only when the bridge mounted it, a drive that is not
-// mounted is dimmed, shows an empty ring where a mounted one has a glowing
-// dot, has Mount and mounts when tapped instead of opening (LOC-3), and the
-// Recents row of On this device opens Recents.
+// mounted is dimmed, shows a dot of the primary colour where a mounted one
+// has the highlight colour's, has Mount and mounts when tapped instead of
+// opening, and is busy while the mount is under way (LOC-3), and the Recents
+// row of On this device opens Recents.
 // Fails naming the row whose menu differs.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -134,24 +135,23 @@ ApplicationWindow {
         return findAll(row, function(x) { return x.opacity === Theme.opacityHigh }, []).length
     }
 
-    // The status icons `row` shows (objectNames).
+    // The colours of the status dots `row` shows.
     function statusIcons(row) {
-        var names = ["statusOn", "statusRing", "statusBusy", "statusWarning"]
-        return findAll(row, function(x) { return x.visible && names.indexOf(x.objectName) >= 0 }, [])
-            .map(function(icon) { return icon.objectName }).join(",")
+        return findAll(row, function(x) { return x.visible && x.objectName === "statusDot" }, [])
+            .map(function(dot) { return String(dot.color) }).join(",")
     }
 
-    // A drive that is not mounted (LOC-3): dimmed, an empty ring, and a tap
+    // A drive that is not mounted (LOC-3): dimmed, a dot of the primary colour, and a tap
     // mounts it instead of opening a page for a volume that is not there.
     function checkUnmountedRow(list) {
         var row = rowOf(list, "STICK")
         if (!row || !row.unmounted)
             return fail("STICK is not shown as not mounted")
-        if (statusIcons(row) !== "statusRing")
-            return fail("STICK shows [" + statusIcons(row) + "], not an empty ring")
+        if (statusIcons(row) !== String(Theme.primaryColor))
+            return fail("STICK shows [" + statusIcons(row) + "], not a dot of the primary colour")
         var stickDimmed = dimmed(row)
         var mounted = rowOf(list, "CARD")
-        if (mounted.unmounted || statusIcons(mounted) !== "statusOn")
+        if (mounted.unmounted || statusIcons(mounted) !== String(Theme.highlightColor))
             return fail("CARD is shown as not mounted: [" + statusIcons(mounted) + "]")
         // Its icon and its labels, and nothing of the mounted one.
         if (stickDimmed < dimmed(mounted) + 2)
@@ -161,6 +161,9 @@ ApplicationWindow {
         row.clicked(null)
         if (pageStack.depth !== depth)
             fail("tapping STICK opened a page")
+        // The mount is under way until the bridge answers (here: that none is there).
+        if (row.statusIndicator !== "busy" || Bridge.busyDrives.join(",") !== "sda1")
+            fail("STICK, tapped, is " + row.statusIndicator + " with drives [" + Bridge.busyDrives + "] busy, not busy")
     }
 
     function checkRecentsRow(list) {

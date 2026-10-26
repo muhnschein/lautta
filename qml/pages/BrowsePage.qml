@@ -193,10 +193,11 @@ Page {
                     return ""
                 }
             }
-            // Only how the connection or mount stands, as an icon, no
+            // Only how the connection or mount stands, as a dot, no
             // protocol or host (NVB-4, LOC-3).
             readonly property string statusIndicator: RowStatus.indicator(kind, model.status, model.connection,
-                                                                          model.connectionError, drive)
+                                                                          model.connectionError, drive,
+                                                                          Bridge.busyDrives)
             readonly property bool hasMenu: kind === "favourite" || kind === "folder" || kind === "volume"
                                             || kind === "account" || kind === "adhoc" || kind === "adhocRecent"
 

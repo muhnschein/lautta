@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of the status icon of Browse's rows (SPEC §15.2, NVB-4, NVB-5,
-// NVB-12, LOC-3): a server's connection and a drive's mount, an attention
-// first, and no icon when the state is not told, for a volume the bridge
-// does not mount and for every other row.
+// Host test of the status dot of Browse's rows (SPEC §15.2, NVB-4, NVB-5,
+// NVB-12, LOC-3): a server's connection and a drive's mount or unmount under
+// way, an attention first, and no dot when the state is not told, for a
+// volume the bridge does not mount and for every other row.
 import QtQuick 2.6
 import "../../../qml/components/browse/RowStatus.js" as RowStatus
 
@@ -13,7 +13,7 @@ QtObject {
     }
 
     Component.onCompleted: {
-        // [kind, status, connection, connectionError, drive, icon]
+        // [kind, status, connection, connectionError, drive, icon, busyDrives]
         var cases = [
             ["account", "ready", "connected", "", "", "on"],
             ["adhoc", "ready", "connected", "", "", "on"],
@@ -41,6 +41,19 @@ QtObject {
             ["volume", "unmounted", "", "", "sda1", "off"],
             ["volume", "ready", "", "", "", ""],
             ["volume", "ready", "", "", undefined, ""],
+            // A drive with a mount or unmount under way is busy, as a server
+            // connecting is, whichever way it stands; others stay as they are.
+            ["volume", "unmounted", "", "", "sda1", "busy", ["sda1"]],
+            ["volume", "ready", "", "", "sda1", "busy", ["sda1"]],
+            ["volume", "unmounted", "", "", "sda1", "busy", ["mmcblk1p1", "sda1"]],
+            ["volume", "unmounted", "", "", "sda1", "busy", ["sda1", "sda1"]],
+            ["volume", "unmounted", "", "", "sda1", "off", ["mmcblk1p1"]],
+            ["volume", "ready", "", "", "sda1", "on", []],
+            ["volume", "ready", "", "", "sda1", "on", undefined],
+            // A volume without a drive is never busy, and neither is any other row.
+            ["volume", "ready", "", "", "", "", [""]],
+            ["account", "ready", "connected", "", "sda1", "on", ["sda1"]],
+            ["folder", "ready", "", "", "sda1", "", ["sda1"]],
             // Every other row has none, whatever its roles hold.
             ["folder", "ready", "connected", "", "", ""],
             ["favourite", "ready", "disconnected", "", "", ""],
@@ -52,7 +65,8 @@ QtObject {
         ]
         for (var i = 0; i < cases.length; ++i) {
             var c = cases[i]
-            same(RowStatus.indicator(c[0], c[1], c[2], c[3], c[4]), c[5], "icon of " + c.slice(0, 5).join("/"))
+            same(RowStatus.indicator(c[0], c[1], c[2], c[3], c[4], c[6]), c[5],
+                 "dot of " + c.slice(0, 5).join("/") + (c[6] ? " busy " + c[6].join(",") : ""))
         }
     }
 }

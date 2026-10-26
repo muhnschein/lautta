@@ -633,6 +633,11 @@ async fn consent_row_until_allowed_and_nothing_when_denied() {
     fake.set_consent(Consent::Denied).await;
     client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
     assert!(of(&e.core.browse_rows().await, "servers").is_empty());
+    assert_eq!(
+        section_of(&e.core.browse_layout_rows().await, "servers"),
+        [switch(true)],
+        "the bridge is there, so is the switch of its section"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -940,14 +945,19 @@ async fn the_volumes_switch_hides_the_section_and_keeps_the_choices_of_its_rows(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn the_volumes_switch_is_there_while_it_is_off_or_there_are_volumes() {
+async fn the_volumes_switch_is_there_without_volumes() {
     let e = env(None, &["Documents"]).await;
     let core = &e.core;
     std::fs::remove_dir(e.home.path().join("media/SD")).unwrap();
     core.locations.refresh_volumes();
+    assert_eq!(
+        section_of(&core.browse_layout_rows().await, "volumes"),
+        [switch(true)],
+        "on and empty, the section is its switch"
+    );
     assert!(
-        section_of(&core.browse_layout_rows().await, "volumes").is_empty(),
-        "no volume, no switch"
+        of(&core.browse_rows().await, "volumes").is_empty(),
+        "and Browse shows nothing of it"
     );
     set_section(core, "volumes", false);
     assert_eq!(
@@ -956,7 +966,45 @@ async fn the_volumes_switch_is_there_while_it_is_off_or_there_are_volumes() {
         "off, it can be turned on again"
     );
     set_section(core, "volumes", true);
-    assert!(section_of(&core.browse_layout_rows().await, "volumes").is_empty());
+    assert_eq!(
+        section_of(&core.browse_layout_rows().await, "volumes"),
+        [switch(true)]
+    );
+    assert!(of(&core.browse_rows().await, "volumes").is_empty());
+
+    // A volume that comes later stands below the switch.
+    std::fs::create_dir_all(e.home.path().join("media/SD")).unwrap();
+    core.locations.refresh_volumes();
+    assert_eq!(
+        section_of(&core.browse_layout_rows().await, "volumes"),
+        [switch(true), row_of("volume", "vol-SD", false)]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_servers_switch_is_there_while_the_bridge_is_without_servers() {
+    let fake = FakeBridge::new();
+    let e = env(Some(&fake), &["Documents"]).await;
+    e.core
+        .bridge
+        .as_ref()
+        .unwrap()
+        .wait_status(|s| s == BridgeStatus::Ready)
+        .await;
+    assert_eq!(
+        section_of(&e.core.browse_layout_rows().await, "servers"),
+        [switch(true)],
+        "no server added yet: the section is its switch"
+    );
+    assert!(
+        of(&e.core.browse_rows().await, "servers").is_empty(),
+        "and Browse shows nothing of it, no empty header"
+    );
+    set_section(&e.core, "servers", false);
+    assert_eq!(
+        section_of(&e.core.browse_layout_rows().await, "servers"),
+        [switch(false)]
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1077,9 +1125,10 @@ async fn servers_off_hides_the_consent_notice_too() {
     let e = env(Some(&fake), &["Documents"]).await;
     let client = e.core.bridge.clone().unwrap();
     client.wait_status(|s| s == BridgeStatus::ConsentUnknown).await;
-    assert!(
-        section_of(&e.core.browse_layout_rows().await, "servers").is_empty(),
-        "the notice is no row of the settings, so no switch"
+    assert_eq!(
+        section_of(&e.core.browse_layout_rows().await, "servers"),
+        [switch(true)],
+        "the notice is no row of the settings, the bridge's switch is"
     );
     set_section(&e.core, "servers", false);
     assert!(of(&e.core.browse_rows().await, "servers").is_empty());

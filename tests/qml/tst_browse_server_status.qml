@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Scenario on the target (real Silica): a server row of Browse tells how its
-// connection stands by one icon at the right margin and no text (SPEC §15.2,
-// NVB-4, NVB-12), never the protocol or the host: a glowing dot when
-// connected, a busy indicator while connecting, a ring when not connected, a
-// ring in the error colour when connecting failed, a warning icon when the
+// connection stands by one glowing dot at the right margin and no text (SPEC
+// §15.2, NVB-4, NVB-12), never the protocol or the host: the highlight colour
+// when connected, the primary colour when not connected, the same dot
+// pulsing while connecting, red when connecting failed, orange when the
 // sign-in or the identity needs the user, nothing when the bridge tells no
 // state. Fails when a row shows a word of the state, shows a provider or
-// host, shows two icons or the wrong one, puts the icon off the margin or
-// off the middle of the row, or two states share a look. A highlighted row
-// lights its ring.
+// host, shows two dots or the wrong one, puts the dot off the margin or off
+// the middle of the row, or two states share a look. A highlighted row lights
+// a dot of the primary colour. The pulse itself is tst_browse_status_dot.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -18,6 +18,7 @@ ApplicationWindow {
 
     property bool scenarioRunning: true
     property int waited: 0
+    property bool pulseChecked: false
     property var browse
 
     // name: the icon its row shows
@@ -105,36 +106,28 @@ ApplicationWindow {
         return byName
     }
 
-    // The status icons the row shows.
+    // The status dots the row shows.
     function icons(row) {
-        var names = ["statusOn", "statusRing", "statusBusy", "statusWarning"]
-        return findAll(row, function(x) { return x.visible && names.indexOf(x.objectName) >= 0 }, [])
+        return findAll(row, function(x) { return x.visible && x.objectName === "statusDot" }, [])
     }
 
-    // What an icon looks like, colour included.
+    // What a dot looks like: colour, and whether it pulses (a busy dot is
+    // told from a not-connected one by that alone; target never has app in
+    // front, so row state says it will).
     function appearance(icon) {
-        switch (icon.objectName) {
-        case "statusOn":
-            return "dot " + icon.color
-        case "statusRing":
-            return "ring " + icon.border.color
-        case "statusBusy":
-            return "busy"
-        default:
-            return "warning " + icon.color
-        }
+        return "dot " + icon.color + (icon.parent.indicator === "busy" ? " pulsing" : "")
     }
 
-    // The state an icon stands for, from what Silica's theme says each looks
-    // like, "" when it looks like none.
+    // State a dot stands for, from what Silica's theme says each looks like,
+    // "" when it looks like none.
     function stateOf(icon) {
         var look = appearance(icon)
         var states = {}
         states["dot " + Theme.highlightColor] = "on"
-        states["ring " + Theme.secondaryColor] = "off"
-        states["ring " + Theme.errorColor] = "failed"
-        states["busy"] = "busy"
-        states["warning " + Theme.errorColor] = "warning"
+        states["dot " + Theme.primaryColor] = "off"
+        states["dot " + Theme.primaryColor + " pulsing"] = "busy"
+        states["dot " + Theme.errorColor] = "failed"
+        states["dot " + icon.parent.warningColor] = "warning"
         return states[look] || ""
     }
 
@@ -157,14 +150,12 @@ ApplicationWindow {
             fail(name + "'s icon ends at " + rightEdge(slot, row, slot.width) + ", the margin is at " + edge)
         var icon = icons(row)[0]
         // A glass item is wider than its dot: the dot ends at the margin.
-        var end = icon.objectName === "statusOn" ? (icon.width + slot.dotSize) / 2 : icon.width
+        var end = (icon.width + slot.dotSize) / 2
         if (rightEdge(icon, row, end) !== edge)
             fail(name + "'s " + icon.objectName + " ends at " + rightEdge(icon, row, end) + ", the margin is at " + edge)
         var middle = icon.mapToItem(row, 0, icon.height / 2).y
         if (Math.abs(middle - row.contentHeight / 2) > 1)
             fail(name + "'s icon is at " + middle + ", the middle of the row is " + row.contentHeight / 2)
-        if (icon.objectName === "statusBusy" && icon.size !== BusyIndicatorSize.ExtraSmall)
-            fail(name + "'s busy indicator is size " + icon.size + ", not extra small")
         var label = findAll(row, function(x) { return x.visible && x.font !== undefined && x.text === name }, [])[0]
         if (!label || rightEdge(label, row, label.width) > slot.mapToItem(row, 0, 0).x)
             fail(name + "'s name does not end before its icon")
@@ -211,11 +202,49 @@ ApplicationWindow {
         console.log("server rows look: " + JSON.stringify(looks))
     }
 
-    // A highlighted row (pressed) lights its ring.
+    // Highlighted (pressed) row lights the dot of a not-connected server.
     function checkHighlighted(row) {
-        var ring = findAll(row, function(x) { return x.objectName === "statusRing" }, [])[0]
-        if (ring.border.color !== Theme.secondaryHighlightColor)
-            fail("a highlighted row's ring is " + ring.border.color + ", not " + Theme.secondaryHighlightColor)
+        var dot = icons(row)[0]
+        if (String(dot.color) !== String(Theme.highlightColor))
+            fail("a highlighted row's dot is " + dot.color + ", not " + Theme.highlightColor)
+    }
+
+    function slotOf(row) {
+        return findAll(row, function(x) { return x.indicator !== undefined && x.dotSize !== undefined }, [])[0]
+    }
+
+    function pulsingOf(row) {
+        var slot = slotOf(row)
+        // An animation is no child, it is in the item's data.
+        for (var i = 0; i < slot.data.length; ++i) {
+            if (slot.data[i].objectName === "statusPulse")
+                return slot.pulsing && slot.data[i].running
+        }
+        return false
+    }
+
+    // App in front (target never has it so): only a connecting server
+    // pulses. Then Cabin connects.
+    function checkPulse(rows) {
+        for (var name in win.expected) {
+            if (win.expected[name] !== "none")
+                slotOf(rows[name]).appActive = true
+        }
+        for (name in win.expected) {
+            if (win.expected[name] !== "none" && pulsingOf(rows[name]) !== (win.expected[name] === "busy"))
+                fail(name + (pulsingOf(rows[name]) ? " pulses" : " does not pulse") + " as " + win.expected[name])
+        }
+        servers.setProperty(1, "connection", "connected")
+        servers.setProperty(1, "status", "ready")
+    }
+
+    // Cabin connected: its dot is the connected one, and still.
+    function checkConnected(row) {
+        var dot = icons(row)[0]
+        if (!dot || stateOf(dot) !== "on")
+            fail("Cabin, connected, shows " + (dot ? appearance(dot) : "no dot"))
+        else if (pulsingOf(row) || dot.opacity !== 1.0)
+            fail("Cabin pulses after it connected")
     }
 
     Timer {
@@ -233,9 +262,19 @@ ApplicationWindow {
             var rows = serverRows()
             if (Object.keys(rows).length < Object.keys(win.expected).length)
                 return
-            win.check(rows)
-            rows["Idle"].highlighted = true
-            win.checkHighlighted(rows["Idle"])
+            if (!win.pulseChecked) {
+                win.check(rows)
+                rows["Idle"].highlighted = true
+                win.checkHighlighted(rows["Idle"])
+                rows["Idle"].highlighted = false
+                win.checkPulse(rows)
+                win.pulseChecked = true
+                return
+            }
+            // Model changed: Cabin's row follows in place.
+            if (win.icons(rows["Cabin"]).length === 0 || win.stateOf(win.icons(rows["Cabin"])[0]) === "busy")
+                return
+            win.checkConnected(rows["Cabin"])
             win.scenarioRunning = false
         }
     }

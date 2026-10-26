@@ -13,6 +13,7 @@ Item {
     property string connected: ""
     property string failedKind: ""
     property string failedSubject: ""
+    property string busyAtOnce: ""
     property bool relisted: false
     property bool moved: false
     property bool movedAtOnce: false
@@ -250,21 +251,32 @@ Item {
              })
         // Mounted where the sandbox does not see it, it is no row at all.
         step("a drive mounted out of the app's sight is an error naming it",
-             function() { Bridge.mountDrive("sda1", "STICK") },
+             function() {
+                 Bridge.mountDrive("sda1", "STICK")
+                 root.busyAtOnce = Bridge.busyDrives.join(",")
+             },
              function() {
                  return root.failedKind === "NotFound" && root.failedSubject === "STICK"
                         && JSON.parse(FakeWorld.drives())[0].mounted && !has("volume", "STICK")
              })
+        // The drive is busy from the call to its end, the mount failing or not.
+        step("the drive was busy while it was mounted and is not any more",
+             null,
+             function() { return root.busyAtOnce === "sda1" && Bridge.busyDrives.length === 0 })
         step("unmounting reaches the bridge and the row comes back",
              function() {
                  root.failedKind = ""
                  Bridge.unmountDrive("sda1", "STICK")
+                 root.busyAtOnce = Bridge.busyDrives.join(",")
              },
              function() {
                  var v = row("volume", "STICK")
                  return !JSON.parse(FakeWorld.drives())[0].mounted && v !== null && v.rstatus === "unmounted"
                         && root.failedKind === "" && root.connected === ""
              })
+        step("the drive was busy while it was unmounted and is not any more",
+             null,
+             function() { return root.busyAtOnce === "sda1" && Bridge.busyDrives.length === 0 })
         step("no account without consent", null, function() { return !has("account") && !has("adhocRecent") })
         step("ask again reaches the bridge",
              function() { Bridge.requestConsent() },

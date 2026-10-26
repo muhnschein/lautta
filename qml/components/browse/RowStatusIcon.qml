@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// How a Browse row's connection or mount stands, as one icon (SPEC §15.2):
-// the glowing dot of a TextSwitch when connected or mounted, a busy indicator
-// while connecting, an empty ring when not connected or not mounted, a ring
-// in the error colour when connecting failed, a warning icon when sign-in or
-// identity needs the user. The icons sit at the right edge of this item, so
-// that the row puts it at the page margin. No text (RowStatus.js has the
-// states).
+// How a Browse row's connection or mount stands (SPEC §15.2): one glowing
+// dot, as TextSwitch draws. Highlight colour = connected, mounted. Primary
+// colour (white on dark ambience, dark on light) = not connected, not
+// mounted. Same dot pulsing = connecting, mounting, unmounting. Red =
+// connecting failed. Orange = sign-in or identity needs user. Dot sits at
+// right edge of this item; row puts item at page margin. No text
+// (RowStatus.js has the states).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
@@ -14,72 +14,74 @@ Item {
 
     // "on", "busy", "off", "failed" or "warning"; "" shows nothing.
     property string indicator
-    // The row is pressed: the ring takes the pressed secondary colour.
+    // Row pressed: dot of primary colour takes highlight colour, as row
+    // labels do.
     property bool highlighted
 
-    // Across of the dot's core and of the ring.
+    // Across of dot core.
     readonly property real dotSize: Theme.paddingMedium
+    // Silica's orange: colour of Away presence. Fixed, reads on dark and
+    // light ambience.
+    readonly property color warningColor: Theme.presenceColor(Theme.PresenceAway)
+    // App in front.
+    property bool appActive: Qt.application.state === Qt.ApplicationActive
+    // Pulse only while row busy, its page on screen and app in front.
+    // Background: nothing animates (PRF-8). Silica's BusyIndicator binds the
+    // same way.
+    readonly property bool pulsing: indicator === "busy" && visible && appActive
+
+    // Brightness while pulsing. Animation moves it; dot reads it only while
+    // pulsing, so a stopped pulse leaves full brightness.
+    property real glow: 1.0
 
     width: Theme.iconSizeExtraSmall
     height: Theme.iconSizeExtraSmall
     visible: indicator !== ""
 
-    // Silica's own glass item, as TextSwitch uses it. Its radius is the
-    // core's share of its width, so the item is as wide as the dot needs;
-    // the glow reaches past the core by the same share.
+    // Silica's glass item, as TextSwitch uses it. Its radius is the core's
+    // share of its width, so item is as wide as dot needs; glow reaches past
+    // core by same share.
     GlassItem {
-        objectName: "statusOn"
-        visible: status.indicator === "on"
+        objectName: "statusDot"
         width: status.dotSize / (2 * radius)
         height: width
         x: parent.width - (status.dotSize + width) / 2
         anchors.verticalCenter: parent.verticalCenter
+        opacity: status.pulsing ? status.glow : 1.0
         dimmed: false
-        color: Theme.highlightColor
+        color: {
+            switch (status.indicator) {
+            case "on":
+                return Theme.highlightColor
+            case "failed":
+                return Theme.errorColor
+            case "warning":
+                return status.warningColor
+            default:
+                return status.highlighted ? Theme.highlightColor : Theme.primaryColor
+            }
+        }
         backgroundColor: Theme.backgroundGlowColor
     }
 
-    Rectangle {
-        objectName: "statusRing"
-        visible: status.indicator === "off" || status.indicator === "failed"
-        anchors {
-            right: parent.right
-            verticalCenter: parent.verticalCenter
-        }
-        width: status.dotSize
-        height: width
-        radius: width / 2
-        color: "transparent"
-        border {
-            width: Math.max(1, Math.round(Theme.paddingSmall / 4))
-            color: status.indicator === "failed" ? Theme.errorColor
-                   : (status.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor)
-        }
-    }
+    SequentialAnimation {
+        objectName: "statusPulse"
+        running: status.pulsing
+        loops: Animation.Infinite
 
-    BusyIndicator {
-        objectName: "statusBusy"
-        visible: status.indicator === "busy"
-        running: visible
-        anchors {
-            right: parent.right
-            verticalCenter: parent.verticalCenter
+        NumberAnimation {
+            target: status
+            property: "glow"
+            to: Theme.opacityLow
+            duration: 700
+            easing.type: Easing.InOutQuad
         }
-        size: BusyIndicatorSize.ExtraSmall
-    }
-
-    HighlightImage {
-        objectName: "statusWarning"
-        visible: status.indicator === "warning"
-        anchors {
-            right: parent.right
-            verticalCenter: parent.verticalCenter
+        NumberAnimation {
+            target: status
+            property: "glow"
+            to: 1.0
+            duration: 700
+            easing.type: Easing.InOutQuad
         }
-        source: "image://theme/icon-s-warning"
-        width: Theme.iconSizeExtraSmall
-        height: width
-        sourceSize.width: width
-        sourceSize.height: height
-        color: Theme.errorColor
     }
 }

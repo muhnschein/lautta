@@ -19,7 +19,7 @@ use lautta_core::bridge::{feature, AdHocOptions, BridgeStatus};
 use lautta_core::questions::{Answer, Question, QuestionEvent, QuestionKind, Responses};
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
-use qmetaobject::{queued_callback, QPointer, QSingletonInit};
+use qmetaobject::{queued_callback, QPointer, QSingletonInit, QVariant, QVariantList};
 use serde::Deserialize;
 use std::sync::{Arc, Once};
 use zeroize::Zeroizing;
@@ -81,6 +81,30 @@ fn is_ours(q: &Question) -> bool {
     q.kind != QuestionKind::Conflict
 }
 
+/// Drives with a mount or unmount under way, one entry per call: two calls on
+/// one drive keep it busy until both ended.
+#[derive(Default)]
+struct Busy(Vec<String>);
+
+impl Busy {
+    fn begin(&mut self, drive: &str) {
+        self.0.push(drive.to_owned());
+    }
+
+    fn end(&mut self, drive: &str) {
+        if let Some(i) = self.0.iter().position(|d| d == drive) {
+            self.0.remove(i);
+        }
+    }
+
+    fn list(&self) -> QVariantList {
+        self.0
+            .iter()
+            .map(|d| QVariant::from(QString::from(d.as_str())))
+            .collect()
+    }
+}
+
 #[derive(QObject, Default)]
 pub struct Bridge {
     base: qt_base_class!(trait QObject),
@@ -93,6 +117,9 @@ pub struct Bridge {
     /// True when the bridge opens Settings › Storage (NVB-13), whatever the
     /// consent.
     storageSettings: qt_property!(bool; NOTIFY statusChanged),
+    /// Ids of drives with a mount or unmount under way, one entry per call
+    /// (LOC-3). Their Browse rows pulse (§15.2).
+    busyDrives: qt_property!(QVariantList; NOTIFY statusChanged),
 
     requestConsent: qt_method!(fn(&mut self)),
     addServer: qt_method!(fn(&mut self, provider: QString)),
@@ -119,6 +146,7 @@ pub struct Bridge {
     failed: qt_signal!(kind: QString, message: QString, subject: QString),
 
     guard: Guard,
+    busy: Busy,
 }
 
 impl QSingletonInit for Bridge {
@@ -250,6 +278,40 @@ impl Bridge {
         });
     }
 
+    /// Runs mount or unmount `f` of `drive`; `drive` is in `busyDrives` until
+    /// it ends. A volume it ends in is opened (`adhocConnected`), a failure
+    /// goes through `failed` (LOC-3).
+    fn drive_call<F>(&mut self, drive: String, subject: String, f: impl FnOnce(Arc<Core>) -> F)
+    where
+        F: std::future::Future<Output = lautta_core::Result<Option<Uri>>> + Send + 'static,
+    {
+        let Some(core) = core() else { return };
+        self.busy.begin(&drive);
+        self.publish_busy();
+        let me = QPointer::from(&*self);
+        spawn_then(f(core), move |res| {
+            let Some(b) = me.as_pinned() else { return };
+            b.borrow_mut().drive_done(&drive);
+            let b = b.borrow();
+            match res {
+                Ok(Some(uri)) => b.adhocConnected(QString::from(uri.to_string().as_str())),
+                Ok(None) => {}
+                Err(e) => b.report(&e, &subject),
+            }
+        });
+    }
+
+    /// One call of `drive` ended.
+    fn drive_done(&mut self, drive: &str) {
+        self.busy.end(drive);
+        self.publish_busy();
+    }
+
+    fn publish_busy(&mut self) {
+        self.busyDrives = self.busy.list();
+        self.statusChanged();
+    }
+
     fn requestConsent(&mut self) {
         self.call(String::new(), |core| async move {
             match &core.bridge {
@@ -285,16 +347,15 @@ impl Bridge {
     /// Mounts the drive and opens the volume (LOC-3).
     fn mountDrive(&mut self, drive: QString, name: QString) {
         let drive = drive.to_string();
-        self.open_when(
-            name.to_string(),
-            |core| async move { core.mount_drive(&drive).await },
-        );
+        self.drive_call(drive.clone(), name.to_string(), |core| async move {
+            core.mount_drive(&drive).await.map(Some)
+        });
     }
 
     fn unmountDrive(&mut self, drive: QString, name: QString) {
         let drive = drive.to_string();
-        self.call(name.to_string(), |core| async move {
-            core.unmount_drive(&drive).await
+        self.drive_call(drive.clone(), name.to_string(), |core| async move {
+            core.unmount_drive(&drive).await.map(|()| None)
         });
     }
 
@@ -420,6 +481,29 @@ mod tests {
             Answer::Responses(r) => assert_eq!(r.as_slice(), [b"123456".to_vec(), b"0000".to_vec()]),
             other => panic!("not responses: {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_drive_is_busy_until_every_call_on_it_has_ended() {
+        let names = |b: &Busy| b.0.clone();
+        let mut busy = Busy::default();
+        busy.begin("sda1");
+        busy.begin("mmcblk1p1");
+        busy.begin("sda1");
+        assert_eq!(names(&busy), ["sda1", "mmcblk1p1", "sda1"]);
+        assert_eq!(busy.list().len(), 3);
+        busy.end("sda1");
+        assert_eq!(names(&busy), ["mmcblk1p1", "sda1"], "one call ended, one is left");
+        busy.end("sdb1");
+        assert_eq!(
+            names(&busy),
+            ["mmcblk1p1", "sda1"],
+            "an unknown drive changes nothing"
+        );
+        busy.end("sda1");
+        busy.end("mmcblk1p1");
+        assert!(names(&busy).is_empty());
+        assert!(busy.list().is_empty());
     }
 
     #[test]
