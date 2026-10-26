@@ -3,8 +3,8 @@
 //! images, for swiping) and the two QML image providers for remote files,
 //! `image://lautta-thumb/<uri>?size=N` and `image://lautta-file/<uri>`.
 //!
-//! Local images and videos never come here for thumbnails (PRV-1:
-//! `Nemo.Thumbnailer`); local PDFs do (PRV-14). The full-image provider
+//! Local images, videos and PDFs never come here for thumbnails (PRV-1:
+//! `Nemo.Thumbnailer`). The full-image provider
 //! serves any location, which is what the viewer uses for remote files. The providers are asynchronous
 //! (`QQuickAsyncImageProvider`): the request returns at once, the tokio
 //! runtime fetches, a worker decodes, and the response is finished from

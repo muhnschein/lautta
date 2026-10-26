@@ -14,7 +14,7 @@
 - The folder pulley reads, from the bottom: New, Select, Search, View options, Activity. "New folder" is now "New".
 - View options is a settings page with a live preview, and open folders follow it at once.
 - Settings are split into pages. The thumbnail cache size applies without a restart. A size limit replaces the metered-network limit for server thumbnails.
-- PDFs get thumbnails of their first page, under the same thumbnail switches as images.
+- PDFs get thumbnails of their first page, under the same thumbnail switches as images. For PDFs on the phone the system draws them, as it does for photos and videos.
 - In grid view, holding and dragging selects a range. Bars at the bottom are opaque.
 - The grid has one size, so View options offers just grid or list. Its icons are bigger, names take two lines and keep their extension, and each tile shows the date and size, or how many items a folder on the phone or a drive holds, counting up to 1000.
 - A folder's header stays in place while its contents scroll. A folder opens at its top, and going back returns to where you were.

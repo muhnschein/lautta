@@ -17,7 +17,7 @@ use crate::ops::{Conflict, ConflictChoice, OperationKind, Plan};
 use crate::provider::{list_all, Disposition, Lane, ProgressSink, Provider, WriteOptions};
 use crate::settings::Settings;
 use crate::sys;
-use crate::thumbs::{app_thumbnail_url, thumbnail_source, trash_item_uri, ThumbSettings, ThumbSource};
+use crate::thumbs::{thumbnail_source, ThumbSettings, ThumbSource};
 use crate::transfer::TransferId;
 use crate::trash::TrashItem;
 use crate::uri::Uri;
@@ -351,20 +351,19 @@ pub struct TrashEntry {
     /// From the original name's extension; empty when none is known. Stored
     /// copy has no extension, so the system thumbnailer goes by this.
     pub mime_type: String,
-    /// `file://` URL of the stored copy of an image or video, or the
-    /// `image://lautta-thumb/` URL of a PDF, that gets a thumbnail, else empty
-    /// ([`trash_thumbnail`]).
+    /// `file://` URL of the stored copy of an image, video or PDF that gets
+    /// a thumbnail, else empty ([`trash_thumbnail`]).
     pub thumbnail_source: String,
 }
 
 /// What a trashed file shows as its thumbnail (OPS-8, PRV-1, PRV-14): the
 /// shared rule ([`thumbnail_source`]) decides by the original name, which
-/// the stored copy has lost. An image or video gives the stored copy's
-/// `file://` URL for the system thumbnailer, a PDF an app thumbnail of the
-/// Trash item. Empty = row keeps its glyph: thumbnails off (BRW-4), the rule
-/// says none, or stored item is no regular file. A trashed link would show
-/// its target, maybe outside the sandbox (BRW-10); a copy gone from the trash
-/// folder has nothing to show.
+/// the stored copy has lost. An image, video or PDF gives the stored copy's
+/// `file://` URL for the system thumbnailer, which goes by
+/// [`TrashEntry::mime_type`]. Empty = row keeps its glyph: thumbnails off
+/// (BRW-4), the rule says none, or stored item is no regular file. A trashed
+/// link would show its target, maybe outside the sandbox (BRW-10); a copy
+/// gone from the trash folder has nothing to show.
 fn trash_thumbnail(item: &TrashItem, settings: &Settings) -> String {
     let kind = if item.is_dir { Kind::Dir } else { Kind::File };
     let mut entry = Entry::new(item.original_uri.name().unwrap_or_default(), kind);
@@ -372,15 +371,10 @@ fn trash_thumbnail(item: &TrashItem, settings: &Settings) -> String {
     let set = ThumbSettings::new(settings);
     let source = thumbnail_source(&entry, true, settings.thumbnails_local, &set);
     let stored = item.stored_path();
-    if source == ThumbSource::Icon || !std::fs::symlink_metadata(&stored).is_ok_and(|m| m.is_file()) {
+    if source != ThumbSource::System || !std::fs::symlink_metadata(&stored).is_ok_and(|m| m.is_file()) {
         return String::new();
     }
-    match source {
-        ThumbSource::App => {
-            trash_item_uri(item.id, &item.stored_name).map_or_else(String::new, |uri| app_thumbnail_url(&uri))
-        }
-        _ => file_url(&stored),
-    }
+    file_url(&stored)
 }
 
 /// Whole days left before purge, never negative (OPS-8).

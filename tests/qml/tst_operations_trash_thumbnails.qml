@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Scenario on the target (real Silica): the Trash page draws a trashed image
 // with the thumbnail of its stored copy and its type from the original name
-// (OPS-8, PRV-1), a trashed PDF with the app's own thumbnail of its first
-// page (PRV-14), a trashed text file with its glyph, and no thumbnail at all
-// once the Thumbnails setting is off (BRW-4). Whether the system thumbnailer
-// makes the picture, and how it looks, only a phone shows.
+// (OPS-8, PRV-1), a trashed PDF the same way, asking the system thumbnailer
+// with the PDF type (PRV-14), a trashed text file with its glyph, and no
+// thumbnail at all once the Thumbnails setting is off (BRW-4). Whether the
+// system thumbnailer draws the picture, and how it looks, only a phone shows:
+// here it draws nothing (no scene graph: a `Thumbnail` stays `Null`).
 import QtQuick 2.6
 import QtQml 2.2
 import Sailfish.Silica 1.0
@@ -145,24 +146,23 @@ ApplicationWindow {
                 var text = win.iconsOf(noteRow)
                 if (text.thumbnail.visible || !text.glyph.visible)
                     return win.fail("a text file keeps its glyph")
-                // A PDF is drawn by the app from the Trash item, not by the
-                // system from a path (PRV-14).
+                // The system thumbnailer draws a PDF only when told its type.
                 var sheet = win.iconsOf(paperRow)
                 if (!sheet.thumbnail || !sheet.thumbnail.visible || sheet.glyph.visible)
                     return win.fail("the PDF shows its thumbnail icon, not the glyph")
-                if (sheet.thumbnail.thumbnailSource.indexOf("image://lautta-thumb/lautta://trash/") !== 0
-                        || sheet.thumbnail.thumbnailSource.indexOf("trash-thumb") >= 0)
-                    return win.fail("the PDF's thumbnail is its Trash item: " + sheet.thumbnail.thumbnailSource)
+                if (sheet.thumbnail.thumbnailSource.indexOf("file://") !== 0 || sheet.thumbnail.thumbnailSource.indexOf("trash-thumb") >= 0)
+                    return win.fail("the PDF's thumbnail is its stored copy: " + sheet.thumbnail.thumbnailSource)
+                if (sheet.thumbnail.mimeType !== "application/pdf")
+                    return win.fail("the PDF's type comes from the original name: " + sheet.thumbnail.mimeType)
                 win.next()
                 break
             case 3:
-                // The app draws the first page from the stored copy.
-                var drawn = win.iconsOf(win.rowOf(win.paper))
-                if (!drawn.thumbnail || !drawn.thumbnail.thumbnailReady) {
-                    if (drawn.thumbnail && drawn.thumbnail.thumbnailFailed)
-                        return win.fail("the first page of the trashed PDF was not drawn")
-                    break
-                }
+                // The system thumbnailer is asked for the stored copy as a PDF.
+                var asked = win.iconsOf(win.rowOf(win.paper)).thumbnail
+                var system = win.findAll(asked, function(x) { return x.priority !== undefined && x.mimeType !== undefined }, [])[0]
+                if (!system || String(system.source) !== asked.thumbnailSource || system.mimeType !== "application/pdf")
+                    return win.fail("the system thumbnailer is asked for the stored copy as a PDF: "
+                                    + (system ? system.source + " " + system.mimeType : "none"))
                 var lists = win.findAll(win.page, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
                 if (lists.length !== 1)
                     return win.fail("the Trash page has one list")

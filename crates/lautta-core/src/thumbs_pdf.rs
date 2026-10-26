@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! PDF thumbnails (SPEC PRV-14): the first page, drawn by `lautta-pdf` as
-//! wide as the thumbnail and cut to a square from the top, as JPEG.
+//! Thumbnails of server PDFs (SPEC PRV-14; local ones are the system
+//! thumbnailer's, PRV-1): the first page, drawn by `lautta-pdf` as wide as
+//! the thumbnail and cut to a square from the top, as JPEG.
 //!
 //! A phone has the CPU for one page at a time: [`PdfThumbs`] lets a render
 //! wait for the one before it, also when the delegate that asked has gone

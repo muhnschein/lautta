@@ -264,8 +264,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   Roles: `trashId`, `name`, `originalUri`, `folderUri`, `folderName`, `isDir`, `size`
   (-1 unknown), `trashedAt`, `daysLeft`, `mimeType` (from the original name, "" for
   folders and unknown types) and `thumbnailSource` (`file://` URL of the stored copy of
-  an image or video, or `image://lautta-thumb/lautta://trash/<id>/<stored name>` for a
-  PDF (PRV-14), while *Show thumbnails* is on, else ""; for `FileIcon`).
+  an image, video or PDF while *Show thumbnails* is on, else ""; for `FileIcon`, with
+  `mimeType`: PRV-1, PRV-14).
 - Pages: `dialogs/PlanSummaryDialog.qml { planId, summary }`,
   `dialogs/ConflictDialog.qml { transferId, item, conflict }`,
   `dialogs/CompressDialog.qml { uris }`,
@@ -310,8 +310,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   constant, type, function, variable, heading, markup, link, inserted, deleted),
   `MarkdownDocument { uri }` (html), `ExifModel { uri }`, `MediaSource { uri }` (QIODevice for QtMultimedia, PRV-8),
   image provider `image://lautta-thumb/<uri>?size=N` for thumbnails of remote images
-  (PRV-2) and of PDFs, local and trashed too (PRV-14; fails with an error for anything
-  else, which `Image` shows as status Error), and `image://lautta-file/<uri>` for remote full images.
+  (PRV-2) and remote PDFs (PRV-14; fails with an error for anything else, which `Image`
+  shows as status Error), and `image://lautta-file/<uri>` for remote full images.
 - `PdfDocument { uri }` (PRV-12): `loading`, `loaded`, `pageCount`, `size`, `errorKind`
   (file not readable, ErrorText.js), `problem` (`invalid`, also when parsing panicked,
   RS-4; `encrypted`, `empty`, `tooLarge`), `wrongPassword` (the last `unlock` failed),

@@ -210,6 +210,8 @@ ApplicationWindow {
 
     // Under a tile the name and the lines stay whether a PDF's
     // first page covers the tile or the page could not be made (encrypted).
+    // The PDFs are in an archive, where the app draws them: the system
+    // thumbnailer, which draws local ones, draws nothing here (no scene graph).
     function checkPdfThumbnails() {
         var pdfs = "lautta://user-downloads/GridCaptionsPdf/"
         downloads.createFolder("GridCaptionsPdf")
@@ -217,7 +219,12 @@ ApplicationWindow {
         expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/two-pages.pdf"), pdfs + "readable.pdf"), "readable PDF")
         expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/secret.pdf"), pdfs + "secret.pdf"), "encrypted PDF")
         App.setSetting("thumbnails_local", JSON.stringify(true))
-        var view = push(pdfs)
+        window.archiveRoot = ""
+        Operations.compress(JSON.stringify([pdfs + "readable.pdf", pdfs + "secret.pdf"]), "lautta://user-downloads/",
+                            "grid-captions-pdf", "zip")
+        waitFor(function () { return window.archiveRoot.length > 0 }, "the archive of PDFs")
+        var view = push(window.archiveRoot)
+        window.archiveRoot = ""
         waitFor(function () { return cells(view).length === 2 }, "both PDFs")
         var good = cellNamed(view, "readable.pdf")
         var locked = cellNamed(view, "secret.pdf")

@@ -373,30 +373,26 @@ async fn a_remote_pdf_thumbnail_is_its_first_page_made_once_per_version() {
 }
 
 #[tokio::test]
-async fn a_local_pdf_is_made_by_the_app_whatever_the_server_switch_says() {
+async fn local_pdfs_are_left_to_the_system_thumbnailer() {
     let h = home().await;
     std::fs::write(h.root.join("Documents/l.pdf"), pdf()).unwrap();
     let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
-    let bytes = thumbnail(&h, &previews, "lautta://user-documents/l.pdf", 48)
+    let err = thumbnail(&h, &previews, "lautta://user-documents/l.pdf", 48)
         .await
-        .unwrap();
-    assert_eq!(thumb_pixels(&bytes).dimensions(), (48, 48));
-
-    let mut s = h.core.settings();
-    s.thumbnails_remote = false;
-    h.core.apply_settings(s);
-    thumbnail(&h, &previews, "lautta://user-documents/l.pdf", 40)
-        .await
-        .expect("Thumbnails from servers is for servers");
+        .unwrap_err();
+    assert_eq!(
+        err.message, "no app thumbnail for this file",
+        "Nemo.Thumbnailer draws it, in a process of its own (PRV-1)"
+    );
+    assert!(previews.cache().is_empty());
 }
 
 #[tokio::test]
 async fn server_pdfs_follow_the_server_thumbnail_switch() {
     let h = home().await;
     h.nas.add_file("a.pdf", &pdf(), 1);
-    std::fs::write(h.root.join("Documents/l.pdf"), pdf()).unwrap();
     let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
-    let (remote, local) = ("lautta://nv-nas/a.pdf", "lautta://user-documents/l.pdf");
+    let remote = "lautta://nv-nas/a.pdf";
 
     let mut s = h.core.settings();
     s.thumbnails_remote = false;
@@ -408,7 +404,6 @@ async fn server_pdfs_follow_the_server_thumbnail_switch() {
     );
     assert_eq!(open_reads(&h.nas), 0, "refused before reading");
     assert!(previews.cache().is_empty());
-    assert!(thumbnail(&h, &previews, local, 32).await.is_ok());
 
     s.thumbnails_remote = true;
     h.core.apply_settings(s);
@@ -416,123 +411,6 @@ async fn server_pdfs_follow_the_server_thumbnail_switch() {
         thumbnail(&h, &previews, remote, 32).await.is_ok(),
         "switched on: made"
     );
-}
-
-/// Moves `Documents/<name>` to the Trash and gives the id of its item and
-/// the URI its thumbnail is asked by.
-async fn trash_document(h: &Home, name: &str) -> (i64, String) {
-    h.core
-        .delete(&[uri(&format!("lautta://user-documents/{name}"))])
-        .await
-        .unwrap();
-    let rows = h.core.trash_entries(lautta_core::trash::now_secs()).unwrap();
-    let id = rows.iter().find(|r| r.name == name).unwrap().id;
-    let stored = h.core.trash.get(id).unwrap().stored_name;
-    (id, format!("lautta://trash/{id}/{stored}"))
-}
-
-#[tokio::test]
-async fn a_trashed_pdf_gets_its_thumbnail_from_the_stored_copy() {
-    let h = home().await;
-    std::fs::write(h.root.join("Documents/t.pdf"), pdf()).unwrap();
-    let (_, u) = trash_document(&h, "t.pdf").await;
-    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
-
-    let bytes = thumbnail(&h, &previews, &u, 64).await.unwrap();
-    let img = thumb_pixels(&bytes);
-    assert_eq!(img.dimensions(), (64, 64));
-    let corner = img.get_pixel(2, 2).0;
-    assert!(
-        corner[0] > 200 && corner[1] < 60 && corner[2] < 60,
-        "page 1's red corner: {corner:?}"
-    );
-    assert_eq!(previews.cache().len(), 1);
-    assert_eq!(thumbnail(&h, &previews, &u, 64).await.unwrap(), bytes);
-    assert_eq!(previews.cache().len(), 1, "the second one is the cached one");
-
-    let mut s = h.core.settings();
-    s.thumbnails_remote = false;
-    h.core.apply_settings(s);
-    assert!(
-        thumbnail(&h, &previews, &u, 48).await.is_ok(),
-        "the Trash is on this device: the servers' switch is not its"
-    );
-}
-
-#[tokio::test]
-async fn trashed_pdfs_are_cached_each_under_its_own_item() {
-    use lautta_pdf::sample::{build, page};
-    let h = home().await;
-    let same = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
-    for (name, fill) in [
-        ("red.pdf", "1 0 0 rg 0 0 595 842 re f"),
-        ("blue.pdf", "0 0 1 rg 0 0 595 842 re f"),
-    ] {
-        let path = h.root.join("Documents").join(name);
-        std::fs::write(&path, build(&[page(595, 842, fill)])).unwrap();
-        std::fs::File::options()
-            .write(true)
-            .open(&path)
-            .unwrap()
-            .set_modified(same)
-            .unwrap();
-    }
-    let (_, red) = trash_document(&h, "red.pdf").await;
-    let (_, blue) = trash_document(&h, "blue.pdf").await;
-    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
-
-    let at = |bytes: &[u8]| thumb_pixels(bytes).get_pixel(16, 16).0;
-    let first = at(&thumbnail(&h, &previews, &red, 32).await.unwrap());
-    let second = at(&thumbnail(&h, &previews, &blue, 32).await.unwrap());
-    assert!(first[0] > 200 && first[2] < 60, "red: {first:?}");
-    assert!(
-        second[2] > 200 && second[0] < 60,
-        "not the cached red one: {second:?}"
-    );
-    assert_eq!(previews.cache().len(), 2, "same size and mtime, two items");
-}
-
-#[tokio::test]
-async fn trash_thumbnails_are_for_regular_pdfs_that_are_still_there() {
-    let h = home().await;
-    std::fs::write(h.root.join("Documents/t.pdf"), pdf()).unwrap();
-    std::fs::write(h.root.join("Documents/p.jpg"), jpeg(8, 8)).unwrap();
-    std::fs::write(h.root.join("Documents/n.txt"), b"x").unwrap();
-    let (pdf_id, pdf_uri) = trash_document(&h, "t.pdf").await;
-    let (_, jpg_uri) = trash_document(&h, "p.jpg").await;
-    let (_, txt_uri) = trash_document(&h, "n.txt").await;
-    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
-    for u in [&jpg_uri, &txt_uri] {
-        let err = thumbnail(&h, &previews, u, 32).await.unwrap_err();
-        assert_eq!(
-            err.message, "no app thumbnail for this file",
-            "the system does pictures"
-        );
-    }
-    let err = thumbnail(&h, &previews, "lautta://trash/9999/x", 32)
-        .await
-        .unwrap_err();
-    assert_eq!(err.kind, ErrorKind::NotFound, "no such item");
-    let err = thumbnail(&h, &previews, "lautta://trash/abc", 32)
-        .await
-        .unwrap_err();
-    assert_eq!(err.kind, ErrorKind::NotFound, "not a Trash item's URI");
-    // The id of a gone item may be another's by now: the stored name tells.
-    let err = thumbnail(&h, &previews, &format!("lautta://trash/{pdf_id}/other"), 32)
-        .await
-        .unwrap_err();
-    assert_eq!(err.kind, ErrorKind::NotFound, "the id of another stored copy");
-
-    // A stored copy swapped for a link is not followed.
-    let item = h.core.trash.get(pdf_id).unwrap();
-    std::fs::remove_file(item.stored_path()).unwrap();
-    std::fs::write(h.root.join("Documents/target.pdf"), pdf()).unwrap();
-    std::os::unix::fs::symlink(h.root.join("Documents/target.pdf"), item.stored_path()).unwrap();
-    let err = thumbnail(&h, &previews, &pdf_uri, 32).await.unwrap_err();
-    assert_eq!(err.kind, ErrorKind::Unsupported);
-    std::fs::remove_file(item.stored_path()).unwrap();
-    let err = thumbnail(&h, &previews, &pdf_uri, 32).await.unwrap_err();
-    assert_eq!(err.kind, ErrorKind::NotFound, "the copy is gone");
 }
 
 #[tokio::test]
@@ -556,19 +434,6 @@ async fn pdfs_over_the_size_limit_are_refused_before_they_are_read() {
     assert!(thumbnail(&h, &previews, "lautta://nv-nas/big.pdf", 32)
         .await
         .is_ok());
-
-    // A local file of 20 MB and a byte: its size is enough to refuse it.
-    let local = std::fs::File::create(h.root.join("Documents/huge.pdf")).unwrap();
-    local
-        .set_len(lautta_core::thumbs::LOCAL_PDF_MAX_BYTES + 1)
-        .unwrap();
-    let err = thumbnail(&h, &previews, "lautta://user-documents/huge.pdf", 32)
-        .await
-        .unwrap_err();
-    assert_eq!(
-        err.message, "no app thumbnail for this file",
-        "not a PDF it tried to read"
-    );
 }
 
 #[tokio::test]

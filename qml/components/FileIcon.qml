@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The icon of a file or folder (doc/QML-API.md): the app's own glyph per
-// kind (FileIcons.js, UI-2), the system thumbnail for local images and
-// videos (Nemo.Thumbnailer, PRV-1) and the app's thumbnail provider for
-// remote images and PDFs (PRV-2, PRV-14). `thumbnailSource` is what
-// DirectoryModel's role gives: a file:// URL, an image://lautta-thumb/ URL or
-// empty. A thumbnail that cannot be made (an encrypted PDF) leaves the
-// category's glyph, and `thumbnailFailed` says so.
+// kind (FileIcons.js, UI-2), the system thumbnail for local images, videos
+// and PDFs (Nemo.Thumbnailer, PRV-1: it draws a PDF or video only when given
+// `mimeType`) and the app's thumbnail provider for remote images and PDFs
+// (PRV-2, PRV-14). `thumbnailSource` is what DirectoryModel's role gives: a
+// file:// URL, an image://lautta-thumb/ URL or empty. A thumbnail that cannot
+// be made (an encrypted PDF) leaves the category's glyph, and
+// `thumbnailFailed` says so.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.Thumbnailer 1.0
