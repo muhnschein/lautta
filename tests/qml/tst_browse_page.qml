@@ -8,8 +8,11 @@
 // (NVB-13) and Unmount only when the bridge mounted it, a drive that is not
 // mounted is dimmed, shows a dot of the primary colour where a mounted one
 // has the highlight colour's, has Mount and mounts when tapped instead of
-// opening, and is busy while the mount is under way (LOC-3), and the Recents
-// row of On this device opens Recents.
+// opening, and is busy while the mount is under way, a locked drive is
+// dimmed, shows a padlock and no dot, has Open Storage settings only and
+// opens Settings › Storage when tapped, and without the bridge's
+// storage-settings has no menu and does nothing (LOC-3), and the Recents row
+// of On this device opens Recents.
 // Fails naming the row whose menu differs.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -22,6 +25,9 @@ ApplicationWindow {
     property bool scenarioRunning: true
     property int step: 0
     property int waited: 0
+    // Bridge calls that failed without a subject: here only Open Storage
+    // settings, which fails as no bridge answers.
+    property int storageCalls: 0
 
     // The visible entries of each row's menu, by name of the row. No
     // translations are loaded here: the texts are the ids.
@@ -31,6 +37,7 @@ ApplicationWindow {
         { "name": "SD card", "items": ["add-favourite", "copy-address", "open-storage-settings"] },
         { "name": "CARD", "items": ["add-favourite", "copy-address", "unmount", "open-storage-settings"] },
         { "name": "STICK", "items": ["mount", "open-storage-settings"] },
+        { "name": "VAULT", "items": ["open-storage-settings"] },
         { "name": "NAS", "items": ["edit-server", "copy-address"] },
         { "name": "Office", "items": ["edit-server", "update-sign-in", "copy-address"] },
         { "name": "Vault", "items": ["edit-server", "review-identity", "copy-address"] },
@@ -53,6 +60,7 @@ ApplicationWindow {
         ListElement { section: "volumes"; uri: "lautta://vol-SD/"; name: "SD card"; kind: "volume"; icon: "image://theme/icon-m-sd-card"; status: "ready"; attention: ""; colour: ""; itemId: "vol-SD"; place: ""; provider: ""; host: ""; free: 62500000000; total: 128000000000; fs: "exFAT" }
         ListElement { section: "volumes"; uri: "lautta://vol-CARD/"; name: "CARD"; kind: "volume"; icon: "image://theme/icon-m-sd-card"; status: "ready"; attention: ""; colour: ""; itemId: "vol-CARD"; place: ""; provider: ""; host: ""; free: 1000000000; total: 64000000000; fs: "vfat"; drive: "mmcblk1p1" }
         ListElement { section: "volumes"; uri: ""; name: "STICK"; kind: "volume"; icon: "image://theme/icon-m-usb"; status: "unmounted"; attention: ""; colour: ""; itemId: "vol-STICK"; place: ""; provider: ""; host: ""; free: -1; total: 8000000000; fs: ""; drive: "sda1" }
+        ListElement { section: "volumes"; uri: ""; name: "VAULT"; kind: "volume"; icon: "image://theme/icon-m-sd-card"; status: "locked"; attention: ""; colour: ""; itemId: "vol-VAULT"; place: ""; provider: ""; host: ""; free: -1; total: 32000000000; fs: ""; drive: "mmcblk1p2" }
         ListElement { section: "servers"; uri: ""; name: ""; kind: "consent"; icon: "image://theme/icon-m-computer"; status: "ready"; attention: ""; colour: ""; itemId: ""; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: "" }
         ListElement { section: "servers"; uri: ""; name: ""; kind: "unavailable"; icon: "image://theme/icon-m-file-folder"; status: "ready"; attention: ""; colour: ""; itemId: ""; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: "" }
         ListElement { section: "servers"; uri: "lautta://nv-account:1/"; name: "NAS"; kind: "account"; icon: "image://theme/icon-m-computer"; status: "ready"; attention: ""; connection: "connected"; connectionError: ""; colour: ""; itemId: "nv-account:1"; place: ""; provider: "SFTP"; host: "nas.home"; free: -1; total: -1; fs: "" }
@@ -64,6 +72,11 @@ ApplicationWindow {
         ListElement { section: "nearby"; uri: "sftp://raspberrypi.local/"; name: "raspberrypi"; kind: "nearby"; icon: "image://theme/icon-m-wlan"; status: "ready"; attention: ""; colour: ""; itemId: "0"; place: ""; provider: "SFTP"; host: "raspberrypi.local"; free: -1; total: -1; fs: "" }
             }
         }
+    }
+
+    Connections {
+        target: Bridge
+        onFailed: if (subject === "") win.storageCalls++
     }
 
     function fail(what) {
@@ -166,6 +179,35 @@ ApplicationWindow {
             fail("STICK, tapped, is " + row.statusIndicator + " with drives [" + Bridge.busyDrives + "] busy, not busy")
     }
 
+    // A drive Settings › Storage unlocks first (LOC-3): dimmed, a padlock and
+    // no dot; a tap opens Settings › Storage, no page and no mount.
+    function checkLockedRow(list) {
+        var row = rowOf(list, "VAULT")
+        if (!row || !row.locked || row.unmounted)
+            return fail("VAULT is not shown as locked")
+        var locks = findAll(row, function(x) { return x.visible && x.objectName === "statusLock" }, [])
+        if (locks.length !== 1 || statusIcons(row) !== "")
+            return fail("VAULT shows " + locks.length + " padlocks and dots [" + statusIcons(row) + "]")
+        if (dimmed(row) < dimmed(rowOf(list, "CARD")) + 2)
+            return fail("VAULT is not dimmed")
+        row = rowOf(list, "VAULT")
+        var depth = pageStack.depth
+        row.clicked(null)
+        if (pageStack.depth !== depth || Bridge.busyDrives.length !== 0)
+            fail("tapping VAULT opened a page or mounted it")
+    }
+
+    // Without the bridge's storage-settings: no menu, and a tap does nothing.
+    function checkLockedRowWithoutStorage(list) {
+        var row = rowOf(list, "VAULT")
+        if (row.menu !== null)
+            return fail("VAULT has a menu without Open Storage settings")
+        var depth = pageStack.depth
+        row.clicked(null)
+        if (pageStack.depth !== depth || Bridge.busyDrives.length !== 0)
+            fail("tapping VAULT without storage settings opened a page or mounted it")
+    }
+
     function checkRecentsRow(list) {
         var row = rowOf(list, "", "recents")
         var label = row ? findAll(row, function(x) { return x.text === "lautta-browse-recents" }, []) : []
@@ -182,9 +224,14 @@ ApplicationWindow {
             if (++win.waited > 100)
                 return win.fail("step " + win.step + " timed out")
             if (win.step === 1) {
-                // RecentsPage is the page that knows whether recents are on.
-                if (pageStack.currentPage.recentsOn !== undefined)
-                    win.scenarioRunning = false
+                // RecentsPage is the page that knows whether recents are on;
+                // the tap on VAULT asked the bridge once, the one without
+                // storage settings not at all.
+                if (pageStack.currentPage.recentsOn === undefined || win.storageCalls === 0)
+                    return
+                if (win.storageCalls !== 1)
+                    win.fail("Open Storage settings was asked " + win.storageCalls + " times")
+                win.scenarioRunning = false
                 return
             }
             var list = win.browseList()
@@ -193,9 +240,13 @@ ApplicationWindow {
             win.checkPulley(list)
             for (var i = 0; i < win.menus.length && win.scenarioRunning; ++i)
                 win.checkMenu(list, win.menus[i])
+            if (win.scenarioRunning)
+                win.checkLockedRow(list)
             pageStack.currentPage.storageSettings = false
             if (win.scenarioRunning)
                 win.checkMenu(list, win.withoutStorage)
+            if (win.scenarioRunning)
+                win.checkLockedRowWithoutStorage(list)
             if (win.scenarioRunning)
                 win.checkUnmountedRow(list)
             if (win.scenarioRunning)

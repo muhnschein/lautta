@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // PDF thumbnails on the target (PRV-1, PRV-14). In a folder of this device a
-// PDF asks the system thumbnailer for its first page at the icon's size,
-// with the PDF type, without which it draws no PDF, in the grid and the list. In an archive (it stands
-// in for a server: neither is on this device) the app draws the first page;
-// the name stays off a compact grid's tile only while a thumbnail covers the
-// tile, and an encrypted PDF keeps its icon and gets its name back. With
-// Show thumbnails off no PDF has one. Fails when a local PDF asks without its
-// type, a readable archive PDF shows no thumbnail, an unreadable one shows no
-// name, or the switch changes nothing. Here the system thumbnailer draws
-// nothing (no scene graph: a `Thumbnail` stays `Null`, a JPEG's too): only a
-// phone shows a local PDF's page, or its icon when the page cannot be drawn.
+// PDF asks the system thumbnailer for its first page at the icon's size, with
+// the PDF type, without which it draws no PDF, in the grid and the list. In an
+// archive (it stands in for a server: neither is on this device) the app
+// draws the first page, and an encrypted PDF keeps its icon. With Show
+// thumbnails off no PDF has one (the name under the tile stays either way,
+// tst_directory_grid_captions.qml). Fails when a local PDF asks without its
+// type, a readable archive PDF shows no thumbnail, an unreadable one is not
+// marked as failed, or the switch changes nothing. Here the system
+// thumbnailer draws nothing (no scene graph: a `Thumbnail` stays `Null`, a
+// JPEG's too): only a phone shows a local PDF's page, or its icon when the
+// page cannot be drawn.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -75,13 +76,6 @@ ApplicationWindow {
         return findAll(icon, function (x) { return x.priority !== undefined && x.mimeType !== undefined }, [])[0]
     }
 
-    // The name shown on the tile of `name`, null when the tile has none.
-    function nameOn(view, name) {
-        layOut(view)
-        var labels = findAll(view, function (x) { return x.text === name && x.truncationMode !== undefined }, [])
-        return labels.length > 0 ? labels[0] : null
-    }
-
     // Lets the event loop run until `done()` holds, for at most 10 s.
     function until(done) {
         for (var i = 0; i < 200 && !done(); ++i)
@@ -129,11 +123,7 @@ ApplicationWindow {
         if (expect(good && locked, "both PDFs of the archive ask for a thumbnail of the app")) {
             expect(good.thumbnailSource.indexOf("image://lautta-thumb/") === 0, "from the thumbnail provider: " + good.thumbnailSource)
             expect(until(function () { return good.thumbnailReady }), "the first page of a readable PDF shows")
-            expect(nameOn(view, "readable.pdf") === null || !nameOn(view, "readable.pdf").visible,
-                   "its tile has no name: the page covers it")
             expect(until(function () { return locked.thumbnailFailed }), "an encrypted PDF has no thumbnail")
-            var name = nameOn(view, "secret.pdf")
-            expect(name && name.visible, "so its tile shows its name")
         }
         pageStack.pop(null, PageStackAction.Immediate)
     }
@@ -143,12 +133,10 @@ ApplicationWindow {
         tools.pump(500)
         tools.installFixture(Qt.resolvedUrl("host/fixtures/two-pages.pdf"), base + "readable.pdf")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/secret.pdf"), base + "secret.pdf")
-        // A compact grid: 4 per row, names on icons only.
         App.setSetting("view_mode", JSON.stringify("grid"))
-        App.setSetting("grid_columns", JSON.stringify(4))
         App.setSetting("thumbnails_remote", JSON.stringify(true))
         var view = push(base)
-        expect(view.gridMode && !view.gridCaptions, "a compact grid")
+        expect(view.gridMode, "a grid")
 
         checkLocal(view)
         // The list's rows ask the same way.
@@ -163,12 +151,9 @@ ApplicationWindow {
         tools.pump(300)
         expect(findAll(view, function (x) { return x.thumbnailFailed !== undefined && x.category === "pdf" && x.thumbnailSource.length > 0 }, []).length === 0,
                "without thumbnails no PDF asks for one")
-        var plain = nameOn(view, "readable.pdf")
-        expect(plain && plain.visible, "and every PDF tile shows its name")
 
         App.setSetting("thumbnails_local", JSON.stringify(true))
         App.setSetting("view_mode", JSON.stringify("list"))
-        App.setSetting("grid_columns", JSON.stringify(4))
     }
 
     Component {

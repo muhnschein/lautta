@@ -2262,18 +2262,6 @@
         <source>Search</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-opts-grid-size">
-        <source>Grid size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-opts-grid-4">
-        <source>4 per row</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-opts-grid-3">
-        <source>3 per row, with names</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-browse-layout-restore">
         <source>Restore defaults</source>
         <translation type="unfinished"></translation>
@@ -2524,14 +2512,6 @@
         <source>List</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-settings-summary-grid-3">
-        <source>Grid of 3</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-summary-grid-4">
-        <source>Grid of 4</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-settings-summary-by-size">
         <source>size</source>
         <extracomment>How folders are sorted, in &quot;List, sorted by size&quot;</extracomment>
@@ -2554,7 +2534,7 @@
     </message>
     <message id="lautta-settings-summary-view">
         <source>%1, sorted by %2</source>
-        <extracomment>%1 is how folders show (&quot;List&quot;, &quot;Grid of 4&quot;), %2 their order (&quot;name&quot;)</extracomment>
+        <extracomment>%1 is how folders show (&quot;List&quot;, &quot;Grid&quot;), %2 their order (&quot;name&quot;)</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-summary-trash" numerus="yes">
@@ -2675,6 +2655,10 @@
             <numerusform>Moving %n item</numerusform>
             <numerusform>Moving %n items</numerusform>
         </translation>
+    </message>
+    <message id="lautta-settings-summary-grid">
+        <source>Grid</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>

@@ -411,6 +411,13 @@ what the app does.
   bridge mount it (`Mount`, as Settings › Storage does, without a question) and opens the
   volume once the sandbox shows its folder (up to 2 s; otherwise "not found", naming it). A mounted volume of
   such a drive has *Unmount* (`Unmount`) and a connected-server dot on the right.
+  An encrypted (LUKS) card or USB drive that is not unlocked (netvfs lists it `locked`)
+  is a dimmed *Volumes* row with its size as well, named and placed by the same rule (its LUKS label,
+  else its LUKS UUID), with Silica's padlock on the right instead of a dot and no text
+  about it. Tapping it, or its only menu entry *Open Storage settings*, opens Settings ›
+  Storage, which unlocks it: no passphrase passes through the app or netvfs. Without
+  `storage-settings` it has no menu and a tap does nothing. Once unlocked it is gone,
+  and its filesystem is a drive like any other.
   While a mount or unmount is under way the drive's dot pulses, as a connecting
   server's. A failure (busy, not allowed) is told with the volume's name. A volume the
   bridge does not mount has no dot: it is there because it is mounted. A drive that is
@@ -445,8 +452,8 @@ what the app does.
   in the binary), size, modified, type; folders first toggle; stable.
 - BRW-3: Instant filter (substring, case- and diacritics-insensitive), hidden files
   toggle (dot names and the hidden attribute).
-- BRW-4: View settings (sort, folders first, hidden files, list or grid, grid size,
-  thumbnails) are global: the same for every folder and location. They are set on one
+- BRW-4: View settings (sort, folders first, hidden files, list or grid, thumbnails) are global:
+  the same for every folder and location. They are set on one
   *View options* page, opened from a folder's pulley or from *Settings*: a plain page
   whose controls apply at once, with a live preview of a sample folder (folders, files,
   a hidden file, a photo) in the order and view a real folder would get, drawn on a
@@ -457,9 +464,9 @@ what the app does.
   names the cost in data, battery and speed) with its size limit (PRV-2) and the
   thumbnail cache size. Folders already open follow a change at once; what one folder
   was switched to on its own (*Use list* over a suggested grid, §15.3) stays until that
-  setting changes for all. The grid shows 4 items per row with names on icons only, or 3
-  per row with larger icons and the name and caption lines under every item (§15.3);
-  landscape keeps the tile size.
+  setting changes for all. The grid has one size: 3 items per row in portrait with the name
+  and caption lines under every item (§15.3); landscape keeps the tile size and shows more
+  per row.
 - BRW-5: Stale-while-revalidate: cached listing shown immediately (≤ 7 days old, marked
   stale), refresh on the interactive lane, diff applied in place without losing scroll
   or selection.
@@ -774,8 +781,7 @@ bridge).
   Thumbnail = first page. One rule (`thumbs::thumbnail_source`) picks files with a
   thumbnail and who makes it. A PDF follows the switches of an image: *Show thumbnails*
   for a local PDF, also *Thumbnails from servers* for a server PDF. Open folders follow a
-  change at once. Encrypted, damaged or page-less PDF: icon, no message; a compact grid
-  tile then shows the file name.
+  change at once. Encrypted, damaged or page-less PDF: icon, no message.
   - Local PDF, a trashed one too: `Nemo.Thumbnailer` (PRV-1), told type
     `application/pdf`; a trashed one's stored copy has no extension, so the type comes
     from the original name. No size limit. A link or a copy gone from the Trash has no
@@ -877,7 +883,8 @@ Long-press menus: favourite: *Edit favourite*, *Copy address*, *Remove from
 favourites*; folder: *Add to favourites*, *Copy address*; volume:
 *Add to favourites*, *Copy address*, *Unmount* (drives the bridge mounts, LOC-3),
 *Open Storage settings* (bridge only, LOC-3, NVB-13); a drive that
-is not mounted: *Mount*, *Open Storage settings*; account: *Edit
+is not mounted: *Mount*, *Open Storage settings*; a locked drive: *Open Storage settings*
+only (none without it); account: *Edit
 server*, *Update sign-in* or *Review server identity* while
 netvfs asks for it (NVB-5), *Copy address*; ad-hoc server:
 *Connect* (recent ones), *Copy address*, *Remove from recents*. Hiding a row is
@@ -888,14 +895,19 @@ attached to swipe to: Activity is in the pulley and the activity bar (XFR-13).
 ### 15.3 Directory page
 
 Header with the folder name only (no breadcrumb); tap → path menu. Slim progress line while listing
-or receiving transfers. List view with icon or thumbnail and "size · modified"; grid view
-for media folders (suggested when > 60 % images). The grid at 4 per row has the name inside
-the tile, cut at the end. At 3 per row the icon is about half the tile wide (thumbnails fill
-it) and under it stand the name on up to two lines, centred (a name that does not fit keeps
-its start on the first line and its end, the extension, on the second behind an ellipsis in
-the middle), and two small lines in the secondary colour, each cut at the end: a file's
+or receiving transfers. Header, progress line, path menu and notices (offline, large, suggested
+grid, error) are fixed at the top of the page: list or grid scrolls under them, clipped, in portrait
+and landscape, and the pulley stays on the content. The path menu scrolls when taller than the
+rest of the page. Opening a folder starts at its very top (nothing in the scroller can grow above
+the first item); going back to a folder on the page stack shows it where it was left. List view
+with icon or thumbnail and "size · modified"; grid view for media folders (suggested when > 60 %
+images). The grid has 3 tiles per row in portrait (landscape keeps the tile size, so it fits
+more); the icon is about half the tile wide (thumbnails fill it) and under it stand the name on
+up to two lines, centred (a name that does not fit keeps its start on the first line and its end,
+the extension, on the second behind an ellipsis in the middle), and two small lines in the
+secondary colour, each cut at the end: a file's
 modified time and size; a folder's item count ("N items") on this device and on drives,
-hidden files left out unless shown, "More than N items" past 10 000 entries, none while
+hidden files left out unless shown, "More than N items" past 1000 entries, none while
 counting or when the folder cannot be read; a folder on a server or in an archive its
 modified time (counting would list it over the network). A folder is counted when its cell
 appears and again when its modified time or the hidden files setting changes, once per
@@ -926,15 +938,17 @@ Tapping an icon opens the item like the rest of the row. The selection's actions
 long-press menu's order (*Share*, *Copy*, *Cut*, *Delete*), *More actions* and a last
 button that leaves selection, set apart on a key of the ambience's highlight background
 with its icon in the highlight colour. The panel is the same for one item or several, with no
-push-up menu. *More actions* opens a page of its own (OPS-12): *Compress* and *Move to
-new folder* for any number of items, and for one item also *Rename* and *Add to
-favourites*, so every action of an item is reachable from the grid. Backing out of the page keeps the selection. The panel's
+push-up menu; waiting for the first item it has only the last button, and ending selection
+leaves it with the buttons it had while it slides out. *More actions* opens a page of its
+own (OPS-12): *Compress* and *Move to new folder* for any number of items, and for one item
+also *Rename* and *Add to favourites*, so every action of an item is reachable from the
+grid. Backing out of the page keeps the selection. The panel's
 *Share*, *Copy* and *Cut*, an action of the page, a finished delete and deselecting the
 last item leave selection. Archives and *Compress* show the platform's archive icon
 (`icon-m-file-archive-folder`) everywhere.
 Placeholders: empty, no permission, offline, error with *Retry*/*Details*. They and the
-loading indicator are part of the view's content, so pulling the pulley moves them with
-the header.
+loading indicator are part of the view's content, so pulling the pulley moves them while
+the header stays.
 
 ### 15.4 Activity page
 

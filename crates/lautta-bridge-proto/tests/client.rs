@@ -331,7 +331,7 @@ async fn features_and_the_storage_handoff_need_no_consent() {
 async fn drives_are_listed_mounted_and_unmounted_without_consent() {
     // netvfs XB-20.
     use lautta_bridge_proto::fake::FakeDrive;
-    use lautta_bridge_proto::{drive_info, feature, value_i64, value_str};
+    use lautta_bridge_proto::{drive_info, feature, value_bool, value_i64, value_str};
     let fake = fake_with_account().await;
     fake.set_consent(lautta_bridge_proto::fake::Consent::Denied).await;
     fake.set_features(Some(&[feature::STORAGE_SETTINGS, feature::DRIVES]));
@@ -375,6 +375,18 @@ async fn drives_are_listed_mounted_and_unmounted_without_consent() {
     assert_eq!(e.netvfs_name(), Some("NotFound"));
     let e = BridgeError::from(p.unmount("../sda1").await.unwrap_err());
     assert!(matches!(e, BridgeError::InvalidArgs(_)), "{e:?}");
+
+    // A LUKS device not unlocked: Settings › Storage unlocks it, the bridge
+    // never mounts it.
+    let mut with_locked = fake.drives();
+    with_locked.push(FakeDrive::new("mmcblk1p2", "VAULT", "sd", 32).locked());
+    fake.set_drives(with_locked).await;
+    let drives = p.list_drives().await.unwrap();
+    assert_eq!(value_bool(&drives[2].info[drive_info::LOCKED]), Some(true));
+    assert!(!drives[0].info.contains_key(drive_info::LOCKED));
+    let e = BridgeError::from(p.mount("mmcblk1p2").await.unwrap_err());
+    assert_eq!(e.netvfs_name(), Some("Unsupported"));
+    p.unmount("mmcblk1p2").await.unwrap();
 
     // With a mount root the folder comes and goes.
     let media = tempfile::tempdir().unwrap();

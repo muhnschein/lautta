@@ -149,6 +149,8 @@ pub struct FakeDrive {
     pub kind: String,
     pub size: i64,
     pub uuid: String,
+    /// A LUKS device not unlocked: listed as `locked`, never mounted.
+    pub locked: bool,
 }
 
 impl FakeDrive {
@@ -161,7 +163,14 @@ impl FakeDrive {
             kind: kind.to_owned(),
             size,
             uuid: String::new(),
+            locked: false,
         }
+    }
+
+    /// The same drive as a LUKS device not unlocked (netvfs XB-20).
+    pub fn locked(mut self) -> FakeDrive {
+        self.locked = true;
+        self
     }
 
     /// The same drive with `uuid`.
@@ -178,13 +187,17 @@ impl FakeDrive {
 
     /// The drive as `ListDrives` lists it.
     pub fn wire(&self) -> WireDrive {
+        let fs_type = if self.locked { "crypto_LUKS" } else { "vfat" };
         let mut info = vec![
             (drive_info::KIND, InfoValue::Str(self.kind.clone())),
-            (drive_info::FS_TYPE, InfoValue::Str("vfat".to_owned())),
+            (drive_info::FS_TYPE, InfoValue::Str(fs_type.to_owned())),
             (drive_info::READ_ONLY, InfoValue::Bool(false)),
         ];
         if !self.uuid.is_empty() {
             info.push((drive_info::UUID, InfoValue::Str(self.uuid.clone())));
+        }
+        if self.locked {
+            info.push((drive_info::LOCKED, InfoValue::Bool(true)));
         }
         let mut info: HashMap<String, OwnedValue> = info
             .iter()
