@@ -267,24 +267,15 @@ impl Core {
     }
 
     /// *Clear app data* (DAT-3): every table of the database, the Trash
-    /// (with what is left of the bins schemas 4 and 5 kept in the
-    /// locations, OPS-8), all caches and the netvfs socket folder (netvfs
-    /// recreates it). Refused while transfers are unfinished.
+    /// (OPS-8), all caches and the netvfs socket folder (netvfs recreates
+    /// it). Refused while transfers are unfinished.
     pub fn clear_app_data(&self) -> Result<()> {
         if self.engine.pending_summary() > 0 {
             return Err(Error::new(ErrorKind::Locked, "transfers are still running"));
         }
-        // The rows say which old bins still hold items: read them before the wipe.
-        let old_bins = self.trash.pending_bins()?;
         self.wipe_tables()?;
         self.dircache.clear()?;
         remove_contents(&self.paths.trash_dir())?;
-        for bin in &old_bins {
-            crate::trash::remove_tree(bin)?;
-        }
-        for root in self.locations.trash_roots() {
-            crate::trash::remove_empty_bin(&crate::trash::old_bin_of(&root));
-        }
         remove_contents(&self.paths.cache_dir())?;
         remove_tree(&self.paths.data_dir().join("netvfs"))
     }

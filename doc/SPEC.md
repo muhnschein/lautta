@@ -550,33 +550,45 @@ bridge).
   PRV-14), made from the stored copy and, as its stored name has no extension, the type
   of the original name; the setting *Show thumbnails* (BRW-4) switches them off, and a
   stored item that is a link or is gone keeps its glyph, as folders and other files do.
-  Items are purged after the retention setting (30 days) when the settings are loaded at start and
-  whenever the Trash opens. The round-1 builds (schema 4–5) kept a hidden bin
-  `.lautta-trash` at the root of each folder: at start the items in them are moved into
-  the Trash (their rows, and so their deletion times, kept) and the emptied bins
-  removed. This is done once (schema 7 marks it due, DAT-2), item by item so an
-  interrupted start continues where it stopped, and it waits for an Android folder that
-  is not there. Anything else left in a bin stays, and the bin is then an ordinary
-  hidden folder.
-- OPS-9: Undo for the last rename, same-location move and trash operation. A rename is
-  undone from the Silica remorse on its row, *File renamed* or *Folder renamed*, for the
-  remorse time of OPS-8 (the remorse timer setting): tapping it renames the item back,
-  letting it run out keeps the new name; a row the listing makes anew meanwhile shows the
-  rest of it. Moves and trash from a banner for 10 s.
+  Items are purged after the retention setting (30 days) when the settings are loaded at
+  start and whenever the Trash opens; the start also removes the copies an interruption
+  left half made in the Trash folder.
+- OPS-9: Remorse. A delete to the Trash (OPS-8), a move and a rename run behind a Silica
+  remorse for the remorse time of OPS-8 (the remorse timer setting); tapping the remorse
+  cancels it. A copy has none. A rename happens at once, and the remorse on its row, *File
+  renamed* or *Folder renamed*, undoes it: tapping renames the item back, letting it run
+  out keeps the new name; a row the listing makes anew meanwhile shows the rest of it. A
+  move is the paste of cut items (OPS-10), from the folder pulley or the paste bar: the
+  remorse, at the top of the page, says *Moving “name”* or *Moving N items*; tapping it
+  cancels, so nothing moves and the items stay cut on the clipboard; letting it run out
+  takes them off the clipboard and starts the move as a transfer (XFR-1). Pasting again,
+  or leaving the folder, runs the pending move at once, as it does for a delete.
+  *Move to new folder* (OPS-13) has no remorse: its name dialog is the confirmation.
 - OPS-10: Clipboard (cut/copy, docked paste bar) across all locations. There is no
   *Copy to…*/*Move to…*: the user goes to the destination either way, so they paste there.
+  A cut is taken off the clipboard when its move starts (OPS-9), a copy stays.
 - OPS-12: There is no details page for an item. The rarer actions on one item sit
   behind *More actions*, the last row of its long-press menu: tapping it opens a Silica
   page whose header names the item, one row (theme icon and name) per action:
-  *Add to favourites* (the item itself, file or folder, ORG-1) and *Compress*. Tapping
-  a row runs the action and leaves the page; a dialog it opens takes the page's place,
-  so leaving the dialog returns to the folder. The image viewer's *More* offers the same
-  next to *Rename*. The selection's *More actions* button (§15.3) opens the same page for
-  the selected items: header the item's name, or the count when several; rows *Rename*
-  (theme icon `icon-m-edit`), *Add to favourites* and *Compress* for one item, *Compress*
-  alone for several. The *More actions* icon, a circle with three dots, is the app's own
+  *Add to favourites* (the item itself, file or folder, ORG-1), *Compress* and, in a
+  writable folder, *Move to new folder* (OPS-13). Tapping a row runs the action and
+  leaves the page; a dialog it opens takes the page's place, so leaving the dialog
+  returns to the folder. The image viewer's *More* offers the same next to *Rename*,
+  without *Move to new folder*. The selection's *More actions* button (§15.3) opens the
+  same page for the selected items: header the item's name, or the count when several;
+  rows *Rename* (theme icon `icon-m-edit`), *Add to favourites*, *Compress* and *Move
+  to new folder* for one item, *Compress* and *Move to new folder* for several. The
+  *More actions* icon, a circle with three dots, is the app's own
   (`qml/icons/more.svg`; the platform theme has none), on the selection panel and in the
   image viewer.
+- OPS-13: *Move to new folder* on the *More actions* page (OPS-12), for one item or
+  the selection, only where the folder is writable: not in the folder picker, the share
+  target, the Trash or an archive. It asks for the name in the dialog of the pulley's
+  *New* (same default name, same checks, same errors), makes the folder in the folder
+  being viewed, then moves the items into it, on a server too. The dialog is the
+  confirmation, so there is no remorse (OPS-9). Selection ends when the row is tapped,
+  as for *Compress*. If the folder cannot be made, the error shows as for *New* and
+  nothing moves.
 
 ## 11. Transfers
 
@@ -646,11 +658,10 @@ bridge).
 - PRV-3: Thumbnail jobs: interactive lane, lowest priority, ≤ 2 in flight per location,
   visible delegates only, canceled on scroll. PDF thumbnails (PRV-14) use same jobs.
 - PRV-4: Viewers: images (zoom, swipe through the folder, EXIF panel), text/code (read-
-  only up to 1 MiB, then a notice; numbered lines wrapped to the page's width by
-  default, so the page swipes back like any other, also from Markdown's *View source*;
-  *Don't wrap lines* in the pulley lets lines wider than the page scroll sideways
-  instead, and then a swipe across the text scrolls it and the back indicator goes
-  back; tabs to the next multiple of 4 columns; a line longer than 1000 characters
+  only up to 1 MiB, then a notice; numbered lines always wrapped to the page's width, so
+  the list never scrolls sideways and the page swipes back like any other, also from
+  Markdown's *View source*; the pulley has *Open with* and *Share*; tabs to the next
+  multiple of 4 columns; a line longer than 1000 characters
   goes on over further rows; coloured by language, PRV-13; on a backdrop over the whole
   page, Silica's overlay colour at 60 % opacity (black on a dark ambience, light grey on
   a light one), so the text reads over any wallpaper), Markdown (pulldown-cmark
@@ -878,8 +889,8 @@ folder's own actions nearest the content. While selecting *Select all* and
 destination, have no *Activity*. The
 folder itself is made a favourite from the path menu (BRW-9). Context menu: plain
 Silica rows *Share* (files), *Copy*, *Cut*, *Rename*, *Delete*, *More actions*; fixed
-order, capability-filtered. *More actions* opens a page of *Add to favourites* and
-*Compress* for that item (OPS-12); there is no details page. *Rename*
+order, capability-filtered. *More actions* opens a page of *Add to favourites*,
+*Compress* and *Move to new folder* for that item (OPS-12, OPS-13); there is no details page. *Rename*
 is a dialog of the plain Silica dialog header, titled *Rename*, and the name field
 only; *New* opens one titled *New folder* (accept *Create*) with the name
 field. A taken or invalid name is an error in the field's label. Archives need no *Extract* row: they open as a location with *Extract all*. Selection starts from the pulley's *Select*, in list and grid alike,
@@ -896,9 +907,9 @@ Tapping an icon opens the item like the rest of the row. The selection's actions
 long-press menu's order (*Share*, *Copy*, *Cut*, *Delete*), *More actions* and a last
 button that leaves selection, set apart on a key of the ambience's highlight background
 with its icon in the highlight colour. The panel is the same for one item or several, with no
-push-up menu. *More actions* opens a page of its own (OPS-12): *Compress* for any number
-of items, and for one item also *Rename* and *Add to favourites*, so every action of an
-item is reachable from the grid. Backing out of the page keeps the selection. The panel's
+push-up menu. *More actions* opens a page of its own (OPS-12): *Compress* and *Move to
+new folder* for any number of items, and for one item also *Rename* and *Add to
+favourites*, so every action of an item is reachable from the grid. Backing out of the page keeps the selection. The panel's
 *Share*, *Copy* and *Cut*, an action of the page, a finished delete and deselecting the
 last item leave selection. Archives and *Compress* show the platform's archive icon
 (`icon-m-file-archive-folder`) everywhere.
@@ -949,8 +960,8 @@ paused) is in its status line and context menu. Pulley: *Clear activity history*
   the line's colour: a favourite's place in Browse and in the favourite dialog, a
   recent's place, the folder headers of a search on a server and the destination in an
   Activity title. Local places have none.
-- UI-10: Bars at the bottom of a page (selection and paste panels, activity bar, undo
-  notice, search progress) are opaque: Silica's docked panel gradient on the ambience's
+- UI-10: Bars at the bottom of a page (selection and paste panels, activity bar, search
+  progress) are opaque: Silica's docked panel gradient on the ambience's
   dimmer highlight colour, so content scrolling under them never shows through. Their
   icons share the theme's stroke weight and optical size; the app's own icons are drawn
   on the theme's 64-unit grid with 2-unit strokes.
@@ -1022,17 +1033,15 @@ SQLite for everything structured.
   (`is_dir`: folder or file, ORG-1, schema 5; older rows are folders; `icon`: the chosen
   theme icon name, ORG-1, schema 6; NULL for the default icon and for older rows),
   `recents`, `transfers`, `transfer_items`, `working_copies`, `dircache`,
-  `trash_items(id, original_uri, trashed_at, stored_name, is_dir, size, bin)` (`bin`: path
-  bytes of the round-1 bin still holding the item, schema 4; NULL once it is in
-  `.../trash/`), `trash_drain(due)` (a row while those bins are still to be drained into
-  the Trash, schema 7, OPS-8),
+  `trash_items(id, original_uri, trashed_at, stored_name, is_dir, size)` (OPS-8; the
+  table also has a `bin` column and the schema a `trash_drain` table, left by schemas 4
+  and 7, which nothing reads or writes: dropping them takes a migration of its own),
   `reading_positions(uri,
   location_id, page, at_ms)` (PRV-12), `browse_layout(section, item, hidden, position)`
   (BRW-12).
 - DAT-3: The netvfs socket directory `~/.local/share/org.netvfs/lautta/netvfs/` belongs
   to netvfs; the app only reads it. *Clear app data* in Settings deletes it along with
-  everything else (the Trash too, and any round-1 bins still in the folders, OPS-8); netvfs
-  recreates it (netvfs XB-4).
+  everything else (the Trash too, OPS-8); netvfs recreates it (netvfs XB-4).
 
 ## 20. Error presentation
 
@@ -1147,8 +1156,7 @@ when the netvfs bridge they depend on is released.
   empty folder (mount propagation into the app's namespace), and `Unmount` of a volume
   the app is not using succeeds; and a delete in `~/Documents`
   and in `~/android_storage/DCIM` lands in the Trash (a copy across the sandbox's mounts,
-  OPS-8) and restores from it; a round-1 build's `.lautta-trash` bins are drained and
-  removed on the first start of this one.
+  OPS-8) and restores from it.
 - `ShareProvider` delivery of files from other apps' locations (INT-1).
 - Harbour accepting an aarch64-only upload (the validator accepts the architecture; the
   store's per-release policy needs confirming).

@@ -91,23 +91,6 @@
         <source>Something went wrong.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-undo-renamed">
-        <source>Renamed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-undo-moved">
-        <source>Moved</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-undo-trashed">
-        <source>Moved to trash</source>
-        <oldsource>Moved to Recently deleted</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-undo">
-        <source>Undo</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-start-error">
         <source>Lautta can&apos;t open its data</source>
         <translation type="unfinished"></translation>
@@ -1061,14 +1044,6 @@
     </message>
     <message id="lautta-viewers-media-getting">
         <source>Getting the file before playing</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-unwrap">
-        <source>Don&apos;t wrap lines</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-wrap">
-        <source>Wrap lines</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-read-only">
@@ -2685,6 +2660,21 @@
     <message id="lautta-browse-layout-servers">
         <source>Servers</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-move-new-folder">
+        <source>Move to new folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-moving">
+        <source>Moving “%1”</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-moving-many" numerus="yes">
+        <source>Moving %n items</source>
+        <translation>
+            <numerusform>Moving %n item</numerusform>
+            <numerusform>Moving %n items</numerusform>
+        </translation>
     </message>
 </context>
 </TS>

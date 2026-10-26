@@ -40,18 +40,23 @@ Item {
         for (var i = 0; i < ctxs.length; ++i) {
             var menu = ids(Actions.menu(ctxs[i]))
             check(menu[menu.length - 1] === "more", "More actions is the last row: " + JSON.stringify(ctxs[i]))
-            same(ids(Actions.more(ctxs[i])), ["favourite", "compress"], "More actions: " + JSON.stringify(ctxs[i]))
+            same(ids(Actions.more(ctxs[i])),
+                 ctxs[i].writable ? ["favourite", "compress", "moveToNewFolder"] : ["favourite", "compress"],
+                 "More actions: " + JSON.stringify(ctxs[i]))
         }
+        // Where the folder is not said (the image viewer's More page) it is
+        // not offered: that page cannot follow the image into its new folder.
+        same(ids(Actions.more({ "isDir": false })), ["favourite", "compress"], "More actions of the image viewer")
     }
 
     function testIcons() {
-        var ctxs = [{ "isDir": false, "writable": true }, { "isDir": true, "writable": false }]
-        for (var i = 0; i < ctxs.length; ++i) {
-            var rows = Actions.more(ctxs[i])
-            same(rows.map(function(r) { return r.icon }),
-                 ["image://theme/icon-m-favorite", FileIcons.archive],
-                 "More actions icons: " + JSON.stringify(ctxs[i]))
-        }
+        var favourite = "image://theme/icon-m-favorite"
+        var folder = "image://theme/icon-m-file-folder"
+        same(Actions.more({ "isDir": false, "writable": true }).map(function(r) { return r.icon }),
+             [favourite, FileIcons.archive, folder], "More actions icons, writable folder")
+        same(Actions.more({ "isDir": true, "writable": false }).map(function(r) { return r.icon }),
+             [favourite, FileIcons.archive], "More actions icons, read-only folder")
+        same(Actions.icon("moveToNewFolder"), "image://theme/icon-m-file-folder", "Move to new folder")
         same(Actions.icon("favourite"), "image://theme/icon-m-favorite", "Add to favourites")
         same(Actions.icon("rename"), "image://theme/icon-m-edit", "Rename, a row for the selection's one item")
         same(Actions.icon("compress"), "image://theme/icon-m-file-archive-folder",
@@ -61,11 +66,12 @@ Item {
 
     function testText() {
         // On the host qsTrId gives back the id.
-        var entries = Actions.menu({ "isDir": false, "writable": true }).concat(Actions.more({ "isDir": false }))
+        var entries = Actions.menu({ "isDir": false, "writable": true }).concat(Actions.more({ "isDir": false, "writable": true }))
         for (var i = 0; i < entries.length; ++i)
             check(entries[i].text.indexOf("lautta-dir-act-") === 0, entries[i].id + " has a translated text")
         same(Actions.text("more"), "lautta-dir-act-more", "More actions")
         same(Actions.text("favourite"), "lautta-dir-act-favourite", "Add to favourites")
+        same(Actions.text("moveToNewFolder"), "lautta-dir-act-move-new-folder", "Move to new folder")
         same(Actions.text("info"), "info", "Details is gone")
         same(Actions.text("copy_to"), "copy_to", "Copy to… is gone")
     }

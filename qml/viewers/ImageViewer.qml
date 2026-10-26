@@ -114,7 +114,6 @@ FullscreenContentPage {
         property string pendingName
 
         onRenamed: {
-            App.noteUndo()
             page.uri = newUri
             images.reload()
         }

@@ -127,9 +127,8 @@ const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (section, item)
     );
     "#,
-    // 4: OPS-8, the bin holding a trashed item (`<location root>/.lautta-trash`,
-    // path bytes). NULL for the items trashed before, which stay in the app
-    // data trash folder.
+    // 4: `trash_items.bin`, unused: nothing reads or writes it (OPS-8). The
+    // column stays, as dropping it takes a migration of its own.
     r#"
     ALTER TABLE trash_items ADD COLUMN bin BLOB;
     "#,
@@ -142,10 +141,8 @@ const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE favourites ADD COLUMN icon TEXT;
     "#,
-    // 7: OPS-8, the trash is one folder in the app data again (DAT-1). The
-    // items still in the bins of schemas 4 to 6 move there with their rows
-    // (`bin` becomes NULL), then the bins go: this row stays until that is
-    // done (`Trash::tidy`).
+    // 7: `trash_drain`, unused: nothing reads or writes it (OPS-8). The table
+    // stays, as dropping it takes a migration of its own.
     r#"
     CREATE TABLE trash_drain (due INTEGER NOT NULL);
     INSERT INTO trash_drain VALUES (1);
@@ -359,26 +356,31 @@ mod tests {
         }
         let db = Db::open(&path).unwrap();
         assert_eq!(db.version().unwrap(), SCHEMA_VERSION);
-        let bin: Option<Vec<u8>> = db
+        let uri: String = db
             .lock()
-            .query_row("SELECT bin FROM trash_items WHERE stored_name = 's'", [], |r| {
-                r.get(0)
-            })
+            .query_row(
+                "SELECT original_uri FROM trash_items WHERE stored_name = 's'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
-        assert_eq!(bin, None, "old items keep the app data folder");
+        assert_eq!(uri, "lautta://a/b");
     }
 
     #[test]
-    fn schema_7_keeps_the_items_of_the_old_bins_and_makes_their_drain_due() {
+    fn a_device_database_at_schema_7_keeps_opening_with_its_trash_rows() {
+        // The database on the device is at schema 7, with trash rows that
+        // name a bin. A migration that ran there may not be dropped or
+        // renumbered, or this app would call that database newer than itself.
+        const DEVICE_SCHEMA: usize = 7;
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("v5.db");
+        let path = dir.path().join("v7.db");
         {
-            // Schema 5 with an item in the bin at the root of Documents.
             let c = Connection::open(&path).unwrap();
-            for sql in &MIGRATIONS[..5] {
+            for sql in &MIGRATIONS[..DEVICE_SCHEMA] {
                 c.execute_batch(sql).unwrap();
             }
-            c.pragma_update(None, "user_version", 5).unwrap();
+            c.pragma_update(None, "user_version", DEVICE_SCHEMA).unwrap();
             c.execute(
                 "INSERT INTO trash_items(original_uri, trashed_at, stored_name, bin) \
                  VALUES ('lautta://user-documents/a', 7, 's', X'2f442f2e6c61757474612d7472617368')",
@@ -388,23 +390,15 @@ mod tests {
         }
         let db = Db::open(&path).unwrap();
         assert_eq!(db.version().unwrap(), SCHEMA_VERSION);
-        let c = db.lock();
-        let row: (i64, Vec<u8>) = c
+        let row: (String, i64) = db
+            .lock()
             .query_row(
-                "SELECT trashed_at, bin FROM trash_items WHERE stored_name = 's'",
+                "SELECT original_uri, trashed_at FROM trash_items WHERE stored_name = 's'",
                 [],
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .unwrap();
-        assert_eq!(
-            row,
-            (7, b"/D/.lautta-trash".to_vec()),
-            "the row waits for the drain"
-        );
-        let due: i64 = c
-            .query_row("SELECT count(*) FROM trash_drain", [], |r| r.get(0))
-            .unwrap();
-        assert_eq!(due, 1);
+        assert_eq!(row, ("lautta://user-documents/a".to_owned(), 7));
     }
 
     #[test]

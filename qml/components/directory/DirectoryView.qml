@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The folder view of DirectoryPage (SPEC §9, §15.3): header with the path menu, list or grid, pulley,
 // context menu and its More actions page, selection mode with drag
-// selection and a docked panel, paste bar, remorse (also the undo of a
-// rename, OPS-9) and the placeholders for empty, not accessible, offline,
-// large and error.
+// selection and a docked panel, paste bar, remorse (delete, move, and the
+// undo of a rename, OPS-9) and the placeholders for empty, not accessible,
+// offline, large and error.
 import QtQuick 2.6
 import QtQml.Models 2.2
 import Sailfish.Silica 1.0
@@ -46,6 +46,8 @@ Item {
     property string undoingUri
     // The More actions page while it is open.
     property Item moreActionsPage
+    // The items Move to new folder moves, until their folder is made.
+    property var toMove: []
 
     // Asks the host page to open a folder.
     signal openFolder(string uri)
@@ -71,10 +73,15 @@ Item {
             Open.open(pageStack, App, Operations, itemUri, false, mimeType, uri)
     }
 
-    function newFolder() {
-        var dialog = pageStack.push(Qt.resolvedUrl("../../dialogs/NewItemDialog.qml"), { "parentUri": uri })
+    // The pulley's New asks for the name of a folder to make here. Move to new
+    // folder (OPS-13) asks the same, and once the folder is made here
+    // (folderMade) puts `moving` into it: the dialog is the confirmation, so
+    // no remorse.
+    function newFolder(moving) {
+        var dialog = openDialog("../../dialogs/NewItemDialog.qml", { "parentUri": uri })
         dialog.accepted.connect(function () {
             view.pendingName = dialog.itemName
+            view.toMove = moving || []
             dir.createFolder(dialog.itemName)
         })
     }
@@ -167,14 +174,54 @@ Item {
         flickable.positionViewAtIndex(index, ListView.Contain)
     }
 
+    // The popup holds one remorse: a new one first runs the one pending,
+    // as Silica does when the page goes.
+    function settleRemorse() {
+        if (remorsePopup.active)
+            remorsePopup.trigger()
+    }
+
+    // A copy starts at once, a cut moves after the remorse timer (OPS-9).
     function paste() {
-        var taken = JSON.parse(App.takeClipboard())
-        if (!taken)
+        settleRemorse()
+        if (App.clipboardCut) {
+            pasteCut()
             return
-        if (taken.cut)
-            Operations.moveTo(JSON.stringify(taken.items), uri)
-        else
+        }
+        var taken = JSON.parse(App.takeClipboard())
+        if (taken)
             Operations.copyTo(JSON.stringify(taken.items), uri)
+    }
+
+    // The cut items stay cut while the remorse runs: tapping it cancels, and
+    // nothing has moved or been taken off the clipboard.
+    function pasteCut() {
+        var json = App.clipboardJson()
+        var items = JSON.parse(json)
+        if (items.length === 0)
+            return
+        var folder = uri
+        var action = function () {
+            // Only the cut that was pasted is consumed: a copy or a cut made
+            // since stays.
+            if (App.clipboardCut && App.clipboardJson() === json)
+                App.clearClipboard()
+            Operations.moveTo(json, folder)
+        }
+        var timeout = App.setting("remorse_seconds") * 1000
+        remorsePopup.execute(items.length === 1
+                             //% "Moving “%1”"
+                             ? qsTrId("lautta-dir-moving").arg(App.nameOf(items[0]))
+                             //% "Moving %n items"
+                             : qsTrId("lautta-dir-moving-many", items.length), action, timeout)
+    }
+
+    // A folder this view made is there: Move to new folder puts its items in.
+    function folderMade(folderUri) {
+        var items = toMove
+        toMove = []
+        if (items.length > 0)
+            Operations.moveTo(JSON.stringify(items), folderUri)
     }
 
     function searchHere() {
@@ -232,6 +279,7 @@ Item {
             //% "Moving to trash"
             listItem.remorseAction(qsTrId("lautta-dir-trashing"), action, timeout)
         } else {
+            settleRemorse()
             //% "Moving %n items to trash"
             remorsePopup.execute(qsTrId("lautta-dir-trashing-many", uris.length), action, timeout)
         }
@@ -265,6 +313,7 @@ Item {
         case "rename": rename(info); break
         case "delete": remove(uris, listItem); break
         case "more": moreActions(info); break
+        case "moveToNewFolder": newFolder(uris); break
         // CompressDialog takes the list itself, not its JSON text.
         case "compress": openDialog("../../dialogs/CompressDialog.qml", { "uris": uris }); break
         case "favourite":
@@ -388,7 +437,11 @@ Item {
             view.notifyFailure(kind, message, view.pendingName)
         }
         onStateChanged: view.revealRenamed()
-        onCreateFailed: view.notifyFailure(kind, message, view.pendingName)
+        onCreated: view.folderMade(uri)
+        onCreateFailed: {
+            view.toMove = []
+            view.notifyFailure(kind, message, view.pendingName)
+        }
         onSelectedCountChanged: view.setSelection(Selection.afterCount({ "selecting": view.selectionMode,
                                                                           "waiting": view.selectionWaiting },
                                                                         selectedCount))
@@ -425,6 +478,13 @@ Item {
 
         interval: 1200
         onTriggered: dir.refresh()
+    }
+
+    // A folder on a server is not watched: it is listed again when a transfer
+    // ends, as moves in and out of it change it.
+    Connections {
+        target: Transfers
+        onFinished: if (view.visible && Qt.application.state === Qt.ApplicationActive) dir.revisit()
     }
 
     Connections {

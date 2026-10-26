@@ -23,12 +23,11 @@ Item {
 
     function checkLines() {
         var two = TextRows.rows("first\nsecond")
-        check(shown(two) === "1:first|2:second" && two.longest === 6 && two.lines === 2,
-              "two lines: " + shown(two) + ", longest " + two.longest + ", lines " + two.lines)
+        check(shown(two) === "1:first|2:second" && two.lines === 2, "two lines: " + shown(two) + ", lines " + two.lines)
         var blank = TextRows.rows("")
-        check(shown(blank) === "1:" && blank.longest === 0 && blank.lines === 1, "an empty text is one empty line: " + shown(blank))
+        check(shown(blank) === "1:" && blank.lines === 1, "an empty text is one empty line: " + shown(blank))
         check(TextRows.rows("a\n\nb").rows.length === 3, "an empty line is a row")
-        check(TextRows.empty.rows.length === 0 && TextRows.empty.longest === 0 && TextRows.empty.lines === 0, "no text, no rows")
+        check(TextRows.empty.rows.length === 0 && TextRows.empty.lines === 0, "no text, no rows")
     }
 
     function checkTabs() {
@@ -39,12 +38,12 @@ Item {
             check(got === cases[i][1], "tabs in '" + cases[i][0] + "': '" + got + "'")
         }
         var row = TextRows.rows("\tx = 1")
-        check(shown(row) === "1:    x = 1" && row.longest === 9, "rows expand tabs: " + shown(row) + ", longest " + row.longest)
+        check(shown(row) === "1:    x = 1", "rows expand tabs: " + shown(row))
     }
 
     function checkLongLines() {
         var exact = TextRows.rows(repeat("a", 1000))
-        check(exact.rows.length === 1 && exact.longest === 1000, "1000 characters are one row: " + exact.rows.length)
+        check(exact.rows.length === 1, "1000 characters are one row: " + exact.rows.length)
         var two = TextRows.rows(repeat("b", 2000))
         check(two.rows.length === 2 && two.rows[1].text.length === 1000, "2000 characters are two rows: " + two.rows.length)
         var longLine = TextRows.rows("x\n" + repeat("c", 2500) + "\ny")
@@ -52,7 +51,7 @@ Item {
         var lengths = longLine.rows.map(function(r) { return r.text.length }).join(",")
         check(numbers === "1,2,0,0,3" && lengths === "1,1000,1000,500,1", "a long line goes on over rows: numbers "
               + numbers + ", lengths " + lengths)
-        check(longLine.longest === 1000 && longLine.lines === 3, "longest " + longLine.longest + ", lines " + longLine.lines)
+        check(longLine.lines === 3, "lines " + longLine.lines)
         check(longLine.rows[1].text + longLine.rows[2].text + longLine.rows[3].text === repeat("c", 2500), "nothing is lost")
 
         // A pair of surrogates (one character) across the 1000th unit stays whole.

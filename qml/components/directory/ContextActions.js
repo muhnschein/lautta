@@ -5,7 +5,7 @@
 // ones for this item (MoreActionsPage.qml), each row with its theme icon.
 // Capabilities decide what is applicable.
 // Copy to…/Move to… are gone on purpose: copy or cut, then paste where you
-// are.
+// are. Move to new folder makes the destination here (OPS-13).
 .pragma library
 .import "../FileIcons.js" as FileIcons
 
@@ -35,6 +35,9 @@ function text(id) {
     case "compress":
         //% "Compress"
         return qsTrId("lautta-dir-act-compress")
+    case "moveToNewFolder":
+        //% "Move to new folder"
+        return qsTrId("lautta-dir-act-move-new-folder")
     }
     return id
 }
@@ -47,6 +50,7 @@ function icon(id) {
     case "rename": return "image://theme/icon-m-edit"
     case "favourite": return "image://theme/icon-m-favorite"
     case "compress": return FileIcons.archive
+    case "moveToNewFolder": return "image://theme/icon-m-file-folder"
     }
     return ""
 }
@@ -63,13 +67,16 @@ function applicable(id, ctx) {
     // The item itself, file or folder (ORG-1), not the folder it is in.
     case "favourite": return true
     case "compress": return true
+    // Makes a folder here: the folder has to be writable (the image viewer,
+    // which does not say, has none).
+    case "moveToNewFolder": return ctx.writable === true
     }
     return false
 }
 
 // More actions last, after Delete: it leads on rather than acting.
 var menuOrder = ["share", "copy", "cut", "rename", "delete", "more"]
-var moreOrder = ["favourite", "compress"]
+var moreOrder = ["favourite", "compress", "moveToNewFolder"]
 
 function pick(order, ctx) {
     var out = []

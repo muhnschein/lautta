@@ -724,13 +724,13 @@ impl Core {
     }
 
     /// The Trash's work at start (OPS-8), once the settings are known: the
-    /// expired items go first, so they are not moved for nothing; then
-    /// [`Trash::tidy`](crate::trash::Trash::tidy) drains the bins that
-    /// schemas 4 and 5 kept at the roots of the locations. Blocking.
+    /// expired items go, then the copies that an interruption left half made
+    /// ([`Trash::tidy`](crate::trash::Trash::tidy)). Returns the number of
+    /// items purged. Blocking.
     pub fn tidy_trash(&self, now_secs: i64) -> Result<usize> {
         let purged = self.purge_trash(now_secs);
-        let moved = self.trash.tidy(&self.locations.trash_roots());
-        purged.and(moved)
+        let tidied = self.trash.tidy();
+        purged.and_then(|n| tidied.map(|()| n))
     }
 
     /// Empties the Trash: every item, and what a crash left in the trash

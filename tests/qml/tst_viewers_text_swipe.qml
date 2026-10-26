@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The text viewer (PRV-4) on the target: it wraps its lines by default, so
-// its list flicks only up and down and a swipe goes back to the page below,
-// with the whole header shown at the top. Unwrapped, it flicks sideways
-// only when a line is wider than the page. Markdown's "View source" opens
-// it wrapped, and a swipe goes back to the Markdown page.
+// The text viewer (PRV-4) on the target: it always wraps its lines, so its
+// list flicks only up and down and a swipe goes back to the page below, with
+// the whole header shown at the top. Its pulley offers Open with and Share,
+// no way to unwrap. Markdown's "View source" opens it the same, and a swipe
+// goes back to the Markdown page.
 //
 // The Silica window sits in a Qt Quick window: only items in one get the
 // mouse events a swipe needs.
@@ -79,16 +79,31 @@ QtQuick.Window {
     }
 
     function vertical(view) {
-        return view.flickableDirection === Flickable.VerticalFlick && view.contentWidth === view.width
+        return view.flickableDirection === Flickable.VerticalFlick && view.contentWidth <= view.width
     }
 
-    // Wrapped by default: a wide line takes several rows, the whole header
-    // shows, and the page swipes back.
-    function wrapsByDefault(below) {
+    // A text is the id of a string, or its English text where one is loaded.
+    function isOneOf(text, id, english) {
+        return text === id || text === english
+    }
+
+    // The texts of the pulley's entries.
+    function pulleyTexts(viewer) {
+        return findAll(viewer, function(x) { return x.hasOwnProperty("__silica_menuitem") }, [])
+            .map(function(item) { return item.text })
+    }
+
+    // A wide line takes several rows, the whole header shows, the pulley has
+    // no unwrap entry, and the page swipes back.
+    function wraps(below) {
         var viewer = openText("lautta://user-documents/wide.txt")
         var view = listOf(viewer)
-        expect(viewer.wrap, "wraps by default")
-        expect(vertical(view), "a wrapped list flicks only up and down: direction " + view.flickableDirection
+        expect(viewer.wrap === undefined, "there is no way to unwrap")
+        var entries = pulleyTexts(viewer)
+        expect(entries.length === 2 && isOneOf(entries[0], "lautta-viewers-open-with", "Open with")
+               && isOneOf(entries[1], "lautta-viewers-share", "Share"),
+               "the pulley has Open with and Share only: " + JSON.stringify(entries))
+        expect(vertical(view), "the list flicks only up and down: direction " + view.flickableDirection
                + ", " + view.contentWidth + " wide in " + view.width)
         expect(Math.abs(view.contentY - view.originY) < 0.5 && view.headerItem.description.trim() !== "",
                "the whole header shows: contentY " + view.contentY + ", originY " + view.originY)
@@ -99,26 +114,13 @@ QtQuick.Window {
         expect(wide.length === 1 && wide[0].lineCount > 1 && wide[0].width < view.width,
                "the wide line wraps: " + (wide.length ? wide[0].lineCount + " rows, " + wide[0].width + " wide" : "not shown"))
         swipesBack(viewer, below, "wrapped")
-    }
-
-    // Unwrapped: sideways only for lines wider than the page.
-    function unwrapped(below) {
+        // Narrow lines too.
         var narrow = openText("lautta://user-documents/short.txt")
-        narrow.wrap = false
-        expect(vertical(listOf(narrow)), "unwrapped narrow lines flick only up and down")
-        swipesBack(narrow, below, "unwrapped narrow lines")
-
-        var wide = openText("lautta://user-documents/wide.txt")
-        var view = listOf(wide)
-        wide.wrap = false
-        expect(view.flickableDirection === Flickable.HorizontalAndVerticalFlick && view.contentWidth > view.width,
-               "unwrapped wide lines flick sideways: " + view.contentWidth + " wide in " + view.width)
-        wide.wrap = true
-        expect(vertical(view), "wrapped again, only up and down")
-        app.pageStack.pop(below, PageStackAction.Immediate)
+        expect(vertical(listOf(narrow)), "narrow lines flick only up and down")
+        swipesBack(narrow, below, "narrow lines")
     }
 
-    // Markdown's "View source" opens the text viewer wrapped.
+    // Markdown's "View source" opens the text viewer.
     function viewSource() {
         var markdown = app.pageStack.push(markdownComponent, {}, PageStackAction.Immediate)
         tools.pump(300)
@@ -130,9 +132,10 @@ QtQuick.Window {
         item[0].clicked(null)
         waitFor(function() { return app.pageStack.currentPage !== markdown && !app.pageStack.busy })
         var source = app.pageStack.currentPage
-        if (!expect(source.wrap === true, "View source opens the text viewer wrapped: " + source.wrap))
-            return
         var view = listOf(source)
+        if (!expect(view && findAll(source, function(x) { return x.objectName === "textBackdrop" }, []).length === 1,
+                    "View source opens the text viewer"))
+            return
         waitFor(function() { return view.count > 0 })
         expect(vertical(view), "the source flicks only up and down")
         swipesBack(source, markdown, "source")
@@ -143,8 +146,7 @@ QtQuick.Window {
         tools.installFixture(Qt.resolvedUrl("host/fixtures/short-lines.txt"), "lautta://user-documents/short.txt")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), "lautta://user-documents/source.md")
         var below = app.pageStack.push(emptyPage, {}, PageStackAction.Immediate)
-        wrapsByDefault(below)
-        unwrapped(below)
+        wraps(below)
         viewSource()
     }
 

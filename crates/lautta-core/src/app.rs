@@ -25,7 +25,6 @@ use crate::sort::SortKey;
 use crate::transfer::clock::SystemClock;
 use crate::transfer::{Engine, EngineConfig, EngineDeps, TransferId, TransferOptions, Trasher};
 use crate::trash::Trash;
-use crate::undo::{UndoAction, UndoRecorder, UndoStep};
 use crate::uri::Uri;
 use crate::viewprefs::{ViewMode, ViewPrefs};
 use crate::volumes::VolumeWatcher;
@@ -70,7 +69,6 @@ pub struct Core {
     settings: Mutex<Settings>,
     /// Counts the changes of `settings` (see [`Core::watch_settings`]).
     settings_changed: watch::Sender<u64>,
-    undo: Mutex<UndoRecorder>,
     /// Follows the removable-media root for as long as the core lives
     /// (LOC-3); `None` when inotify is not available, then Browse finds
     /// volumes by rescanning when it refreshes.
@@ -104,7 +102,7 @@ impl Trasher for LocalTrasher {
 /// Moves one item of a location that keeps a trash into the Trash, by copy
 /// where the sandbox mounts the two apart (§3.3), on a blocking thread
 /// (ARC-6). Returns its trash id.
-async fn trash_one(locations: &LocationRegistry, trash: &Trash, uri: &Uri) -> Result<i64> {
+async fn trash_one(locations: &LocationRegistry, trash: &Trash, uri: &Uri) -> Result<()> {
     // An unknown or vanished location is an error, not a permanent delete.
     locations.provider(&uri.location)?;
     let path = locations
@@ -115,7 +113,7 @@ async fn trash_one(locations: &LocationRegistry, trash: &Trash, uri: &Uri) -> Re
     tokio::task::spawn_blocking(move || trash.trash(&path, &uri))
         .await
         .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))?
-        .map(|item| item.id)
+        .map(|_| ())
 }
 
 impl Core {
@@ -175,7 +173,6 @@ impl Core {
             bridge: client.clone(),
             settings: Mutex::new(settings),
             settings_changed: watch::channel(0).0,
-            undo: Mutex::new(UndoRecorder::default()),
             _volume_watch: volume_watch,
             paths,
             db,
@@ -253,8 +250,7 @@ impl Core {
         Ok(uri)
     }
 
-    /// Renames without replacing (§10 table); favourites follow and the
-    /// rename can be undone for 10 s (OPS-9).
+    /// Renames without replacing (§10 table); favourites follow.
     pub async fn rename(&self, uri: &Uri, new_name: &[u8]) -> Result<Uri> {
         let parent = uri
             .parent()
@@ -267,10 +263,6 @@ impl Core {
             .rename(&uri.path, &to.path, RenameMode::NoReplace)
             .await?;
         self.after_move(uri, &to);
-        lock(&self.undo).record(UndoAction::Rename {
-            from: uri.clone(),
-            to: to.clone(),
-        });
         self.invalidate(&parent);
         Ok(to)
     }
@@ -288,10 +280,9 @@ impl Core {
     }
 
     /// Deletes items (OPS-8): to the Trash where [`Core::deletes_to_trash`]
-    /// says so (undoable, OPS-9), after the remorse timer; the rest
-    /// permanently through the transfer engine, after the confirmation.
+    /// says so, after the remorse timer; the rest permanently through the
+    /// transfer engine, after the confirmation.
     pub async fn delete(&self, items: &[Uri]) -> Result<Option<TransferId>> {
-        let mut trashed = Vec::new();
         let mut permanent = Vec::new();
         let mut failed = None;
         for uri in items {
@@ -299,20 +290,13 @@ impl Core {
                 permanent.push(uri.clone());
                 continue;
             }
-            match trash_one(&self.locations, &self.trash, uri).await {
-                Ok(id) => trashed.push(id),
-                Err(e) => {
-                    failed = Some(e);
-                    break;
-                }
+            if let Err(e) = trash_one(&self.locations, &self.trash, uri).await {
+                failed = Some(e);
+                break;
             }
         }
         for parent in items.iter().filter_map(Uri::parent) {
             self.invalidate(&parent);
-        }
-        if !trashed.is_empty() {
-            // What went to the Trash before a failure can be undone too.
-            lock(&self.undo).record(UndoAction::Trash { ids: trashed });
         }
         if let Some(e) = failed {
             return Err(e);
@@ -353,21 +337,14 @@ impl Core {
         self.start_plan(plan).await.map(Started::Transfer)
     }
 
-    /// Queues a planned operation. Same-location moves record undo (OPS-9).
+    /// Queues a planned operation. Favourites follow a same-location move.
     pub async fn start_plan(&self, plan: Plan) -> Result<TransferId> {
         let settings = self.settings();
         if plan.kind == OperationKind::Move {
-            let pairs: Vec<(Uri, Uri)> = plan
-                .items
-                .iter()
-                .filter(|i| i.src.location == i.dst.location && i.src.parent() != i.dst.parent())
-                .map(|i| (i.src.clone(), i.dst.clone()))
-                .collect();
-            for (from, to) in &pairs {
-                self.after_move(from, to);
-            }
-            if !pairs.is_empty() && pairs.len() == plan.items.len() {
-                lock(&self.undo).record(UndoAction::Move { pairs });
+            for item in &plan.items {
+                if item.src.location == item.dst.location && item.src.parent() != item.dst.parent() {
+                    self.after_move(&item.src, &item.dst);
+                }
             }
         }
         let options = TransferOptions {
@@ -380,45 +357,6 @@ impl Core {
         let title = plan_title(&plan);
         self.invalidate(&plan.destination);
         self.engine.add(plan, &title, options).await
-    }
-
-    /// Whether an undo is still offered (OPS-9, 10 s banner).
-    pub fn can_undo(&self) -> bool {
-        lock(&self.undo).is_fresh_now()
-    }
-
-    /// The action the undo banner offers, while it is fresh.
-    pub fn undo_kind(&self) -> Option<UndoAction> {
-        let undo = lock(&self.undo);
-        if undo.is_fresh_now() {
-            undo.peek().cloned()
-        } else {
-            None
-        }
-    }
-
-    /// Undoes the last rename, same-location move or trash operation.
-    pub async fn undo(&self) -> Result<bool> {
-        let Some(action) = lock(&self.undo).take() else {
-            return Ok(false);
-        };
-        for step in crate::undo::undo_steps(&action) {
-            match step {
-                UndoStep::Rename { from, to, .. } => {
-                    self.provider(&from.location)?
-                        .rename(&from.path, &to.path, RenameMode::NoReplace)
-                        .await?;
-                    self.after_move(&from, &to);
-                    if let Some(p) = to.parent() {
-                        self.invalidate(&p);
-                    }
-                }
-                UndoStep::Restore { id } => {
-                    self.restore(id).await?;
-                }
-            }
-        }
-        Ok(true)
     }
 
     /// Restores an item from the Trash to where it was.

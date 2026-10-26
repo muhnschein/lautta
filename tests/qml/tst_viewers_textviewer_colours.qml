@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // TextViewer's colours on the target (PRV-13, real Silica and Qt 5.6's
 // StyledText): a shell script's rows are coloured with the ambience's
-// palette, wrapped or not, a file of unknown type gets plain rows, and
-// markup in a file shows as its own characters: each row is exactly as wide
-// as its text laid out as plain text, so no tag, entity or space of the file
-// was taken as markup or lost. Rows that tabs and long lines make (PRV-4)
+// palette, a file of unknown type gets plain rows, and markup in a file shows
+// as its own characters: each row lays out in as many lines, as wide, as its
+// text laid out as plain text, so no tag, entity or space of the file was
+// taken as markup or lost. Rows that tabs and long lines make (PRV-4)
 // have the colours of their part of the line.
 //
 // The Silica window sits in a Qt Quick window so the list has a size and
@@ -36,6 +36,7 @@ QtQuick.Window {
         id: plain
         visible: false
         textFormat: Text.PlainText
+        wrapMode: Text.WrapAtWordBoundaryOrAnywhere
         font.family: "monospace"
         font.pixelSize: Theme.fontSizeExtraSmall
     }
@@ -87,41 +88,56 @@ QtQuick.Window {
         return match ? match[2] : "none"
     }
 
-    // The row of line `number` shows exactly the characters of the line.
+    // The row of line `number` shows exactly the characters of the line: as
+    // many lines, as wide, as the line's plain text in a label of its width.
     function showsItsLine(row, number) {
         var line = page.layout.rows[number - 1].text
+        plain.width = row.width
         plain.text = line
-        expect(row.implicitWidth > 0 && Math.abs(row.implicitWidth - plain.implicitWidth) < 1,
-               "line " + number + " " + JSON.stringify(line) + " is " + row.implicitWidth + " wide as " + JSON.stringify(row.text)
-               + ", " + plain.implicitWidth + " as plain text")
+        expect(row.contentWidth > 0 && row.lineCount === plain.lineCount
+               && Math.abs(row.contentWidth - plain.contentWidth) < 1,
+               "line " + number + " " + JSON.stringify(line) + " is " + row.lineCount + " lines, " + row.contentWidth
+               + " wide as " + JSON.stringify(row.text) + ", " + plain.lineCount + " and " + plain.contentWidth
+               + " as plain text")
     }
 
-    // Wrapped (the page is small, and the rows wrap to several lines: the
-    // first two are on screen).
+    // The page is small, and the rows wrap to several lines: the first
+    // two are on screen.
     function checkWrapped(shown) {
         console.log("palette " + page.colours)
         var comment = colourOf("comment")
-        expect(page.wrap, "wrapped by default")
         expect(comment !== "none", "a comment colour in " + page.colours)
         expect(shown["2"].text.indexOf('<font color="' + comment + '">') === 0,
                "the comment is coloured: " + shown["2"].text)
         expect(shown["2"].lineCount > 1, "the comment wraps: " + shown["2"].lineCount)
+        for (var n = 1; n <= 2; ++n)
+            showsItsLine(shown[String(n)], n)
     }
 
+    // The rows below, after the list is scrolled to them.
     function checkScript(shown) {
-        expect(!page.wrap, "unwrapped")
         expect(shown["3"].text.indexOf('<font color="' + colourOf("function") + '">echo</font>') === 0,
                "echo is coloured: " + shown["3"].text)
         expect(shown["3"].text.indexOf('<font color="' + colourOf("string") + '">') > 0,
                "the string is coloured: " + shown["3"].text)
-        for (var n = 1; n <= 4; ++n)
+        for (var n = 3; n <= 4; ++n)
             showsItsLine(shown[String(n)], n)
     }
 
-    // A row with a tab, and the second row of a long line.
-    function checkRows(shown) {
+    function scrollTo(index) {
+        var lists = findAll(page, function(x) { return x.positionViewAtIndex !== undefined }, [])
+        lists[0].positionViewAtIndex(index, ListView.Beginning)
+    }
+
+    // A row with a tab.
+    function checkTabbed(shown) {
         var tabbed = '&nbsp;&nbsp;&nbsp;&nbsp;<font color="' + colourOf("function") + '">echo</font>'
         expect(shown["2"].text.indexOf(tabbed) === 0, "the row with a tab: " + shown["2"].text)
+    }
+
+    // The second row of a long line, which wraps over most of the page, so
+    // that the list is scrolled to it.
+    function checkLong(shown) {
         var rest = '<font color="' + colourOf("comment") + '"># long</font>'
         expect(shown[""] !== undefined && shown[""].text.indexOf(rest) > 0, "the long line's second row: "
                + (shown[""] ? shown[""].text.slice(-80) : "not shown"))
@@ -152,14 +168,14 @@ QtQuick.Window {
                 if (!shown["2"] || shown["2"].text.indexOf("<font") < 0)
                     return
                 window.checkWrapped(shown)
-                // A new page: the list does not lay its rows out again here
-                // when they change height.
-                window.page = app.pageStack.replace(unwrappedPage, {}, PageStackAction.Immediate)
+                window.scrollTo(2)
                 break
             case 1:
                 if (!shown["4"] || shown["3"].text.indexOf("<font") < 0)
                     return
                 window.checkScript(shown)
+                // A new page: the list does not lay its rows out again here
+                // when they change height.
                 window.page = app.pageStack.replace(markupPage, {}, PageStackAction.Immediate)
                 break
             case 2:
@@ -172,9 +188,15 @@ QtQuick.Window {
                 window.page = app.pageStack.replace(rowsPage, {}, PageStackAction.Immediate)
                 break
             case 3:
-                if (!shown["3"] || !shown[""] || shown[""].text.indexOf("<font") < 0)
+                if (!shown["2"] || shown["2"].text.indexOf("<font") < 0)
                     return
-                window.checkRows(shown)
+                window.checkTabbed(shown)
+                window.scrollTo(3)
+                break
+            case 4:
+                if (!shown[""] || shown[""].text.indexOf("<font") < 0)
+                    return
+                window.checkLong(shown)
                 window.scenarioRunning = false
                 break
             }
@@ -208,17 +230,12 @@ QtQuick.Window {
     }
 
     Component {
-        id: unwrappedPage
-        TextViewer { uri: "lautta://user-documents/script.sh"; wrap: false }
-    }
-
-    Component {
         id: markupPage
-        TextViewer { uri: "lautta://user-documents/markup.xyz"; wrap: false }
+        TextViewer { uri: "lautta://user-documents/markup.xyz" }
     }
 
     Component {
         id: rowsPage
-        TextViewer { uri: "lautta://user-documents/rows.sh"; wrap: false }
+        TextViewer { uri: "lautta://user-documents/rows.sh" }
     }
 }

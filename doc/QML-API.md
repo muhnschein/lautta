@@ -38,7 +38,7 @@ are the reference for each page.
 
 | Name | Owner | Purpose |
 |---|---|---|
-| `App` | core infra | readiness, settings, clipboard, undo, URI helpers, open/share |
+| `App` | core infra | readiness, settings, clipboard, URI helpers, open/share |
 | `Bridge` | browse | netvfs bridge status, consent, servers, nearby, questions, hand-offs |
 | `Operations` | operations | plans, conflicts, delete, compress/extract |
 | `Transfers` | transfers | queue summary and control, cover data, keep-alive state |
@@ -47,8 +47,7 @@ are the reference for each page.
 
 Properties: `ready: bool`, `startError: string`, `version: string`,
 `settingsJson: string` (object, keys of `lautta_core::settings::Settings::to_map`),
-`canUndo: bool` (OPS-9 banner), `undoText: string` (engineering kind: `rename`, `move`,
-`trash`), `clipboardCount: int`, `clipboardCut: bool`.
+`clipboardCount: int`, `clipboardCut: bool`.
 
 Methods:
 - `setting(key) → var` (bool, number or string; lists as JSON text), `setSetting(key,
@@ -61,8 +60,9 @@ Methods:
   server, LOC-7, also one that is gone; archives are neither: lines naming the location
   mark it, §15.5).
 - `copy(uris)`, `cut(uris)`, `clearClipboard()`, `canPasteInto(uri) → bool`,
-  `paste(destUri)` (→ `Operations` flow).
-- `undo()`; signal `undone(ok)`.
+  `clipboardJson() → string` (the items, JSON list of URIs; they stay on the clipboard),
+  `takeClipboard() → string` (`{ cut, items }` or `null`; a cut leaves the clipboard, a
+  copy stays; `DirectoryView.paste()` is the paste, then `Operations`).
 - `categoryOf(nameOrUri) → string` (FileCategory icon name), `viewerFor(uri, mime) → string`
   (`image`, `text`, `markdown`, `audio`, `video`, `archive`, `pdf`, `external`).
 - `previewRows(entries, sortKey, descending, foldersFirst, showHidden) → list` — the
@@ -209,7 +209,17 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   action opens (Rename's too) replaces the page (`DirectoryView.openDialog`). Which actions each holds,
   in a fixed order filtered by capabilities, and their icons, is in
   `components/directory/ContextActions.js` (`menu(ctx)`, `more(ctx)` →
-  `[{ id, text, icon }]`, `icon(id)`).
+  `[{ id, text, icon }]`, `icon(id)`; `ctx.writable` true is what *Move to new folder*
+  needs).
+- `DirectoryView.paste()` (pulley *Paste*, paste bar *Paste here*): a copy starts at once;
+  a cut shows the view's `RemorsePopup`, *Moving “name”* or *Moving N items*, for
+  `remorse_seconds`, and moves when it runs out (OPS-9). Cancelling leaves the clipboard
+  as it was; a second paste, or leaving the page, runs the pending move first
+  (`settleRemorse()`).
+- `DirectoryView.newFolder(moving)` asks `dialogs/NewItemDialog.qml` for a name and makes
+  the folder with `DirectoryModel.createFolder`; `moving`, a list of URIs (*Move to new
+  folder*, OPS-13), is moved into the folder when `DirectoryModel.created(uri)` says it
+  is made, and dropped when `createFailed` does.
 - After `DirectoryModel.renamed(oldUri, newUri)` the DirectoryView shows a Silica remorse on
   the new name's row (OPS-9); every list row and grid cell holds a
   `components/directory/RenameRemorse.qml { owner, row, uri }` so that a row made anew
@@ -315,11 +325,11 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - Pages: `viewers/ImageViewer.qml { uri, folderUri }` (Jolla Gallery's viewer, adapted in
   `components/viewers/gallery`; `remove()` deletes the image shown; its *More* is
   `components/viewers/ImageMorePage.qml { uri }`, whose Rename signals `renameChosen()` for
-  the viewer to rename), `viewers/TextViewer.qml { uri, wrap }`
-  (`wrap` true by default; a `textBackdrop` rectangle fills the page under the text,
+  the viewer to rename), `viewers/TextViewer.qml { uri }`
+  (lines always wrap; a `textBackdrop` rectangle fills the page under the text,
   PRV-4; its rows, tabs expanded and long lines split, come from
   `components/viewers/TextRows.js` `rows(text)`: `{ rows: [{ number, text, line,
-  start }], longest, lines }`, `line` from 0 and `start` the row's first column in
+  start }], lines }`, `line` from 0 and `start` the row's first column in
   the line with tabs expanded, in UTF-16 units),
   `viewers/MarkdownViewer.qml { uri }`, `viewers/PdfViewer.qml { uri }`, `viewers/PdfContentsPage.qml { fileName, outline,
   pageCount, currentPage }` (signal `chosen(index)`), `viewers/MediaPlayer.qml { uri, video }`,
@@ -347,18 +357,18 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 ## Shared QML (core infra owns)
 
 - `harbour-lautta.qml` — `ApplicationWindow`, initial page `BrowsePage`, global handlers
-  for `Operations.needsSummary`, `Transfers.needsAnswer`, `Bridge.question`, the undo
-  banner and the app-wide `KeepAlive`.
+  for `Operations.needsSummary`, `Transfers.needsAnswer`, `Bridge.question` and the
+  app-wide `KeepAlive`.
 - `components/ErrorText.js`, `components/Open.js`, `components/FileIcon.qml { category,
   isDir, thumbnailSource, mimeType, size, glyphSize }` (`glyphSize`: the side of the theme
   glyph in the tile, `AppIcon.iconSize`; read-only `thumbnailReady`, `thumbnailFailed`: the
   thumbnail shows / could not be made, so the category icon stays),
   `components/FileIcons.js` (icons every file view shares: `archive`),
   `components/IconRow.qml` (icon row for context menus),
-  `components/UndoBanner.qml`, `components/BarBackground.qml` (the opaque backdrop of
-  bottom bars, UI-10), `components/PlaceLabel.qml { before, text, remote, color,
-  fontSize, horizontalAlignment }` (a line naming a location: a remote one gets the small
-  server icon before its name, §15.5).
+  `components/BarBackground.qml` (the opaque backdrop of bottom bars, UI-10),
+  `components/PlaceLabel.qml { before, text, remote, color, fontSize,
+  horizontalAlignment }` (a line naming a location: a remote one gets the small server
+  icon before its name, §15.5).
 
 ## Tests
 

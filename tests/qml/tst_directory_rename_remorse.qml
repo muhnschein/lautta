@@ -6,8 +6,8 @@
 // the new row, also a grid cell, shows the rest of the same remorse; tapping
 // it renames the file back, with no remorse for that. A folder says "Folder
 // renamed", and once its remorse runs out the new name stays and the remorse
-// does not come back. Fails when the rename shows the undo banner or no
-// remorse, a new row loses the remorse, or cancel keeps the new name.
+// does not come back. Fails when the rename shows no remorse, a new row loses
+// the remorse, or cancel keeps the new name.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -233,8 +233,6 @@ ApplicationWindow {
                     win.next()
                 break
             case 5:
-                if (App.canUndo)
-                    return win.fail("the rename shows the undo banner")
                 if (!win.onFolder())
                     break
                 win.remorse = win.remorseOn(win.after, ["File renamed", "lautta-dir-renamed-file"])

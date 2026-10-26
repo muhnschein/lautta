@@ -18,7 +18,9 @@
 - In the grid with three per row, icons are bigger, names take two lines and keep their extension, and each tile shows the date and size, or how many items a folder on the phone or a drive holds.
 - Counts read correctly in English: 1 item, 1 day, 1 task, not 1 items, 1 days, 1 tasks.
 - Search puts the field and filters above the results.
-- The text viewer wraps lines by default, colours code by its language, and puts the text on a backdrop for contrast. Markdown previews wrap code blocks.
+- Pasting cut items moves them after a remorse timer: tap it to cancel. The undo banner is gone.
+- More actions can move the selected items into a new folder made where they are.
+- The text viewer always wraps lines, colours code by its language, and puts the text on a backdrop for contrast. Markdown previews wrap code blocks.
 - The image viewer works like Jolla Gallery's. Its More button is a circle with three dots, and More › Rename renames.
 - PDFs open at the top with the whole header in view.
 - Photos show the date they were taken, in the system's formats.
