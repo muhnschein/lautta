@@ -15,7 +15,9 @@ are the reference for each page.
   shows a badge, BRW-1). Never build URIs by string concatenation in QML; use
   `App.childUri(parentUri, name)`.
 - All user-visible strings use `qsTrId("lautta-…")` with a `//%` engineering English
-  comment (UI-7), plurals with `%n`. Ids are kebab-case and start with `lautta-`.
+  comment (UI-7). Ids are kebab-case and start with `lautta-`. A text with a count is one
+  plural string: `//% "%n items"` and `qsTrId("lautta-…", n)`, no "(s)", no separate id for
+  the singular; `make translations` adds the English singular.
 - Sizes and dates are formatted in QML: `Format.formatFileSize(bytes)`,
   `Format.formatDate(date, Formatter.…)` (Silica). Rust returns raw numbers and
   milliseconds since the epoch (`-1` = unknown).
@@ -363,6 +365,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - QML: `tests/qml/tst_*.qml` are instantiated by `harbour-lautta --qml-check` in the SDK
   target (real Silica, real types); failures are QML errors, warnings naming the file and
   `console.error` calls. Every page gets a test that instantiates it with realistic
-  properties inside an `ApplicationWindow`.
+  properties inside an `ApplicationWindow`. No catalogue is installed there: `qsTrId`
+  gives back the id. `--qml-check -T <folder>` installs the catalogues of `<folder>`
+  first; `tests/translations/tst_english_plurals.qml` runs that way (host and
+  `make check-rpm`) and reads the English plural forms.
 - Rust: facades keep logic in `lautta-core`; what remains in `lautta-qt` is tested on the
   host with Qt 5.15 (`QT_QPA_PLATFORM=offscreen`) through `lautta_qt::testing`.

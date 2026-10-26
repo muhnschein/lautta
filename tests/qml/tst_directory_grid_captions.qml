@@ -339,7 +339,7 @@ ApplicationWindow {
         same(DirFormat.modifiedWithTime(now.getTime()), DirFormat.modified(now.getTime()), "today as the list says it")
         same(DirFormat.modifiedWithTime(-1), "", "no time known")
         same(DirFormat.items(-1, false), "", "no count")
-        same(DirFormat.items(1, false), qsTrId("lautta-dir-grid-item"), "one item, not one items")
+        same(DirFormat.items(1, false), qsTrId("lautta-dir-grid-items", 1), "one item goes through the plural string")
         expect(DirFormat.items(14, false) === qsTrId("lautta-dir-grid-items", 14)
                && DirFormat.items(10000, true) === qsTrId("lautta-dir-grid-items-more", 10000)
                && DirFormat.items(14, false) !== DirFormat.items(14, true), "a capped count says more than")

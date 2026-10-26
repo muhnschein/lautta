@@ -58,11 +58,11 @@ function forms(r) {
                 qsTrId("lautta-xfr-title-copied-one")], r.title, r.destName)
         if (!one)
             return withArgs([
-                //% "Copy %n item(s) to %1"
+                //% "Copy %n items to %1"
                 qsTrId("lautta-xfr-title-copy-many", n),
-                //% "Copying %n item(s) to %1"
+                //% "Copying %n items to %1"
                 qsTrId("lautta-xfr-title-copying-many", n),
-                //% "Copied %n item(s) to %1"
+                //% "Copied %n items to %1"
                 qsTrId("lautta-xfr-title-copied-many", n)], r.destName)
         break
     case "move":
@@ -75,11 +75,11 @@ function forms(r) {
                 //% "Moved %1 to %2"
                 qsTrId("lautta-xfr-title-moved-one")], r.title, r.destName)
         return withArgs([
-            //% "Move %n item(s) to %1"
+            //% "Move %n items to %1"
             qsTrId("lautta-xfr-title-move-many", n),
-            //% "Moving %n item(s) to %1"
+            //% "Moving %n items to %1"
             qsTrId("lautta-xfr-title-moving-many", n),
-            //% "Moved %n item(s) to %1"
+            //% "Moved %n items to %1"
             qsTrId("lautta-xfr-title-moved-many", n)], r.destName)
     case "delete":
         if (one)
@@ -91,11 +91,11 @@ function forms(r) {
                 //% "Deleted %1"
                 qsTrId("lautta-xfr-title-deleted-one")], r.title)
         return [
-            //% "Delete %n item(s)"
+            //% "Delete %n items"
             qsTrId("lautta-xfr-title-delete-many", n),
-            //% "Deleting %n item(s)"
+            //% "Deleting %n items"
             qsTrId("lautta-xfr-title-deleting-many", n),
-            //% "Deleted %n item(s)"
+            //% "Deleted %n items"
             qsTrId("lautta-xfr-title-deleted-many", n)]
     case "compress":
         if (one)
@@ -107,11 +107,11 @@ function forms(r) {
                 //% "Compressed %1"
                 qsTrId("lautta-xfr-title-compressed-one")], r.title)
         return [
-            //% "Compress %n item(s)"
+            //% "Compress %n items"
             qsTrId("lautta-xfr-title-compress-many", n),
-            //% "Compressing %n item(s)"
+            //% "Compressing %n items"
             qsTrId("lautta-xfr-title-compressing-many", n),
-            //% "Compressed %n item(s)"
+            //% "Compressed %n items"
             qsTrId("lautta-xfr-title-compressed-many", n)]
     case "extract":
         return withArgs([
@@ -209,7 +209,7 @@ function waitReason(reason) {
 }
 
 function needsAnswer(questions) {
-    //% "Needs an answer: %n conflict(s)"
+    //% "Needs an answer: %n conflicts"
     return qsTrId("lautta-xfr-needs-answer", questions)
 }
 
@@ -219,7 +219,7 @@ function status(r, restored) {
     switch (r.group) {
     case "active":
         if (r.state === "scanning")
-            //% "Scanning… %n item(s)"
+            //% "Scanning… %n items"
             return qsTrId("lautta-xfr-scanning", r.itemsTotal)
         if (r.state === "queued" && r.bytesDone === 0)
             //% "Queued"
@@ -244,7 +244,7 @@ function historyLine(r) {
         //% "Canceled"
         text = qsTrId("lautta-xfr-canceled")
     else if (r.state === "failed" && r.itemsFailed > 0 && r.itemsDone > 0)
-        //% "Completed with %n failure(s)"
+        //% "Completed with %n failures"
         text = qsTrId("lautta-xfr-completed-failures", r.itemsFailed)
     else if (r.state === "failed")
         //% "Failed"

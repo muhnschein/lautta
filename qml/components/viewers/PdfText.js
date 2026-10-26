@@ -4,7 +4,7 @@
 
 // "12 pages".
 function summary(pages) {
-    //% "%n page(s)"
+    //% "%n pages"
     return qsTrId("lautta-viewers-pdf-pages", pages)
 }
 
@@ -34,7 +34,7 @@ function hit(current, count, page) {
 
 // The search bar once the whole document is searched without a hit.
 function notFound(pages) {
-    //% "Not found in %n page(s)"
+    //% "Not found in %n pages"
     return qsTrId("lautta-viewers-pdf-not-found", pages)
 }
 

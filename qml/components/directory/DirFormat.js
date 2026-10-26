@@ -44,10 +44,6 @@ function items(count, capped) {
     if (capped)
         //% "More than %n items"
         return qsTrId("lautta-dir-grid-items-more", count)
-    // Engineering English has one plural form: one item has its own string.
-    if (count === 1)
-        //% "1 item"
-        return qsTrId("lautta-dir-grid-item")
     //% "%n items"
     return qsTrId("lautta-dir-grid-items", count)
 }

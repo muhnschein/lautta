@@ -94,7 +94,7 @@ Page {
                         rightMargin: Theme.paddingMedium
                         verticalCenter: parent.verticalCenter
                     }
-                    //% "%n task(s) stopped when Lautta closed."
+                    //% "%n tasks stopped when Lautta closed."
                     text: qsTrId("lautta-xfr-restored", Transfers.pendingAtStart)
                     wrapMode: Text.WordWrap
                     font.pixelSize: Theme.fontSizeSmall
