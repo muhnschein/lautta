@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// How a Browse row's connection or mount stands (SPEC §15.2), as the one
-// icon at its right edge: "on" (connected, mounted), "busy" (connecting),
-// "off" (not connected, not mounted), "failed" (could not connect),
-// "warning" (sign-in or identity), "" for nothing. No text: the icon says
-// it (NVB-4). Computed from the row's roles; no Silica here, so that the
-// host tests can check it.
+// How a Browse row's connection or mount stands (SPEC §15.2), as one glowing
+// dot at its right edge: "on" (connected, mounted), "busy" (connecting,
+// mounting, unmounting), "off" (not connected, not mounted), "failed" (could
+// not connect), "warning" (sign-in or identity), "" for nothing. No text: dot
+// says it (NVB-4). Computed from row roles; no Silica here, so host tests can
+// check it.
 .pragma library
 
 // A failed connection: the sign-in and identity failures are the ones the
@@ -34,24 +34,27 @@ function server(status, connection, connectionError) {
     }
 }
 
-// A volume (LOC-3). Only a drive the bridge mounts can be mounted or not;
-// any other volume is there because it is mounted, as the device's folders
-// always are, and has no icon. Mounting and unmounting are not shown as
-// states: a failure arrives as a notice.
-function volume(status, drive) {
+// A volume (LOC-3). Only a drive the bridge mounts can be mounted or not; any
+// other volume is there because it is mounted, as device folders always are,
+// and has no dot. Drive listed in `busyDrives` (Bridge.busyDrives: mount or
+// unmount under way) is busy, as a server connecting is. Failure arrives as
+// a notice.
+function volume(status, drive, busyDrives) {
+    if (drive.length > 0 && busyDrives && busyDrives.indexOf(drive) >= 0)
+        return "busy"
     if (status === "unmounted")
         return "off"
     return drive.length > 0 ? "on" : ""
 }
 
-function indicator(kind, status, connection, connectionError, drive) {
+function indicator(kind, status, connection, connectionError, drive, busyDrives) {
     switch (kind) {
     case "account":
     case "adhoc":
     case "adhocRecent":
         return server(status, connection, connectionError)
     case "volume":
-        return volume(status, drive || "")
+        return volume(status, drive || "", busyDrives)
     default:
         return ""
     }

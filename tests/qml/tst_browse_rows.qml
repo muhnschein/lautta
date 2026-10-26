@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Browse rows on the target (real Silica, SPEC §15.2, §15.5): a folder row
-// shows no item count; a server row is as tall as a folder row, its status an
-// icon at the right margin and no text; a favourite on a server has the
+// shows no item count; a server row is as tall as a folder row, its status a
+// glowing dot at the right margin and no text; a favourite on a server has the
 // server icon before its place and a local one has none; a drive that is not
 // mounted is as tall as a mounted volume, with its size below its name and
-// an empty ring on the right like a server's status, a mounted drive a
-// glowing dot and a volume the bridge does not mount none (LOC-3); and
-// nothing is attached to the page to swipe to (Activity is in the pulley).
-// Fails when a count comes back, server rows grow a second line again, a
-// state is told in words, the status icon leaves the right margin, the
-// icon marks the wrong place or Activity is attached again.
+// a dot of the primary colour on the right like a server's status that is
+// not connected, a mounted drive the highlight colour's dot and a volume the
+// bridge does not mount none, a drive with a mount under way a dot that pulses
+// (LOC-3); and nothing is attached to the page to swipe to (Activity is in
+// the pulley). Fails when a count comes back, server rows grow a second line
+// again, a state is told in words, the status dot leaves the right margin,
+// the dot marks the wrong state or Activity is attached again.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -84,11 +85,10 @@ ApplicationWindow {
         return null
     }
 
-    // The status icons `row` shows, by what each is.
+    // The status dots `row` shows, by colour.
     function icons(row) {
-        var names = ["statusOn", "statusRing", "statusBusy", "statusWarning"]
-        return findAll(row, function(x) { return x.visible && names.indexOf(x.objectName) >= 0 }, [])
-            .map(function(icon) { return icon.objectName })
+        return findAll(row, function(x) { return x.visible && x.objectName === "statusDot" }, [])
+            .map(function(dot) { return String(dot.color) })
     }
 
     // The status icon item of `row`, which sits at the page margin.
@@ -131,7 +131,7 @@ ApplicationWindow {
         var folder = rowOf("Documents")
         var edge = statusEdge(folder)
         // name: the icon of its row
-        var servers = [["NAS", "statusOn"], ["Office", "statusWarning"], ["Old", ""]]
+        var servers = [["NAS", String(Theme.highlightColor)], ["Office", String(statusSlot(rowOf("Office")).warningColor)], ["Old", ""]]
         for (var i = 0; i < servers.length; ++i) {
             var row = rowOf(servers[i][0])
             expect(row.height === folder.height,
@@ -161,13 +161,13 @@ ApplicationWindow {
                "STICK's line is " + (size ? size.text : "missing"))
         expect(texts(stick).join("|") === "STICK|" + Format.formatFileSize(8000000000),
                "STICK shows " + texts(stick).join("|") + ", only its name and size")
-        expect(icons(stick).join(",") === "statusRing", "STICK shows [" + icons(stick).join(",") + "], an empty ring")
+        expect(icons(stick).join(",") === String(Theme.primaryColor), "STICK shows [" + icons(stick).join(",") + "], a dot of the primary colour")
         var slot = statusSlot(stick)
         expect(slot && rightEdge(slot, stick) === statusEdge(stick),
                "STICK's status ends at " + (slot ? rightEdge(slot, stick) : "nowhere") + ", the margin is at " + statusEdge(stick))
         var name = labelOf(stick, "STICK")
         expect(name && slot && rightEdge(name, stick) <= slot.mapToItem(stick, 0, 0).x, "STICK's name ends before its status")
-        expect(icons(mounted).join(",") === "statusOn", "a mounted drive shows [" + icons(mounted).join(",") + "], a glowing dot")
+        expect(icons(mounted).join(",") === String(Theme.highlightColor), "a mounted drive shows [" + icons(mounted).join(",") + "], the dot of the highlight colour")
         expect(texts(mounted).length === 2, "a mounted volume shows " + texts(mounted).join("|") + ", only its name and line")
         expect(icons(card).length === 0, "a volume the bridge does not mount shows [" + icons(card).join(",") + "]")
     }

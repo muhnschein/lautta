@@ -92,7 +92,7 @@ Item {
                     id: statusIcon
 
                     indicator: RowStatus.indicator(model.kind, model.status, model.connection,
-                                                   model.connectionError, model.drive)
+                                                   model.connectionError, model.drive, Bridge.busyDrives)
                     anchors {
                         right: parent.right
                         rightMargin: Theme.horizontalPageMargin

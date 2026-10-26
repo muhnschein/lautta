@@ -94,10 +94,14 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   ad-hoc servers), `failed`, or empty when the bridge reports none; `connectionError` is
   the netvfs error name of a `failed` one (`AuthFailed`, `Timeout`, …).
   `components/browse/RowStatus.js` `indicator(kind, status, connection, connectionError,
-  drive)` turns them into the row's status icon (`on`, `busy`, `off`, `failed`,
-  `warning`, `""` for none; servers and volumes, LOC-3), which
+  drive, busyDrives)` turns them into the row's status dot (`on`, `busy`, `off`, `failed`,
+  `warning`, `""` for none; servers and volumes, LOC-3; a drive listed in `busyDrives`
+  (`Bridge.busyDrives`) is `busy`), which
   `components/browse/RowStatusIcon.qml { indicator, highlighted }` draws at the right
-  margin, no text (§15.2). `refresh()`
+  margin as one `GlassItem`, no text (§15.2): `on` highlight colour, `off` and `busy`
+  primary colour, `failed` error colour, `warning` `warningColor` (Silica's orange).
+  `busy` pulses while `pulsing` (busy, item `visible`, `appActive` = app in front, from
+  `Qt.application.state`). `refresh()`
   rescans the device folders and volumes first (LOC-3); the model also follows location
   changes by itself, and a changed row changes in place.
 - `FavouritesModel` (roles `itemId`, `uri`, `label`, `colour`, `place`, `isDir`, `icon`
@@ -122,7 +126,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `storageSettings` follows it; tests set it. `mountDrive(drive, name)` mounts a drive
   (LOC-3) and opens it: `adhocConnected(locationUri)` carries the volume as it carries a
   connected ad-hoc server; `unmountDrive(drive, name)`; their failures arrive as `failed`
-  with `name` as the subject.
+  with `name` as the subject. `busyDrives`: ids of drives with a mount or unmount under
+  way, one entry per call (changes with `statusChanged`).
 - Pages: `pages/BrowsePage.qml` (initial page), `pages/RecentsPage.qml`,
   `dialogs/ConnectServerDialog.qml { url }`,
   `dialogs/ServerQuestionDialog.qml { questionId, kind, details }`,
