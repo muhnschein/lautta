@@ -10,6 +10,7 @@ import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../"
 import "DirFormat.js" as DirFormat
+import "GridRows.js" as GridRows
 
 Item {
     id: preview
@@ -26,11 +27,8 @@ Item {
     readonly property bool thumbnails: setting("thumbnails_local") === true
     // As DirectoryView: landscape keeps the tile size of portrait.
     readonly property real tileWidth: Math.min(Screen.width, Screen.height) / gridMetrics.portraitColumns
-    readonly property int columns: tileWidth > 0
-                                   ? Math.max(gridMetrics.portraitColumns, Math.round(screenWidth / tileWidth))
-                                   : gridMetrics.portraitColumns
+    readonly property int columns: GridRows.columns(screenWidth, tileWidth, gridMetrics.portraitColumns)
     readonly property real cellWidth: screenWidth / columns
-    readonly property real cellHeight: gridMetrics.cellHeight(cellWidth)
     // Modified times count back from now, so the rows read like a real
     // folder's; folders have a number of items, as on the device. File names
     // keep their extensions out of the translations.
@@ -78,14 +76,24 @@ Item {
     // The rows as drawn, in order (tests): { name, isDir, size, photo,
     // captions }, the captions as the lines under a tile.
     function shown() {
-        var drawn = gridMode ? tiles : listRows
+        var drawn = gridMode ? tiles() : rowsOf(listRows)
+        return drawn.map(function (row) {
+            return { "name": row.name, "isDir": row.isDir, "size": row.size, "photo": row.photo,
+                     "captions": row.captions }
+        })
+    }
+
+    // The items of `repeater`, in order.
+    function rowsOf(repeater) {
         var out = []
-        for (var i = 0; i < drawn.count; ++i) {
-            var row = drawn.itemAt(i)
-            out.push({ "name": row.name, "isDir": row.isDir, "size": row.size, "photo": row.photo,
-                       "captions": row.captions })
-        }
+        for (var i = 0; i < repeater.count; ++i)
+            out.push(repeater.itemAt(i))
         return out
+    }
+
+    // The tiles of the grid's rows, in order.
+    function tiles() {
+        return rowsOf(gridRows).reduce(function (all, row) { return all.concat(row.tiles()) }, [])
     }
 
     height: frame.height
@@ -202,8 +210,11 @@ Item {
             readonly property var captions: DirFormat.gridCaptions(modelData.isDir, modelData.size, modelData.modified,
                                                                    true, preview.itemsOf(modelData.name), false)
 
+            // Its column in its row, as tall as the row: the row's tallest tile.
+            x: index * width
             width: preview.cellWidth
-            height: preview.cellHeight
+            height: parent ? parent.height : implicitHeight
+            implicitHeight: gridMetrics.cellHeight(width, caption.implicitHeight)
 
             Item {
                 id: tile
@@ -234,6 +245,8 @@ Item {
             }
 
             GridCaption {
+                id: caption
+
                 anchors {
                     top: tile.bottom
                     topMargin: Theme.paddingSmall / 2
@@ -243,6 +256,32 @@ Item {
                 metrics: gridMetrics
                 name: modelData.name
                 captions: cell.captions
+            }
+        }
+    }
+
+    // A row of DirectoryView's grid: as tall as its tallest tile.
+    Component {
+        id: gridRow
+
+        Item {
+            id: previewRow
+
+            readonly property int first: index * preview.columns
+
+            function tiles() {
+                return preview.rowsOf(rowTiles)
+            }
+
+            width: preview.screenWidth
+            // The tiles are its children; so is the Repeater, of no height.
+            height: GridRows.tallest(children)
+
+            Repeater {
+                id: rowTiles
+
+                model: preview.rows.slice(previewRow.first, previewRow.first + preview.columns)
+                delegate: gridTile
             }
         }
     }
@@ -287,15 +326,14 @@ Item {
                     delegate: listRow
                 }
             }
-            Grid {
+            Column {
                 visible: preview.gridMode
-                columns: preview.columns
 
                 Repeater {
-                    id: tiles
+                    id: gridRows
 
-                    model: preview.gridMode ? preview.rows : []
-                    delegate: gridTile
+                    model: preview.gridMode ? GridRows.rowCount(preview.count, preview.columns) : 0
+                    delegate: gridRow
                 }
             }
         }

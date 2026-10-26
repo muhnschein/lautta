@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The sizes of the cells of the grid (SPEC §15.3), the one place for
 // DirectoryView and the View options preview so both lay a cell out alike: a
-// tile is followed by the name on two lines and two caption lines, and every
-// cell has the height for all of them, as the view needs one cell height.
+// tile, then the lines of the name and the caption lines it has, no empty
+// line kept. A row is as tall as its tallest cell (GridRows.js).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "GridName.js" as GridName
@@ -15,14 +15,18 @@ Item {
     readonly property int portraitColumns: 3
     // The space around a tile.
     readonly property real gap: Theme.paddingSmall
-    readonly property real nameHeight: 2 * nameFont.lineSpacing
+    // One line of the name, one caption line.
+    readonly property real nameLineHeight: nameFont.lineSpacing
     readonly property real captionHeight: captionFont.lineSpacing
     // Room taken from the name's width: its cut is measured, not laid out
     // by Qt, so a line must not end at the very edge.
     readonly property real nameMargin: Theme.paddingSmall / 2
 
-    function cellHeight(cellWidth) {
-        return cellWidth + nameHeight + 2 * captionHeight + Theme.paddingSmall
+    // A cell `cellWidth` wide whose text under the tile (GridCaption) is
+    // `textHeight` high: the tile with the gap around it, the text half a
+    // padding under the tile and half a padding and a gap above the cell's end.
+    function cellHeight(cellWidth, textHeight) {
+        return cellWidth + textHeight + Theme.paddingSmall
     }
 
     // The glyph in a tile: about half the tile, at a multiple of 28 px, where

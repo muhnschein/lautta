@@ -16,7 +16,7 @@
 - Settings are split into pages. The thumbnail cache size applies without a restart. A size limit replaces the metered-network limit for server thumbnails.
 - PDFs get thumbnails of their first page, under the same thumbnail switches as images. For PDFs on the phone the system draws them, as it does for photos and videos.
 - In grid view, holding and dragging selects a range. Bars at the bottom are opaque.
-- The grid has one size, so View options offers just grid or list. Its icons are bigger, names take two lines and keep their extension, and each tile shows the date and size, or how many items a folder on the phone or a drive holds, counting up to 1000.
+- The grid has one size, so View options offers just grid or list. Its icons are bigger, names take up to two lines and keep their extension, each row is only as tall as its tallest tile, and each tile shows, right under its name, the date and size, or how many items a folder on the phone or a drive holds, counting up to 1000.
 - File icons are Lautta's own drawings, sharp in the grid and in every list at any screen scale. An icon turns the highlight colour with its name when pressed or selected.
 - Video thumbnails carry a small video badge, so they stand apart from photos.
 - A folder's header stays in place while its contents scroll. A folder opens at its top, and going back returns to where you were.

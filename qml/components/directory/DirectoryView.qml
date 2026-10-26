@@ -14,6 +14,7 @@ import "../transfers"
 import "../Open.js" as Open
 import "../ErrorText.js" as ErrorText
 import "DirFormat.js" as DirFormat
+import "GridRows.js" as GridRows
 import "Selection.js" as Selection
 
 Item {
@@ -29,7 +30,8 @@ Item {
     readonly property bool gridMode: dir.viewMode === "grid"
     property string pendingName
     property string pendingShare
-    // The list or the grid, whichever is shown.
+    // The list or the grid, whichever is shown. Both have
+    // itemIndexAt(x, y): the item at that point of their content, -1 if none.
     readonly property Item flickable: gridMode ? grid : list
     // The item renamed last while its remorse runs (OPS-9): { uri, oldUri,
     // isDir, ends, revealed }. Its row shows the remorse (RenameRemorse.qml).
@@ -164,7 +166,21 @@ Item {
         if (index < 0)
             return
         renamed.revealed = true
-        flickable.positionViewAtIndex(index, ListView.Contain)
+        flickable.positionViewAtIndex(gridMode ? GridRows.rowOf(index, grid.columns) : index, ListView.Contain)
+    }
+
+    // As many grid rows as the items need (SPEC §15.3). Rows come and go at
+    // the end only, so the grid keeps its place: a new count as the model
+    // would start it anew at its top.
+    function fitGridRows() {
+        var wanted = gridMode ? GridRows.rowCount(dir.count, grid.columns) : 0
+        if (gridRows.count > wanted)
+            gridRows.remove(wanted, gridRows.count - wanted)
+        var more = []
+        for (var i = gridRows.count; i < wanted; ++i)
+            more.push({})
+        if (more.length > 0)
+            gridRows.append(more)
     }
 
     // The popup holds one remorse: a new one first runs the one pending,
@@ -419,6 +435,9 @@ Item {
         notice.show(ErrorText.message(kind, { "location": dir.locationName, "item": item }))
     }
 
+    onGridModeChanged: fitGridRows()
+    Component.onCompleted: fitGridRows()
+
     DirectoryModel {
         id: dir
 
@@ -430,6 +449,7 @@ Item {
             view.notifyFailure(kind, message, view.pendingName)
         }
         onStateChanged: view.revealRenamed()
+        onCountChanged: view.fitGridRows()
         onCreated: view.folderMade(uri)
         onCreateFailed: {
             view.toMove = []
@@ -782,8 +802,12 @@ Item {
                                                                    dir.folderCounts, items, model.itemCountCapped)
             readonly property real gap: gridMetrics.gap
 
+            // Its column in its row (gridRowDelegate), as tall as the row,
+            // which is as tall as its tallest cell.
+            x: (index % grid.columns) * width
             width: grid.cellWidth
-            height: grid.cellHeight
+            height: parent ? parent.height : implicitHeight
+            implicitHeight: gridMetrics.cellHeight(width, caption.implicitHeight)
             onCountKeyChanged: cell.countItems()
             Component.onCompleted: cell.countItems()
             onClicked: {
@@ -794,11 +818,8 @@ Item {
             }
             // As in Photos apps, holding an item selects it (starting selection
             // mode) and the finger then selects a range (DragSelect, §15.3).
-            // The view keeps a held item while its row scrolls out of view.
-            onPressAndHold: {
-                DelegateModel.inPersistedItems = true
-                dragSelect.begin(cell, index, mouse.x, mouse.y)
-            }
+            // Its row stays while it scrolls out of view (gridRowDelegate).
+            onPressAndHold: dragSelect.begin(cell, index, mouse.x, mouse.y)
             onPositionChanged: if (dragSelect.holder === cell) dragSelect.move(mouse.x, mouse.y)
             onReleased: cell.letGo()
             onCanceled: cell.letGo()
@@ -808,12 +829,9 @@ Item {
                     dir.requestCount(model.uri)
             }
 
-            // Last: the view drops an item out of view once it is not held.
             function letGo() {
-                if (dragSelect.holder !== cell)
-                    return
-                dragSelect.end()
-                DelegateModel.inPersistedItems = false
+                if (dragSelect.holder === cell)
+                    dragSelect.end()
             }
 
             RenameRemorse {
@@ -854,6 +872,8 @@ Item {
             }
 
             GridCaption {
+                id: caption
+
                 anchors {
                     top: tile.bottom
                     topMargin: Theme.paddingSmall / 2
@@ -863,8 +883,82 @@ Item {
                 metrics: gridMetrics
                 name: cell.itemName
                 captions: cell.captions
+                // A folder's count has its line while it is coming.
+                minLines: cell.counting && !model.inaccessible ? 1 : 0
                 emphasised: cell.highlighted || model.selected
                 pressed: cell.highlighted
+            }
+        }
+    }
+
+    // A row of the grid (SPEC §15.3): the items `first` to `first + columns
+    // - 1`, cells of gridDelegate, as tall as its tallest cell. Only rows the
+    // view makes are measured, never every name of a large folder (PRF-1,
+    // PRF-3).
+    // Its DelegateModel shows the row's items of the folder's model, group
+    // "inRow", so cells follow their item's roles as the list's rows do.
+    Component {
+        id: gridRowDelegate
+
+        Item {
+            id: gridRow
+
+            readonly property int first: index * grid.columns
+            // Past its last item; changes with the columns, also in row 0.
+            readonly property int end: (index + 1) * grid.columns
+            // The row holds the cell a drag holds: it stays, and so the cell
+            // and its finger, while it scrolls out of view (DragSelect).
+            readonly property bool holding: !!dragSelect.holder && dragSelect.holder.parent === gridRow
+
+            // Its items in group "inRow", the others out of it. A cell that
+            // stays in the row is kept, not made anew. From the columns
+            // themselves: `first` may not have followed them yet.
+            function regroup() {
+                var all = rowCells.items
+                var from = index * grid.columns
+                var to = Math.min(from + grid.columns, all.count)
+                var kept = []
+                for (var i = inRow.count - 1; i >= 0; --i) {
+                    var at = inRow.get(i).itemsIndex
+                    if (at < from || at >= to)
+                        inRow.remove(i, 1)
+                    else
+                        kept.push(at)
+                }
+                for (var j = from; j < to; ++j) {
+                    if (kept.indexOf(j) < 0)
+                        all.addGroups(j, 1, "inRow")
+                }
+            }
+
+            width: grid.width
+            // The cells are its children; so is the Repeater, of no height.
+            height: GridRows.tallest(children)
+            onEndChanged: regroup()
+            onHoldingChanged: DelegateModel.inPersistedItems = holding
+            Component.onCompleted: regroup()
+
+            DelegateModel {
+                id: rowCells
+
+                model: dir
+                delegate: gridDelegate
+                groups: DelegateModelGroup {
+                    id: inRow
+
+                    name: "inRow"
+                }
+                filterOnGroup: "inRow"
+            }
+
+            // Items came, went or moved: the row's items are others.
+            Connections {
+                target: rowCells.items
+                onChanged: gridRow.regroup()
+            }
+
+            Repeater {
+                model: rowCells
             }
         }
     }
@@ -873,8 +967,16 @@ Item {
         id: gridMetrics
     }
 
+    ListModel {
+        id: gridRows
+    }
+
     SilicaListView {
         id: list
+
+        function itemIndexAt(x, y) {
+            return indexAt(x, y)
+        }
 
         anchors {
             top: top.bottom
@@ -898,12 +1000,19 @@ Item {
         VerticalScrollDecorator { }
     }
 
-    SilicaGridView {
+    // The grid: a list of rows (gridRowDelegate), each as tall as its
+    // tallest cell; a GridView gives every cell one height.
+    SilicaListView {
         id: grid
 
         // Landscape keeps the tile size of portrait.
         readonly property real tileWidth: Math.min(Screen.width, Screen.height) / gridMetrics.portraitColumns
-        readonly property int columns: Math.max(gridMetrics.portraitColumns, Math.round(width / tileWidth))
+        readonly property int columns: GridRows.columns(width, tileWidth, gridMetrics.portraitColumns)
+        readonly property real cellWidth: width / columns
+
+        function itemIndexAt(x, y) {
+            return GridRows.indexAt(indexAt(x, y), x, cellWidth, columns, dir.count)
+        }
 
         anchors {
             top: top.bottom
@@ -913,10 +1022,9 @@ Item {
         }
         clip: true
         visible: view.gridMode
-        model: view.gridMode ? dir : null
-        cellWidth: width / columns
-        cellHeight: gridMetrics.cellHeight(cellWidth)
-        delegate: gridDelegate
+        model: gridRows
+        delegate: gridRowDelegate
+        onColumnsChanged: view.fitGridRows()
         footer: Item {
             width: grid.width
             height: panelSpace.height

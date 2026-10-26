@@ -6,8 +6,8 @@
 // bottom of the view it scrolls on by itself, faster nearer the edge, and
 // the range follows the finger. The held delegate keeps the finger (no
 // flick steals it) and reports its moves here; it stays alive while its row
-// scrolls out of view because it is in DelegateModel's persisted items
-// while held.
+// scrolls out of view because that row is in DelegateModel's persisted
+// items while it is held.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "Selection.js" as Selection
@@ -15,7 +15,8 @@ import "Selection.js" as Selection
 Item {
     id: drag
 
-    // The SilicaGridView or SilicaListView shown, and its DirectoryModel.
+    // The grid or the list shown (DirectoryView.flickable), and its
+    // DirectoryModel.
     property Flickable view
     property var model
     // How much of the view's end the docked panel covers.
@@ -72,7 +73,7 @@ Item {
     // header or past the last item it stays.
     function follow() {
         var p = view.contentItem.mapFromItem(view, finger.x, finger.y)
-        var index = view.indexAt(p.x, p.y)
+        var index = view.itemIndexAt(p.x, p.y)
         if (index >= 0)
             reach(index)
     }

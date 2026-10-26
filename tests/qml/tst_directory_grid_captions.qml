@@ -6,10 +6,12 @@
 // only when they are shown), a folder's modified time where counting would
 // list it over the network (an archive stands in for a server here, both
 // are not local); the glyph is about half the tile, at a multiple of 28 px
-// (FileIcons.js). The View options
-// preview draws the same cells at the same size. Fails when a caption line,
-// the count, the cut name or the glyph size is missing or wrong, when cells
-// differ in height or when the preview lays a cell out differently.
+// (FileIcons.js). A cell keeps no line it does not show, and its row is as
+// tall as its tallest cell (more in tst_directory_grid_rows.qml). The View
+// options preview draws the same cells at the same size. Fails when a
+// caption line, the count, the cut name or the glyph size is missing or
+// wrong, when a cell keeps an empty line or its row's height is not its
+// tallest cell's, or when the preview lays a cell out differently.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -79,15 +81,19 @@ ApplicationWindow {
         return null
     }
 
-    // The cells of the grid on screen, which are those that hold captions.
-    // Laid out by hand: headless, no render loop polishes the view.
+    // The cells of the grid on screen, which are those that hold captions,
+    // in the grid's rows. Laid out by hand: headless, no render loop
+    // polishes the view.
     function cells(view) {
         var out = []
         view.flickable.forceLayout()
-        var kids = view.flickable.contentItem.children
-        for (var i = 0; i < kids.length; ++i) {
-            if (kids[i].captions !== undefined && kids[i].itemName !== undefined)
-                out.push(kids[i])
+        var rows = view.flickable.contentItem.children
+        for (var i = 0; i < rows.length; ++i) {
+            var kids = rows[i].children
+            for (var j = 0; j < kids.length; ++j) {
+                if (kids[j].captions !== undefined && kids[j].itemName !== undefined)
+                    out.push(kids[j])
+            }
         }
         return out
     }
@@ -160,7 +166,7 @@ ApplicationWindow {
         waitFor(function () { return folder.items === 3 }, "the count of Inner")
         same(folder.captions, [qsTrId("lautta-dir-grid-items", 3)], "a folder here has its item count, no hidden file")
         same(textOf(folder, "gridCaption0"), folder.captions[0], "shown on the first line")
-        same(textOf(folder, "gridCaption1"), "", "and nothing on the second")
+        expect(find(folder, "gridCaption1") === null, "and no second line kept for it")
         var empty = cellNamed(view, "Empty")
         waitFor(function () { return empty.items === 0 }, "the count of Empty")
         same(empty.captions, [qsTrId("lautta-dir-grid-items", 0)], "an empty folder has a count too")
@@ -281,20 +287,28 @@ ApplicationWindow {
         var grid = view.flickable
         var all = cells(view)
         expect(all.length === 4, "four cells: " + all.length)
-        for (var i = 0; i < all.length; ++i)
-            expect(all[i].height === grid.cellHeight, "every cell is as tall as the view says")
         var tile = grid.cellWidth - 2 * all[0].gap
         var glyph = find(all[0], "fileGlyph")
         expect(glyph.width % 28 === 0 && Math.abs(glyph.width - tile / 2) <= 14,
                "the glyph is about half the tile, at a multiple of 28 px: " + glyph.width + " in " + tile)
-        expect(grid.cellHeight > grid.cellWidth, "cells are taller than wide: " + grid.cellHeight + " " + grid.cellWidth)
-        // The last caption line ends close to the cell's end, which is the
-        // height of the tile, two name lines and two caption lines with the
-        // space around them: no line is cut, no room wasted.
-        var last = find(all[0], "gridCaption1")
-        var room = all[0].height - last.mapToItem(all[0], 0, last.height).y
-        expect(Math.abs(room - (all[0].gap + Theme.paddingSmall / 2)) <= 1,
-               "the cell ends a gap and half a padding below the last line: " + room)
+        for (var i = 0; i < all.length; ++i) {
+            var cell = all[i]
+            var row = cell.parent
+            var tallest = 0
+            for (var k = 0; k < row.children.length; ++k)
+                tallest = Math.max(tallest, row.children[k].implicitHeight)
+            expect(cell.height === row.height && row.height === tallest,
+                   cell.itemName + ": as tall as its row, which is as tall as its tallest cell: "
+                   + [cell.height, row.height, tallest])
+            expect(cell.height > grid.cellWidth, "cells are taller than wide: " + cell.height + " " + grid.cellWidth)
+            // The last line ends close to the cell's own end, which is the
+            // height of the tile and the lines it has with the space around
+            // them: no line is cut, no room wasted.
+            var last = find(cell, "gridCaption" + (cell.captions.length - 1))
+            var room = cell.implicitHeight - last.mapToItem(cell, 0, last.height).y
+            expect(Math.abs(room - (cell.gap + Theme.paddingSmall / 2)) <= 1,
+                   cell.itemName + " ends a gap and half a padding below its last line: " + room)
+        }
     }
 
     // A folder that is not on this device shows its modified time, not a count.
@@ -347,7 +361,14 @@ ApplicationWindow {
         tools.pump(300)
         expect(preview.gridMode, "the preview is a grid")
         same(preview.cellWidth, view.flickable.cellWidth, "its cell is as wide")
-        same(preview.cellHeight, view.flickable.cellHeight, "and as tall")
+        var notes = cellNamed(view, "notes.txt")
+        var nameLines = metrics.nameLines(notes.itemName, notes.width - 2 * notes.gap).length
+        var file = preview.tiles().filter(function (t) {
+            return !t.isDir && metrics.nameLines(t.name, t.width - 2 * t.gap).length === nameLines
+        })
+        expect(file.length > 0 && file[0].implicitHeight === notes.implicitHeight,
+               "a file of as many name lines is as tall: " + (file.length > 0 ? file[0].implicitHeight : "none")
+               + " and " + notes.implicitHeight)
         var rows = preview.shown()
         expect(rows.length === 6, "the sample folder has six items: " + rows.length)
         for (var i = 0; i < rows.length; ++i) {

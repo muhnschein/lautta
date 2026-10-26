@@ -465,8 +465,8 @@ what the app does.
   thumbnail cache size. Folders already open follow a change at once; what one folder
   was switched to on its own (*Use list* over a suggested grid, §15.3) stays until that
   setting changes for all. The grid has one size: 3 items per row in portrait with the name
-  and caption lines under every item (§15.3); landscape keeps the tile size and shows more
-  per row.
+  and caption lines under every item, each row as tall as its tallest item (§15.3); landscape
+  keeps the tile size and shows more per row.
 - BRW-5: Stale-while-revalidate: cached listing shown immediately (≤ 7 days old, marked
   stale), refresh on the interactive lane, diff applied in place without losing scroll
   or selection.
@@ -911,17 +911,21 @@ images). The grid has 3 tiles per row in portrait (landscape keeps the tile size
 more); the glyph is about half the tile wide, snapped to a multiple of 28 px (UI-2;
 thumbnails fill the tile, a video's with its badge, PRV-1) and under it stand the name on
 up to two lines, centred (a name that does not fit keeps its start on the first line and its end,
-the extension, on the second behind an ellipsis in the middle), and two small lines in the
-secondary colour, each cut at the end: a file's
+the extension, on the second behind an ellipsis in the middle), and right under the name up to two
+small lines in the secondary colour, each cut at the end: a file's
 modified time and size; a folder's item count ("N items") on this device and on drives,
 hidden files left out unless shown, "More than N items" past 1000 entries, none while
 counting or when the folder cannot be read; a folder on a server or in an archive its
 modified time (counting would list it over the network). A folder is counted when its cell
 appears and again when its modified time or the hidden files setting changes, once per
-cell and off the GUI thread, from its names alone, with no timer or polling (PRF-8). All
-cells have the height of two name and two caption lines. Pulley, top to bottom: *Activity* (live
-count, as in Browse; at the top, as it leads away), *View options* (BRW-4; no *Refresh*,
-BRW-11), *Search*, *Select*, *Paste* (with clipboard), *New* (makes a folder): the
+cell and off the GUI thread, from its names alone, with no timer or polling (PRF-8). As in iOS
+Files each row of tiles is only as tall as its tallest tile, so a row of one-line names with one
+caption line is short and a row with a two-line name taller. No line is kept empty, apart from
+the count line of a counted folder while its count is to come (or when the folder cannot be
+read, which looks the same), so that the row does not grow when the count comes. Only the rows
+on screen and near it are measured, never every name of a folder (PRF-1, PRF-3). Pulley, top to
+bottom: *Activity* (live count, as in Browse; at the top, as it leads away), *View options*
+(BRW-4; no *Refresh*, BRW-11), *Search*, *Select*, *Paste* (with clipboard), *New* (makes a folder): the
 folder's own actions nearest the content. While selecting *Select all* and
 *Clear selection*. The folder picker and the share target, dialogs that choose a
 destination, have no *Activity*. The
