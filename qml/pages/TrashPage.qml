@@ -130,12 +130,14 @@ Page {
                     category: App.categoryOf(model.name)
                     thumbnailSource: model.thumbnailSource
                     mimeType: model.mimeType
+                    highlighted: item.highlighted
                 }
                 OpIcon {
                     anchors.centerIn: parent
                     visible: model.thumbnailSource.length === 0
                     isDir: model.isDir
                     category: App.categoryOf(model.name)
+                    highlighted: item.highlighted
                 }
             }
             Column {

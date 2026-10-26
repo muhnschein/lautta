@@ -2,12 +2,11 @@
 // Which actions an item offers and where (SPEC §15.3, OPS-12, board
 // DirectoryContext): the long-press menu holds the everyday ones as plain
 // Silica rows and ends with More actions, which opens a page of the rarer
-// ones for this item (MoreActionsPage.qml), each row with its theme icon.
+// ones for this item (MoreActionsPage.qml), each row with its icon.
 // Capabilities decide what is applicable.
 // Copy to…/Move to… are gone on purpose: copy or cut, then paste where you
 // are. Move to new folder makes the destination here (OPS-13).
 .pragma library
-.import "../FileIcons.js" as FileIcons
 
 function text(id) {
     switch (id) {
@@ -42,15 +41,16 @@ function text(id) {
     return id
 }
 
-// The theme icon of a row of the More actions page; Compress shows the
-// archive icon archives show (FileIcons.js). Rename is a row there only for
-// the selection's one item (Selection.js).
+// The icon of a row of the More actions page: a theme icon, or for Compress
+// and Move to new folder the glyph token of archives and folders
+// (FileIcons.js), sized where shown. Rename is a row there only for the
+// selection's one item (Selection.js).
 function icon(id) {
     switch (id) {
     case "rename": return "image://theme/icon-m-edit"
     case "favourite": return "image://theme/icon-m-favorite"
-    case "compress": return FileIcons.archive
-    case "moveToNewFolder": return "image://theme/icon-m-file-folder"
+    case "compress": return "file-archive"
+    case "moveToNewFolder": return "file-folder"
     }
     return ""
 }

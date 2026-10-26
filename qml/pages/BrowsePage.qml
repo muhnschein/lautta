@@ -10,6 +10,7 @@ import "../components"
 import "../components/browse"
 import "../components/transfers"
 import "../components/ErrorText.js" as ErrorText
+import "../components/FileIcons.js" as FileIcons
 import "../components/Open.js" as Open
 import "../components/browse/BrowseText.js" as BrowseText
 import "../components/browse/RowStatus.js" as RowStatus
@@ -210,7 +211,9 @@ Page {
 
             onClicked: if (!banner) page.openRow(model)
 
-            HighlightImage {
+            // A theme icon, or the core's glyph token of a folder or file
+            // (FileIcons.js).
+            AppIcon {
                 visible: !row.banner
                 opacity: row.unmounted ? Theme.opacityHigh : 1.0
                 anchors {
@@ -218,14 +221,9 @@ Page {
                     leftMargin: Theme.horizontalPageMargin
                     verticalCenter: parent.verticalCenter
                 }
-                source: model.icon
-                width: Theme.iconSizeMedium
-                height: width
-                sourceSize.width: width
-                sourceSize.height: height
+                icon: FileIcons.sized(model.icon, iconSize)
                 color: model.colour.length > 0 ? model.colour : Theme.primaryColor
                 highlighted: row.highlighted
-                highlightColor: Theme.highlightColor
             }
 
             Column {

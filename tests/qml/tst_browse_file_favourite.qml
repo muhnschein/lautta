@@ -7,6 +7,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../../qml/components/FileIcons.js" as FileIcons
 
 ApplicationWindow {
     id: win
@@ -71,6 +72,11 @@ ApplicationWindow {
         return null
     }
 
+    // The app's document glyph at a row icon's size (FileIcons.js).
+    function documentGlyph() {
+        return String(Qt.resolvedUrl("../../qml/icons/" + FileIcons.glyph("markdown", false, Theme.iconSizeMedium) + ".svg"))
+    }
+
     // The row's icon is its first image (the page is not shown, headless).
     function icons(row) {
         return findAll(row, function(x) { return x.highlightColor !== undefined && x.source !== undefined }, [])
@@ -113,7 +119,7 @@ ApplicationWindow {
                 if (row.subtitle !== "Documents › Uni")
                     return win.fail("the folder the file is in: " + row.subtitle)
                 var icon = win.icons(row)
-                if (icon.length === 0 || String(icon[0].source) !== "image://theme/icon-m-document")
+                if (icon.length === 0 || String(icon[0].source) !== win.documentGlyph())
                     return win.fail("the file's icon: " + (icon.length > 0 ? icon[0].source : "none"))
                 row.clicked(null)
                 win.next()

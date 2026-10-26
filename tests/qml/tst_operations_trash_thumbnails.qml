@@ -92,7 +92,7 @@ ApplicationWindow {
     function iconsOf(row) {
         return {
             "thumbnail": findAll(row, function(x) { return x.thumbnailSource !== undefined && x.thumbnailReady !== undefined }, [])[0],
-            "glyph": findAll(row, function(x) { return x.themeIcon !== undefined }, [])[0]
+            "glyph": findAll(row, function(x) { return x.themed !== undefined && x.category !== undefined }, [])[0]
         }
     }
 

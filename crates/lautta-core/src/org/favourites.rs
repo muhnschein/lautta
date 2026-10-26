@@ -10,10 +10,11 @@ use crate::mime::{category_of_name, FileCategory};
 use crate::uri::Uri;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
-/// The icons a favourite can have (ORG-1), by theme name
-/// (`image://theme/icon-m-<name>`, all in the Sailfish OS 5.2 theme), in the
-/// order the favourite page offers them. The first, the star, is what a
-/// folder favourite shows until another is chosen.
+/// The icons a favourite can have (ORG-1), by name, in the order the
+/// favourite page offers them: `file-…` ones are the app's own file-type
+/// glyphs (UI-2), the others theme icons (`image://theme/icon-m-<name>`, all
+/// in the Sailfish OS 5.2 theme). The first, the star, is what a folder
+/// favourite shows until another is chosen.
 pub const ICONS: [&str; 24] = [
     "favorite",
     "home",
@@ -62,28 +63,33 @@ pub struct Favourite {
 }
 
 impl Favourite {
-    /// The theme icon Browse shows for the favourite: the chosen one, or
-    /// the default ([`Favourite::default_icon`]).
+    /// The icon Browse shows for the favourite: the chosen one, or the
+    /// default ([`Favourite::default_icon`]). A theme icon's URL, or the
+    /// token of an own glyph (`file-folder`), which QML sizes
+    /// (`FileIcons.sized`).
     pub fn icon_source(&self) -> String {
         match known_icon(self.icon.as_deref()) {
+            Some(icon) if icon.starts_with("file-") => icon.to_owned(),
             Some(icon) => format!("image://theme/icon-m-{icon}"),
             None => self.default_icon().to_owned(),
         }
     }
 
     /// The icon of a favourite without a chosen one: the star for a folder,
-    /// the file's category for a file, as the folder view shows it.
+    /// the glyph of the file's kind for a file, as the folder view shows it
+    /// (`FileIcons.kind`).
     pub fn default_icon(&self) -> &'static str {
         if self.is_dir {
             return "image://theme/icon-m-favorite";
         }
         match category_of_name(self.uri.name().unwrap_or_default()) {
-            FileCategory::Image => "image://theme/icon-m-file-image",
-            FileCategory::Video => "image://theme/icon-m-file-video",
-            FileCategory::Audio => "image://theme/icon-m-file-audio",
-            FileCategory::Archive => "image://theme/icon-m-file-compressed",
-            FileCategory::Package => "image://theme/icon-m-file-rpm",
-            _ => "image://theme/icon-m-document",
+            FileCategory::Image => "file-image",
+            FileCategory::Video => "file-video",
+            FileCategory::Audio => "file-audio",
+            FileCategory::Archive => "file-archive",
+            FileCategory::Package => "file-package",
+            FileCategory::Database => "file-database",
+            _ => "file-document",
         }
     }
 }
@@ -495,11 +501,69 @@ mod tests {
         assert_eq!(folder.icon_source(), "image://theme/icon-m-favorite");
         // A file keeps its file's icon until another is chosen.
         let file = f.add(&u("lautta://x/Uni/a.mp3"), "A", None, false).unwrap();
-        assert_eq!(file.icon_source(), "image://theme/icon-m-file-audio");
+        assert_eq!(file.icon_source(), "file-audio");
         let chosen = f
             .save(&u("lautta://x/Uni/a.mp3"), "A", None, Some("favorite"), false)
             .unwrap();
         assert_eq!(chosen.icon_source(), "image://theme/icon-m-favorite");
+    }
+
+    #[test]
+    fn files_show_the_own_glyph_of_their_kind() {
+        let f = store();
+        let shown: Vec<_> = [
+            "a.jpg", "a.mp4", "a.mp3", "a.zip", "a.rpm", "a.sqlite", "a.pdf", "a.txt", "a",
+        ]
+        .iter()
+        .map(|n| {
+            let uri = u(&format!("lautta://x/{n}"));
+            f.add(&uri, n, None, false).unwrap().icon_source()
+        })
+        .collect();
+        assert_eq!(
+            shown,
+            [
+                "file-image",
+                "file-video",
+                "file-audio",
+                "file-archive",
+                "file-package",
+                "file-database",
+                "file-document",
+                "file-document",
+                "file-document",
+            ],
+            "the glyph the folder view shows for the file (UI-2)"
+        );
+        // A chosen file-type icon is the own glyph too; the others are theme icons.
+        let a = u("lautta://x/a");
+        let folder = f.save(&a, "a", None, Some("file-folder"), false).unwrap();
+        assert_eq!(folder.icon_source(), "file-folder");
+        let camera = f.save(&a, "a", None, Some("camera"), false).unwrap();
+        assert_eq!(camera.icon_source(), "image://theme/icon-m-camera");
+    }
+
+    #[test]
+    fn every_glyph_token_has_its_svgs() {
+        // QML sizes a token into qml/icons/<token>-<set>.svg (FileIcons.js).
+        let icons = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../qml/icons");
+        let f = store();
+        let mut tokens: Vec<String> = ICONS
+            .iter()
+            .filter(|i| i.starts_with("file-"))
+            .map(|i| (*i).to_owned())
+            .collect();
+        for n in ["a.jpg", "a.mp4", "a.mp3", "a.zip", "a.rpm", "a.sqlite", "a.txt"] {
+            let file = f.add(&u(&format!("lautta://y/{n}")), n, None, false).unwrap();
+            tokens.push(file.icon_source());
+        }
+        assert_eq!(tokens.len(), 11);
+        for token in tokens {
+            for set in [28, 32, 80] {
+                let svg = icons.join(format!("{token}-{set}.svg"));
+                assert!(svg.is_file(), "{} is missing", svg.display());
+            }
+        }
     }
 
     #[test]

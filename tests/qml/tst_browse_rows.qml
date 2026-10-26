@@ -8,13 +8,16 @@
 // not connected, a mounted drive the highlight colour's dot and a volume the
 // bridge does not mount none, a drive with a mount under way a dot that pulses
 // (LOC-3); and nothing is attached to the page to swipe to (Activity is in
-// the pulley). Fails when a count comes back, server rows grow a second line
-// again, a state is told in words, the status dot leaves the right margin,
-// the dot marks the wrong state or Activity is attached again.
+// the pulley); a folder row draws the app's folder glyph the core names
+// (UI-2), a favourite's star stays the theme's. Fails when a count comes back,
+// server rows grow a second line again, a state is told in words, the status
+// dot leaves the right margin, the dot marks the wrong state, a row's glyph is
+// not the app's SVG or Activity is attached again.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../../qml/pages"
+import "../../qml/components/FileIcons.js" as FileIcons
 
 ApplicationWindow {
     id: win
@@ -33,7 +36,7 @@ ApplicationWindow {
             listModel: ListModel {
                 ListElement { section: "favourites"; uri: "lautta://nv-account:1/srv/photos"; name: "Photos"; kind: "favourite"; icon: "image://theme/icon-m-favorite"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "1"; place: "NAS › /srv/photos"; provider: ""; host: ""; free: -1; total: -1; fs: "" }
                 ListElement { section: "favourites"; uri: "lautta://user-documents/Uni"; name: "Thesis"; kind: "favourite"; icon: "image://theme/icon-m-favorite"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "2"; place: "Documents › Uni"; provider: ""; host: ""; free: -1; total: -1; fs: "" }
-                ListElement { section: "device"; uri: "lautta://user-documents/"; name: "Documents"; kind: "folder"; icon: "image://theme/icon-m-file-folder"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; count: 214; itemId: "user-documents"; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: "" }
+                ListElement { section: "device"; uri: "lautta://user-documents/"; name: "Documents"; kind: "folder"; icon: "file-folder"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; count: 214; itemId: "user-documents"; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: "" }
                 ListElement { section: "volumes"; uri: "lautta://vol-SD/"; name: "SD card"; kind: "volume"; icon: "image://theme/icon-m-sd-card"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "vol-SD"; place: ""; provider: ""; host: ""; free: 62500000000; total: 128000000000; fs: "exFAT"; drive: "mmcblk1p1" }
                 ListElement { section: "volumes"; uri: ""; name: "STICK"; kind: "volume"; icon: "image://theme/icon-m-usb"; status: "unmounted"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "vol-STICK"; place: ""; provider: ""; host: ""; free: -1; total: 8000000000; fs: ""; drive: "sda1" }
                 ListElement { section: "volumes"; uri: "lautta://vol-CARD/"; name: "CARD"; kind: "volume"; icon: "image://theme/icon-m-sd-card"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "vol-CARD"; place: ""; provider: ""; host: ""; free: 1000; total: 2000; fs: "vfat"; drive: "" }
@@ -172,6 +175,18 @@ ApplicationWindow {
         expect(icons(card).length === 0, "a volume the bridge does not mount shows [" + icons(card).join(",") + "]")
     }
 
+    function checkGlyphs() {
+        var image = function (row) {
+            return findAll(row, function(x) { return x.themed !== undefined && x.visible }, [])[0]
+        }
+        var folder = image(rowOf("Documents"))
+        var want = String(Qt.resolvedUrl("../../qml/icons/" + FileIcons.sized("file-folder", Theme.iconSizeMedium) + ".svg"))
+        expect(folder && String(folder.source) === want && folder.status === Image.Ready,
+               "a folder row draws the app's folder glyph: " + (folder ? folder.source : "none"))
+        var star = image(rowOf("Thesis"))
+        expect(star && String(star.source) === "image://theme/icon-m-favorite", "a favourite's star is the theme's")
+    }
+
     function checkPlaces() {
         var remote = placeLine(rowOf("Photos"))
         var local = placeLine(rowOf("Thesis"))
@@ -195,6 +210,7 @@ ApplicationWindow {
             win.checkHeights()
             win.checkVolumes()
             win.checkPlaces()
+            win.checkGlyphs()
             // Activity is reached from the pulley and the activity bar only.
             win.expect(!pageStack.nextPage(win.browse) && !win.browse._forwardDestination,
                        "Browse has a page attached: " + pageStack.nextPage(win.browse))

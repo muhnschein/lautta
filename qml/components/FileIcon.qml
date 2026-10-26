@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The icon of a file or folder (doc/QML-API.md): a theme icon per category,
-// the system thumbnail for local images and videos (Nemo.Thumbnailer, PRV-1)
-// and the app's thumbnail provider for remote images and PDFs (PRV-2,
-// PRV-14). `thumbnailSource` is what DirectoryModel's role gives: a file://
-// URL, an image://lautta-thumb/ URL or empty. A thumbnail that cannot be
-// made (an encrypted PDF) leaves the category's icon, and `thumbnailFailed`
-// says so.
+// The icon of a file or folder (doc/QML-API.md): the app's own glyph per
+// kind (FileIcons.js, UI-2), the system thumbnail for local images and
+// videos (Nemo.Thumbnailer, PRV-1) and the app's thumbnail provider for
+// remote images and PDFs (PRV-2, PRV-14). `thumbnailSource` is what
+// DirectoryModel's role gives: a file:// URL, an image://lautta-thumb/ URL or
+// empty. A thumbnail that cannot be made (an encrypted PDF) leaves the
+// category's glyph, and `thumbnailFailed` says so.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.Thumbnailer 1.0
@@ -21,32 +21,15 @@ Item {
     property bool selected
     property string mimeType
     property real size: Theme.iconSizeMedium
-    // The side of the theme glyph inside; the grid draws it large.
+    // The side of the glyph inside; the grid draws it large.
     property real glyphSize: Theme.iconSizeMedium
+    // Glyphs take the highlight colour: the row or tile is pressed or selected.
+    property bool highlighted
     readonly property bool thumbnailReady: thumbnailLoader.item ? thumbnailLoader.item.ready : false
     readonly property bool thumbnailFailed: thumbnailLoader.item ? thumbnailLoader.item.failed : false
 
     function iconFor(name, dir) {
-        if (dir)
-            return "image://theme/icon-m-file-folder"
-        switch (name) {
-        case "folder": return "image://theme/icon-m-file-folder"
-        case "image": return "image://theme/icon-m-file-image"
-        case "video": return "image://theme/icon-m-file-video"
-        case "audio": return "image://theme/icon-m-file-audio"
-        case "archive": return FileIcons.archive
-        case "package": return "image://theme/icon-m-file-rpm"
-        case "text":
-        case "code":
-        case "markdown":
-        case "pdf":
-        case "document":
-        case "spreadsheet":
-        case "presentation":
-            return "image://theme/icon-m-document"
-        case "database": return "dir-database"
-        default: return "image://theme/icon-m-document"
-        }
+        return FileIcons.glyph(name, dir, glyphSize)
     }
 
     width: size
@@ -58,6 +41,7 @@ Item {
         anchors.centerIn: parent
         icon: icon.iconFor(icon.category, icon.isDir)
         iconSize: icon.glyphSize
+        highlighted: icon.highlighted
         visible: !icon.thumbnailReady
     }
 
@@ -98,6 +82,42 @@ Item {
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             visible: ready
+        }
+    }
+
+    // A video's thumbnail keeps the video glyph at its bottom left, on a dark
+    // gradient as Jolla Gallery's video thumbnails: else it reads as a
+    // picture. Not on the plain glyph, which is the video glyph already.
+    Item {
+        objectName: "videoBadge"
+
+        anchors.fill: parent
+        visible: icon.thumbnailReady && icon.category === "video" && !icon.isDir
+
+        Rectangle {
+            anchors.bottom: parent.bottom
+            width: parent.width
+            height: parent.height / 2
+            opacity: Theme.opacityOverlay
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: "transparent" }
+                GradientStop { position: 1.0; color: Theme.highlightDimmerColor }
+            }
+        }
+
+        AppIcon {
+            objectName: "videoBadgeGlyph"
+
+            anchors {
+                left: parent.left
+                bottom: parent.bottom
+                margins: Theme.paddingSmall
+            }
+            // Small beside its thumbnail: three eighths of a list row's,
+            // the small icon size on a grid tile.
+            iconSize: Math.round(Math.min(Theme.iconSizeSmall, icon.size * 3 / 8))
+            icon: FileIcons.glyph("video", false, iconSize)
+            highlighted: icon.highlighted
         }
     }
 

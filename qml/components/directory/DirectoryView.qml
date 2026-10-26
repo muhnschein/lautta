@@ -689,6 +689,8 @@ Item {
                 thumbnailSource: model.thumbnailSource
                 mimeType: model.mimeType
                 selected: model.selected
+                // Coloured as the name beside it.
+                highlighted: item.highlighted || model.selected
             }
 
             Column {
@@ -846,6 +848,8 @@ Item {
                     thumbnailSource: model.thumbnailSource
                     mimeType: model.mimeType
                     selected: model.selected
+                    // Coloured as the name under it.
+                    highlighted: cell.highlighted || model.selected
                 }
             }
 

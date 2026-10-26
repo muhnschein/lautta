@@ -5,6 +5,8 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../"
+import "../FileIcons.js" as FileIcons
 import "BrowseText.js" as BrowseText
 import "RowStatus.js" as RowStatus
 
@@ -64,17 +66,13 @@ Item {
                 height: banner ? 0 : Theme.itemSizeSmall
                 visible: !banner
 
-                HighlightImage {
+                AppIcon {
                     anchors {
                         left: parent.left
                         leftMargin: Theme.horizontalPageMargin
                         verticalCenter: parent.verticalCenter
                     }
-                    source: model.icon
-                    width: Theme.iconSizeMedium
-                    height: width
-                    sourceSize.width: width
-                    sourceSize.height: height
+                    icon: FileIcons.sized(model.icon, iconSize)
                     color: model.colour.length > 0 ? model.colour : Theme.primaryColor
                 }
                 Label {
