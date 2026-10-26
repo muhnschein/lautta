@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! User-level actions of the viewers area on [`Core`](crate::app::Core):
 //! loading text (PRV-4), Markdown and EXIF sources, the folder's images,
-//! thumbnails of remote images and of PDFs, remote full images (PRV-2,
+//! thumbnails of remote images and PDFs, remote full images (PRV-2,
 //! PRV-3, PRV-14), media for playback (PRV-8, PRV-9) and recents (ORG-2).
 //! Everything is Qt-free; the Qt layer forwards to these functions.
 
 use crate::app::Core;
-use crate::entry::{Entry, Kind};
+use crate::entry::Entry;
 use crate::error::{Error, ErrorKind, Result};
 use crate::mime::{category_of, FileCategory};
 use crate::org::recents::RecentKind;
@@ -14,13 +14,11 @@ use crate::preview::exif::{self, ExifInfo};
 use crate::preview::highlight::{self, ColourJob, ColouredText};
 use crate::preview::markdown;
 use crate::preview::text::{self as ptext, TextDoc};
-use crate::provider::local::LocalProvider;
 use crate::provider::{list_all, Lane, ProgressSink, Provider, ReadHandle, ReadOptions};
 use crate::settings::Settings;
 use crate::sort::sort_permutation;
 use crate::thumbs::{
-    remote_thumbnail, thumb_key, thumbnail_source, trash_item_ref, ThumbJobs, ThumbSettings, ThumbSource,
-    ThumbnailCache, TRASH_LOCATION,
+    remote_thumbnail, thumb_key, thumbnail_source, ThumbJobs, ThumbSettings, ThumbSource, ThumbnailCache,
 };
 use crate::thumbs_pdf::PdfThumbs;
 use crate::uri::Uri;
@@ -290,9 +288,10 @@ impl Previews {
         }
     }
 
-    /// The thumbnail itself, if `thumbnail_source` says the app makes it:
-    /// cache first, then for an image the first 64 KiB or the whole file
-    /// (PRV-2), for a PDF its first page (PRV-14).
+    /// The thumbnail itself, if `thumbnail_source` says the app makes it
+    /// (a server file; local ones are the system thumbnailer's): cache
+    /// first, then for an image the first 64 KiB or the whole file (PRV-2),
+    /// for a PDF its first page (PRV-14).
     async fn make(&self, core: &Core, uri: &Uri, size: u32) -> ThumbResult {
         let file = ThumbFile::open(core, uri).await?;
         let entry = &file.entry;
@@ -320,7 +319,7 @@ impl Previews {
         }
         let handle = file.provider.open_read(&file.path, Lane::Interactive).await?;
         let bytes = if pdf {
-            let (dir, limit) = (self.cache.dir(), settings.pdf_limit(file.local));
+            let (dir, limit) = (self.cache.dir(), settings.pdf_limit());
             self.pdf.make(dir, &version, handle.as_ref(), size, limit).await?
         } else {
             remote_thumbnail(handle.as_ref(), size, settings.max_remote_bytes).await?
@@ -336,20 +335,16 @@ impl Previews {
 struct ThumbFile {
     provider: Arc<dyn Provider>,
     path: VPath,
-    /// Named as the user knows it: a trashed copy by its original name.
     entry: Entry,
-    /// In a folder of this device, or in the Trash.
+    /// In a folder of this device.
     local: bool,
     /// What the cache keys name the file by.
     key_uri: String,
 }
 
 impl ThumbFile {
-    /// The file `uri` names: in a location, or an item of the Trash.
+    /// The file `uri` names.
     async fn open(core: &Core, uri: &Uri) -> Result<ThumbFile> {
-        if uri.location == TRASH_LOCATION {
-            return ThumbFile::trashed(core, uri).await;
-        }
         let provider = core.provider(&uri.location)?;
         let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
         Ok(ThumbFile {
@@ -357,42 +352,6 @@ impl ThumbFile {
             path: uri.path.clone(),
             entry,
             local: core.locations.to_local_path(uri).is_some(),
-            key_uri: uri.to_string(),
-        })
-    }
-
-    /// The stored copy of the Trash item `uri` names, which must still be the
-    /// one stored under that name (OPS-8): the id of a gone item may name
-    /// another by now. Only a regular file: a trashed link would show its
-    /// target, maybe outside the sandbox (BRW-10).
-    async fn trashed(core: &Core, uri: &Uri) -> Result<ThumbFile> {
-        let (id, stored_name) = trash_item_ref(uri).ok_or_else(|| Error::kind(ErrorKind::NotFound))?;
-        let trash = core.trash.clone();
-        let (item, provider) = tokio::task::spawn_blocking(move || {
-            let item = trash.get(id)?;
-            if item.stored_name != stored_name {
-                return Err(Error::kind(ErrorKind::NotFound));
-            }
-            let provider = LocalProvider::new(item.dir.clone());
-            Ok::<_, Error>((item, provider))
-        })
-        .await
-        .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))??;
-        let path = VPath::parse(item.stored_name.as_bytes())?;
-        let mut entry = provider.stat(&path, false, Lane::Interactive).await?;
-        if entry.kind != Kind::File {
-            return Err(Error::new(
-                ErrorKind::Unsupported,
-                "only a regular file has a thumbnail",
-            ));
-        }
-        // The stored name has no extension; the type comes from the original.
-        entry.name = item.original_uri.name().unwrap_or_default().to_vec();
-        Ok(ThumbFile {
-            provider: Arc::new(provider),
-            path,
-            entry,
-            local: true,
             key_uri: uri.to_string(),
         })
     }

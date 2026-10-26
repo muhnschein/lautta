@@ -122,8 +122,11 @@ is the authority.
 - HBR-5: `[X-Sailjail]` uses only `Permissions`, `OrganizationName`, `ApplicationName`,
   `ExecDBus`. `OrganizationName` must not be `com.jolla` or `org.sailfishos`.
 - HBR-6: No setuid/setgid bits, no debug info in the package, no source-control files.
-- HBR-7: The app must not spawn other programs. Sailjail's `private-bin` only provides
-  the app's own binary, so the design contains no subprocesses at all.
+- HBR-7: Lautta starts no other program. Sailjail's `private-bin` provides the app's own
+  binary and only the helpers its permissions add. The system thumbnail library
+  (`Nemo.Thumbnailer`, PRV-1) starts its own helpers, `/usr/bin/thumbnaild-pdf` and
+  `/usr/bin/thumbnaild-video`, under the `Thumbnails` permission, which `UserDirs` brings
+  (§3.3).
 
 ### 3.3 Sandbox profile
 
@@ -137,7 +140,7 @@ ExecDBus=harbour-lautta
 
 | Permission | Why | What it grants (sailjail-permissions) |
 |---|---|---|
-| `UserDirs` | the user's files | `~/Documents`, `~/Downloads`, `~/Pictures`, `~/Music`, `~/Playlists`, `~/Videos`, `~/Public`, and `~/android_storage/{Documents,Download,Pictures,DCIM,Music,Podcasts,Movies}` |
+| `UserDirs` | the user's files, their thumbnails (PRV-1) | `~/Documents`, `~/Downloads`, `~/Pictures`, `~/Music`, `~/Playlists`, `~/Videos`, `~/Public`, and `~/android_storage/{Documents,Download,Pictures,DCIM,Music,Podcasts,Movies}`; through `Pictures` and `Videos` also `Thumbnails`: `private-bin thumbnaild-pdf,thumbnaild-video` (HBR-7), `~/.cache/org.nemomobile/thumbnails`, D-Bus `org.nemomobile.Thumbnailer` |
 | `RemovableMedia` | SD cards and USB drives | `/run/media` (via `ignore disable-mnt`), listening to UDisks2 signals |
 | `Audio` | sound in audio/video preview | PulseAudio, GStreamer cache |
 
@@ -205,7 +208,8 @@ flowchart LR
   LP --> FS[(user folders, /run/media)]
 ```
 
-- ARC-1: One process. No helper binaries (HBR-7), no daemon (HBR-1). Work that must
+- ARC-1: One process: Lautta ships and starts no helper binary (HBR-7; the system
+  thumbnail library's own helpers are the system's), no daemon (HBR-1). Work that must
   outlive a page lives in `lautta-core`; work that must outlive the process is persisted
   and resumed at the next start (XFR-11).
 - ARC-2: `lautta-core` has no Qt dependency. It is testable on the host with
@@ -239,7 +243,7 @@ flowchart LR
 | `Planner` | expands operations into steps, scans, detects conflicts |
 | `TransferQueue` | persistent queue and history in SQLite, resume bookkeeping |
 | `DirCache` | memory LRU + SQLite listing cache, stale-while-revalidate |
-| `Thumbs` | local image and video thumbnails via `Nemo.Thumbnailer`; remote images and PDFs decoded in Rust |
+| `Thumbs` | local image, video and PDF thumbnails via `Nemo.Thumbnailer`; remote images and PDFs decoded in Rust |
 | `MediaSource` | random-access byte source for the player (PRV-9) |
 | `WorkingCopies` | copies of remote files opened in other apps, expiry (PRV-6) |
 | `Trash` | app-private *Trash* for this device's folders |
@@ -655,11 +659,14 @@ bridge).
 ## 12. Preview, open, stream
 
 - PRV-1: Local thumbnails via `Nemo.Thumbnailer` (`image://nemoThumbnail/` and the
-  `Thumbnail` item), covering images and videos the system can thumbnail. The Trash page
-  (OPS-8) uses them too. PDFs not among them: `Nemo.Thumbnailer` draws one by running
-  `/usr/bin/thumbnaild-pdf` from the app's process (HBR-7), which Sailjail's `private-bin`
-  leaves out without the `Thumbnails` permission, and Harbour does not allow that
-  permission. App makes PDF thumbnails, local too (PRV-14).
+  `Thumbnail` item): images, videos and PDFs (PRV-14) the system can thumbnail, in this
+  device's folders and on the Trash page (OPS-8). The item gets the file's `file://` URL,
+  its MIME type and the icon's size: the library draws a PDF (`application/pdf`) or a
+  video (`video/*`) only when told that type, each in a helper process of its own
+  (HBR-7), other types in its own thread. A file that crashes a helper keeps its icon,
+  the app runs on. The library draws one thumbnail at a time: a helper that hangs holds
+  back the other local thumbnails, not the app. No size limit: the app reads nothing of
+  the file.
 - PRV-2: Remote image thumbnails: read the first 64 KiB through the bridge, use the EXIF
   thumbnail when present; otherwise read the whole file up to the size set in *View
   options* (*Largest server file with a thumbnail*, 20 MB by default) and decode with the
@@ -671,7 +678,7 @@ bridge).
   within the *Thumbnail cache* size of *View options* (200 MB by default); a smaller size
   evicts the least recently used thumbnails at once.
 - PRV-3: Thumbnail jobs: interactive lane, lowest priority, ≤ 2 in flight per location,
-  visible delegates only, canceled on scroll. PDF thumbnails (PRV-14) use same jobs.
+  visible delegates only, canceled on scroll. Server PDF thumbnails (PRV-14) use same jobs.
 - PRV-4: Viewers: images (zoom, swipe through the folder, EXIF panel), text/code (read-
   only up to 1 MiB, then a notice; numbered lines always wrapped to the page's width, so
   the list never scrolls sideways and the page swipes back like any other, also from
@@ -771,25 +778,24 @@ bridge).
   entities. Plain files get the same escaping without colours. Markdown's *View source*
   is coloured as Markdown.
 - PRV-14: PDF thumbnails in every list that shows thumbnails (folder list, grid, Trash).
-  Thumbnail = first page, drawn by `lautta-pdf` (PRV-12) as wide as the thumbnail; page
-  taller than wide cut to square from its top. Served as JPEG by
-  `image://lautta-thumb/<uri>?size=N`, cached like PRV-2's (key: URI, size, mtime, etag):
-  one draw per file version and size. One rule (`thumbs::thumbnail_source`) picks files
-  with a thumbnail and who makes it. A PDF follows the switches of an image: *Show
-  thumbnails* for a local PDF, also *Thumbnails from servers* for a server PDF. Open
-  folders follow a change at once. Read limit: local 20 MB; server = size limit of PRV-2,
-  never above the viewer's 200 MB. Larger: not read, icon shows. Encrypted, damaged or
-  page-less PDF: icon, no message. Drawing =
-  CPU work on the blocking pool, one PDF at a time app-wide (stricter than ARC-7: battery,
-  heat). Job whose delegate left before its turn never runs; one already drawing finishes.
-  PDF that cannot be drawn, a draw that panicked included (RS-4), is remembered for the
-  session, so scrolling back reads nothing. PDF whose drawing killed the process (stack
-  overflow, out of memory) gets a marker file in the thumbnail folder and is never tried
-  again. Local images and videos stay with `Nemo.Thumbnailer`, which cannot draw PDFs in
-  the sandbox (PRV-1). A trashed PDF is asked by Trash item
-  (`lautta://trash/<id>/<stored name>`: an id comes back after the newest item goes, a
-  stored name never): the stored copy has no extension, so the rule goes by the original
-  name; a link or a copy gone from the Trash has no thumbnail.
+  Thumbnail = first page. One rule (`thumbs::thumbnail_source`) picks files with a
+  thumbnail and who makes it. A PDF follows the switches of an image: *Show thumbnails*
+  for a local PDF, also *Thumbnails from servers* for a server PDF. Open folders follow a
+  change at once. Encrypted, damaged or page-less PDF: icon, no message.
+  - Local PDF, a trashed one too: `Nemo.Thumbnailer` (PRV-1), told type
+    `application/pdf`; a trashed one's stored copy has no extension, so the type comes
+    from the original name. No size limit. A link or a copy gone from the Trash has no
+    thumbnail.
+  - Server PDF: drawn by `lautta-pdf` (PRV-12) as wide as the thumbnail; page taller than
+    wide cut to square from its top. Served as JPEG by `image://lautta-thumb/<uri>?size=N`,
+    cached like PRV-2's (key: URI, size, mtime, etag): one draw per file version and size.
+    Read limit = size limit of PRV-2, never above the viewer's 200 MB. Larger: not read,
+    icon shows. Drawing = CPU work on the blocking pool, one PDF at a time app-wide
+    (stricter than ARC-7: battery, heat). Job whose delegate left before its turn never
+    runs; one already drawing finishes. PDF that cannot be drawn, a draw that panicked
+    included (RS-4), is remembered for the session, so scrolling back reads nothing. PDF
+    whose drawing killed the process (stack overflow, out of memory) gets a marker file
+    in the thumbnail folder and is never tried again.
 
 ## 13. Search and organisation
 
