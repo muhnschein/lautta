@@ -4,9 +4,10 @@
 
 lupdate lists a `%n` message with empty `<numerusform>`s. lrelease then makes
 the `//%` text the answer for every n, "1 items". `english-plurals.py fill
-FILE.ts` gives each such message its two English forms: the singular and the
-plural, which is the source text itself. It runs after lupdate, in
-`make translations` and in `make translations-check`.
+< in.ts > out.ts` gives each such message its two English forms: the singular
+and the plural, which is the source text itself. It runs after lupdate, in
+`make translations` and in `make translations-check`. A filter, no file names:
+nothing it opens comes from its arguments.
 
 The catalogue gets `language="en"` when it has none: lrelease writes no plural
 rules without it.
@@ -20,13 +21,14 @@ plural ending ("%n items" -> "%n item"), and the verbs after it that agree
 with the plural follow ("are" -> "is"). A word after `%n` that is no noun in
 the plural stays when it is a participle or one of a few others ("%n paused",
 "%n more"). Any other word is refused, and so is "(s)": the message is left as
-it is, the run fails, and both forms are written by hand into the `.ts`. Read
-the printed pairs: the rule knows nothing of other verbs.
+it is, the rest is filled, the run fails, and both forms are written by hand
+into the `.ts`. A text that is no English catalogue gives no output. Read the
+pairs printed to stderr: the rule knows nothing of other verbs.
 """
 import re
 import sys
 
-MESSAGE = re.compile(r'    <message id="(?P<id>[^"]*)"(?P<numerus> numerus="yes")?>\n.*?\n    </message>\n', re.S)
+MESSAGE = re.compile(r' {4}<message id="(?P<id>[^"]*)"(?P<numerus> numerus="yes")?>\n.*?\n {4}</message>\n', re.S)
 SOURCE = re.compile(r"<source>(.*?)</source>", re.S)
 FORM = re.compile(r"<numerusform>(.*?)</numerusform>", re.S)
 AFTER_N = re.compile(r"%n (\w+)")
@@ -83,7 +85,7 @@ def valid(source, forms):
 def filled(block, forms):
     """`block` (one message) with `forms` as its finished translation."""
     head = block[: block.index("        <translation")]
-    head = re.sub(r"        <oldsource>.*?</oldsource>\n", "", head, flags=re.S)
+    head = re.sub(r" {8}<oldsource>.*?</oldsource>\n", "", head, flags=re.S)
     lines = "".join(f"            <numerusform>{form}</numerusform>\n" for form in forms)
     return f"{head}        <translation>\n{lines}        </translation>\n    </message>\n"
 
@@ -140,21 +142,20 @@ def fill(text):
 
 
 def main(argv):
-    if len(argv) != 3 or argv[1] != "fill":
-        print("usage: english-plurals.py fill FILE.ts", file=sys.stderr)
+    if argv[1:] != ["fill"]:
+        print("usage: english-plurals.py fill < in.ts > out.ts", file=sys.stderr)
         return 2
-    with open(argv[2], encoding="utf-8") as handle:
-        text = handle.read()
+    # The catalogue is UTF-8 whatever the locale says ("›" in strings).
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8")
     try:
-        out, made, refused = fill(text)
+        out, made, refused = fill(sys.stdin.read())
     except ValueError as error:
         print(f"english-plurals: {error}", file=sys.stderr)
         return 1
+    sys.stdout.write(out)
     for name, (single, plural) in made:
-        print(f"english-plurals: {name}: {single} | {plural}")
-    if out != text:
-        with open(argv[2], "w", encoding="utf-8") as handle:
-            handle.write(out)
+        print(f"english-plurals: {name}: {single} | {plural}", file=sys.stderr)
     for reason in refused:
         print(f"english-plurals: {reason}", file=sys.stderr)
     return 1 if refused else 0
