@@ -476,7 +476,7 @@ fn pdf() -> Vec<u8> {
 }
 
 #[tokio::test]
-async fn trashed_pdfs_carry_an_app_thumbnail_of_their_trash_item() {
+async fn trashed_pdfs_carry_what_the_thumbnailer_needs() {
     let h = home().await;
     write(&h.root.join("Documents/doc.PDF"), &pdf());
     write(&h.root.join("Documents/dir.pdf/inner.txt"), b"x");
@@ -485,7 +485,7 @@ async fn trashed_pdfs_carry_an_app_thumbnail_of_their_trash_item() {
         .write(true)
         .open(h.root.join("Documents/huge.pdf"))
         .unwrap()
-        .set_len(lautta_core::thumbs::LOCAL_PDF_MAX_BYTES + 1)
+        .set_len(lautta_pdf::MAX_PDF_BYTES + 1)
         .unwrap();
     std::os::unix::fs::symlink("doc.PDF", h.root.join("Documents/link.pdf")).unwrap();
     let rows = trashed(&h, &["doc.PDF", "dir.pdf", "huge.pdf", "link.pdf"]).await;
@@ -494,16 +494,20 @@ async fn trashed_pdfs_carry_an_app_thumbnail_of_their_trash_item() {
     let doc = &rows["doc.PDF"];
     assert_eq!(
         doc.mime_type, "application/pdf",
-        "the type comes from the original name"
+        "the type comes from the original name: the thumbnailer draws PDFs by it"
     );
-    let stored = h.core.trash.get(doc.id).unwrap().stored_name;
     assert_eq!(
         doc.thumbnail_source,
-        format!("image://lautta-thumb/lautta://trash/{}/{stored}", doc.id),
-        "the app makes it: the stored copy has no location, and the id alone can come back (PRV-14)"
+        stored_url(&h, doc),
+        "the system thumbnailer draws the stored copy (PRV-1)"
     );
     assert_eq!(rows["dir.pdf"].thumbnail_source, "", "a folder");
-    assert_eq!(rows["huge.pdf"].thumbnail_source, "", "over the local limit");
+    let huge = &rows["huge.pdf"];
+    assert_eq!(
+        huge.thumbnail_source,
+        stored_url(&h, huge),
+        "no size limit: the app reads none of it"
+    );
     assert_eq!(
         rows["link.pdf"].thumbnail_source, "",
         "a link would show its target"

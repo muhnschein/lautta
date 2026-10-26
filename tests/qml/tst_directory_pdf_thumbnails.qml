@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// PDF thumbnails in a folder on the target (PRV-14): the first page of a PDF
-// is its thumbnail, made by the app, and the name stays off a compact grid's
-// tile only while a thumbnail covers the tile. A PDF that cannot be drawn
-// (encrypted) keeps its icon and gets its name back; with Show thumbnails
-// off no PDF has one. Fails when a readable PDF shows no thumbnail, an
-// unreadable one shows no name, or the switch changes nothing.
+// PDF thumbnails on the target (PRV-1, PRV-14). In a folder of this device a
+// PDF asks the system thumbnailer for its first page at the icon's size,
+// with the PDF type, without which it draws no PDF, in the grid and the list. In an archive (it stands
+// in for a server: neither is on this device) the app draws the first page;
+// the name stays off a compact grid's tile only while a thumbnail covers the
+// tile, and an encrypted PDF keeps its icon and gets its name back. With
+// Show thumbnails off no PDF has one. Fails when a local PDF asks without its
+// type, a readable archive PDF shows no thumbnail, an unreadable one shows no
+// name, or the switch changes nothing. Here the system thumbnailer draws
+// nothing (no scene graph: a `Thumbnail` stays `Null`, a JPEG's too): only a
+// phone shows a local PDF's page, or its icon when the page cannot be drawn.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -14,12 +19,19 @@ ApplicationWindow {
     id: window
 
     readonly property string base: "lautta://user-documents/PdfThumbnails/"
+    property string archiveRoot
 
     ViewerTools { id: tools }
 
     DirectoryModel {
         id: documents
         uri: "lautta://user-documents/"
+    }
+
+    Connections {
+        target: Operations
+        onJobFinished: if (ok) Operations.openArchive(resultUri)
+        onArchiveOpened: window.archiveRoot = rootUri
     }
 
     function expect(ok, what) {
@@ -58,6 +70,11 @@ ApplicationWindow {
         return own.length === 1 ? own[0] : null
     }
 
+    // The system thumbnail inside `icon`, undefined while it has none.
+    function systemThumbnailOf(icon) {
+        return findAll(icon, function (x) { return x.priority !== undefined && x.mimeType !== undefined }, [])[0]
+    }
+
     // The name shown on the tile of `name`, null when the tile has none.
     function nameOn(view, name) {
         layOut(view)
@@ -72,6 +89,55 @@ ApplicationWindow {
         return done()
     }
 
+    function push(uri) {
+        pageStack.push(pageComponent, { "folderUri": uri }, PageStackAction.Immediate)
+        tools.pump(500)
+        return pageStack.currentPage.view
+    }
+
+    // Each local PDF asks the system thumbnailer for its own file, as a PDF,
+    // at the icon's size.
+    function checkLocal(view) {
+        until(function () { return iconOf(view, "pdf", "readable.pdf") && iconOf(view, "pdf", "secret.pdf") })
+        var names = ["readable.pdf", "secret.pdf"]
+        for (var i = 0; i < names.length; ++i) {
+            var icon = iconOf(view, "pdf", names[i])
+            if (!expect(icon, names[i] + " asks for a thumbnail"))
+                continue
+            expect(icon.thumbnailSource.indexOf("file://") === 0, "of the file itself: " + icon.thumbnailSource)
+            var system = systemThumbnailOf(icon)
+            if (!expect(system, names[i] + " asks the system thumbnailer"))
+                continue
+            expect(String(system.source) === icon.thumbnailSource && system.mimeType === "application/pdf",
+                   "for that file, with the PDF type: " + system.source + " " + system.mimeType)
+            expect(system.sourceSize.width > 0 && Math.abs(system.sourceSize.width - icon.width) < 1
+                   && system.sourceSize.height === system.sourceSize.width,
+                   "at the icon's size: " + system.sourceSize + ", icon " + icon.width)
+        }
+    }
+
+    // In an archive the app draws the first page; an encrypted PDF fails.
+    function checkArchive() {
+        Operations.compress(JSON.stringify([base + "readable.pdf", base + "secret.pdf"]), "lautta://user-documents/",
+                            "pdf-thumbnails", "zip")
+        if (!expect(until(function () { return window.archiveRoot.length > 0 }), "the archive opens"))
+            return
+        var view = push(window.archiveRoot)
+        until(function () { return iconOf(view, "pdf", "readable.pdf") && iconOf(view, "pdf", "secret.pdf") })
+        var good = iconOf(view, "pdf", "readable.pdf")
+        var locked = iconOf(view, "pdf", "secret.pdf")
+        if (expect(good && locked, "both PDFs of the archive ask for a thumbnail of the app")) {
+            expect(good.thumbnailSource.indexOf("image://lautta-thumb/") === 0, "from the thumbnail provider: " + good.thumbnailSource)
+            expect(until(function () { return good.thumbnailReady }), "the first page of a readable PDF shows")
+            expect(nameOn(view, "readable.pdf") === null || !nameOn(view, "readable.pdf").visible,
+                   "its tile has no name: the page covers it")
+            expect(until(function () { return locked.thumbnailFailed }), "an encrypted PDF has no thumbnail")
+            var name = nameOn(view, "secret.pdf")
+            expect(name && name.visible, "so its tile shows its name")
+        }
+        pageStack.pop(null, PageStackAction.Immediate)
+    }
+
     Component.onCompleted: {
         documents.createFolder("PdfThumbnails")
         tools.pump(500)
@@ -80,23 +146,18 @@ ApplicationWindow {
         // A compact grid: 4 per row, names on icons only.
         App.setSetting("view_mode", JSON.stringify("grid"))
         App.setSetting("grid_columns", JSON.stringify(4))
-        pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        tools.pump(500)
-        var view = pageStack.currentPage.view
+        App.setSetting("thumbnails_remote", JSON.stringify(true))
+        var view = push(base)
         expect(view.gridMode && !view.gridCaptions, "a compact grid")
 
-        until(function () { return iconOf(view, "pdf", "readable.pdf") && iconOf(view, "pdf", "secret.pdf") })
-        var good = iconOf(view, "pdf", "readable.pdf")
-        var locked = iconOf(view, "pdf", "secret.pdf")
-        if (expect(good && locked, "both PDFs ask for a thumbnail of the app: " + findAll(view, function (x) { return x.thumbnailFailed !== undefined }, []).length)) {
-            expect(good.thumbnailSource.indexOf("image://lautta-thumb/" + base) === 0, "from the thumbnail provider: " + good.thumbnailSource)
-            expect(until(function () { return good.thumbnailReady }), "the first page of a readable PDF shows")
-            expect(nameOn(view, "readable.pdf") === null || !nameOn(view, "readable.pdf").visible,
-                   "its tile has no name: the page covers it")
-            expect(until(function () { return locked.thumbnailFailed }), "an encrypted PDF has no thumbnail")
-            var name = nameOn(view, "secret.pdf")
-            expect(name && name.visible, "so its tile shows its name")
-        }
+        checkLocal(view)
+        // The list's rows ask the same way.
+        App.setSetting("view_mode", JSON.stringify("list"))
+        expect(until(function () { return !view.gridMode }), "a list")
+        checkLocal(view)
+        App.setSetting("view_mode", JSON.stringify("grid"))
+        expect(until(function () { return view.gridMode }), "the grid again")
+        checkArchive()
 
         App.setSetting("thumbnails_local", JSON.stringify(false))
         tools.pump(300)
@@ -114,12 +175,16 @@ ApplicationWindow {
         id: pageComponent
 
         Page {
+            id: page
+
+            property string folderUri
             property alias view: folder
 
             DirectoryView {
                 id: folder
+
                 anchors.fill: parent
-                uri: window.base
+                uri: page.folderUri
             }
         }
     }
