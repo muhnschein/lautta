@@ -3,7 +3,8 @@
 // and grid tiles draw qml/icons/file-<kind>-<set>.svg, the set picked for the
 // glyph's pixel size, a grid glyph at a multiple of 28 px; a glyph takes the
 // highlight colour with its name, pressed or selected. A video's thumbnail,
-// once shown, keeps the video glyph at its bottom left on a dark gradient; a
+// once shown, keeps the video glyph at its bottom left on a dark gradient, at
+// the largest sharp size up to its target (a multiple of 28 or 32 px); a
 // plain glyph, a thumbnail that failed and an image's thumbnail have none.
 // Fails when a glyph is a theme icon or does not load, a size gets another
 // set, a glyph keeps its colour in a highlighted row, or the badge shows
@@ -85,6 +86,16 @@ ApplicationWindow {
         if (side % 32 === 0)
             return 32
         return side % 80 === 0 ? 80 : 28
+    }
+
+    // The largest side up to `px` one set draws sharp (a multiple of 28 or
+    // 32), at least 28.
+    function sharpAtMost(px) {
+        for (var side = Math.floor(px); side > 28; --side) {
+            if (side % 28 === 0 || side % 32 === 0)
+                return side
+        }
+        return 28
     }
 
     function svg(kind, set) {
@@ -197,7 +208,7 @@ ApplicationWindow {
         pairs.forEach(function (p) {
             var badge = named(p[0], "videoBadge")
             var mark = named(p[0], "videoBadgeGlyph")
-            var side = Math.round(Math.min(Theme.iconSizeSmall, p[1] * 3 / 8))
+            var side = sharpAtMost(Math.min(Theme.iconSizeSmall, p[1] * 3 / 8))
             expect(badge.visible, p[2] + ": a shown video thumbnail has the badge")
             expect(!named(p[0], "fileGlyph").visible, p[2] + ": over the thumbnail, not the glyph")
             same(String(mark.source), svg("video", setAt(side)), p[2] + ": the badge is the video glyph")

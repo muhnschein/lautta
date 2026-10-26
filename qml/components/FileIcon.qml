@@ -114,9 +114,9 @@ Item {
                 bottom: parent.bottom
                 margins: Theme.paddingSmall
             }
-            // Small beside its thumbnail: three eighths of a list row's,
-            // the small icon size on a grid tile.
-            iconSize: Math.round(Math.min(Theme.iconSizeSmall, icon.size * 3 / 8))
+            // Small beside its thumbnail: up to three eighths of a list row's,
+            // up to the small icon size on a grid tile, at a sharp size.
+            iconSize: FileIcons.sharpAtMost(Math.min(Theme.iconSizeSmall, icon.size * 3 / 8))
             icon: FileIcons.glyph("video", false, iconSize)
             highlighted: icon.highlighted
         }
