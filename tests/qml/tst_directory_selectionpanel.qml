@@ -5,8 +5,9 @@
 // gradient alone. The selection panel shows its icons in the long-press
 // menu's order, then More actions, whatever the number of items, with no
 // push-up menu. More actions opens a page: for one item Rename (opening the
-// rename dialog), Add to favourites and Compress, for several Compress, the
-// header naming the item or counting them; a dialog it opens takes the
+// rename dialog), Add to favourites, Compress and Move to new folder, for
+// several Compress and Move to new folder, the header naming the item or
+// counting them; a dialog it opens takes the
 // page's place and ends selection, leaving the page keeps it. Archives show
 // the same archive icon in a folder, in search, in the operations pages and
 // in Recents. Fails when a bar lets content through, an action of the
@@ -191,11 +192,13 @@ ApplicationWindow {
         if (!page)
             return
         same(pageTitle(page), "a.md", "the header names the one item")
-        same(pageRows(page).map(function (r) { return [r.text, r.icon] }),
+        // The window shows three rows: the page's own list says all four.
+        same(page.actions.map(function (a) { return [a.text, a.icon] }),
              [[qsTrId("lautta-dir-act-rename"), "image://theme/icon-m-edit"],
               [qsTrId("lautta-dir-act-favourite"), "image://theme/icon-m-favorite"],
-              [qsTrId("lautta-dir-act-compress"), FileIcons.archive]],
-             "one item: Rename, Add to favourites, Compress, each with its icon")
+              [qsTrId("lautta-dir-act-compress"), FileIcons.archive],
+              [qsTrId("lautta-dir-act-move-new-folder"), "image://theme/icon-m-file-folder"]],
+             "one item: Rename, Add to favourites, Compress, Move to new folder, each with its icon")
         pageStack.pop(null, PageStackAction.Immediate)
         tools.pump(300)
         settle()
@@ -230,14 +233,15 @@ ApplicationWindow {
             return
         same(pageTitle(page), qsTrId("lautta-dir-selected", 3), "the header counts the selected items")
         same(pageRows(page).map(function (r) { return [r.text, r.icon] }),
-             [[qsTrId("lautta-dir-act-compress"), FileIcons.archive]],
-             "several items: Compress only")
+             [[qsTrId("lautta-dir-act-compress"), FileIcons.archive],
+              [qsTrId("lautta-dir-act-move-new-folder"), "image://theme/icon-m-file-folder"]],
+             "several items: Compress and Move to new folder")
         // A dialog takes the page's place while selection ends: the header
         // and the rows stay as they were.
         folderView.endSelection()
         tools.pump(300)
         same(pageTitle(page), qsTrId("lautta-dir-selected", 3), "the header keeps its count when selection ends")
-        same(pageRows(page).length, 1, "the rows stay when selection ends")
+        same(pageRows(page).length, 2, "the rows stay when selection ends")
         pageStack.pop(null, PageStackAction.Immediate)
         tools.pump(300)
         settle()

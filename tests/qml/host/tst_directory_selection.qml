@@ -2,8 +2,8 @@
 // Host test of selection mode (Selection.js), SPEC §15.3: when it starts and
 // ends, what its panel and its More actions page offer (every action of an
 // item's long-press menu with one item selected, as grid view selects on
-// hold; Compress for several) and how a drag selects a range and scrolls at
-// the edges.
+// hold; Compress and Move to new folder for several) and how a drag selects a
+// range and scrolls at the edges.
 import QtQuick 2.6
 import "../../../qml/components/directory/Selection.js" as Selection
 import "../../../qml/components/directory/ContextActions.js" as Actions
@@ -39,7 +39,7 @@ Item {
     }
 
     function testSelectionActions() {
-        var ending = ["copy", "cut", "share", "compress", "rename", "favourite"]
+        var ending = ["copy", "cut", "share", "compress", "rename", "favourite", "moveToNewFolder"]
         for (var i = 0; i < ending.length; ++i)
             check(Selection.endsSelection(ending[i]), ending[i] + " ends selection")
         check(!Selection.endsSelection("delete"), "delete ends it only after the remorse timer")
@@ -66,21 +66,26 @@ Item {
 
     function testMoreRows() {
         var file = { "isDir": false, "writable": true }
-        same(ids(Selection.moreRows(1, file)), ["rename", "favourite", "compress"],
+        same(ids(Selection.moreRows(1, file)), ["rename", "favourite", "compress", "moveToNewFolder"],
              "one item: Rename, then its own More actions page")
-        same(ids(Selection.moreRows(1, { "isDir": true, "writable": true })), ["rename", "favourite", "compress"],
-             "one folder")
+        same(ids(Selection.moreRows(1, { "isDir": true, "writable": true })),
+             ["rename", "favourite", "compress", "moveToNewFolder"], "one folder")
         same(ids(Selection.moreRows(1, { "isDir": false, "writable": false })), ["favourite", "compress"],
              "no Rename in a read-only folder")
-        same(ids(Selection.moreRows(2, file)), ["compress"], "several items: only what works on several")
-        same(ids(Selection.moreRows(5, { "isDir": false, "writable": false })), ["compress"], "several, read-only")
+        same(ids(Selection.moreRows(2, file)), ["compress", "moveToNewFolder"],
+             "several items: only what works on several")
+        same(ids(Selection.moreRows(5, { "isDir": false, "writable": false })), ["compress"],
+             "several, read-only: no Move to new folder")
         same(Selection.moreRows(0, file), [], "nothing selected")
         same(Selection.moreRows(1, file).map(function (r) { return r.icon }),
-             ["image://theme/icon-m-edit", "image://theme/icon-m-favorite", FileIcons.archive], "icons")
-        same(Selection.moreRows(2, file).map(function (r) { return r.icon }), [FileIcons.archive],
+             ["image://theme/icon-m-edit", "image://theme/icon-m-favorite", FileIcons.archive,
+              "image://theme/icon-m-file-folder"], "icons")
+        same(Selection.moreRows(2, file).map(function (r) { return r.icon }),
+             [FileIcons.archive, "image://theme/icon-m-file-folder"],
              "Compress shows the archive icon files show")
         check(Selection.moreRows(1, file)[0].text === Actions.text("rename"), "menu texts")
         check(Selection.moreRows(1, file)[2].text === Actions.text("compress"), "menu texts, second")
+        check(Selection.moreRows(1, file)[3].text === Actions.text("moveToNewFolder"), "menu texts, third")
     }
 
     // Grid view holds to select instead of opening the long-press menu: with

@@ -2624,5 +2624,9 @@
             <numerusform></numerusform>
         </translation>
     </message>
+    <message id="lautta-dir-act-move-new-folder">
+        <source>Move to new folder</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

@@ -132,7 +132,8 @@ ApplicationWindow {
         var rows = pageRows(page)
         var got = JSON.stringify(rows.map(function(r) { return [r.text, r.icon] }))
         var want = JSON.stringify([[Actions.text("favourite"), "image://theme/icon-m-favorite"],
-                                   [Actions.text("compress"), FileIcons.archive]])
+                                   [Actions.text("compress"), FileIcons.archive],
+                                   [Actions.text("moveToNewFolder"), "image://theme/icon-m-file-folder"]])
         if (got !== want)
             return fail("More actions rows: " + got + " != " + want)
         return rows

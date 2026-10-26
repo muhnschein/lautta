@@ -201,12 +201,17 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   action opens (Rename's too) replaces the page (`DirectoryView.openDialog`). Which actions each holds,
   in a fixed order filtered by capabilities, and their icons, is in
   `components/directory/ContextActions.js` (`menu(ctx)`, `more(ctx)` →
-  `[{ id, text, icon }]`, `icon(id)`).
+  `[{ id, text, icon }]`, `icon(id)`; `ctx.writable` true is what *Move to new folder*
+  needs).
 - `DirectoryView.paste()` (pulley *Paste*, paste bar *Paste here*): a copy starts at once;
   a cut shows the view's `RemorsePopup`, *Moving “name”* or *Moving N items*, for
   `remorse_seconds`, and moves when it runs out (OPS-9). Cancelling leaves the clipboard
   as it was; a second paste, or leaving the page, runs the pending move first
   (`settleRemorse()`).
+- `DirectoryView.newFolder(moving)` asks `dialogs/NewItemDialog.qml` for a name and makes
+  the folder with `DirectoryModel.createFolder`; `moving`, a list of URIs (*Move to new
+  folder*, OPS-13), is moved into the folder when `DirectoryModel.created(uri)` says it
+  is made, and dropped when `createFailed` does.
 - After `DirectoryModel.renamed(oldUri, newUri)` the DirectoryView shows a Silica remorse on
   the new name's row (OPS-9); every list row and grid cell holds a
   `components/directory/RenameRemorse.qml { owner, row, uri }` so that a row made anew

@@ -13,7 +13,7 @@
 // favourites included: their dialog takes over the one item. Delete ends it
 // once its remorse timer has run out, so a cancelled one keeps the selection.
 // More actions only opens a page: leaving it keeps the selection.
-var endingActions = ["copy", "cut", "share", "compress", "rename", "favourite"]
+var endingActions = ["copy", "cut", "share", "compress", "rename", "favourite", "moveToNewFolder"]
 
 function endsSelection(id) {
     return endingActions.indexOf(id) >= 0
@@ -42,7 +42,7 @@ function afterCount(state, count) {
 // (moreRows), which grid view needs, as holding an item selects it there.
 var buttonOrder = ["share", "copy", "cut", "delete"]
 // The rows of the More actions page that work on several items.
-var manyOrder = ["compress"]
+var manyOrder = ["compress", "moveToNewFolder"]
 
 function buttonIcon(id) {
     switch (id) {

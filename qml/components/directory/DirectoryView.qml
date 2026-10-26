@@ -46,6 +46,8 @@ Item {
     property string undoingUri
     // The More actions page while it is open.
     property Item moreActionsPage
+    // The items Move to new folder moves, until their folder is made.
+    property var toMove: []
 
     // Asks the host page to open a folder.
     signal openFolder(string uri)
@@ -71,10 +73,15 @@ Item {
             Open.open(pageStack, App, Operations, itemUri, false, mimeType, uri)
     }
 
-    function newFolder() {
-        var dialog = pageStack.push(Qt.resolvedUrl("../../dialogs/NewItemDialog.qml"), { "parentUri": uri })
+    // The pulley's New asks for the name of a folder to make here. Move to new
+    // folder (OPS-13) asks the same, and once the folder is made here
+    // (folderMade) puts `moving` into it: the dialog is the confirmation, so
+    // no remorse.
+    function newFolder(moving) {
+        var dialog = openDialog("../../dialogs/NewItemDialog.qml", { "parentUri": uri })
         dialog.accepted.connect(function () {
             view.pendingName = dialog.itemName
+            view.toMove = moving || []
             dir.createFolder(dialog.itemName)
         })
     }
@@ -209,6 +216,14 @@ Item {
                              : qsTrId("lautta-dir-moving-many", items.length), action, timeout)
     }
 
+    // A folder this view made is there: Move to new folder puts its items in.
+    function folderMade(folderUri) {
+        var items = toMove
+        toMove = []
+        if (items.length > 0)
+            Operations.moveTo(JSON.stringify(items), folderUri)
+    }
+
     function searchHere() {
         pageStack.push(Qt.resolvedUrl("../../pages/SearchPage.qml"), { "rootUri": uri })
     }
@@ -298,6 +313,7 @@ Item {
         case "rename": rename(info); break
         case "delete": remove(uris, listItem); break
         case "more": moreActions(info); break
+        case "moveToNewFolder": newFolder(uris); break
         // CompressDialog takes the list itself, not its JSON text.
         case "compress": openDialog("../../dialogs/CompressDialog.qml", { "uris": uris }); break
         case "favourite":
@@ -421,7 +437,11 @@ Item {
             view.notifyFailure(kind, message, view.pendingName)
         }
         onStateChanged: view.revealRenamed()
-        onCreateFailed: view.notifyFailure(kind, message, view.pendingName)
+        onCreated: view.folderMade(uri)
+        onCreateFailed: {
+            view.toMove = []
+            view.notifyFailure(kind, message, view.pendingName)
+        }
         onSelectedCountChanged: view.setSelection(Selection.afterCount({ "selecting": view.selectionMode,
                                                                           "waiting": view.selectionWaiting },
                                                                         selectedCount))

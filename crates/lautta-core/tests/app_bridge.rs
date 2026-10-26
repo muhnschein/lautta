@@ -211,3 +211,32 @@ async fn the_connection_state_reaches_the_location() {
     .await;
     assert_eq!(core.location(SERVER).unwrap().status, LocationStatus::Ready);
 }
+
+/// Move to new folder on a server (OPS-13): the folder is made with
+/// `make_folder`, the items move into it as an ordinary same-location move.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn items_move_into_a_folder_made_on_a_server() {
+    let fake = fake_with_files().await;
+    let (_home, core, _l) = core_with(&fake, true).await;
+    eventually("server location", || core.location(SERVER).is_some()).await;
+    let photos = Uri::parse("lautta://nv-account:1/photos").unwrap();
+    let pair = core.make_folder(&photos, b"Pair").await.unwrap();
+    let started = core
+        .copy_or_move(
+            OperationKind::Move,
+            vec![Uri::parse("lautta://nv-account:1/photos/a.jpg").unwrap()],
+            pair,
+        )
+        .await
+        .unwrap();
+    let Started::Transfer(id) = started else {
+        panic!("a small move starts at once")
+    };
+    let done = core.engine.wait_for(id, |s| s.state.is_finished()).await.unwrap();
+    assert_eq!(done.state, TransferState::Completed);
+    assert_eq!(
+        fake.file("account:1", b"photos/Pair/a.jpg").as_deref(),
+        Some(&b"jpeg bytes"[..])
+    );
+    assert!(!fake.exists("account:1", b"photos/a.jpg"));
+}

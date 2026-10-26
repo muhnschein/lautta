@@ -559,21 +559,32 @@ bridge).
   cancels, so nothing moves and the items stay cut on the clipboard; letting it run out
   takes them off the clipboard and starts the move as a transfer (XFR-1). Pasting again,
   or leaving the folder, runs the pending move at once, as it does for a delete.
+  *Move to new folder* (OPS-13) has no remorse: its name dialog is the confirmation.
 - OPS-10: Clipboard (cut/copy, docked paste bar) across all locations. There is no
   *Copy to…*/*Move to…*: the user goes to the destination either way, so they paste there.
   A cut is taken off the clipboard when its move starts (OPS-9), a copy stays.
 - OPS-12: There is no details page for an item. The rarer actions on one item sit
   behind *More actions*, the last row of its long-press menu: tapping it opens a Silica
   page whose header names the item, one row (theme icon and name) per action:
-  *Add to favourites* (the item itself, file or folder, ORG-1) and *Compress*. Tapping
-  a row runs the action and leaves the page; a dialog it opens takes the page's place,
-  so leaving the dialog returns to the folder. The image viewer's *More* offers the same
-  next to *Rename*. The selection's *More actions* button (§15.3) opens the same page for
-  the selected items: header the item's name, or the count when several; rows *Rename*
-  (theme icon `icon-m-edit`), *Add to favourites* and *Compress* for one item, *Compress*
-  alone for several. The *More actions* icon, a circle with three dots, is the app's own
+  *Add to favourites* (the item itself, file or folder, ORG-1), *Compress* and, in a
+  writable folder, *Move to new folder* (OPS-13). Tapping a row runs the action and
+  leaves the page; a dialog it opens takes the page's place, so leaving the dialog
+  returns to the folder. The image viewer's *More* offers the same next to *Rename*,
+  without *Move to new folder*. The selection's *More actions* button (§15.3) opens the
+  same page for the selected items: header the item's name, or the count when several;
+  rows *Rename* (theme icon `icon-m-edit`), *Add to favourites*, *Compress* and *Move
+  to new folder* for one item, *Compress* and *Move to new folder* for several. The
+  *More actions* icon, a circle with three dots, is the app's own
   (`qml/icons/more.svg`; the platform theme has none), on the selection panel and in the
   image viewer.
+- OPS-13: *Move to new folder* on the *More actions* page (OPS-12), for one item or
+  the selection, only where the folder is writable: not in the folder picker, the share
+  target, the Trash or an archive. It asks for the name in the dialog of the pulley's
+  *New* (same default name, same checks, same errors), makes the folder in the folder
+  being viewed, then moves the items into it, on a server too. The dialog is the
+  confirmation, so there is no remorse (OPS-9). Selection ends when the row is tapped,
+  as for *Compress*. If the folder cannot be made, the error shows as for *New* and
+  nothing moves.
 
 ## 11. Transfers
 
@@ -874,8 +885,8 @@ folder's own actions nearest the content. While selecting *Select all* and
 destination, have no *Activity*. The
 folder itself is made a favourite from the path menu (BRW-9). Context menu: plain
 Silica rows *Share* (files), *Copy*, *Cut*, *Rename*, *Delete*, *More actions*; fixed
-order, capability-filtered. *More actions* opens a page of *Add to favourites* and
-*Compress* for that item (OPS-12); there is no details page. *Rename*
+order, capability-filtered. *More actions* opens a page of *Add to favourites*,
+*Compress* and *Move to new folder* for that item (OPS-12, OPS-13); there is no details page. *Rename*
 is a dialog of the plain Silica dialog header, titled *Rename*, and the name field
 only; *New* opens one titled *New folder* (accept *Create*) with the name
 field. A taken or invalid name is an error in the field's label. Archives need no *Extract* row: they open as a location with *Extract all*. Selection starts from the pulley's *Select*, in list and grid alike,
@@ -892,9 +903,9 @@ Tapping an icon opens the item like the rest of the row. The selection's actions
 long-press menu's order (*Share*, *Copy*, *Cut*, *Delete*), *More actions* and a last
 button that leaves selection, set apart on a key of the ambience's highlight background
 with its icon in the highlight colour. The panel is the same for one item or several, with no
-push-up menu. *More actions* opens a page of its own (OPS-12): *Compress* for any number
-of items, and for one item also *Rename* and *Add to favourites*, so every action of an
-item is reachable from the grid. Backing out of the page keeps the selection. The panel's
+push-up menu. *More actions* opens a page of its own (OPS-12): *Compress* and *Move to
+new folder* for any number of items, and for one item also *Rename* and *Add to
+favourites*, so every action of an item is reachable from the grid. Backing out of the page keeps the selection. The panel's
 *Share*, *Copy* and *Cut*, an action of the page, a finished delete and deselecting the
 last item leave selection. Archives and *Compress* show the platform's archive icon
 (`icon-m-file-archive-folder`) everywhere.
