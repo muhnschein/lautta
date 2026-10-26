@@ -60,6 +60,7 @@ pub mod search;
 // App-wide
 pub mod date_group;
 pub mod messages;
+pub mod panics;
 pub mod settings;
 
 pub use error::{Error, ErrorKind, Result};

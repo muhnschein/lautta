@@ -303,9 +303,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   (PRV-2) and of PDFs, local and trashed too (PRV-14; fails with an error for anything
   else, which `Image` shows as status Error), and `image://lautta-file/<uri>` for remote full images.
 - `PdfDocument { uri }` (PRV-12): `loading`, `loaded`, `pageCount`, `size`, `errorKind`
-  (file not readable, ErrorText.js), `problem` (`invalid`, `encrypted`, `empty`,
-  `tooLarge`), `wrongPassword` (the last `unlock` failed), `lastPage` (where reading
-  stopped, from 0; -1 unknown), `heightFor(index, width)`, `reload()`,
+  (file not readable, ErrorText.js), `problem` (`invalid`, also when parsing panicked,
+  RS-4; `encrypted`, `empty`, `tooLarge`), `wrongPassword` (the last `unlock` failed),
+  `lastPage` (where reading stopped, from 0; -1 unknown), `heightFor(index, width)`, `reload()`,
   `unlock(password)` (opens an encrypted PDF; the password is not kept),
   `rememberPage(index)`; text search: `search(query, fromPage)` (from page `fromPage`,
   from 0, to the end, then from the first page; replaces the last search; a blank
@@ -321,7 +321,8 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   height, page, top, uri}]`: area as fractions of the shown page; page from 0 and `top`
   as a fraction of its height or -1; or page -1 and an http(s) `uri`). Image provider
   `image://lautta-pdf/<uri>?page=N` renders page N (from 0) at `sourceSize.width`
-  (1080 without one), any location.
+  (1080 without one), any location; a page that cannot be drawn, a panicked draw
+  included (RS-4), fails, which `Image` shows as status Error.
 - Pages: `viewers/ImageViewer.qml { uri, folderUri }` (Jolla Gallery's viewer, adapted in
   `components/viewers/gallery`; `remove()` deletes the image shown; its *More* is
   `components/viewers/ImageMorePage.qml { uri }`, whose Rename signals `renameChosen()` for

@@ -152,11 +152,14 @@ cpp! {{
 }}
 
 /// Starts the application: Qt, the QML engine and the main page. `argv`
-/// comes from the exported C `main` (SPEC RS-3).
+/// comes from the exported C `main` (SPEC RS-3). Panics abort the process,
+/// apart from PDF drawing's (RS-4); tests that start the QML engine with
+/// [`qml_check`] keep the default hook.
 ///
 /// # Safety
 /// `argc`/`argv` must be the process arguments as passed to `main`.
 pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
+    lautta_core::panics::abort_outside_catch();
     start();
     cpp!([argc as "int", argv as "char**"] -> c_int as "int" {
             if (argc > 1 && qstrcmp(argv[1], "--qml-check") == 0)
