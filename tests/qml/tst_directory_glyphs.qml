@@ -20,6 +20,7 @@ ApplicationWindow {
     id: window
 
     readonly property string base: "lautta://user-documents/GlyphsCheck/"
+    property string archiveRoot
     // The glyph each item's category shows, as drawn on the board.
     readonly property var kindOf: ({
         "folder": "folder", "markdown": "document", "archive": "archive", "video": "video",
@@ -31,6 +32,12 @@ ApplicationWindow {
     DirectoryModel {
         id: documents
         uri: "lautta://user-documents/"
+    }
+
+    Connections {
+        target: Operations
+        onJobFinished: if (ok) Operations.openArchive(resultUri)
+        onArchiveOpened: window.archiveRoot = rootUri
     }
 
     function expect(ok, what) {
@@ -165,10 +172,15 @@ ApplicationWindow {
         }, "grid")
     }
 
-    // FileIcons on their own, given a thumbnail the app draws (the page of a
-    // PDF): the system thumbnailer makes none on the target.
+    // FileIcons on their own, given a thumbnail the app draws: the page of a
+    // PDF in an archive, which stands in for a server. The system thumbnailer
+    // draws nothing on the target.
     function checkBadge() {
-        var thumb = "image://lautta-thumb/" + base + "Sub/page.pdf"
+        Operations.compress(JSON.stringify([base + "Sub/page.pdf"]), "lautta://user-documents/", "glyphs-check", "zip")
+        if (!waitFor(function () { return window.archiveRoot.length > 0 }, "the archive"))
+            return
+        var root = window.archiveRoot.charAt(window.archiveRoot.length - 1) === "/" ? window.archiveRoot : window.archiveRoot + "/"
+        var thumb = "image://lautta-thumb/" + root + "page.pdf"
         var list = Theme.iconSizeMedium
         var grid = 168
         var make = function (props) { return iconComponent.createObject(window.contentItem, props) }
@@ -177,7 +189,7 @@ ApplicationWindow {
                                "glyphSize": FileIcons.snap(grid / 2) })
         var image = make({ "category": "image", "thumbnailSource": thumb, "size": list })
         var plain = make({ "category": "video", "size": list })
-        var failed = make({ "category": "video", "thumbnailSource": "image://lautta-thumb/" + base + "none.mp4",
+        var failed = make({ "category": "video", "thumbnailSource": "image://lautta-thumb/" + root + "none.mp4",
                            "size": list })
         waitFor(function () { return video.thumbnailReady && videoGrid.thumbnailReady && image.thumbnailReady }, "the thumbnails")
         waitFor(function () { return failed.thumbnailFailed }, "the missing file's thumbnail to fail")
@@ -227,7 +239,8 @@ ApplicationWindow {
     DirectoryModel { id: folderModel }
 
     Component.onCompleted: {
-        var settings = { "view_mode": "list", "show_hidden": false, "thumbnails_local": false }
+        var settings = { "view_mode": "list", "show_hidden": false, "thumbnails_local": false,
+                         "thumbnails_remote": true }
         for (var key in settings)
             App.setSetting(key, JSON.stringify(settings[key]))
         makeFolder()
