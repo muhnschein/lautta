@@ -585,9 +585,9 @@ bridge).
   A cut is taken off the clipboard when its move starts (OPS-9), a copy stays.
 - OPS-12: There is no details page for an item. The rarer actions on one item sit
   behind *More actions*, the last row of its long-press menu: tapping it opens a Silica
-  page whose header names the item, one row (theme icon and name) per action:
-  *Add to favourites* (the item itself, file or folder, ORG-1), *Compress* and, in a
-  writable folder, *Move to new folder* (OPS-13). Tapping a row runs the action and
+  page whose header names the item, one row (icon and name) per action:
+  *Add to favourites* (the item itself, file or folder, ORG-1), *Compress* (the archive
+  glyph, UI-2) and, in a writable folder, *Move to new folder* (OPS-13; the folder glyph). Tapping a row runs the action and
   leaves the page; a dialog it opens takes the page's place, so leaving the dialog
   returns to the folder. The image viewer's *More* offers the same next to *Rename*,
   without *Move to new folder*. The selection's *More actions* button (§15.3) opens the
@@ -666,7 +666,12 @@ bridge).
   (HBR-7), other types in its own thread. A file that crashes a helper keeps its icon,
   the app runs on. The library draws one thumbnail at a time: a helper that hangs holds
   back the other local thumbnails, not the app. No size limit: the app reads nothing of
-  the file.
+  the file. A shown video thumbnail keeps the video glyph (UI-2) at its bottom left on a
+  dark gradient over its lower half (`Theme.opacityOverlay`, transparent to
+  `Theme.highlightDimmerColor`), as Jolla Gallery's video thumbnails: else a video reads
+  as a photo. Badge side: largest multiple of 28 or 32 px up to ⅜ of the thumbnail and
+  up to `Theme.iconSizeSmall`, at least 28 (sharp, UI-2). No badge on a plain glyph or
+  a thumbnail that failed.
 - PRV-2: Remote image thumbnails: read the first 64 KiB through the bridge, use the EXIF
   thumbnail when present; otherwise read the whole file up to the size set in *View
   options* (*Largest server file with a thumbnail*, 20 MB by default) and decode with the
@@ -811,9 +816,10 @@ bridge).
   page, BRW-12), with label, colour and icon. The icon is one of a range of theme icons
   (star, home, work, person, people, documents, pictures, camera, videos, music, downloads,
   folder, cloud, computer, games, calendar, mail, internet, travel, car, health, kids,
-  private, Android), shown in Browse tinted with the colour; without a chosen one (or with
-  one the app does not know) a folder favourite shows the star and a file favourite its
-  file's icon. A file favourite shows the folder it is in, and opens like the file does in
+  private, Android; pictures, videos, music and folder are the app's file-type glyphs,
+  UI-2), shown in Browse tinted with the colour; without a chosen one (or with one the
+  app does not know) a folder favourite shows the star and a file favourite its file's
+  glyph. A file favourite shows the folder it is in, and opens like the file does in
   its folder (viewer or *Open with*); a folder favourite opens the folder. Whether a
   favourite is a folder is stored with it (DAT-2), so Browse never asks the location.
   The favourite page (*Edit favourite*, and *Add to favourites*, which makes the item a
@@ -902,7 +908,8 @@ rest of the page. Opening a folder starts at its very top (nothing in the scroll
 the first item); going back to a folder on the page stack shows it where it was left. List view
 with icon or thumbnail and "size · modified"; grid view for media folders (suggested when > 60 %
 images). The grid has 3 tiles per row in portrait (landscape keeps the tile size, so it fits
-more); the icon is about half the tile wide (thumbnails fill it) and under it stand the name on
+more); the glyph is about half the tile wide, snapped to a multiple of 28 px (UI-2;
+thumbnails fill the tile, a video's with its badge, PRV-1) and under it stand the name on
 up to two lines, centred (a name that does not fit keeps its start on the first line and its end,
 the extension, on the second behind an ellipsis in the middle), and two small lines in the
 secondary colour, each cut at the end: a file's
@@ -944,8 +951,9 @@ own (OPS-12): *Compress* and *Move to new folder* for any number of items, and f
 also *Rename* and *Add to favourites*, so every action of an item is reachable from the
 grid. Backing out of the page keeps the selection. The panel's
 *Share*, *Copy* and *Cut*, an action of the page, a finished delete and deselecting the
-last item leave selection. Archives and *Compress* show the platform's archive icon
-(`icon-m-file-archive-folder`) everywhere.
+last item leave selection. Archives and *Compress* show the app's archive glyph
+everywhere (UI-2). An item's glyph takes the highlight colour with its name: pressed or
+selected, in list and grid.
 Placeholders: empty, no permission, offline, error with *Retry*/*Details*. They and the
 loading indicator are part of the view's content, so pulling the pulley moves them while
 the header stays.
@@ -968,7 +976,19 @@ paused) is in its status line and context menu. Pulley: *Clear activity history*
 
 - UI-1: Silica components only; no custom chrome.
 - UI-2: Theme colours and sizes; light and dark ambiences; theme icons where they exist,
-  otherwise SVG at all scale factors under `/usr/share/harbour-lautta`.
+  otherwise SVG at all scale factors under `/usr/share/harbour-lautta`. File-type glyphs
+  (folder, image, video, audio, archive, package, database, document) are the app's own
+  SVGs (`qml/icons/file-<kind>-<set>.svg`) wherever a kind of file shows: folder list and
+  grid, Trash, search, Recents, operations pages, *More actions*, Browse rows and
+  favourites, folder picker, cover. Why: the theme's are soft at the grid's sizes and
+  have no database glyph. Text, code, PDF and office files share the document glyph.
+  Three sets, edges on whole pixels at their sizes: `-28` (28-unit grid, any multiple of
+  28 px), `-32` (32-unit grid, multiples of 32 px: list at scale 1.0, 1.5, 2.0), `-80`
+  (drawn for 80 px: list at 1.25). Size rule: multiple of 28 → `-28`, else of 32 →
+  `-32`, else of 80 → `-80`, else `-28` (soft). The grid's glyph and the cover's snap to
+  a multiple of 28 px, the video badge to a multiple of 28 or 32 (PRV-1). White with
+  partly transparent parts, tinted as theme icons: primary colour, highlight colour when
+  pressed or selected.
 - UI-3: Portrait and landscape.
 - UI-4: Nothing modal blocks navigation; all long work is visible and cancelable.
 - UI-5: Destructive actions use remorse; a permanent delete (volumes, servers, the Trash
@@ -1064,7 +1084,7 @@ SQLite for everything structured.
   unused.
 - DAT-2: Schema with `PRAGMA user_version`, forward migrations only: `favourites`
   (`is_dir`: folder or file, ORG-1, schema 5; older rows are folders; `icon`: the chosen
-  theme icon name, ORG-1, schema 6; NULL for the default icon and for older rows),
+  icon's name, ORG-1, schema 6; NULL for the default icon and for older rows),
   `recents`, `transfers`, `transfer_items`, `working_copies`, `dircache`,
   `trash_items(id, original_uri, trashed_at, stored_name, is_dir, size)` (OPS-8; the
   table also has a `bin` column and the schema a `trash_drain` table, left by schemas 4
