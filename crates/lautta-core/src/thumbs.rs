@@ -15,7 +15,8 @@
 //!
 //! Local images and videos get theirs from `Nemo.Thumbnailer` in QML
 //! (PRV-1), not from here; PDFs, local or not, are made by
-//! [`crate::thumbs_pdf`].
+//! [`crate::thumbs_pdf`]: `Nemo.Thumbnailer` draws a PDF with a helper
+//! program that the sandbox does not have.
 
 use crate::entry::{Entry, EntryFlags};
 use crate::error::{Error, ErrorKind, Result};
@@ -43,8 +44,9 @@ const MAX_PIXELS: u64 = 64_000_000;
 const JPEG_QUALITY: u8 = 85;
 /// Simultaneous jobs per location (PRV-3).
 pub const MAX_IN_FLIGHT_PER_LOCATION: usize = 2;
-/// Largest local PDF a thumbnail is made from (PRV-14); remote ones are
-/// held to the size limit of View options.
+/// Largest local PDF a thumbnail is made from (PRV-14): the whole file is
+/// read into the app's memory. Remote ones are held to the size limit of
+/// View options.
 pub const LOCAL_PDF_MAX_BYTES: u64 = 20_000_000;
 
 /// Who makes a file's thumbnail (PRV-1, PRV-2, PRV-14).

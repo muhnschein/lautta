@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 use super::*;
+use std::ffi::OsStr;
 use std::os::unix::fs::symlink;
 use std::time::Duration;
 
@@ -58,29 +59,21 @@ impl Env {
         |u: &Uri| Some(self.loc.join(OsStr::from_bytes(u.path.as_bytes())))
     }
 
-    /// An item that schema 4 or 5 put into the bin at `root`, with its row.
-    fn old_item(&self, root: &Path, stored: &str, name: &str, data: &str) -> i64 {
-        let bin = old_bin_of(root);
-        std::fs::create_dir_all(&bin).unwrap();
-        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o700)).unwrap();
-        std::fs::write(bin.join(stored), data).unwrap();
+    /// A row as the bin-keeping builds (schemas 4 to 6) wrote it: it names
+    /// a bin in a location, though the code does not use that column now.
+    fn row_with_a_bin(&self, stored: &str, name: &str) -> i64 {
         let conn = self.trash.db.lock();
         conn.execute(
             "INSERT INTO trash_items(original_uri, trashed_at, stored_name, is_dir, size, bin) \
-             VALUES (?1, 1000, ?2, 0, ?3, ?4)",
+             VALUES (?1, 1000, ?2, 0, 1, ?3)",
             params![
                 uri(name).to_string(),
                 stored,
-                data.len() as i64,
-                bin.as_os_str().as_bytes()
+                self.loc.join(".lautta-trash").as_os_str().as_bytes()
             ],
         )
         .unwrap();
         conn.last_insert_rowid()
-    }
-
-    fn drain_due(&self) -> bool {
-        self.trash.drain_due().unwrap()
     }
 }
 
@@ -170,7 +163,7 @@ fn trashing_moves_the_item_into_the_trash_folder() {
     let f = e.put("report.txt", "twelve bytes");
     let item = e.trash(&f, "report.txt").unwrap();
     assert!(!f.exists());
-    assert_eq!(item.bin, e.trash.dir());
+    assert_eq!(item.dir, e.trash.dir());
     assert_eq!(item.stored_path(), e.trash.dir().join(&item.stored_name));
     assert_eq!(std::fs::read(item.stored_path()).unwrap(), b"twelve bytes");
     assert_eq!(item.original_uri, uri("report.txt"));
@@ -180,7 +173,11 @@ fn trashing_moves_the_item_into_the_trash_folder() {
     assert_eq!(e.trash.list().unwrap(), vec![item.clone()]);
     assert_eq!(e.trash.get(item.id).unwrap(), item);
     assert_eq!(mode(e.trash.dir()), 0o700, "the trash folder is private (SEC-5)");
-    assert_eq!(names(&e.loc), Vec::<String>::new(), "no bin in the location");
+    assert_eq!(
+        names(&e.loc),
+        Vec::<String>::new(),
+        "nothing is left in the location"
+    );
 }
 
 #[test]
@@ -307,25 +304,21 @@ fn missing_source_is_not_found_and_leaves_no_row() {
 }
 
 #[test]
-fn the_trash_cannot_swallow_itself_or_an_old_bin_with_items() {
+fn the_trash_cannot_swallow_itself() {
     let e = env();
     e.trash(&e.put("first", "x"), "first").unwrap();
     let inside = e.trash.dir().join("x");
     std::fs::write(&inside, "x").unwrap();
-    e.old_item(&e.loc, "s1", "old", "o");
     for p in [
         e.trash.dir().to_path_buf(),
         inside,
         e.trash.dir().parent().unwrap().to_path_buf(),
-        old_bin_of(&e.loc),
-        old_bin_of(&e.loc).join("s1"),
-        e.loc.clone(),
     ] {
         let err = e.trash(&p, "x").unwrap_err();
         assert_eq!(err.kind, ErrorKind::InvalidArgument, "{p:?}");
         assert!(p.exists());
     }
-    assert_eq!(e.trash.list().unwrap().len(), 2);
+    assert_eq!(e.trash.list().unwrap().len(), 1);
 }
 
 #[test]
@@ -535,20 +528,16 @@ fn remove_tree_handles_all_kinds() {
 }
 
 #[test]
-fn empty_clears_items_strays_and_old_bins() {
+fn empty_clears_items_and_strays() {
     let e = env();
     e.trash(&e.put("a", "x"), "a").unwrap();
     e.sandboxed().trash(&e.put("b", "x"), &uri("b")).unwrap();
-    let music = e.root.path().join("home/Music");
-    std::fs::create_dir_all(&music).unwrap();
-    e.old_item(&music, "s-old", "c", "x");
     std::fs::write(e.trash.dir().join("stray-from-a-crash"), "x").unwrap();
     std::fs::create_dir(e.trash.dir().join(format!("{PARTIAL_PREFIX}1"))).unwrap();
-    assert_eq!(e.trash.empty().unwrap(), 3);
+    assert_eq!(e.trash.empty().unwrap(), 2);
     assert!(e.trash.list().unwrap().is_empty());
     assert_eq!(count(e.trash.dir()), 0);
-    assert!(!old_bin_of(&music).exists(), "the emptied old bin goes");
-    assert!(music.is_dir() && e.loc.is_dir());
+    assert!(e.loc.is_dir());
     assert_eq!(e.trash.empty().unwrap(), 0);
 }
 
@@ -581,14 +570,13 @@ fn purge_removes_only_expired_items() {
     let e = env();
     let old = e.trash(&e.put("old", "x"), "old").unwrap();
     let old2 = e.sandboxed().trash(&e.put("old2", "x"), &uri("old2")).unwrap();
-    let in_old_bin = e.old_item(&e.loc, "s-old3", "old3", "x");
     let borderline = e.trash(&e.put("borderline", "x"), "borderline").unwrap();
     e.trash(&e.put("fresh", "x"), "fresh").unwrap();
-    for id in [old.id, old2.id, in_old_bin] {
+    for id in [old.id, old2.id] {
         age(&e, id, 31);
     }
     age(&e, borderline.id, 29);
-    assert_eq!(e.trash.purge_expired().unwrap(), 3);
+    assert_eq!(e.trash.purge_expired().unwrap(), 2);
     let left: Vec<String> = e
         .trash
         .list()
@@ -600,7 +588,6 @@ fn purge_removes_only_expired_items() {
     assert!(!left.iter().any(|u| u.contains("/old")));
     assert!(!old.stored_path().exists());
     assert!(!old2.stored_path().exists());
-    assert!(!old_bin_of(&e.loc).join("s-old3").exists());
     assert!(borderline.stored_path().exists());
     assert_eq!(e.trash.purge_older_than(7).unwrap(), 1);
     assert_eq!(
@@ -623,213 +610,56 @@ fn total_size_adds_up() {
     assert_eq!(e.trash.total_size().unwrap(), 10);
 }
 
-// ------------------------------------------------------------ the old bins
+// ------------------------------------------------------------ strays and old rows
 
 #[test]
-fn tidy_drains_the_old_bins_with_their_rows() {
-    for e in both() {
-        let downloads = e.root.path().join("home/Downloads");
-        let pictures = e.root.path().join("home/Pictures");
-        std::fs::create_dir_all(&downloads).unwrap();
-        std::fs::create_dir_all(&pictures).unwrap();
-        let a = e.old_item(&e.loc, "s-a", "a.txt", "aa");
-        let b = e.old_item(&downloads, "s-b", "b.txt", "bbb");
-        // A folder item, as round 1 renamed it in: modes and times as they were.
-        let d = old_bin_of(&e.loc).join("s-d");
-        let when = project(&d);
-        e.trash
-            .db
-            .lock()
-            .execute(
-                "INSERT INTO trash_items(original_uri, trashed_at, stored_name, is_dir, size, bin) \
-                 VALUES (?1, 2000, 's-d', 1, 10, ?2)",
-                params![
-                    uri("Project").to_string(),
-                    old_bin_of(&e.loc).as_os_str().as_bytes()
-                ],
-            )
-            .unwrap();
-        // Pictures' bin held an item that was restored: empty, no row.
-        std::fs::create_dir(old_bin_of(&pictures)).unwrap();
-        let before = e.trash.list().unwrap();
-        assert_eq!(before.len(), 3);
-        assert!(e.drain_due());
-
-        let roots = [e.loc.clone(), downloads.clone(), pictures.clone()];
-        assert_eq!(e.trash.tidy(&roots).unwrap(), 3);
-        let after = e.trash.list().unwrap();
-        for (old, new) in before.iter().zip(&after) {
-            assert_eq!(
-                (
-                    old.id,
-                    &old.original_uri,
-                    old.trashed_at,
-                    &old.stored_name,
-                    old.size
-                ),
-                (
-                    new.id,
-                    &new.original_uri,
-                    new.trashed_at,
-                    &new.stored_name,
-                    new.size
-                ),
-                "the rows stay as they were"
-            );
-            assert_eq!(new.bin, e.trash.dir());
-        }
-        assert_eq!(
-            std::fs::read(e.trash.get(a).unwrap().stored_path()).unwrap(),
-            b"aa"
-        );
-        assert_eq!(
-            std::fs::read(e.trash.get(b).unwrap().stored_path()).unwrap(),
-            b"bbb"
-        );
-        assert_project(&e.trash.dir().join("s-d"), when);
-        for root in &roots {
-            assert!(!old_bin_of(root).exists(), "{root:?} has no bin left");
-        }
-        assert!(e.trash.pending_bins().unwrap().is_empty());
-        assert!(!e.drain_due(), "the drain is done");
-
-        // Again: nothing to do, nothing changes; the trash works as ever.
-        std::fs::create_dir(old_bin_of(&pictures)).unwrap();
-        assert_eq!(e.trash.tidy(&roots).unwrap(), 0);
-        assert!(
-            old_bin_of(&pictures).exists(),
-            "once done, the roots are left alone"
-        );
-        assert_eq!(e.trash.list().unwrap(), after);
-        assert_eq!(e.trash.restore(a, &e.resolve()).unwrap(), e.loc.join("a.txt"));
-        assert_eq!(std::fs::read(e.loc.join("a.txt")).unwrap(), b"aa");
-    }
-}
-
-#[test]
-fn tidy_finishes_a_drain_that_was_interrupted() {
+fn tidy_removes_half_made_copies_only() {
     let e = env();
-    let trash = e.sandboxed();
-    // Interrupted while removing the original: the complete copy is in
-    // place, part of the item is still in the old bin.
-    let a = e.old_item(&e.loc, "s-a", "a", "x");
-    let partly = old_bin_of(&e.loc).join("s-a");
-    std::fs::remove_file(&partly).unwrap();
-    std::fs::create_dir_all(partly.join("left")).unwrap();
-    std::fs::create_dir_all(trash.dir().join("s-a/left")).unwrap();
-    std::fs::write(trash.dir().join("s-a/left/f"), "complete").unwrap();
-    // Interrupted while copying: a partial copy, the original whole.
-    let b = e.old_item(&e.loc, "s-b", "b", "whole");
-    std::fs::write(trash.dir().join(format!("{PARTIAL_PREFIX}9")), "wh").unwrap();
-    // Interrupted after the row was updated: only the bin is left.
-    let downloads = e.root.path().join("home/Downloads");
-    std::fs::create_dir_all(old_bin_of(&downloads)).unwrap();
-
-    assert_eq!(trash.tidy(&[e.loc.clone(), downloads.clone()]).unwrap(), 2);
-    assert_eq!(
-        std::fs::read(trash.get(a).unwrap().stored_path().join("left/f")).unwrap(),
-        b"complete"
-    );
-    assert_eq!(
-        std::fs::read(trash.get(b).unwrap().stored_path()).unwrap(),
-        b"whole"
-    );
-    assert_eq!(names(trash.dir()), ["s-a", "s-b"], "the partial copy is gone");
-    assert!(!old_bin_of(&e.loc).exists() && !old_bin_of(&downloads).exists());
-    assert!(!e.drain_due());
-}
-
-#[test]
-fn tidy_removes_partial_copies_even_once_the_drain_is_done() {
-    let e = env();
-    e.trash.tidy(&[]).unwrap();
-    assert!(!e.drain_due());
     let kept = e.trash(&e.put("kept", "x"), "kept").unwrap();
     std::fs::create_dir_all(e.trash.dir().join(format!("{PARTIAL_PREFIX}1/sub"))).unwrap();
     std::fs::write(e.trash.dir().join("no-row"), "x").unwrap();
-    assert_eq!(e.trash.tidy(&[]).unwrap(), 0);
+    e.trash.tidy().unwrap();
     let mut expected = vec![kept.stored_name, "no-row".to_owned()];
     expected.sort();
     assert_eq!(names(e.trash.dir()), expected, "only half-made copies go");
+    e.trash.tidy().unwrap();
+    assert_eq!(names(e.trash.dir()), expected, "a second pass changes nothing");
 }
 
 #[test]
-fn tidy_waits_for_a_location_that_is_away() {
+fn tidy_of_a_trash_folder_that_does_not_exist_is_fine() {
     let e = env();
-    let android = e.root.path().join("home/android_storage/DCIM");
-    std::fs::create_dir_all(&android).unwrap();
-    let id = e.old_item(&android, "s-a", "a.jpg", "jpeg");
-    // Android support is off: its folders are not there.
-    let away = e.root.path().join("away");
-    std::fs::rename(e.root.path().join("home/android_storage"), &away).unwrap();
-    assert_eq!(e.trash.tidy(std::slice::from_ref(&e.loc)).unwrap(), 0);
-    assert!(e.drain_due(), "the drain is not done");
-    assert_eq!(e.trash.pending_bins().unwrap(), [old_bin_of(&android)]);
-    assert_eq!(e.trash.list().unwrap().len(), 1, "the item is still listed");
-
-    std::fs::rename(&away, e.root.path().join("home/android_storage")).unwrap();
-    assert_eq!(e.trash.tidy(&[e.loc.clone(), android.clone()]).unwrap(), 1);
-    assert_eq!(
-        std::fs::read(e.trash.get(id).unwrap().stored_path()).unwrap(),
-        b"jpeg"
-    );
-    assert!(!old_bin_of(&android).exists());
-    assert!(!e.drain_due());
+    e.trash.tidy().unwrap();
+    assert!(!e.trash.dir().exists());
 }
 
 #[test]
-fn tidy_drops_an_item_that_vanished_from_its_bin() {
+fn a_row_that_names_a_bin_is_an_item_of_the_trash_folder() {
+    // Nothing moves such an item into the trash folder any more: its row
+    // lists as one of the trash folder and finds nothing there.
     let e = env();
-    let id = e.old_item(&e.loc, "s-a", "a", "x");
-    std::fs::remove_file(old_bin_of(&e.loc).join("s-a")).unwrap();
-    assert_eq!(e.trash.tidy(&[]).unwrap(), 0);
-    assert_eq!(e.trash.get(id).unwrap_err().kind, ErrorKind::NotFound);
-    assert!(!old_bin_of(&e.loc).exists());
-    assert!(!e.drain_due());
+    let id = e.row_with_a_bin("s-old", "old");
+    let item = e.trash.get(id).unwrap();
+    assert_eq!(item.dir, e.trash.dir());
+    assert_eq!(item.stored_path(), e.trash.dir().join("s-old"));
+    assert_eq!(e.trash.list().unwrap(), vec![item]);
+    let err = e.trash.restore(id, &e.resolve()).unwrap_err();
+    assert_eq!(err.kind, ErrorKind::NotFound);
+    assert!(e.trash.list().unwrap().is_empty(), "the stale row went");
+    let other = e.row_with_a_bin("s-old2", "old2");
+    e.trash.delete(other).unwrap();
+    assert!(e.trash.list().unwrap().is_empty());
 }
 
 #[test]
-fn tidy_keeps_what_it_does_not_know() {
+fn what_a_bin_left_in_a_location_is_not_touched() {
     let e = env();
-    // A stray without a row, and a bin that is a planted link.
-    std::fs::create_dir_all(old_bin_of(&e.loc)).unwrap();
-    std::fs::write(old_bin_of(&e.loc).join("stray"), "x").unwrap();
-    let downloads = e.root.path().join("home/Downloads");
-    let elsewhere = e.root.path().join("elsewhere");
-    std::fs::create_dir_all(&downloads).unwrap();
-    std::fs::create_dir(&elsewhere).unwrap();
-    std::fs::write(elsewhere.join("s-b"), "not ours").unwrap();
-    let id = e.old_item(&downloads, "s-b", "b", "x");
-    std::fs::remove_dir_all(old_bin_of(&downloads)).unwrap();
-    symlink(&elsewhere, old_bin_of(&downloads)).unwrap();
-    assert_eq!(e.trash.tidy(&[e.loc.clone(), downloads.clone()]).unwrap(), 0);
-    assert_eq!(std::fs::read(old_bin_of(&e.loc).join("stray")).unwrap(), b"x");
-    assert_eq!(std::fs::read(elsewhere.join("s-b")).unwrap(), b"not ours");
-    assert!(std::fs::symlink_metadata(old_bin_of(&downloads)).is_ok());
-    assert_eq!(e.trash.get(id).unwrap_err().kind, ErrorKind::NotFound);
-    assert!(!e.trash.dir().exists(), "nothing came in");
-    assert!(!e.drain_due());
-}
-
-#[test]
-fn the_turn_keeps_a_drain_and_a_restore_apart() {
-    let e = env();
-    let id = e.old_item(&e.loc, "s-a", "a", "x");
-    let turn = e.trash.turn();
-    let trash = e.trash.clone();
-    let (tx, rx) = std::sync::mpsc::channel();
-    let roots = [e.loc.clone()];
-    let worker = std::thread::spawn(move || {
-        let moved = trash.tidy(&roots);
-        tx.send(()).unwrap();
-        moved
-    });
-    assert!(
-        rx.recv_timeout(Duration::from_millis(200)).is_err(),
-        "the drain waits for its turn"
-    );
-    drop(turn);
-    assert_eq!(worker.join().unwrap().unwrap(), 1);
-    e.trash.restore(id, &e.resolve()).unwrap();
-    assert_eq!(std::fs::read(e.loc.join("a")).unwrap(), b"x");
+    let bin = e.loc.join(".lautta-trash");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::write(bin.join("s-old"), "keep").unwrap();
+    e.row_with_a_bin("s-old", "old");
+    e.trash(&e.put("new", "x"), "new").unwrap();
+    e.trash.tidy().unwrap();
+    e.trash.empty().unwrap();
+    assert_eq!(std::fs::read(bin.join("s-old")).unwrap(), b"keep");
 }

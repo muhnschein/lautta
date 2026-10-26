@@ -7,8 +7,9 @@
 //! in `make translations` and in `make translations-check`, on catalogues
 //! with a form missing or a message it must not guess.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -154,22 +155,25 @@ fn the_built_catalogue_has_english_plural_forms() {
     );
 }
 
-/// Runs `english-plurals.py fill` on `text`: exit code, stdout, stderr and the file after.
-fn fill(text: &str) -> (i32, String, String, String) {
-    let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("test.ts");
-    std::fs::write(&file, text).unwrap();
-    let out = Command::new("python3")
+/// Runs `english-plurals.py fill` with `text` on stdin, its stdio ASCII as
+/// in a locale without UTF-8: exit code, stderr and the filled catalogue
+/// (stdout).
+fn fill(text: &str) -> (i32, String, String) {
+    let mut child = Command::new("python3")
         .arg(root().join("tools/english-plurals.py"))
         .arg("fill")
-        .arg(&file)
-        .output()
+        .env("PYTHONIOENCODING", "ascii")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .expect("python3 is needed");
+    child.stdin.take().unwrap().write_all(text.as_bytes()).unwrap();
+    let out = child.wait_with_output().unwrap();
     (
         out.status.code().unwrap(),
-        String::from_utf8(out.stdout).unwrap(),
         String::from_utf8(out.stderr).unwrap(),
-        std::fs::read_to_string(&file).unwrap(),
+        String::from_utf8(out.stdout).unwrap(),
     )
 }
 
@@ -247,20 +251,20 @@ fn a_new_message_gets_the_singular_by_rule_and_the_source_as_plural() {
         ),
     ];
     let input: Vec<(&str, &str, &[&str])> = cases.iter().map(|(id, s, _)| (*id, *s, &[][..])).collect();
-    let (code, stdout, _, out) = fill(&lupdate_output(&input));
+    let (code, stderr, out) = fill(&lupdate_output(&input));
     assert_eq!(code, 0);
     for (id, plural, single) in cases {
         assert_eq!(forms_of(&out, id), [*single, *plural], "{id}");
-        assert!(stdout.contains(&format!("english-plurals: {id}: {single} | {plural}")));
+        assert!(stderr.contains(&format!("english-plurals: {id}: {single} | {plural}")));
     }
     assert!(!out.contains("unfinished"), "the forms are final");
 }
 
 #[test]
 fn filling_twice_changes_nothing() {
-    let (_, _, _, once) = fill(&lupdate_output(&[("a", "%n items", &[]), ("b", "Plain", &[])]));
-    let (code, stdout, _, twice) = fill(&once);
-    assert_eq!((code, twice.as_str(), stdout.as_str()), (0, once.as_str(), ""));
+    let (_, _, once) = fill(&lupdate_output(&[("a", "%n items", &[]), ("b", "Plain", &[])]));
+    let (code, stderr, twice) = fill(&once);
+    assert_eq!((code, twice.as_str(), stderr.as_str()), (0, once.as_str(), ""));
 }
 
 #[test]
@@ -284,7 +288,7 @@ fn a_form_taken_away_is_made_again() {
     ] {
         let broken = ts.replacen(from, to, 1);
         assert_ne!(broken, ts, "{from}");
-        let (code, _, _, fixed) = fill(&broken);
+        let (code, _, fixed) = fill(&broken);
         assert_eq!(code, 0);
         assert_eq!(fixed, ts, "{from} -> {to}");
     }
@@ -297,7 +301,7 @@ fn a_changed_source_gets_new_forms_and_loses_the_old_source() {
         "        <translation type=\"unfinished\">",
         "        <oldsource>Compress %n items</oldsource>\n        <translation type=\"unfinished\">",
     );
-    let (code, _, _, out) = fill(&ts);
+    let (code, _, out) = fill(&ts);
     assert_eq!(code, 0);
     assert_eq!(forms_of(&out, "a"), ["Pack %n thing", "Pack %n things"]);
     assert!(!out.contains("oldsource"));
@@ -308,8 +312,8 @@ fn a_singular_written_by_hand_stays_while_the_source_does() {
     // "new" is no word the rule can tell: the singular is the hand's.
     let ts = lupdate_output(&[("a", "%n new files", &["%n new file", "%n new files"])])
         .replace(" type=\"unfinished\"", "");
-    let (code, stdout, _, out) = fill(&ts);
-    assert_eq!((code, out.as_str(), stdout.as_str()), (0, ts.as_str(), ""));
+    let (code, stderr, out) = fill(&ts);
+    assert_eq!((code, out.as_str(), stderr.as_str()), (0, ts.as_str(), ""));
 }
 
 #[test]
@@ -326,7 +330,7 @@ fn messages_the_rule_must_not_guess_are_refused_and_the_rest_is_filled() {
         ("%n new files", "cannot tell the singular of \"new\""),
     ] {
         let ts = lupdate_output(&[("fine", "%n items", &[]), ("bad", source, &[])]);
-        let (code, _, stderr, out) = fill(&ts);
+        let (code, stderr, out) = fill(&ts);
         assert_eq!(code, 1, "{source}");
         assert!(
             stderr.contains(&format!("english-plurals: bad: {why}")),
@@ -341,7 +345,7 @@ fn messages_the_rule_must_not_guess_are_refused_and_the_rest_is_filled() {
 fn a_count_that_qstrid_does_not_get_is_refused() {
     let ts = lupdate_output(&[("fine", "%n items", &[]), ("bad", "Moved %n items", &[])])
         .replace("<message id=\"bad\" numerus=\"yes\">", "<message id=\"bad\">");
-    let (code, _, stderr, out) = fill(&ts);
+    let (code, stderr, out) = fill(&ts);
     assert_eq!(code, 1);
     assert!(stderr.contains("english-plurals: bad: has %n but qsTrId gets no count"));
     assert_eq!(forms_of(&out, "fine"), ["%n item", "%n items"]);
@@ -350,7 +354,7 @@ fn a_count_that_qstrid_does_not_get_is_refused() {
 #[test]
 fn a_catalogue_without_a_language_gets_english() {
     let ts = lupdate_output(&[("a", "%n items", &[])]).replace(" language=\"en\"", "");
-    let (code, _, _, out) = fill(&ts);
+    let (code, _, out) = fill(&ts);
     assert_eq!(code, 0);
     assert!(out.contains("<TS version=\"2.1\" language=\"en\">"));
     assert_eq!(forms_of(&out, "a"), ["%n item", "%n items"]);
@@ -359,22 +363,23 @@ fn a_catalogue_without_a_language_gets_english() {
 #[test]
 fn a_catalogue_of_another_language_is_refused_whole() {
     let ts = lupdate_output(&[("a", "%n items", &[])]).replace("language=\"en\"", "language=\"de\"");
-    let (code, _, stderr, out) = fill(&ts);
+    let (code, stderr, out) = fill(&ts);
     assert_eq!(code, 1);
     assert!(stderr.contains("must be language=\"en\""), "{stderr}");
-    assert_eq!(out, ts);
+    assert_eq!(out, "", "nothing to write over the catalogue with");
 }
 
 #[test]
 fn text_that_is_no_catalogue_is_refused() {
-    let (code, _, stderr, _) = fill("hello\n");
+    let (code, stderr, out) = fill("hello\n");
     assert_eq!(code, 1);
     assert!(stderr.contains("not a TS catalogue"), "{stderr}");
+    assert_eq!(out, "");
 }
 
 #[test]
-fn the_script_wants_a_file_to_fill() {
-    for args in [vec![], vec!["fill"], vec!["frobnicate", "x.ts"]] {
+fn the_script_fills_stdin_and_takes_no_file() {
+    for args in [vec![], vec!["fill", "x.ts"], vec!["frobnicate"]] {
         let out = Command::new("python3")
             .arg(root().join("tools/english-plurals.py"))
             .args(&args)

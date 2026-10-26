@@ -13,7 +13,6 @@ use lautta_core::app_operations::{parse_choice, ConflictEntry, PendingPlans, Sta
 use lautta_core::compress::ArchiveKind;
 use lautta_core::ops::{OperationKind, Plan};
 use lautta_core::transfer::{TransferEvent, TransferState};
-use lautta_core::undo::UndoAction;
 use lautta_core::{Error, ErrorKind, Result, Uri};
 use qmetaobject::prelude::*;
 use qmetaobject::{QPointer, QSingletonInit};
@@ -96,13 +95,6 @@ impl QSingletonInit for Operations {
 
 fn plan_id(id: u64) -> i32 {
     i32::try_from(id).unwrap_or(i32::MAX)
-}
-
-fn trash_ids(core: &Core) -> Vec<i64> {
-    match core.undo_kind() {
-        Some(UndoAction::Trash { ids }) => ids,
-        _ => Vec::new(),
-    }
 }
 
 async fn launch(core: &Core, started: Result<Started>) -> Result<Launched> {
@@ -314,11 +306,9 @@ impl Operations {
         let me = QPointer::from(self);
         spawn_then(
             async move {
-                let before = trash_ids(&core);
-                let res = core.delete(&items).await;
-                let after = trash_ids(&core);
-                let trashed = if after == before { 0 } else { after.len() };
-                (res, trashed)
+                // A delete that succeeds trashed every item that goes there.
+                let trashed = items.iter().filter(|u| core.deletes_to_trash(u)).count();
+                (core.delete(&items).await, trashed)
             },
             move |(res, trashed)| {
                 let Some(p) = me.as_pinned() else { return };

@@ -77,15 +77,16 @@ check-rpm:
 
 translations:
 	$(LUPDATE) $(LUPDATE_ARGS) qml -ts translations/harbour-lautta.ts
-	python3 tools/english-plurals.py fill translations/harbour-lautta.ts
+	python3 tools/english-plurals.py fill < translations/harbour-lautta.ts > $${TMPDIR:-/tmp}/lautta-ts-filled.ts
+	mv $${TMPDIR:-/tmp}/lautta-ts-filled.ts translations/harbour-lautta.ts
 
 # The engineering English catalogue must match the QML, plural forms included (UI-7):
 # regenerating it changes nothing.
 translations-check:
 	cp translations/harbour-lautta.ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
 	$(LUPDATE) $(LUPDATE_ARGS) qml -ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
-	python3 tools/english-plurals.py fill $${TMPDIR:-/tmp}/lautta-ts-check.ts
-	diff -u translations/harbour-lautta.ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
+	python3 tools/english-plurals.py fill < $${TMPDIR:-/tmp}/lautta-ts-check.ts > $${TMPDIR:-/tmp}/lautta-ts-checked.ts
+	diff -u translations/harbour-lautta.ts $${TMPDIR:-/tmp}/lautta-ts-checked.ts
 
 clean:
 	$(CARGO) clean

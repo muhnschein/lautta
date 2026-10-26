@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Text and code viewer (PRV-4, boards TextViewer, TextViewerPulley): read-only
-// up to 1 MiB with line numbers, the lines wrapped to the page's width
-// unless the pulley says otherwise, coloured by the file's language (PRV-13),
-// on a backdrop that darkens a dark ambience and lightens a light one.
+// up to 1 MiB with line numbers, the lines wrapped to the page's width,
+// coloured by the file's language (PRV-13), on a backdrop that darkens a dark
+// ambience and lightens a light one.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -16,11 +16,6 @@ Page {
     id: page
 
     property string uri
-    // Wrapped (the default), the page swipes back like any other (PRV-4).
-    // Unwrapped, lines wider than the page scroll sideways, and the page
-    // stack leaves a horizontal swipe to a list that flicks sideways: then
-    // only the back indicator goes back.
-    property bool wrap: true
 
     readonly property string fileName: App.nameOf(uri)
     // The text in rows (TextRows.js): the list's model.
@@ -72,11 +67,9 @@ Page {
         anchors.fill: parent
         model: page.layout.rows
         clip: true
-        // Sideways only when a line is wider than the page: a list that
-        // can flick sideways keeps the swipe back from the page stack.
-        flickableDirection: contentWidth > width ? Flickable.HorizontalAndVerticalFlick : Flickable.VerticalFlick
-        contentWidth: page.wrap ? width
-                                : Math.max(width, page.gutter + page.layout.longest * page.charWidth + 2 * Theme.horizontalPageMargin)
+        // Never sideways: a list that can flick sideways keeps the swipe
+        // back from the page stack (PRV-4).
+        flickableDirection: Flickable.VerticalFlick
 
         PullDownMenu {
             MenuItem {
@@ -88,14 +81,6 @@ Page {
                 //% "Share"
                 text: qsTrId("lautta-viewers-share")
                 onClicked: external.share()
-            }
-            MenuItem {
-                text: page.wrap
-                      //% "Don't wrap lines"
-                      ? qsTrId("lautta-viewers-unwrap")
-                      //% "Wrap lines"
-                      : qsTrId("lautta-viewers-wrap")
-                onClicked: page.wrap = !page.wrap
             }
         }
 
@@ -114,7 +99,7 @@ Page {
         }
 
         delegate: Item {
-            width: view.contentWidth
+            width: view.width
             height: Math.max(line.implicitHeight, Theme.fontSizeExtraSmall * 1.4)
 
             Label {
@@ -131,8 +116,8 @@ Page {
             Label {
                 id: line
                 x: page.gutter
-                // Never implicitWidth: with wrapping switched on that
-                // depends on the width again (a binding loop).
+                // Never implicitWidth: wrapping makes that depend on the
+                // width again (a binding loop).
                 width: parent.width - page.gutter - Theme.horizontalPageMargin
                 // The row's characters come back escaped from the core, with
                 // the colours of its part of the line, so nothing in the file
@@ -140,7 +125,7 @@ Page {
                 text: doc.styledRow(modelData.text, modelData.line, modelData.start, doc.highlighted ? page.colours : "")
                 font.family: "monospace"
                 font.pixelSize: Theme.fontSizeExtraSmall
-                wrapMode: page.wrap ? Text.WrapAtWordBoundaryOrAnywhere : Text.NoWrap
+                wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                 textFormat: Text.StyledText
             }
         }
@@ -184,7 +169,6 @@ Page {
         }
 
         VerticalScrollDecorator { }
-        HorizontalScrollDecorator { }
     }
 
     BusyIndicator {

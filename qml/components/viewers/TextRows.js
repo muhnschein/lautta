@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The rows of the text viewer (PRV-4). A tab becomes the spaces up to the
 // next multiple of `tabWidth` columns, so that in the monospace font a row
-// is as wide as its characters: the viewer sizes its unwrapped width by the
-// longest row. A line longer than `rowLength` characters goes on over
-// further rows: a minified file is one line, and one Text item of a
-// megabyte is slow to lay out and draw, and wider than glyphs are placed
+// is as wide as its characters. A line longer than `rowLength` characters
+// goes on over further rows: a minified file is one line, and one Text item
+// of a megabyte is slow to lay out and draw, and wider than glyphs are placed
 // exactly.
 .pragma library
 
@@ -12,7 +11,7 @@ var tabWidth = 4
 var rowLength = 1000
 
 // No text (yet): no rows.
-var empty = { "rows": [], "longest": 0, "lines": 0 }
+var empty = { "rows": [], "lines": 0 }
 
 // `line` with its tabs expanded to spaces.
 function expandTabs(line) {
@@ -38,25 +37,22 @@ function rowEnd(line, end) {
     return c >= 0xDC00 && c <= 0xDFFF ? end - 1 : end
 }
 
-// `text` (lines separated by "\n") as { rows, longest, lines }: rows are
+// `text` (lines separated by "\n") as { rows, lines }: rows are
 // { number, text, line, start }, number the line's from 1 on its first row
 // and 0 on the rows it goes on over, line the line's index (from 0) and
 // start where the row starts in the line with its tabs expanded, for the
-// line's colours (PRV-13); longest is the length of the longest row and
-// lines the number of lines.
+// line's colours (PRV-13); lines is the number of lines.
 function rows(text) {
     var lines = text.split("\n")
     var out = []
-    var longest = 0
     for (var i = 0; i < lines.length; ++i) {
         var line = expandTabs(lines[i])
         var start = 0
         do {
             var end = rowEnd(line, start + rowLength)
             out.push({ "number": start === 0 ? i + 1 : 0, "text": line.substring(start, end), "line": i, "start": start })
-            longest = Math.max(longest, end - start)
             start = end
         } while (start < line.length)
     }
-    return { "rows": out, "longest": longest, "lines": lines.length }
+    return { "rows": out, "lines": lines.length }
 }

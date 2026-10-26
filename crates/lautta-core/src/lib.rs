@@ -41,7 +41,6 @@ pub mod questions;
 pub mod clipboard;
 pub mod ops;
 pub mod trash;
-pub mod undo;
 
 // Transfers and edit-in-place
 pub mod activity;
@@ -61,6 +60,7 @@ pub mod search;
 // App-wide
 pub mod date_group;
 pub mod messages;
+pub mod panics;
 pub mod settings;
 
 pub use error::{Error, ErrorKind, Result};

@@ -197,7 +197,7 @@ body{margin:0}
 .remorse>i{position:absolute;left:0;top:0;bottom:0;background:var(--hldim);display:block}
 .remorse b{font-weight:400;font-size:19px;position:relative}
 .remorse span{font-size:15px;color:var(--sec);position:relative}
-/* banner (in-page notice, e.g. offline / undo) */
+/* banner (in-page notice, e.g. offline) */
 .banner{margin:6px 18px;padding:12px 14px;background:var(--hldim);display:flex;gap:12px;align-items:center;font-size:15px}
 .banner .act{color:var(--hl);font-size:15px;margin-left:auto;flex:none}
 /* interaction hint label */

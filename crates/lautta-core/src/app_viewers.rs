@@ -373,7 +373,7 @@ impl ThumbFile {
             if item.stored_name != stored_name {
                 return Err(Error::kind(ErrorKind::NotFound));
             }
-            let provider = LocalProvider::new(item.bin.clone());
+            let provider = LocalProvider::new(item.dir.clone());
             Ok::<_, Error>((item, provider))
         })
         .await

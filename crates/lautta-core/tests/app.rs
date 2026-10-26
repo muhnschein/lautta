@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The app context end to end on a temporary home folder: user folders,
-//! rename + undo, the Trash + undo, copy/move through the engine,
+//! rename, the Trash, copy/move through the engine,
 //! listings with the cache, archives as locations.
 
 use lautta_core::app::{Core, Started};
@@ -56,7 +56,7 @@ async fn user_folders_are_locations() {
 }
 
 #[tokio::test]
-async fn make_rename_and_undo() {
+async fn make_and_rename() {
     let h = home().await;
     let docs = uri("lautta://user-documents/");
     let folder = h.core.make_folder(&docs, b"Plans").await.unwrap();
@@ -69,11 +69,7 @@ async fn make_rename_and_undo() {
     let renamed = h.core.rename(&file, b"b.txt").await.unwrap();
     assert_eq!(renamed, uri("lautta://user-documents/Plans/b.txt"));
     assert!(h.root.join("Documents/Plans/b.txt").is_file());
-    assert!(h.core.can_undo());
-    assert!(h.core.undo().await.unwrap());
-    assert!(h.root.join("Documents/Plans/a.txt").is_file());
-    assert!(!h.root.join("Documents/Plans/b.txt").exists());
-    assert!(!h.core.undo().await.unwrap(), "an undo is used once");
+    assert!(!h.root.join("Documents/Plans/a.txt").exists());
 }
 
 #[tokio::test]
@@ -103,15 +99,43 @@ async fn favourites_follow_renames() {
 }
 
 #[tokio::test]
-async fn delete_to_the_trash_and_undo() {
+async fn favourites_follow_moves() {
+    let h = home().await;
+    std::fs::create_dir_all(h.root.join("Documents/x")).unwrap();
+    std::fs::create_dir_all(h.root.join("Documents/sub")).unwrap();
+    let x = uri("lautta://user-documents/x");
+    h.core.favourites.add(&x, "x", None, true).unwrap();
+    let started = h
+        .core
+        .copy_or_move(OperationKind::Move, vec![x], uri("lautta://user-documents/sub/"))
+        .await
+        .unwrap();
+    let Started::Transfer(id) = started else {
+        panic!("small plans start at once")
+    };
+    let done = h
+        .core
+        .engine
+        .wait_for(id, |s| s.state.is_finished())
+        .await
+        .unwrap();
+    assert_eq!(done.state, TransferState::Completed);
+    let favourites = h.core.favourites.list().unwrap();
+    assert_eq!(favourites.len(), 1);
+    assert_eq!(favourites[0].uri, uri("lautta://user-documents/sub/x"));
+}
+
+#[tokio::test]
+async fn delete_to_the_trash_and_restore() {
     let h = home().await;
     write(&h.root.join("Documents/old.txt"), b"old");
     let item = uri("lautta://user-documents/old.txt");
     let transfer = h.core.delete(std::slice::from_ref(&item)).await.unwrap();
     assert!(transfer.is_none(), "trashed locally, no transfer");
     assert!(!h.root.join("Documents/old.txt").exists());
-    assert_eq!(h.core.trash.list().unwrap().len(), 1);
-    assert!(h.core.undo().await.unwrap());
+    let rows = h.core.trash.list().unwrap();
+    assert_eq!(rows.len(), 1);
+    h.core.restore(rows[0].id).await.unwrap();
     assert_eq!(std::fs::read(h.root.join("Documents/old.txt")).unwrap(), b"old");
     assert!(h.core.trash.list().unwrap().is_empty());
 }
