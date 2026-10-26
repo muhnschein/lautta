@@ -118,7 +118,7 @@ ApplicationWindow {
 
     function checkHoldAndDrag() {
         var grid = flick()
-        expect(view.gridMode && grid.columns === 4, "a grid of 4 per row")
+        expect(view.gridMode && grid.columns === 3, "a grid of 3 per row")
         expect(!view.selecting, "not selecting at first")
         press(2)
         tools.pump(1200)
@@ -205,7 +205,6 @@ ApplicationWindow {
     Component.onCompleted: {
         makeFolder()
         App.setSetting("view_mode", JSON.stringify("grid"))
-        App.setSetting("grid_columns", JSON.stringify(4))
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
         tools.pump(800)
         if (expect(view.model.count === files, "the folder lists its files: " + view.model.count)) {
@@ -222,12 +221,12 @@ ApplicationWindow {
         Page {
             property alias view: folder
 
-            // Taller than the page: the checks' small screen leaves no room for rows
-            // between the header and the selection panel.
+            // Taller than the page: the checks' small screen leaves no room for the
+            // rows of tiles with captions between the header and the selection panel.
             DirectoryView {
                 id: folder
                 width: parent.width
-                height: 720
+                height: 1200
                 uri: win.base
             }
         }

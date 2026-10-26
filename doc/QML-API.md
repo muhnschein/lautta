@@ -174,11 +174,12 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `itemCount` role of its row changes when done; asking again for an unchanged folder does
   nothing, a changed modified time or `showHidden` counts anew). An open model follows
   every change of the global view settings at once (BRW-4).
-- The grid (SPEC §15.3): `components/directory/GridMetrics.qml` (`cellHeight(cellWidth,
-  captioned)`, `gap(captioned)`, `glyphSize(tileWidth, captioned)`, `nameLines(name,
-  tileWidth)`; the one place for the sizes of DirectoryView's and ViewPreview's cells),
+- The grid (SPEC §15.3): `components/directory/GridMetrics.qml` (`portraitColumns` (3), `gap`,
+  `cellHeight(cellWidth)`, `glyphSize(tileWidth)`, `nameLines(name, tileWidth)`; the one place
+  for the sizes of DirectoryView's and ViewPreview's cells; there is no setting for the number
+  of tiles per row),
   `components/directory/GridCaption.qml { metrics, name, captions, emphasised, pressed }`
-  (the name on up to two lines and two caption lines under a tile at 3 per row),
+  (the name on up to two lines and two caption lines under a tile),
   `components/directory/GridName.js` (`lines(name, width, measure)`: the cut of a long name,
   its end kept, no Silica), `components/directory/DirFormat.js` (`modifiedWithTime(ms)`,
   `items(count, capped)`, `gridCaptions(isDir, size, modifiedMs, counted, count, capped)` →

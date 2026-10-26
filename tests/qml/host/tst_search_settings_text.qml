@@ -12,9 +12,8 @@ QtObject {
     }
 
     Component.onCompleted: {
-        same(SettingsText.viewName("list", 3), "lautta-settings-summary-list", "a list has no grid size")
-        same(SettingsText.viewName("grid", 4), "lautta-settings-summary-grid-4", "a grid of 4")
-        same(SettingsText.viewName("grid", 3), "lautta-settings-summary-grid-3", "a grid of 3")
+        same(SettingsText.viewName("list"), "lautta-settings-summary-list", "a list")
+        same(SettingsText.viewName("grid"), "lautta-settings-summary-grid", "a grid")
         same(SettingsText.sortName("name"), "lautta-settings-summary-by-name", "by name")
         same(SettingsText.sortName("size"), "lautta-settings-summary-by-size", "by size")
         same(SettingsText.sortName("modified"), "lautta-settings-summary-by-modified", "by date")

@@ -23,14 +23,14 @@ Item {
     readonly property bool foldersFirst: setting("folders_first") === true
     readonly property bool showHidden: setting("show_hidden") === true
     readonly property bool gridMode: setting("view_mode") === "grid"
-    readonly property int gridColumns: setting("grid_columns") === 3 ? 3 : 4
-    readonly property bool gridCaptions: gridColumns === 3
     readonly property bool thumbnails: setting("thumbnails_local") === true
     // As DirectoryView: landscape keeps the tile size of portrait.
-    readonly property real tileWidth: Math.min(Screen.width, Screen.height) / gridColumns
-    readonly property int columns: tileWidth > 0 ? Math.max(gridColumns, Math.round(screenWidth / tileWidth)) : gridColumns
+    readonly property real tileWidth: Math.min(Screen.width, Screen.height) / gridMetrics.portraitColumns
+    readonly property int columns: tileWidth > 0
+                                   ? Math.max(gridMetrics.portraitColumns, Math.round(screenWidth / tileWidth))
+                                   : gridMetrics.portraitColumns
     readonly property real cellWidth: screenWidth / columns
-    readonly property real cellHeight: gridMetrics.cellHeight(cellWidth, gridCaptions)
+    readonly property real cellHeight: gridMetrics.cellHeight(cellWidth)
     // Modified times count back from now, so the rows read like a real
     // folder's; folders have a number of items, as on the device. File names
     // keep their extensions out of the translations.
@@ -76,7 +76,7 @@ Item {
     }
 
     // The rows as drawn, in order (tests): { name, isDir, size, photo,
-    // captions }, the captions as the lines under a tile at 3 per row.
+    // captions }, the captions as the lines under a tile.
     function shown() {
         var drawn = gridMode ? tiles : listRows
         var out = []
@@ -187,8 +187,7 @@ Item {
         }
     }
 
-    // A tile of DirectoryView's grid: 4 per row with names on icons only, 3
-    // per row with the name and the caption lines under every tile.
+    // A tile of DirectoryView's grid: the name and the caption lines under it.
     Component {
         id: gridTile
 
@@ -199,11 +198,9 @@ Item {
             readonly property bool isDir: modelData.isDir
             readonly property real size: modelData.size
             readonly property bool photo: preview.thumbnails && modelData.category === "image"
-            readonly property real gap: gridMetrics.gap(preview.gridCaptions)
-            readonly property var captions: preview.gridCaptions
-                                            ? DirFormat.gridCaptions(modelData.isDir, modelData.size, modelData.modified,
-                                                                     true, preview.itemsOf(modelData.name), false)
-                                            : []
+            readonly property real gap: gridMetrics.gap
+            readonly property var captions: DirFormat.gridCaptions(modelData.isDir, modelData.size, modelData.modified,
+                                                                   true, preview.itemsOf(modelData.name), false)
 
             width: preview.cellWidth
             height: preview.cellHeight
@@ -225,7 +222,7 @@ Item {
                     anchors.fill: parent
                     visible: !cell.photo
                     size: tile.width
-                    glyphSize: gridMetrics.glyphSize(tile.width, preview.gridCaptions)
+                    glyphSize: gridMetrics.glyphSize(tile.width)
                     category: modelData.category
                     isDir: modelData.isDir
                 }
@@ -234,23 +231,9 @@ Item {
                     active: cell.photo
                     sourceComponent: photoComponent
                 }
-                Label {
-                    visible: !preview.gridCaptions && !cell.photo
-                    anchors {
-                        left: parent.left
-                        right: parent.right
-                        bottom: parent.bottom
-                        margins: Theme.paddingSmall
-                    }
-                    horizontalAlignment: Text.AlignHCenter
-                    text: modelData.name
-                    truncationMode: TruncationMode.Elide
-                    font.pixelSize: Theme.fontSizeExtraSmall
-                }
             }
 
             GridCaption {
-                visible: preview.gridCaptions
                 anchors {
                     top: tile.bottom
                     topMargin: Theme.paddingSmall / 2
@@ -266,8 +249,7 @@ Item {
 
     // A half-size screen, as the Browse page preview: its size follows the
     // page's alone, never the folder drawn in it, so that no view setting
-    // (list or grid, items per row, names, the hidden file) makes the
-    // preview grow or shrink.
+    // (list or grid, the hidden file) makes the preview grow or shrink.
     Rectangle {
         id: frame
 

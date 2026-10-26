@@ -89,10 +89,6 @@ ApplicationWindow {
             views[i].forceLayout()
     }
 
-    function labelled(item, name) {
-        return findAll(item, function(x) { return x.truncationMode !== undefined && x.text === name }, []).length > 0
-    }
-
     // The row of `uri` in the list or grid shown: a list row by its item, a
     // grid cell by its name.
     function rowOf(uri) {
@@ -103,7 +99,7 @@ ApplicationWindow {
         var kids = shown.contentItem.children
         for (var i = 0; i < kids.length; ++i) {
             var x = kids[i]
-            if (x.info !== undefined ? x.info.uri === uri : x.highlightedColor !== undefined && labelled(x, name))
+            if (x.info !== undefined ? x.info.uri === uri : x.itemName === name)
                 return x
         }
         return null

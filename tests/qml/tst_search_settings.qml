@@ -4,8 +4,8 @@
 // page of settings, with pages of their own for Deleting, Transfers, Search,
 // Recents and Storage. Every control writes the key it wrote before; the
 // thumbnails are in View options; no setting is left without a control.
-// There is no date format (dates follow the system) and no view option is
-// repeated (BRW-4): the View options entry opens that page. Fails when an
+// There is no date format (dates follow the system) nor grid size, and no
+// view option is repeated (BRW-4): the View options entry opens that page. Fails when an
 // entry is missing or opens another page, a page lacks one of its settings
 // or a control writes nothing, or a setting can no longer be reached.
 import QtQuick 2.6
@@ -31,7 +31,7 @@ ApplicationWindow {
     // Set on View options by its own controls, and by "Ask before large
     // operations" two at once.
     readonly property var viewKeys: ["sort_key", "sort_descending", "folders_first", "show_hidden", "view_mode",
-                                     "grid_columns", "thumbnails_local"]
+                                     "thumbnails_local"]
     readonly property var largeOpKeys: ["large_op_items", "large_op_bytes"]
     // Every key a page of Settings sets (nothing lost).
     property var reached: []
@@ -203,6 +203,7 @@ ApplicationWindow {
         var lost = all.filter(function (k) { return reached.indexOf(k) < 0 })
         expect(lost.length === 0, "every setting has its control: none for " + lost)
         expect(all.indexOf("date_format") < 0 && reached.indexOf("date_format") < 0, "there is no date format")
+        expect(all.indexOf("grid_columns") < 0, "there is no grid size")
     }
 
     Component {
