@@ -3,7 +3,7 @@
 // selected items (§15.3, board DirectorySelect): the rarer actions on a page
 // of their own, as Sailfish leads on from a menu or a bar to an action page.
 // The header names the item, or counts the selected ones; a row is the
-// action's theme icon and name. Tapping a row runs the action and leaves the
+// action's icon and name. Tapping a row runs the action and leaves the
 // page: a dialog the action opens takes the page's place
 // (DirectoryView.openDialog), so leaving it returns to the folder. `owner` is
 // the DirectoryView, `info` describes the item as its row does. For the
@@ -12,6 +12,8 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../"
+import "../FileIcons.js" as FileIcons
 import "ContextActions.js" as Actions
 import "Selection.js" as Selection
 
@@ -57,7 +59,7 @@ Page {
             height: Theme.itemSizeSmall
             onClicked: page.choose(modelData.id)
 
-            Icon {
+            AppIcon {
                 id: icon
 
                 anchors {
@@ -65,7 +67,7 @@ Page {
                     leftMargin: Theme.horizontalPageMargin
                     verticalCenter: parent.verticalCenter
                 }
-                source: modelData.icon
+                icon: FileIcons.sized(modelData.icon, iconSize)
                 highlighted: row.highlighted
             }
 

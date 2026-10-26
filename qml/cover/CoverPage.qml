@@ -5,6 +5,8 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../components"
+import "../components/FileIcons.js" as FileIcons
 
 CoverBackground {
     id: cover
@@ -38,16 +40,13 @@ CoverBackground {
         }
         spacing: Theme.paddingSmall
 
-        HighlightImage {
+        AppIcon {
             visible: cover.folderUri.length > 0
             anchors.horizontalCenter: parent.horizontalCenter
-            source: "image://theme/icon-m-file-folder"
-            width: Theme.iconSizeLarge
-            height: width
-            sourceSize.width: width
-            sourceSize.height: height
+            // Large, at a multiple of 28 px: the glyph's sharp set (UI-2).
+            iconSize: FileIcons.snap(Theme.iconSizeLarge)
+            icon: FileIcons.glyph("folder", true, iconSize)
             color: Theme.highlightColor
-            highlighted: false
         }
         Label {
             width: parent.width

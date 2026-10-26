@@ -5,7 +5,8 @@
 // modified time and size, a folder's item count on this device (hidden files
 // only when they are shown), a folder's modified time where counting would
 // list it over the network (an archive stands in for a server here, both
-// are not local); the theme glyph is about half the tile. The View options
+// are not local); the glyph is about half the tile, at a multiple of 28 px
+// (FileIcons.js). The View options
 // preview draws the same cells at the same size. Fails when a caption line,
 // the count, the cut name or the glyph size is missing or wrong, when cells
 // differ in height or when the preview lays a cell out differently.
@@ -284,7 +285,8 @@ ApplicationWindow {
             expect(all[i].height === grid.cellHeight, "every cell is as tall as the view says")
         var tile = grid.cellWidth - 2 * all[0].gap
         var glyph = find(all[0], "fileGlyph")
-        expect(Math.abs(glyph.width - tile / 2) <= 1, "the glyph is half the tile: " + glyph.width + " in " + tile)
+        expect(glyph.width % 28 === 0 && Math.abs(glyph.width - tile / 2) <= 14,
+               "the glyph is about half the tile, at a multiple of 28 px: " + glyph.width + " in " + tile)
         expect(grid.cellHeight > grid.cellWidth, "cells are taller than wide: " + grid.cellHeight + " " + grid.cellWidth)
         // The last caption line ends close to the cell's end, which is the
         // height of the tile, two name lines and two caption lines with the

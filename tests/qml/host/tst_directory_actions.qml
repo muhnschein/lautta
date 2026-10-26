@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Host test of which actions an item offers where (ContextActions.js), SPEC
 // §15.3: the long-press menu, More actions last, and the rows of the More
-// actions page, each with its theme icon (OPS-12). There is no Details page
-// any more.
+// actions page, each with its icon (OPS-12): Compress and Move to new folder
+// the app's archive and folder glyphs (FileIcons.js). There is no Details
+// page any more.
 import QtQuick 2.6
 import "../../../qml/components/directory/ContextActions.js" as Actions
-import "../../../qml/components/FileIcons.js" as FileIcons
 
 Item {
     function check(cond, what) {
@@ -51,16 +51,14 @@ Item {
 
     function testIcons() {
         var favourite = "image://theme/icon-m-favorite"
-        var folder = "image://theme/icon-m-file-folder"
         same(Actions.more({ "isDir": false, "writable": true }).map(function(r) { return r.icon }),
-             [favourite, FileIcons.archive, folder], "More actions icons, writable folder")
+             [favourite, "file-archive", "file-folder"], "More actions icons, writable folder")
         same(Actions.more({ "isDir": true, "writable": false }).map(function(r) { return r.icon }),
-             [favourite, FileIcons.archive], "More actions icons, read-only folder")
-        same(Actions.icon("moveToNewFolder"), "image://theme/icon-m-file-folder", "Move to new folder")
+             [favourite, "file-archive"], "More actions icons, read-only folder")
+        same(Actions.icon("moveToNewFolder"), "file-folder", "Move to new folder: the folder glyph")
         same(Actions.icon("favourite"), "image://theme/icon-m-favorite", "Add to favourites")
         same(Actions.icon("rename"), "image://theme/icon-m-edit", "Rename, a row for the selection's one item")
-        same(Actions.icon("compress"), "image://theme/icon-m-file-archive-folder",
-             "Compress: the archive icon, not the off-centre zipper badge")
+        same(Actions.icon("compress"), "file-archive", "Compress: the glyph archives show")
         same(Actions.icon("copy"), "", "the menu's rows have no icon")
     }
 

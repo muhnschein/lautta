@@ -90,6 +90,11 @@ async fn standalone_shows_no_trace_of_the_bridge() {
     let deleted = device.last().unwrap();
     assert_eq!(deleted.kind, "deleted");
     assert_eq!(of(&rows, "android")[0].name, "DCIM");
+    // Folders show the app's own folder glyph, which QML sizes (UI-2).
+    assert_eq!(
+        (device[1].icon.as_str(), of(&rows, "android")[0].icon.as_str()),
+        ("file-folder", "file-folder")
+    );
 }
 
 fn names(rows: &[Row], section: &str) -> Vec<String> {
@@ -337,8 +342,8 @@ async fn file_favourites_name_their_folder_and_icon() {
     assert_eq!(
         shown,
         [
-            ("Thesis", "Documents › Uni", "image://theme/icon-m-document", true),
-            ("Photo", "Documents", "image://theme/icon-m-file-image", true),
+            ("Thesis", "Documents › Uni", "file-document", true),
+            ("Photo", "Documents", "file-image", true),
         ],
         "the folder a file is in, and the file's icon"
     );
