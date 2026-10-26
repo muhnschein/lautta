@@ -546,13 +546,7 @@ impl LocationRegistry {
         self.state()
             .all()
             .find(|s| s.location.id == location)
-            .and_then(trash_root_of)
-            .is_some()
-    }
-
-    /// The roots of the locations whose deletes go to the *Trash*.
-    pub fn trash_roots(&self) -> Vec<PathBuf> {
-        self.state().all().filter_map(trash_root_of).collect()
+            .is_some_and(slot_keeps_trash)
     }
 
     /// The local path behind `uri`, `None` for remote locations and archives.
@@ -584,9 +578,8 @@ impl LocationRegistry {
     }
 }
 
-fn trash_root_of(slot: &Slot) -> Option<PathBuf> {
-    let root = slot.location.local_root.as_ref()?;
-    slot.provider.capabilities().has(cap::TRASH).then(|| root.clone())
+fn slot_keeps_trash(slot: &Slot) -> bool {
+    slot.location.local_root.is_some() && slot.provider.capabilities().has(cap::TRASH)
 }
 
 /// The absolute path of `uri` inside a local location.
@@ -860,10 +853,6 @@ mod tests {
             mem(),
         );
         assert!(!e.reg.keeps_trash("arc-1"), "only providers that keep a trash");
-        assert_eq!(
-            e.reg.trash_roots(),
-            [e.home.join("Documents"), e.home.join("android_storage/DCIM")]
-        );
     }
 
     #[test]

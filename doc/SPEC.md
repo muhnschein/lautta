@@ -546,14 +546,9 @@ bridge).
   PRV-14), made from the stored copy and, as its stored name has no extension, the type
   of the original name; the setting *Show thumbnails* (BRW-4) switches them off, and a
   stored item that is a link or is gone keeps its glyph, as folders and other files do.
-  Items are purged after the retention setting (30 days) when the settings are loaded at start and
-  whenever the Trash opens. The round-1 builds (schema 4–5) kept a hidden bin
-  `.lautta-trash` at the root of each folder: at start the items in them are moved into
-  the Trash (their rows, and so their deletion times, kept) and the emptied bins
-  removed. This is done once (schema 7 marks it due, DAT-2), item by item so an
-  interrupted start continues where it stopped, and it waits for an Android folder that
-  is not there. Anything else left in a bin stays, and the bin is then an ordinary
-  hidden folder.
+  Items are purged after the retention setting (30 days) when the settings are loaded at
+  start and whenever the Trash opens; the start also removes the copies an interruption
+  left half made in the Trash folder.
 - OPS-9: Undo for the last rename, same-location move and trash operation. A rename is
   undone from the Silica remorse on its row, *File renamed* or *Folder renamed*, for the
   remorse time of OPS-8 (the remorse timer setting): tapping it renames the item back,
@@ -1008,17 +1003,15 @@ SQLite for everything structured.
   (`is_dir`: folder or file, ORG-1, schema 5; older rows are folders; `icon`: the chosen
   theme icon name, ORG-1, schema 6; NULL for the default icon and for older rows),
   `recents`, `transfers`, `transfer_items`, `working_copies`, `dircache`,
-  `trash_items(id, original_uri, trashed_at, stored_name, is_dir, size, bin)` (`bin`: path
-  bytes of the round-1 bin still holding the item, schema 4; NULL once it is in
-  `.../trash/`), `trash_drain(due)` (a row while those bins are still to be drained into
-  the Trash, schema 7, OPS-8),
+  `trash_items(id, original_uri, trashed_at, stored_name, is_dir, size)` (OPS-8; the
+  table also has a `bin` column and the schema a `trash_drain` table, left by schemas 4
+  and 7, which nothing reads or writes: dropping them takes a migration of its own),
   `reading_positions(uri,
   location_id, page, at_ms)` (PRV-12), `browse_layout(section, item, hidden, position)`
   (BRW-12).
 - DAT-3: The netvfs socket directory `~/.local/share/org.netvfs/lautta/netvfs/` belongs
   to netvfs; the app only reads it. *Clear app data* in Settings deletes it along with
-  everything else (the Trash too, and any round-1 bins still in the folders, OPS-8); netvfs
-  recreates it (netvfs XB-4).
+  everything else (the Trash too, OPS-8); netvfs recreates it (netvfs XB-4).
 
 ## 20. Error presentation
 
@@ -1130,8 +1123,7 @@ when the netvfs bridge they depend on is released.
   empty folder (mount propagation into the app's namespace), and `Unmount` of a volume
   the app is not using succeeds; and a delete in `~/Documents`
   and in `~/android_storage/DCIM` lands in the Trash (a copy across the sandbox's mounts,
-  OPS-8) and restores from it; a round-1 build's `.lautta-trash` bins are drained and
-  removed on the first start of this one.
+  OPS-8) and restores from it.
 - `ShareProvider` delivery of files from other apps' locations (INT-1).
 - Harbour accepting an aarch64-only upload (the validator accepts the architecture; the
   store's per-release policy needs confirming).

@@ -136,8 +136,8 @@ impl App {
         let map = from_json(&json.to_string()).unwrap_or_default();
         core.apply_settings(Settings::from_map(&map));
         self.publish_settings();
-        // The user's retention is known from here on: purge, then drain
-        // the bins of schemas 4 and 5 into the Trash (OPS-8).
+        // The user's retention is known from here on: purge the Trash and
+        // clear its half-made copies (OPS-8).
         handle().spawn_blocking(move || {
             if let Err(e) = core.tidy_trash(now_secs()) {
                 log::warn!("tidying the Trash failed: {e}");

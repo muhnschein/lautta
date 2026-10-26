@@ -374,6 +374,33 @@ async fn recently_deleted_entries_restore_and_empty() {
     assert_eq!(h.core.trash.total_size().unwrap(), 0);
 }
 
+#[tokio::test]
+async fn the_trash_at_start_loses_the_expired_and_the_half_made_copies() {
+    let h = home().await;
+    write(&h.root.join("Documents/old.txt"), b"1");
+    write(&h.root.join("Documents/new.txt"), b"22");
+    h.core
+        .delete(&[uri("lautta://user-documents/old.txt")])
+        .await
+        .unwrap();
+    let now = lautta_core::trash::now_secs();
+    h.core
+        .delete(&[uri("lautta://user-documents/new.txt")])
+        .await
+        .unwrap();
+    let partial = h.core.trash.dir().join(".lautta-partial-1");
+    write(&partial.join("x"), b"half");
+    // Kept 40 days: after 31 nothing has expired, after 41 both items have.
+    let mut settings = h.core.settings();
+    settings.recently_deleted_retention_days = 40;
+    h.core.apply_settings(settings);
+    assert_eq!(h.core.tidy_trash(now + 31 * 86_400).unwrap(), 0);
+    assert!(!partial.exists(), "the half-made copy goes");
+    assert_eq!(h.core.trash.list().unwrap().len(), 2);
+    assert_eq!(h.core.tidy_trash(now + 41 * 86_400).unwrap(), 2);
+    assert!(h.core.trash.list().unwrap().is_empty());
+}
+
 /// Trashes `names` from Documents and returns the Trash's rows by name.
 async fn trashed(h: &Home, names: &[&str]) -> std::collections::HashMap<String, TrashEntry> {
     let uris: Vec<Uri> = names

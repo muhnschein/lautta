@@ -14,7 +14,6 @@ use lautta_core::locations::LocationRegistry;
 use lautta_core::paths::AppPaths;
 use lautta_core::trash::now_secs;
 use lautta_core::Uri;
-use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -124,14 +123,14 @@ async fn deletes_go_to_the_app_data_trash_across_mounts() {
     assert!(!s.home.join("Documents/Uni").exists());
     let items = s.core.trash.list().unwrap();
     assert_eq!(items.len(), 1);
-    assert_eq!(items[0].bin, AppPaths::new(&s.home).trash_dir());
+    assert_eq!(items[0].dir, AppPaths::new(&s.home).trash_dir());
     assert_project(&items[0].stored_path(), when);
 
-    // Nothing is left in the folder: no bin, no copy.
+    // Nothing is left in the folder: no copy.
     assert!(s.core.list(&docs, |_| {}).await.unwrap().is_empty());
     assert_eq!(std::fs::read_dir(s.home.join("Documents")).unwrap().count(), 0);
 
-    assert!(s.core.undo().await.unwrap(), "undo copies it back");
+    s.core.restore(items[0].id).await.unwrap();
     assert_project(&s.home.join("Documents/Uni"), when);
     assert!(s.core.trash.list().unwrap().is_empty());
     assert_eq!(
@@ -261,92 +260,14 @@ async fn the_retention_setting_decides_what_expires() {
     assert!(s.core.trash.list().unwrap().is_empty());
 }
 
-/// An item the round-1 build (schemas 4 and 5) put into the bin at `root`.
-fn old_item(core: &Core, root: &Path, stored: &str, original: &str, trashed_at: i64) -> i64 {
-    let bin = root.join(".lautta-trash");
-    write(&bin.join(stored), original.as_bytes());
-    let conn = core.db.lock();
-    conn.execute(
-        "INSERT INTO trash_items(original_uri, trashed_at, stored_name, is_dir, size, bin) \
-         VALUES (?1, ?2, ?3, 0, 1, ?4)",
-        rusqlite::params![original, trashed_at, stored, bin.as_os_str().as_bytes()],
-    )
-    .unwrap();
-    conn.last_insert_rowid()
-}
-
 #[tokio::test]
-async fn the_bins_of_the_round_1_build_are_drained_at_start() {
-    let Some(s) = sandbox().await else { return };
-    let now = now_secs();
-    let docs = old_item(
-        &s.core,
-        &s.home.join("Documents"),
-        "s-1",
-        "lautta://user-documents/a.txt",
-        now - DAY,
-    );
-    let dl = old_item(
-        &s.core,
-        &s.home.join("Downloads"),
-        "s-2",
-        "lautta://user-downloads/b.txt",
-        now - 2 * DAY,
-    );
-    // Expired while the app was away: purged, not moved.
-    old_item(
-        &s.core,
-        &s.home.join("Downloads"),
-        "s-3",
-        "lautta://user-downloads/c.txt",
-        now - 40 * DAY,
-    );
-    // Pictures' bin is empty: its item was restored.
-    std::fs::create_dir_all(s.home.join("Pictures/.lautta-trash")).unwrap();
-    s.core.locations.refresh();
-    let before = s.core.trash_entries(now).unwrap();
-    assert_eq!(before.len(), 3);
-
-    assert_eq!(s.core.tidy_trash(now).unwrap(), 2);
-    let after = s.core.trash_entries(now).unwrap();
-    assert_eq!(after, before[..2], "the same rows, restorable as before");
-    let trash_dir = AppPaths::new(&s.home).trash_dir();
-    for folder in ["Documents", "Downloads", "Pictures"] {
-        assert!(!s.home.join(folder).join(".lautta-trash").exists(), "{folder}");
-    }
-    assert_eq!(
-        std::fs::read(trash_dir.join("s-1")).unwrap(),
-        b"lautta://user-documents/a.txt"
-    );
-    assert!(s.core.trash.pending_bins().unwrap().is_empty());
-
-    // Again at the next start: nothing to do.
-    assert_eq!(s.core.tidy_trash(now).unwrap(), 0);
-    assert_eq!(s.core.trash_entries(now).unwrap(), after);
-    s.core.restore(docs).await.unwrap();
-    s.core.restore(dl).await.unwrap();
-    assert!(s.home.join("Documents/a.txt").is_file() && s.home.join("Downloads/b.txt").is_file());
-}
-
-#[tokio::test]
-async fn clear_app_data_removes_the_trash_and_the_old_bins() {
+async fn clear_app_data_removes_the_trash_and_nothing_else_in_the_folders() {
     let Some(s) = sandbox().await else { return };
     write(&s.home.join("Documents/a"), b"a");
     write(&s.home.join("Downloads/keep"), b"k");
     s.core.delete(&[uri("lautta://user-documents/a")]).await.unwrap();
-    old_item(
-        &s.core,
-        &s.home.join("Downloads"),
-        "s-1",
-        "lautta://user-downloads/b",
-        now_secs(),
-    );
-    std::fs::create_dir_all(s.home.join("Documents/.lautta-trash")).unwrap();
-    assert_eq!(s.core.trash.list().unwrap().len(), 2);
+    assert_eq!(s.core.trash.list().unwrap().len(), 1);
     s.core.clear_app_data().unwrap();
-    for folder in ["Documents", "Downloads"] {
-        assert!(!s.home.join(folder).join(".lautta-trash").exists(), "{folder}");
-    }
     assert!(s.home.join("Downloads/keep").is_file(), "user files stay");
     assert!(s.core.trash.list().unwrap().is_empty());
     assert_eq!(
