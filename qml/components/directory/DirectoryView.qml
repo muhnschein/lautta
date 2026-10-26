@@ -27,13 +27,6 @@ Item {
     property alias model: dir
     readonly property bool selecting: selectionMode
     readonly property bool gridMode: dir.viewMode === "grid"
-    // Grid items per row in portrait (View options): 4, or 3 with the name
-    // and caption lines under every tile (SPEC §15.3).
-    readonly property int gridColumns: {
-        var dependency = App.settingsJson
-        return App.setting("grid_columns") === 3 ? 3 : 4
-    }
-    readonly property bool gridCaptions: gridColumns === 3
     property string pendingName
     property string pendingShare
     // The list or the grid, whichever is shown.
@@ -505,84 +498,117 @@ Item {
         }
     }
 
-    Component {
-        id: headerComponent
+    // The folder's header, its progress line, path menu and notices stay at
+    // the top of the page while the list or grid scrolls under them (SPEC
+    // §15.3). They are not the header of the list: a list keeps its contentY
+    // when its header grows, so a notice or a line that came after the rows
+    // scrolled the list away from its top. Stacked by anchors, not a Column:
+    // the height follows a notice or a line at once, not at the next polish.
+    Item {
+        id: top
 
-        Column {
-            width: view.width
+        objectName: "folderHeader"
+        z: 1
+        anchors {
+            top: parent.top
+            left: parent.left
+            right: parent.right
+        }
+        height: errorNotice.y + errorNotice.height
 
-            Item {
-                width: parent.width
-                height: pageHeader.height
+        Item {
+            id: headerBar
 
-                PageHeader {
-                    id: pageHeader
+            width: parent.width
+            height: pageHeader.height
 
-                    title: view.selecting
-                           //% "%n selected"
-                           ? qsTrId("lautta-dir-selected", dir.selectedCount)
-                           : dir.title
-                    // No breadcrumb (as in iOS Files): the path menu shows the way up.
-                    description: view.selecting ? dir.title : ""
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: !view.selecting
-                    onClicked: pathMenu.open = !pathMenu.open
-                }
+            PageHeader {
+                id: pageHeader
+
+                objectName: "folderPageHeader"
+                title: view.selecting
+                       //% "%n selected"
+                       ? qsTrId("lautta-dir-selected", dir.selectedCount)
+                       : dir.title
+                // No breadcrumb (as in iOS Files): the path menu shows the way up.
+                description: view.selecting ? dir.title : ""
             }
-
-            SlimProgress {
-                running: dir.loading
+            MouseArea {
+                anchors.fill: parent
+                enabled: !view.selecting
+                onClicked: pathMenu.open = !pathMenu.open
             }
+        }
 
-            PathMenu {
-                id: pathMenu
+        SlimProgress {
+            id: progress
 
-                pathModel: path
-                currentUri: view.uri
-                onNavigate: view.openFolder(uri)
-                onFavouriteRequested: view.runAction("favourite", [view.uri], {}, null)
-            }
+            anchors.top: headerBar.bottom
+            running: dir.loading
+        }
 
-            InfoBanner {
-                visible: dir.offline
-                height: visible ? implicitHeight : 0
-                //% "Offline. Showing the copy from %1. Changes aren't possible."
-                text: qsTrId("lautta-dir-offline").arg(dir.cachedAt >= 0
-                      ? DirFormat.modified(dir.cachedAt) : "")
-                //% "Retry"
-                actionText: qsTrId("lautta-dir-offline-retry")
-                onAction: dir.refresh()
-            }
+        PathMenu {
+            id: pathMenu
 
-            InfoBanner {
-                visible: dir.large
-                height: visible ? implicitHeight : 0
-                //% "%1 loaded · large folder: name order, thumbnails off"
-                text: qsTrId("lautta-dir-large").arg(dir.count)
-                //% "Stop"
-                actionText: dir.loading ? qsTrId("lautta-dir-large-stop") : ""
-                onAction: dir.stopLoading()
-            }
+            objectName: "folderPathMenu"
+            anchors.top: progress.bottom
+            // The rest of the page less a strip of the list; longer, it scrolls.
+            maxHeight: Math.max(0, view.height - y - Theme.itemSizeLarge)
+            pathModel: path
+            currentUri: view.uri
+            onNavigate: view.openFolder(uri)
+            onFavouriteRequested: view.runAction("favourite", [view.uri], {}, null)
+        }
 
-            InfoBanner {
-                visible: dir.suggestGrid
-                height: visible ? implicitHeight : 0
-                //% "Shown as grid because most items are photos"
-                text: qsTrId("lautta-dir-grid-suggested")
-                //% "Use list"
-                actionText: qsTrId("lautta-dir-use-list")
-                onAction: dir.setViewPrefs(JSON.stringify({ "viewMode": "list" }))
-            }
+        InfoBanner {
+            id: offlineNotice
 
-            InfoBanner {
-                visible: dir.errorKind.length > 0 && dir.count > 0 && !dir.offline
-                height: visible ? implicitHeight : 0
-                text: ErrorText.message(dir.errorKind, { "location": dir.locationName, "item": dir.title })
-                actionText: qsTrId("lautta-dir-retry")
-                onAction: dir.refresh()
-            }
+            anchors.top: pathMenu.bottom
+            visible: dir.offline
+            height: visible ? implicitHeight : 0
+            //% "Offline. Showing the copy from %1. Changes aren't possible."
+            text: qsTrId("lautta-dir-offline").arg(dir.cachedAt >= 0
+                  ? DirFormat.modified(dir.cachedAt) : "")
+            //% "Retry"
+            actionText: qsTrId("lautta-dir-offline-retry")
+            onAction: dir.refresh()
+        }
+
+        InfoBanner {
+            id: largeNotice
+
+            anchors.top: offlineNotice.bottom
+            visible: dir.large
+            height: visible ? implicitHeight : 0
+            //% "%1 loaded · large folder: name order, thumbnails off"
+            text: qsTrId("lautta-dir-large").arg(dir.count)
+            //% "Stop"
+            actionText: dir.loading ? qsTrId("lautta-dir-large-stop") : ""
+            onAction: dir.stopLoading()
+        }
+
+        InfoBanner {
+            id: gridNotice
+
+            anchors.top: largeNotice.bottom
+            visible: dir.suggestGrid
+            height: visible ? implicitHeight : 0
+            //% "Shown as grid because most items are photos"
+            text: qsTrId("lautta-dir-grid-suggested")
+            //% "Use list"
+            actionText: qsTrId("lautta-dir-use-list")
+            onAction: dir.setViewPrefs(JSON.stringify({ "viewMode": "list" }))
+        }
+
+        InfoBanner {
+            id: errorNotice
+
+            anchors.top: gridNotice.bottom
+            visible: dir.errorKind.length > 0 && dir.count > 0 && !dir.offline
+            height: visible ? implicitHeight : 0
+            text: ErrorText.message(dir.errorKind, { "location": dir.locationName, "item": dir.title })
+            actionText: qsTrId("lautta-dir-retry")
+            onAction: dir.refresh()
         }
     }
 
@@ -743,18 +769,16 @@ Item {
         BackgroundItem {
             id: cell
 
-            // Three per row: a folder here (device, drives) shows its item
-            // count, asked for when the cell appears and again when the
-            // folder or the hidden files setting changed.
+            // A folder here (device, drives) shows its item count, asked for
+            // when the cell appears and again when the folder or the hidden
+            // files setting changed.
             readonly property string itemName: model.name
             readonly property int items: model.itemCount
-            readonly property bool counting: view.gridCaptions && model.isDir && dir.folderCounts
+            readonly property bool counting: model.isDir && dir.folderCounts
             readonly property string countKey: counting + "/" + model.modified + "/" + dir.showHidden
-            readonly property var captions: view.gridCaptions
-                                            ? DirFormat.gridCaptions(model.isDir, model.size, model.modified,
-                                                                     dir.folderCounts, items, model.itemCountCapped)
-                                            : []
-            readonly property real gap: gridMetrics.gap(view.gridCaptions)
+            readonly property var captions: DirFormat.gridCaptions(model.isDir, model.size, model.modified,
+                                                                   dir.folderCounts, items, model.itemCountCapped)
+            readonly property real gap: gridMetrics.gap
 
             width: grid.cellWidth
             height: grid.cellHeight
@@ -815,7 +839,7 @@ Item {
 
                     anchors.fill: parent
                     size: tile.width
-                    glyphSize: gridMetrics.glyphSize(tile.width, view.gridCaptions)
+                    glyphSize: gridMetrics.glyphSize(tile.width)
                     category: model.category
                     isDir: model.isDir
                     isSymlink: model.isSymlink
@@ -823,26 +847,9 @@ Item {
                     mimeType: model.mimeType
                     selected: model.selected
                 }
-
-                // Compact grid: the name inside the tile, cut at the end only.
-                Label {
-                    visible: !view.gridCaptions && (model.thumbnailSource.length === 0 || tileIcon.thumbnailFailed)
-                    anchors {
-                        left: parent.left
-                        right: parent.right
-                        bottom: parent.bottom
-                        margins: Theme.paddingSmall
-                    }
-                    horizontalAlignment: Text.AlignHCenter
-                    text: model.name
-                    truncationMode: TruncationMode.Elide
-                    font.pixelSize: Theme.fontSizeExtraSmall
-                    color: cell.highlighted || model.selected ? Theme.highlightColor : Theme.primaryColor
-                }
             }
 
             GridCaption {
-                visible: view.gridCaptions
                 anchors {
                     top: tile.bottom
                     topMargin: Theme.paddingSmall / 2
@@ -865,10 +872,15 @@ Item {
     SilicaListView {
         id: list
 
-        anchors.fill: parent
+        anchors {
+            top: top.bottom
+            left: parent.left
+            right: parent.right
+            bottom: parent.bottom
+        }
+        clip: true
         visible: !view.gridMode
         model: view.gridMode ? null : dir
-        header: headerComponent
         delegate: listDelegate
         footer: Item {
             width: list.width
@@ -886,15 +898,20 @@ Item {
         id: grid
 
         // Landscape keeps the tile size of portrait.
-        readonly property real tileWidth: Math.min(Screen.width, Screen.height) / view.gridColumns
-        readonly property int columns: Math.max(view.gridColumns, Math.round(width / tileWidth))
+        readonly property real tileWidth: Math.min(Screen.width, Screen.height) / gridMetrics.portraitColumns
+        readonly property int columns: Math.max(gridMetrics.portraitColumns, Math.round(width / tileWidth))
 
-        anchors.fill: parent
+        anchors {
+            top: top.bottom
+            left: parent.left
+            right: parent.right
+            bottom: parent.bottom
+        }
+        clip: true
         visible: view.gridMode
         model: view.gridMode ? dir : null
         cellWidth: width / columns
-        cellHeight: gridMetrics.cellHeight(cellWidth, view.gridCaptions)
-        header: headerComponent
+        cellHeight: gridMetrics.cellHeight(cellWidth)
         delegate: gridDelegate
         footer: Item {
             width: grid.width
@@ -918,16 +935,17 @@ Item {
 
     // The loading, empty and error states sit in the content of the list or
     // grid, as Silica's ViewPlaceholder does, so pulling the pulley moves
-    // them with the header. As siblings of the views they stayed put, and in
+    // them with the content. As siblings of the views they stayed put, and in
     // an empty folder they are all there is below the header.
     Item {
         id: stateLayer
 
+        objectName: "stateLayer"
         parent: view.flickable.contentItem
         x: view.flickable.originX
         y: view.flickable.originY
-        width: view.width
-        height: view.height
+        width: view.flickable.width
+        height: view.flickable.height
 
         BusyIndicator {
             anchors.centerIn: parent
@@ -940,6 +958,7 @@ Item {
 
             readonly property string kind: view.placeholderKind()
 
+            objectName: "folderPlaceholder"
             visible: kind.length > 0
             x: Theme.horizontalPageMargin
             y: Math.round(parent.height * 0.38)

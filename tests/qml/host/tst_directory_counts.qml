@@ -134,13 +134,13 @@ Item {
         var many = root.base + "Many/"
         counts.createFolder("Many")
         wait(400)
-        for (var i = 0; i <= 10000; ++i)
+        for (var i = 0; i <= 1000; ++i)
             check(tools.installFixture(Qt.resolvedUrl("fixtures/notes-crlf.txt"), many + i), "file " + i)
         counts.refresh()
         wait(600)
         counts.requestCount(root.base + "Many")
         wait(1500)
-        check(row("Many").items === 10000 && row("Many").capped,
+        check(row("Many").items === 1000 && row("Many").capped,
               "a huge folder gives a lower bound: " + row("Many").items + " " + row("Many").capped)
     }
 

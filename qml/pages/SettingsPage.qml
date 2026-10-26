@@ -62,8 +62,7 @@ Page {
                 iconSource: "image://theme/icon-m-month-view"
                 //% "View options"
                 text: qsTrId("lautta-settings-view-options")
-                value: SettingsText.viewOptions(page.setting("view_mode"), page.setting("grid_columns"),
-                                                page.setting("sort_key"))
+                value: SettingsText.viewOptions(page.setting("view_mode"), page.setting("sort_key"))
                 onClicked: page.open("ViewOptionsPage.qml")
             }
             SettingsEntry {

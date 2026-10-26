@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The grid at 3 per row on the target (SPEC §15.3, BRW-4, board
-// DirectoryGrid): under every tile the name on up to two lines, a long one
+// The grid on the target (SPEC §15.3, BRW-4, board DirectoryGrid): under
+// every tile the name on up to two lines, a long one
 // cut in the middle so that its end stays, and caption lines: a file's
 // modified time and size, a folder's item count on this device (hidden files
 // only when they are shown), a folder's modified time where counting would
 // list it over the network (an archive stands in for a server here, both
-// are not local); the theme glyph is about half the tile. 4 per row has none
-// of it. The View options preview draws the same cells at the same size.
-// Fails when a caption line, the count, the cut name or the glyph size is
-// missing or wrong, when cells differ in height, when 4 per row shows
-// captions or when the preview lays a cell out differently.
+// are not local); the theme glyph is about half the tile. The View options
+// preview draws the same cells at the same size. Fails when a caption line,
+// the count, the cut name or the glyph size is missing or wrong, when cells
+// differ in height or when the preview lays a cell out differently.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -183,12 +182,12 @@ ApplicationWindow {
         top.uri = huge
         top.createFolder("Many")
         waitFor(function () { return top.count === 1 }, "the folder of many")
-        for (var i = 0; i <= 10000; ++i)
+        for (var i = 0; i <= 1000; ++i)
             install(String(i), huge + "Many/")
         var view = push(huge)
         var many = cellNamed(view, "Many")
-        waitFor(function () { return many.items === 10000 }, "the capped count")
-        same(many.captions, [qsTrId("lautta-dir-grid-items-more", 10000)], "a huge folder has more than its count")
+        waitFor(function () { return many.items === 1000 }, "the capped count")
+        same(many.captions, [qsTrId("lautta-dir-grid-items-more", 1000)], "a huge folder has more than its count")
         same(textOf(many, "gridCaption0"), many.captions[0], "shown on the first line")
         pageStack.pop(null, PageStackAction.Immediate)
     }
@@ -208,7 +207,7 @@ ApplicationWindow {
         return null
     }
 
-    // Under a tile at 3 per row the name and the lines stay whether a PDF's
+    // Under a tile the name and the lines stay whether a PDF's
     // first page covers the tile or the page could not be made (encrypted).
     function checkPdfThumbnails() {
         var pdfs = "lautta://user-downloads/GridCaptionsPdf/"
@@ -270,45 +269,23 @@ ApplicationWindow {
         caption.destroy()
     }
 
-    function checkCells(view, captioned) {
+    function checkCells(view) {
         var grid = view.flickable
         var all = cells(view)
         expect(all.length === 4, "four cells: " + all.length)
-        for (var i = 0; i < all.length; ++i) {
+        for (var i = 0; i < all.length; ++i)
             expect(all[i].height === grid.cellHeight, "every cell is as tall as the view says")
-            expect(all[i].captions.length === 0 || captioned, "no captions at 4 per row")
-        }
         var tile = grid.cellWidth - 2 * all[0].gap
         var glyph = find(all[0], "fileGlyph")
-        expect(Math.abs(glyph.width - (captioned ? tile / 2 : Theme.iconSizeMedium)) <= 1,
-               "the glyph is " + (captioned ? "half the tile" : "medium") + ": " + glyph.width + " in " + tile)
-        expect(captioned ? grid.cellHeight > grid.cellWidth : grid.cellHeight === grid.cellWidth,
-               "cells are taller than wide only with captions: " + grid.cellHeight + " " + grid.cellWidth)
-        if (captioned) {
-            // The last caption line ends close to the cell's end, which is
-            // the height of the tile, two name lines and two caption lines
-            // with the space around them: no line is cut, no room wasted.
-            var last = find(all[0], "gridCaption1")
-            var room = all[0].height - last.mapToItem(all[0], 0, last.height).y
-            expect(Math.abs(room - (all[0].gap + Theme.paddingSmall / 2)) <= 1,
-                   "the cell ends a gap and half a padding below the last line: " + room)
-        }
-    }
-
-    function checkNoCaptionsAtFour(view) {
-        App.setSetting("grid_columns", JSON.stringify(4))
-        waitFor(function () { return !view.gridCaptions }, "4 per row")
-        tools.pump(100)
-        checkCells(view, false)
-        var all = cells(view)
-        for (var i = 0; i < all.length; ++i) {
-            expect(!find(all[i], "gridName").visible, "no name under a tile at 4 per row")
-            expect(!all[i].counting, "nothing is counted at 4 per row")
-            same(all[i].captions, [], "and no caption lines")
-        }
-        App.setSetting("grid_columns", JSON.stringify(3))
-        waitFor(function () { return view.gridCaptions }, "3 per row again")
-        tools.pump(100)
+        expect(Math.abs(glyph.width - tile / 2) <= 1, "the glyph is half the tile: " + glyph.width + " in " + tile)
+        expect(grid.cellHeight > grid.cellWidth, "cells are taller than wide: " + grid.cellHeight + " " + grid.cellWidth)
+        // The last caption line ends close to the cell's end, which is the
+        // height of the tile, two name lines and two caption lines with the
+        // space around them: no line is cut, no room wasted.
+        var last = find(all[0], "gridCaption1")
+        var room = all[0].height - last.mapToItem(all[0], 0, last.height).y
+        expect(Math.abs(room - (all[0].gap + Theme.paddingSmall / 2)) <= 1,
+               "the cell ends a gap and half a padding below the last line: " + room)
     }
 
     // A folder that is not on this device shows its modified time, not a count.
@@ -341,7 +318,7 @@ ApplicationWindow {
         same(DirFormat.items(-1, false), "", "no count")
         same(DirFormat.items(1, false), qsTrId("lautta-dir-grid-items", 1), "one item goes through the plural string")
         expect(DirFormat.items(14, false) === qsTrId("lautta-dir-grid-items", 14)
-               && DirFormat.items(10000, true) === qsTrId("lautta-dir-grid-items-more", 10000)
+               && DirFormat.items(1000, true) === qsTrId("lautta-dir-grid-items-more", 1000)
                && DirFormat.items(14, false) !== DirFormat.items(14, true), "a capped count says more than")
         same(DirFormat.gridCaptions(false, 2400000, older, true, -1, false),
              [DirFormat.modifiedWithTime(older), Format.formatFileSize(2400000)], "a file: time and size")
@@ -359,7 +336,7 @@ ApplicationWindow {
         var preview = previewComponent.createObject(window.contentItem,
                                                     { "screenWidth": view.width, "screenHeight": view.height })
         tools.pump(300)
-        expect(preview.gridMode && preview.gridCaptions, "the preview is a grid of 3")
+        expect(preview.gridMode, "the preview is a grid")
         same(preview.cellWidth, view.flickable.cellWidth, "its cell is as wide")
         same(preview.cellHeight, view.flickable.cellHeight, "and as tall")
         var rows = preview.shown()
@@ -375,21 +352,16 @@ ApplicationWindow {
         var glyph = find(view, "fileGlyph")
         expect(Math.abs(find(preview, "fileGlyph").width - glyph.width) <= 1,
                "its glyph is as large as the view's: " + find(preview, "fileGlyph").width + " and " + glyph.width)
-        App.setSetting("grid_columns", JSON.stringify(4))
-        tools.pump(300)
-        expect(!preview.gridCaptions && preview.shown().every(function (r) { return r.captions.length === 0 }),
-               "none at 4 per row")
-        App.setSetting("grid_columns", JSON.stringify(3))
         preview.destroy()
     }
 
     Component.onCompleted: {
-        var settings = { "view_mode": "grid", "grid_columns": 3, "show_hidden": false, "thumbnails_local": false }
+        var settings = { "view_mode": "grid", "show_hidden": false, "thumbnails_local": false }
         for (var key in settings)
             App.setSetting(key, JSON.stringify(settings[key]))
         makeFolders()
         var view = push(base)
-        waitFor(function () { return view.gridCaptions && cells(view).length === 4 }, "3 per row")
+        waitFor(function () { return cells(view).length === 4 }, "the cells")
         checkFileCell(view)
         checkFolderCells(view)
         checkHiddenCount(view)
@@ -397,12 +369,11 @@ ApplicationWindow {
         checkHugeFolder()
         checkPdfThumbnails()
         checkNames()
-        checkCells(view, true)
+        checkCells(view)
         checkPreview(view)
-        checkNoCaptionsAtFour(view)
         checkArchive()
         checkCaptionText()
-        var restore = { "view_mode": "list", "grid_columns": 4, "thumbnails_local": true }
+        var restore = { "view_mode": "list", "thumbnails_local": true }
         for (var again in restore)
             App.setSetting(again, JSON.stringify(restore[again]))
     }

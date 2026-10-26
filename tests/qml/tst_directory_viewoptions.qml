@@ -2,8 +2,8 @@
 // View options on the target (BRW-4, board ViewOptions): a settings page,
 // not a dialog, with no description under its title. Every control changes
 // the global setting at once and the preview follows (order, folders first,
-// hidden file, list or grid, grid size with the caption lines of 3 per row,
-// photo thumbnail) at a size that stays the same; a folder already open
+// hidden file, list or grid with its caption lines, photo thumbnail) at a
+// size that stays the same; a folder already open
 // follows too, and the folder the page came from takes a choice that only
 // differed there (List over a suggested grid). Its Thumbnails section, there
 // from Settings and from a folder alike, has the switch for every thumbnail
@@ -11,8 +11,8 @@
 // costs; there is no limit for metered connections, which the app cannot
 // tell. Fails when the page waits for an Apply, the preview or an open
 // folder keeps the old view, the preview changes size or lacks the caption
-// lines of 3 per row, the folder keeps its suggestion, the header has a
-// description or a thumbnail setting is missing.
+// lines, a grid size can be chosen, the folder keeps its suggestion, the
+// header has a description or a thumbnail setting is missing.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -216,19 +216,13 @@ ApplicationWindow {
 
         pick(page, "viewBox", "grid")
         expect(App.setting("view_mode") === "grid", "View applies at once")
-        expect(preview.gridMode && preview.columns === 4 && !preview.gridCaptions && preview.shown().length === 7,
-               "the preview is a grid of 4 per row: " + preview.columns)
-        expect(preview.shown().every(function (r) { return r.captions.length === 0 }),
-               "a grid of 4 has no caption lines: " + JSON.stringify(preview.shown()))
-        expect(find(page, "viewBox").currentIndex === 1, "View shows Grid")
-        sameSize(preview, size, "a grid of 4")
-
-        pick(page, "gridBox", "3")
-        expect(App.setting("grid_columns") === 3, "Grid size applies at once")
-        expect(preview.columns === 3 && preview.gridCaptions, "3 per row with names: " + preview.columns)
+        expect(preview.gridMode && preview.columns === 3 && preview.shown().length === 7,
+               "the preview is a grid of 3 per row: " + preview.columns)
         expect(preview.shown().every(function (r) { return r.captions.length > 0 }),
-               "and with caption lines under every name: " + JSON.stringify(preview.shown()))
-        sameSize(preview, size, "a grid of 3 with names")
+               "with caption lines under every name: " + JSON.stringify(preview.shown()))
+        expect(find(page, "viewBox").currentIndex === 1, "View shows Grid")
+        expect(find(page, "gridBox") === null, "a grid has no size to choose")
+        sameSize(preview, size, "a grid")
 
         expect(photoShown(preview.shown()), "the grid shows the photo")
         tap(page, "thumbnailsSwitch")
@@ -255,8 +249,7 @@ ApplicationWindow {
         var views = [
             { "show_hidden": false, "view_mode": "list" },
             { "show_hidden": true },
-            { "view_mode": "grid", "grid_columns": 4 },
-            { "grid_columns": 3 },
+            { "view_mode": "grid" },
             { "show_hidden": false },
             { "sort_key": "size", "thumbnails_local": false }
         ]
@@ -282,7 +275,7 @@ ApplicationWindow {
 
     function restoreDefaults() {
         var defaults = { "sort_key": "name", "sort_descending": false, "folders_first": true, "show_hidden": false,
-                         "view_mode": "list", "grid_columns": 4, "thumbnails_local": true }
+                         "view_mode": "list", "thumbnails_local": true }
         for (var key in defaults)
             App.setSetting(key, JSON.stringify(defaults[key]))
         tools.pump(300)
