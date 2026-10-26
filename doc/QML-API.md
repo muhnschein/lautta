@@ -183,6 +183,13 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   its end kept, no Silica), `components/directory/DirFormat.js` (`modifiedWithTime(ms)`,
   `items(count, capped)`, `gridCaptions(isDir, size, modifiedMs, counted, count, capped)` →
   the caption lines). A grid cell asks `requestCount` for its folder when it appears.
+- `components/directory/DirectoryView.qml` keeps the folder's header (`PageHeader`, `SlimProgress`,
+  `PathMenu`, the notices) in an item stacked by anchors (`folderHeader`) at the top of the page,
+  outside the list and the grid: a list keeps `contentY` when its header grows, which scrolled a
+  folder away from its top. The `SilicaListView` and `SilicaGridView` have no `header`, are
+  anchored below it and clipped; the pulley and the empty, loading and error states
+  (`stateLayer`) sit in them. `PathMenu.maxHeight` caps the open menu (it scrolls); less than 0:
+  no cap.
 - `PathModel { uri }` — ancestors (roles `uri`, `name`), `complete(prefix) → list`.
 - Pages: `pages/DirectoryPage.qml { uri }`, `dialogs/FolderPickerDialog.qml { title,
   acceptText, startUri }` (property `selectedUri` after accept),
