@@ -549,13 +549,19 @@ bridge).
   Items are purged after the retention setting (30 days) when the settings are loaded at
   start and whenever the Trash opens; the start also removes the copies an interruption
   left half made in the Trash folder.
-- OPS-9: Undo for the last rename, same-location move and trash operation. A rename is
-  undone from the Silica remorse on its row, *File renamed* or *Folder renamed*, for the
-  remorse time of OPS-8 (the remorse timer setting): tapping it renames the item back,
-  letting it run out keeps the new name; a row the listing makes anew meanwhile shows the
-  rest of it. Moves and trash from a banner for 10 s.
+- OPS-9: Remorse. A delete to the Trash (OPS-8), a move and a rename run behind a Silica
+  remorse for the remorse time of OPS-8 (the remorse timer setting); tapping the remorse
+  cancels it. A copy has none. A rename happens at once, and the remorse on its row, *File
+  renamed* or *Folder renamed*, undoes it: tapping renames the item back, letting it run
+  out keeps the new name; a row the listing makes anew meanwhile shows the rest of it. A
+  move is the paste of cut items (OPS-10), from the folder pulley or the paste bar: the
+  remorse, at the top of the page, says *Moving “name”* or *Moving N items*; tapping it
+  cancels, so nothing moves and the items stay cut on the clipboard; letting it run out
+  takes them off the clipboard and starts the move as a transfer (XFR-1). Pasting again,
+  or leaving the folder, runs the pending move at once, as it does for a delete.
 - OPS-10: Clipboard (cut/copy, docked paste bar) across all locations. There is no
   *Copy to…*/*Move to…*: the user goes to the destination either way, so they paste there.
+  A cut is taken off the clipboard when its move starts (OPS-9), a copy stays.
 - OPS-12: There is no details page for an item. The rarer actions on one item sit
   behind *More actions*, the last row of its long-press menu: tapping it opens a Silica
   page whose header names the item, one row (theme icon and name) per action:
@@ -929,8 +935,8 @@ paused) is in its status line and context menu. Pulley: *Clear activity history*
   the line's colour: a favourite's place in Browse and in the favourite dialog, a
   recent's place, the folder headers of a search on a server and the destination in an
   Activity title. Local places have none.
-- UI-10: Bars at the bottom of a page (selection and paste panels, activity bar, undo
-  notice, search progress) are opaque: Silica's docked panel gradient on the ambience's
+- UI-10: Bars at the bottom of a page (selection and paste panels, activity bar, search
+  progress) are opaque: Silica's docked panel gradient on the ambience's
   dimmer highlight colour, so content scrolling under them never shows through. Their
   icons share the theme's stroke weight and optical size; the app's own icons are drawn
   on the theme's 64-unit grid with 2-unit strokes.

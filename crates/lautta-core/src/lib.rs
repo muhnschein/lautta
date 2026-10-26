@@ -41,7 +41,6 @@ pub mod questions;
 pub mod clipboard;
 pub mod ops;
 pub mod trash;
-pub mod undo;
 
 // Transfers and edit-in-place
 pub mod activity;

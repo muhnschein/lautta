@@ -91,23 +91,6 @@
         <source>Something went wrong.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-undo-renamed">
-        <source>Renamed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-undo-moved">
-        <source>Moved</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-undo-trashed">
-        <source>Moved to trash</source>
-        <oldsource>Moved to Recently deleted</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-undo">
-        <source>Undo</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-start-error">
         <source>Lautta can&apos;t open its data</source>
         <translation type="unfinished"></translation>
@@ -2630,6 +2613,16 @@
     <message id="lautta-dir-grid-item">
         <source>1 item</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-moving">
+        <source>Moving “%1”</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-moving-many" numerus="yes">
+        <source>Moving %n items</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
     </message>
 </context>
 </TS>

@@ -4,7 +4,8 @@
 // original name as mimeType, a trashed PDF has the app's thumbnail of its
 // Trash item, a trashed text file has the type and no thumbnail, and the
 // Show thumbnails setting (BRW-4) switches them off at the next reload. The
-// Trash page draws its rows from these roles.
+// Trash page draws its rows from these roles. Operations.removed counts the
+// items that went to the Trash.
 import QtQuick 2.6
 import QtQml 2.2
 import Lautta 1.0
@@ -17,6 +18,7 @@ Item {
     property int step: 0
     property int waited: 0
     property bool removed
+    property int trashed: -1
     property var photo
     property var paper
     property var note
@@ -67,7 +69,10 @@ Item {
     }
 
     Component.onCompleted: {
-        Operations.removed.connect(function() { test.removed = true })
+        Operations.removed.connect(function(count) {
+            test.trashed = count
+            test.removed = true
+        })
         Operations.failed.connect(function(kind) { test.fail("the delete failed: " + kind) })
     }
 
@@ -96,6 +101,8 @@ Item {
             case 1:
                 if (!test.removed)
                     break
+                if (test.trashed !== 3)
+                    return test.fail("the delete says how many went to the Trash: " + test.trashed)
                 trash.reload()
                 test.next()
                 break

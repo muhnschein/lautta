@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The bars at the bottom on the target (real Silica, UI-10, SPEC §15.3): the
-// selection panel, the paste bar, the activity bar, the undo notice and the
-// search progress have an opaque backdrop, not Silica's see-through panel
+// selection panel, the paste bar, the activity bar and the search progress
+// have an opaque backdrop, not Silica's see-through panel
 // gradient alone. The selection panel shows its icons in the long-press
 // menu's order, then More actions, whatever the number of items, with no
 // push-up menu. More actions opens a page: for one item Rename (opening the
@@ -69,8 +69,8 @@ ApplicationWindow {
     }
 
     // The bar's backdrop is opaque and covers it, and nothing between it and
-    // the bar makes it see-through (the activity bar and the undo notice fade
-    // as a whole when they go).
+    // the bar makes it see-through (the activity bar fades as a whole when it
+    // goes).
     function expectOpaque(bar, what) {
         var grounds = named(bar, "barBackground")
         if (!expect(grounds.length === 1, what + " has the opaque backdrop: " + grounds.length))
@@ -265,7 +265,6 @@ ApplicationWindow {
 
     function checkOtherBars() {
         expectOpaque(activityBar, "activity bar")
-        expectOpaque(undoBanner.children[0], "undo notice")
         pageStack.push(Qt.resolvedUrl("../../qml/pages/SearchPage.qml"), {}, PageStackAction.Immediate)
         tools.pump(300)
         var searchPanels = findAll(pageStack.currentPage, function (x) { return x.dock !== undefined })
@@ -318,7 +317,6 @@ ApplicationWindow {
         height: 800
 
         ActivityBar { id: activityBar }
-        UndoBanner { id: undoBanner }
         FileIcon { id: fileIcon; category: "archive" }
         OpIcon { id: opIcon; category: "archive" }
         ResultIcon { id: resultIcon; category: "archive" }

@@ -36,7 +36,7 @@ are the reference for each page.
 
 | Name | Owner | Purpose |
 |---|---|---|
-| `App` | core infra | readiness, settings, clipboard, undo, URI helpers, open/share |
+| `App` | core infra | readiness, settings, clipboard, URI helpers, open/share |
 | `Bridge` | browse | netvfs bridge status, consent, servers, nearby, questions, hand-offs |
 | `Operations` | operations | plans, conflicts, delete, compress/extract |
 | `Transfers` | transfers | queue summary and control, cover data, keep-alive state |
@@ -45,8 +45,7 @@ are the reference for each page.
 
 Properties: `ready: bool`, `startError: string`, `version: string`,
 `settingsJson: string` (object, keys of `lautta_core::settings::Settings::to_map`),
-`canUndo: bool` (OPS-9 banner), `undoText: string` (engineering kind: `rename`, `move`,
-`trash`), `clipboardCount: int`, `clipboardCut: bool`.
+`clipboardCount: int`, `clipboardCut: bool`.
 
 Methods:
 - `setting(key) → var` (bool, number or string; lists as JSON text), `setSetting(key,
@@ -59,8 +58,9 @@ Methods:
   server, LOC-7, also one that is gone; archives are neither: lines naming the location
   mark it, §15.5).
 - `copy(uris)`, `cut(uris)`, `clearClipboard()`, `canPasteInto(uri) → bool`,
-  `paste(destUri)` (→ `Operations` flow).
-- `undo()`; signal `undone(ok)`.
+  `clipboardJson() → string` (the items, JSON list of URIs; they stay on the clipboard),
+  `takeClipboard() → string` (`{ cut, items }` or `null`; a cut leaves the clipboard, a
+  copy stays; `DirectoryView.paste()` is the paste, then `Operations`).
 - `categoryOf(nameOrUri) → string` (FileCategory icon name), `viewerFor(uri, mime) → string`
   (`image`, `text`, `markdown`, `audio`, `video`, `archive`, `pdf`, `external`).
 - `previewRows(entries, sortKey, descending, foldersFirst, showHidden) → list` — the
@@ -202,6 +202,11 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   in a fixed order filtered by capabilities, and their icons, is in
   `components/directory/ContextActions.js` (`menu(ctx)`, `more(ctx)` →
   `[{ id, text, icon }]`, `icon(id)`).
+- `DirectoryView.paste()` (pulley *Paste*, paste bar *Paste here*): a copy starts at once;
+  a cut shows the view's `RemorsePopup`, *Moving “name”* or *Moving N items*, for
+  `remorse_seconds`, and moves when it runs out (OPS-9). Cancelling leaves the clipboard
+  as it was; a second paste, or leaving the page, runs the pending move first
+  (`settleRemorse()`).
 - After `DirectoryModel.renamed(oldUri, newUri)` the DirectoryView shows a Silica remorse on
   the new name's row (OPS-9); every list row and grid cell holds a
   `components/directory/RenameRemorse.qml { owner, row, uri }` so that a row made anew
@@ -339,18 +344,18 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 ## Shared QML (core infra owns)
 
 - `harbour-lautta.qml` — `ApplicationWindow`, initial page `BrowsePage`, global handlers
-  for `Operations.needsSummary`, `Transfers.needsAnswer`, `Bridge.question`, the undo
-  banner and the app-wide `KeepAlive`.
+  for `Operations.needsSummary`, `Transfers.needsAnswer`, `Bridge.question` and the
+  app-wide `KeepAlive`.
 - `components/ErrorText.js`, `components/Open.js`, `components/FileIcon.qml { category,
   isDir, thumbnailSource, mimeType, size, glyphSize }` (`glyphSize`: the side of the theme
   glyph in the tile, `AppIcon.iconSize`; read-only `thumbnailReady`, `thumbnailFailed`: the
   thumbnail shows / could not be made, so the category icon stays),
   `components/FileIcons.js` (icons every file view shares: `archive`),
   `components/IconRow.qml` (icon row for context menus),
-  `components/UndoBanner.qml`, `components/BarBackground.qml` (the opaque backdrop of
-  bottom bars, UI-10), `components/PlaceLabel.qml { before, text, remote, color,
-  fontSize, horizontalAlignment }` (a line naming a location: a remote one gets the small
-  server icon before its name, §15.5).
+  `components/BarBackground.qml` (the opaque backdrop of bottom bars, UI-10),
+  `components/PlaceLabel.qml { before, text, remote, color, fontSize,
+  horizontalAlignment }` (a line naming a location: a remote one gets the small server
+  icon before its name, §15.5).
 
 ## Tests
 

@@ -11,8 +11,8 @@
 
 // The actions after which the selection is done, Rename and Add to
 // favourites included: their dialog takes over the one item. Delete ends it
-// once its remorse timer has run out, so an undo keeps the selection. More
-// actions only opens a page: leaving it keeps the selection.
+// once its remorse timer has run out, so a cancelled one keeps the selection.
+// More actions only opens a page: leaving it keeps the selection.
 var endingActions = ["copy", "cut", "share", "compress", "rename", "favourite"]
 
 function endsSelection(id) {
