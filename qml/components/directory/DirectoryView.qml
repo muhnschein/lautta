@@ -27,13 +27,6 @@ Item {
     property alias model: dir
     readonly property bool selecting: selectionMode
     readonly property bool gridMode: dir.viewMode === "grid"
-    // Grid items per row in portrait (View options): 4, or 3 with the name
-    // and caption lines under every tile (SPEC §15.3).
-    readonly property int gridColumns: {
-        var dependency = App.settingsJson
-        return App.setting("grid_columns") === 3 ? 3 : 4
-    }
-    readonly property bool gridCaptions: gridColumns === 3
     property string pendingName
     property string pendingShare
     // The list or the grid, whichever is shown.
@@ -716,18 +709,16 @@ Item {
         BackgroundItem {
             id: cell
 
-            // Three per row: a folder here (device, drives) shows its item
-            // count, asked for when the cell appears and again when the
-            // folder or the hidden files setting changed.
+            // A folder here (device, drives) shows its item count, asked for
+            // when the cell appears and again when the folder or the hidden
+            // files setting changed.
             readonly property string itemName: model.name
             readonly property int items: model.itemCount
-            readonly property bool counting: view.gridCaptions && model.isDir && dir.folderCounts
+            readonly property bool counting: model.isDir && dir.folderCounts
             readonly property string countKey: counting + "/" + model.modified + "/" + dir.showHidden
-            readonly property var captions: view.gridCaptions
-                                            ? DirFormat.gridCaptions(model.isDir, model.size, model.modified,
-                                                                     dir.folderCounts, items, model.itemCountCapped)
-                                            : []
-            readonly property real gap: gridMetrics.gap(view.gridCaptions)
+            readonly property var captions: DirFormat.gridCaptions(model.isDir, model.size, model.modified,
+                                                                   dir.folderCounts, items, model.itemCountCapped)
+            readonly property real gap: gridMetrics.gap
 
             width: grid.cellWidth
             height: grid.cellHeight
@@ -788,7 +779,7 @@ Item {
 
                     anchors.fill: parent
                     size: tile.width
-                    glyphSize: gridMetrics.glyphSize(tile.width, view.gridCaptions)
+                    glyphSize: gridMetrics.glyphSize(tile.width)
                     category: model.category
                     isDir: model.isDir
                     isSymlink: model.isSymlink
@@ -796,26 +787,9 @@ Item {
                     mimeType: model.mimeType
                     selected: model.selected
                 }
-
-                // Compact grid: the name inside the tile, cut at the end only.
-                Label {
-                    visible: !view.gridCaptions && (model.thumbnailSource.length === 0 || tileIcon.thumbnailFailed)
-                    anchors {
-                        left: parent.left
-                        right: parent.right
-                        bottom: parent.bottom
-                        margins: Theme.paddingSmall
-                    }
-                    horizontalAlignment: Text.AlignHCenter
-                    text: model.name
-                    truncationMode: TruncationMode.Elide
-                    font.pixelSize: Theme.fontSizeExtraSmall
-                    color: cell.highlighted || model.selected ? Theme.highlightColor : Theme.primaryColor
-                }
             }
 
             GridCaption {
-                visible: view.gridCaptions
                 anchors {
                     top: tile.bottom
                     topMargin: Theme.paddingSmall / 2
@@ -864,8 +838,8 @@ Item {
         id: grid
 
         // Landscape keeps the tile size of portrait.
-        readonly property real tileWidth: Math.min(Screen.width, Screen.height) / view.gridColumns
-        readonly property int columns: Math.max(view.gridColumns, Math.round(width / tileWidth))
+        readonly property real tileWidth: Math.min(Screen.width, Screen.height) / gridMetrics.portraitColumns
+        readonly property int columns: Math.max(gridMetrics.portraitColumns, Math.round(width / tileWidth))
 
         anchors {
             top: top.bottom
@@ -877,7 +851,7 @@ Item {
         visible: view.gridMode
         model: view.gridMode ? dir : null
         cellWidth: width / columns
-        cellHeight: gridMetrics.cellHeight(cellWidth, view.gridCaptions)
+        cellHeight: gridMetrics.cellHeight(cellWidth)
         delegate: gridDelegate
         footer: Item {
             width: grid.width

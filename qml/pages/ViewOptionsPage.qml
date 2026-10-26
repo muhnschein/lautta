@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// View options (board ViewOptions, SPEC BRW-3/BRW-4): sort, view and grid
-// size, the same for every folder, with a live preview below them, then the
+// View options (board ViewOptions, SPEC BRW-3/BRW-4): sort and view (list or
+// grid), the same for every folder, with a live preview below them, then the
 // thumbnails: the switch for all of them, and those from servers with their
 // size limit and cache (PRV-1, PRV-2). A settings page, not a dialog: every
 // control applies at once, and folders already open follow. `model` is the
@@ -28,10 +28,10 @@ Page {
     }
 
     // Stores one view setting for every folder; `pref` is its name for
-    // DirectoryModel.setViewPrefs, empty when the model has none.
+    // DirectoryModel.setViewPrefs.
     function choose(key, pref, value) {
         App.setSetting(key, JSON.stringify(value))
-        if (model && pref.length > 0) {
+        if (model) {
             var prefs = {}
             prefs[pref] = value
             model.setViewPrefs(JSON.stringify(prefs))
@@ -135,28 +135,6 @@ Page {
                         //% "Grid"
                         text: qsTrId("lautta-dir-opts-view-grid")
                         onClicked: page.choose("view_mode", "viewMode", objectName)
-                    }
-                }
-            }
-
-            ComboBox {
-                objectName: "gridBox"
-                visible: page.setting("view_mode") === "grid"
-                //% "Grid size"
-                label: qsTrId("lautta-dir-opts-grid-size")
-                currentIndex: page.setting("grid_columns") === 3 ? 1 : 0
-                menu: ContextMenu {
-                    MenuItem {
-                        objectName: "4"
-                        //% "4 per row"
-                        text: qsTrId("lautta-dir-opts-grid-4")
-                        onClicked: page.choose("grid_columns", "", 4)
-                    }
-                    MenuItem {
-                        objectName: "3"
-                        //% "3 per row, with names"
-                        text: qsTrId("lautta-dir-opts-grid-3")
-                        onClicked: page.choose("grid_columns", "", 3)
                     }
                 }
             }

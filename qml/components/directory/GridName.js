@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The name under a grid cell at 3 per row (SPEC §15.3, BRW-4): at most two
+// The name under a grid cell (SPEC §15.3, BRW-4): at most two
 // lines of the cell's width. A name that does not fit keeps its beginning on
 // the first line and its end, with the extension, on the second behind an
 // ellipsis in the middle. Qt 5.6 elides the middle of a single line only, so
