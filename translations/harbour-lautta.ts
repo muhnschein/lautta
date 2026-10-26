@@ -1047,14 +1047,6 @@
         <source>Getting the file before playing</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-viewers-unwrap">
-        <source>Don&apos;t wrap lines</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-wrap">
-        <source>Wrap lines</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-viewers-read-only">
         <source>Read-only · %1</source>
         <translation type="unfinished"></translation>

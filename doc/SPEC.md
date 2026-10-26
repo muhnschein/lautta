@@ -637,11 +637,10 @@ bridge).
 - PRV-3: Thumbnail jobs: interactive lane, lowest priority, ≤ 2 in flight per location,
   visible delegates only, canceled on scroll. PDF thumbnails (PRV-14) use same jobs.
 - PRV-4: Viewers: images (zoom, swipe through the folder, EXIF panel), text/code (read-
-  only up to 1 MiB, then a notice; numbered lines wrapped to the page's width by
-  default, so the page swipes back like any other, also from Markdown's *View source*;
-  *Don't wrap lines* in the pulley lets lines wider than the page scroll sideways
-  instead, and then a swipe across the text scrolls it and the back indicator goes
-  back; tabs to the next multiple of 4 columns; a line longer than 1000 characters
+  only up to 1 MiB, then a notice; numbered lines always wrapped to the page's width, so
+  the list never scrolls sideways and the page swipes back like any other, also from
+  Markdown's *View source*; the pulley has *Open with* and *Share*; tabs to the next
+  multiple of 4 columns; a line longer than 1000 characters
   goes on over further rows; coloured by language, PRV-13; on a backdrop over the whole
   page, Silica's overlay colour at 60 % opacity (black on a dark ambience, light grey on
   a light one), so the text reads over any wallpaper), Markdown (pulldown-cmark

@@ -307,11 +307,11 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
 - Pages: `viewers/ImageViewer.qml { uri, folderUri }` (Jolla Gallery's viewer, adapted in
   `components/viewers/gallery`; `remove()` deletes the image shown; its *More* is
   `components/viewers/ImageMorePage.qml { uri }`, whose Rename signals `renameChosen()` for
-  the viewer to rename), `viewers/TextViewer.qml { uri, wrap }`
-  (`wrap` true by default; a `textBackdrop` rectangle fills the page under the text,
+  the viewer to rename), `viewers/TextViewer.qml { uri }`
+  (lines always wrap; a `textBackdrop` rectangle fills the page under the text,
   PRV-4; its rows, tabs expanded and long lines split, come from
   `components/viewers/TextRows.js` `rows(text)`: `{ rows: [{ number, text, line,
-  start }], longest, lines }`, `line` from 0 and `start` the row's first column in
+  start }], lines }`, `line` from 0 and `start` the row's first column in
   the line with tabs expanded, in UTF-16 units),
   `viewers/MarkdownViewer.qml { uri }`, `viewers/PdfViewer.qml { uri }`, `viewers/PdfContentsPage.qml { fileName, outline,
   pageCount, currentPage }` (signal `chosen(index)`), `viewers/MediaPlayer.qml { uri, video }`,
