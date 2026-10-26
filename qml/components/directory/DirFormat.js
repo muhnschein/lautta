@@ -36,7 +36,7 @@ function modifiedWithTime(ms) {
     return qsTrId("lautta-dir-date-time").arg(day).arg(Silica.Format.formatDate(date, Silica.Formatter.TimeValue))
 }
 
-// "1 item", "14 items", "More than 10000 items" for a count that stopped at
+// "1 item", "14 items", "More than 1000 items" for a count that stopped at
 // its cap; empty while there is none (`count` < 0).
 function items(count, capped) {
     if (count < 0)

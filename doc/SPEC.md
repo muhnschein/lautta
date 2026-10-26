@@ -866,7 +866,7 @@ up to two lines, centred (a name that does not fit keeps its start on the first 
 the extension, on the second behind an ellipsis in the middle), and two small lines in the
 secondary colour, each cut at the end: a file's
 modified time and size; a folder's item count ("N items") on this device and on drives,
-hidden files left out unless shown, "More than N items" past 10 000 entries, none while
+hidden files left out unless shown, "More than N items" past 1000 entries, none while
 counting or when the folder cannot be read; a folder on a server or in an archive its
 modified time (counting would list it over the network). A folder is counted when its cell
 appears and again when its modified time or the hidden files setting changes, once per

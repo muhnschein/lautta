@@ -9,7 +9,7 @@ use std::path::Path;
 
 /// Directory entries read at most. A bigger folder reports what was read
 /// and `capped`: the work stays bounded on a slow card (PRF-8).
-pub const COUNT_CAP: usize = 10_000;
+pub const COUNT_CAP: usize = 1000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FolderCount {
@@ -48,6 +48,12 @@ mod tests {
 
     fn count(dir: &tempfile::TempDir, show_hidden: bool, cap: usize) -> FolderCount {
         count_entries(dir.path(), show_hidden, cap).unwrap()
+    }
+
+    #[test]
+    fn the_cap_is_a_thousand_entries() {
+        // SPEC §15.3: "More than 1000 items" past it.
+        assert_eq!(COUNT_CAP, 1000);
     }
 
     #[test]

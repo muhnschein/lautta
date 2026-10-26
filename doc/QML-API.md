@@ -170,7 +170,7 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   settings without storing them, `App.setSetting` does that; a `viewMode` replaces a
   suggested grid), `indexOf(uri)`, `uriAt(index)` (empty outside the rows), `kindOf(uri)`
   (`folder`, `file` or empty, like `nameKind(name)` but by uri), `requestCount(uri)` (counts
-  the items of that folder off the GUI thread, from its names, at most 10 000 entries; the
+  the items of that folder off the GUI thread, from its names, at most 1000 entries; the
   `itemCount` role of its row changes when done; asking again for an unchanged folder does
   nothing, a changed modified time or `showHidden` counts anew). An open model follows
   every change of the global view settings at once (BRW-4).
