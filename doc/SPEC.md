@@ -903,8 +903,10 @@ attached to swipe to: Activity is in the pulley and the activity bar (XFR-13).
 Header with the folder name only (no breadcrumb); tap → path menu. Slim progress line while listing
 or receiving transfers. Header, progress line, path menu and notices (offline, large, suggested
 grid, error) are fixed at the top of the page: list or grid scrolls under them, clipped, in portrait
-and landscape, and the pulley stays on the content. The path menu scrolls when taller than the
-rest of the page. Opening a folder starts at its very top (nothing in the scroller can grow above
+and landscape. The pulley is the page's, as on any Silica page: pulling at the top of the content
+moves header and content together and the menu comes out above the header. While selecting the
+header shows the count in place of the name, on the same single line: the header keeps its
+height. The path menu scrolls when taller than the rest of the page. Opening a folder starts at its very top (nothing in the scroller can grow above
 the first item); going back to a folder on the page stack shows it where it was left. List view
 with icon or thumbnail and "size · modified"; grid view for media folders (suggested when > 60 %
 images). The grid has 3 tiles per row in portrait (landscape keeps the tile size, so it fits
@@ -959,8 +961,8 @@ last item leave selection. Archives and *Compress* show the app's archive glyph
 everywhere (UI-2). An item's glyph takes the highlight colour with its name: pressed or
 selected, in list and grid.
 Placeholders: empty, no permission, offline, error with *Retry*/*Details*. They and the
-loading indicator are part of the view's content, so pulling the pulley moves them while
-the header stays.
+loading indicator are part of the view's content, so pulling the pulley moves them with the
+header.
 
 ### 15.4 Activity page
 

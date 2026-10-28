@@ -1,19 +1,26 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // The folder's header on the target (real Silica, SPEC §15.3, boards
-// Directory, DirectoryGrid, DirectoryLandscape): the header bar with its
-// progress line, path menu and notices stays at the top of the page while
-// the list or grid scrolls under it, in portrait and landscape; the list or
-// grid has no header of its own, so a notice or the selection line that
-// comes after the rows cannot scroll it away from its top; the pulley is the
-// content's and shows under the header; the empty-folder placeholder sits in
-// the area below it. Opening a folder starts at its very top, also while it
-// still loads and when a notice comes after the rows (a photo folder shown
-// as grid); going back shows the folder where it was left, the same item at
-// its top, also in a grid whose rows differ in height (long names take two
-// lines). Fails when the header scrolls, overlaps or leaves a gap, when a
-// view starts anywhere but its top or when going back loses the position.
-// Headless there is no render loop, so how the header's height settles on a
-// device is not seen here.
+// Directory, DirectoryGrid, DirectoryLandscape, DirectoryPulley,
+// DirectorySelect): the header bar with its progress line, path menu and
+// notices stays at the top of the page while the list or grid scrolls under
+// it, in portrait and landscape; the list or grid has no header of its own,
+// so a notice that comes after the rows cannot scroll it away from its top.
+// Selecting keeps the header's height (count in place of the name, no extra
+// line). The pulley is the page's, on a flickable that holds header and
+// content and never scrolls: it comes out above the header, and pulling
+// moves header and content together. With a finger sent through the window
+// (ViewerTools.mouse): a drag on the content scrolls the content, not the
+// host; a drag down at the content's top pulls the host. The empty-folder
+// placeholder sits in the area below the header. Opening a folder starts at
+// its very top, also while it still loads and when a notice comes after the
+// rows (a photo folder shown as grid); going back shows the folder where it
+// was left, the same item at its top, also in a grid whose rows differ in
+// height (long names take two lines). Fails when the header scrolls,
+// overlaps, leaves a gap or changes height with selection, when the pulley
+// sits on the content or under the header, when a drag goes to the wrong
+// flickable, when a view starts anywhere but its top or when going back
+// loses the position. Headless there is no render loop, so how the header's
+// height settles and how a pull feels on a device are not seen here.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -151,38 +158,123 @@ ApplicationWindow {
         f.contentY = f.originY
     }
 
-    // The selection line grows the header; the content follows and stays at its top.
-    function checkSelectionLine(view, label) {
+    // Selecting changes the title, not the height: no description line comes
+    // or goes, so nothing under the header jumps.
+    function checkSelectionHeight(view, label) {
         var f = view.flickable
         var header = named(view, "folderHeader")
         var bar = named(view, "folderPageHeader")
         if (!header || !bar)
             return
-        expect(bar.description === "", label + ": no description outside selection")
-        var before = header.height
+        var before = { "bar": bar.height, "header": header.height, "y": f.y }
+        var same = function (when) {
+            expect(bar.description === "", label + " " + when + ": no description: " + bar.description)
+            expect(bar.height === before.bar && header.height === before.header,
+                   label + " " + when + ": the header keeps its height: " + bar.height + " vs " + before.bar
+                   + ", " + header.height + " vs " + before.header)
+            expect(f.y === before.y && f.contentY === f.originY,
+                   label + " " + when + ": the content stays put at its top: " + f.y + " vs " + before.y)
+        }
         view.startSelection()
-        expect(bar.description.length > 0 && bar.description === view.model.title,
-               label + ": selecting shows the folder name as description: " + bar.description)
-        expect(header.height >= before, label + ": the header holds the line")
-        expect(Math.abs(f.y - header.height) < 0.5, label + ": the content follows the header: " + f.y + " vs " + header.height)
-        expect(f.contentY === f.originY, label + ": and stays at its top: " + f.contentY + " vs " + f.originY)
+        expect(bar.title.indexOf("lautta-dir-selected") === 0, label + ": selecting shows the count: " + bar.title)
+        same("selecting")
         view.endSelection()
-        expect(bar.description === "", label + ": the description goes with selection")
-        expect(Math.abs(f.y - header.height) < 0.5, label + ": the content follows back")
+        expect(bar.title === view.model.title, label + ": the name comes back: " + bar.title)
+        same("after selecting")
     }
 
-    // The pulley is the content's: its menu ends where the content begins, so
-    // pulled it shows right under the header. (Pulling it from here moves
-    // contentY, which Silica resets when a grid re-estimates its height.)
+    // The pulley is the page's: one, on the host that holds header and
+    // content; none on the list or grid, which stop at their top. It ends at
+    // the top of the page, above the header. The host never scrolls; pulled,
+    // header and content move together and the content stays at its top.
     function checkPulley(view, label) {
         var f = view.flickable
+        var host = named(view, "folderPulleyHost")
         var header = named(view, "folderHeader")
-        var menus = findAll(view, function (x) { return x._isPullDownMenu === true && x.flickable === f }, [])
-        if (!expect(menus.length === 1, label + ": one pulley on the content: " + menus.length) || !header)
+        var menus = findAll(view, function (x) { return x._isPullDownMenu === true }, [])
+        if (!expect(menus.length === 1, label + ": one pulley: " + menus.length) || !host || !header)
             return
-        expect(menus[0].parent === f.contentItem, label + ": the pulley is in the content")
-        var bottom = menus[0].mapToItem(view, 0, menus[0].height).y
-        expect(Math.abs(bottom - header.height) < 1, label + ": the pulley comes out under the header: " + bottom + " vs " + header.height)
+        var menu = menus[0]
+        expect(menu.flickable === host && host.pullDownMenu === menu, label + ": the pulley is the host's")
+        expect(!f.pullDownMenu && f.boundsBehavior === Flickable.StopAtBounds,
+               label + ": the content has none and stops at its top: " + f.boundsBehavior)
+        expect(isInside(host.contentItem, header) && isInside(host.contentItem, f),
+               label + ": header and content are in the host")
+        expect(host.contentHeight === host.height && host.contentY === 0 && host.height === view.height,
+               label + ": the host fills the page and does not scroll: " + host.contentHeight + " " + host.height)
+        var bottom = menu.mapToItem(view, 0, menu.height).y
+        expect(Math.abs(bottom) < 1, label + ": the pulley comes out above the header: " + bottom)
+        var by = Theme.itemSizeMedium
+        var headerAt = header.mapToItem(view, 0, 0).y
+        var contentAt = f.mapToItem(view, 0, 0).y
+        host.contentY = -by
+        expect(Math.abs(header.mapToItem(view, 0, 0).y - headerAt - by) < 0.5,
+               label + ": pulled, the header moves: " + header.mapToItem(view, 0, 0).y)
+        expect(Math.abs(f.mapToItem(view, 0, 0).y - contentAt - by) < 0.5,
+               label + ": and the content with it: " + f.mapToItem(view, 0, 0).y)
+        expect(f.contentY === f.originY, label + ": the content stays at its top: " + f.contentY)
+        host.contentY = 0
+    }
+
+    // A finger from (x, from) to (x, to) of `item` in steps, still down.
+    function dragOn(item, x, from, to) {
+        tools.mouse(item, "press", x, from)
+        for (var i = 1; i <= 12; ++i)
+            tools.mouse(item, "move", x, from + (to - from) * i / 12)
+    }
+
+    // The finger goes back to where it started before it lets go: let go on
+    // a pulled pulley, an entry under the highlight would run.
+    function letGo(item, x, at) {
+        tools.mouse(item, "move", x, at)
+        tools.mouse(item, "release", x, at)
+    }
+
+    function stop(flick) {
+        flick.cancelFlick()
+        flick.returnToBounds()
+        waitFor(function () { return !flick.moving }, "the flickable to stop")
+    }
+
+    // Real drags: up and down on the content scroll the content and leave
+    // the host; down at the content's top pulls the host, header and all.
+    function checkGestures(view, label) {
+        var f = view.flickable
+        var host = named(view, "folderPulleyHost")
+        var header = named(view, "folderHeader")
+        if (!host || !header)
+            return
+        var page = pageStack.currentPage
+        var x = f.width / 2
+        f.contentY = f.originY
+        dragOn(f, x, f.height * 0.8, f.height * 0.2)
+        expect(f.contentY > f.originY + Theme.paddingSmall && host.contentY === 0,
+               label + ": a drag up scrolls the content, not the host: " + f.contentY + " " + host.contentY)
+        tools.mouse(f, "release", x, f.height * 0.2)
+        stop(f)
+        var scrolled = f.contentY
+        // Less far than it scrolled: the content does not reach its top.
+        dragOn(f, x, f.height * 0.2, f.height * 0.5)
+        expect(f.contentY < scrolled - Theme.paddingSmall && f.contentY > f.originY && host.contentY === 0,
+               label + ": a drag down on scrolled content scrolls it back, not the host: "
+               + f.contentY + " vs " + scrolled + ", " + host.contentY)
+        letGo(f, x, f.height * 0.2)
+        stop(f)
+        f.contentY = f.originY
+        var headerAt = header.mapToItem(view, 0, 0).y
+        dragOn(f, x, f.height * 0.2, f.height * 0.2 + Theme.itemSizeLarge)
+        var pulled = -host.contentY
+        expect(pulled > Theme.paddingLarge && f.contentY === f.originY,
+               label + ": a drag down at the content's top pulls the host: " + host.contentY + ", content " + f.contentY)
+        expect(Math.abs(header.mapToItem(view, 0, 0).y - headerAt - pulled) < 0.5,
+               label + ": the header comes down with it: " + header.mapToItem(view, 0, 0).y + " vs " + pulled)
+        expect(host.pullDownMenu && host.pullDownMenu.active, label + ": the pulley is out")
+        letGo(f, x, f.height * 0.2)
+        tools.pump(100)
+        expect(pageStack.currentPage === page && !pageStack.busy, label + ": letting go where it started runs no entry")
+        // Headless no animation runs: the host would stay out. Closed by hand.
+        host.cancelFlick()
+        host.contentY = 0
     }
 
     // The path menu is capped to leave the content a strip, and scrolls inside
@@ -204,8 +296,9 @@ ApplicationWindow {
         if (!view)
             return
         checkFixed(view, label)
-        checkSelectionLine(view, label)
+        checkSelectionHeight(view, label)
         checkPulley(view, label)
+        checkGestures(view, label)
         checkPathMenu(view, label)
     }
 

@@ -518,120 +518,6 @@ Item {
         }
     }
 
-    // The folder's header, its progress line, path menu and notices stay at
-    // the top of the page while the list or grid scrolls under them (SPEC
-    // §15.3). They are not the header of the list: a list keeps its contentY
-    // when its header grows, so a notice or a line that came after the rows
-    // scrolled the list away from its top. Stacked by anchors, not a Column:
-    // the height follows a notice or a line at once, not at the next polish.
-    Item {
-        id: top
-
-        objectName: "folderHeader"
-        z: 1
-        anchors {
-            top: parent.top
-            left: parent.left
-            right: parent.right
-        }
-        height: errorNotice.y + errorNotice.height
-
-        Item {
-            id: headerBar
-
-            width: parent.width
-            height: pageHeader.height
-
-            PageHeader {
-                id: pageHeader
-
-                objectName: "folderPageHeader"
-                title: view.selecting
-                       //% "%n selected"
-                       ? qsTrId("lautta-dir-selected", dir.selectedCount)
-                       : dir.title
-                // No breadcrumb (as in iOS Files): the path menu shows the way up.
-                description: view.selecting ? dir.title : ""
-            }
-            MouseArea {
-                anchors.fill: parent
-                enabled: !view.selecting
-                onClicked: pathMenu.open = !pathMenu.open
-            }
-        }
-
-        SlimProgress {
-            id: progress
-
-            anchors.top: headerBar.bottom
-            running: dir.loading
-        }
-
-        PathMenu {
-            id: pathMenu
-
-            objectName: "folderPathMenu"
-            anchors.top: progress.bottom
-            // The rest of the page less a strip of the list; longer, it scrolls.
-            maxHeight: Math.max(0, view.height - y - Theme.itemSizeLarge)
-            pathModel: path
-            currentUri: view.uri
-            onNavigate: view.openFolder(uri)
-            onFavouriteRequested: view.runAction("favourite", [view.uri], {}, null)
-        }
-
-        InfoBanner {
-            id: offlineNotice
-
-            anchors.top: pathMenu.bottom
-            visible: dir.offline
-            height: visible ? implicitHeight : 0
-            //% "Offline. Showing the copy from %1. Changes aren't possible."
-            text: qsTrId("lautta-dir-offline").arg(dir.cachedAt >= 0
-                  ? DirFormat.modified(dir.cachedAt) : "")
-            //% "Retry"
-            actionText: qsTrId("lautta-dir-offline-retry")
-            onAction: dir.refresh()
-        }
-
-        InfoBanner {
-            id: largeNotice
-
-            anchors.top: offlineNotice.bottom
-            visible: dir.large
-            height: visible ? implicitHeight : 0
-            //% "%1 loaded · large folder: name order, thumbnails off"
-            text: qsTrId("lautta-dir-large").arg(dir.count)
-            //% "Stop"
-            actionText: dir.loading ? qsTrId("lautta-dir-large-stop") : ""
-            onAction: dir.stopLoading()
-        }
-
-        InfoBanner {
-            id: gridNotice
-
-            anchors.top: largeNotice.bottom
-            visible: dir.suggestGrid
-            height: visible ? implicitHeight : 0
-            //% "Shown as grid because most items are photos"
-            text: qsTrId("lautta-dir-grid-suggested")
-            //% "Use list"
-            actionText: qsTrId("lautta-dir-use-list")
-            onAction: dir.setViewPrefs(JSON.stringify({ "viewMode": "list" }))
-        }
-
-        InfoBanner {
-            id: errorNotice
-
-            anchors.top: gridNotice.bottom
-            visible: dir.errorKind.length > 0 && dir.count > 0 && !dir.offline
-            height: visible ? implicitHeight : 0
-            text: ErrorText.message(dir.errorKind, { "location": dir.locationName, "item": dir.title })
-            actionText: qsTrId("lautta-dir-retry")
-            onAction: dir.refresh()
-        }
-    }
-
     Component {
         id: listDelegate
 
@@ -971,70 +857,199 @@ Item {
         id: gridRows
     }
 
-    SilicaListView {
-        id: list
+    // One flickable owns the pulley, as on any Silica page: pulling moves
+    // header and content together, menu above the header at the top of the
+    // page. PullDownMenu draws at the top of its flickable: on the list or
+    // grid it would come out under the header. Host never scrolls (content
+    // as big as itself), so the header stays while list or grid scrolls;
+    // those have no menu, so stop at their top and a pull there goes on to
+    // the host (SPEC §15.3).
+    SilicaFlickable {
+        id: pulleyHost
 
-        function itemIndexAt(x, y) {
-            return indexAt(x, y)
-        }
-
-        anchors {
-            top: top.bottom
-            left: parent.left
-            right: parent.right
-            bottom: parent.bottom
-        }
-        clip: true
-        visible: !view.gridMode
-        model: view.gridMode ? null : dir
-        delegate: listDelegate
-        footer: Item {
-            width: list.width
-            height: panelSpace.height
-        }
+        objectName: "folderPulleyHost"
+        anchors.fill: parent
+        // A flickable's content is 0x0 until told; anchors to parent go to it.
+        contentWidth: width
+        contentHeight: height
 
         DirectoryMenu {
             owner: view
         }
 
-        VerticalScrollDecorator { }
-    }
+        // The folder's header, its progress line, path menu and notices stay at
+        // the top of the page while the list or grid scrolls under them (SPEC
+        // §15.3). They are not the header of the list: a list keeps its contentY
+        // when its header grows, so a notice that came after the rows scrolled
+        // the list away from its top. Stacked by anchors, not a Column: the
+        // height follows a notice at once, not at the next polish.
+        Item {
+            id: top
 
-    // The grid: a list of rows (gridRowDelegate), each as tall as its
-    // tallest cell; a GridView gives every cell one height.
-    SilicaListView {
-        id: grid
+            objectName: "folderHeader"
+            z: 1
+            anchors {
+                top: parent.top
+                left: parent.left
+                right: parent.right
+            }
+            height: errorNotice.y + errorNotice.height
 
-        // Landscape keeps the tile size of portrait.
-        readonly property real tileWidth: Math.min(Screen.width, Screen.height) / gridMetrics.portraitColumns
-        readonly property int columns: GridRows.columns(width, tileWidth, gridMetrics.portraitColumns)
-        readonly property real cellWidth: width / columns
+            Item {
+                id: headerBar
 
-        function itemIndexAt(x, y) {
-            return GridRows.indexAt(indexAt(x, y), x, cellWidth, columns, dir.count)
+                width: parent.width
+                height: pageHeader.height
+
+                PageHeader {
+                    id: pageHeader
+
+                    objectName: "folderPageHeader"
+                    title: view.selecting
+                           //% "%n selected"
+                           ? qsTrId("lautta-dir-selected", dir.selectedCount)
+                           : dir.title
+                    // No breadcrumb (as in iOS Files): the path menu shows the way up.
+                    // No description either, also while selecting: the count takes
+                    // the name's place (as Sailfish pickers' "Accept %n"), so the
+                    // header keeps its height and nothing under it jumps.
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: !view.selecting
+                    onClicked: pathMenu.open = !pathMenu.open
+                }
+            }
+
+            SlimProgress {
+                id: progress
+
+                anchors.top: headerBar.bottom
+                running: dir.loading
+            }
+
+            PathMenu {
+                id: pathMenu
+
+                objectName: "folderPathMenu"
+                anchors.top: progress.bottom
+                // The rest of the page less a strip of the list; longer, it scrolls.
+                maxHeight: Math.max(0, view.height - y - Theme.itemSizeLarge)
+                pathModel: path
+                currentUri: view.uri
+                onNavigate: view.openFolder(uri)
+                onFavouriteRequested: view.runAction("favourite", [view.uri], {}, null)
+            }
+
+            InfoBanner {
+                id: offlineNotice
+
+                anchors.top: pathMenu.bottom
+                visible: dir.offline
+                height: visible ? implicitHeight : 0
+                //% "Offline. Showing the copy from %1. Changes aren't possible."
+                text: qsTrId("lautta-dir-offline").arg(dir.cachedAt >= 0
+                      ? DirFormat.modified(dir.cachedAt) : "")
+                //% "Retry"
+                actionText: qsTrId("lautta-dir-offline-retry")
+                onAction: dir.refresh()
+            }
+
+            InfoBanner {
+                id: largeNotice
+
+                anchors.top: offlineNotice.bottom
+                visible: dir.large
+                height: visible ? implicitHeight : 0
+                //% "%1 loaded · large folder: name order, thumbnails off"
+                text: qsTrId("lautta-dir-large").arg(dir.count)
+                //% "Stop"
+                actionText: dir.loading ? qsTrId("lautta-dir-large-stop") : ""
+                onAction: dir.stopLoading()
+            }
+
+            InfoBanner {
+                id: gridNotice
+
+                anchors.top: largeNotice.bottom
+                visible: dir.suggestGrid
+                height: visible ? implicitHeight : 0
+                //% "Shown as grid because most items are photos"
+                text: qsTrId("lautta-dir-grid-suggested")
+                //% "Use list"
+                actionText: qsTrId("lautta-dir-use-list")
+                onAction: dir.setViewPrefs(JSON.stringify({ "viewMode": "list" }))
+            }
+
+            InfoBanner {
+                id: errorNotice
+
+                anchors.top: gridNotice.bottom
+                visible: dir.errorKind.length > 0 && dir.count > 0 && !dir.offline
+                height: visible ? implicitHeight : 0
+                text: ErrorText.message(dir.errorKind, { "location": dir.locationName, "item": dir.title })
+                actionText: qsTrId("lautta-dir-retry")
+                onAction: dir.refresh()
+            }
         }
 
-        anchors {
-            top: top.bottom
-            left: parent.left
-            right: parent.right
-            bottom: parent.bottom
-        }
-        clip: true
-        visible: view.gridMode
-        model: gridRows
-        delegate: gridRowDelegate
-        onColumnsChanged: view.fitGridRows()
-        footer: Item {
-            width: grid.width
-            height: panelSpace.height
+        SilicaListView {
+            id: list
+
+            function itemIndexAt(x, y) {
+                return indexAt(x, y)
+            }
+
+            anchors {
+                top: top.bottom
+                left: parent.left
+                right: parent.right
+                bottom: parent.bottom
+            }
+            clip: true
+            visible: !view.gridMode
+            model: view.gridMode ? null : dir
+            delegate: listDelegate
+            footer: Item {
+                width: list.width
+                height: panelSpace.height
+            }
+
+            VerticalScrollDecorator { }
         }
 
-        DirectoryMenu {
-            owner: view
-        }
+        // The grid: a list of rows (gridRowDelegate), each as tall as its
+        // tallest cell; a GridView gives every cell one height.
+        SilicaListView {
+            id: grid
 
-        VerticalScrollDecorator { }
+            // Landscape keeps the tile size of portrait.
+            readonly property real tileWidth: Math.min(Screen.width, Screen.height) / gridMetrics.portraitColumns
+            readonly property int columns: GridRows.columns(width, tileWidth, gridMetrics.portraitColumns)
+            readonly property real cellWidth: width / columns
+
+            function itemIndexAt(x, y) {
+                return GridRows.indexAt(indexAt(x, y), x, cellWidth, columns, dir.count)
+            }
+
+            anchors {
+                top: top.bottom
+                left: parent.left
+                right: parent.right
+                bottom: parent.bottom
+            }
+            clip: true
+            visible: view.gridMode
+            model: gridRows
+            delegate: gridRowDelegate
+            onColumnsChanged: view.fitGridRows()
+            footer: Item {
+                width: grid.width
+                height: panelSpace.height
+            }
+
+            VerticalScrollDecorator { }
+        }
     }
 
     // Room for the docked panels and the activity bar at the end of the list.

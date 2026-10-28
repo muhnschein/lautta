@@ -57,7 +57,7 @@ ApplicationWindow {
 
     // The grid or the list, whichever is shown.
     function flick() {
-        return child(function (c) { return c.indexAt !== undefined && c.visible })
+        return view.flickable
     }
 
     function panelHeight() {
