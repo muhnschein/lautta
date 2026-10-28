@@ -389,17 +389,17 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   app-wide `KeepAlive`.
 - `components/ErrorText.js`, `components/Open.js`, `components/FileIcon.qml { category,
   isDir, thumbnailSource, mimeType, size, glyphSize, highlighted }` (`glyphSize`: the side
-  of the glyph in the tile, `AppIcon.iconSize`; `highlighted`: glyph and video badge in
-  the highlight colour, bound to the row's or tile's pressed or selected state; read-only
+  of the glyph in the tile, `AppIcon.iconSize`; `highlighted`: glyph in the
+  highlight colour, bound to the row's or tile's pressed or selected state; read-only
   `thumbnailReady`, `thumbnailFailed`: the thumbnail shows / could not be made, so the
-  category's glyph stays; a shown video thumbnail has the video badge, PRV-1),
+  category's glyph stays; a shown video thumbnail keeps the glyph over it, at the plain
+  glyph's size and place, on a dark disc, PRV-1),
   `components/FileIcons.js` (the own file-type glyphs every place shares, UI-2:
   `kind(category, isDir)` → `folder`, `image`, `video`, `audio`, `archive`, `package`,
   `database` or `document`; `setFor(px)` → 28, 32 or 80, the set sharp at that side;
-  `snap(px)` → nearest multiple of 28, at least 28; `sharpAtMost(px)` → largest multiple
-  of 28 or 32 up to `px`, at least 28; `sized(icon, px)` → a glyph token `file-<kind>`
-  with its set, `file-folder-32`, anything else as it is; `glyph(category, isDir, px)` →
-  the item's glyph at `px`; `AppIcon` draws a sized name from `qml/icons/`),
+  `snap(px)` → nearest multiple of 28, at least 28; `sized(icon, px)` → a glyph token
+  `file-<kind>` with its set, `file-folder-32`, anything else as it is;
+  `glyph(category, isDir, px)` → the item's glyph at `px`; `AppIcon` draws a sized name from `qml/icons/`),
   `components/IconRow.qml` (icon row for context menus),
   `components/BarBackground.qml` (the opaque backdrop of bottom bars, UI-10),
   `components/PlaceLabel.qml { before, text, remote, color, fontSize,
