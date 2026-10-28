@@ -3,13 +3,14 @@
 // and grid tiles draw qml/icons/file-<kind>-<set>.svg, the set picked for the
 // glyph's pixel size, a grid glyph at a multiple of 28 px; a glyph takes the
 // highlight colour with its name, pressed or selected. A video's thumbnail,
-// once shown, keeps the video glyph at its bottom left on a dark gradient, at
-// the largest sharp size up to its target (a multiple of 28 or 32 px); a
-// plain glyph, a thumbnail that failed and an image's thumbnail have none.
-// Fails when a glyph is a theme icon or does not load, a size gets another
-// set, a glyph keeps its colour in a highlighted row, or the badge shows
-// where it should not or not where it should. How sharp glyphs and badge
-// look, and how the badge reads on real videos, only a phone shows.
+// once shown, keeps the video glyph at the size and place of the plain one in
+// the same view, light on a dark disc; a plain glyph, a thumbnail that failed
+// and an image's thumbnail have no disc. Fails when a glyph is a theme icon
+// or does not load, a size gets another set, a glyph keeps its colour in a
+// highlighted row, or the video glyph moves, resizes or loses its disc over a
+// thumbnail. How sharp the glyphs look, how the disc reads on real videos and
+// that the glyph is light in a light ambience (the test ambience's primary
+// colour is light already), only a phone shows.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -22,6 +23,8 @@ ApplicationWindow {
 
     readonly property string base: "lautta://user-documents/GlyphsCheck/"
     property string archiveRoot
+    // The thumbnail the app draws for a stand-in video (checkBadge).
+    property string thumb
     // The glyph each item's category shows, as drawn on the board.
     readonly property var kindOf: ({
         "folder": "folder", "markdown": "document", "archive": "archive", "video": "video",
@@ -88,16 +91,6 @@ ApplicationWindow {
         return side % 80 === 0 ? 80 : 28
     }
 
-    // The largest side up to `px` one set draws sharp (a multiple of 28 or
-    // 32), at least 28.
-    function sharpAtMost(px) {
-        for (var side = Math.floor(px); side > 28; --side) {
-            if (side % 28 === 0 || side % 32 === 0)
-                return side
-        }
-        return 28
-    }
-
     function svg(kind, set) {
         return String(Qt.resolvedUrl("../../qml/icons/file-" + kind + "-" + set + ".svg"))
     }
@@ -157,6 +150,7 @@ ApplicationWindow {
         var side = Theme.iconSizeMedium
         var shown = checkGlyphs(view, setAt(side), "list")
         expect(named(shown["notes.md"], "fileGlyph").width === side, "a list glyph is a medium icon")
+        checkOver(shown["clip.mp4"], "list view")
         checkHighlight(view, "notes.md", function (glyph) {
             for (var row = glyph; row; row = row.parent) {
                 if (row.info !== undefined) {
@@ -173,6 +167,7 @@ ApplicationWindow {
         var tile = shown["notes.md"].width
         expect(glyph.width % 28 === 0 && Math.abs(glyph.width - tile / 2) <= 14,
                "a grid glyph is about half its tile at a multiple of 28 px: " + glyph.width + " in " + tile)
+        checkOver(shown["clip.mp4"], "grid view")
         checkHighlight(view, "notes.md", function (g) {
             for (var cell = g; cell; cell = cell.parent) {
                 if (cell.itemName !== undefined) {
@@ -183,6 +178,47 @@ ApplicationWindow {
         }, "grid")
     }
 
+    // The video glyph's side and centre in its FileIcon.
+    function glyphBox(icon) {
+        var glyph = named(icon, "fileGlyph")
+        var centre = glyph.mapToItem(icon, glyph.width / 2, glyph.height / 2)
+        return [glyph.width, glyph.height, centre.x, centre.y]
+    }
+
+    // A video FileIcon given a thumbnail, of the side and glyph side of
+    // `plain`, the item the view shows without one.
+    function overThumbnail(plain) {
+        var props = { "category": "video", "thumbnailSource": window.thumb, "size": plain.width,
+                      "glyphSize": plain.glyphSize }
+        var icon = iconComponent.createObject(window.contentItem, props)
+        waitFor(function () { return icon.thumbnailReady }, "the video's thumbnail")
+        return icon
+    }
+
+    // A shown video thumbnail keeps the plain glyph's size and centre, on a
+    // dark disc round the glyph's ring; it takes the light colour.
+    function checkOver(plain, what) {
+        var icon = overThumbnail(plain)
+        var glyph = named(icon, "fileGlyph")
+        var disc = named(icon, "videoBadge")
+        same(glyphBox(icon), glyphBox(plain), what + ": the glyph over the thumbnail is the plain glyph's size and centre")
+        same(glyphBox(plain).slice(2), [plain.width / 2, plain.height / 2], what + ": the plain glyph is centred in its icon")
+        same(String(glyph.source), String(named(plain, "fileGlyph").source), what + ": the same glyph file")
+        expect(glyph.visible && glyph.status === Image.Ready, what + ": the glyph shows over the thumbnail")
+        expect(disc.visible && disc.width === plain.glyphSize - 2 * Math.floor(plain.glyphSize / 10) && disc.width > plain.glyphSize * 0.79,
+               what + ": a disc round the glyph's ring: " + disc.width + " for " + plain.glyphSize)
+        var middle = disc.mapToItem(icon, disc.width / 2, disc.height / 2)
+        expect(middle.x === glyphBox(plain)[2] && middle.y === glyphBox(plain)[3], what + ": the disc is centred on the glyph")
+        expect(disc.color.a === Theme.opacityOverlay && Math.max(disc.color.r, disc.color.g, disc.color.b) < 0.35,
+               what + ": the disc is dark and translucent: " + disc.color)
+        same(String(glyph.color), String(Theme.lightPrimaryColor), what + ": the glyph is light over the disc")
+        same(String(glyph.highlightColor), String(Theme.highlightFromColor(Theme.highlightColor, Theme.LightOnDark)),
+             what + ": pressed, the highlight colour for a dark ground")
+        icon.highlighted = true
+        expect(glyph.highlighted, what + ": the glyph follows the item's highlight")
+        icon.destroy()
+    }
+
     // FileIcons on their own, given a thumbnail the app draws: the page of a
     // PDF in an archive, which stands in for a server. The system thumbnailer
     // draws nothing on the target.
@@ -191,43 +227,27 @@ ApplicationWindow {
         if (!waitFor(function () { return window.archiveRoot.length > 0 }, "the archive"))
             return
         var root = window.archiveRoot.charAt(window.archiveRoot.length - 1) === "/" ? window.archiveRoot : window.archiveRoot + "/"
-        var thumb = "image://lautta-thumb/" + root + "page.pdf"
+        window.thumb = "image://lautta-thumb/" + root + "page.pdf"
         var list = Theme.iconSizeMedium
         var grid = 168
         var make = function (props) { return iconComponent.createObject(window.contentItem, props) }
-        var video = make({ "category": "video", "thumbnailSource": thumb, "size": list })
-        var videoGrid = make({ "category": "video", "thumbnailSource": thumb, "size": grid,
-                               "glyphSize": FileIcons.snap(grid / 2) })
-        var image = make({ "category": "image", "thumbnailSource": thumb, "size": list })
-        var plain = make({ "category": "video", "size": list })
+        var plainList = make({ "category": "video", "size": list })
+        var plainGrid = make({ "category": "video", "size": grid, "glyphSize": FileIcons.snap(grid / 2) })
+        checkOver(plainList, "list")
+        checkOver(plainGrid, "grid")
+        var image = make({ "category": "image", "thumbnailSource": window.thumb, "size": list })
         var failed = make({ "category": "video", "thumbnailSource": "image://lautta-thumb/" + root + "none.mp4",
                            "size": list })
-        waitFor(function () { return video.thumbnailReady && videoGrid.thumbnailReady && image.thumbnailReady }, "the thumbnails")
+        waitFor(function () { return image.thumbnailReady }, "the image's thumbnail")
         waitFor(function () { return failed.thumbnailFailed }, "the missing file's thumbnail to fail")
-        var pairs = [[video, list, "list"], [videoGrid, grid, "grid"]]
-        pairs.forEach(function (p) {
-            var badge = named(p[0], "videoBadge")
-            var mark = named(p[0], "videoBadgeGlyph")
-            var side = sharpAtMost(Math.min(Theme.iconSizeSmall, p[1] * 3 / 8))
-            expect(badge.visible, p[2] + ": a shown video thumbnail has the badge")
-            expect(!named(p[0], "fileGlyph").visible, p[2] + ": over the thumbnail, not the glyph")
-            same(String(mark.source), svg("video", setAt(side)), p[2] + ": the badge is the video glyph")
-            expect(mark.status === Image.Ready && mark.width === side, p[2] + ": loaded, " + side + " px: " + mark.width)
-            var corner = mark.mapToItem(p[0], 0, mark.height)
-            expect(corner.x === Theme.paddingSmall && Math.abs(p[1] - corner.y - Theme.paddingSmall) < 1,
-                   p[2] + ": at the bottom left: " + corner.x + "," + corner.y)
-            var shade = findAll(badge, function (x) { return x.gradient !== undefined && x.gradient !== null })[0]
-            expect(shade && shade.height === p[1] / 2 && shade.y === p[1] / 2 && shade.opacity === Theme.opacityOverlay,
-                   p[2] + ": on a gradient over the thumbnail's lower half")
-        })
-        expect(!named(image, "videoBadge").visible, "an image's thumbnail has no badge")
-        expect(!named(plain, "videoBadge").visible && named(plain, "fileGlyph").visible,
-               "a video without thumbnail shows its glyph, no badge")
+        expect(!named(image, "videoBadge").visible && !named(image, "fileGlyph").visible,
+               "an image's thumbnail has no disc and no glyph")
+        expect(!named(plainList, "videoBadge").visible && named(plainList, "fileGlyph").visible,
+               "a video without thumbnail shows its glyph, no disc")
+        same(String(named(plainList, "fileGlyph").color), String(Theme.primaryColor), "the plain glyph is in the primary colour")
         expect(!named(failed, "videoBadge").visible && named(failed, "fileGlyph").visible,
-               "a video whose thumbnail failed shows its glyph, no badge")
-        video.highlighted = true
-        expect(named(video, "videoBadgeGlyph").highlighted, "the badge is highlighted with its item")
-        var made = [video, videoGrid, image, plain, failed]
+               "a video whose thumbnail failed shows its glyph, no disc")
+        var made = [plainList, plainGrid, image, failed]
         made.forEach(function (icon) { icon.destroy() })
     }
 

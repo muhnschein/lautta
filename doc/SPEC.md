@@ -666,12 +666,14 @@ bridge).
   (HBR-7), other types in its own thread. A file that crashes a helper keeps its icon,
   the app runs on. The library draws one thumbnail at a time: a helper that hangs holds
   back the other local thumbnails, not the app. No size limit: the app reads nothing of
-  the file. A shown video thumbnail keeps the video glyph (UI-2) at its bottom left on a
-  dark gradient over its lower half (`Theme.opacityOverlay`, transparent to
-  `Theme.highlightDimmerColor`), as Jolla Gallery's video thumbnails: else a video reads
-  as a photo. Badge side: largest multiple of 28 or 32 px up to ⅜ of the thumbnail and
-  up to `Theme.iconSizeSmall`, at least 28 (sharp, UI-2). No badge on a plain glyph or
-  a thumbnail that failed.
+  the file. A shown video thumbnail keeps the video glyph (UI-2) over it, the same glyph
+  at the same size and place as the item's plain icon in that view (grid tile, list row,
+  Trash), light (`Theme.lightPrimaryColor`) on a round translucent dark disc
+  (`Theme.opacityOverlay`, dark whatever the ambience) about 0.8 of the glyph wide, as Jolla
+  Gallery's overlays on media: the disc keeps the glyph readable on bright and dark
+  frames and in light ambiences while the frame shows around it. Pressed or selected, the glyph takes the highlight colour for a
+  dark ground, as the name. Else a video reads as a photo. No glyph over an image's
+  thumbnail, nor a disc behind a plain glyph or a thumbnail that failed.
 - PRV-2: Remote image thumbnails: read the first 64 KiB through the bridge, use the EXIF
   thumbnail when present; otherwise read the whole file up to the size set in *View
   options* (*Largest server file with a thumbnail*, 20 MB by default) and decode with the
@@ -909,7 +911,7 @@ the first item); going back to a folder on the page stack shows it where it was 
 with icon or thumbnail and "size · modified"; grid view for media folders (suggested when > 60 %
 images). The grid has 3 tiles per row in portrait (landscape keeps the tile size, so it fits
 more); the glyph is about half the tile wide, snapped to a multiple of 28 px (UI-2;
-thumbnails fill the tile, a video's with its badge, PRV-1) and under it stand the name on
+thumbnails fill the tile, a video's with its glyph on a disc, PRV-1) and under it stand the name on
 up to two lines, centred (a name that does not fit keeps its start on the first line and its end,
 the extension, on the second behind an ellipsis in the middle), and right under the name up to two
 small lines in the secondary colour, each cut at the end: a file's
@@ -990,7 +992,7 @@ paused) is in its status line and context menu. Pulley: *Clear activity history*
   28 px), `-32` (32-unit grid, multiples of 32 px: list at scale 1.0, 1.5, 2.0), `-80`
   (drawn for 80 px: list at 1.25). Size rule: multiple of 28 → `-28`, else of 32 →
   `-32`, else of 80 → `-80`, else `-28` (soft). The grid's glyph and the cover's snap to
-  a multiple of 28 px, the video badge to a multiple of 28 or 32 (PRV-1). White with
+  a multiple of 28 px. White with
   partly transparent parts, tinted as theme icons: primary colour, highlight colour when
   pressed or selected.
 - UI-3: Portrait and landscape.

@@ -46,13 +46,6 @@ function snap(px) {
     return Math.max(28, Math.round(px / 28) * 28)
 }
 
-// The largest side up to `px` that a set draws sharp, a multiple of 28 or
-// of 32, at least 28: the video badge's (PRV-1).
-function sharpAtMost(px) {
-    var side = Math.floor(px)
-    return Math.max(28, Math.floor(side / 28) * 28, Math.floor(side / 32) * 32)
-}
-
 // The AppIcon name of `icon` at `px`: a glyph token gets its set
 // ("file-folder" → "file-folder-32"); anything else (a theme URL, another
 // app icon) stays as it is.

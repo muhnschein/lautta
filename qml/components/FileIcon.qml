@@ -6,7 +6,9 @@
 // (PRV-2, PRV-14). `thumbnailSource` is what DirectoryModel's role gives: a
 // file:// URL, an image://lautta-thumb/ URL or empty. A thumbnail that cannot
 // be made (an encrypted PDF) leaves the category's glyph, and
-// `thumbnailFailed` says so.
+// `thumbnailFailed` says so. A shown video thumbnail keeps the video glyph at
+// the size and place the plain glyph has, on a translucent dark disc, so it
+// reads as a video, not as a photo (PRV-1).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.Thumbnailer 1.0
@@ -28,6 +30,8 @@ Item {
     property bool highlighted
     readonly property bool thumbnailReady: thumbnailLoader.item ? thumbnailLoader.item.ready : false
     readonly property bool thumbnailFailed: thumbnailLoader.item ? thumbnailLoader.item.failed : false
+    // A video's thumbnail shows: the glyph stays over it, light on a dark disc.
+    readonly property bool videoShown: thumbnailReady && category === "video" && !isDir
 
     function iconFor(name, dir) {
         return FileIcons.glyph(name, dir, glyphSize)
@@ -35,16 +39,6 @@ Item {
 
     width: size
     height: size
-
-    AppIcon {
-        objectName: "fileGlyph"
-
-        anchors.centerIn: parent
-        icon: icon.iconFor(icon.category, icon.isDir)
-        iconSize: icon.glyphSize
-        highlighted: icon.highlighted
-        visible: !icon.thumbnailReady
-    }
 
     Loader {
         id: thumbnailLoader
@@ -86,40 +80,37 @@ Item {
         }
     }
 
-    // A video's thumbnail keeps the video glyph at its bottom left, on a dark
-    // gradient as Jolla Gallery's video thumbnails: else it reads as a
-    // picture. Not on the plain glyph, which is the video glyph already.
-    Item {
+    // Behind the glyph over a video's thumbnail: dark whatever the ambience, as
+    // Jolla Gallery's overlays, a little wider than the glyph's ring so the
+    // frame shows around it; an even step in from the glyph's side keeps it
+    // centred on whole pixels. Contrast on bright and dark frames (PRV-1).
+    Rectangle {
         objectName: "videoBadge"
 
-        anchors.fill: parent
-        visible: icon.thumbnailReady && icon.category === "video" && !icon.isDir
+        anchors.centerIn: parent
+        width: icon.glyphSize - 2 * Math.floor(icon.glyphSize / 10)
+        height: width
+        radius: width / 2
+        color: Theme.rgba(Theme.highlightDimmerFromColor(Theme.highlightDimmerColor, Theme.LightOnDark),
+                          Theme.opacityOverlay)
+        visible: icon.videoShown
+    }
 
-        Rectangle {
-            anchors.bottom: parent.bottom
-            width: parent.width
-            height: parent.height / 2
-            opacity: Theme.opacityOverlay
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: "transparent" }
-                GradientStop { position: 1.0; color: Theme.highlightDimmerColor }
-            }
-        }
+    // The category's glyph: alone when no thumbnail shows, else over a video's
+    // (the one item, so the glyph is the plain one in size and place). Light
+    // on the dark disc, its highlight colour for that scheme (Jolla Gallery,
+    // VerticalPageBackHint).
+    AppIcon {
+        objectName: "fileGlyph"
 
-        AppIcon {
-            objectName: "videoBadgeGlyph"
-
-            anchors {
-                left: parent.left
-                bottom: parent.bottom
-                margins: Theme.paddingSmall
-            }
-            // Small beside its thumbnail: up to three eighths of a list row's,
-            // up to the small icon size on a grid tile, at a sharp size.
-            iconSize: FileIcons.sharpAtMost(Math.min(Theme.iconSizeSmall, icon.size * 3 / 8))
-            icon: FileIcons.glyph("video", false, iconSize)
-            highlighted: icon.highlighted
-        }
+        anchors.centerIn: parent
+        icon: icon.iconFor(icon.category, icon.isDir)
+        iconSize: icon.glyphSize
+        color: icon.videoShown ? Theme.lightPrimaryColor : Theme.primaryColor
+        highlightColor: icon.videoShown ? Theme.highlightFromColor(Theme.highlightColor, Theme.LightOnDark)
+                                        : Theme.highlightColor
+        highlighted: icon.highlighted
+        visible: !icon.thumbnailReady || icon.videoShown
     }
 
     // A link badge on symlinks (board Directory, "Old drafts").
