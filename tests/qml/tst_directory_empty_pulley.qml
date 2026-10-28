@@ -122,7 +122,8 @@ ApplicationWindow {
         var followed = at(view, holder) - before
         tools.mouse(flick, "move", x, y)
         tools.mouse(flick, "release", x, y)
-        // Headless no animation runs: the host would stay out. Closed by hand.
+        // Let go pulled, the host returns by its own animation. Stopped and
+        // closed by hand: the next step starts with the host at rest.
         host.cancelFlick()
         host.contentY = 0
         if (pulled < Theme.paddingLarge || Math.abs(followed - pulled) > 1)

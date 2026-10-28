@@ -272,9 +272,12 @@ ApplicationWindow {
         letGo(f, x, f.height * 0.2)
         tools.pump(100)
         expect(pageStack.currentPage === page && !pageStack.busy, label + ": letting go where it started runs no entry")
-        // Headless no animation runs: the host would stay out. Closed by hand.
-        host.cancelFlick()
-        host.contentY = 0
+        // Let go out of bounds, the pulley's own animation opens it in full.
+        // Closed at once as Silica closes it, which stops that animation;
+        // contentY set by hand leaves it running into the next check.
+        host.pullDownMenu.close(true)
+        tools.pump(100)
+        expect(!host.pullDownMenu.active && host.contentY === 0, label + ": the pulley closes and stays closed: " + host.contentY)
     }
 
     // The path menu is capped to leave the content a strip, and scrolls inside

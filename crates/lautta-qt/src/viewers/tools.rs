@@ -95,10 +95,17 @@ impl ViewerTools {
                 root->setParentItem(window->contentItem());
                 QObject::connect(root, &QObject::destroyed, window, &QObject::deleteLater);
             }
-            // Events carry increasing times: flickables measure speed by them.
+            // Event times: wall clock, but at least one touch panel frame
+            // (16 ms) after the last event. On the target's Qt 5.6 a move in
+            // the same millisecond as the one before scrolls no flickable
+            // until a move with a later time comes: drag length would follow
+            // runner speed (tst_tools_finger). Flickables measure speed by
+            // these times; pauses (pumps) between gestures keep real length.
             static QElapsedTimer clock;
+            static qint64 last = 0;
             if (!clock.isValid())
                 clock.start();
+            last = qMax(clock.elapsed() + 1, last + 16);
             const QPointF scene = target->mapToScene(QPointF(x, y));
             const QEvent::Type type = kind == 0 ? QEvent::MouseButtonPress
                                     : kind == 1 ? QEvent::MouseMove : QEvent::MouseButtonRelease;
@@ -106,7 +113,7 @@ impl ViewerTools {
             const Qt::MouseButtons held = kind == 2 ? Qt::NoButton : Qt::LeftButton;
             QMouseEvent event(type, scene, scene, window->mapToGlobal(scene.toPoint()), button, held,
                               Qt::NoModifier);
-            event.setTimestamp(static_cast<ulong>(clock.elapsed()) + 1);
+            event.setTimestamp(static_cast<ulong>(last));
             QCoreApplication::sendEvent(window, &event);
             return true;
         })
