@@ -212,9 +212,11 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `PathMenu`, the notices) in an item stacked by anchors (`folderHeader`) at the top of the page,
   outside the list and the grid: a list keeps `contentY` when its header grows, which scrolled a
   folder away from its top. The list's and the grid's `SilicaListView` have no `header`, are
-  anchored below it and clipped; the pulley and the empty, loading and error states
-  (`stateLayer`) sit in them. `PathMenu.maxHeight` caps the open menu (it scrolls); less than 0:
-  no cap.
+  anchored below it and clipped; the empty, loading and error states (`stateLayer`) sit in them.
+  Header, list and grid sit in `folderPulleyHost`, a `SilicaFlickable` as big as its content (never
+  scrolls) that owns the one `DirectoryMenu`: the pulley comes out above the header; list and grid
+  have no menu, stop at their top, and a pull there goes to the host. `PathMenu.maxHeight` caps
+  the open menu (it scrolls); less than 0: no cap.
 - `PathModel { uri }` — ancestors (roles `uri`, `name`), `complete(prefix) → list`.
 - Pages: `pages/DirectoryPage.qml { uri }`, `dialogs/FolderPickerDialog.qml { title,
   acceptText, startUri }` (property `selectedUri` after accept),
