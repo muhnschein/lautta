@@ -33,8 +33,12 @@ screen; `design/STYLE.md` is the Silica style kit).
   blocks, no commented-out code, no TODO comments, no empty functions without a comment,
   no `String` concatenation in loops where `format!`/`push_str` is meant, etc.
 - CodeQL (workflow `codeql.yml`) scans the code that ships: no `cfg(test)`, default features
-  only, no `crates/*/tests`, no `third_party` (`.github/codeql/codeql-config.yml`). A finding
-  there is fixed, or dismissed with its reason.
+  only, no `crates/*/tests`, no `third_party` (`.github/codeql/codeql-config.yml`, Rust
+  `codeql-config-rust.yml`). `rust/access-invalid-pointer` comes from our copy
+  (`.github/codeql/rust-queries`): silent on code `#[derive(QObject)]` writes, which takes
+  signal offsets as `&(*null).field` and reads no memory. Its query test
+  (`.github/codeql/rust-queries-tests`, planted bugs) runs in same job. A finding there is
+  fixed, or dismissed with its reason.
 - Paths and names are bytes (`VPath`, `Vec<u8>`); display with lossy decoding only at the
   edge. Never log secrets or file contents; paths and host names only at `debug` (SEC-6).
 - Blocking file system calls run in `tokio::task::spawn_blocking` (ARC-6). Database access

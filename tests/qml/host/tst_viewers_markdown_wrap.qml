@@ -15,6 +15,14 @@ Item {
             console.error("FAILED: " + what)
     }
 
+    // Waits while `o.loading` (30 s at most: a busy machine), then lets its
+    // signals arrive.
+    function settle(o) {
+        for (var i = 0; i < 1200 && o.loading; ++i)
+            tools.pump(25)
+        tools.pump(25)
+    }
+
     ViewerTools { id: tools }
     MarkdownDocument { id: md }
 
@@ -32,7 +40,7 @@ Item {
         var uri = "lautta://user-documents/" + fixture
         check(tools.installFixture(Qt.resolvedUrl("fixtures/" + fixture), uri), fixture + " installed")
         md.uri = uri
-        tools.pump(300)
+        settle(md)
         check(md.html.length > 0, fixture + " rendered")
         preview.text = md.html
         return preview.contentWidth

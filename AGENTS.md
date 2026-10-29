@@ -46,7 +46,7 @@ User tests RPM on phone; that test judges feel, lag, transitions. Say exactly wh
 
 ## Local checks
 
-- Host deps (Ubuntu 24.04): `./tools/ci/install-host-deps.sh [coverage] [mutants] [cross]`: Qt 5 dev files, `lupdate`, pinned Rust 1.95; extras = pinned cargo-llvm-cov, cargo-mutants, `libc6-i386`.
+- Host deps (Ubuntu 24.04): `./tools/ci/install-host-deps.sh [nextest] [coverage] [mutants] [cross]`: Qt 5 dev files, `lupdate`, pinned Rust 1.95; extras = pinned cargo-nextest (`make test` runs 32 tests at once; without it `cargo test`), cargo-llvm-cov, cargo-mutants, `libc6-i386`.
 - `make check` = rustfmt, catalogue drift, clippy (`clippy::all` denied), host tests incl. host QML (`tests/qml/host`: real Lautta types, offscreen, no Silica). Fake bridge (`lautta-bridge-proto` feature `fake`) stands in for netvfs.
 - Page tests (`tests/qml/tst_*.qml`, real Silica, Qt 5.6) run only on SDK target: `make rpm && make check-rpm` (docker, `libc6-i386`; also Harbour validator, linked libs, installability) or `tools/sdk-qml-check.sh` against running SDK container. QML change → run one, or say only CI did.
 - Missing tool (docker, cargo-mutants) → step skipped locally. Say which; CI runs all.

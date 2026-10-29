@@ -14,6 +14,14 @@ Item {
             console.error("FAILED: " + what)
     }
 
+    // Waits while `o.loading` (30 s at most: a busy machine), then lets its
+    // signals arrive.
+    function settle(o) {
+        for (var i = 0; i < 1200 && o.loading; ++i)
+            tools.pump(25)
+        tools.pump(25)
+    }
+
     ViewerTools { id: tools }
     TextDocument { id: doc }
     TextDocument { id: missing }
@@ -28,7 +36,7 @@ Item {
 
     function waitForColours(document, uri) {
         document.uri = uri
-        for (var waited = 0; waited < 100 && (document.loading || !document.highlighted); ++waited)
+        for (var waited = 0; waited < 300 && (document.loading || !document.highlighted); ++waited)
             tools.pump(100)
     }
 
@@ -45,7 +53,7 @@ Item {
         check(!doc.loaded, "nothing loaded before a uri")
         doc.uri = uri
         check(doc.loading, "loading starts at once")
-        tools.pump(300)
+        settle(doc)
         check(!doc.loading && doc.loaded, "loaded")
         check(doc.text === "line one\nline two", "text normalised: " + JSON.stringify(doc.text))
         check(doc.validUtf8 && !doc.truncated, "flags")
@@ -81,7 +89,7 @@ Item {
               "the long line's second row: " + rest)
 
         coloured.uri = "lautta://user-documents/markup.xyz"
-        tools.pump(500)
+        settle(coloured)
         check(coloured.loaded && !coloured.highlighted && coloured.syntax === "", "an unknown type is plain")
         var markup = styled(coloured, 0, "keyword=#ff0000")
         check(markup === "&lt;img src=&quot;image://lautta-thumb/x&quot;&gt; &amp;lt;b&amp;gt; &amp; &lt;b&gt;bold&lt;/b&gt; &amp;nbsp;&lt;a href=&quot;x&quot;&gt;link&lt;/a&gt;",
@@ -89,7 +97,7 @@ Item {
 
         // Errors.
         missing.uri = "lautta://user-documents/nope.txt"
-        tools.pump(300)
+        settle(missing)
         check(missing.errorKind === "NotFound" && !missing.loaded, "missing file: " + missing.errorKind)
         var invalid = Qt.createQmlObject('import Lautta 1.0; TextDocument { uri: "garbage" }', root)
         check(!invalid.loading && !invalid.loaded, "bad uri is ignored")
@@ -98,12 +106,12 @@ Item {
         check(tools.installFixture(Qt.resolvedUrl("fixtures/doc.md"), "lautta://user-documents/doc.md"), "md fixture")
         md.uri = "lautta://user-documents/doc.md"
         check(md.loading, "markdown loading")
-        tools.pump(300)
+        settle(md)
         check(md.html.indexOf("Title") >= 0 && md.html.indexOf("<em>emphasis</em>") >= 0, "rendered: " + md.html)
         check(md.html.indexOf("<script") < 0 && md.html.indexOf("&lt;script&gt;") >= 0, "raw html is shown as text")
         check(md.errorKind === "" && !md.truncated, "no error")
         md.uri = "lautta://user-documents/nope.md"
-        tools.pump(300)
+        settle(md)
         check(md.errorKind === "NotFound", "markdown error " + md.errorKind)
     }
 }
