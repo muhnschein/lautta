@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Text thumbnail sheet 2 one and a half glyph, band</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600&amp;family=Source+Code+Pro:wght@400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.amb{--pri:#ffffff;--sec:rgba(255,255,255,.62);--hl:#74d4ff;--hl2:#5fb3d9;--hlbg:rgba(116,212,255,.30);--hldim:rgba(116,212,255,.13);--ov:rgba(8,14,20,.55);--line:rgba(255,255,255,.28);--btn:rgba(255,255,255,.16);--warn:#ffb067;
+ background:radial-gradient(130% 70% at 85% -5%,#2a4a63 0%,#13222f 45%,#0a1219 100%);
+ color:var(--pri);font-family:'Source Sans 3',system-ui,sans-serif;font-size:19px;font-weight:400;position:relative;overflow:hidden;box-sizing:border-box}
+.amb.light{--pri:#15191d;--sec:rgba(21,25,29,.66);--hl:#00639c;--hl2:#2a74a3;--hlbg:rgba(0,99,156,.20);--hldim:rgba(0,99,156,.09);--ov:rgba(240,244,247,.7);--line:rgba(21,25,29,.3);--btn:rgba(21,25,29,.10);--warn:#a14d00;
+ background:radial-gradient(130% 70% at 85% -5%,#ffffff 0%,#e7eef3 50%,#d6e1e9 100%)}
+.amb *{box-sizing:border-box}
+.amb button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:inherit}
+.amb a{color:inherit;text-decoration:none}
+.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.m{width:40px;height:40px;stroke-width:1.2}
+.ic.l{width:64px;height:64px;stroke-width:1}
+.hl{color:var(--hl)}.sec{color:var(--sec)}.hl2{color:var(--hl2)}.warn{color:var(--warn)}
+.small{font-size:15px}.xs{font-size:13px}.tiny{font-size:12px}.large{font-size:26px;font-weight:300}.xl{font-size:34px;font-weight:300}
+.mono{font-family:'Source Code Pro',monospace}
+/* page-stack indicators */
+.ind-back,.ind-fwd{position:absolute;top:14px;display:flex;gap:4px}
+.ind-back{left:10px}.ind-fwd{right:10px}
+.ind-back i,.ind-fwd i{display:block;width:4px;height:4px;border-radius:2px;background:var(--hl);opacity:.9}
+.ind-back i+i,.ind-fwd i+i{opacity:.45}
+/* pulley/push-up indicators (closed) */
+.pull-ind{position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--hl) 50%,transparent);opacity:.7}
+.push-ind{position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--hl) 50%,transparent);opacity:.7}
+/* open pulley / push-up menu */
+.pulley{padding:18px 18px 6px;background:linear-gradient(180deg,var(--hlbg),var(--hldim) 70%,transparent);display:flex;flex-direction:column}
+.pushup{padding:6px 18px 18px;background:linear-gradient(0deg,var(--hlbg),var(--hldim) 70%,transparent);display:flex;flex-direction:column}
+.mi{height:56px;display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--pri);width:100%;text-align:center}
+.mi.on{color:var(--hl)}
+.mi .cnt{margin-left:8px;color:var(--sec);font-size:15px}
+.mi.on .cnt{color:var(--hl2)}
+.mi.dis{color:var(--sec);opacity:.5}
+/* page header */
+.hdr{min-height:80px;padding:14px 18px 6px 60px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;text-align:right}
+.hdr-t{font-size:28px;font-weight:300;color:var(--hl);line-height:1.15}
+.hdr-d{font-size:15px;color:var(--hl2);margin-top:2px}
+/* dialog header */
+.dlg{height:80px;padding:0 18px;display:flex;align-items:center;justify-content:space-between}
+.dlg-c{font-size:19px;color:var(--pri)}
+.dlg-a{font-size:28px;font-weight:300;color:var(--hl)}
+.dlg-a.dis{opacity:.4}
+.dlg-sub{padding:0 18px 8px;text-align:right;font-size:15px;color:var(--hl2)}
+/* section header */
+.sh{padding:14px 18px 6px;text-align:right;font-size:15px;color:var(--hl)}
+/* list item */
+.li{min-height:72px;padding:6px 18px;display:flex;align-items:center;gap:14px;width:100%}
+.li.s{min-height:56px}
+.li.pressed{background:var(--hlbg)}
+.li.selected{background:var(--hldim)}
+.li-ic{width:48px;height:48px;display:flex;align-items:center;justify-content:center;flex:none;color:var(--pri);position:relative}
+.li-ic.sel::after{content:"";position:absolute;inset:2px;border:2px solid var(--hl);border-radius:3px}
+.thumb{width:48px;height:48px;flex:none;background:linear-gradient(135deg,#4b6b7f,#9bb7a0);}
+.li-b{flex:1;min-width:0}
+.li-t{font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li-s{font-size:15px;color:var(--sec);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li-r{font-size:15px;color:var(--sec);flex:none;text-align:right}
+.li.pressed .li-t{color:var(--hl)}
+/* context menu (inline, under pressed item) */
+.cm{background:var(--hldim);display:flex;flex-direction:column;padding:4px 0}
+/* badges / dots */
+.dot{width:8px;height:8px;border-radius:4px;background:var(--hl);display:inline-block;flex:none}
+.dot.off{background:transparent;border:1px solid var(--sec)}
+.badge{font-size:13px;color:var(--warn);display:inline-flex;align-items:center;gap:4px}
+.tagdot{width:12px;height:12px;border-radius:6px;display:inline-block;flex:none}
+.lossy{font-size:12px;border:1px solid var(--sec);color:var(--sec);border-radius:3px;padding:0 4px;margin-left:6px;vertical-align:middle}
+/* progress */
+.prog{height:3px;background:var(--line);position:relative;overflow:hidden}
+.prog>i{position:absolute;left:0;top:0;bottom:0;background:var(--hl);display:block}
+.slim{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--hl),transparent);opacity:.85}
+/* busy indicator */
+.busy{width:64px;height:64px;border-radius:50%;border:3px solid var(--hldim);border-top-color:var(--hl);border-right-color:var(--hl)}
+.busy.s{width:24px;height:24px;border-width:2px}
+/* placeholder */
+.ph{position:absolute;left:18px;right:18px;text-align:center}
+.ph-t{font-size:34px;font-weight:300;color:var(--hl);opacity:.85;line-height:1.2}
+.ph-h{font-size:19px;color:var(--hl2);margin-top:12px;line-height:1.35}
+/* buttons */
+.btn{min-width:150px;height:52px;padding:0 26px;border-radius:0;background:var(--btn);color:var(--pri);font-size:19px;display:inline-flex;align-items:center;justify-content:center}
+.btn.down{background:var(--hlbg);color:var(--hl)}
+.btns{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;padding:12px 18px}
+.ibtn{width:56px;height:56px;display:inline-flex;align-items:center;justify-content:center;color:var(--pri)}
+.ibtn.on{color:var(--hl)}
+/* docked panel */
+.dock{position:absolute;left:0;right:0;bottom:0;min-height:80px;background:var(--ov);backdrop-filter:blur(6px);border-top:1px solid var(--hldim);display:flex;align-items:center;justify-content:space-around;padding:0 6px}
+/* text switch */
+.sw{display:flex;gap:14px;padding:10px 18px;align-items:flex-start;width:100%}
+.sw-d{width:18px;height:18px;border-radius:9px;border:1.5px solid var(--sec);margin-top:5px;flex:none}
+.sw.on .sw-d{border-color:var(--hl);background:var(--hl);box-shadow:0 0 10px 2px var(--hlbg)}
+.sw-t{font-size:19px}.sw-x{font-size:15px;color:var(--sec);margin-top:2px;line-height:1.3}
+/* combo box */
+.cb{display:flex;flex-direction:column;padding:10px 18px;width:100%}
+.cb-r{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.cb-l{font-size:19px}.cb-v{font-size:19px;color:var(--hl)}
+.cb-x{font-size:15px;color:var(--sec);margin-top:2px}
+/* slider */
+.sl{padding:8px 18px 12px}
+.sl-v{text-align:center;font-size:26px;font-weight:300;color:var(--hl)}
+.sl-t{height:2px;background:var(--line);margin:14px 6px;position:relative}
+.sl-t>i{position:absolute;left:0;top:0;bottom:0;background:var(--hl)}
+.sl-t>b{position:absolute;top:-9px;width:20px;height:20px;border-radius:10px;background:var(--hl);box-shadow:0 0 12px 3px var(--hlbg);margin-left:-10px}
+.sl-l{text-align:center;font-size:15px;color:var(--sec)}
+/* text field */
+.tf{padding:10px 18px}
+.tf input,.tf textarea{width:100%;background:transparent;border:0;border-bottom:1px solid var(--line);color:var(--pri);font:inherit;font-size:19px;padding:6px 0;outline:none}
+.tf.focus input{border-bottom-color:var(--hl)}
+.tf label{display:block;font-size:15px;color:var(--sec);margin-top:4px}
+.tf.focus label{color:var(--hl)}
+.tf.err input{border-bottom-color:var(--warn)}
+.tf.err label{color:var(--warn)}
+/* remorse */
+.remorse{min-height:72px;background:var(--hlbg);position:relative;padding:10px 18px;display:flex;flex-direction:column;justify-content:center;overflow:hidden}
+.remorse>i{position:absolute;left:0;top:0;bottom:0;background:var(--hldim);display:block}
+.remorse b{font-weight:400;font-size:19px;position:relative}
+.remorse span{font-size:15px;color:var(--sec);position:relative}
+/* banner (in-page notice, e.g. offline) */
+.banner{margin:6px 18px;padding:12px 14px;background:var(--hldim);display:flex;gap:12px;align-items:center;font-size:15px}
+.banner .act{color:var(--hl);font-size:15px;margin-left:auto;flex:none}
+/* interaction hint label */
+.hintlabel{position:absolute;left:0;right:0;bottom:0;padding:40px 30px 30px;text-align:center;font-size:19px;color:var(--hl);background:linear-gradient(0deg,var(--ov),transparent)}
+/* key/value detail (DetailItem) */
+.di{display:flex;gap:12px;padding:5px 18px;font-size:15px}
+.di-l{flex:1;text-align:right;color:var(--sec)}
+.di-v{flex:1;color:var(--pri);word-break:break-all}
+/* notification popup (system) */
+.note{background:rgba(20,30,40,.92);color:#fff;padding:12px 16px;display:flex;gap:12px;align-items:flex-start;border-radius:6px}
+.cell{width:117.33px;flex:none}
+.tile{height:117.33px;position:relative;display:flex;align-items:center;justify-content:center;color:var(--pri);overflow:hidden;background:var(--hldim)}
+.tile.img{background:none}
+.cell-n{font-size:13px;text-align:center;line-height:17px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 2px}
+.cell-c{font-size:12px;text-align:center;line-height:15px;color:var(--sec)}
+.row{display:flex;gap:6px;padding:0 18px 10px}
+.ph-img{position:absolute;inset:0;background:linear-gradient(160deg,#9fc3d9 0%,#5d8fae 45%,#2f4f3a 46%,#47704f 100%)}
+.amb{--pg:rgba(255,255,255,.07);--pgline:rgba(255,255,255,.55);--flap:rgba(255,255,255,.30);--band:rgba(255,255,255,.22)}
+.amb.light{--pg:rgba(255,255,255,.55);--pgline:rgba(21,25,29,.55);--flap:rgba(21,25,29,.22);--band:rgba(21,25,29,.14)}
+.sheet{position:absolute}
+.sh-c{position:absolute;inset:0;background:var(--pg)}
+.tx{position:absolute;left:0;right:0;top:0;margin:0;overflow:hidden;font-family:'Source Sans 3',sans-serif;color:var(--sec);white-space:pre-wrap;word-break:break-word}
+.tx.code{font-family:'Source Code Pro',monospace;white-space:pre}
+.sh-o{position:absolute;left:-0.5px;top:-0.5px;overflow:visible;fill:none;stroke:var(--pgline);stroke-width:1;stroke-linejoin:round}
+.sh-o .flap{fill:var(--flap);stroke:var(--pgline)}
+.bd{position:absolute;display:flex;align-items:center;justify-content:center;background:var(--band);color:var(--pri);font-weight:600;letter-spacing:.4px;border-top:1px solid var(--pgline)}
+.lt{position:absolute;color:var(--pri);font-weight:600;letter-spacing:.4px}
+.chip{position:absolute;padding:0 5px;height:16px;line-height:16px;font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--pri);background:var(--ov);border:1px solid var(--pgline)}
+.cell.pressed .tile{background:var(--hlbg)}
+.cell.pressed .tile{color:var(--hl)}
+.cell.pressed .tx,.cell.pressed .bd,.cell.pressed .lt,.cell.pressed .chip,.cell.pressed .cell-n{color:var(--hl)}
+.cell.pressed .sh-o{stroke:var(--hl)}
+.cell.pressed .sh-o .flap{stroke:var(--hl)}
+</style>
+</helmet>
+<div class="amb {{amb}}" style="width: 400px; height: 860px">
+<div class="pull-ind"></div>
+<div class="ind-back"><i></i><i></i></div>
+<div class="hdr"><div class="hdr-t">Notes</div></div>
+<div class="row"><div class="cell"><div class="tile"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Folder" width="56" height="56" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5V6a1 1 0 0 1 1-1h4.4c.5 0 .9.2 1.2.5l2 2h-.3c-1.3 0-1.7 2-3 2z" fill="currentColor" fill-opacity="0.6" stroke="none"/><path d="M4.5 9.5h4.8c1.3 0 1.7-2 3-2h10.2a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1z"/></svg></div><div class="cell-n">Drafts</div><div class="cell-c">4 items</div><div class="cell-c"></div></div><div class="cell"><div class="tile"><div class="sheet" style="left:31.665px;top:25.665px;width:54.0px;height:66.0px"><div class="sh-c" style="clip-path:path('M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z')"><pre class="tx" style="clip-path:polygon(0 0,40.0px 0,40.0px 14.0px,100% 14.0px,100% 100%,0 100%);padding:4.5px 9.4px 0 4.5px;font-size:3.4px;line-height:4.42px;bottom:13px">Ferry timetable, Nauvo–Parainen
+Weekdays from 06:00 every 20 min, nights every hour. Last one 00:30.
+
+Ask Anni about the cabin keys before Friday. Sauna wood: 2 sacks.
+Check boat battery, charger is in the shed behind the paint cans.</pre><div class="bd" style="left:0;right:0;bottom:0;height:13px;font-size:9px">TXT</div></div><svg class="sh-o" width="54.0" height="66.0" viewBox="-0.5 -0.5 55.0 67.0"><path d="M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z"/><path class="flap" d="M41.0,0V10.75Q41.0,13.0 43.25,13.0H54.0Z"/></svg></div></div><div class="cell-n">notes.txt</div><div class="cell-c">Today 16:05</div><div class="cell-c">412 B</div></div><div class="cell"><div class="tile"><div class="sheet" style="left:31.665px;top:25.665px;width:54.0px;height:66.0px"><div class="sh-c" style="clip-path:path('M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z')"><pre class="tx" style="clip-path:polygon(0 0,40.0px 0,40.0px 14.0px,100% 14.0px,100% 100%,0 100%);padding:4.5px 9.4px 0 4.5px;font-size:3.4px;line-height:4.42px;bottom:13px"># Lautta
+A file manager for Sailfish OS.
+
+## Build
+    make rpm
+
+## Features
+- Local folders, SD card, USB
+- SFTP and SMB servers
+- Trash, search, transfers</pre><div class="bd" style="left:0;right:0;bottom:0;height:13px;font-size:9px">MD</div></div><svg class="sh-o" width="54.0" height="66.0" viewBox="-0.5 -0.5 55.0 67.0"><path d="M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z"/><path class="flap" d="M41.0,0V10.75Q41.0,13.0 43.25,13.0H54.0Z"/></svg></div></div><div class="cell-n">README.md</div><div class="cell-c">Today 11:40</div><div class="cell-c">1.8 kB</div></div></div>
+<div class="row"><div class="cell"><div class="tile"><div class="sheet" style="left:31.665px;top:25.665px;width:54.0px;height:66.0px"><div class="sh-c" style="clip-path:path('M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z')"><pre class="tx code" style="clip-path:polygon(0 0,40.0px 0,40.0px 14.0px,100% 14.0px,100% 100%,0 100%);padding:4.5px 9.4px 0 4.5px;font-size:3.128px;line-height:4.42px;bottom:13px">#!/bin/sh
+# Nightly copy of Documents to NAS
+set -eu
+SRC=&quot;$HOME/Documents&quot;
+DST=&quot;nas:/backup/phone&quot;
+rsync -a --delete \
+  &quot;$SRC/&quot; &quot;$DST/&quot;
+echo &quot;done $(date +%F)&quot;</pre><div class="bd" style="left:0;right:0;bottom:0;height:13px;font-size:9px">SH</div></div><svg class="sh-o" width="54.0" height="66.0" viewBox="-0.5 -0.5 55.0 67.0"><path d="M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z"/><path class="flap" d="M41.0,0V10.75Q41.0,13.0 43.25,13.0H54.0Z"/></svg></div></div><div class="cell-n">backup.sh</div><div class="cell-c">Yesterday</div><div class="cell-c">236 B</div></div><div class="cell pressed"><div class="tile"><div class="sheet" style="left:31.665px;top:25.665px;width:54.0px;height:66.0px"><div class="sh-c" style="clip-path:path('M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z')"><pre class="tx" style="clip-path:polygon(0 0,40.0px 0,40.0px 14.0px,100% 14.0px,100% 100%,0 100%);padding:4.5px 9.4px 0 4.5px;font-size:3.4px;line-height:4.42px;bottom:13px">Packing list, Lapland
+- wool socks x4
+- headlamp + spare batteries
+- thermos
+- map of Pallas-Yllästunturi
+- power bank
+- sauna towel
+- reindeer jerky for Matti</pre><div class="bd" style="left:0;right:0;bottom:0;height:13px;font-size:9px">TXT</div></div><svg class="sh-o" width="54.0" height="66.0" viewBox="-0.5 -0.5 55.0 67.0"><path d="M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z"/><path class="flap" d="M41.0,0V10.75Q41.0,13.0 43.25,13.0H54.0Z"/></svg></div></div><div class="cell-n">packing-list.txt</div><div class="cell-c">Yesterday</div><div class="cell-c">198 B</div></div><div class="cell"><div class="tile"><div class="sheet" style="left:31.665px;top:25.665px;width:54.0px;height:66.0px"><div class="sh-c" style="clip-path:path('M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z')"><pre class="tx code" style="clip-path:polygon(0 0,40.0px 0,40.0px 14.0px,100% 14.0px,100% 100%,0 100%);padding:4.5px 9.4px 0 4.5px;font-size:3.128px;line-height:4.42px;bottom:13px">use std::env;
+
+fn main() {
+    let args: Vec&lt;String&gt; =
+        env::args().collect();
+    let name = args.get(1)
+        .map_or(&quot;world&quot;, |s| s);
+    println!(&quot;Hei, {name}!&quot;);
+}</pre><div class="bd" style="left:0;right:0;bottom:0;height:13px;font-size:9px">RS</div></div><svg class="sh-o" width="54.0" height="66.0" viewBox="-0.5 -0.5 55.0 67.0"><path d="M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z"/><path class="flap" d="M41.0,0V10.75Q41.0,13.0 43.25,13.0H54.0Z"/></svg></div></div><div class="cell-n">main.rs</div><div class="cell-c">26 Oct</div><div class="cell-c">204 B</div></div></div>
+<div class="row"><div class="cell"><div class="tile img"><span class="ph-img"></span></div><div class="cell-n">Saimaa.jpg</div><div class="cell-c">24 Oct</div><div class="cell-c">3.4 MB</div></div><div class="cell"><div class="tile"><div class="sheet" style="left:31.665px;top:25.665px;width:54.0px;height:66.0px"><div class="sh-c" style="clip-path:path('M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z')"><pre class="tx" style="clip-path:polygon(0 0,40.0px 0,40.0px 14.0px,100% 14.0px,100% 100%,0 100%);padding:4.5px 9.4px 0 4.5px;font-size:3.4px;line-height:4.42px;bottom:13px"># This week
+- [x] Renew bus card
+- [ ] Book ferry to Utö
+- [ ] Return library books
+- [ ] Call grandma Sunday
+- [ ] Fix bike light</pre><div class="bd" style="left:0;right:0;bottom:0;height:13px;font-size:9px">MD</div></div><svg class="sh-o" width="54.0" height="66.0" viewBox="-0.5 -0.5 55.0 67.0"><path d="M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z"/><path class="flap" d="M41.0,0V10.75Q41.0,13.0 43.25,13.0H54.0Z"/></svg></div></div><div class="cell-n">todo.md</div><div class="cell-c">22 Oct</div><div class="cell-c">131 B</div></div><div class="cell"><div class="tile"><div class="sheet" style="left:31.665px;top:25.665px;width:54.0px;height:66.0px"><div class="sh-c" style="clip-path:path('M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z')"><pre class="tx code" style="clip-path:polygon(0 0,40.0px 0,40.0px 14.0px,100% 14.0px,100% 100%,0 100%);padding:4.5px 9.4px 0 4.5px;font-size:3.128px;line-height:4.42px;bottom:13px">[sync]
+interval = &quot;1h&quot;
+folders = [
+  &quot;Documents&quot;,
+  &quot;Pictures/Camera&quot;,
+]
+keep_versions = 5
+wifi_only = true</pre><div class="bd" style="left:0;right:0;bottom:0;height:13px;font-size:9px">TOML</div></div><svg class="sh-o" width="54.0" height="66.0" viewBox="-0.5 -0.5 55.0 67.0"><path d="M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z"/><path class="flap" d="M41.0,0V10.75Q41.0,13.0 43.25,13.0H54.0Z"/></svg></div></div><div class="cell-n">config.toml</div><div class="cell-c">20 Oct</div><div class="cell-c">117 B</div></div></div>
+<div class="row"><div class="cell"><div class="tile"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document" width="56" height="56" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="18" height="22" rx="1.5" fill="currentColor" fill-opacity="0.5" stroke="none"/><path d="M9 7.75h10M9 11.75h10M9 15.75h10M9 19.75h6" stroke-width="1.5"/></svg></div><div class="cell-n">empty.txt</div><div class="cell-c">19 Oct</div><div class="cell-c">0 B</div></div><div class="cell"><div class="tile"><div class="sheet" style="left:31.665px;top:25.665px;width:54.0px;height:66.0px"><div class="sh-c" style="clip-path:path('M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z')"><pre class="tx" style="clip-path:polygon(0 0,40.0px 0,40.0px 14.0px,100% 14.0px,100% 100%,0 100%);padding:4.5px 9.4px 0 4.5px;font-size:3.4px;line-height:4.42px;bottom:13px"># Team sync 28 Oct
+**Present:** Aino, Jussi, Leena
+
+## Decisions
+- Ship 0.2 after the ferry trip
+- Grid stays default for photos
+
+## Next
+- Jussi: release notes
+- Leena: icons for SD card</pre><div class="bd" style="left:0;right:0;bottom:0;height:13px;font-size:9px">MD</div></div><svg class="sh-o" width="54.0" height="66.0" viewBox="-0.5 -0.5 55.0 67.0"><path d="M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z"/><path class="flap" d="M41.0,0V10.75Q41.0,13.0 43.25,13.0H54.0Z"/></svg></div></div><div class="cell-n">team-sync.md</div><div class="cell-c">18 Oct</div><div class="cell-c">322 B</div></div><div class="cell"><div class="tile"><div class="sheet" style="left:31.665px;top:25.665px;width:54.0px;height:66.0px"><div class="sh-c" style="clip-path:path('M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z')"><pre class="tx" style="clip-path:polygon(0 0,40.0px 0,40.0px 14.0px,100% 14.0px,100% 100%,0 100%);padding:4.5px 9.4px 0 4.5px;font-size:3.4px;line-height:4.42px;bottom:13px">Karelian pies (16)
+Filling: 2 dl rice, 5 dl water, 5 dl milk, salt. Simmer 40 min.
+Crust: 1 dl water, 2 dl rye flour, 1/2 tsp salt. Roll thin, fill, pinch the edges. Bake at 275 °C for 12–15 min.
+Brush with butter and milk.</pre><div class="bd" style="left:0;right:0;bottom:0;height:13px;font-size:9px">TXT</div></div><svg class="sh-o" width="54.0" height="66.0" viewBox="-0.5 -0.5 55.0 67.0"><path d="M2.25,0H41.0L54.0,13.0V63.75Q54.0,66.0 51.75,66.0H2.25Q0,66.0 0,63.75V2.25Q0,0 2.25,0Z"/><path class="flap" d="M41.0,0V10.75Q41.0,13.0 43.25,13.0H54.0Z"/></svg></div></div><div class="cell-n">recipe.txt</div><div class="cell-c">12 Oct</div><div class="cell-c">264 B</div></div></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":400,"height":860}}'>
+class Component extends DCLogic {
+renderVals() {
+return { amb: (this.props.ambience ?? 'dark') === 'light' ? 'light' : 'dark' };
+}
+}
+</script>
+</body>
+</html>

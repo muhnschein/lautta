@@ -522,42 +522,42 @@
       "x": 1440,
       "y": 8200
     },
-    "TextThumbPaper.dc.html": {
+    "TextThumbSheetGlyph.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Text thumbnail \u00b7 A paper",
+      "title": "Text thumbnail \u00b7 1 glyph size, band",
       "w": 400,
       "x": 5720,
       "y": 2060
     },
-    "TextThumbSheet.dc.html": {
+    "TextThumbSheetMid.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Text thumbnail \u00b7 B ambience sheet",
+      "title": "Text thumbnail \u00b7 2 1.5\u00d7 glyph, band",
       "w": 400,
       "x": 6200,
       "y": 2060
     },
-    "TextThumbFolded.dc.html": {
+    "TextThumbSheetLarge.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Text thumbnail \u00b7 C folded page with type",
+      "title": "Text thumbnail \u00b7 3 2\u00d7 glyph, band",
       "w": 400,
       "x": 6680,
       "y": 2060
     },
-    "TextThumbFill.dc.html": {
+    "TextThumbSheetLabel.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Text thumbnail \u00b7 D text fills tile",
+      "title": "Text thumbnail \u00b7 4 2\u00d7 glyph, type as text",
       "w": 400,
       "x": 7160,
       "y": 2060
     },
-    "TextThumbStyled.dc.html": {
+    "TextThumbSheetChip.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Text thumbnail \u00b7 E styled by kind",
+      "title": "Text thumbnail \u00b7 5 2\u00d7 glyph, type on a tag",
       "w": 400,
       "x": 7640,
       "y": 2060
@@ -675,11 +675,11 @@
     "NewItem.dc.html",
     "Rename.dc.html",
     "GridIcons.dc.html",
-    "TextThumbPaper.dc.html",
-    "TextThumbSheet.dc.html",
-    "TextThumbFolded.dc.html",
-    "TextThumbFill.dc.html",
-    "TextThumbStyled.dc.html",
+    "TextThumbSheetGlyph.dc.html",
+    "TextThumbSheetMid.dc.html",
+    "TextThumbSheetLarge.dc.html",
+    "TextThumbSheetLabel.dc.html",
+    "TextThumbSheetChip.dc.html",
     "StateEmpty.dc.html",
     "StateNoAccess.dc.html",
     "StateOffline.dc.html",
