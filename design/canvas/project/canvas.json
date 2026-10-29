@@ -55,7 +55,7 @@
       "is_interactive": true,
       "title": "Edit path \u00b7 dialog",
       "w": 400,
-      "x": 2880,
+      "x": 3360,
       "y": 15900
     },
     "BreadcrumbsHeader.dc.html": {
@@ -66,36 +66,44 @@
       "x": 0,
       "y": 15900
     },
-    "BreadcrumbsOpenA.dc.html": {
+    "BreadcrumbsOpen1.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Path open \u00b7 actions A, menu items",
+      "title": "Path menu 1 \u00b7 centred, actions darker",
       "w": 400,
       "x": 960,
       "y": 15900
     },
-    "BreadcrumbsOpenB.dc.html": {
+    "BreadcrumbsOpen2.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Path open \u00b7 actions B, icon rows",
+      "title": "Path menu 2 \u00b7 centred, actions highlighted",
       "w": 400,
       "x": 1440,
       "y": 15900
     },
-    "BreadcrumbsOpenC.dc.html": {
+    "BreadcrumbsOpen3.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Path open \u00b7 actions C, header buttons",
+      "title": "Path menu 3 \u00b7 centred, actions as icon rows",
       "w": 400,
       "x": 1920,
       "y": 15900
     },
-    "BreadcrumbsOpenD.dc.html": {
+    "BreadcrumbsOpen4.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Path open \u00b7 actions D, to the pulley",
+      "title": "Path menu 4 \u00b7 right-aligned",
       "w": 400,
       "x": 2400,
+      "y": 15900
+    },
+    "BreadcrumbsOpen5.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Path menu 5 \u00b7 with menu labels",
+      "w": 400,
+      "x": 2880,
       "y": 15900
     },
     "BreadcrumbsOpening.dc.html": {
@@ -745,10 +753,11 @@
     "ActivityBarDone.dc.html",
     "BreadcrumbsHeader.dc.html",
     "BreadcrumbsOpening.dc.html",
-    "BreadcrumbsOpenA.dc.html",
-    "BreadcrumbsOpenB.dc.html",
-    "BreadcrumbsOpenC.dc.html",
-    "BreadcrumbsOpenD.dc.html",
+    "BreadcrumbsOpen1.dc.html",
+    "BreadcrumbsOpen2.dc.html",
+    "BreadcrumbsOpen3.dc.html",
+    "BreadcrumbsOpen4.dc.html",
+    "BreadcrumbsOpen5.dc.html",
     "BreadcrumbsEdit.dc.html"
   ],
   "pages": [],
