@@ -2,8 +2,12 @@
 //! Shared state of the fake bridge and of one client session.
 
 use super::tree::Tree;
-use crate::wire::{WireCapabilities, WireLocation, WireNearby};
+use crate::wire::{
+    drive_info, feature, location_state, WireCapabilities, WireDrive, WireLocation, WireNearby,
+};
 use std::collections::{BTreeMap, HashMap};
+use std::os::unix::ffi::OsStrExt;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
@@ -134,6 +138,81 @@ impl InfoValue {
     }
 }
 
+/// A memory card or USB drive of the fake (netvfs XB-20).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FakeDrive {
+    pub id: String,
+    pub label: String,
+    /// Where it is mounted, empty when it is not.
+    pub mount_point: Vec<u8>,
+    /// `sd` or `usb`.
+    pub kind: String,
+    pub size: i64,
+    pub uuid: String,
+    /// A LUKS device not unlocked: listed as `locked`, never mounted.
+    pub locked: bool,
+}
+
+impl FakeDrive {
+    /// An unmounted `vfat` drive.
+    pub fn new(id: &str, label: &str, kind: &str, size: i64) -> FakeDrive {
+        FakeDrive {
+            id: id.to_owned(),
+            label: label.to_owned(),
+            mount_point: Vec::new(),
+            kind: kind.to_owned(),
+            size,
+            uuid: String::new(),
+            locked: false,
+        }
+    }
+
+    /// The same drive as a LUKS device not unlocked (netvfs XB-20).
+    pub fn locked(mut self) -> FakeDrive {
+        self.locked = true;
+        self
+    }
+
+    /// The same drive with `uuid`.
+    pub fn with_uuid(mut self, uuid: &str) -> FakeDrive {
+        uuid.clone_into(&mut self.uuid);
+        self
+    }
+
+    /// The same drive, mounted at `mount_point`.
+    pub fn mounted(mut self, mount_point: &[u8]) -> FakeDrive {
+        self.mount_point = mount_point.to_vec();
+        self
+    }
+
+    /// The drive as `ListDrives` lists it.
+    pub fn wire(&self) -> WireDrive {
+        let fs_type = if self.locked { "crypto_LUKS" } else { "vfat" };
+        let mut info = vec![
+            (drive_info::KIND, InfoValue::Str(self.kind.clone())),
+            (drive_info::FS_TYPE, InfoValue::Str(fs_type.to_owned())),
+            (drive_info::READ_ONLY, InfoValue::Bool(false)),
+        ];
+        if !self.uuid.is_empty() {
+            info.push((drive_info::UUID, InfoValue::Str(self.uuid.clone())));
+        }
+        if self.locked {
+            info.push((drive_info::LOCKED, InfoValue::Bool(true)));
+        }
+        let mut info: HashMap<String, OwnedValue> = info
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), v.to_owned_value()))
+            .collect();
+        info.insert(drive_info::SIZE.to_owned(), OwnedValue::from(self.size));
+        WireDrive {
+            id: self.id.clone(),
+            label: self.label.clone(),
+            mount_point: self.mount_point.clone(),
+            info,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ScriptedQuestion {
     pub kind: String,
@@ -168,6 +247,14 @@ pub struct State {
     pub consent_requests: u32,
     pub auto_consent: Option<Consent>,
     pub bridge_version: String,
+    /// What `GetFeatures` answers (XB-19); `None`: a bridge without the
+    /// method, which answers `UnknownMethod`.
+    pub features: Option<Vec<String>>,
+    /// What `ListDrives` lists (XB-20).
+    pub drives: Vec<FakeDrive>,
+    /// Where `Mount` makes the drive's folder; `None`: below
+    /// `/run/media/user`, without making it.
+    pub mount_root: Option<PathBuf>,
     pub locations: BTreeMap<String, LocationRec>,
     pub trees: HashMap<String, Tree>,
     pub caps: HashMap<String, WireCapabilities>,
@@ -196,6 +283,9 @@ impl Default for State {
             consent_requests: 0,
             auto_consent: None,
             bridge_version: "0.2.0-fake".to_owned(),
+            features: Some(vec![feature::STORAGE_SETTINGS.to_owned()]),
+            drives: Vec::new(),
+            mount_root: None,
             locations: BTreeMap::new(),
             trees: HashMap::new(),
             caps: HashMap::new(),
@@ -220,7 +310,46 @@ impl Default for State {
 }
 
 impl State {
-    pub fn add_location(&mut self, id: &str, provider: &str, name: &str, info: Vec<(String, InfoValue)>) {
+    /// Whether the fake has the drive methods: a bridge that does not name
+    /// them answers `UnknownMethod` (a netvfs without XB-20).
+    pub fn offers_drives(&self) -> bool {
+        self.features
+            .as_ref()
+            .is_some_and(|f| f.iter().any(|n| n == feature::DRIVES))
+    }
+
+    /// Mounts (`mount`) or unmounts `drive`: where it was mounted before
+    /// and where it is mounted then; `None` for an unknown drive. A drive is
+    /// mounted below the mount root, by label, else by UUID, else by id.
+    pub fn mount(&mut self, drive: &str, mount: bool) -> Option<(Vec<u8>, Vec<u8>)> {
+        let root = self
+            .mount_root
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("/run/media/user"));
+        let d = self.drives.iter_mut().find(|d| d.id == drive)?;
+        let wanted = if mount && d.mount_point.is_empty() {
+            let name = [&d.label, &d.uuid, &d.id]
+                .into_iter()
+                .find(|n| !n.is_empty())
+                .unwrap_or(&d.id);
+            root.join(name).as_os_str().as_bytes().to_vec()
+        } else if mount {
+            d.mount_point.clone()
+        } else {
+            Vec::new()
+        };
+        Some((std::mem::replace(&mut d.mount_point, wanted.clone()), wanted))
+    }
+
+    /// Adds a location; without a `state` in `info` it is disconnected, as
+    /// the bridge lists a location it has not connected to (netvfs XB-12).
+    pub fn add_location(&mut self, id: &str, provider: &str, name: &str, mut info: Vec<(String, InfoValue)>) {
+        if !info.iter().any(|(k, _)| k == location_state::KEY) {
+            info.push((
+                location_state::KEY.to_owned(),
+                InfoValue::Str(location_state::DISCONNECTED.into()),
+            ));
+        }
         self.locations.insert(
             id.to_owned(),
             LocationRec {
@@ -230,6 +359,29 @@ impl State {
             },
         );
         self.trees.entry(id.to_owned()).or_default();
+    }
+
+    /// Sets the connection state of location `id` (`state`, and
+    /// `stateError` for `failed`); whether that changed anything.
+    pub fn set_state(&mut self, id: &str, state: &str, error: Option<&str>) -> bool {
+        let Some(rec) = self.locations.get_mut(id) else {
+            return false;
+        };
+        let value = |key: &str| rec.info.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone());
+        let error = error.map(|e| InfoValue::Str(e.to_owned()));
+        if value(location_state::KEY) == Some(InfoValue::Str(state.to_owned()))
+            && value(location_state::ERROR_KEY) == error
+        {
+            return false;
+        }
+        rec.info
+            .retain(|(k, _)| k != location_state::KEY && k != location_state::ERROR_KEY);
+        rec.info
+            .push((location_state::KEY.to_owned(), InfoValue::Str(state.to_owned())));
+        if let Some(error) = error {
+            rec.info.push((location_state::ERROR_KEY.to_owned(), error));
+        }
+        true
     }
 
     pub fn remove_location(&mut self, id: &str) {
@@ -526,6 +678,40 @@ mod tests {
         let w = st.wire_locations();
         assert_eq!(w.len(), 1);
         assert_eq!(crate::wire::value_str(&w[0].info["host"]).as_deref(), Some("h"));
+        // Disconnected until it is used.
+        let state = |st: &State, key: &str| {
+            st.wire_locations()[0]
+                .info
+                .get(key)
+                .and_then(|v| crate::wire::value_str(v))
+        };
+        assert_eq!(state(&st, "state").as_deref(), Some("disconnected"));
+        assert!(st.set_state("account:1", "failed", Some("Timeout")));
+        assert!(!st.set_state("account:1", "failed", Some("Timeout")));
+        assert_eq!(state(&st, "stateError").as_deref(), Some("Timeout"));
+        assert!(st.set_state("account:1", "failed", Some("AuthFailed")));
+        assert!(st.set_state("account:1", "connected", None));
+        assert_eq!(
+            (state(&st, "state").as_deref(), state(&st, "stateError")),
+            (Some("connected"), None)
+        );
+        assert!(!st.set_state("account:1", "connected", None));
+        assert_eq!(state(&st, "host").as_deref(), Some("h"));
+        assert!(!st.set_state("account:9", "connected", None));
+        // A state given at the start is kept.
+        st.add_location(
+            "adhoc:1",
+            "sftp",
+            "h",
+            vec![("state".into(), InfoValue::Str("connected".into()))],
+        );
+        let adhoc = &st.wire_locations()[1];
+        assert_eq!(adhoc.info.len(), 1);
+        assert_eq!(
+            crate::wire::value_str(&adhoc.info["state"]).as_deref(),
+            Some("connected")
+        );
+        st.remove_location("adhoc:1");
         st.remove_location("account:1");
         assert!(st.wire_locations().is_empty());
         assert_eq!(Consent::Denied.as_str(), "denied");

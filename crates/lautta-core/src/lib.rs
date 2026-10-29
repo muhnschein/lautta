@@ -24,6 +24,7 @@ pub mod vpath;
 pub mod browse_layout;
 pub mod dircache;
 pub mod filter;
+pub mod foldercount;
 pub mod listing;
 pub mod locations;
 pub mod mime;
@@ -40,7 +41,6 @@ pub mod questions;
 pub mod clipboard;
 pub mod ops;
 pub mod trash;
-pub mod undo;
 
 // Transfers and edit-in-place
 pub mod activity;
@@ -51,13 +51,16 @@ pub mod workcopy;
 pub mod compress;
 pub mod preview;
 pub mod thumbs;
+pub mod thumbs_pdf;
 
 // Search, organisation
 pub mod org;
 pub mod search;
 
 // App-wide
+pub mod date_group;
 pub mod messages;
+pub mod panics;
 pub mod settings;
 
 pub use error::{Error, ErrorKind, Result};

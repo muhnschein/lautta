@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of CacheInfo (SEC-5 Clear cache, location list).
+// Host test of CacheInfo (SEC-5 Clear cache).
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -48,11 +48,5 @@ Item {
         check(support.exists(dir + "other/keep.txt"), "other cache files are kept")
         check(support.exists("Documents/srch_storage_keep.txt"), "user files are kept")
         check(until(function () { return cache.thumbnailBytes === 0 && !cache.busy }, 3000), "sizes refreshed after clearing")
-
-        var locations = JSON.parse(cache.locationsJson())
-        check(Array.isArray(locations), "locations list")
-        for (var i = 0; i < locations.length; ++i)
-            check(["server", "adhoc", "volume"].indexOf(locations[i].kind) >= 0, "only network and volume locations: " + locations[i].kind)
-
     }
 }

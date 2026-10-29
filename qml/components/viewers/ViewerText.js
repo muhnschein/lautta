@@ -42,6 +42,19 @@ function orientation(o) {
     }
 }
 
+// "Taken" row: the EXIF time "2026-09-12 18:42:11", local time without a
+// zone, in the system's date and time formats like every date the app
+// shows (§18); text in another shape is shown as recorded.
+function taken(raw) {
+    var parts = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(raw || "")
+    if (!parts)
+        return raw || ""
+    var n = parts.map(Number)
+    var date = new Date(n[1], n[2] - 1, n[3], n[4], n[5], n[6])
+    return Silica.Format.formatDate(date, Silica.Formatter.DateMedium) + " "
+        + Silica.Format.formatDate(date, Silica.Formatter.TimeValue)
+}
+
 // "Exposure" row: "1/640 s · f/1.8 · ISO 50", missing parts left out.
 function exposureLine(info) {
     var parts = []

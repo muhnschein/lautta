@@ -18,6 +18,13 @@ QtObject {
         check(App.parentUri(child) === docs, "parentUri")
         check(App.nameOf(child) === "a b.txt", "nameOf")
         check(App.childUri(docs, "x/y") === "", "names with a slash are refused")
+        // Servers, known or gone, are remote; the device, volumes and
+        // archives are not (§15.5).
+        check(App.isRemote("lautta://nv-account:1/srv/photos"), "an account is remote")
+        check(App.isRemote("lautta://nv-adhoc:9/"), "an ad-hoc server is remote")
+        check(!App.isRemote(child), "a local folder is not remote")
+        check(!App.isRemote("lautta://arc-1/a.txt"), "an archive is not remote")
+        check(!App.isRemote("") && !App.isRemote("nv-account:1"), "nothing is remote without a URI")
         check(App.categoryOf("photo.JPG") === "image", "category by extension")
         check(App.viewerFor("notes.md", "") === "markdown", "markdown viewer")
         check(App.viewerFor("song.flac", "") === "audio", "audio viewer")

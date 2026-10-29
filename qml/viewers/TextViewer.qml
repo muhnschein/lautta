@@ -1,29 +1,29 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Text and code viewer (PRV-4, boards TextViewer, TextViewerPulley): read-only
-// up to 1 MiB with line numbers.
+// up to 1 MiB with line numbers, the lines wrapped to the page's width,
+// coloured by the file's language (PRV-13), on a backdrop that darkens a dark
+// ambience and lightens a light one.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components"
 import "../components/viewers"
 import "../components/ErrorText.js" as ErrorText
+import "../components/viewers/SyntaxColours.js" as SyntaxColours
+import "../components/viewers/TextRows.js" as TextRows
 
 Page {
     id: page
 
     property string uri
-    property bool wrap: false
 
     readonly property string fileName: App.nameOf(uri)
-    readonly property var lines: doc.loaded ? doc.text.split("\n") : []
-    readonly property int maxChars: {
-        var most = 0
-        for (var i = 0; i < lines.length; ++i)
-            most = Math.max(most, lines[i].length)
-        return most
-    }
+    // The text in rows (TextRows.js): the list's model.
+    readonly property var layout: doc.loaded ? TextRows.rows(doc.text) : TextRows.empty
     readonly property real charWidth: metrics.advanceWidth
-    readonly property real gutter: Math.max(2, String(lines.length).length) * charWidth + Theme.paddingLarge
+    readonly property real gutter: Math.max(2, String(layout.lines).length) * charWidth + Theme.paddingLarge
+    // The ambience's colours for the syntax classes (PRV-13).
+    readonly property string colours: SyntaxColours.palette(Theme)
 
     allowedOrientations: Orientation.All
 
@@ -45,6 +45,15 @@ Page {
 
     Notice { id: notice }
 
+    // Colour Page.highContrast dims a page with, stronger: black on a dark
+    // ambience, light grey on a light one. Opaque enough for text and syntax
+    // colours to read over any wallpaper (PRV-4).
+    Rectangle {
+        objectName: "textBackdrop"
+        anchors.fill: parent
+        color: Theme.rgba(palette.overlayBackgroundColor, Theme.opacityHigh)
+    }
+
     TextMetrics {
         id: metrics
         font.family: "monospace"
@@ -56,11 +65,11 @@ Page {
         id: view
 
         anchors.fill: parent
-        model: page.lines
+        model: page.layout.rows
         clip: true
-        flickableDirection: page.wrap ? Flickable.VerticalFlick : Flickable.HorizontalAndVerticalFlick
-        contentWidth: page.wrap ? width
-                                : Math.max(width, page.gutter + page.maxChars * page.charWidth + 2 * Theme.horizontalPageMargin)
+        // Never sideways: a list that can flick sideways keeps the swipe
+        // back from the page stack (PRV-4).
+        flickableDirection: Flickable.VerticalFlick
 
         PullDownMenu {
             MenuItem {
@@ -73,35 +82,32 @@ Page {
                 text: qsTrId("lautta-viewers-share")
                 onClicked: external.share()
             }
-            MenuItem {
-                text: page.wrap
-                      //% "Don't wrap lines"
-                      ? qsTrId("lautta-viewers-unwrap")
-                      //% "Wrap lines"
-                      : qsTrId("lautta-viewers-wrap")
-                onClicked: page.wrap = !page.wrap
-            }
         }
 
         header: PageHeader {
             width: view.width
             title: page.fileName
+            // The list is put at its top (above the header) when the text
+            // arrives, and a ListView keeps contentY when its header grows:
+            // a description line that came only with the text would push
+            // the top of the header out of view. So the line is there,
+            // blank, from the start.
             description: doc.loaded
                          //% "Read-only · %1"
                          ? qsTrId("lautta-viewers-read-only").arg(Format.formatFileSize(doc.size))
-                         : ""
+                         : " "
         }
 
         delegate: Item {
-            width: page.wrap ? view.width : view.contentWidth
+            width: view.width
             height: Math.max(line.implicitHeight, Theme.fontSizeExtraSmall * 1.4)
 
             Label {
-                id: number
                 x: Theme.paddingSmall
                 width: page.gutter - Theme.paddingLarge
                 horizontalAlignment: Text.AlignRight
-                text: index + 1
+                // A line's number on its first row only.
+                text: modelData.number > 0 ? modelData.number : ""
                 font.family: "monospace"
                 font.pixelSize: Theme.fontSizeExtraSmall
                 color: Theme.secondaryColor
@@ -110,12 +116,17 @@ Page {
             Label {
                 id: line
                 x: page.gutter
-                width: page.wrap ? view.width - page.gutter - Theme.horizontalPageMargin : implicitWidth
-                text: modelData
+                // Never implicitWidth: wrapping makes that depend on the
+                // width again (a binding loop).
+                width: parent.width - page.gutter - Theme.horizontalPageMargin
+                // The row's characters come back escaped from the core, with
+                // the colours of its part of the line, so nothing in the file
+                // is read as markup (PRV-13).
+                text: doc.styledRow(modelData.text, modelData.line, modelData.start, doc.highlighted ? page.colours : "")
                 font.family: "monospace"
                 font.pixelSize: Theme.fontSizeExtraSmall
-                wrapMode: page.wrap ? Text.WrapAnywhere : Text.NoWrap
-                textFormat: Text.PlainText
+                wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                textFormat: Text.StyledText
             }
         }
 
@@ -158,7 +169,6 @@ Page {
         }
 
         VerticalScrollDecorator { }
-        HorizontalScrollDecorator { }
     }
 
     BusyIndicator {

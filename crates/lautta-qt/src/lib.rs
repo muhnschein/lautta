@@ -42,10 +42,28 @@ cpp! {{
     #include <sailfishapp.h>
 #endif
 
+    // Installs the catalogues of `directory`: engineering English first, then
+    // the user's language. The translator installed last is asked first, so a
+    // language that lacks a message falls back to engineering English, which
+    // has the English plural forms (UI-7). False when that catalogue is missing.
+    static bool lauttaInstallTranslations(QCoreApplication *app, const QString &directory)
+    {
+        QTranslator *english = new QTranslator(app);
+        const bool found = english->load(QStringLiteral("harbour-lautta"), directory);
+        if (found)
+            app->installTranslator(english);
+        QTranslator *local = new QTranslator(app);
+        if (local->load(QLocale(), QStringLiteral("harbour-lautta"), QStringLiteral("-"), directory))
+            app->installTranslator(local);
+        return found;
+    }
+
     // QML check mode (SPEC TST-6, tests/qml): compiles and instantiates QML
     // documents with this binary's engine, so the real Silica modules and the
     // real Lautta types are used. Any error, and any warning or console.error
-    // naming a checked document, fails.
+    // naming a checked document, fails. `-T <directory>` installs the
+    // catalogues of that directory first (tests/translations); without it
+    // qsTrId gives back the id.
     static QStringList *lauttaCheckProblems = nullptr;
     static QString lauttaCheckFile;
 
@@ -66,12 +84,19 @@ cpp! {{
         QGuiApplication app(count, argv);
         QStringList importPaths;
         QStringList files;
+        QString translations;
         const QStringList args = QCoreApplication::arguments().mid(2);
         for (int i = 0; i < args.size(); ++i) {
             if (args.at(i) == QLatin1String("-I") && i + 1 < args.size())
                 importPaths << args.at(++i);
+            else if (args.at(i) == QLatin1String("-T") && i + 1 < args.size())
+                translations = args.at(++i);
             else
                 files << args.at(i);
+        }
+        if (!translations.isEmpty() && !lauttaInstallTranslations(&app, translations)) {
+            std::printf("ERROR   no harbour-lautta.qm in %s\n", qPrintable(translations));
+            return 1;
         }
         int failures = 0;
         for (const QString &file : files) {
@@ -127,11 +152,14 @@ cpp! {{
 }}
 
 /// Starts the application: Qt, the QML engine and the main page. `argv`
-/// comes from the exported C `main` (SPEC RS-3).
+/// comes from the exported C `main` (SPEC RS-3). Panics abort the process,
+/// apart from PDF drawing's (RS-4); tests that start the QML engine with
+/// [`qml_check`] keep the default hook.
 ///
 /// # Safety
 /// `argc`/`argv` must be the process arguments as passed to `main`.
 pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
+    lautta_core::panics::abort_outside_catch();
     start();
     cpp!([argc as "int", argv as "char**"] -> c_int as "int" {
             if (argc > 1 && qstrcmp(argv[1], "--qml-check") == 0)
@@ -140,14 +168,7 @@ pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
             count = argc;
     #ifdef LAUTTA_SAILFISH
             QGuiApplication *app = SailfishApp::application(count, argv);
-            // Engineering English first, then the user's language (UI-7).
-            const QString translations = SailfishApp::pathTo(QStringLiteral("translations")).toLocalFile();
-            QTranslator *english = new QTranslator(app);
-            if (english->load(QStringLiteral("harbour-lautta"), translations))
-                app->installTranslator(english);
-            QTranslator *local = new QTranslator(app);
-            if (local->load(QLocale(), QStringLiteral("harbour-lautta"), QStringLiteral("-"), translations))
-                app->installTranslator(local);
+            lauttaInstallTranslations(app, SailfishApp::pathTo(QStringLiteral("translations")).toLocalFile());
             QQuickView *view = SailfishApp::createView();
             lauttaRegisterImageProviders(view->engine());
             view->setSource(SailfishApp::pathToMainQml());
@@ -202,8 +223,9 @@ pub fn cstr(s: &str) -> std::ffi::CString {
 }
 
 /// Runs the QML check (see `--qml-check`) in this process with the given
-/// arguments (`-I <path>` and files). Opens the core from `$HOME` and
-/// registers the types first, like the app does. Used by the host QML tests.
+/// arguments (`-I <path>`, `-T <catalogue folder>` and files). Opens the core
+/// from `$HOME` and registers the types first, like the app does. Used by the
+/// host QML tests.
 pub fn qml_check(args: &[String]) -> c_int {
     start();
     let mut owned: Vec<std::ffi::CString> = vec![cstr("harbour-lautta"), cstr("--qml-check")];

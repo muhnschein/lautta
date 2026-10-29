@@ -2,7 +2,7 @@
 //! zbus proxy for `org.netvfs.Bridge1` at `/org/netvfs/Bridge` (XB-8..XB-10).
 //! The interface text is `tests/bridge-contract/org.netvfs.Bridge1.xml`.
 
-use crate::wire::{Opts, WireCapabilities, WireEntry, WireLocation, WireNearby, WireWalkItem};
+use crate::wire::{Opts, WireCapabilities, WireDrive, WireEntry, WireLocation, WireNearby, WireWalkItem};
 use zbus::zvariant::{Fd, OwnedValue};
 
 #[zbus::proxy(
@@ -21,6 +21,9 @@ pub trait Bridge1 {
     fn request_consent(&self) -> zbus::Result<()>;
     #[zbus(signal)]
     fn consent_changed(&self, consent: String) -> zbus::Result<()>;
+    /// The optional parts this bridge offers (XB-19, [`crate::feature`]); an
+    /// older bridge answers `UnknownMethod`.
+    fn get_features(&self) -> zbus::Result<Vec<String>>;
 
     // Locations
     fn list_locations(&self) -> zbus::Result<Vec<WireLocation>>;
@@ -107,4 +110,15 @@ pub trait Bridge1 {
     // Handoff
     fn open_account_settings(&self, loc: &str) -> zbus::Result<()>;
     fn add_account(&self, provider: &str) -> zbus::Result<()>;
+    /// Opens Settings › Storage (XB-15); needs no consent.
+    fn open_storage_settings(&self) -> zbus::Result<()>;
+
+    // Drives (XB-20, feature [`crate::feature::DRIVES`]); no consent needed.
+    /// The memory cards and USB drives, mounted or not.
+    fn list_drives(&self) -> zbus::Result<Vec<WireDrive>>;
+    #[zbus(signal)]
+    fn drives_changed(&self) -> zbus::Result<()>;
+    /// Mounts a drive: where it is mounted.
+    fn mount(&self, drive: &str) -> zbus::Result<Vec<u8>>;
+    fn unmount(&self, drive: &str) -> zbus::Result<()>;
 }

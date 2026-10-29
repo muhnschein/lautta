@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The operations area on a temporary home: compress and extract through the
 //! engine, remote compress through a pipe, info, permissions, links,
-//! Recently deleted and the share probe.
+//! the Trash and the share probe.
 
 use lautta_core::app::{Core, Started};
 use lautta_core::app_operations::*;
@@ -340,48 +340,6 @@ async fn summary_conflicts_and_start_with_options() {
 }
 
 #[tokio::test]
-async fn info_and_links() {
-    let h = home().await;
-    write(&h.root.join("Documents/doc.txt"), b"abc");
-    let u = uri("lautta://user-documents/doc.txt");
-
-    let info = h.core.info(&u).await.unwrap();
-    assert_eq!(info.name, "doc.txt");
-    assert_eq!(info.size, Some(3));
-    assert_eq!(info.category, "text");
-    assert_eq!(info.folder_name, "Documents");
-    assert!(info.mode_text.len() == 9 && info.mode.is_some());
-    assert!(info.can_symlink);
-    assert!(info.free_bytes.is_some());
-    assert!(!info.is_dir);
-
-    let dl = uri("lautta://user-downloads/");
-    let hard = h.core.make_link(&u, &dl, true).await;
-    // Different locations: hard links are refused rather than guessed.
-    assert_eq!(hard.unwrap_err().kind, ErrorKind::CrossesDevice);
-    let sym = h.core.make_link(&u, &dl, false).await.unwrap();
-    assert_eq!(sym, uri("lautta://user-downloads/doc.txt"));
-    assert!(std::fs::symlink_metadata(h.root.join("Downloads/doc.txt"))
-        .unwrap()
-        .is_symlink());
-    let sym2 = h.core.make_link(&u, &dl, false).await.unwrap();
-    assert_eq!(sym2, uri("lautta://user-downloads/doc 2.txt"));
-    let same = uri("lautta://user-documents/");
-    let hard = h.core.make_link(&u, &same, true).await.unwrap();
-    assert_eq!(hard, uri("lautta://user-documents/doc 2.txt"));
-    assert_eq!(std::fs::read(h.root.join("Documents/doc 2.txt")).unwrap(), b"abc");
-}
-
-#[tokio::test]
-async fn set_modified_changes_the_time() {
-    let h = home().await;
-    write(&h.root.join("Documents/t.txt"), b"x");
-    let u = uri("lautta://user-documents/t.txt");
-    h.core.set_modified(&u, 1_000_000_000_000).await.unwrap();
-    assert_eq!(h.core.info(&u).await.unwrap().modified, Some(1_000_000_000_000));
-}
-
-#[tokio::test]
 async fn recently_deleted_entries_restore_and_empty() {
     let h = home().await;
     write(&h.root.join("Documents/Uni/old.txt"), b"1");
@@ -411,9 +369,202 @@ async fn recently_deleted_entries_restore_and_empty() {
     h.core.restore(old.id).await.unwrap();
     assert!(h.root.join("Documents/Uni/old.txt").is_file());
     assert_eq!(h.core.trash_entries(now).unwrap().len(), 1);
-    assert_eq!(h.core.trash.empty().unwrap(), 1);
+    assert_eq!(h.core.empty_trash().unwrap(), 1);
     assert!(h.core.trash_entries(now).unwrap().is_empty());
     assert_eq!(h.core.trash.total_size().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn the_trash_at_start_loses_the_expired_and_the_half_made_copies() {
+    let h = home().await;
+    write(&h.root.join("Documents/old.txt"), b"1");
+    write(&h.root.join("Documents/new.txt"), b"22");
+    h.core
+        .delete(&[uri("lautta://user-documents/old.txt")])
+        .await
+        .unwrap();
+    let now = lautta_core::trash::now_secs();
+    h.core
+        .delete(&[uri("lautta://user-documents/new.txt")])
+        .await
+        .unwrap();
+    let partial = h.core.trash.dir().join(".lautta-partial-1");
+    write(&partial.join("x"), b"half");
+    // Kept 40 days: after 31 nothing has expired, after 41 both items have.
+    let mut settings = h.core.settings();
+    settings.recently_deleted_retention_days = 40;
+    h.core.apply_settings(settings);
+    assert_eq!(h.core.tidy_trash(now + 31 * 86_400).unwrap(), 0);
+    assert!(!partial.exists(), "the half-made copy goes");
+    assert_eq!(h.core.trash.list().unwrap().len(), 2);
+    assert_eq!(h.core.tidy_trash(now + 41 * 86_400).unwrap(), 2);
+    assert!(h.core.trash.list().unwrap().is_empty());
+}
+
+/// Trashes `names` from Documents and returns the Trash's rows by name.
+async fn trashed(h: &Home, names: &[&str]) -> std::collections::HashMap<String, TrashEntry> {
+    let uris: Vec<Uri> = names
+        .iter()
+        .map(|n| uri(&format!("lautta://user-documents/{n}")))
+        .collect();
+    h.core.delete(&uris).await.unwrap();
+    h.core
+        .trash_entries(lautta_core::trash::now_secs())
+        .unwrap()
+        .into_iter()
+        .map(|e| (e.name.clone(), e))
+        .collect()
+}
+
+fn stored_url(h: &Home, row: &TrashEntry) -> String {
+    let item = h
+        .core
+        .trash
+        .list()
+        .unwrap()
+        .into_iter()
+        .find(|i| i.id == row.id)
+        .unwrap();
+    lautta_core::app_directory::file_url(&item.stored_path())
+}
+
+#[tokio::test]
+async fn trashed_images_and_videos_carry_what_the_thumbnailer_needs() {
+    let h = home().await;
+    write(&h.root.join("Documents/photo.JPG"), b"jpeg");
+    write(&h.root.join("Documents/clip.mp4"), b"video");
+    write(&h.root.join("Documents/notes.txt"), b"text");
+    write(&h.root.join("Documents/no extension"), b"jpeg");
+    write(&h.root.join("Documents/album.png/inner.txt"), b"x");
+    std::os::unix::fs::symlink("photo.JPG", h.root.join("Documents/link.png")).unwrap();
+    let rows = trashed(
+        &h,
+        &[
+            "photo.JPG",
+            "clip.mp4",
+            "notes.txt",
+            "no extension",
+            "album.png",
+            "link.png",
+        ],
+    )
+    .await;
+    assert_eq!(rows.len(), 6);
+
+    // The stored copy has no extension: the type comes from the original name.
+    let photo = &rows["photo.JPG"];
+    assert_eq!(photo.mime_type, "image/jpeg");
+    assert_eq!(photo.thumbnail_source, stored_url(&h, photo));
+    assert!(photo.thumbnail_source.starts_with("file://"));
+    let clip = &rows["clip.mp4"];
+    assert_eq!(clip.mime_type, "video/mp4");
+    assert_eq!(clip.thumbnail_source, stored_url(&h, clip));
+    // Folders and other files keep their icons.
+    assert_eq!(rows["notes.txt"].mime_type, "text/plain");
+    assert_eq!(rows["notes.txt"].thumbnail_source, "");
+    assert_eq!(rows["no extension"].mime_type, "");
+    assert_eq!(rows["no extension"].thumbnail_source, "");
+    assert_eq!(rows["album.png"].mime_type, "", "a folder has no file type");
+    assert_eq!(rows["album.png"].thumbnail_source, "");
+    // A link would show its target, maybe outside the sandbox.
+    assert_eq!(rows["link.png"].thumbnail_source, "");
+}
+
+fn pdf() -> Vec<u8> {
+    use lautta_pdf::sample::{build, page};
+    build(&[page(100, 200, "1 0 0 rg 0 0 50 50 re f")])
+}
+
+#[tokio::test]
+async fn trashed_pdfs_carry_what_the_thumbnailer_needs() {
+    let h = home().await;
+    write(&h.root.join("Documents/doc.PDF"), &pdf());
+    write(&h.root.join("Documents/dir.pdf/inner.txt"), b"x");
+    write(&h.root.join("Documents/huge.pdf"), b"");
+    std::fs::File::options()
+        .write(true)
+        .open(h.root.join("Documents/huge.pdf"))
+        .unwrap()
+        .set_len(lautta_pdf::MAX_PDF_BYTES + 1)
+        .unwrap();
+    std::os::unix::fs::symlink("doc.PDF", h.root.join("Documents/link.pdf")).unwrap();
+    let rows = trashed(&h, &["doc.PDF", "dir.pdf", "huge.pdf", "link.pdf"]).await;
+    assert_eq!(rows.len(), 4);
+
+    let doc = &rows["doc.PDF"];
+    assert_eq!(
+        doc.mime_type, "application/pdf",
+        "the type comes from the original name: the thumbnailer draws PDFs by it"
+    );
+    assert_eq!(
+        doc.thumbnail_source,
+        stored_url(&h, doc),
+        "the system thumbnailer draws the stored copy (PRV-1)"
+    );
+    assert_eq!(rows["dir.pdf"].thumbnail_source, "", "a folder");
+    let huge = &rows["huge.pdf"];
+    assert_eq!(
+        huge.thumbnail_source,
+        stored_url(&h, huge),
+        "no size limit: the app reads none of it"
+    );
+    assert_eq!(
+        rows["link.pdf"].thumbnail_source, "",
+        "a link would show its target"
+    );
+}
+
+#[tokio::test]
+async fn trashed_pdfs_follow_the_local_thumbnail_switch() {
+    let h = home().await;
+    write(&h.root.join("Documents/doc.pdf"), &pdf());
+    let rows = trashed(&h, &["doc.pdf"]).await;
+    assert!(!rows["doc.pdf"].thumbnail_source.is_empty());
+    let source = |h: &Home| {
+        h.core.trash_entries(lautta_core::trash::now_secs()).unwrap()[0]
+            .thumbnail_source
+            .clone()
+    };
+
+    let mut settings = h.core.settings();
+    settings.thumbnails_remote = false;
+    h.core.apply_settings(settings.clone());
+    assert!(!source(&h).is_empty(), "the servers' switch is for servers");
+    settings.thumbnails_local = false;
+    h.core.apply_settings(settings);
+    assert_eq!(source(&h), "", "thumbnails off");
+
+    // A copy that is gone has nothing to show.
+    let mut settings = h.core.settings();
+    settings.thumbnails_local = true;
+    h.core.apply_settings(settings);
+    let item = h.core.trash.list().unwrap().remove(0);
+    std::fs::remove_file(item.stored_path()).unwrap();
+    assert_eq!(source(&h), "");
+}
+
+#[tokio::test]
+async fn the_thumbnails_setting_decides_whether_trashed_media_show_them() {
+    let h = home().await;
+    write(&h.root.join("Documents/photo.png"), b"png");
+    let rows = trashed(&h, &["photo.png"]).await;
+    assert!(!rows["photo.png"].thumbnail_source.is_empty());
+
+    let mut settings = h.core.settings();
+    settings.thumbnails_local = false;
+    h.core.apply_settings(settings);
+    let off = h.core.trash_entries(lautta_core::trash::now_secs()).unwrap();
+    assert_eq!(off[0].thumbnail_source, "", "thumbnails switched off");
+    assert_eq!(off[0].mime_type, "image/png", "the type does not depend on it");
+
+    // A copy that is gone has nothing to show.
+    let mut settings = h.core.settings();
+    settings.thumbnails_local = true;
+    h.core.apply_settings(settings);
+    let item = h.core.trash.list().unwrap().remove(0);
+    std::fs::remove_file(item.stored_path()).unwrap();
+    let gone = h.core.trash_entries(lautta_core::trash::now_secs()).unwrap();
+    assert_eq!(gone[0].thumbnail_source, "");
 }
 
 #[tokio::test]

@@ -1,0 +1,4 @@
+<!-- SPDX-License-Identifier: LGPL-2.1-or-later -->
+<!-- 28-unit grid, stroke 1: edges on whole units, so whole pixels at any multiple of 28 px (grid 84 to 252 px, list 112 px). -->
+<!-- Centre line on half units: soft at odd pixels per unit (84, 252 px). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" fill="none" stroke="#ffffff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9l9.5 5.5 9.5-5.5M14 14.5v10" stroke-opacity="0.6"/><path d="M14 3.5l9.5 5.5v10l-9.5 5.5-9.5-5.5v-10z"/></svg>

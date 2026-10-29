@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The icon of a file or folder (doc/QML-API.md): a theme icon per category,
-// the system thumbnail for local images and videos (Nemo.Thumbnailer, PRV-1)
-// and the app's thumbnail provider for remote ones (PRV-2). `thumbnailSource`
-// is what DirectoryModel's role gives: a file:// URL, an image://lautta-thumb/
-// URL or empty.
+// The icon of a file or folder (doc/QML-API.md): the app's own glyph per
+// kind (FileIcons.js, UI-2), the system thumbnail for local images, videos
+// and PDFs (Nemo.Thumbnailer, PRV-1: it draws a PDF or video only when given
+// `mimeType`) and the app's thumbnail provider for remote images and PDFs
+// (PRV-2, PRV-14). `thumbnailSource` is what DirectoryModel's role gives: a
+// file:// URL, an image://lautta-thumb/ URL or empty. A thumbnail that cannot
+// be made (an encrypted PDF) leaves the category's glyph, and
+// `thumbnailFailed` says so. A shown video thumbnail keeps the video glyph at
+// the size and place the plain glyph has, on a translucent dark disc, so it
+// reads as a video, not as a photo (PRV-1).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.Thumbnailer 1.0
+import "FileIcons.js" as FileIcons
 
 Item {
     id: icon
@@ -18,39 +24,21 @@ Item {
     property bool selected
     property string mimeType
     property real size: Theme.iconSizeMedium
+    // The side of the glyph inside; the grid draws it large.
+    property real glyphSize: Theme.iconSizeMedium
+    // Glyphs take the highlight colour: the row or tile is pressed or selected.
+    property bool highlighted
     readonly property bool thumbnailReady: thumbnailLoader.item ? thumbnailLoader.item.ready : false
+    readonly property bool thumbnailFailed: thumbnailLoader.item ? thumbnailLoader.item.failed : false
+    // A video's thumbnail shows: the glyph stays over it, light on a dark disc.
+    readonly property bool videoShown: thumbnailReady && category === "video" && !isDir
 
     function iconFor(name, dir) {
-        if (dir)
-            return "image://theme/icon-m-file-folder"
-        switch (name) {
-        case "folder": return "image://theme/icon-m-file-folder"
-        case "image": return "image://theme/icon-m-file-image"
-        case "video": return "image://theme/icon-m-file-video"
-        case "audio": return "image://theme/icon-m-file-audio"
-        case "archive": return "image://theme/icon-m-file-compressed"
-        case "package": return "image://theme/icon-m-file-rpm"
-        case "text":
-        case "code":
-        case "markdown":
-        case "pdf":
-        case "document":
-        case "spreadsheet":
-        case "presentation":
-            return "image://theme/icon-m-document"
-        case "database": return "dir-database"
-        default: return "image://theme/icon-m-document"
-        }
+        return FileIcons.glyph(name, dir, glyphSize)
     }
 
     width: size
     height: size
-
-    AppIcon {
-        anchors.centerIn: parent
-        icon: icon.iconFor(icon.category, icon.isDir)
-        visible: !icon.thumbnailReady
-    }
 
     Loader {
         id: thumbnailLoader
@@ -65,6 +53,7 @@ Item {
 
         Thumbnail {
             readonly property bool ready: status === Thumbnail.Ready
+            readonly property bool failed: status === Thumbnail.Error
 
             source: icon.thumbnailSource
             mimeType: icon.mimeType
@@ -80,6 +69,7 @@ Item {
 
         Image {
             readonly property bool ready: status === Image.Ready
+            readonly property bool failed: status === Image.Error
 
             source: icon.thumbnailSource + "?size=" + Math.round(icon.size)
             sourceSize.width: icon.width
@@ -88,6 +78,41 @@ Item {
             asynchronous: true
             visible: ready
         }
+    }
+
+    // Behind the glyph over a video's thumbnail: dark whatever the ambience, as
+    // Jolla Gallery's overlays, a little wider than the glyph's ring so the
+    // frame shows around it; an even step in from the glyph's side keeps it
+    // centred on whole pixels. Contrast on bright and dark frames (PRV-1);
+    // translucent enough that the frame shows through.
+    Rectangle {
+        objectName: "videoBadge"
+
+        anchors.centerIn: parent
+        width: icon.glyphSize - 2 * Math.floor(icon.glyphSize / 10)
+        height: width
+        radius: width / 2
+        color: Theme.rgba(Theme.highlightDimmerFromColor(Theme.highlightDimmerColor, Theme.LightOnDark),
+                          Theme.opacityHigh)
+        visible: icon.videoShown
+    }
+
+    // The category's glyph: alone when no thumbnail shows, else over a video's
+    // (the one item, so the glyph is the plain one in size and place). Light
+    // on the dark disc and a little translucent, its highlight colour for that
+    // scheme (Jolla Gallery, VerticalPageBackHint).
+    AppIcon {
+        objectName: "fileGlyph"
+
+        anchors.centerIn: parent
+        icon: icon.iconFor(icon.category, icon.isDir)
+        iconSize: icon.glyphSize
+        color: icon.videoShown ? Theme.lightPrimaryColor : Theme.primaryColor
+        highlightColor: icon.videoShown ? Theme.highlightFromColor(Theme.highlightColor, Theme.LightOnDark)
+                                        : Theme.highlightColor
+        highlighted: icon.highlighted
+        opacity: icon.videoShown ? Theme.opacityOverlay : 1
+        visible: !icon.thumbnailReady || icon.videoShown
     }
 
     // A link badge on symlinks (board Directory, "Old drafts").

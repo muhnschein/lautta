@@ -76,7 +76,7 @@ QtObject {
         check(probed[0].name === "shared file.jpg", "file URLs are decoded: " + probed[0].name)
         check(JSON.parse(Operations.probeShared("junk")).length === 0, "junk paths probe to nothing")
 
-        // Recently deleted starts empty and unloaded.
+        // The Trash starts empty and unloaded.
         check(trash.count === 0 && trash.totalSize === 0 && !trash.loaded && !trash.busy, "empty trash model")
     }
 }

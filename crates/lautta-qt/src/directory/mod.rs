@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! directory area facades (doc/QML-API.md): the folder list model, the path
-//! model of the header menu and the folder picker's root list.
+//! model of the header menu and the folder picker's root list; the sample
+//! folder of the view options preview is `App.previewRows`.
 
 mod model;
 mod path;
 mod picker;
+pub(crate) mod preview;
 
 pub use model::DirectoryModel;
 pub use path::PathModel;

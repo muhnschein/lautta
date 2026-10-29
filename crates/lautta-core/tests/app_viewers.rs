@@ -115,6 +115,62 @@ async fn markdown_is_rendered_and_truncation_is_reported() {
     assert!(!r.truncated);
 }
 
+/// The viewer's lines once the colouring is done.
+async fn colours_of(
+    viewed: lautta_core::app_viewers::ViewedText,
+) -> lautta_core::preview::highlight::ColouredText {
+    match viewed.colouring {
+        Some(job) => job.finish().await.unwrap(),
+        None => viewed.lines,
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_text_viewer_gets_colours_by_name_or_first_line() {
+    let h = home().await;
+    h.nas
+        .add_file("configure", b"#!/bin/sh\r\necho \"<img src=x>\"\r\n", 0);
+    h.nas.add_file("notes.txt", b"#!/bin/sh\necho <b>\n", 0);
+    let v = h.core.view_text(&uri("lautta://nv-nas/configure")).await.unwrap();
+    assert_eq!((v.size, v.truncated, v.valid_utf8), (Some(31), false, true));
+    let lines = colours_of(v).await;
+    assert_eq!(lines.syntax(), Some("Bourne Again Shell (bash)"));
+    assert_eq!((lines.line_count(), lines.coloured_lines()), (2, 2));
+    let palette = lautta_core::preview::highlight::Palette::parse("string=#00ff00");
+    let styled = lines.styled_row(1, 0, lines.line(1).unwrap(), &palette);
+    assert!(
+        styled.contains("<font color=\"#00ff00\">&quot;&lt;img src=x&gt;&quot;</font>"),
+        "{styled}"
+    );
+
+    let plain = colours_of(h.core.view_text(&uri("lautta://nv-nas/notes.txt")).await.unwrap()).await;
+    assert_eq!((plain.syntax(), plain.coloured_lines()), (None, 0));
+    assert_eq!(plain.styled_row(1, 0, "echo <b>", &palette), "echo &lt;b&gt;");
+    let err = h
+        .core
+        .view_text(&uri("lautta://nv-nas/none.sh"))
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::NotFound);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_long_file_comes_plain_and_is_coloured_later() {
+    let h = home().await;
+    let script = "for f in *; do echo \"$f\"; done # loop\n".repeat(15_000);
+    h.nas.add_file("long.sh", script.as_bytes(), 0);
+    let v = h.core.view_text(&uri("lautta://nv-nas/long.sh")).await.unwrap();
+    assert!(v.colouring.is_some(), "not done within the first wait");
+    assert_eq!((v.lines.line_count(), v.lines.coloured_lines()), (15_000, 0));
+    assert_eq!(
+        v.lines.line(14_999),
+        Some("for f in *; do echo \"$f\"; done # loop")
+    );
+    let lines = colours_of(v).await;
+    assert!(lines.coloured_lines() > 0, "the first lines at least");
+    assert_eq!(lines.line_count(), 15_000);
+}
+
 #[tokio::test]
 async fn exif_report_reads_the_head_of_the_file() {
     let h = home().await;
@@ -232,6 +288,236 @@ async fn local_files_and_switched_off_thumbnails_are_refused() {
     h.core.apply_settings(s);
     let t = previews.request(h.core.clone(), uri("lautta://nv-nas/x.jpg"), 32);
     assert_eq!(t.rx.await.unwrap().unwrap_err().kind, ErrorKind::Unsupported);
+}
+
+#[tokio::test]
+async fn remote_thumbnails_follow_the_size_setting() {
+    let h = home().await;
+    // 1.5 MB that only decode whole: no EXIF thumbnail to fall back on.
+    let mut big = jpeg(64, 64);
+    big.resize(1_500_000, 0);
+    h.nas.add_file("big.jpg", &big, 0);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let u = uri("lautta://nv-nas/big.jpg");
+    let mut s = h.core.settings();
+    s.thumbnail_max_remote_mb = 1;
+    h.core.apply_settings(s.clone());
+    let t = previews.request(h.core.clone(), u.clone(), 32);
+    assert_eq!(
+        t.rx.await.unwrap().unwrap_err().kind,
+        ErrorKind::Unsupported,
+        "larger than the 1 MB the setting allows"
+    );
+    s.thumbnail_max_remote_mb = 2;
+    h.core.apply_settings(s);
+    let t = previews.request(h.core.clone(), u, 32);
+    assert!(t.rx.await.unwrap().is_ok(), "within 2 MB it is made");
+}
+
+/// A PDF of two pages: a red square in the top left corner of the first,
+/// the second all blue.
+fn pdf() -> Vec<u8> {
+    use lautta_pdf::sample::{build, page};
+    build(&[
+        page(595, 842, "1 0 0 rg 0 792 50 50 re f"),
+        page(595, 842, "0 0 1 rg 0 0 595 842 re f"),
+    ])
+}
+
+fn thumb_pixels(bytes: &[u8]) -> image::RgbImage {
+    image::load_from_memory(bytes).unwrap().to_rgb8()
+}
+
+async fn thumbnail(
+    h: &Home,
+    previews: &Arc<lautta_core::app_viewers::Previews>,
+    u: &str,
+    size: u32,
+) -> Result<Vec<u8>, lautta_core::Error> {
+    let t = previews.request(h.core.clone(), uri(u), size);
+    t.rx.await.unwrap().map(|b| b.to_vec())
+}
+
+#[tokio::test]
+async fn a_remote_pdf_thumbnail_is_its_first_page_made_once_per_version() {
+    let h = home().await;
+    h.nas.add_file("d/a.pdf", &pdf(), 9_000);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let u = "lautta://nv-nas/d/a.pdf";
+
+    let bytes = thumbnail(&h, &previews, u, 64).await.unwrap();
+    let img = thumb_pixels(&bytes);
+    assert_eq!(img.dimensions(), (64, 64), "the size asked for (PRV-14)");
+    let corner = img.get_pixel(2, 2).0;
+    assert!(
+        corner[0] > 200 && corner[1] < 60 && corner[2] < 60,
+        "page 1's red corner: {corner:?}"
+    );
+    let inside = img.get_pixel(40, 40).0;
+    assert!(
+        inside.iter().all(|c| *c > 235),
+        "page 2 is blue and not drawn: {inside:?}"
+    );
+    assert_eq!(previews.cache().len(), 1);
+
+    let before = open_reads(&h.nas);
+    assert_eq!(thumbnail(&h, &previews, u, 64).await.unwrap(), bytes);
+    assert_eq!(before, open_reads(&h.nas), "the second one comes from the cache");
+    assert_eq!(previews.cache().len(), 1);
+
+    thumbnail(&h, &previews, u, 100).await.unwrap();
+    assert_eq!(previews.cache().len(), 2, "another size is another thumbnail");
+    h.nas.add_file("d/a.pdf", &pdf(), 10_000);
+    thumbnail(&h, &previews, u, 64).await.unwrap();
+    assert_eq!(previews.cache().len(), 3, "a changed file is drawn again");
+}
+
+#[tokio::test]
+async fn local_pdfs_are_left_to_the_system_thumbnailer() {
+    let h = home().await;
+    std::fs::write(h.root.join("Documents/l.pdf"), pdf()).unwrap();
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let err = thumbnail(&h, &previews, "lautta://user-documents/l.pdf", 48)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err.message, "no app thumbnail for this file",
+        "Nemo.Thumbnailer draws it, in a process of its own (PRV-1)"
+    );
+    assert!(previews.cache().is_empty());
+}
+
+#[tokio::test]
+async fn server_pdfs_follow_the_server_thumbnail_switch() {
+    let h = home().await;
+    h.nas.add_file("a.pdf", &pdf(), 1);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let remote = "lautta://nv-nas/a.pdf";
+
+    let mut s = h.core.settings();
+    s.thumbnails_remote = false;
+    h.core.apply_settings(s.clone());
+    assert_eq!(
+        thumbnail(&h, &previews, remote, 32).await.unwrap_err().kind,
+        ErrorKind::Unsupported,
+        "a PDF on a server needs Thumbnails from servers"
+    );
+    assert_eq!(open_reads(&h.nas), 0, "refused before reading");
+    assert!(previews.cache().is_empty());
+
+    s.thumbnails_remote = true;
+    h.core.apply_settings(s);
+    assert!(
+        thumbnail(&h, &previews, remote, 32).await.is_ok(),
+        "switched on: made"
+    );
+}
+
+#[tokio::test]
+async fn pdfs_over_the_size_limit_are_refused_before_they_are_read() {
+    let h = home().await;
+    // Valid, with spaces after the end marker.
+    let mut big = pdf();
+    big.resize(1_500_000, b' ');
+    h.nas.add_file("big.pdf", &big, 0);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let mut s = h.core.settings();
+    s.thumbnail_max_remote_mb = 1;
+    h.core.apply_settings(s.clone());
+    let err = thumbnail(&h, &previews, "lautta://nv-nas/big.pdf", 32)
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::Unsupported);
+    assert_eq!(open_reads(&h.nas), 0, "the server limit holds PDFs too");
+    s.thumbnail_max_remote_mb = 2;
+    h.core.apply_settings(s);
+    assert!(thumbnail(&h, &previews, "lautta://nv-nas/big.pdf", 32)
+        .await
+        .is_ok());
+}
+
+#[tokio::test]
+async fn pdfs_that_cannot_be_drawn_are_refused_and_not_read_again() {
+    use lautta_pdf::sample::{build, LOCKED_AES256};
+    let h = home().await;
+    h.nas.add_file("locked.pdf", LOCKED_AES256, 1);
+    h.nas.add_file("broken.pdf", b"%PDF-1.4 and then nothing", 1);
+    h.nas.add_file("empty.pdf", &build(&[]), 1);
+    h.nas.add_file("zero.pdf", b"", 1);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    for (n, name) in ["locked", "broken", "empty", "zero"].into_iter().enumerate() {
+        let u = format!("lautta://nv-nas/{name}.pdf");
+        for _ in 0..3 {
+            let err = thumbnail(&h, &previews, &u, 32).await.unwrap_err();
+            assert_eq!(err.kind, ErrorKind::Unsupported, "{name}");
+        }
+        assert_eq!(open_reads(&h.nas), n + 1, "{name} was read once");
+    }
+    assert!(previews.cache().is_empty());
+    let leftovers: Vec<_> = std::fs::read_dir(previews.cache().dir()).unwrap().collect();
+    assert!(leftovers.is_empty(), "no markers stay behind");
+
+    // The verdict is on one version of the file: a new one is tried.
+    h.nas.add_file("broken.pdf", &pdf(), 2);
+    thumbnail(&h, &previews, "lautta://nv-nas/broken.pdf", 32)
+        .await
+        .expect("the file was replaced");
+}
+
+#[tokio::test]
+async fn a_pdf_request_that_is_cancelled_while_queued_never_runs() {
+    let h = home().await;
+    h.nas.add_file("a.pdf", &pdf(), 0);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let gate = Arc::new(tokio::sync::Notify::new());
+    for i in 0..2 {
+        let g = gate.clone();
+        previews
+            .jobs()
+            .request(&format!("block{i}"), "nv-nas", async move { g.notified().await });
+    }
+    let t = previews.request(h.core.clone(), uri("lautta://nv-nas/a.pdf"), 32);
+    assert_eq!(
+        previews.jobs().queued("nv-nas"),
+        1,
+        "PDFs wait in the same queue (PRV-3)"
+    );
+    t.cancel();
+    assert_eq!(
+        previews.jobs().queued("nv-nas"),
+        0,
+        "a delegate that left takes its request along"
+    );
+    gate.notify_waiters();
+    assert_eq!(open_reads(&h.nas), 0);
+}
+
+#[tokio::test]
+async fn a_smaller_thumbnail_cache_is_trimmed_at_once() {
+    let h = home().await;
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let cache = previews.cache();
+    for i in 0..12 {
+        cache.put(&format!("k{i:02}"), &vec![7u8; 1_000_000]).unwrap();
+    }
+    assert_eq!(cache.total_bytes(), 12_000_000, "within the 200 MB default");
+    let mut s = h.core.settings();
+    s.thumbnail_cache_mb = 10;
+    h.core.apply_settings(s);
+    // The files go off the caller's thread: wait for them.
+    for _ in 0..300 {
+        if cache.total_bytes() <= 10_000_000 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    assert_eq!(cache.max_bytes(), 10_000_000);
+    assert_eq!(cache.total_bytes(), 10_000_000, "trimmed to the new size");
+    assert!(
+        !cache.contains("k00") && !cache.contains("k01") && cache.contains("k02"),
+        "the oldest go first"
+    );
+    assert!(!cache.dir().join("k00.thumb").exists(), "from disk too");
 }
 
 #[tokio::test]

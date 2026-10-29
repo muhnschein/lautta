@@ -17,8 +17,6 @@ use std::collections::BTreeMap;
 pub const REMORSE_RANGE: (u32, u32) = (3, 10);
 pub const LOCAL_CONCURRENCY_RANGE: (u32, u32) = (1, 4);
 pub const REMOTE_LANES_RANGE: (u32, u32) = (1, 6);
-/// Items per row of the portrait grid view: 4 (compact) or 3 (with names).
-pub const GRID_COLUMNS_RANGE: (u32, u32) = (3, 4);
 const RETENTION_DAYS_MAX: u32 = 365;
 const MB: u64 = 1_000_000;
 const GB: u64 = 1_000_000_000;
@@ -26,38 +24,28 @@ const GB: u64 = 1_000_000_000;
 pub const SORT_KEYS: [&str; 4] = ["name", "size", "modified", "type"];
 pub const VIEW_MODES: [&str; 2] = ["list", "grid"];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum DateFormat {
-    #[default]
-    Relative,
-    Iso,
-    Locale,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    // Default view (BRW-4 global defaults).
+    // View options (BRW-4): one set for every folder.
     pub sort_key: String,
     pub sort_descending: bool,
     pub folders_first: bool,
     pub show_hidden: bool,
     pub view_mode: String,
-    pub grid_columns: u32,
 
     // Thumbnails (PRV).
     pub thumbnails_local: bool,
     pub thumbnails_remote: bool,
+    /// Largest remote file read whole for a thumbnail (PRV-2). There is no
+    /// lower limit for metered connections: the app cannot tell one.
     pub thumbnail_max_remote_mb: u64,
-    /// Largest remote file thumbnailed on a metered connection.
-    pub thumbnail_max_metered_mb: u64,
 
     // Caches.
     pub thumbnail_cache_mb: u64,
     pub listing_cache_days: u32,
 
-    // Recently deleted (§11) and remorse timer.
+    // The Trash (OPS-8; stored as `recently_deleted`) and remorse timer.
     pub recently_deleted: bool,
     pub recently_deleted_retention_days: u32,
     pub remorse_seconds: u32,
@@ -73,7 +61,6 @@ pub struct Settings {
     pub large_op_items: u64,
     pub large_op_bytes: u64,
 
-    pub date_format: DateFormat,
     pub recents_enabled: bool,
     /// SRC-3: depth limit of remote searches.
     pub search_remote_depth: u32,
@@ -87,11 +74,9 @@ impl Default for Settings {
             folders_first: true,
             show_hidden: false,
             view_mode: "list".to_owned(),
-            grid_columns: 4,
             thumbnails_local: true,
             thumbnails_remote: true,
             thumbnail_max_remote_mb: 20,
-            thumbnail_max_metered_mb: 5,
             thumbnail_cache_mb: 200,
             listing_cache_days: 7,
             recently_deleted: true,
@@ -106,7 +91,6 @@ impl Default for Settings {
             history_retention_days: 30,
             large_op_items: 1_000,
             large_op_bytes: GB,
-            date_format: DateFormat::Relative,
             recents_enabled: true,
             search_remote_depth: 8,
         }
@@ -128,7 +112,6 @@ impl Settings {
             self.view_mode = defaults.view_mode;
         }
         self.thumbnail_max_remote_mb = self.thumbnail_max_remote_mb.clamp(1, 1_000);
-        self.thumbnail_max_metered_mb = self.thumbnail_max_metered_mb.clamp(0, 1_000);
         self.thumbnail_cache_mb = self.thumbnail_cache_mb.clamp(10, 10_000);
         self.listing_cache_days = self.listing_cache_days.clamp(1, RETENTION_DAYS_MAX);
         self.recently_deleted_retention_days =
@@ -137,10 +120,19 @@ impl Settings {
         self.remorse_seconds = clamp(self.remorse_seconds, REMORSE_RANGE);
         self.local_concurrency = clamp(self.local_concurrency, LOCAL_CONCURRENCY_RANGE);
         self.remote_lanes = clamp(self.remote_lanes, REMOTE_LANES_RANGE);
-        self.grid_columns = clamp(self.grid_columns, GRID_COLUMNS_RANGE);
         self.large_op_items = self.large_op_items.max(1);
         self.large_op_bytes = self.large_op_bytes.max(MB);
         self.search_remote_depth = self.search_remote_depth.clamp(1, 64);
+    }
+
+    /// `thumbnail_max_remote_mb` in bytes (PRV-2).
+    pub fn thumbnail_max_remote_bytes(&self) -> u64 {
+        self.thumbnail_max_remote_mb.saturating_mul(MB)
+    }
+
+    /// `thumbnail_cache_mb` in bytes (PRV-2).
+    pub fn thumbnail_cache_bytes(&self) -> u64 {
+        self.thumbnail_cache_mb.saturating_mul(MB)
     }
 
     pub fn sanitised(mut self) -> Settings {
@@ -358,7 +350,11 @@ mod tests {
             ("name", false, true)
         );
         assert!(!s.show_hidden && s.thumbnails_local && s.thumbnails_remote);
-        assert_eq!((s.thumbnail_max_remote_mb, s.thumbnail_max_metered_mb), (20, 5));
+        assert_eq!(s.thumbnail_max_remote_mb, 20);
+        assert_eq!(
+            (s.thumbnail_max_remote_bytes(), s.thumbnail_cache_bytes()),
+            (20_000_000, 200_000_000)
+        );
         assert_eq!((s.thumbnail_cache_mb, s.listing_cache_days), (200, 7));
         assert!(s.recently_deleted);
         assert_eq!((s.recently_deleted_retention_days, s.remorse_seconds), (30, 5));
@@ -366,10 +362,8 @@ mod tests {
         assert!(s.preserve_mtimes && !s.preserve_permissions && !s.verify_checksums && s.auto_resume);
         assert_eq!(s.history_retention_days, 30);
         assert_eq!((s.large_op_items, s.large_op_bytes), (1_000, 1_000_000_000));
-        assert_eq!(s.date_format, DateFormat::Relative);
         assert!(s.recents_enabled);
         assert_eq!(s.search_remote_depth, 8);
-        assert_eq!(s.grid_columns, 4);
         assert_eq!(s.clone().sanitised(), s, "defaults are already valid");
     }
 
@@ -380,12 +374,12 @@ mod tests {
             local_concurrency: 9,
             remote_lanes: 0,
             thumbnail_cache_mb: 1,
+            thumbnail_max_remote_mb: 0,
             listing_cache_days: 0,
             history_retention_days: 100_000,
             large_op_items: 0,
             large_op_bytes: 0,
             search_remote_depth: 0,
-            grid_columns: 2,
             sort_key: "bogus".into(),
             view_mode: "".into(),
             ..Settings::default()
@@ -396,16 +390,17 @@ mod tests {
             (3, 4, 1)
         );
         assert_eq!((s.thumbnail_cache_mb, s.listing_cache_days), (10, 1));
+        assert_eq!(s.thumbnail_max_remote_mb, 1);
         assert_eq!(s.history_retention_days, 365);
         assert_eq!((s.large_op_items, s.large_op_bytes), (1, MB));
         assert_eq!(s.search_remote_depth, 1);
-        assert_eq!(s.grid_columns, 3);
         assert_eq!((s.sort_key.as_str(), s.view_mode.as_str()), ("name", "list"));
         s.remorse_seconds = 99;
         s.remote_lanes = 99;
-        s.grid_columns = 5;
+        s.thumbnail_max_remote_mb = 5_000;
         s.sanitise();
-        assert_eq!((s.remorse_seconds, s.remote_lanes, s.grid_columns), (10, 6, 4));
+        assert_eq!((s.remorse_seconds, s.remote_lanes), (10, 6));
+        assert_eq!(s.thumbnail_max_remote_mb, 1_000);
     }
 
     #[test]
@@ -414,17 +409,13 @@ mod tests {
             sort_key: "size".into(),
             sort_descending: true,
             show_hidden: true,
-            date_format: DateFormat::Iso,
             remote_lanes: 5,
-            grid_columns: 3,
             ..Settings::default()
         }
         .sanitised();
         assert_eq!(Settings::from_json(&s.to_json()), s);
         let map = s.to_map();
-        assert_eq!(map["date_format"], json!("iso"));
         assert_eq!(map["remote_lanes"], json!(5));
-        assert_eq!(map["grid_columns"], json!(3));
         assert_eq!(Settings::from_map(&map), s);
     }
 
@@ -433,19 +424,62 @@ mod tests {
         let mut map = BTreeMap::new();
         map.insert("remorse_seconds".to_owned(), json!(8));
         map.insert("local_concurrency".to_owned(), json!("many"));
-        map.insert("date_format".to_owned(), json!("martian"));
         map.insert("show_hidden".to_owned(), json!(true));
         map.insert("not_a_setting".to_owned(), json!(1));
         map.insert("remote_lanes".to_owned(), json!(100));
         let s = Settings::from_map(&map);
         assert_eq!(s.remorse_seconds, 8);
         assert_eq!(s.local_concurrency, 2);
-        assert_eq!(s.date_format, DateFormat::Relative);
         assert!(s.show_hidden);
         assert_eq!(s.remote_lanes, 6, "out-of-range values are clamped");
         assert_eq!(Settings::from_json("not json"), Settings::default());
         assert_eq!(Settings::from_json("[1]"), Settings::default());
         assert_eq!(Settings::from_json("{}"), Settings::default());
+    }
+
+    #[test]
+    fn a_stored_date_format_is_ignored() {
+        // Dates follow the system format (§18): there is no date format
+        // setting, and the value an earlier version left in dconf neither
+        // breaks the other keys nor survives the next save.
+        let stored = r#"{"date_format":"iso","remorse_seconds":7}"#;
+        let mut s = Settings::from_json(stored);
+        assert_eq!(
+            s,
+            Settings {
+                remorse_seconds: 7,
+                ..Settings::default()
+            }
+        );
+        assert!(!s.to_map().contains_key("date_format"));
+        assert!(!s.to_json().contains("date_format"));
+        assert!(!s.set("date_format", json!("locale")));
+    }
+
+    #[test]
+    fn a_stored_grid_size_is_ignored() {
+        // The grid has one size (BRW-4): the number of tiles per row an
+        // earlier version stored is dropped like any unknown key.
+        let stored = r#"{"grid_columns":3,"view_mode":"grid"}"#;
+        let mut s = Settings::from_json(stored);
+        assert_eq!(s.view_mode, "grid");
+        assert!(!s.to_map().contains_key("grid_columns"));
+        assert!(!s.to_json().contains("grid_columns"));
+        assert!(!s.set("grid_columns", json!(4)));
+        let mut map = BTreeMap::new();
+        map.insert("grid_columns".to_owned(), json!(4));
+        assert_eq!(Settings::from_map(&map), Settings::default());
+    }
+
+    #[test]
+    fn a_stored_metered_limit_is_ignored() {
+        // The app cannot tell a metered connection (PRV-2): the limit an
+        // earlier version stored for one is dropped like any unknown key.
+        let stored = r#"{"thumbnail_max_metered_mb":1,"thumbnail_max_remote_mb":50}"#;
+        let mut s = Settings::from_json(stored);
+        assert_eq!(s.thumbnail_max_remote_mb, 50);
+        assert!(!s.to_map().contains_key("thumbnail_max_metered_mb"));
+        assert!(!s.set("thumbnail_max_metered_mb", json!(5)));
     }
 
     #[test]

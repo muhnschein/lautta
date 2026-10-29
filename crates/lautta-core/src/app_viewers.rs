@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! User-level actions of the viewers area on [`Core`](crate::app::Core):
 //! loading text (PRV-4), Markdown and EXIF sources, the folder's images,
-//! remote thumbnails and full images (PRV-2, PRV-3), media for playback
-//! (PRV-8, PRV-9) and recents (ORG-2).
+//! thumbnails of remote images and PDFs, remote full images (PRV-2,
+//! PRV-3, PRV-14), media for playback (PRV-8, PRV-9) and recents (ORG-2).
 //! Everything is Qt-free; the Qt layer forwards to these functions.
 
 use crate::app::Core;
@@ -11,12 +11,18 @@ use crate::error::{Error, ErrorKind, Result};
 use crate::mime::{category_of, FileCategory};
 use crate::org::recents::RecentKind;
 use crate::preview::exif::{self, ExifInfo};
+use crate::preview::highlight::{self, ColourJob, ColouredText};
 use crate::preview::markdown;
 use crate::preview::text::{self as ptext, TextDoc};
-use crate::provider::{list_all, Lane, ProgressSink, ReadHandle, ReadOptions};
+use crate::provider::{list_all, Lane, ProgressSink, Provider, ReadHandle, ReadOptions};
+use crate::settings::Settings;
 use crate::sort::sort_permutation;
-use crate::thumbs::{remote_thumbnail, thumb_key, ThumbJobs, ThumbnailCache};
+use crate::thumbs::{
+    remote_thumbnail, thumb_key, thumbnail_source, ThumbJobs, ThumbSettings, ThumbSource, ThumbnailCache,
+};
+use crate::thumbs_pdf::PdfThumbs;
 use crate::uri::Uri;
+use crate::vpath::VPath;
 use std::collections::HashMap;
 use std::os::fd::OwnedFd;
 use std::path::PathBuf;
@@ -38,6 +44,18 @@ pub const MAX_THUMB: u32 = 1024;
 pub struct LoadedText {
     pub doc: TextDoc,
     pub size: Option<u64>,
+}
+
+/// A text file for the text viewer, with its colours (PRV-13).
+#[derive(Debug)]
+pub struct ViewedText {
+    pub size: Option<u64>,
+    pub truncated: bool,
+    pub valid_utf8: bool,
+    /// The lines: coloured when that was quick, else plain until
+    /// `colouring` finishes.
+    pub lines: ColouredText,
+    pub colouring: Option<ColourJob>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -166,6 +184,7 @@ impl ReadAhead {
 pub struct Previews {
     cache: ThumbnailCache,
     jobs: ThumbJobs,
+    pdf: PdfThumbs,
     waiters: Mutex<HashMap<String, Vec<(u64, ThumbSender)>>>,
     next_waiter: AtomicU64,
 }
@@ -210,8 +229,8 @@ impl Previews {
         &self.jobs
     }
 
-    /// Queues the thumbnail of a remote image. Several requests for the same
-    /// image and size share one job.
+    /// Queues the thumbnail of a remote image or of a PDF. Several requests
+    /// for the same file and size share one job.
     pub fn request(self: &Arc<Self>, core: Arc<Core>, uri: Uri, size: u32) -> ThumbTicket {
         let job_key = thumb_key(&uri.to_string(), size, None, None);
         let waiter = self.next_waiter.fetch_add(1, Ordering::Relaxed);
@@ -269,33 +288,72 @@ impl Previews {
         }
     }
 
-    /// The thumbnail itself: cache first, then the first 64 KiB or the whole
-    /// file (PRV-2).
+    /// The thumbnail itself, if `thumbnail_source` says the app makes it
+    /// (a server file; local ones are the system thumbnailer's): cache
+    /// first, then for an image the first 64 KiB or the whole file (PRV-2),
+    /// for a PDF its first page (PRV-14).
     async fn make(&self, core: &Core, uri: &Uri, size: u32) -> ThumbResult {
-        if !core.settings().thumbnails_remote {
-            return Err(Error::new(ErrorKind::Unsupported, "remote thumbnails are off"));
-        }
-        if core.locations.to_local_path(uri).is_some() {
-            return Err(Error::new(
-                ErrorKind::Unsupported,
-                "local files use the system thumbnailer",
-            ));
-        }
-        let provider = core.provider(&uri.location)?;
-        let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
+        let file = ThumbFile::open(core, uri).await?;
+        let entry = &file.entry;
         if entry.is_dir() {
             return Err(Error::kind(ErrorKind::IsADirectory));
         }
-        let key = thumb_key(&uri.to_string(), size, entry.modified_ms(), entry.etag.as_deref());
+        // The folder's own *Show thumbnails* was asked where the row was made.
+        // Read when asked, so a change in View options holds from the next
+        // thumbnail on.
+        let settings = ThumbSettings::new(&core.settings());
+        if thumbnail_source(entry, file.local, true, &settings) != ThumbSource::App {
+            return Err(Error::new(
+                ErrorKind::Unsupported,
+                "no app thumbnail for this file",
+            ));
+        }
+        let pdf = category_of(entry) == FileCategory::Pdf;
+        let version = thumb_key(&file.key_uri, 0, entry.modified_ms(), entry.etag.as_deref());
+        if pdf && self.pdf.is_refused(&version) {
+            return Err(Error::new(ErrorKind::Unsupported, "PDF cannot be drawn"));
+        }
+        let key = thumb_key(&file.key_uri, size, entry.modified_ms(), entry.etag.as_deref());
         if let Some(hit) = self.cache.get(&key) {
             return Ok(Arc::new(hit));
         }
-        let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
-        let bytes = remote_thumbnail(handle.as_ref(), size, false).await?;
+        let handle = file.provider.open_read(&file.path, Lane::Interactive).await?;
+        let bytes = if pdf {
+            let (dir, limit) = (self.cache.dir(), settings.pdf_limit());
+            self.pdf.make(dir, &version, handle.as_ref(), size, limit).await?
+        } else {
+            remote_thumbnail(handle.as_ref(), size, settings.max_remote_bytes).await?
+        };
         if let Err(e) = self.cache.put(&key, &bytes) {
             log::warn!("thumbnail not cached: {e}");
         }
         Ok(Arc::new(bytes))
+    }
+}
+
+/// The file a thumbnail is made from: where to read it and what it is.
+struct ThumbFile {
+    provider: Arc<dyn Provider>,
+    path: VPath,
+    entry: Entry,
+    /// In a folder of this device.
+    local: bool,
+    /// What the cache keys name the file by.
+    key_uri: String,
+}
+
+impl ThumbFile {
+    /// The file `uri` names.
+    async fn open(core: &Core, uri: &Uri) -> Result<ThumbFile> {
+        let provider = core.provider(&uri.location)?;
+        let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
+        Ok(ThumbFile {
+            provider,
+            path: uri.path.clone(),
+            entry,
+            local: core.locations.to_local_path(uri).is_some(),
+            key_uri: uri.to_string(),
+        })
     }
 }
 
@@ -332,6 +390,33 @@ impl Core {
         Ok(LoadedText {
             doc,
             size: entry.size,
+        })
+    }
+
+    /// Reads a text file for the text viewer and colours it (PRV-13). The
+    /// colours come with the text when they are ready within
+    /// [`highlight::FIRST_WAIT`]; otherwise the text comes plain and the
+    /// colouring goes on.
+    pub async fn view_text(&self, uri: &Uri) -> Result<ViewedText> {
+        let loaded = self.load_text(uri).await?;
+        let TextDoc {
+            text,
+            truncated,
+            valid_utf8,
+        } = loaded.doc;
+        let name = uri.path.name().unwrap_or_default().to_vec();
+        let job = highlight::start(name, text.clone());
+        let (lines, colouring) = match job.wait(highlight::FIRST_WAIT).await {
+            Ok(Some(lines)) => (lines, None),
+            Ok(None) => (ColouredText::plain(text), None),
+            Err(job) => (ColouredText::plain(text), Some(job)),
+        };
+        Ok(ViewedText {
+            size: loaded.size,
+            truncated,
+            valid_utf8,
+            lines,
+            colouring,
         })
     }
 
@@ -401,6 +486,22 @@ impl Core {
         Ok(FullImage { bytes, orientation })
     }
 
+    /// A changed thumbnail cache setting holds at once (§18): an open cache
+    /// takes the new budget, trimmed off the caller's thread (ARC-6); one
+    /// opened later reads the setting itself.
+    pub(crate) fn follow_thumbnail_budget(&self, settings: &Settings) {
+        let dir = self.paths.thumbs_dir();
+        let list = lock(PREVIEWS.get_or_init(Mutex::default));
+        if let Some((_, previews)) = list.iter().find(|(d, _)| *d == dir) {
+            let max = settings.thumbnail_cache_bytes();
+            let me = Arc::clone(previews);
+            previews
+                .jobs
+                .runtime()
+                .spawn_blocking(move || me.cache.set_max_bytes(max));
+        }
+    }
+
     /// The thumbnail state for this core's cache folder.
     pub fn previews(&self, rt: &Handle) -> Result<Arc<Previews>> {
         let dir = self.paths.thumbs_dir();
@@ -408,10 +509,11 @@ impl Core {
         if let Some((_, p)) = list.iter().find(|(d, _)| *d == dir) {
             return Ok(Arc::clone(p));
         }
-        let max = self.settings().thumbnail_cache_mb.saturating_mul(1_000_000);
+        let max = self.settings().thumbnail_cache_bytes();
         let previews = Arc::new(Previews {
             cache: ThumbnailCache::new(&dir, max)?,
             jobs: ThumbJobs::new(rt.clone()),
+            pdf: PdfThumbs::default(),
             waiters: Mutex::default(),
             next_waiter: AtomicU64::new(1),
         });

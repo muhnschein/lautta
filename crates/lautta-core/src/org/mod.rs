@@ -155,8 +155,8 @@ mod tests {
         let gone = Uri::parse("lautta://nv-1/x").unwrap();
         let kept = Uri::parse("lautta://user-documents/x").unwrap();
         let fav = Favourites::new(db.clone());
-        fav.add(&gone, "g", None).unwrap();
-        fav.add(&kept, "k", None).unwrap();
+        fav.add(&gone, "g", None, true).unwrap();
+        fav.add(&kept, "k", None, true).unwrap();
         let rec = Recents::new(db.clone());
         rec.record(&gone, "g", RecentKind::Opened).unwrap();
         rec.record(&kept, "k", RecentKind::Opened).unwrap();

@@ -8,7 +8,7 @@
 //! callers map errors with `Error::from` and keep the errno.
 
 use rustix::fs::{
-    copy_file_range, fadvise, ioctl_ficlone, renameat_with, statvfs as rx_statvfs, utimensat, Advice,
+    copy_file_range, fadvise, ioctl_ficlone, renameat_with, statvfs as rx_statvfs, utimensat, Access, Advice,
     AtFlags, RenameFlags, StatxFlags, Timespec, Timestamps, CWD, UTIME_OMIT,
 };
 use rustix::io::Errno;
@@ -128,9 +128,16 @@ fn statx_unavailable(e: Errno) -> bool {
     e == Errno::NOSYS || e == Errno::PERM || e == Errno::INVAL
 }
 
-/// True when `a` and `b` are on the same device (rename-based trash, OPS-8).
+/// True when `a` and `b` are on the same device.
 pub fn same_device(a: &Path, b: &Path) -> io::Result<bool> {
     Ok(stat(a, true)?.dev == stat(b, true)?.dev)
+}
+
+/// True when this process may add and remove entries in the folder `dir`
+/// (`access(W_OK | X_OK)`). The trash copies an item across mounts only
+/// when it can remove the original afterwards (OPS-8).
+pub fn can_change(dir: &Path) -> bool {
+    rustix::fs::access(dir, Access::WRITE_OK | Access::EXEC_OK).is_ok()
 }
 
 /// `renameat2(RENAME_NOREPLACE)`: atomic "fail if the destination exists".
@@ -254,6 +261,7 @@ mod tests {
     use super::*;
     use std::io::{Read, Seek, SeekFrom, Write};
     use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::fs::PermissionsExt;
 
     fn tmp() -> tempfile::TempDir {
         tempfile::tempdir().unwrap()
@@ -497,6 +505,18 @@ mod tests {
         std::fs::write(&f, "x").unwrap();
         assert!(same_device(&f, d.path()).unwrap());
         assert!(same_device(&f, &d.path().join("missing")).is_err());
+    }
+
+    #[test]
+    fn can_change_needs_write_and_search_permission() {
+        let d = tmp();
+        assert!(can_change(d.path()));
+        assert!(!can_change(&d.path().join("missing")));
+        let locked = d.path().join("locked");
+        std::fs::create_dir(&locked).unwrap();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+        // Root may change any folder.
+        assert_eq!(can_change(&locked), effective_ids().0 == 0);
     }
 
     #[test]

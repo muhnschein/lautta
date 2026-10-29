@@ -14,6 +14,7 @@ Page {
     property url imageSource
 
     readonly property var info: exif.infoJson.length > 0 ? JSON.parse(exif.infoJson) : ({})
+    readonly property string taken: ViewerText.taken(info.dateTaken)
 
     allowedOrientations: Orientation.All
 
@@ -81,7 +82,7 @@ Page {
             DetailItem {
                 //% "Taken"
                 label: qsTrId("lautta-viewers-exif-taken")
-                value: page.info.dateTaken ? page.info.dateTaken : ""
+                value: page.taken
                 visible: value.length > 0
             }
             DetailItem {

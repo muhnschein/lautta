@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // A half-size picture of the Browse page for Settings › Browse page (BRW-12),
-// as Salama's start page preview: the real rows, drawn small, following
-// every change. Takes no input.
+// as Salama's start page preview: the real rows, drawn small, with their
+// status icons, following every change. Takes no input.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../"
+import "../FileIcons.js" as FileIcons
 import "BrowseText.js" as BrowseText
+import "RowStatus.js" as RowStatus
 
 Item {
     id: preview
@@ -63,40 +66,36 @@ Item {
                 height: banner ? 0 : Theme.itemSizeSmall
                 visible: !banner
 
-                HighlightImage {
+                AppIcon {
                     anchors {
                         left: parent.left
                         leftMargin: Theme.horizontalPageMargin
                         verticalCenter: parent.verticalCenter
                     }
-                    source: model.icon
-                    width: Theme.iconSizeMedium
-                    height: width
-                    sourceSize.width: width
-                    sourceSize.height: height
+                    icon: FileIcons.sized(model.icon, iconSize)
                     color: model.colour.length > 0 ? model.colour : Theme.primaryColor
                 }
                 Label {
                     anchors {
                         left: parent.left
                         leftMargin: Theme.horizontalPageMargin + Theme.iconSizeMedium + Theme.paddingLarge
-                        right: countLabel.left
-                        rightMargin: Theme.paddingMedium
+                        right: statusIcon.indicator.length > 0 ? statusIcon.left : parent.right
+                        rightMargin: statusIcon.indicator.length > 0 ? Theme.paddingLarge : Theme.horizontalPageMargin
                         verticalCenter: parent.verticalCenter
                     }
-                    text: model.kind === "deleted" ? qsTrId("lautta-browse-recently-deleted") : model.name
+                    text: BrowseText.rowName(model.kind, model.name)
                     truncationMode: TruncationMode.Fade
                 }
-                Label {
-                    id: countLabel
+                RowStatusIcon {
+                    id: statusIcon
+
+                    indicator: RowStatus.indicator(model.kind, model.status, model.connection,
+                                                   model.connectionError, model.drive, Bridge.busyDrives)
                     anchors {
                         right: parent.right
                         rightMargin: Theme.horizontalPageMargin
                         verticalCenter: parent.verticalCenter
                     }
-                    text: model.count >= 0 ? model.count : ""
-                    font.pixelSize: Theme.fontSizeSmall
-                    color: Theme.secondaryColor
                 }
             }
         }

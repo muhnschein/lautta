@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Activity (SPEC §15.4): Active, Waiting for you, Paused and History, with
-// the prompt for transfers that stopped when the app closed
+// Activity (SPEC §15.4): what has not ended under In progress, in queue
+// order, then what ended by the day it ended (Today … Older, newest first),
+// with the prompt for transfers that stopped when the app closed
 // (XFR-11, board TransfersRestored).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -12,28 +13,14 @@ import "../components/transfers/TransferText.js" as TransferText
 Page {
     id: page
 
+    // The rows; tests give the page a ListModel.
+    property var listModel: transfers
+
     objectName: "transfersPage"
     allowedOrientations: Orientation.All
 
     // What ended is on screen now: the activity bar lets go of it (XFR-13).
     onStatusChanged: if (status === PageStatus.Active) Transfers.barSeen()
-
-    function sectionTitle(group) {
-        switch (group) {
-        case "active":
-            //% "Active"
-            return qsTrId("lautta-xfr-group-active")
-        case "waiting":
-            //% "Waiting for you"
-            return qsTrId("lautta-xfr-group-waiting")
-        case "paused":
-            //% "Paused"
-            return qsTrId("lautta-xfr-group-paused")
-        default:
-            //% "History"
-            return qsTrId("lautta-xfr-group-history")
-        }
-    }
 
     function headerDescription() {
         if (Transfers.pendingAtStart > 0)
@@ -70,7 +57,7 @@ Page {
         id: list
 
         anchors.fill: parent
-        model: transfers
+        model: page.listModel
 
         header: Column {
             width: list.width
@@ -107,7 +94,7 @@ Page {
                         rightMargin: Theme.paddingMedium
                         verticalCenter: parent.verticalCenter
                     }
-                    //% "%n task(s) stopped when Lautta closed."
+                    //% "%n tasks stopped when Lautta closed."
                     text: qsTrId("lautta-xfr-restored", Transfers.pendingAtStart)
                     wrapMode: Text.WordWrap
                     font.pixelSize: Theme.fontSizeSmall
@@ -128,9 +115,9 @@ Page {
         }
 
         section {
-            property: "group"
-            delegate: SectionHeader {
-                text: page.sectionTitle(section)
+            property: "dateGroup"
+            delegate: DateSectionHeader {
+                group: section
             }
         }
 
@@ -156,20 +143,18 @@ Page {
             }
         }
 
+        // Every entry needs a task in the list.
         PullDownMenu {
+            visible: list.count > 0
+
             MenuItem {
-                //% "Settings"
-                text: qsTrId("lautta-xfr-menu-settings")
-                onClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"))
-            }
-            MenuItem {
-                //% "Clear history"
-                text: qsTrId("lautta-xfr-menu-clear")
+                //% "Clear activity history"
+                text: qsTrId("lautta-xfr-menu-clear-activity")
                 visible: list.count > 0
                 onClicked: Remorse.popupAction(
                     page,
-                    //% "Clearing history"
-                    qsTrId("lautta-xfr-remorse-clear"),
+                    //% "Clearing activity history"
+                    qsTrId("lautta-xfr-remorse-clear-activity"),
                     function() { Transfers.clearHistory() },
                     App.setting("remorse_seconds") * 1000)
             }

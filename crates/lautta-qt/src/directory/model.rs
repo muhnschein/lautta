@@ -3,18 +3,22 @@
 //! top of `lautta_core::listing::ListingState`. Listings stream in from the
 //! core (cached copy first, BRW-5), diffs become row inserts/removes/updates,
 //! local folders are watched (BRW-6) and the view settings are the global
-//! ones (BRW-4).
+//! ones (BRW-4), followed while the folder is open.
 
+use crate::browse::Guard;
 use crate::json::from_json;
 use crate::runtime::{self, core, spawn_then};
+use lautta_core::app::Core;
 use lautta_core::app_directory::{file_url, ListEvent};
 use lautta_core::entry::{cap, Entry, EntryFlags};
 use lautta_core::error::ErrorKind;
 use lautta_core::filter::FilterOptions;
+use lautta_core::foldercount::FolderCount;
 use lautta_core::listing::{ListChange, ListingState};
 use lautta_core::locations::{LocationKind, LocationStatus};
-use lautta_core::mime::{self, FileCategory};
+use lautta_core::mime;
 use lautta_core::sort::SortKey;
+use lautta_core::thumbs::{app_thumbnail_url, thumbnail_source, ThumbSettings, ThumbSource};
 use lautta_core::viewprefs::{suggest_grid, ViewMode, ViewPrefs};
 use lautta_core::watch::{DirWatcher, DIR_DEBOUNCE};
 use lautta_core::{Error, Uri};
@@ -28,7 +32,7 @@ use tokio::sync::mpsc::unbounded_channel;
 use tokio::task::AbortHandle;
 
 const ROLE_BASE: i32 = 0x0100;
-const ROLES: [&str; 20] = [
+const ROLES: [&str; 22] = [
     "name",
     "nameIsLossy",
     "uri",
@@ -49,6 +53,8 @@ const ROLES: [&str; 20] = [
     "selected",
     "transferState",
     "inaccessible",
+    "itemCount",
+    "itemCountCapped",
 ];
 
 /// Errors that mean "can't reach it right now": a cached copy stays visible
@@ -65,6 +71,21 @@ fn is_connectivity(kind: ErrorKind) -> bool {
 
 fn qs(s: &str) -> QString {
     QString::from(s)
+}
+
+/// What an item count was made for: it is counted again when the folder
+/// changed (its modified time) or the hidden files were switched.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct CountStamp {
+    modified: Option<i64>,
+    show_hidden: bool,
+}
+
+/// The count of one folder in the view, `result` `None` until it is made
+/// or when the folder cannot be read.
+struct CountSlot {
+    stamp: CountStamp,
+    result: Option<FolderCount>,
 }
 
 #[derive(QObject, Default)]
@@ -87,6 +108,9 @@ pub struct DirectoryModel {
     writable: qt_property!(bool; NOTIFY stateChanged),
     locationName: qt_property!(QString; NOTIFY stateChanged),
     title: qt_property!(QString; NOTIFY stateChanged),
+    /// Folders here have an item count (`requestCount`): the folder is on
+    /// this device or a drive, not on a server or in an archive.
+    folderCounts: qt_property!(bool; NOTIFY stateChanged),
     stateChanged: qt_signal!(),
 
     selectedCount: qt_property!(i32; NOTIFY selectionChanged),
@@ -116,26 +140,37 @@ pub struct DirectoryModel {
     selectedUris: qt_method!(fn(&self) -> QVariantList),
     setViewPrefs: qt_method!(fn(&mut self, prefs_json: QString) -> bool),
     indexOf: qt_method!(fn(&self, uri: QString) -> i32),
+    /// The uri of row `index`, empty outside the rows (drag selection, SPEC §15.3).
+    uriAt: qt_method!(fn(&self, index: i32) -> QString),
     hasCapability: qt_method!(fn(&self, flag: QString) -> bool),
     nameKind: qt_method!(fn(&self, name: QString) -> QString),
+    /// "folder", "file" or "" for the item `uri` of this folder.
+    kindOf: qt_method!(fn(&self, uri: QString) -> QString),
+    /// Counts the items of the folder `uri` for the `itemCount` role,
+    /// off the GUI thread; asks again only when the folder changed.
+    requestCount: qt_method!(fn(&mut self, uri: QString)),
     setTransferState: qt_method!(fn(&mut self, uri: QString, state: QString)),
     rename: qt_method!(fn(&mut self, uri: QString, name: QString)),
     createFolder: qt_method!(fn(&mut self, name: QString)),
-    createFile: qt_method!(fn(&mut self, name: QString)),
     renamed: qt_signal!(oldUri: QString, newUri: QString),
     renameFailed: qt_signal!(uri: QString, kind: QString, message: QString),
-    created: qt_signal!(uri: QString, isDir: bool),
+    created: qt_signal!(uri: QString),
     createFailed: qt_signal!(kind: QString, message: QString),
 
     dir: Option<Uri>,
     local_dir: Option<PathBuf>,
     state: ListingState,
     prefs: ViewPrefs,
-    /// The view was set here (`setViewPrefs`): no grid suggestion.
+    /// The global view settings `prefs` last followed (BRW-4).
+    global: ViewPrefs,
+    /// The view was set here (`setViewPrefs`) or for every folder since
+    /// the folder opened: no grid suggestion.
     prefs_set: bool,
     filter: FilterOptions,
     flags: Vec<String>,
-    remote_thumbs: bool,
+    /// The settings that pick the files with a thumbnail, as of the last
+    /// load or change; none before the folder is open.
+    thumb_settings: Option<ThumbSettings>,
     shown: usize,
     generation: u64,
     task: Option<AbortHandle>,
@@ -144,7 +179,12 @@ pub struct DirectoryModel {
     /// Archives do not change while open: coming back never lists them again.
     archive: bool,
     watcher: Option<DirWatcher>,
+    /// Ends the task following the settings when the model goes.
+    settings_watch: Option<Guard>,
     transfer_states: HashMap<Vec<u8>, String>,
+    /// Item counts of the folders in this one, by name; asked for by the
+    /// cells that show them.
+    counts: HashMap<Vec<u8>, CountSlot>,
 }
 
 impl DirectoryModel {
@@ -169,11 +209,16 @@ impl DirectoryModel {
             return;
         };
         self.prefs = core.view_prefs();
+        self.global = self.prefs;
         self.prefs_set = false;
-        self.remote_thumbs = core.settings().thumbnails_remote;
+        self.thumb_settings = Some(ThumbSettings::new(&core.settings()));
+        if self.settings_watch.is_none() {
+            self.watch_settings(&core);
+        }
         self.apply_prefs_state();
         self.flags = core.capability_flags(&dir.location);
         self.local_dir = core.locations.to_local_path(&dir);
+        self.folderCounts = self.local_dir.is_some();
         let location = core.location(&dir.location);
         self.archive = location.as_ref().is_some_and(|l| l.kind == LocationKind::Archive);
         self.offline = location
@@ -212,6 +257,8 @@ impl DirectoryModel {
         self.cachedAt = -1.0;
         self.suggestGrid = false;
         self.transfer_states.clear();
+        self.counts.clear();
+        self.folderCounts = false;
         self.dir = None;
         self.local_dir = None;
     }
@@ -262,6 +309,32 @@ impl DirectoryModel {
             }
         });
         self.watcher = Some(watcher);
+    }
+
+    /// Follows the settings while the model lives: a change made on another
+    /// page (Settings, or View options in another folder) shows here at
+    /// once (BRW-4), not only when the folder is opened again.
+    fn watch_settings(&mut self, core: &Core) {
+        let guard = Guard::default();
+        let mut stop = guard.subscribe();
+        let mut changes = core.watch_settings();
+        let me = QPointer::from(&*self);
+        let cb = queued_callback(move |()| {
+            if let Some(m) = me.as_pinned() {
+                m.borrow_mut().follow_settings();
+            }
+        });
+        runtime::handle().spawn(async move {
+            loop {
+                tokio::select! {
+                    r = changes.changed() => if r.is_err() { return },
+                    _ = stop.changed() => return,
+                }
+                changes.borrow_and_update();
+                cb(());
+            }
+        });
+        self.settings_watch = Some(guard);
     }
 
     fn on_watch(&mut self, generation: u64) {
@@ -436,20 +509,39 @@ impl DirectoryModel {
     }
 
     fn thumbnail_source(&self, e: &Entry) -> String {
-        if !self.prefs.thumbnails || !self.state.thumbnails_enabled() {
+        let Some(settings) = &self.thumb_settings else {
+            return String::new();
+        };
+        if !self.state.thumbnails_enabled() {
             return String::new();
         }
-        let category = mime::category_of(e);
-        let media = matches!(category, FileCategory::Image | FileCategory::Video);
-        if !media || e.flags.contains(EntryFlags::NOT_ACCESSIBLE) {
-            return String::new();
+        let local = self.local_dir.as_ref();
+        match thumbnail_source(e, local.is_some(), self.prefs.thumbnails, settings) {
+            ThumbSource::Icon => String::new(),
+            ThumbSource::System => {
+                local.map_or_else(String::new, |dir| file_url(&dir.join(OsStr::from_bytes(&e.name))))
+            }
+            ThumbSource::App => self
+                .entry_uri(e)
+                .map_or_else(String::new, |u| app_thumbnail_url(&u)),
         }
-        if let Some(dir) = &self.local_dir {
-            return file_url(&dir.join(OsStr::from_bytes(&e.name)));
+    }
+
+    fn stamp_of(&self, e: &Entry) -> CountStamp {
+        CountStamp {
+            modified: e.modified_ms(),
+            show_hidden: self.prefs.show_hidden,
         }
-        match (category, &self.remote_thumbs, self.entry_uri(e)) {
-            (FileCategory::Image, true, Some(u)) => format!("image://lautta-thumb/{u}"),
-            _ => String::new(),
+    }
+
+    /// The count of the folder `e` as it is now; none while it is being
+    /// made again after a change.
+    fn count_of(&self, e: &Entry) -> Option<FolderCount> {
+        let slot = self.counts.get(&e.name)?;
+        if slot.stamp == self.stamp_of(e) {
+            slot.result
+        } else {
+            None
         }
     }
 
@@ -479,6 +571,8 @@ impl DirectoryModel {
             17 => self.state.is_selected(&e.name).into(),
             18 => qs(self.transfer_states.get(&e.name).map_or("", String::as_str)).into(),
             19 => e.flags.contains(EntryFlags::NOT_ACCESSIBLE).into(),
+            20 => self.count_of(e).map_or(-1, |c| count_role(c.shown)).into(),
+            21 => self.count_of(e).is_some_and(|c| c.capped).into(),
             _ => QVariant::default(),
         }
     }
@@ -491,7 +585,13 @@ impl DirectoryModel {
         self.descending = p.descending;
         self.foldersFirst = p.folders_first;
         self.showHidden = p.show_hidden;
-        self.viewMode = qs(p.view_mode.as_str());
+        // A suggested grid (SPEC 15.3) stays until a view is chosen.
+        let mode = if self.suggestGrid {
+            ViewMode::Grid
+        } else {
+            p.view_mode
+        };
+        self.viewMode = qs(mode.as_str());
         self.thumbnails = p.thumbnails;
         self.filter.show_hidden = p.show_hidden;
         self.prefsChanged();
@@ -530,17 +630,46 @@ impl DirectoryModel {
             .and_then(ViewMode::parse)
         {
             p.view_mode = m;
+            self.view_chosen();
         }
+        self.show_prefs(p);
+        true
+    }
+
+    /// The global settings changed. What changed shows here at once; what
+    /// was set for this folder alone and did not change stays (BRW-4).
+    fn follow_settings(&mut self) {
+        let Some(core) = core() else { return };
+        let global = core.view_prefs();
+        let thumbs = Some(ThumbSettings::new(&core.settings()));
+        if global == self.global && thumbs == self.thumb_settings {
+            return;
+        }
+        if global.view_mode != self.global.view_mode {
+            self.view_chosen();
+        }
+        let prefs = self.prefs.follow(self.global, global);
+        self.global = global;
+        self.thumb_settings = thumbs;
+        self.show_prefs(prefs);
+    }
+
+    /// A view was chosen for this folder or for all: it replaces a
+    /// suggested grid and no other is suggested.
+    fn view_chosen(&mut self) {
         self.prefs_set = true;
-        self.prefs = p;
         self.suggestGrid = false;
+    }
+
+    /// Shows the folder with the view settings `p`.
+    fn show_prefs(&mut self, p: ViewPrefs) {
+        self.prefs = p;
         self.apply_prefs_state();
         let mut changes = self.state.set_sort(self.prefs.sort_options());
         changes.extend(self.state.set_filter(self.filter.clone()));
         self.apply(changes);
         self.reload_roles();
         self.publish();
-        true
     }
 
     /// Thumbnails may have been switched: every row's data changed.
@@ -620,6 +749,15 @@ impl DirectoryModel {
             .map_or(-1, |i| i as i32)
     }
 
+    fn uriAt(&self, index: i32) -> QString {
+        usize::try_from(index)
+            .ok()
+            .filter(|&i| i < self.shown)
+            .and_then(|i| self.state.entry_at(i))
+            .and_then(|e| self.entry_uri(e))
+            .map_or_else(QString::default, |u| qs(&u.to_string()))
+    }
+
     fn hasCapability(&self, flag: QString) -> bool {
         let flag = flag.to_string();
         self.flags.contains(&flag)
@@ -627,12 +765,61 @@ impl DirectoryModel {
 
     /// "folder", "file" or "" for what is called `name` here (before filtering).
     fn nameKind(&self, name: QString) -> QString {
-        let kind = match self.state.entry_named(name.to_string().as_bytes()) {
-            Some(e) if e.is_dir() => "folder",
-            Some(_) => "file",
-            None => "",
+        qs(kind_of(self.state.entry_named(name.to_string().as_bytes())))
+    }
+
+    /// By uri, so names that are not UTF-8 are found too (the selection
+    /// panel's one item, SPEC §15.3).
+    fn kindOf(&self, uri: QString) -> QString {
+        let name = self.name_of(&uri).unwrap_or_default();
+        qs(kind_of(self.state.entry_named(&name)))
+    }
+
+    fn requestCount(&mut self, uri: QString) {
+        let (Some(core), Some(name)) = (core(), self.name_of(&uri)) else {
+            return;
         };
-        qs(kind)
+        let Some(entry) = self.state.entry_named(&name) else {
+            return;
+        };
+        if !self.folderCounts || !entry.is_dir() || entry.flags.contains(EntryFlags::NOT_ACCESSIBLE) {
+            return;
+        }
+        let stamp = self.stamp_of(entry);
+        if self.counts.get(&name).is_some_and(|slot| slot.stamp == stamp) {
+            return;
+        }
+        let Some(folder) = self.entry_uri(entry) else {
+            return;
+        };
+        self.counts
+            .insert(name.clone(), CountSlot { stamp, result: None });
+        let me = QPointer::from(&*self);
+        let generation = self.generation;
+        spawn_then(
+            async move { core.count_folder(&folder, stamp.show_hidden).await },
+            move |result| {
+                if let Some(m) = me.as_pinned() {
+                    m.borrow_mut().counted(generation, &name, stamp, result);
+                }
+            },
+        );
+    }
+
+    /// A count arrived. One made for an older state of the folder, or for
+    /// another folder, is dropped: the cell asked again.
+    fn counted(&mut self, generation: u64, name: &[u8], stamp: CountStamp, result: Option<FolderCount>) {
+        if generation != self.generation {
+            return;
+        }
+        let Some(slot) = self.counts.get_mut(name).filter(|slot| slot.stamp == stamp) else {
+            return;
+        };
+        slot.result = result;
+        if let Some(i) = self.state.index_of(name) {
+            let idx = self.row_index(i as i32);
+            self.data_changed(idx, idx);
+        }
     }
 
     fn setTransferState(&mut self, uri: QString, state: QString) {
@@ -674,39 +861,39 @@ impl DirectoryModel {
     }
 
     fn createFolder(&mut self, name: QString) {
-        self.create(name, true);
-    }
-
-    fn createFile(&mut self, name: QString) {
-        self.create(name, false);
-    }
-
-    fn create(&mut self, name: QString, folder: bool) {
         let (Some(core), Some(dir)) = (core(), self.dir.clone()) else {
             return;
         };
         let me = QPointer::from(&*self);
         let new_name = name.to_string();
         spawn_then(
-            async move {
-                if folder {
-                    core.make_folder(&dir, new_name.as_bytes()).await
-                } else {
-                    core.make_file(&dir, new_name.as_bytes()).await
-                }
-            },
+            async move { core.make_folder(&dir, new_name.as_bytes()).await },
             move |res| {
                 let Some(m) = me.as_pinned() else { return };
                 let mut m = m.borrow_mut();
                 match res {
                     Ok(new) => {
-                        m.created(qs(&new.to_string()), folder);
+                        m.created(qs(&new.to_string()));
                         m.refresh();
                     }
                     Err(e) => m.createFailed(qs(e.kind.name()), qs(&e.message)),
                 }
             },
         );
+    }
+}
+
+/// The `itemCount` role: the count, `-1` when there is none.
+fn count_role(shown: usize) -> i32 {
+    i32::try_from(shown).unwrap_or(i32::MAX)
+}
+
+/// What `nameKind` and `kindOf` answer for an entry or none.
+fn kind_of(entry: Option<&Entry>) -> &'static str {
+    match entry {
+        Some(e) if e.is_dir() => "folder",
+        Some(_) => "file",
+        None => "",
     }
 }
 

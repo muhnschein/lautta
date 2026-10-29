@@ -8,9 +8,9 @@ use crate::bridge::{Attention, BridgeClient, BridgeConfig, BridgeStatus, RemoteK
 use crate::browse_layout::BrowseLayout;
 use crate::db::Db;
 use crate::dircache::DirCache;
-use crate::entry::{cap, Entry};
+use crate::entry::Entry;
 use crate::error::{Error, ErrorKind, Result};
-use crate::locations::{Location, LocationKind, LocationRegistry, LocationStatus};
+use crate::locations::{ConnectionState, Location, LocationKind, LocationRegistry, LocationStatus};
 use crate::ops::plan::{PlanOptions, Planner};
 use crate::ops::{OperationKind, Plan};
 use crate::org::favourites::Favourites;
@@ -25,13 +25,14 @@ use crate::sort::SortKey;
 use crate::transfer::clock::SystemClock;
 use crate::transfer::{Engine, EngineConfig, EngineDeps, TransferId, TransferOptions, Trasher};
 use crate::trash::Trash;
-use crate::undo::{UndoAction, UndoRecorder, UndoStep};
 use crate::uri::Uri;
 use crate::viewprefs::{ViewMode, ViewPrefs};
+use crate::volumes::VolumeWatcher;
 use crate::workcopy::WorkingCopies;
 use async_trait::async_trait;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, MutexGuard};
+use tokio::sync::watch;
 
 /// Listings kept in memory (BRW-5).
 const DIRCACHE_ENTRIES: usize = 64;
@@ -66,7 +67,12 @@ pub struct Core {
     /// The netvfs bridge client (SPEC §7); `None` only in tests without one.
     pub bridge: Option<BridgeClient>,
     settings: Mutex<Settings>,
-    undo: Mutex<UndoRecorder>,
+    /// Counts the changes of `settings` (see [`Core::watch_settings`]).
+    settings_changed: watch::Sender<u64>,
+    /// Follows the removable-media root for as long as the core lives
+    /// (LOC-3); `None` when inotify is not available, then Browse finds
+    /// volumes by rescanning when it refreshes.
+    _volume_watch: Option<VolumeWatcher>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -76,8 +82,8 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     }
 }
 
-/// Moves local items to Recently deleted when their location keeps a trash
-/// (OPS-8); everything else is deleted permanently by the engine.
+/// Moves local items to the Trash when their location keeps one (OPS-8);
+/// everything else is deleted permanently by the engine.
 struct LocalTrasher {
     locations: LocationRegistry,
     trash: Trash,
@@ -86,32 +92,28 @@ struct LocalTrasher {
 #[async_trait]
 impl Trasher for LocalTrasher {
     async fn trash(&self, uri: &Uri) -> Result<bool> {
-        trash_one(&self.locations, &self.trash, uri)
-            .await
-            .map(|id| id.is_some())
+        if !self.locations.keeps_trash(&uri.location) {
+            return Ok(false);
+        }
+        trash_one(&self.locations, &self.trash, uri).await.map(|_| true)
     }
 }
 
-/// Trashes one item; `None` when its location does not keep a trash or the
-/// item is on another file system (then the caller deletes permanently).
-async fn trash_one(locations: &LocationRegistry, trash: &Trash, uri: &Uri) -> Result<Option<i64>> {
-    let provider = locations.provider(&uri.location)?;
-    if !provider.capabilities().has(cap::TRASH) {
-        return Ok(None);
-    }
-    let Some(path) = locations.to_local_path(uri) else {
-        return Ok(None);
-    };
+/// Moves one item of a location that keeps a trash into the Trash, by copy
+/// where the sandbox mounts the two apart (§3.3), on a blocking thread
+/// (ARC-6). Returns its trash id.
+async fn trash_one(locations: &LocationRegistry, trash: &Trash, uri: &Uri) -> Result<()> {
+    // An unknown or vanished location is an error, not a permanent delete.
+    locations.provider(&uri.location)?;
+    let path = locations
+        .to_local_path(uri)
+        .ok_or_else(|| Error::new(ErrorKind::Unsupported, "not a local item"))?;
     let trash = trash.clone();
     let uri = uri.clone();
-    let res = tokio::task::spawn_blocking(move || trash.trash(&path, &uri))
+    tokio::task::spawn_blocking(move || trash.trash(&path, &uri))
         .await
-        .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))?;
-    match res {
-        Ok(item) => Ok(Some(item.id)),
-        Err(e) if e.kind == ErrorKind::CrossesDevice => Ok(None),
-        Err(e) => Err(e),
-    }
+        .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))?
+        .map(|_| ())
 }
 
 impl Core {
@@ -141,6 +143,7 @@ impl Core {
             .await
             .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))??;
         locations.refresh();
+        let volume_watch = watch_volumes(&locations);
         let trash = Trash::new(paths.trash_dir(), db.clone());
         let mut deps = EngineDeps::new(db.clone(), Arc::new(locations.clone()));
         deps.trasher = Some(Arc::new(LocalTrasher {
@@ -169,7 +172,8 @@ impl Core {
             questions: questions.clone(),
             bridge: client.clone(),
             settings: Mutex::new(settings),
-            undo: Mutex::new(UndoRecorder::default()),
+            settings_changed: watch::channel(0).0,
+            _volume_watch: volume_watch,
             paths,
             db,
             locations,
@@ -191,7 +195,20 @@ impl Core {
     pub fn apply_settings(&self, settings: Settings) {
         let settings = settings.sanitised();
         self.recents.set_enabled(settings.recents_enabled);
-        *lock(&self.settings) = settings;
+        let previous = std::mem::replace(&mut *lock(&self.settings), settings.clone());
+        if previous.thumbnail_cache_mb != settings.thumbnail_cache_mb {
+            self.follow_thumbnail_budget(&settings);
+        }
+        if previous != settings {
+            self.settings_changed.send_modify(|generation| *generation += 1);
+        }
+    }
+
+    /// A receiver whose value increases whenever the settings change, so
+    /// what is already on screen can follow them (BRW-4: folders open
+    /// while the view settings change show the new ones at once).
+    pub fn watch_settings(&self) -> watch::Receiver<u64> {
+        self.settings_changed.subscribe()
     }
 
     /// The view settings every folder uses (BRW-4).
@@ -233,16 +250,7 @@ impl Core {
         Ok(uri)
     }
 
-    /// New empty file.
-    pub async fn make_file(&self, parent: &Uri, name: &[u8]) -> Result<Uri> {
-        let uri = parent.join(name)?;
-        self.provider(&uri.location)?.make_file(&uri.path).await?;
-        self.invalidate(parent);
-        Ok(uri)
-    }
-
-    /// Renames without replacing (§10 table); favourites follow and the
-    /// rename can be undone for 10 s (OPS-9).
+    /// Renames without replacing (§10 table); favourites follow.
     pub async fn rename(&self, uri: &Uri, new_name: &[u8]) -> Result<Uri> {
         let parent = uri
             .parent()
@@ -255,10 +263,6 @@ impl Core {
             .rename(&uri.path, &to.path, RenameMode::NoReplace)
             .await?;
         self.after_move(uri, &to);
-        lock(&self.undo).record(UndoAction::Rename {
-            from: uri.clone(),
-            to: to.clone(),
-        });
         self.invalidate(&parent);
         Ok(to)
     }
@@ -267,29 +271,35 @@ impl Core {
         let _ = self.favourites.on_moved(from, to);
     }
 
-    /// Deletes items after the remorse timer (OPS-8): local items on the home
-    /// file system go to Recently deleted (undoable, OPS-9); the rest are
-    /// deleted permanently through the transfer engine.
+    /// True when deleting `uri` moves it to the Trash (OPS-8): the trash is
+    /// on and the item is in one of this device's folders. Every other
+    /// delete is permanent, and the UI asks first. The one place that
+    /// decides; [`Core::delete`] follows it.
+    pub fn deletes_to_trash(&self, uri: &Uri) -> bool {
+        self.settings().recently_deleted && self.locations.keeps_trash(&uri.location)
+    }
+
+    /// Deletes items (OPS-8): to the Trash where [`Core::deletes_to_trash`]
+    /// says so, after the remorse timer; the rest permanently through the
+    /// transfer engine, after the confirmation.
     pub async fn delete(&self, items: &[Uri]) -> Result<Option<TransferId>> {
-        let use_trash = self.settings().recently_deleted;
-        let mut trashed = Vec::new();
         let mut permanent = Vec::new();
+        let mut failed = None;
         for uri in items {
-            let id = if use_trash {
-                trash_one(&self.locations, &self.trash, uri).await?
-            } else {
-                None
-            };
-            match id {
-                Some(id) => trashed.push(id),
-                None => permanent.push(uri.clone()),
+            if !self.deletes_to_trash(uri) {
+                permanent.push(uri.clone());
+                continue;
             }
-            if let Some(parent) = uri.parent() {
-                self.invalidate(&parent);
+            if let Err(e) = trash_one(&self.locations, &self.trash, uri).await {
+                failed = Some(e);
+                break;
             }
         }
-        if !trashed.is_empty() {
-            lock(&self.undo).record(UndoAction::Trash { ids: trashed });
+        for parent in items.iter().filter_map(Uri::parent) {
+            self.invalidate(&parent);
+        }
+        if let Some(e) = failed {
+            return Err(e);
         }
         if permanent.is_empty() {
             return Ok(None);
@@ -327,21 +337,14 @@ impl Core {
         self.start_plan(plan).await.map(Started::Transfer)
     }
 
-    /// Queues a planned operation. Same-location moves record undo (OPS-9).
+    /// Queues a planned operation. Favourites follow a same-location move.
     pub async fn start_plan(&self, plan: Plan) -> Result<TransferId> {
         let settings = self.settings();
         if plan.kind == OperationKind::Move {
-            let pairs: Vec<(Uri, Uri)> = plan
-                .items
-                .iter()
-                .filter(|i| i.src.location == i.dst.location && i.src.parent() != i.dst.parent())
-                .map(|i| (i.src.clone(), i.dst.clone()))
-                .collect();
-            for (from, to) in &pairs {
-                self.after_move(from, to);
-            }
-            if !pairs.is_empty() && pairs.len() == plan.items.len() {
-                lock(&self.undo).record(UndoAction::Move { pairs });
+            for item in &plan.items {
+                if item.src.location == item.dst.location && item.src.parent() != item.dst.parent() {
+                    self.after_move(&item.src, &item.dst);
+                }
             }
         }
         let options = TransferOptions {
@@ -356,46 +359,7 @@ impl Core {
         self.engine.add(plan, &title, options).await
     }
 
-    /// Whether an undo is still offered (OPS-9, 10 s banner).
-    pub fn can_undo(&self) -> bool {
-        lock(&self.undo).is_fresh_now()
-    }
-
-    /// The action the undo banner offers, while it is fresh.
-    pub fn undo_kind(&self) -> Option<UndoAction> {
-        let undo = lock(&self.undo);
-        if undo.is_fresh_now() {
-            undo.peek().cloned()
-        } else {
-            None
-        }
-    }
-
-    /// Undoes the last rename, same-location move or trash operation.
-    pub async fn undo(&self) -> Result<bool> {
-        let Some(action) = lock(&self.undo).take() else {
-            return Ok(false);
-        };
-        for step in crate::undo::undo_steps(&action) {
-            match step {
-                UndoStep::Rename { from, to, .. } => {
-                    self.provider(&from.location)?
-                        .rename(&from.path, &to.path, RenameMode::NoReplace)
-                        .await?;
-                    self.after_move(&from, &to);
-                    if let Some(p) = to.parent() {
-                        self.invalidate(&p);
-                    }
-                }
-                UndoStep::Restore { id } => {
-                    self.restore(id).await?;
-                }
-            }
-        }
-        Ok(true)
-    }
-
-    /// Restores an item from Recently deleted to where it was.
+    /// Restores an item from the Trash to where it was.
     pub async fn restore(&self, id: i64) -> Result<Uri> {
         let trash = self.trash.clone();
         let locations = self.locations.clone();
@@ -444,6 +408,18 @@ impl Core {
     }
 }
 
+/// Starts following mounts and unmounts below the media root (LOC-3). The
+/// app works without it, so a failure (no inotify, watch limit) is logged.
+fn watch_volumes(locations: &LocationRegistry) -> Option<VolumeWatcher> {
+    match locations.watch_volumes() {
+        Ok(watcher) => Some(watcher),
+        Err(e) => {
+            log::warn!("removable volumes are not followed live: {e}");
+            None
+        }
+    }
+}
+
 /// Keeps the registry's remote locations and the engine's bridge state in
 /// step with the bridge client. Holds only a weak reference to the core.
 fn spawn_bridge_sync(core: &Arc<Core>, client: BridgeClient) {
@@ -469,7 +445,8 @@ fn spawn_bridge_sync(core: &Arc<Core>, client: BridgeClient) {
 }
 
 /// Registry entries for the bridge's locations: hidden unless the bridge
-/// is usable (UI-8), shown as connecting while it reconnects (NVB-12).
+/// is usable (UI-8), shown as connecting while it reconnects (NVB-12),
+/// otherwise with the connection state the bridge reports (NVB-4).
 fn remote_entries(
     client: &BridgeClient,
     remote: &[RemoteLocation],
@@ -489,6 +466,11 @@ fn remote_entries(
                 RemoteKind::AdHoc => LocationKind::AdHoc,
             };
             let mut location = Location::remote(r.id.clone(), kind, r.name.clone(), r.url.clone());
+            // The states of the last list are stale while the bridge is away.
+            location.connection = match status {
+                BridgeStatus::Reconnecting => ConnectionState::Connecting,
+                _ => r.connection.clone(),
+            };
             let (status, attention) = match (status, r.attention) {
                 (BridgeStatus::Reconnecting, _) => (LocationStatus::Connecting, None),
                 (_, Attention::AuthFailed) => {
