@@ -3,7 +3,7 @@
 # QML tests and the vendored qttypes (third_party: crates.io code with a patch
 # of ours, a dependency like the others). Test modules inside src/ and the
 # test-only `sample` and `fake` features drop out through the extractor
-# options in the workflow.
+# options in the workflow. Rust: codeql-config-rust.yml, same paths.
 paths-ignore:
   - crates/*/tests
   - tests
