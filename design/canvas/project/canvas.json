@@ -525,41 +525,17 @@
     "TextThumbSheetGlyph.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Text thumbnail \u00b7 1 glyph size, band",
+      "title": "Text thumbnail \u00b7 1 glyph size, type band",
       "w": 400,
       "x": 5720,
-      "y": 2060
-    },
-    "TextThumbSheetMid.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Text thumbnail \u00b7 2 1.5\u00d7 glyph, band",
-      "w": 400,
-      "x": 6200,
-      "y": 2060
-    },
-    "TextThumbSheetLarge.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Text thumbnail \u00b7 3 2\u00d7 glyph, band",
-      "w": 400,
-      "x": 6680,
       "y": 2060
     },
     "TextThumbSheetLabel.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Text thumbnail \u00b7 4 2\u00d7 glyph, type as text",
+      "title": "Text thumbnail \u00b7 4 twice the glyph, type as text",
       "w": 400,
-      "x": 7160,
-      "y": 2060
-    },
-    "TextThumbSheetChip.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Text thumbnail \u00b7 5 2\u00d7 glyph, type on a tag",
-      "w": 400,
-      "x": 7640,
+      "x": 6200,
       "y": 2060
     }
   },
@@ -676,10 +652,7 @@
     "Rename.dc.html",
     "GridIcons.dc.html",
     "TextThumbSheetGlyph.dc.html",
-    "TextThumbSheetMid.dc.html",
-    "TextThumbSheetLarge.dc.html",
     "TextThumbSheetLabel.dc.html",
-    "TextThumbSheetChip.dc.html",
     "StateEmpty.dc.html",
     "StateNoAccess.dc.html",
     "StateOffline.dc.html",
