@@ -55,7 +55,7 @@
       "is_interactive": true,
       "title": "Crumbs 5 \u00b7 at the bottom",
       "w": 400,
-      "x": 3840,
+      "x": 1440,
       "y": 15900
     },
     "BreadcrumbsEdit.dc.html": {
@@ -63,63 +63,23 @@
       "is_interactive": true,
       "title": "Crumbs 4 \u00b7 edit path",
       "w": 400,
-      "x": 3360,
-      "y": 15900
-    },
-    "BreadcrumbsFolded.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Crumbs 3 \u00b7 folded strip",
-      "w": 400,
       "x": 960,
-      "y": 15900
-    },
-    "BreadcrumbsHeader.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Crumbs 2 \u00b7 in the header",
-      "w": 400,
-      "x": 480,
       "y": 15900
     },
     "BreadcrumbsPane.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Crumbs 4 \u00b7 pane: whole path, actions",
+      "title": "Crumbs 4 \u00b7 tapped: whole path, actions",
       "w": 400,
-      "x": 2880,
+      "x": 480,
       "y": 15900
     },
     "BreadcrumbsSlim.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Crumbs 4 \u00b7 slim while scrolling",
-      "w": 400,
-      "x": 1920,
-      "y": 15900
-    },
-    "BreadcrumbsStrip.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Crumbs 1 \u00b7 flicking strip",
+      "title": "Crumbs 4 \u00b7 path bar, slim",
       "w": 400,
       "x": 0,
-      "y": 15900
-    },
-    "BreadcrumbsUnfolded.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Crumbs 3 \u00b7 unfolded",
-      "w": 400,
-      "x": 1440,
-      "y": 15900
-    },
-    "BreadcrumbsWhole.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Crumbs 4 \u00b7 whole at rest",
-      "w": 400,
-      "x": 2400,
       "y": 15900
     },
     "BrowsePulley.dc.html": {
@@ -759,12 +719,7 @@
     "ActivityBar.dc.html",
     "ActivityBarQuestion.dc.html",
     "ActivityBarDone.dc.html",
-    "BreadcrumbsStrip.dc.html",
-    "BreadcrumbsHeader.dc.html",
-    "BreadcrumbsFolded.dc.html",
-    "BreadcrumbsUnfolded.dc.html",
     "BreadcrumbsSlim.dc.html",
-    "BreadcrumbsWhole.dc.html",
     "BreadcrumbsPane.dc.html",
     "BreadcrumbsEdit.dc.html",
     "BreadcrumbsBottom.dc.html"
