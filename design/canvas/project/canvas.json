@@ -50,36 +50,68 @@
       "x": 2880,
       "y": 8200
     },
-    "BreadcrumbsBottom.dc.html": {
+    "BreadcrumbsEditA.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Crumbs 5 \u00b7 at the bottom",
+      "title": "Edit path A \u00b7 in the open path",
       "w": 400,
-      "x": 1440,
+      "x": 2400,
       "y": 15900
     },
-    "BreadcrumbsEdit.dc.html": {
+    "BreadcrumbsEditB.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Crumbs 4 \u00b7 edit path",
+      "title": "Edit path B \u00b7 in the header",
       "w": 400,
-      "x": 960,
+      "x": 2880,
       "y": 15900
     },
-    "BreadcrumbsPane.dc.html": {
+    "BreadcrumbsEditC.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Crumbs 4 \u00b7 tapped: whole path, actions",
+      "title": "Edit path C \u00b7 dialog page",
+      "w": 400,
+      "x": 3360,
+      "y": 15900
+    },
+    "BreadcrumbsHeader.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Path \u00b7 subtitle of the header",
+      "w": 400,
+      "x": 0,
+      "y": 15900
+    },
+    "BreadcrumbsPaneA.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Path open A \u00b7 staircase",
       "w": 400,
       "x": 480,
       "y": 15900
     },
-    "BreadcrumbsSlim.dc.html": {
+    "BreadcrumbsPaneB.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Crumbs 4 \u00b7 path bar, slim",
+      "title": "Path open B \u00b7 plain, actions first",
       "w": 400,
-      "x": 0,
+      "x": 960,
+      "y": 15900
+    },
+    "BreadcrumbsPaneC.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Path open C \u00b7 parent first",
+      "w": 400,
+      "x": 1440,
+      "y": 15900
+    },
+    "BreadcrumbsPaneD.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Path open D \u00b7 crumbs wrapped",
+      "w": 400,
+      "x": 1920,
       "y": 15900
     },
     "BrowsePulley.dc.html": {
@@ -647,7 +679,7 @@
     "r10": {
       "kind": "title1",
       "maxW": 5200,
-      "text": "Breadcrumbs for deep folders (crumb strip variants)",
+      "text": "Breadcrumbs for deep folders (path in the header)",
       "w": 240,
       "x": 0,
       "y": 15600
@@ -719,10 +751,14 @@
     "ActivityBar.dc.html",
     "ActivityBarQuestion.dc.html",
     "ActivityBarDone.dc.html",
-    "BreadcrumbsSlim.dc.html",
-    "BreadcrumbsPane.dc.html",
-    "BreadcrumbsEdit.dc.html",
-    "BreadcrumbsBottom.dc.html"
+    "BreadcrumbsHeader.dc.html",
+    "BreadcrumbsPaneA.dc.html",
+    "BreadcrumbsPaneB.dc.html",
+    "BreadcrumbsPaneC.dc.html",
+    "BreadcrumbsPaneD.dc.html",
+    "BreadcrumbsEditA.dc.html",
+    "BreadcrumbsEditB.dc.html",
+    "BreadcrumbsEditC.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"
