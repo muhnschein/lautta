@@ -8,18 +8,20 @@ status=0
 cases=0
 
 check() {
+    want=$1 got=$2 why=$3
     cases=$((cases + 1))
-    if [ "$2" = "code=$1" ]; then
-        echo "ok   $3"
+    if [ "$got" = "code=$want" ]; then
+        echo "ok   $why"
     else
-        echo "FAIL $3: got $2, wanted code=$1" >&2
+        echo "FAIL $why: got $got, wanted code=$want" >&2
         status=1
     fi
 }
 
 # says WANT WHY FILES (one per line)
 says() {
-    check "$1" "$(printf '%s\n' "$3" | "$script" --classify)" "$2"
+    want=$1 why=$2 files=$3
+    check "$want" "$(printf '%s\n' "$files" | "$script" --classify)" "$why"
 }
 
 says false "docs alone skip" "doc/SPEC.md
@@ -44,7 +46,8 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 g() { git -C "$work" -c user.name=t -c user.email=t@t "$@" > /dev/null 2>&1; }
 event() {
-    check "$1" "$(cd "$work" && EVENT=$3 "$script" 2> /dev/null)" "$2"
+    want=$1 why=$2 name=$3
+    check "$want" "$(cd "$work" && EVENT=$name "$script" 2> /dev/null)" "$why"
 }
 g init -q
 echo a > "$work/main.rs"

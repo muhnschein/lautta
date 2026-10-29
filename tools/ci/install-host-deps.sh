@@ -13,10 +13,11 @@ sudo apt-get install -y -q --no-install-recommends \
 rustup show active-toolchain || rustup toolchain install
 # cargo_tool CRATE VERSION
 cargo_tool() {
-    if cargo "${1#cargo-}" --version 2> /dev/null | grep -qF " $2"; then
-        echo "$1 $2 already installed"
+    crate=$1 version=$2
+    if cargo "${crate#cargo-}" --version 2> /dev/null | grep -qF " $version"; then
+        echo "$crate $version already installed"
     else
-        cargo +stable install --locked "$1@$2"
+        cargo +stable install --locked "$crate@$version"
     fi
 }
 for tool in "$@"; do
