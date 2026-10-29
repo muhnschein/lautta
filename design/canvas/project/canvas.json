@@ -537,6 +537,14 @@
       "w": 400,
       "x": 6200,
       "y": 2060
+    },
+    "TextThumbSheetFull.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Text thumbnail \u00b7 6 full tile, type as text",
+      "w": 400,
+      "x": 6680,
+      "y": 2060
     }
   },
   "createdOnFiles": {
@@ -653,6 +661,7 @@
     "GridIcons.dc.html",
     "TextThumbSheetGlyph.dc.html",
     "TextThumbSheetLabel.dc.html",
+    "TextThumbSheetFull.dc.html",
     "StateEmpty.dc.html",
     "StateNoAccess.dc.html",
     "StateOffline.dc.html",
