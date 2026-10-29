@@ -11,6 +11,11 @@ ApplicationWindow {
     initialPage: App.ready ? Qt.resolvedUrl("pages/BrowsePage.qml") : Qt.resolvedUrl("pages/StartErrorPage.qml")
     cover: Qt.resolvedUrl("cover/CoverPage.qml")
     allowedOrientations: defaultAllowedOrientations
+    // Every Label shows plain text: names, paths, server prompts and error
+    // texts come from files and servers, never markup (SEC-8). Silica's
+    // default is auto-detected rich text; Jolla's Settings and Share set it
+    // the same way. Coloured labels set StyledText of escaped text themselves.
+    _defaultLabelFormat: Text.PlainText
 
     // Simple preferences live in dconf (SPEC §18); the core gets them at start.
     ConfigurationValue {
