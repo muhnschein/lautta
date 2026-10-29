@@ -1,19 +1,30 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Remote thumbnails and the thumbnail cache (SPEC PRV-2, PRV-3).
+//! Remote thumbnails, the rule for which files get one and the thumbnail
+//! cache (SPEC PRV-1 to PRV-3, PRV-14).
 //!
+//! * [`thumbnail_source`]: the one rule for which files get a thumbnail and
+//!   who makes it. Every list that shows thumbnails asks it.
 //! * [`remote_thumbnail`]: EXIF thumbnail from the first 64 KiB when there is
-//!   one, otherwise the whole file (≤ 20 MB, ≤ 5 MB when metered) decoded
-//!   and scaled, EXIF orientation applied.
-//! * [`ThumbnailCache`]: on-disk cache, 200 MB LRU, keyed by
+//!   one, otherwise the whole file (up to the size set in View options, 20 MB
+//!   by default) decoded and scaled, EXIF orientation applied.
+//! * [`ThumbnailCache`]: on-disk cache, LRU within the size set in View
+//!   options (200 MB by default, changed while in use), keyed by
 //!   sha256(URI, size, mtime, etag).
 //! * [`ThumbJobs`]: at most two jobs in flight per location, newest request
 //!   first (the delegates that are visible now), cancelable by key.
 //!
-//! Local thumbnails come from `Nemo.Thumbnailer` in QML (PRV-1), not from here.
+//! Local images, videos and PDFs get theirs from `Nemo.Thumbnailer` in QML
+//! (PRV-1), not from here: it draws videos and PDFs in helper processes of
+//! its own, so a PDF that crashes the drawing leaves the app running. Server
+//! PDFs are made by [`crate::thumbs_pdf`].
 
+use crate::entry::{Entry, EntryFlags};
 use crate::error::{Error, ErrorKind, Result};
+use crate::mime::{category_of, FileCategory};
 use crate::preview::exif;
 use crate::provider::{read_all, ReadHandle};
+use crate::settings::Settings;
+use crate::uri::Uri;
 use image::imageops::FilterType;
 use image::{DynamicImage, ImageOutputFormat};
 use sha2::{Digest, Sha256};
@@ -22,21 +33,78 @@ use std::future::Future;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-/// Cache budget (PRV-2).
-pub const DEFAULT_CACHE_BYTES: u64 = 200 * 1000 * 1000;
 /// Head read looking for an EXIF thumbnail.
 pub const HEAD_BYTES: u64 = 64 * 1024;
-/// Largest file decoded for a thumbnail.
-pub const MAX_DECODE_BYTES: u64 = 20 * 1000 * 1000;
-/// The same on a metered network.
-pub const MAX_DECODE_BYTES_METERED: u64 = 5 * 1000 * 1000;
 /// Images with more pixels than this are not decoded (memory bound).
 const MAX_PIXELS: u64 = 64_000_000;
 const JPEG_QUALITY: u8 = 85;
 /// Simultaneous jobs per location (PRV-3).
 pub const MAX_IN_FLIGHT_PER_LOCATION: usize = 2;
+
+/// Who makes a file's thumbnail (PRV-1, PRV-2, PRV-14).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThumbSource {
+    /// No thumbnail: the category's icon shows.
+    Icon,
+    /// `Nemo.Thumbnailer`, given the file's `file://` URL and MIME type:
+    /// local images, videos and PDFs.
+    System,
+    /// The app, through [`app_thumbnail_url`]: remote images and PDFs.
+    App,
+}
+
+/// The settings that decide which files get a thumbnail, apart from the
+/// folder's *Show thumbnails* (BRW-4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ThumbSettings {
+    /// *Thumbnails from servers*.
+    pub remote: bool,
+    /// *Largest server file with a thumbnail*, in bytes.
+    pub max_remote_bytes: u64,
+}
+
+impl ThumbSettings {
+    pub fn new(s: &Settings) -> ThumbSettings {
+        ThumbSettings {
+            remote: s.thumbnails_remote,
+            max_remote_bytes: s.thumbnail_max_remote_bytes(),
+        }
+    }
+
+    /// Largest server PDF a thumbnail is made from: nothing larger is read.
+    /// A local one has no limit, as a local image has none: the system
+    /// thumbnailer reads it in its own process, the app reads none of it.
+    pub fn pdf_limit(&self) -> u64 {
+        self.max_remote_bytes.min(lautta_pdf::MAX_PDF_BYTES)
+    }
+}
+
+/// Who makes the thumbnail of `entry`, for a file of a local folder (`local`)
+/// or not. `shown` is the folder's *Show thumbnails*. A PDF follows the
+/// switches an image does: *Show thumbnails* for a local one and also
+/// *Thumbnails from servers* for a remote one; a remote one larger than
+/// [`ThumbSettings::pdf_limit`] has none.
+pub fn thumbnail_source(entry: &Entry, local: bool, shown: bool, set: &ThumbSettings) -> ThumbSource {
+    if !shown || entry.flags.contains(EntryFlags::NOT_ACCESSIBLE) {
+        return ThumbSource::Icon;
+    }
+    match (category_of(entry), local) {
+        (FileCategory::Image | FileCategory::Video | FileCategory::Pdf, true) => ThumbSource::System,
+        (FileCategory::Image, false) if set.remote => ThumbSource::App,
+        (FileCategory::Pdf, false) if set.remote && entry.size.is_none_or(|s| s <= set.pdf_limit()) => {
+            ThumbSource::App
+        }
+        _ => ThumbSource::Icon,
+    }
+}
+
+/// The `Image` source of an app thumbnail; QML adds `?size=N`.
+pub fn app_thumbnail_url(uri: &Uri) -> String {
+    format!("image://lautta-thumb/{uri}")
+}
 
 /// Cache key: hex sha256 over URI, requested size, mtime and etag.
 pub fn thumb_key(uri: &str, size: u32, mtime_ms: Option<i64>, etag: Option<&[u8]>) -> String {
@@ -73,7 +141,7 @@ pub fn apply_orientation(img: DynamicImage, orientation: u8) -> DynamicImage {
     }
 }
 
-fn encode(img: &DynamicImage) -> Result<Vec<u8>> {
+pub(crate) fn encode(img: &DynamicImage) -> Result<Vec<u8>> {
     let mut out = Cursor::new(Vec::new());
     let result = if img.color().has_alpha() {
         img.write_to(&mut out, ImageOutputFormat::Png)
@@ -107,9 +175,10 @@ pub fn render_thumbnail(bytes: &[u8], target: u32, orientation: u8) -> Result<Ve
     encode(&apply_orientation(img, orientation))
 }
 
-/// A thumbnail of a remote image (PRV-2). `metered` lowers the size limit
-/// for the whole-file fallback. Returns JPEG, or PNG for images with alpha.
-pub async fn remote_thumbnail(handle: &dyn ReadHandle, target_size: u32, metered: bool) -> Result<Vec<u8>> {
+/// A thumbnail of a remote image (PRV-2). Without an EXIF thumbnail the
+/// whole file is read, when it has at most `max_bytes` (the setting
+/// `thumbnail_max_remote_mb`). Returns JPEG, or PNG for images with alpha.
+pub async fn remote_thumbnail(handle: &dyn ReadHandle, target_size: u32, max_bytes: u64) -> Result<Vec<u8>> {
     let head = read_all(handle, HEAD_BYTES).await?;
     let orientation = exif::orientation(&head);
     if let Some(thumb) = exif::exif_thumbnail(&head) {
@@ -122,16 +191,11 @@ pub async fn remote_thumbnail(handle: &dyn ReadHandle, target_size: u32, metered
             return Ok(done);
         }
     }
-    let limit = if metered {
-        MAX_DECODE_BYTES_METERED
-    } else {
-        MAX_DECODE_BYTES
-    };
-    if handle.size().is_some_and(|s| s > limit) {
+    if handle.size().is_some_and(|s| s > max_bytes) {
         return Err(thumb_error("file too large for a remote thumbnail"));
     }
-    let bytes = read_all(handle, limit + 1).await?;
-    if bytes.len() as u64 > limit {
+    let bytes = read_all(handle, max_bytes.saturating_add(1)).await?;
+    if bytes.len() as u64 > max_bytes {
         return Err(thumb_error("file too large for a remote thumbnail"));
     }
     let orientation = exif::orientation(&bytes);
@@ -185,7 +249,8 @@ impl CacheIndex {
 /// Disk cache of generated thumbnails with least-recently-used eviction.
 pub struct ThumbnailCache {
     dir: PathBuf,
-    max_bytes: u64,
+    /// The budget; the setting changes it while the cache is in use.
+    max_bytes: AtomicU64,
     index: Mutex<CacheIndex>,
 }
 
@@ -213,7 +278,7 @@ impl ThumbnailCache {
         }
         let cache = ThumbnailCache {
             dir,
-            max_bytes,
+            max_bytes: AtomicU64::new(max_bytes),
             index: Mutex::new(index),
         };
         cache.evict_to_budget(0);
@@ -236,7 +301,14 @@ impl ThumbnailCache {
     }
 
     pub fn max_bytes(&self) -> u64 {
-        self.max_bytes
+        self.max_bytes.load(Ordering::Relaxed)
+    }
+
+    /// Takes a new budget: a smaller one evicts the least recently used
+    /// thumbnails at once (file removals: call it off the UI thread).
+    pub fn set_max_bytes(&self, max_bytes: u64) {
+        self.max_bytes.store(max_bytes, Ordering::Relaxed);
+        self.evict_to_budget(0);
     }
 
     pub fn total_bytes(&self) -> u64 {
@@ -275,7 +347,7 @@ impl ThumbnailCache {
         if !valid_key(key) {
             return Err(Error::new(ErrorKind::InvalidArgument, "bad thumbnail key"));
         }
-        if data.len() as u64 > self.max_bytes {
+        if data.len() as u64 > self.max_bytes() {
             return Ok(());
         }
         let tmp = self.dir.join(format!("{key}.tmp"));
@@ -298,7 +370,7 @@ impl ThumbnailCache {
         loop {
             let victim = {
                 let mut index = self.lock();
-                if index.total + reserve <= self.max_bytes {
+                if index.total + reserve <= self.max_bytes() {
                     return;
                 }
                 let Some(key) = index.oldest() else {
@@ -408,6 +480,11 @@ impl ThumbJobs {
         }
     }
 
+    /// The runtime the jobs run on.
+    pub fn runtime(&self) -> &tokio::runtime::Handle {
+        &self.rt
+    }
+
     /// Queues `job` for `key` at `location`. Returns false (and drops `job`)
     /// when `key` is already queued or running. Newer requests start first.
     pub fn request(&self, key: &str, location: &str, job: impl Future<Output = ()> + Send + 'static) -> bool {
@@ -500,6 +577,9 @@ mod tests {
         (img.width(), img.height())
     }
 
+    /// The default of `thumbnail_max_remote_mb`, in bytes.
+    const LIMIT: u64 = 20 * 1000 * 1000;
+
     async fn handle_for(data: &[u8]) -> Box<dyn ReadHandle> {
         let mem = MemoryProvider::default();
         mem.add_file("img", data, 0);
@@ -511,13 +591,13 @@ mod tests {
     #[tokio::test]
     async fn decode_resize_keeps_aspect_ratio() {
         let src = jpeg_of(400, 200, [200, 30, 30]);
-        let out = remote_thumbnail(handle_for(&src).await.as_ref(), 100, false)
+        let out = remote_thumbnail(handle_for(&src).await.as_ref(), 100, LIMIT)
             .await
             .unwrap();
         assert_eq!(dims(&out), (100, 50));
         assert_eq!(&out[..2], [0xFF, 0xD8], "photo without alpha comes back as JPEG");
         let tall = jpeg_of(100, 300, [0, 0, 200]);
-        let out = remote_thumbnail(handle_for(&tall).await.as_ref(), 150, false)
+        let out = remote_thumbnail(handle_for(&tall).await.as_ref(), 150, LIMIT)
             .await
             .unwrap();
         assert_eq!(dims(&out), (50, 150));
@@ -525,7 +605,7 @@ mod tests {
 
     #[tokio::test]
     async fn small_images_are_not_upscaled_and_alpha_stays_png() {
-        let out = remote_thumbnail(handle_for(&png_of(40, 20)).await.as_ref(), 256, false)
+        let out = remote_thumbnail(handle_for(&png_of(40, 20)).await.as_ref(), 256, LIMIT)
             .await
             .unwrap();
         assert_eq!(dims(&out), (40, 20));
@@ -542,7 +622,7 @@ mod tests {
             gps: false,
         };
         let src = testutil::with_exif(&jpeg_of(400, 200, [10, 200, 10]), &spec);
-        let out = remote_thumbnail(handle_for(&src).await.as_ref(), 100, false)
+        let out = remote_thumbnail(handle_for(&src).await.as_ref(), 100, LIMIT)
             .await
             .unwrap();
         assert_eq!(dims(&out), (50, 100), "rotated by 90 degrees");
@@ -589,7 +669,7 @@ mod tests {
         // thumbnail can have produced a result.
         let mut file = testutil::bare_jpeg(&spec);
         file.extend(vec![0u8; 3_000_000]);
-        let out = remote_thumbnail(handle_for(&file).await.as_ref(), 80, false)
+        let out = remote_thumbnail(handle_for(&file).await.as_ref(), 80, LIMIT)
             .await
             .unwrap();
         assert_eq!(dims(&out), (80, 60));
@@ -609,41 +689,70 @@ mod tests {
             gps: false,
         };
         let file = testutil::bare_jpeg(&spec);
-        let out = remote_thumbnail(handle_for(&file).await.as_ref(), 1000, false)
+        let out = remote_thumbnail(handle_for(&file).await.as_ref(), 1000, LIMIT)
             .await
             .unwrap();
         assert_eq!(dims(&out), (120, 160));
     }
 
+    /// A file of `len` bytes that only decodes as a whole: a small JPEG
+    /// padded with zeros, no EXIF thumbnail.
+    fn padded_jpeg(len: usize) -> Vec<u8> {
+        let mut file = jpeg_of(64, 64, [9, 9, 9]);
+        file.resize(len, 0);
+        file
+    }
+
     #[tokio::test]
-    async fn size_limits_depend_on_the_network() {
-        let mut big = jpeg_of(64, 64, [9, 9, 9]);
-        big.resize(6_000_000, 0);
-        let h = handle_for(&big).await;
-        let metered = remote_thumbnail(h.as_ref(), 32, true).await;
-        assert_eq!(metered.err().map(|e| e.kind), Some(ErrorKind::Unsupported));
+    async fn files_over_the_size_setting_are_refused() {
+        let h = handle_for(&padded_jpeg(6_000_000)).await;
         assert!(
-            remote_thumbnail(h.as_ref(), 32, false).await.is_ok(),
-            "6 MB is fine when not metered"
+            remote_thumbnail(h.as_ref(), 32, 6_000_000).await.is_ok(),
+            "a file of exactly the limit is read"
         );
-        let mut huge = jpeg_of(64, 64, [9, 9, 9]);
-        huge.resize(20_000_001, 0);
-        let h = handle_for(&huge).await;
-        assert!(remote_thumbnail(h.as_ref(), 32, false).await.is_err());
+        let refused = remote_thumbnail(h.as_ref(), 32, 5_999_999).await;
+        assert_eq!(refused.err().map(|e| e.kind), Some(ErrorKind::Unsupported));
+        let h = handle_for(&padded_jpeg(20_000_001)).await;
+        assert!(
+            remote_thumbnail(h.as_ref(), 32, LIMIT).await.is_err(),
+            "20 MB is the default"
+        );
+    }
+
+    /// A handle that does not know its size, as some servers' files.
+    struct Unsized(Box<dyn ReadHandle>);
+
+    #[async_trait::async_trait]
+    impl ReadHandle for Unsized {
+        fn size(&self) -> Option<u64> {
+            None
+        }
+
+        async fn read_at(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
+            self.0.read_at(offset, max).await
+        }
+    }
+
+    #[tokio::test]
+    async fn files_of_unknown_size_are_read_one_byte_past_the_limit() {
+        let h = Unsized(handle_for(&padded_jpeg(3_000_000)).await);
+        assert!(remote_thumbnail(&h, 32, 3_000_000).await.is_ok());
+        let refused = remote_thumbnail(&h, 32, 2_999_999).await;
+        assert_eq!(refused.err().map(|e| e.kind), Some(ErrorKind::Unsupported));
     }
 
     #[tokio::test]
     async fn non_images_are_an_error() {
         let h = handle_for(b"this is definitely not a picture").await;
         assert_eq!(
-            remote_thumbnail(h.as_ref(), 32, false)
+            remote_thumbnail(h.as_ref(), 32, LIMIT)
                 .await
                 .err()
                 .map(|e| e.kind),
             Some(ErrorKind::Unsupported)
         );
         let h = handle_for(b"").await;
-        assert!(remote_thumbnail(h.as_ref(), 32, false).await.is_err());
+        assert!(remote_thumbnail(h.as_ref(), 32, LIMIT).await.is_err());
     }
 
     #[test]
@@ -672,6 +781,180 @@ mod tests {
         assert_ne!(base, thumb_key("srv:/a.jpg", 128, None, Some(b"e1")));
         assert_ne!(base, thumb_key("srv:/a.jpg", 128, Some(5), None));
         assert_ne!(thumb_key("a", 1, None, Some(b"")), thumb_key("a", 1, None, None));
+    }
+
+    fn file(name: &str, size: Option<u64>) -> Entry {
+        let mut e = Entry::new(name.as_bytes(), crate::entry::Kind::File);
+        e.size = size;
+        e
+    }
+
+    fn settings() -> ThumbSettings {
+        ThumbSettings::new(&Settings::default())
+    }
+
+    #[test]
+    fn local_images_videos_and_pdfs_use_the_system_thumbnailer() {
+        for name in ["a.jpg", "b.PNG", "c.mp4", "d.pdf", "E.PDF"] {
+            assert_eq!(
+                thumbnail_source(&file(name, Some(5)), true, true, &settings()),
+                ThumbSource::System,
+                "{name}"
+            );
+        }
+        let off = ThumbSettings {
+            remote: false,
+            ..settings()
+        };
+        assert_eq!(
+            thumbnail_source(&file("a.jpg", None), true, true, &off),
+            ThumbSource::System,
+            "the server switch does not touch local pictures"
+        );
+        assert_eq!(
+            thumbnail_source(&file("a.jpg", None), true, false, &settings()),
+            ThumbSource::Icon,
+            "Show thumbnails off"
+        );
+    }
+
+    #[test]
+    fn remote_images_are_the_apps_and_need_the_server_switch() {
+        let on = settings();
+        assert_eq!(
+            thumbnail_source(&file("a.jpg", None), false, true, &on),
+            ThumbSource::App
+        );
+        let off = ThumbSettings { remote: false, ..on };
+        assert_eq!(
+            thumbnail_source(&file("a.jpg", None), false, true, &off),
+            ThumbSource::Icon
+        );
+        assert_eq!(
+            thumbnail_source(&file("c.mp4", None), false, true, &on),
+            ThumbSource::Icon,
+            "no thumbnails of videos on servers"
+        );
+        assert_eq!(
+            thumbnail_source(&file("a.jpg", None), false, false, &on),
+            ThumbSource::Icon,
+            "Show thumbnails off"
+        );
+    }
+
+    #[test]
+    fn pdfs_follow_the_switches_of_their_place() {
+        let on = settings();
+        let pdf = file("a.pdf", Some(1_000));
+        assert_eq!(
+            thumbnail_source(&pdf, true, true, &on),
+            ThumbSource::System,
+            "local: the system thumbnailer, in a process of its own"
+        );
+        assert_eq!(
+            thumbnail_source(&pdf, false, true, &on),
+            ThumbSource::App,
+            "on a server: the app"
+        );
+        for local in [true, false] {
+            assert_eq!(
+                thumbnail_source(&pdf, local, false, &on),
+                ThumbSource::Icon,
+                "Show thumbnails off, local {local}"
+            );
+        }
+        let no_servers = ThumbSettings { remote: false, ..on };
+        assert_eq!(
+            thumbnail_source(&pdf, true, true, &no_servers),
+            ThumbSource::System,
+            "the server switch does not touch local PDFs"
+        );
+        assert_eq!(
+            thumbnail_source(&pdf, false, true, &no_servers),
+            ThumbSource::Icon,
+            "a PDF on a server needs Thumbnails from servers"
+        );
+        let by_type = Entry {
+            content_type: Some("application/pdf".into()),
+            ..file("download", Some(1_000))
+        };
+        assert_eq!(thumbnail_source(&by_type, false, true, &on), ThumbSource::App);
+    }
+
+    #[test]
+    fn server_pdfs_over_the_limit_have_no_thumbnail() {
+        let on = settings();
+        let local = |size| thumbnail_source(&file("a.pdf", size), true, true, &on);
+        assert_eq!(
+            local(Some(lautta_pdf::MAX_PDF_BYTES + 1)),
+            ThumbSource::System,
+            "a local PDF has no limit: the app reads none of it"
+        );
+        let remote = |size, set: &ThumbSettings| thumbnail_source(&file("a.pdf", size), false, true, set);
+        assert_eq!(
+            remote(None, &on),
+            ThumbSource::App,
+            "an unknown size is checked when read"
+        );
+        assert_eq!(
+            remote(Some(20_000_000), &on),
+            ThumbSource::App,
+            "the server limit is 20 MB"
+        );
+        assert_eq!(remote(Some(20_000_001), &on), ThumbSource::Icon);
+        let big = ThumbSettings {
+            max_remote_bytes: 100_000_000,
+            ..on
+        };
+        assert_eq!(
+            remote(Some(20_000_001), &big),
+            ThumbSource::App,
+            "the setting decides"
+        );
+    }
+
+    #[test]
+    fn the_pdf_limit_never_passes_what_the_viewer_opens() {
+        let set = ThumbSettings {
+            max_remote_bytes: 1_000_000_000,
+            ..settings()
+        };
+        assert_eq!(set.pdf_limit(), lautta_pdf::MAX_PDF_BYTES);
+        assert_eq!(settings().pdf_limit(), 20_000_000);
+    }
+
+    #[test]
+    fn other_files_and_unreachable_ones_have_none() {
+        let on = settings();
+        for local in [true, false] {
+            for name in ["a.txt", "a.zip", "noext"] {
+                assert_eq!(
+                    thumbnail_source(&file(name, Some(5)), local, true, &on),
+                    ThumbSource::Icon,
+                    "{name}"
+                );
+            }
+            let dir = Entry::new(b"photos.jpg", crate::entry::Kind::Dir);
+            assert_eq!(thumbnail_source(&dir, local, true, &on), ThumbSource::Icon);
+            for name in ["a.jpg", "a.pdf"] {
+                let mut e = file(name, Some(5));
+                e.flags |= EntryFlags::NOT_ACCESSIBLE;
+                assert_eq!(
+                    thumbnail_source(&e, local, true, &on),
+                    ThumbSource::Icon,
+                    "{name} behind a link out of the sandbox, local {local}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn app_thumbnails_are_asked_from_the_provider_by_uri() {
+        let uri = Uri::parse("lautta://nv-a/p/a%20b.pdf").unwrap();
+        assert_eq!(
+            app_thumbnail_url(&uri),
+            "image://lautta-thumb/lautta://nv-a/p/a%20b.pdf"
+        );
     }
 
     fn cache(max: u64) -> (tempfile::TempDir, ThumbnailCache) {
@@ -712,6 +995,30 @@ mod tests {
         assert_eq!(c.len(), 1, "a big item pushes out several small ones");
         assert!(c.contains("k5"));
         assert!(c.total_bytes() <= c.max_bytes());
+    }
+
+    #[test]
+    fn a_new_budget_holds_at_once() {
+        let (_tmp, c) = cache(30);
+        c.put("k1", &[1; 10]).unwrap();
+        c.put("k2", &[2; 10]).unwrap();
+        c.put("k3", &[3; 10]).unwrap();
+        assert!(c.get("k1").is_some(), "k1 becomes the most recently used");
+        c.set_max_bytes(20);
+        assert_eq!(c.max_bytes(), 20);
+        assert!(
+            !c.contains("k2") && c.contains("k1") && c.contains("k3"),
+            "the oldest goes first"
+        );
+        assert!(!c.dir().join("k2.thumb").exists(), "evicted from disk too");
+        c.set_max_bytes(40);
+        assert_eq!(c.len(), 2, "a larger budget evicts nothing");
+        c.put("k4", &[4; 20]).unwrap();
+        assert_eq!(c.total_bytes(), 40, "and holds more");
+        c.set_max_bytes(5);
+        assert!(c.is_empty());
+        c.put("k5", &[5; 6]).unwrap();
+        assert!(c.is_empty(), "nothing larger than the new budget is stored");
     }
 
     #[test]

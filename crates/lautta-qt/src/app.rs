@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The `App` singleton (doc/QML-API.md): readiness, settings, clipboard,
-//! undo, URI helpers and opening files outside the app.
+//! URI helpers, opening files outside the app and the sample folder of the
+//! view options preview.
 
+use crate::directory::preview;
 use crate::json::{from_json, json_value_to_qvariant, to_json};
-use crate::runtime::{core, spawn_then};
+use crate::runtime::{core, handle, spawn_then};
 use lautta_core::clipboard::{Clipboard, ClipboardMode};
 use lautta_core::mime::{category_of_name, extension_of, from_extension, viewer_for, FileCategory, Viewer};
 use lautta_core::settings::Settings;
-use lautta_core::undo::UndoAction;
+use lautta_core::transfer::scheduler::is_bridge_location;
+use lautta_core::trash::now_secs;
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
-use qmetaobject::{QPointer, QSingletonInit};
-use std::time::Duration;
-
-/// How long the undo banner stays (OPS-9).
-const UNDO_BANNER: Duration = Duration::from_secs(10);
+use qmetaobject::{QPointer, QSingletonInit, QVariantList};
 
 #[derive(QObject, Default)]
 pub struct App {
@@ -25,9 +24,6 @@ pub struct App {
     version: qt_property!(QString; CONST),
     settingsJson: qt_property!(QString; NOTIFY settingsJsonChanged),
     settingsJsonChanged: qt_signal!(),
-    canUndo: qt_property!(bool; NOTIFY undo_changed),
-    undoText: qt_property!(QString; NOTIFY undo_changed),
-    undo_changed: qt_signal!(),
     clipboardCount: qt_property!(i32; NOTIFY clipboard_changed),
     clipboardCut: qt_property!(bool; NOTIFY clipboard_changed),
     clipboard_changed: qt_signal!(),
@@ -35,6 +31,18 @@ pub struct App {
     loadSettings: qt_method!(fn(&mut self, json: QString)),
     setting: qt_method!(fn(&self, key: QString) -> QVariant),
     setSetting: qt_method!(fn(&mut self, key: QString, value_json: QString) -> bool),
+    /// The view options preview (BRW-4): the sample entries as a folder
+    /// shows them with these view settings, one map per shown entry.
+    previewRows: qt_method!(
+        fn(
+            &self,
+            entries: QString,
+            sort_key: QString,
+            descending: bool,
+            folders_first: bool,
+            show_hidden: bool,
+        ) -> QVariantList
+    ),
 
     childUri: qt_method!(fn(&self, parent: QString, name: QString) -> QString),
     parentUri: qt_method!(fn(&self, uri: QString) -> QString),
@@ -42,6 +50,9 @@ pub struct App {
     displayAddress: qt_method!(fn(&self, uri: QString) -> QString),
     locationName: qt_method!(fn(&self, uri: QString) -> QString),
     isLocal: qt_method!(fn(&self, uri: QString) -> bool),
+    /// Whether `uri` is on a server (LOC-7), even one that is gone: lines
+    /// that name its location mark it (§15.5).
+    isRemote: qt_method!(fn(&self, uri: QString) -> bool),
     localUrl: qt_method!(fn(&self, uri: QString) -> QString),
     categoryOf: qt_method!(fn(&self, name_or_uri: QString) -> QString),
     viewerFor: qt_method!(fn(&self, name_or_uri: QString, mime: QString) -> QString),
@@ -53,16 +64,11 @@ pub struct App {
     clipboardJson: qt_method!(fn(&self) -> QString),
     takeClipboard: qt_method!(fn(&mut self) -> QString),
 
-    noteUndo: qt_method!(fn(&mut self)),
-    undo: qt_method!(fn(&mut self)),
-    undone: qt_signal!(ok: bool),
-
     prepareExternal: qt_method!(fn(&self, uri: QString)),
     externalReady: qt_signal!(uri: QString, fileUrl: QString),
     externalFailed: qt_signal!(uri: QString, kind: QString, message: QString),
 
     clipboard: Clipboard,
-    undo_generation: u64,
 }
 
 impl QSingletonInit for App {
@@ -117,6 +123,13 @@ impl App {
         let map = from_json(&json.to_string()).unwrap_or_default();
         core.apply_settings(Settings::from_map(&map));
         self.publish_settings();
+        // The user's retention is known from here on: purge the Trash and
+        // clear its half-made copies (OPS-8).
+        handle().spawn_blocking(move || {
+            if let Err(e) = core.tidy_trash(now_secs()) {
+                log::warn!("tidying the Trash failed: {e}");
+            }
+        });
     }
 
     fn publish_settings(&mut self) {
@@ -149,6 +162,18 @@ impl App {
         core.apply_settings(settings);
         self.publish_settings();
         true
+    }
+
+    fn previewRows(
+        &self,
+        entries: QString,
+        sort_key: QString,
+        descending: bool,
+        folders_first: bool,
+        show_hidden: bool,
+    ) -> QVariantList {
+        let prefs = preview::prefs(&sort_key.to_string(), descending, folders_first, show_hidden);
+        preview::rows(&entries.to_string(), &prefs)
     }
 
     fn childUri(&self, parent: QString, name: QString) -> QString {
@@ -195,6 +220,10 @@ impl App {
 
     fn isLocal(&self, uri: QString) -> bool {
         matches!((core(), parse_uri(&uri)), (Some(c), Some(u)) if c.locations.to_local_path(&u).is_some())
+    }
+
+    fn isRemote(&self, uri: QString) -> bool {
+        parse_uri(&uri).is_some_and(|u| is_bridge_location(&u.location))
     }
 
     fn localUrl(&self, uri: QString) -> QString {
@@ -287,43 +316,6 @@ impl App {
             })
         });
         QString::from(to_json(&value).as_str())
-    }
-
-    /// Called after an undoable action finished: shows the banner for 10 s.
-    fn noteUndo(&mut self) {
-        let Some(core) = core() else { return };
-        self.canUndo = core.can_undo();
-        self.undoText = QString::from(match core.undo_kind() {
-            Some(UndoAction::Rename { .. }) => "rename",
-            Some(UndoAction::Move { .. }) => "move",
-            Some(UndoAction::Trash { .. }) => "trash",
-            None => "",
-        });
-        self.undo_changed();
-        self.undo_generation += 1;
-        let generation = self.undo_generation;
-        let me = QPointer::from(&*self);
-        qmetaobject::single_shot(UNDO_BANNER, move || {
-            if let Some(app) = me.as_pinned() {
-                let mut app = app.borrow_mut();
-                if app.undo_generation == generation {
-                    app.canUndo = false;
-                    app.undo_changed();
-                }
-            }
-        });
-    }
-
-    fn undo(&mut self) {
-        let Some(core) = core() else { return };
-        self.canUndo = false;
-        self.undo_changed();
-        let me = QPointer::from(&*self);
-        spawn_then(async move { core.undo().await }, move |res| {
-            if let Some(app) = me.as_pinned() {
-                app.borrow().undone(matches!(res, Ok(true)));
-            }
-        });
     }
 
     /// Makes a file readable by other apps: local files as they are, remote

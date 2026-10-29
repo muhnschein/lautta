@@ -13,7 +13,6 @@ use lautta_core::app_operations::{parse_choice, ConflictEntry, PendingPlans, Sta
 use lautta_core::compress::ArchiveKind;
 use lautta_core::ops::{OperationKind, Plan};
 use lautta_core::transfer::{TransferEvent, TransferState};
-use lautta_core::undo::UndoAction;
 use lautta_core::{Error, ErrorKind, Result, Uri};
 use qmetaobject::prelude::*;
 use qmetaobject::{QPointer, QSingletonInit};
@@ -56,6 +55,7 @@ pub struct Operations {
     conflictsJson: qt_method!(fn(&self, plan_id: i32) -> QString),
     resolveConflict: qt_method!(fn(&self, plan_id: i32, index: i32, choice: QString, apply_to_all: bool)),
     remove: qt_method!(fn(&self, uris_json: QString)),
+    deletesPermanently: qt_method!(fn(&self, uris_json: QString) -> bool),
     compress: qt_method!(fn(&self, uris_json: QString, dest_uri: QString, name: QString, kind: QString)),
     cancelJob: qt_method!(fn(&self, job_id: i32)),
     measure: qt_method!(fn(&self, uris_json: QString)),
@@ -95,13 +95,6 @@ impl QSingletonInit for Operations {
 
 fn plan_id(id: u64) -> i32 {
     i32::try_from(id).unwrap_or(i32::MAX)
-}
-
-fn trash_ids(core: &Core) -> Vec<i64> {
-    match core.undo_kind() {
-        Some(UndoAction::Trash { ids }) => ids,
-        _ => Vec::new(),
-    }
 }
 
 async fn launch(core: &Core, started: Result<Started>) -> Result<Launched> {
@@ -313,11 +306,9 @@ impl Operations {
         let me = QPointer::from(self);
         spawn_then(
             async move {
-                let before = trash_ids(&core);
-                let res = core.delete(&items).await;
-                let after = trash_ids(&core);
-                let trashed = if after == before { 0 } else { after.len() };
-                (res, trashed)
+                // A delete that succeeds trashed every item that goes there.
+                let trashed = items.iter().filter(|u| core.deletes_to_trash(u)).count();
+                (core.delete(&items).await, trashed)
             },
             move |(res, trashed)| {
                 let Some(p) = me.as_pinned() else { return };
@@ -330,6 +321,16 @@ impl Operations {
                 }
             },
         );
+    }
+
+    /// True when `remove` would delete any of the items for good: they
+    /// skip the Trash (OPS-8), so the page asks first. Junk counts as
+    /// permanent: asking is the safe side.
+    fn deletesPermanently(&self, uris_json: QString) -> bool {
+        match (core(), parse_uris(&uris_json)) {
+            (Some(core), Some(items)) => items.iter().any(|u| !core.deletes_to_trash(u)),
+            _ => true,
+        }
     }
 
     // ------------------------------------------------------ compress

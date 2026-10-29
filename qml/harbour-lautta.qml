@@ -33,6 +33,4 @@ ApplicationWindow {
     BrowseHandlers { }
     OperationsHandlers { }
     TransfersHandlers { }
-
-    UndoBanner { }
 }

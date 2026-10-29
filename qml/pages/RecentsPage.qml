@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Recents (ORG-2): files opened, previewed or transferred, newest
-// first. Filterable by kind, clearable, and can be switched off.
+// first, in the date sections of Activity (§15.4). Clearable; switched on
+// and off in Settings.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../components"
 import "../components/Open.js" as Open
 import "../components/browse"
-import "../components/browse/BrowseText.js" as BrowseText
 
 Page {
     id: page
@@ -40,50 +41,22 @@ Page {
         anchors.fill: parent
         model: page.listModel
 
-        header: Column {
-            width: list.width
-
-            PageHeader {
-                //% "Recents"
-                title: qsTrId("lautta-recents-title")
-            }
-            ComboBox {
-                id: filterBox
-                visible: page.recentsOn
-                //% "Show"
-                label: qsTrId("lautta-recents-show")
-                currentIndex: kinds.indexOf(recents.kindFilter)
-                readonly property var kinds: ["", "opened", "previewed", "transferred"]
-
-                menu: ContextMenu {
-                    Repeater {
-                        model: filterBox.kinds
-                        delegate: MenuItem {
-                            text: BrowseText.recentFilterTitle(modelData)
-                            onClicked: recents.kindFilter = modelData
-                        }
-                    }
-                }
-            }
+        header: PageHeader {
+            //% "Recents"
+            title: qsTrId("lautta-recents-title")
         }
 
-        section.property: "day"
+        section.property: "dateGroup"
         section.criteria: ViewSection.FullString
-        section.delegate: SectionHeader {
-            text: BrowseText.recentDayTitle(section)
+        section.delegate: DateSectionHeader {
+            group: section
         }
 
         PullDownMenu {
+            // Only shown while there is something to clear.
+            visible: recents.count > 0
+
             MenuItem {
-                text: page.recentsOn
-                      //% "Turn off recents"
-                      ? qsTrId("lautta-recents-turn-off")
-                      //% "Turn on recents"
-                      : qsTrId("lautta-recents-turn-on")
-                onClicked: App.setSetting("recents_enabled", JSON.stringify(!page.recentsOn))
-            }
-            MenuItem {
-                visible: recents.count > 0
                 //% "Clear recents"
                 text: qsTrId("lautta-recents-clear")
                 onClicked: {
@@ -134,12 +107,13 @@ Page {
                     color: row.highlighted ? Theme.highlightColor : Theme.primaryColor
                     truncationMode: TruncationMode.Fade
                 }
-                Label {
+                // Where the file is, without how it was used; a server's
+                // place has its icon (§15.5).
+                PlaceLabel {
                     width: parent.width
-                    text: BrowseText.recentKindLine(model.kind, model.place)
-                    font.pixelSize: Theme.fontSizeExtraSmall
-                    color: Theme.secondaryColor
-                    truncationMode: TruncationMode.Fade
+                    text: model.place
+                    remote: App.isRemote(model.uri)
+                    color: row.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
                 }
             }
         }
@@ -154,8 +128,8 @@ Page {
             hintText: page.recentsOn
                       //% "Files you open, edit or transfer show up here"
                       ? qsTrId("lautta-recents-empty-hint")
-                      //% "Pull down to turn them on"
-                      : qsTrId("lautta-recents-off-hint")
+                      //% "Turn them on in Settings"
+                      : qsTrId("lautta-recents-off-settings-hint")
         }
 
         VerticalScrollDecorator { }

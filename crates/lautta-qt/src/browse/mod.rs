@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! browse area facades (doc/QML-API.md): the Browse page's locations, the
-//! `Bridge` singleton, favourites, recents and per-location settings.
+//! `Bridge` singleton, favourites, recents and the Browse page's layout.
 //! Logic lives in `lautta_core::app_browse`; this layer maps it to QML.
 
 mod bridge;
@@ -8,13 +8,16 @@ mod favourites;
 mod folderinfo;
 mod layout;
 mod locations;
-mod prefs;
 mod recents;
 
+use crate::runtime::handle;
 use cpp::cpp;
+use lautta_core::app::Core;
 use qmetaobject::prelude::*;
+use qmetaobject::{queued_callback, QPointer};
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 use tokio::sync::watch;
 
 /// A model cell; QML sees plain strings and numbers.
@@ -119,6 +122,59 @@ pub(crate) fn store_subscribe() -> watch::Receiver<u64> {
     store_channel().subscribe()
 }
 
+/// Changes that arrive together are applied together.
+const SETTLE: Duration = Duration::from_millis(80);
+
+/// Calls `on_change` on the model `me` (on the GUI thread) whenever what the
+/// Browse rows show changes: the locations, the stores ([`store_changed`])
+/// and what the bridge shows (status, nearby servers, drives). Ends with
+/// `guard` or when a source is gone.
+pub(crate) fn watch_sources<T: QObject + 'static>(
+    me: QPointer<T>,
+    core: &Arc<Core>,
+    guard: &Guard,
+    on_change: fn(&mut T),
+) {
+    let notify = queued_callback(move |()| {
+        if let Some(model) = me.as_pinned() {
+            on_change(&mut model.borrow_mut());
+        }
+    });
+    let core = core.clone();
+    let mut stop = guard.subscribe();
+    handle().spawn(async move {
+        let mut locations = core.locations.subscribe();
+        let mut store = store_subscribe();
+        let mut status = core.bridge.as_ref().map(|b| b.watch_status());
+        let mut nearby = core.bridge.as_ref().map(|b| b.watch_nearby());
+        let mut drives = core.bridge.as_ref().map(|b| b.watch_drives());
+        loop {
+            tokio::select! {
+                r = locations.changed() => if r.is_err() { return },
+                r = store.changed() => if r.is_err() { return },
+                ok = changed(&mut status) => if !ok { return },
+                ok = changed(&mut nearby) => if !ok { return },
+                ok = changed(&mut drives) => if !ok { return },
+                _ = stop.changed() => return,
+            }
+            tokio::time::sleep(SETTLE).await;
+            locations.borrow_and_update();
+            store.borrow_and_update();
+            notify(());
+        }
+    });
+}
+
+/// Waits for the next change of what the bridge shows (status, nearby
+/// servers, drives); false when the bridge is gone. Never completes without
+/// a bridge.
+async fn changed<T>(rx: &mut Option<watch::Receiver<T>>) -> bool {
+    match rx {
+        Some(rx) => rx.changed().await.is_ok(),
+        None => std::future::pending().await,
+    }
+}
+
 /// `{kind, message}` as the failure signals carry it.
 pub(crate) fn error_parts(e: &lautta_core::Error) -> (QString, QString) {
     (QString::from(e.kind.name()), QString::from(e.message.as_str()))
@@ -142,12 +198,6 @@ pub fn register() {
         1,
         0,
         &crate::cstr("BrowseLayoutModel"),
-    );
-    qmetaobject::qml_register_type::<prefs::LocationPrefsModel>(
-        &uri,
-        1,
-        0,
-        &crate::cstr("LocationPrefsModel"),
     );
 }
 

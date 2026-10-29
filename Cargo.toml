@@ -28,8 +28,23 @@ all = { level = "deny", priority = -1 }
 debug = "line-tables-only"
 incremental = false
 
+# The text viewer's grammars (SPEC PRV-13) compile and run their regexes in
+# these crates; unoptimised they are tens of times slower, too slow for the
+# host tests and for the QML checks on the emulated target.
+[profile.dev.package.syntect]
+opt-level = 3
+[profile.dev.package.fancy-regex]
+opt-level = 3
+[profile.dev.package.regex-automata]
+opt-level = 3
+[profile.dev.package.regex-syntax]
+opt-level = 3
+
+# Unwinds so a PDF that trips the renderer fails that draw, not the app;
+# a panic anywhere else still aborts, through the hook of
+# `lautta_core::panics` (SPEC RS-4).
 [profile.release]
-panic = "abort"
+panic = "unwind"
 lto = "fat"
 codegen-units = 1
 opt-level = 3

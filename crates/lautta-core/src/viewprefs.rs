@@ -61,6 +61,27 @@ impl ViewPrefs {
             folders_first: self.folders_first,
         }
     }
+
+    /// What a folder showing `self` shows after the global settings went
+    /// from `before` to `after` (BRW-4): every setting that changed, and
+    /// only those, so what was set for this folder alone stays.
+    pub fn follow(self, before: ViewPrefs, after: ViewPrefs) -> ViewPrefs {
+        fn pick<T: PartialEq>(shown: T, before: T, after: T) -> T {
+            if before == after {
+                shown
+            } else {
+                after
+            }
+        }
+        ViewPrefs {
+            sort: pick(self.sort, before.sort, after.sort),
+            descending: pick(self.descending, before.descending, after.descending),
+            folders_first: pick(self.folders_first, before.folders_first, after.folders_first),
+            show_hidden: pick(self.show_hidden, before.show_hidden, after.show_hidden),
+            view_mode: pick(self.view_mode, before.view_mode, after.view_mode),
+            thumbnails: pick(self.thumbnails, before.thumbnails, after.thumbnails),
+        }
+    }
 }
 
 /// Grid is suggested when more than 60 % of the entries are images or videos
@@ -90,6 +111,46 @@ mod tests {
         assert_eq!(o.key, SortKey::Modified);
         assert!(o.descending);
         assert!(!o.folders_first);
+    }
+
+    #[test]
+    fn following_takes_what_changed_and_keeps_the_rest() {
+        let before = ViewPrefs::default();
+        // This folder was switched to grid without thumbnails by itself.
+        let shown = ViewPrefs {
+            view_mode: ViewMode::Grid,
+            thumbnails: false,
+            ..before
+        };
+        assert_eq!(shown.follow(before, before), shown, "nothing changed");
+        let after = ViewPrefs {
+            sort: SortKey::Size,
+            descending: true,
+            folders_first: false,
+            show_hidden: true,
+            ..before
+        };
+        assert_eq!(
+            shown.follow(before, after),
+            ViewPrefs {
+                view_mode: ViewMode::Grid,
+                thumbnails: false,
+                ..after
+            }
+        );
+        let all = ViewPrefs {
+            sort: SortKey::Type,
+            descending: true,
+            folders_first: false,
+            show_hidden: true,
+            view_mode: ViewMode::Grid,
+            thumbnails: false,
+        };
+        assert_eq!(
+            before.follow(before, all),
+            all,
+            "nothing of its own: it follows everything"
+        );
     }
 
     #[test]

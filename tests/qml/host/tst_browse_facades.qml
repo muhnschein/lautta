@@ -15,7 +15,6 @@ QtObject {
     property var favourites: FavouritesModel { }
     property var locations: LocationsModel { }
     property var recents: RecentsModel { }
-    property var prefs: LocationPrefsModel { }
     property var folder: FolderInfo { }
 
     Component.onCompleted: {
@@ -25,7 +24,10 @@ QtObject {
         check(Bridge.status === "absent", "status absent: " + Bridge.status)
         check(!Bridge.ready, "bridge not ready")
         check(Bridge.version === "", "no bridge version")
+        check(!Bridge.storageSettings, "no Storage settings without the bridge (NVB-13)")
         check(Bridge.pending() === "[]", "no questions waiting")
+        check(typeof Bridge.mountDrive === "function" && typeof Bridge.unmountDrive === "function",
+              "drives are mounted through the Bridge (LOC-3)")
         Bridge.poke()
         Bridge.setForeground(true)
         Bridge.setDiscover(false)
@@ -37,7 +39,7 @@ QtObject {
         check(favourites.placeOf("lautta://user-documents/") === "Documents", "place of a root: " + favourites.placeOf("lautta://user-documents/"))
         check(favourites.placeOf("lautta://user-documents/Uni/Thesis") === "Documents › Uni › Thesis", "place of a folder: " + favourites.placeOf("lautta://user-documents/Uni/Thesis"))
         check(favourites.placeOf("nonsense") === "", "place of nonsense")
-        favourites.moveBy(7, 1)
+        favourites.moveTo(7, 1)
 
         check(locations.count === 0, "locations start empty")
         check(locations.sectionCount("servers") === 0, "no servers section")
@@ -45,13 +47,7 @@ QtObject {
         locations.refresh()
 
         check(recents.count === 0 && !recents.enabled && !recents.loaded, "recents start empty")
-        recents.kindFilter = "previewed"
-        recents.text = "notes"
-        check(recents.kindFilter === "previewed" && recents.text === "notes", "recents filter is kept")
-
-        check(prefs.locationName === "" && prefs.bulkLanes === 0, "prefs start empty")
-        prefs.locationId = "user-documents"
-        check(prefs.locationId === "user-documents", "location id is set")
+        check(recents.kindFilter === undefined && recents.text === undefined, "recents have no filter (ORG-2)")
 
         folder.uri = "lautta://user-documents/"
         check(folder.uri === "lautta://user-documents/", "folder uri is set")

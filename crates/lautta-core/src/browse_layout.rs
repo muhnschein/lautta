@@ -4,25 +4,35 @@
 //! their fixed order; favourites keep their own order (ORG-1).
 //!
 //! A row is named by its section and an item: the location id of a folder,
-//! volume or server, `deleted` for *Recently deleted* and `nearby` for all
-//! nearby servers together. The store is blocking: call it from
-//! `spawn_blocking` (ARC-6).
+//! volume or server, `recents` for *Recents*, `deleted` for the *Trash*
+//! and `nearby` for all nearby servers together. *Volumes* and *Servers*
+//! have a switch for the whole section, stored as the hidden flag of the
+//! item `section`; the flags of the section's rows are left as they are
+//! while it is off, so that switching it on again restores them. The store
+//! is blocking: call it from `spawn_blocking` (ARC-6).
 
 use crate::db::Db;
 use crate::error::Result;
 use rusqlite::params;
 use std::collections::{BTreeMap, BTreeSet};
 
-/// The item of *Recently deleted* in the `device` section.
+/// The item of the *Trash* in the `device` section.
 pub const DELETED_ITEM: &str = "deleted";
+/// The item of *Recents* in the `device` section (ORG-2).
+pub const RECENTS_ITEM: &str = "recents";
 /// The one item that stands for every nearby server.
 pub const NEARBY_ITEM: &str = "nearby";
+/// The item of a section's own switch. No location id is called this.
+pub const SECTION_ITEM: &str = "section";
+/// The sections with a switch of their own, in Browse order.
+pub const SWITCHED_SECTIONS: [&str; 2] = ["volumes", "servers"];
 
 /// The layout item of a Browse row of `kind` with id `item_id`; `None` for
 /// rows the layout does not cover (favourites and the bridge notices).
 pub fn layout_item(kind: &str, item_id: &str) -> Option<String> {
     match kind {
         "deleted" => Some(DELETED_ITEM.to_owned()),
+        "recents" => Some(RECENTS_ITEM.to_owned()),
         "nearby" => Some(NEARBY_ITEM.to_owned()),
         "folder" | "volume" | "account" | "adhoc" | "adhocRecent" => Some(item_id.to_owned()),
         _ => None,
@@ -39,6 +49,12 @@ pub struct Layout {
 impl Layout {
     pub fn is_hidden(&self, section: &str, item: &str) -> bool {
         self.hidden.contains(&(section.to_owned(), item.to_owned()))
+    }
+
+    /// Whether the section is on: its rows show on the Browse page. Only
+    /// the sections in [`SWITCHED_SECTIONS`] can be turned off.
+    pub fn section_shown(&self, section: &str) -> bool {
+        !SWITCHED_SECTIONS.contains(&section) || !self.is_hidden(section, SECTION_ITEM)
     }
 
     /// The stored place of `item` in its section, if the user moved rows
@@ -145,7 +161,8 @@ impl BrowseLayout {
         Ok(())
     }
 
-    /// Back to the defaults: every row shown, in its natural order.
+    /// Back to the defaults: every row and section shown, in its natural
+    /// order.
     pub fn reset(&self) -> Result<()> {
         self.db.lock().execute("DELETE FROM browse_layout", [])?;
         Ok(())
@@ -200,6 +217,7 @@ mod tests {
     #[test]
     fn items_of_rows() {
         assert_eq!(layout_item("deleted", "").as_deref(), Some("deleted"));
+        assert_eq!(layout_item("recents", "").as_deref(), Some("recents"));
         assert_eq!(layout_item("nearby", "3").as_deref(), Some("nearby"));
         for kind in ["folder", "volume", "account", "adhoc", "adhocRecent"] {
             assert_eq!(layout_item(kind, "x").as_deref(), Some("x"), "{kind}");
@@ -274,6 +292,56 @@ mod tests {
         assert_eq!(
             arranged(&Layout::default(), &list[2..6]),
             ["a", "new", "b", "other"]
+        );
+    }
+
+    #[test]
+    fn a_section_switch_keeps_the_choices_of_its_rows() {
+        let s = store();
+        s.set_hidden("servers", "nv-account:2", true).unwrap();
+        s.set_order("servers", &["nv-account:2".to_owned(), "nv-account:1".to_owned()])
+            .unwrap();
+        s.set_hidden("servers", SECTION_ITEM, true).unwrap();
+        let off = s.load().unwrap();
+        assert!(!off.section_shown("servers"));
+        assert!(off.section_shown("volumes"), "per section");
+        assert!(off.is_hidden("servers", "nv-account:2"));
+        assert_eq!(off.position("servers", "nv-account:1"), Some(1));
+        assert_eq!(count(&s), 3);
+        s.set_hidden("servers", SECTION_ITEM, false).unwrap();
+        let on = s.load().unwrap();
+        assert!(on.section_shown("servers"));
+        assert!(on.is_hidden("servers", "nv-account:2"), "the row stays hidden");
+        assert_eq!(
+            on.position("servers", "nv-account:2"),
+            Some(0),
+            "and in its place"
+        );
+        assert_eq!(count(&s), 2, "a section that is on is not kept");
+    }
+
+    #[test]
+    fn only_volumes_and_servers_have_a_switch() {
+        let s = store();
+        let others = ["device", "android", "favourites", "nearby"];
+        for section in others {
+            s.set_hidden(section, SECTION_ITEM, true).unwrap();
+        }
+        let l = s.load().unwrap();
+        for section in others {
+            assert!(l.section_shown(section), "{section}");
+        }
+        s.reset().unwrap();
+        for section in SWITCHED_SECTIONS {
+            s.set_hidden(section, SECTION_ITEM, true).unwrap();
+        }
+        let l = s.load().unwrap();
+        assert!(!l.section_shown("volumes") && !l.section_shown("servers"));
+        s.reset().unwrap();
+        let l = s.load().unwrap();
+        assert!(
+            l.section_shown("volumes") && l.section_shown("servers"),
+            "defaults: on"
         );
     }
 

@@ -4,6 +4,7 @@
 // formats sizes and times, doc/QML-API.md).
 .pragma library
 .import Sailfish.Silica 1.0 as Silica
+.import "../PlaceText.js" as PlaceText
 
 function size(bytes) {
     return Silica.Format.formatFileSize(bytes)
@@ -14,7 +15,7 @@ function duration(seconds) {
 }
 
 function when(ms) {
-    return Silica.Format.formatDate(new Date(ms), Silica.Formatter.TimepointRelativeCurrentDay)
+    return Silica.Format.formatDate(new Date(ms), Silica.Formatter.TimepointRelative)
 }
 
 function percent(done, total) {
@@ -57,11 +58,11 @@ function forms(r) {
                 qsTrId("lautta-xfr-title-copied-one")], r.title, r.destName)
         if (!one)
             return withArgs([
-                //% "Copy %n item(s) to %1"
+                //% "Copy %n items to %1"
                 qsTrId("lautta-xfr-title-copy-many", n),
-                //% "Copying %n item(s) to %1"
+                //% "Copying %n items to %1"
                 qsTrId("lautta-xfr-title-copying-many", n),
-                //% "Copied %n item(s) to %1"
+                //% "Copied %n items to %1"
                 qsTrId("lautta-xfr-title-copied-many", n)], r.destName)
         break
     case "move":
@@ -74,11 +75,11 @@ function forms(r) {
                 //% "Moved %1 to %2"
                 qsTrId("lautta-xfr-title-moved-one")], r.title, r.destName)
         return withArgs([
-            //% "Move %n item(s) to %1"
+            //% "Move %n items to %1"
             qsTrId("lautta-xfr-title-move-many", n),
-            //% "Moving %n item(s) to %1"
+            //% "Moving %n items to %1"
             qsTrId("lautta-xfr-title-moving-many", n),
-            //% "Moved %n item(s) to %1"
+            //% "Moved %n items to %1"
             qsTrId("lautta-xfr-title-moved-many", n)], r.destName)
     case "delete":
         if (one)
@@ -90,11 +91,11 @@ function forms(r) {
                 //% "Deleted %1"
                 qsTrId("lautta-xfr-title-deleted-one")], r.title)
         return [
-            //% "Delete %n item(s)"
+            //% "Delete %n items"
             qsTrId("lautta-xfr-title-delete-many", n),
-            //% "Deleting %n item(s)"
+            //% "Deleting %n items"
             qsTrId("lautta-xfr-title-deleting-many", n),
-            //% "Deleted %n item(s)"
+            //% "Deleted %n items"
             qsTrId("lautta-xfr-title-deleted-many", n)]
     case "compress":
         if (one)
@@ -106,11 +107,11 @@ function forms(r) {
                 //% "Compressed %1"
                 qsTrId("lautta-xfr-title-compressed-one")], r.title)
         return [
-            //% "Compress %n item(s)"
+            //% "Compress %n items"
             qsTrId("lautta-xfr-title-compress-many", n),
-            //% "Compressing %n item(s)"
+            //% "Compressing %n items"
             qsTrId("lautta-xfr-title-compressing-many", n),
-            //% "Compressed %n item(s)"
+            //% "Compressed %n items"
             qsTrId("lautta-xfr-title-compressed-many", n)]
     case "extract":
         return withArgs([
@@ -137,6 +138,24 @@ function forms(r) {
 // r: { kind, direction, state, title, itemsTotal, destName }
 function title(r) {
     return forms(r)[r.state === "completed" ? ENDED : IMPERATIVE]
+}
+
+// The title split around the destination's name (PlaceText.around), for
+// a line that marks a server's name with its icon (§15.5).
+function titleParts(r) {
+    return PlaceText.around(function (dest) {
+        var marked = {}
+        for (var key in r)
+            marked[key] = r[key]
+        marked.destName = dest
+        return title(marked)
+    }, r.destName)
+}
+
+// Whether a transfer's destination is on a server (LOC-7): uploads and
+// transfers between servers go to one.
+function toServer(direction) {
+    return direction === "upload" || direction === "remote"
 }
 
 // "Copied 37 items to NAS", "Deleted notes.md", "Extracted dataset.tar.gz".
@@ -190,7 +209,7 @@ function waitReason(reason) {
 }
 
 function needsAnswer(questions) {
-    //% "Needs an answer: %n conflict(s)"
+    //% "Needs an answer: %n conflicts"
     return qsTrId("lautta-xfr-needs-answer", questions)
 }
 
@@ -200,7 +219,7 @@ function status(r, restored) {
     switch (r.group) {
     case "active":
         if (r.state === "scanning")
-            //% "Scanning… %n item(s)"
+            //% "Scanning… %n items"
             return qsTrId("lautta-xfr-scanning", r.itemsTotal)
         if (r.state === "queued" && r.bytesDone === 0)
             //% "Queued"
@@ -225,7 +244,7 @@ function historyLine(r) {
         //% "Canceled"
         text = qsTrId("lautta-xfr-canceled")
     else if (r.state === "failed" && r.itemsFailed > 0 && r.itemsDone > 0)
-        //% "Completed with %n failure(s)"
+        //% "Completed with %n failures"
         text = qsTrId("lautta-xfr-completed-failures", r.itemsFailed)
     else if (r.state === "failed")
         //% "Failed"

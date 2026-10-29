@@ -41,7 +41,7 @@ User tests RPM on phone; that test judges feel, lag, transitions. Say exactly wh
 
 - Silica stock components only (UI-1), built like existing pages; idioms in `design/STYLE.md` (pulley, no push-up menu, remorse, dialog pages). Jolla app has same feature (e.g. Gallery's image viewer) → match it. Feature references: SPEC Appendix A (Harbour File Browser, Transmit/Cyberduck, iOS Files).
 - "Design first" / "no PR yet" → artboard on design canvas (`design/canvas/project/*.dc.html`, kit `design/STYLE.md`), wait for approval, then code.
-- Every string `qsTrId()` with `//%` engineering English (UI-7); error text as SPEC §20. Changed strings → `make translations` (`make check` fails on drift).
+- Every string `qsTrId()` with `//%` engineering English (UI-7); error text as SPEC §20. Changed strings → `make translations` (`make check` fails on drift). A count in a text → one `%n` plural string, never "(s)"; `make translations` adds its English singular (read the printed pairs).
 - Host QML tests have no Silica; target page tests have no finger, no phone: looks and gestures unproven until device test. Say so.
 - Phone = battery: no always-running animations, timers, polling. Idle in background = 0 % CPU, no timers (PRF-8); only a running transfer keeps device awake (XFR-5).
 

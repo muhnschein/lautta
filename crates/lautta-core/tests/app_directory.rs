@@ -5,6 +5,7 @@
 use lautta_core::app::Core;
 use lautta_core::app_directory::{ListEvent, PathStep};
 use lautta_core::entry::cap;
+use lautta_core::foldercount::{FolderCount, COUNT_CAP};
 use lautta_core::locations::LocationRegistry;
 use lautta_core::paths::AppPaths;
 use lautta_core::{ErrorKind, Uri};
@@ -234,6 +235,101 @@ async fn completion_comes_from_cached_listings() {
     );
     assert_eq!(h.core.complete_address("~/Documents/Uni/", &base).len(), 3);
     assert!(h.core.complete_address("no slash", &base).is_empty());
+}
+
+#[tokio::test]
+async fn a_device_folder_counts_the_items_the_view_would_show() {
+    let h = home().await;
+    let uni = h.root.join("Documents/Uni");
+    std::fs::create_dir_all(uni.join("Thesis")).unwrap();
+    std::fs::write(uni.join("a.txt"), b"a").unwrap();
+    std::fs::write(uni.join(".hidden"), b"h").unwrap();
+    let dir = uri("lautta://user-documents/Uni");
+    assert_eq!(
+        h.core.count_folder(&dir, false).await,
+        Some(FolderCount {
+            shown: 2,
+            capped: false
+        })
+    );
+    assert_eq!(h.core.count_folder(&dir, true).await.map(|c| c.shown), Some(3));
+}
+
+#[tokio::test]
+async fn a_folder_on_a_memory_card_is_counted() {
+    let h = home().await;
+    std::fs::create_dir_all(h.root.join("media/SD/DCIM")).unwrap();
+    std::fs::write(h.root.join("media/SD/DCIM/a.jpg"), b"a").unwrap();
+    h.core.locations.refresh();
+    assert_eq!(
+        h.core.count_folder(&uri("lautta://vol-SD/DCIM"), false).await,
+        Some(FolderCount {
+            shown: 1,
+            capped: false
+        })
+    );
+}
+
+#[tokio::test]
+async fn a_folder_that_cannot_be_read_has_no_count() {
+    let h = home().await;
+    std::fs::write(h.root.join("Documents/a.txt"), b"a").unwrap();
+    assert_eq!(
+        h.core
+            .count_folder(&uri("lautta://user-documents/gone"), false)
+            .await,
+        None
+    );
+    assert_eq!(
+        h.core
+            .count_folder(&uri("lautta://user-documents/a.txt"), false)
+            .await,
+        None
+    );
+    assert_eq!(h.core.count_folder(&uri("lautta://nowhere/"), false).await, None);
+}
+
+#[tokio::test]
+async fn a_server_folder_is_not_counted() {
+    use lautta_core::provider::memory::MemoryProvider;
+    use std::sync::Arc;
+    let h = home().await;
+    let loc = lautta_core::locations::Location::remote(
+        "nv-nas",
+        lautta_core::locations::LocationKind::AdHoc,
+        "NAS",
+        Some("sftp://nas.home".to_owned()),
+    );
+    h.core.locations.register(
+        loc,
+        Arc::new(MemoryProvider::new(lautta_core::entry::Capabilities::with(&[
+            cap::WRITE,
+        ]))),
+    );
+    assert_eq!(
+        h.core.count_folder(&uri("lautta://nv-nas/srv"), false).await,
+        None
+    );
+    assert_eq!(h.core.count_folder(&uri("lautta://nv-nas/"), true).await, None);
+}
+
+#[tokio::test]
+async fn a_huge_folder_is_counted_up_to_the_cap() {
+    let h = home().await;
+    let big = h.root.join("Documents/big");
+    std::fs::create_dir_all(&big).unwrap();
+    for i in 0..=COUNT_CAP {
+        std::fs::File::create(big.join(i.to_string())).unwrap();
+    }
+    assert_eq!(
+        h.core
+            .count_folder(&uri("lautta://user-documents/big"), false)
+            .await,
+        Some(FolderCount {
+            shown: COUNT_CAP,
+            capped: true
+        })
+    );
 }
 
 #[tokio::test]

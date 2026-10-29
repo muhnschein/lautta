@@ -53,8 +53,7 @@ Dialog {
                 //% "New folder"
                 text: qsTrId("lautta-dir-picker-new-folder")
                 onClicked: {
-                    var d = pageStack.push(Qt.resolvedUrl("NewItemDialog.qml"),
-                                           { "parentUri": dialog.currentUri, "foldersOnly": true })
+                    var d = pageStack.push(Qt.resolvedUrl("NewItemDialog.qml"), { "parentUri": dialog.currentUri })
                     d.accepted.connect(function () { folders.createFolder(d.itemName) })
                 }
             }
@@ -168,6 +167,7 @@ Dialog {
                     isDir: true
                     category: "folder"
                     isSymlink: model.isSymlink
+                    highlighted: parent.parent.highlighted
                 }
                 Label {
                     anchors.verticalCenter: parent.verticalCenter

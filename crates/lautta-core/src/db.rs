@@ -127,6 +127,27 @@ const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (section, item)
     );
     "#,
+    // 4: `trash_items.bin`, unused: nothing reads or writes it (OPS-8). The
+    // column stays, as dropping it takes a migration of its own.
+    r#"
+    ALTER TABLE trash_items ADD COLUMN bin BLOB;
+    "#,
+    // 5: ORG-1, files can be favourites too; the rows before were folders.
+    r#"
+    ALTER TABLE favourites ADD COLUMN is_dir INTEGER NOT NULL DEFAULT 1;
+    "#,
+    // 6: ORG-1, the icon chosen for a favourite (a name of
+    // `org::favourites::ICONS`). NULL for the rows before and for no choice:
+    // the default icon.
+    r#"
+    ALTER TABLE favourites ADD COLUMN icon TEXT;
+    "#,
+    // 7: `trash_drain`, unused: nothing reads or writes it (OPS-8). The table
+    // stays, as dropping it takes a migration of its own.
+    r#"
+    CREATE TABLE trash_drain (due INTEGER NOT NULL);
+    INSERT INTO trash_drain VALUES (1);
+    "#,
 ];
 
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -235,6 +256,78 @@ mod tests {
     }
 
     #[test]
+    fn favourites_from_before_files_stay_folders() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v4.db");
+        {
+            // A database as schema 4 left it, with one favourite.
+            let c = Connection::open(&path).unwrap();
+            for sql in &MIGRATIONS[..4] {
+                c.execute_batch(sql).unwrap();
+            }
+            c.pragma_update(None, "user_version", 4).unwrap();
+            c.execute(
+                "INSERT INTO favourites(uri, label, colour, position) \
+                 VALUES ('lautta://user-documents/Uni', 'Uni', NULL, 0)",
+                [],
+            )
+            .unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.version().unwrap(), SCHEMA_VERSION);
+        let favourites = crate::org::favourites::Favourites::new(db.clone());
+        let list = favourites.list().unwrap();
+        assert_eq!(list.len(), 1);
+        assert!(list[0].is_dir, "rows from before are folders");
+        let file = crate::uri::Uri::parse("lautta://user-documents/Uni/a.pdf").unwrap();
+        assert!(!favourites.add(&file, "A", None, false).unwrap().is_dir);
+    }
+
+    #[test]
+    fn favourites_from_before_icons_keep_their_default_icon() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v5.db");
+        {
+            // A database as schema 5 left it, with a folder and a file.
+            let c = Connection::open(&path).unwrap();
+            for sql in &MIGRATIONS[..5] {
+                c.execute_batch(sql).unwrap();
+            }
+            c.pragma_update(None, "user_version", 5).unwrap();
+            c.execute_batch(
+                "INSERT INTO favourites(uri, label, colour, position, is_dir) \
+                 VALUES ('lautta://user-documents/Uni', 'Uni', '#e7a33c', 0, 1); \
+                 INSERT INTO favourites(uri, label, colour, position, is_dir) \
+                 VALUES ('lautta://user-documents/a.pdf', 'A', NULL, 1, 0);",
+            )
+            .unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.version().unwrap(), SCHEMA_VERSION);
+        let favourites = crate::org::favourites::Favourites::new(db.clone());
+        let list = favourites.list().unwrap();
+        assert_eq!(
+            list.iter()
+                .map(|f| (f.label.as_str(), f.colour.as_deref(), f.icon.as_deref()))
+                .collect::<Vec<_>>(),
+            [("Uni", Some("#e7a33c"), None), ("A", None, None)],
+            "rows from before keep label and colour and have no icon chosen"
+        );
+        assert_eq!(list[0].icon_source(), "image://theme/icon-m-favorite");
+        assert_eq!(list[1].icon_source(), "file-document");
+        let uni = crate::uri::Uri::parse("lautta://user-documents/Uni").unwrap();
+        let saved = favourites
+            .save(&uni, "Uni", Some("#e7a33c"), Some("home"), true)
+            .unwrap();
+        assert_eq!(saved.icon.as_deref(), Some("home"));
+        drop(favourites);
+        drop(db);
+        let reopened = crate::org::favourites::Favourites::new(Db::open(&path).unwrap());
+        let again = reopened.get_by_uri(&uni).unwrap().unwrap();
+        assert_eq!(again.icon.as_deref(), Some("home"), "the icon is stored");
+    }
+
+    #[test]
     fn newer_schema_is_refused() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("x.db");
@@ -244,6 +337,69 @@ mod tests {
         }
         let err = Db::open(&path).err().unwrap();
         assert_eq!(err.kind, ErrorKind::Unsupported);
+    }
+
+    #[test]
+    fn older_schemas_migrate_forward_and_keep_their_rows() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("x.db");
+        {
+            let c = Connection::open(&path).unwrap();
+            for sql in &MIGRATIONS[..3] {
+                c.execute_batch(sql).unwrap();
+            }
+            c.pragma_update(None, "user_version", 3).unwrap();
+            c.execute(
+                "INSERT INTO trash_items(original_uri, trashed_at, stored_name) VALUES ('lautta://a/b', 1, 's')",
+                [],
+            )
+            .unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.version().unwrap(), SCHEMA_VERSION);
+        let uri: String = db
+            .lock()
+            .query_row(
+                "SELECT original_uri FROM trash_items WHERE stored_name = 's'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(uri, "lautta://a/b");
+    }
+
+    #[test]
+    fn a_device_database_at_schema_7_keeps_opening_with_its_trash_rows() {
+        // The database on the device is at schema 7, with trash rows that
+        // name a bin. A migration that ran there may not be dropped or
+        // renumbered, or this app would call that database newer than itself.
+        const DEVICE_SCHEMA: usize = 7;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v7.db");
+        {
+            let c = Connection::open(&path).unwrap();
+            for sql in &MIGRATIONS[..DEVICE_SCHEMA] {
+                c.execute_batch(sql).unwrap();
+            }
+            c.pragma_update(None, "user_version", DEVICE_SCHEMA).unwrap();
+            c.execute(
+                "INSERT INTO trash_items(original_uri, trashed_at, stored_name, bin) \
+                 VALUES ('lautta://user-documents/a', 7, 's', X'2f442f2e6c61757474612d7472617368')",
+                [],
+            )
+            .unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.version().unwrap(), SCHEMA_VERSION);
+        let row: (String, i64) = db
+            .lock()
+            .query_row(
+                "SELECT original_uri, trashed_at FROM trash_items WHERE stored_name = 's'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(row, ("lautta://user-documents/a".to_owned(), 7));
     }
 
     #[test]

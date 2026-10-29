@@ -13,15 +13,25 @@ BackgroundItem {
     // The spoken name of the button.
     property string description
     property bool accent
+    // The button that leaves the bar, set apart from the bar's actions on a
+    // key of the ambience's highlight background (board DirectorySelect).
+    property bool key
 
     width: Theme.itemSizeMedium
     height: Theme.itemSizeLarge
     Accessible.role: Accessible.Button
     Accessible.name: description
 
+    Rectangle {
+        objectName: "dockKey"
+        visible: button.key
+        anchors.fill: parent
+        color: Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity)
+    }
+
     AppIcon {
         anchors.centerIn: parent
         icon: button.icon
-        highlighted: button.highlighted || button.accent
+        highlighted: button.highlighted || button.accent || button.key
     }
 }

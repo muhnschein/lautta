@@ -44,6 +44,8 @@ pub enum Signal {
         kind: String,
         details: HashMap<String, OwnedValue>,
     },
+    /// `ListDrives` lists something else now (XB-20).
+    DrivesChanged,
 }
 
 fn body<T>(msg: &Message) -> Result<T, BridgeError>
@@ -107,6 +109,7 @@ fn decode_member(member: &str, msg: &Message) -> Result<Option<Signal>, BridgeEr
             let (id, kind, details) = body::<(String, String, HashMap<String, OwnedValue>)>(msg)?;
             Signal::Question { id, kind, details }
         }
+        "DrivesChanged" => Signal::DrivesChanged,
         _ => return Ok(None),
     }))
 }

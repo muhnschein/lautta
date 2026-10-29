@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Images (PRV-2, PRV-3, PRV-4): `ImageListModel` (the folder's images, for
-//! swiping) and the two QML image providers for remote files,
+//! Images (PRV-2, PRV-3, PRV-4, PRV-14): `ImageListModel` (the folder's
+//! images, for swiping) and the two QML image providers for remote files,
 //! `image://lautta-thumb/<uri>?size=N` and `image://lautta-file/<uri>`.
 //!
-//! Local files never come here for thumbnails (PRV-1: `Nemo.Thumbnailer`);
-//! the full-image provider serves any location, which is what the viewer
-//! uses for remote files. The providers are asynchronous
+//! Local images, videos and PDFs never come here for thumbnails (PRV-1:
+//! `Nemo.Thumbnailer`). The full-image provider
+//! serves any location, which is what the viewer uses for remote files. The providers are asynchronous
 //! (`QQuickAsyncImageProvider`): the request returns at once, the tokio
 //! runtime fetches, a worker decodes, and the response is finished from
 //! there.
@@ -646,5 +646,11 @@ mod tests {
         assert!(e.starts_with("NotFound"), "{e}");
         let (e, ..) = probe("lautta-pdf", "lautta://nv-qt-images/p/two.pdf", (50, 0));
         assert_eq!(e, "bad page id");
+
+        // PDF thumbnails (PRV-14): the first page, a square from the top.
+        let (e, w, h) = probe("lautta-thumb", "lautta://nv-qt-images/p/two.pdf?size=64", (0, 0));
+        assert_eq!((e.as_str(), w, h), ("", 64, 64), "first page as wide as asked");
+        let (e, ..) = probe("lautta-thumb", "lautta://nv-qt-images/p/fake.pdf?size=64", (0, 0));
+        assert!(e.contains("not a readable PDF"), "{e}");
     }
 }

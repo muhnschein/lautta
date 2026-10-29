@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Actions on the selected items (board DirectorySelect): a docked panel of
-// icons, open for as long as selection mode is, ending with the button that
-// leaves it. `owner` is the DirectoryView.
+// Actions on the selected items (board DirectorySelect): a docked panel,
+// open for as long as selection mode is, of icons spread evenly over its
+// width in the long-press menu's order, then More actions, which opens the
+// rest on a page of its own (MoreActionsPage.qml), and the button that leaves
+// selection, on a highlight key (Selection.panelButtons). The same buttons for
+// one item or several (SPEC §15.3). Opaque (UI-10). `owner` is the
+// DirectoryView.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "../"
+import "Selection.js" as Selection
 
 DockedPanel {
     id: panel
@@ -12,63 +17,55 @@ DockedPanel {
     property var owner
     readonly property bool writable: owner ? owner.model.writable : false
     readonly property int count: owner ? owner.model.selectedCount : 0
-    readonly property bool any: count > 0
+    readonly property bool waiting: owner ? owner.selectionWaiting : false
+    // Buttons of the selection as it last was. Ending selection zeroes `count`
+    // while the panel still fades out: no switch to the no-selection set (just
+    // Stop selecting) on the way. They change only with an item selected or
+    // waiting for the first.
+    property var buttons: Selection.panelButtons(0, false)
 
-    function _run(id) {
-        if (owner)
+    function refreshButtons() {
+        if (count > 0 || waiting)
+            buttons = Selection.panelButtons(count, writable)
+    }
+
+    function run(id) {
+        if (!owner)
+            return
+        if (id === "done")
+            owner.endSelection()
+        else if (id === "more")
+            owner.moreSelection()
+        else
             owner.runSelectionAction(id)
     }
 
     dock: Dock.Bottom
     width: parent ? parent.width : 0
-    height: content.height
+    height: Theme.itemSizeLarge
     open: owner ? owner.selecting : false
+    onCountChanged: refreshButtons()
+    onWritableChanged: refreshButtons()
+    onWaitingChanged: refreshButtons()
+    background: BarBackground { }
 
     Row {
         id: content
 
-        anchors.horizontalCenter: parent.horizontalCenter
+        width: panel.width
+        height: panel.height
 
-        DockButton {
-            visible: panel.any
-            icon: "dir-copy"
-            //% "Copy"
-            description: qsTrId("lautta-dir-sel-copy")
-            onClicked: panel._run("copy")
-        }
-        DockButton {
-            visible: panel.any && panel.writable
-            icon: "dir-cut"
-            //% "Cut"
-            description: qsTrId("lautta-dir-sel-cut")
-            onClicked: panel._run("cut")
-        }
-        DockButton {
-            visible: panel.any && panel.writable
-            icon: "image://theme/icon-m-delete"
-            //% "Delete"
-            description: qsTrId("lautta-dir-sel-delete")
-            onClicked: panel._run("delete")
-        }
-        DockButton {
-            visible: panel.any
-            icon: "image://theme/icon-m-share"
-            //% "Share"
-            description: qsTrId("lautta-dir-sel-share")
-            onClicked: panel._run("share")
-        }
-        DockButton {
-            visible: panel.any
-            icon: "image://theme/icon-m-file-compressed"
-            //% "Compress"
-            description: qsTrId("lautta-dir-sel-compress")
-            onClicked: panel._run("compress")
-        }
-        DockButton {
-            icon: "image://theme/icon-m-dismiss"
-            //% "Stop selecting"
-            description: qsTrId("lautta-dir-sel-done")
-            onClicked: if (panel.owner) panel.owner.endSelection()
+        Repeater {
+            model: panel.buttons
+
+            DockButton {
+                width: content.width / panel.buttons.length
+                height: content.height
+                icon: modelData.icon
+                description: modelData.text
+                key: modelData.id === "done"
+                onClicked: panel.run(modelData.id)
+            }
         }
     }
 }

@@ -26,7 +26,7 @@ pub enum FileCategory {
 }
 
 impl FileCategory {
-    /// Icon name for the UI (maps to a Silica/theme icon in QML).
+    /// Icon name for the UI (QML maps it to a glyph, `FileIcons.kind`).
     pub fn icon_name(self) -> &'static str {
         match self {
             FileCategory::Folder => "folder",

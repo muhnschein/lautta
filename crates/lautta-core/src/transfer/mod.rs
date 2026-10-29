@@ -31,7 +31,7 @@ pub use model::{
 pub use scheduler::Scheduler;
 pub use store::Store;
 
-/// Moves a local item to *Recently deleted* (OPS-8). Supplied by the caller
+/// Moves a local item to the *Trash* (OPS-8). Supplied by the caller
 /// (`trash.rs`) so the engine stays free of that policy.
 #[async_trait]
 pub trait Trasher: Send + Sync {

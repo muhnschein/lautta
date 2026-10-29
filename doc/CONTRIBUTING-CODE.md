@@ -38,7 +38,15 @@ screen; `design/STYLE.md` is the Silica style kit).
   goes through `crate::db::Db` (a `Mutex<rusqlite::Connection>`), only from blocking
   contexts.
 - SPDX header `// SPDX-License-Identifier: LGPL-2.1-or-later` on every source file.
+  Third-party code keeps its own licence and copyright headers: `third_party/` (crates)
+  and `qml/components/viewers/gallery/` (Jolla Gallery's viewer, BSD-3-Clause, with the
+  licence text); a `LAUTTA.md` next to it says where it comes from and what changed.
 - Comments explain *why*; cite requirement IDs where a rule comes from the spec.
+- Strings: `qsTrId("lautta-…")` with `//%` engineering English (UI-7). A count in a text is
+  one plural string with `%n`, called as `qsTrId(id, n)`: never "(s)", never a separate id
+  for "1 item". `make translations` refreshes `translations/harbour-lautta.ts` and adds the
+  English singular of new plural strings: read the pairs it prints, and write a singular
+  by hand where it says it cannot tell. `make check` fails on any gap.
 
 ## Layout
 
@@ -48,7 +56,7 @@ crates/lautta-bridge-proto   org.netvfs.Bridge1 types + zbus proxy + fake bridge
 crates/lautta-qt             qmetaobject models/facades, C++ glue (SailfishApp, MediaSource)
 crates/harbour-lautta        the binary (exported C main, SPEC RS-3)
 qml/                         pages/, components/, dialogs/, viewers/, cover/
-tests/bridge-contract        netvfs's protocol contract (copied from netvfs a025b1f)
+tests/bridge-contract        netvfs's protocol contract (copied from netvfs 1470242)
 ```
 
 Shared core types: `Error`/`ErrorKind` (error.rs), `VPath` (vpath.rs), `Entry`/`Kind`/

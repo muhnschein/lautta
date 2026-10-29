@@ -26,6 +26,8 @@ ListItem {
         eta: row.eta, itemsDone: row.itemsDone, itemsTotal: row.itemsTotal, itemsFailed: row.itemsFailed,
         destName: row.destName, finishedMs: row.finishedMs
     })
+    readonly property var titleParts: TransferText.titleParts(r)
+    readonly property bool toServer: TransferText.toServer(row.direction)
 
     contentHeight: Math.max(Theme.itemSizeMedium, content.height + 2 * Theme.paddingSmall)
     menu: Component {
@@ -87,11 +89,14 @@ ListItem {
         Column {
             width: parent.width - directionIcon.width - parent.spacing
 
-            Label {
+            // A server the task goes to has its icon (§15.5).
+            PlaceLabel {
                 width: parent.width
-                text: TransferText.title(item.r)
+                before: item.titleParts.before
+                text: item.titleParts.rest
+                remote: item.titleParts.named && item.toServer
                 color: item.highlighted ? Theme.highlightColor : Theme.primaryColor
-                truncationMode: TruncationMode.Fade
+                fontSize: Theme.fontSizeMedium
             }
             ProgressBar {
                 width: parent.width + 2 * Theme.horizontalPageMargin

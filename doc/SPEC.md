@@ -122,8 +122,11 @@ is the authority.
 - HBR-5: `[X-Sailjail]` uses only `Permissions`, `OrganizationName`, `ApplicationName`,
   `ExecDBus`. `OrganizationName` must not be `com.jolla` or `org.sailfishos`.
 - HBR-6: No setuid/setgid bits, no debug info in the package, no source-control files.
-- HBR-7: The app must not spawn other programs. Sailjail's `private-bin` only provides
-  the app's own binary, so the design contains no subprocesses at all.
+- HBR-7: Lautta starts no other program. Sailjail's `private-bin` provides the app's own
+  binary and only the helpers its permissions add. The system thumbnail library
+  (`Nemo.Thumbnailer`, PRV-1) starts its own helpers, `/usr/bin/thumbnaild-pdf` and
+  `/usr/bin/thumbnaild-video`, under the `Thumbnails` permission, which `UserDirs` brings
+  (§3.3).
 
 ### 3.3 Sandbox profile
 
@@ -137,7 +140,7 @@ ExecDBus=harbour-lautta
 
 | Permission | Why | What it grants (sailjail-permissions) |
 |---|---|---|
-| `UserDirs` | the user's files | `~/Documents`, `~/Downloads`, `~/Pictures`, `~/Music`, `~/Playlists`, `~/Videos`, `~/Public`, and `~/android_storage/{Documents,Download,Pictures,DCIM,Music,Podcasts,Movies}` |
+| `UserDirs` | the user's files, their thumbnails (PRV-1) | `~/Documents`, `~/Downloads`, `~/Pictures`, `~/Music`, `~/Playlists`, `~/Videos`, `~/Public`, and `~/android_storage/{Documents,Download,Pictures,DCIM,Music,Podcasts,Movies}`; through `Pictures` and `Videos` also `Thumbnails`: `private-bin thumbnaild-pdf,thumbnaild-video` (HBR-7), `~/.cache/org.nemomobile/thumbnails`, D-Bus `org.nemomobile.Thumbnailer` |
 | `RemovableMedia` | SD cards and USB drives | `/run/media` (via `ignore disable-mnt`), listening to UDisks2 signals |
 | `Audio` | sound in audio/video preview | PulseAudio, GStreamer cache |
 
@@ -148,6 +151,14 @@ see PRV-9 for the one feature that was redesigned to avoid it), `Accounts` and `
 Implicit: `~/.local/share/org.netvfs/lautta`, `~/.cache/org.netvfs/lautta`,
 `~/.config/org.netvfs/lautta`, and ownership of D-Bus name `org.netvfs.lautta` (used for
 notification actions and `ExecDBus` activation).
+
+What the app sees of the file system (firejail `whitelist`): a tmpfs on `$HOME` with every
+granted folder above, and the app's own folders, bind-mounted onto it one by one. So no
+folder is on `$HOME`'s device, and `rename(2)` between two of them fails with `EXDEV` even
+when both live on the same ext4: moves between folders are copies (OPS-4), and so is a
+move into the *Trash* in the app's data folder (OPS-8). `/run/media` is the host's (`ignore
+disable-mnt`); the sandbox has its own mount namespace, in which an inotify watch on the
+media folder can miss a mount, so volumes are also rescanned (LOC-3).
 
 ### 3.4 Two modes
 
@@ -197,7 +208,8 @@ flowchart LR
   LP --> FS[(user folders, /run/media)]
 ```
 
-- ARC-1: One process. No helper binaries (HBR-7), no daemon (HBR-1). Work that must
+- ARC-1: One process: Lautta ships and starts no helper binary (HBR-7; the system
+  thumbnail library's own helpers are the system's), no daemon (HBR-1). Work that must
   outlive a page lives in `lautta-core`; work that must outlive the process is persisted
   and resumed at the next start (XFR-11).
 - ARC-2: `lautta-core` has no Qt dependency. It is testable on the host with
@@ -231,10 +243,10 @@ flowchart LR
 | `Planner` | expands operations into steps, scans, detects conflicts |
 | `TransferQueue` | persistent queue and history in SQLite, resume bookkeeping |
 | `DirCache` | memory LRU + SQLite listing cache, stale-while-revalidate |
-| `Thumbs` | local thumbnails via `Nemo.Thumbnailer`; remote thumbnails decoded in Rust |
+| `Thumbs` | local image, video and PDF thumbnails via `Nemo.Thumbnailer`; remote images and PDFs decoded in Rust |
 | `MediaSource` | random-access byte source for the player (PRV-9) |
 | `WorkingCopies` | copies of remote files opened in other apps, expiry (PRV-6) |
-| `Trash` | app-private *Recently deleted* for local files |
+| `Trash` | app-private *Trash* for this device's folders |
 | `Questions` | blocking prompts (conflicts, ad-hoc identity, keyboard-interactive) |
 
 ## 6. Rust
@@ -263,15 +275,20 @@ against the target rustc.
 - RS-2: Native linkage only to HBR-2 libraries. `cargo-deny` enforces an allow-list of
   crates with `links =` keys and of licences. Preferred pure-Rust backends: `zbus`
   (no libdbus), `miniz_oxide` via `flate2`, `zip`, `tar`, `image` (jpeg, png, gif, webp),
-  `kamadak-exif`, `pulldown-cmark`, `notify` (inotify), `rustix` (renameat2, statx,
-  copy_file_range). `rusqlite` links the system `libsqlite3.so.0`; `xz2` and `bzip2` link
+  `kamadak-exif`, `pulldown-cmark`, `syntect` with `fancy-regex` (PRV-13), `notify`
+  (inotify), `rustix` (renameat2, statx, copy_file_range). `rusqlite` links the system `libsqlite3.so.0`; `xz2` and `bzip2` link
   the system `liblzma`/`libbz2`. zstd, if used, is linked statically.
 - RS-3: Binary: `#![no_main]`, `#[no_mangle] pub extern "C" fn main(argc, argv)`, linked
   with `-Wl,--export-dynamic-symbol=main`, PIE. Arguments come from `main`'s parameters,
   not `std::env::args`. The app starts directly (`no-invoker`, HBR-4), not through
   the booster.
-- RS-4: `panic = "abort"` in release. Every closure invoked from C++ is a thin trampoline
-  that cannot unwind.
+- RS-4: Release builds unwind (`panic = "unwind"`), but only inside `panics::catch`,
+  which wraps PDF parsing, drawing and search (PRV-12, PRV-14): a panic there fails that
+  one request and the app goes on. A hook installed at start aborts on every other panic
+  before it unwinds, as `panic = "abort"` would: a bug elsewhere stops the app, no task
+  dies alone, nothing unwinds into C++. Every closure invoked from C++ is a thin
+  trampoline that cannot unwind. Stack overflow, out of memory and an abort are not
+  caught: they end the process.
 - RS-5: `unsafe` is allowed only in `lautta-qt` (FFI) and in a single `sys` module of
   `lautta-core` (fd passing, `statx`, `renameat2`). `#![forbid(unsafe_code)]` elsewhere.
 - RS-6: `Cargo.lock` is committed. The binary is cross-built with the pinned host
@@ -284,6 +301,21 @@ against the target rustc.
 - RS-8: Error model: `lautta_core::Error` mirrors the netvfs v2 taxonomy one-to-one
   (`AuthFailed`, `ServerIdentityChanged`, `NotFound`, `Locked`, …) plus local `io`
   mappings, so the UI has one message table (§20) for every provider.
+- RS-9: Third-party data built into the binary, with its licence: `syntect` 5.3 (MIT,
+  © Tristan Hume, Keith Hall, Google Inc and contributors) embeds its default grammar
+  set (`default_newlines.packdump`, PRV-13), made from the Sublime Text grammars of
+  github.com/sublimehq/Packages, which that repository licenses as "Permission to
+  copy, use, modify, sell and distribute this software is granted. This software is
+  provided "as is" without express or implied warranty, and with no claim as to its
+  suitability for any purpose", except files that carry a licence of their own. The
+  set holds Plain Text, ASP, ActionScript, AppleScript, Batch File, NAnt, C#, C, C++,
+  CSS, Clojure, D, Diff, Erlang, Go, Graphviz, Groovy, HTML (and its ASP, Erlang, JSP,
+  Rails, Tcl variants), Haskell, Java, JavaDoc, Java Properties, JSON, JavaScript,
+  BibTeX, LaTeX, TeX, Lisp, Lua, Makefile, Markdown, MultiMarkdown, MATLAB, OCaml,
+  Objective-C(++), PHP, Pascal, Perl, Python, R, Rd, Ruby (Haml, Rails), regular
+  expressions, reStructuredText, Rust, SQL, Scala, shell (bash), Tcl, Textile, XML and
+  YAML. Crates it links in that the app did not have: `fancy-regex`, `bincode` 1 (MIT),
+  `regex-automata`, `regex-syntax`, `bit-set`, `bit-vec`, `fnv` (MIT or Apache-2.0).
 
 ## 7. netvfs bridge integration
 
@@ -302,10 +334,24 @@ what the app does.
   (`RequestConsent`). `denied` hides the section and shows the reason in *About*.
 - NVB-4: Locations: `ListLocations` and `LocationsChanged` populate *Servers* (accounts
   and this app's ad-hoc servers) and *Nearby* (`Discover`). Attention states from netvfs
-  (`auth-failed`, `server-identity-changed`) show as badges.
+  (`auth-failed`, `server-identity-changed`) show as warnings. A server row's status (on
+  the right, §15.2) tells only how its connection stands, from the `state` and
+  `stateError` netvfs lists for each location (netvfs
+  XB-10, XB-12; every `LocationsChanged` lists again, row changes in place), as one
+  glowing dot (as a text switch's) and no text: connected = highlight colour; not
+  connected (never used, closed when idle or dropped; also a recent ad-hoc server) =
+  primary colour (white on dark ambience, dark on light); connecting = same dot pulsing;
+  could not connect = error colour (red); sign-in or identity needs user (`stateError`
+  `AuthFailed` or `ServerIdentityChanged`, or an attention, which comes first) = orange
+  (Silica's *Away* presence colour). Pulse runs only while row connecting, its page on
+  screen and app in front: in background nothing animates (PRF-8). A bridge that reports
+  no state gets no dot rather than a wrong one. No protocol or host shown. Connection
+  state is not location's status: a server not connected stays browsable, opening it
+  connects.
 - NVB-5: Account management is handed off: *Add server* → `AddAccount(provider)`;
-  *Edit*, *Update sign-in*, *Review server identity* → `OpenAccountSettings(id)`. The bridge
-  opens Settings; the app never edits accounts, pins or secrets.
+  *Edit server*, *Update sign-in*, *Review server identity* → `OpenAccountSettings(id)`.
+  The bridge opens Settings; the app never edits accounts, pins or secrets, and never
+  opens or closes connections (no *Disconnect*).
 - NVB-6: Ad-hoc servers: *Connect to server* collects an `sftp://` or `smb://` URL and,
   when needed, a secret, and calls `ConnectAdHoc`. The secret buffer is zeroized
   (`zeroize`) immediately after the call. Identity prompts for ad-hoc servers and the
@@ -332,9 +378,16 @@ what the app does.
   `Rename(NoReplace or Replace)` call. Backends reporting `AtomicPut` are written
   directly.
 - NVB-12: Failure handling: socket EOF or `ConnectionLost` → all bridge locations show
-  "Reconnecting…"; the app reconnects with backoff (1, 2, 4, 8 s, then 15 s) while in the
+  *Connecting…* (NVB-4); the app reconnects with backoff (1, 2, 4, 8 s, then 15 s) while in the
   foreground; running transfers become *waiting* and resume (XFR-12). The bridge cancels
   jobs of a disconnected client itself (netvfs XB-13).
+- NVB-13: Features: after `Hello` the app asks `GetFeatures` (netvfs XB-19) and offers
+  what depends on an optional part of the interface only while the bridge names it:
+  `storage-settings` → *Open Storage settings* (LOC-3); `drives` → memory cards and USB
+  drives that are not mounted, *Mount* and *Unmount* (LOC-3). Names the app does not know are
+  ignored. A bridge without the method (`UnknownMethod`) names none, and the app behaves
+  as with a bridge that offers nothing more; only a lost connection fails the handshake.
+  The features are asked again on every connection.
 
 ## 8. Locations
 
@@ -343,10 +396,39 @@ what the app does.
   (the sandbox would show an incomplete tree, which the old File Browser had to explain).
 - LOC-2: Android storage: one *Android* group listing the exposed subfolders (Documents,
   Download, Pictures, DCIM, Music, Podcasts, Movies) that exist.
-- LOC-3: Removable volumes: from UDisks2 signals plus a scan of `/run/media/$USER/*`;
-  appear and disappear live. Mount, unmount and format are not available to sandboxed
-  apps; the app shows *Open Storage settings* instead (verify the handoff, §24.1).
-  Transfers to a vanishing volume pause with "Insert the card to continue".
+- LOC-3: Removable volumes: the readable, non-hidden folders `/run/media/<user>/<label or
+  UUID>` (`<user>` is `$USER`, the home folder's name when that is unset). They appear and
+  disappear live: an inotify watch on the media folder (on its nearest existing parent
+  until it exists) runs for the app's lifetime, and Browse rescans whenever it refreshes,
+  also when the app comes back to the foreground, for mounts the watch missed (§3.3). The
+  app does not use UDisks2 itself: the sandbox may not mount, unmount or format. While the
+  bridge has the `drives` feature (NVB-13) it lists the memory cards and USB drives it can
+  mount (`ListDrives`, netvfs XB-20, also without the consent, followed by
+  `DrivesChanged`): one that is not mounted is a dimmed *Volumes* row with its size and
+  a not-connected dot on the right (as tall as a mounted volume), named and placed (BRW-12) as
+  the volume it becomes, by the folder UDisks2 mounts it on (label, else UUID, else
+  `disk`). Tapping it, or its *Mount*, has the
+  bridge mount it (`Mount`, as Settings › Storage does, without a question) and opens the
+  volume once the sandbox shows its folder (up to 2 s; otherwise "not found", naming it). A mounted volume of
+  such a drive has *Unmount* (`Unmount`) and a connected-server dot on the right.
+  An encrypted (LUKS) card or USB drive that is not unlocked (netvfs lists it `locked`)
+  is a dimmed *Volumes* row with its size as well, named and placed by the same rule (its LUKS label,
+  else its LUKS UUID), with Silica's padlock on the right instead of a dot and no text
+  about it. Tapping it, or its only menu entry *Open Storage settings*, opens Settings ›
+  Storage, which unlocks it: no passphrase passes through the app or netvfs. Without
+  `storage-settings` it has no menu and a tap does nothing. Once unlocked it is gone,
+  and its filesystem is a drive like any other.
+  While a mount or unmount is under way the drive's dot pulses, as a connecting
+  server's. A failure (busy, not allowed) is told with the volume's name. A volume the
+  bridge does not mount has no dot: it is there because it is mounted. A drive that is
+  mounted where the sandbox does not see it is not shown.
+  Without the feature (older netvfs, standalone) volumes are only the mounted ones and
+  have neither entry. *Open Storage settings* asks the bridge to open
+  Settings › Storage (`OpenStorageSettings`, netvfs XB-15) and is offered only while it
+  has the `storage-settings` feature (NVB-13): the sandbox can open no `settings:` URL
+  (no handler, "schema not supported") and may not call the Settings app's D-Bus service
+  itself (verify the Storage page, §24.1). Transfers to a vanishing volume pause with "Insert the card to
+  continue".
 - LOC-4: netvfs accounts and ad-hoc servers (NVB-4, NVB-6).
 - LOC-5: Archives opened as read-only locations (PRV-11).
 - LOC-6: Nearby servers from the bridge's discovery; tapping prefills *Connect to
@@ -370,10 +452,21 @@ what the app does.
   in the binary), size, modified, type; folders first toggle; stable.
 - BRW-3: Instant filter (substring, case- and diacritics-insensitive), hidden files
   toggle (dot names and the hidden attribute).
-- BRW-4: View settings (sort, folders first, hidden files, list or grid, grid size) are
-  global: the same for every folder and location. The grid shows 4 items per row with
-  names on icons only, or 3 per row with name and size under every item; landscape keeps
-  the tile size.
+- BRW-4: View settings (sort, folders first, hidden files, list or grid, thumbnails) are global:
+  the same for every folder and location. They are set on one
+  *View options* page, opened from a folder's pulley or from *Settings*: a plain page
+  whose controls apply at once, with a live preview of a sample folder (folders, files,
+  a hidden file, a photo) in the order and view a real folder would get, drawn on a
+  half-size screen of the page's size that no setting makes larger or smaller. Below the
+  preview, a *Thumbnails* section, the same whether the page came from Settings or a
+  folder: *Show thumbnails* (its description says that making thumbnails decodes files
+  as soon as they show, untrusted ones too), *Thumbnails from servers* (its description
+  names the cost in data, battery and speed) with its size limit (PRV-2) and the
+  thumbnail cache size. Folders already open follow a change at once; what one folder
+  was switched to on its own (*Use list* over a suggested grid, §15.3) stays until that
+  setting changes for all. The grid has one size: 3 items per row in portrait with the name
+  and caption lines under every item, each row as tall as its tallest item (§15.3); landscape
+  keeps the tile size and shows more per row.
 - BRW-5: Stale-while-revalidate: cached listing shown immediately (≤ 7 days old, marked
   stale), refresh on the interactive lane, diff applied in place without losing scroll
   or selection.
@@ -383,7 +476,7 @@ what the app does.
 - BRW-8: Large folders: listings arrive in batches and render as they arrive; above
   20 000 entries the view falls back to name order, no sections, thumbnails off.
 - BRW-9: Path menu from the page header: ancestors, *Copy address*, *Edit path* with
-  completion from the cache.
+  completion from the cache, *Favourite* (the folder shown).
 - BRW-10: Symlinks in local folders that point outside the sandbox show as "Not
   accessible" rather than as empty folders.
 - BRW-11: There is no *Refresh*. A folder that is not watched (remote folders, local
@@ -393,13 +486,30 @@ what the app does.
   again.
 - BRW-12: The Browse page is configurable without a wall of options (prior art: iOS
   Files *Browse › Edit*, Finder sidebar settings, Dolphin *Places › Hide*). *Settings ›
-  Browse page* lists every row in Browse order: a switch per folder, *Recently deleted*,
-  volume and server (hiding the row only; the bin keeps working), one switch for all
-  nearby servers, and a drag handle to move rows within their section (favourites move
-  only; volumes and nearby stay put). A half-size live preview of the Browse page sits
-  below, as in Salama's start page settings; the pulley has *Restore defaults*.
-  Long-press *Hide from Browse* is the shortcut. Stored in `browse_layout`; a removed
-  account's rows are purged with it (SEC-5).
+  Browse page* lists every row in Browse order, laid out and moved as Salama's tab
+  group view: a switch per folder, *Recents*, *Trash*, volume and server
+  (hiding the row only; the Trash and recents keep working), one switch for all nearby
+  servers, a tap on the row switching it, and a grip to move rows within their section
+  (favourites move only; volumes and nearby stay put). *Volumes* ("Memory cards
+  and USB drives") and *Servers* lead with a switch for the whole section, no subtitle,
+  and their rows stand a step in from it. Off, the section's rows are gone from this
+  list (not dimmed) and the section is gone from the Browse page and its preview, drives
+  connected and servers added later included; the switches of the rows keep what they
+  said, so that switching the section on restores them. *Volumes* switch is always
+  there, *Servers* switch whenever a bridge answers (UI-8), rows or not: a section on and
+  empty is just its switch and shows nothing on Browse page and its preview. A press on
+  the grip picks the row
+  up at once; it follows the finger, the rows it passes slide aside and its new order is
+  stored as it moves, and let go it settles into its place. A switch or a move changes
+  its row in place: the list keeps its position and a press lights one row only. A
+  half-size live preview of the Browse page sits below, as in Salama's start page
+  settings; the pulley has *Restore defaults*, which also puts *Recents* first again and
+  switches both sections on.
+  The list and the preview follow what the Browse page follows (a volume, drive, server
+  or favourite that comes or goes), except while a change of the user's own is not
+  stored yet. No menu on the Browse page hides a row; this page is the one place.
+  Stored in `browse_layout` (a section's switch is the hidden flag of the item
+  `section`); a removed account's rows are purged with it (SEC-5).
 
 ## 10. File operations
 
@@ -407,13 +517,11 @@ what the app does.
 
 | Operation | Local (sandbox) | netvfs location | Notes |
 |---|---|---|---|
-| New folder / empty file | ✓ | ✓ | exclusive create |
+| New folder | ✓ | ✓ | exclusive create; no empty files |
 | Rename | ✓ | ✓ | no-replace by default |
 | Copy / move within location | ✓ (reflink/`copy_file_range`, rename) | server copy if capable, else via bridge | |
 | Copy / move across locations | ✓ | ✓ | queue |
-| Delete | ✓ to *Recently deleted* | ✓ remorse, permanent | |
-| Symlink / hard link | ✓ (same volume, not on vfat/exFAT) | if capable | |
-| Set modification time | ✓ | if capable | |
+| Delete | ✓ to the *Trash* (user and Android folders) | ✓ confirmation, permanent | volumes: confirmation, permanent |
 | Compress / extract | ✓ | ✓ streamed through pipes (NVB-9) | |
 
 The UI reads capabilities (local: per filesystem type via `statfs`; remote: from the
@@ -437,15 +545,66 @@ bridge).
   locally, visited set remotely), depth limit 40.
 - OPS-7: Names invalid on the destination (vfat/exFAT and SMB rules, length) get a
   proposed safe name in the plan, acceptable for all.
-- OPS-8: Delete: remorse timer (5 s, 3–10 s setting). Local deletes on the home
-  filesystem move items to *Recently deleted* (`~/.local/share/org.netvfs/lautta/trash`,
-  same filesystem, so a rename) and are purged after 30 days; on removable media and
-  remote locations deletes are permanent and say so.
-- OPS-9: Undo for the last rename, same-location move and trash operation, from a banner
-  for 10 s.
+- OPS-8: Delete. Deletes in user and Android folders move items to the *Trash*, a folder
+  `~/.local/share/org.netvfs/lautta/trash` in the app's data (prior art: the Trash of
+  Finder, GNOME Files and Dolphin, a local feature; Lautta puts no hidden folders into
+  the user's folders). In the sandbox that folder is a mount of its own (§3.3), so the
+  move is a rename where it can be and otherwise a copy (modification times and
+  permissions kept, links stay links) followed by deleting the original; a copy that
+  fails leaves the original as it was and removes what it copied, and an item that could
+  not be deleted afterwards (no write permission on its folder) is refused before
+  anything is copied. Such a delete runs the remorse timer (5 s, 3–10 s setting) first.
+  Deletes on volumes and servers, and every delete while the Trash is switched off, are
+  permanent: a dialog *Delete permanently?* names the item (or the number of items) and
+  its location, says it can't be undone, and deletes on *Delete*, with no remorse timer
+  after it. The decision is one call, `Operations.deletesPermanently` (QML-API). The
+  *Trash* page lists, restores (to the original folder, made again if it is gone; a
+  copy when that crosses a mount; never overwriting), deletes and empties the items, and
+  says that only files deleted from this device's folders appear there, in a note under
+  the page header (not shown while the Trash is empty, when the placeholder has its own
+  hint). Images, videos and PDFs show their thumbnail as a folder's rows do (PRV-1,
+  PRV-14), made from the stored copy and, as its stored name has no extension, the type
+  of the original name; the setting *Show thumbnails* (BRW-4) switches them off, and a
+  stored item that is a link or is gone keeps its glyph, as folders and other files do.
+  Items are purged after the retention setting (30 days) when the settings are loaded at
+  start and whenever the Trash opens; the start also removes the copies an interruption
+  left half made in the Trash folder.
+- OPS-9: Remorse. A delete to the Trash (OPS-8), a move and a rename run behind a Silica
+  remorse for the remorse time of OPS-8 (the remorse timer setting); tapping the remorse
+  cancels it. A copy has none. A rename happens at once, and the remorse on its row, *File
+  renamed* or *Folder renamed*, undoes it: tapping renames the item back, letting it run
+  out keeps the new name; a row the listing makes anew meanwhile shows the rest of it. A
+  move is the paste of cut items (OPS-10), from the folder pulley or the paste bar: the
+  remorse, at the top of the page, says *Moving “name”* or *Moving N items*; tapping it
+  cancels, so nothing moves and the items stay cut on the clipboard; letting it run out
+  takes them off the clipboard and starts the move as a transfer (XFR-1). Pasting again,
+  or leaving the folder, runs the pending move at once, as it does for a delete.
+  *Move to new folder* (OPS-13) has no remorse: its name dialog is the confirmation.
 - OPS-10: Clipboard (cut/copy, docked paste bar) across all locations. There is no
   *Copy to…*/*Move to…*: the user goes to the destination either way, so they paste there.
-- OPS-12: Info page: details, with permissions shown read-only.
+  A cut is taken off the clipboard when its move starts (OPS-9), a copy stays.
+- OPS-12: There is no details page for an item. The rarer actions on one item sit
+  behind *More actions*, the last row of its long-press menu: tapping it opens a Silica
+  page whose header names the item, one row (icon and name) per action:
+  *Add to favourites* (the item itself, file or folder, ORG-1), *Compress* (the archive
+  glyph, UI-2) and, in a writable folder, *Move to new folder* (OPS-13; the folder glyph). Tapping a row runs the action and
+  leaves the page; a dialog it opens takes the page's place, so leaving the dialog
+  returns to the folder. The image viewer's *More* offers the same next to *Rename*,
+  without *Move to new folder*. The selection's *More actions* button (§15.3) opens the
+  same page for the selected items: header the item's name, or the count when several;
+  rows *Rename* (theme icon `icon-m-edit`), *Add to favourites*, *Compress* and *Move
+  to new folder* for one item, *Compress* and *Move to new folder* for several. The
+  *More actions* icon, a circle with three dots, is the app's own
+  (`qml/icons/more.svg`; the platform theme has none), on the selection panel and in the
+  image viewer.
+- OPS-13: *Move to new folder* on the *More actions* page (OPS-12), for one item or
+  the selection, only where the folder is writable: not in the folder picker, the share
+  target, the Trash or an archive. It asks for the name in the dialog of the pulley's
+  *New* (same default name, same checks, same errors), makes the folder in the folder
+  being viewed, then moves the items into it, on a server too. The dialog is the
+  confirmation, so there is no remorse (OPS-9). Selection ends when the row is tapped,
+  as for *Compress*. If the folder cannot be made, the error shows as for *New* and
+  nothing moves.
 
 ## 11. Transfers
 
@@ -500,18 +659,53 @@ bridge).
 ## 12. Preview, open, stream
 
 - PRV-1: Local thumbnails via `Nemo.Thumbnailer` (`image://nemoThumbnail/` and the
-  `Thumbnail` item), covering images and videos the system can thumbnail.
+  `Thumbnail` item): images, videos and PDFs (PRV-14) the system can thumbnail, in this
+  device's folders and on the Trash page (OPS-8). The item gets the file's `file://` URL,
+  its MIME type and the icon's size: the library draws a PDF (`application/pdf`) or a
+  video (`video/*`) only when told that type, each in a helper process of its own
+  (HBR-7), other types in its own thread. A file that crashes a helper keeps its icon,
+  the app runs on. The library draws one thumbnail at a time: a helper that hangs holds
+  back the other local thumbnails, not the app. No size limit: the app reads nothing of
+  the file. A shown video thumbnail keeps the video glyph (UI-2) over it, the same glyph
+  at the same size and place as the item's plain icon in that view (grid tile, list row,
+  Trash), light (`Theme.lightPrimaryColor`, opacity `Theme.opacityOverlay`) on a round
+  translucent dark disc (`Theme.opacityHigh`, dark whatever the ambience) about 0.8 of the glyph wide, as Jolla
+  Gallery's overlays on media: the disc keeps the glyph readable on bright and dark
+  frames and in light ambiences while the frame shows around it. Pressed or selected, the glyph takes the highlight colour for a
+  dark ground, as the name. Else a video reads as a photo. No glyph over an image's
+  thumbnail, nor a disc behind a plain glyph or a thumbnail that failed.
 - PRV-2: Remote image thumbnails: read the first 64 KiB through the bridge, use the EXIF
-  thumbnail when present; otherwise read the whole file up to 20 MB (5 MB when the bridge
-  reports a metered network) and decode with the `image` crate at the target size, EXIF
-  orientation applied. Cache in `~/.cache/org.netvfs/lautta/thumbs` (key: URI, size,
-  mtime, etag), 200 MB LRU.
+  thumbnail when present; otherwise read the whole file up to the size set in *View
+  options* (*Largest server file with a thumbnail*, 20 MB by default) and decode with the
+  `image` crate at the target size, EXIF orientation applied. There is no lower limit for
+  metered networks: the app cannot tell one. Connman's D-Bus and a network namespace
+  with the real interfaces come only with the `Internet` permission (§3.3), which the
+  app does not request, so Qt's bearer plugins see no connection either; netvfs reports
+  none. Cache in `~/.cache/org.netvfs/lautta/thumbs` (key: URI, size, mtime, etag), LRU
+  within the *Thumbnail cache* size of *View options* (200 MB by default); a smaller size
+  evicts the least recently used thumbnails at once.
 - PRV-3: Thumbnail jobs: interactive lane, lowest priority, ≤ 2 in flight per location,
-  visible delegates only, canceled on scroll.
+  visible delegates only, canceled on scroll. Server PDF thumbnails (PRV-14) use same jobs.
 - PRV-4: Viewers: images (zoom, swipe through the folder, EXIF panel), text/code (read-
-  only up to 1 MiB, then a notice), Markdown (pulldown-cmark → Qt rich text subset), audio
+  only up to 1 MiB, then a notice; numbered lines always wrapped to the page's width, so
+  the list never scrolls sideways and the page swipes back like any other, also from
+  Markdown's *View source*; the pulley has *Open with* and *Share*; tabs to the next
+  multiple of 4 columns; a line longer than 1000 characters
+  goes on over further rows; coloured by language, PRV-13; on a backdrop over the whole
+  page, Silica's overlay colour at 60 % opacity (black on a dark ambience, light grey on
+  a light one), so the text reads over any wallpaper), Markdown (pulldown-cmark
+  → Qt rich text subset, wrapped to the page's width, code blocks and tables
+  included), audio
   and video (QtMultimedia), archives (as locations), PDFs (PRV-12). Office documents,
   databases, packages and other binary files go to *Open with*.
+  The image viewer is Jolla Gallery's (its BSD-3-Clause QML adapted, as
+  `Sailfish.Gallery` is not a Harbour import): full screen on black, the folder's
+  images swiped sideways in the folder's order. A tap shows or hides the overlay:
+  details top left, close top right, *Delete*, *Open with*, *Share* and *More*
+  (OPS-12, a circle with three dots) at the bottom. A pinch or a double tap zooms in and puts the overlay away;
+  zoomed, drags pan and neither swipe nor go back, and a tap zooms out. A swipe down
+  or up goes back (a hint says so the first two times). After a delete it shows the
+  neighbour; after a rename, the image under its new name.
 - PRV-5: *Open with* for local files uses the system handler as Harbour File Browser
   does (mechanism to verify in the sandbox, §24.1).
 - PRV-6: Remote files opened in another app must be readable by that sandboxed app, so
@@ -545,11 +739,16 @@ bridge).
   so the app itself never fetches it. The app's sandbox has no `Internet` permission
   either. *Contents and pages* in the pulley shows the outline (the section being read
   highlighted) and a *Go to page* field. Files up to 200 MB; pages at most 4096 px on an edge.
-  The pulley header shows the page count. A password-protected PDF asks for its
+  The pulley header shows the page count; a PDF without a page to return to starts at
+  its top, the whole header in view. A password-protected PDF asks for its
   password in a dialog (swipe forward unlocks; a wrong one asks again); the password
   opens that one parse and is never stored, so reopening asks again (the empty user
   password opens without asking). Reopening a PDF starts at the page where reading
-  stopped, remembered with the recents (off and cleared with them, ORG-2).
+  stopped (the page at the top of the view, put at the top again), remembered with
+  the recents (off and cleared with them, ORG-2). A panic while parsing, drawing or
+  searching (RS-4) shows as a file that cannot be read as a PDF, or as *Can't show page
+  N* for a page; that parse is dropped (it may hold locks the panic left poisoned), so the
+  next request reads the file again.
   *Search* in the pulley finds text in the document: a search field stays at the top
   of the page (its close button leaves search mode), typing searches once it pauses,
   case-insensitive with whitespace runs alike. The search runs off the GUI thread page
@@ -559,20 +758,81 @@ bridge).
   "2 of 17 · page 3", or "Not found in 12 pages" once every page is searched. At
   most 10 000 hits per document, 1 000 per page, in its first 200 000 characters; an
   encrypted PDF is searchable while it is open after unlocking.
+- PRV-13: The text viewer colours a file by its language. The grammar comes from the
+  file's whole name (`Makefile`, `.bashrc`), then its extension, else its first line
+  (`#!/bin/sh` is a shell script); `.txt` and unknown types stay plain. Grammars are the
+  Sublime Text ones bundled with `syntect`, run by its pure-Rust regex engine
+  (`fancy-regex`; no oniguruma, RS-2); a grammar's scopes come down to fixed classes
+  (comment, keyword, operator, string, number, constant, type, function, variable,
+  heading, markup, link, inserted, deleted, plain) whose colours are the ambience's:
+  keywords and headings the highlight colour, operators and Markdown markup the
+  secondary highlight colour, comments the secondary colour, removed diff lines the error
+  colour, the others hues turned from the highlight colour and made readable for the
+  colour scheme by the theme; no colour comes from a grammar or theme file. The whole
+  document (≤ 1 MiB, PRV-4) is coloured on the blocking pool line after line, the
+  parser's state carried over so multi-line strings, comments and here-documents stay
+  whole, within 3 s: a line over 4 KiB, a grammar error or the end of that time leaves
+  that line and all after it plain, and a colouring still busy 0.5 s later is dropped
+  (the whole file plain; a line cannot be cut short). The text appears with its colours
+  when they are ready within 250 ms, else plain at once and coloured when they arrive.
+  Each of the viewer's rows (PRV-4: tabs expanded, a long line split) reaches the view
+  as Qt StyledText made in the core from the row's own characters, each in the colour
+  of its part of the line, found through the same tab expansion (columns in UTF-16
+  units, as the rows count them): every character is escaped (`<`, `>`, `&`, `"`),
+  whitespace kept as no-break spaces (a lone space between words stays a space, where
+  wrapping can break), NUL shown as U+FFFD, and the only tags are `<font color>` with a
+  colour checked to be `#` and hex digits, so a file cannot bring in images, links or
+  entities. Plain files get the same escaping without colours. Markdown's *View source*
+  is coloured as Markdown.
+- PRV-14: PDF thumbnails in every list that shows thumbnails (folder list, grid, Trash).
+  Thumbnail = first page. One rule (`thumbs::thumbnail_source`) picks files with a
+  thumbnail and who makes it. A PDF follows the switches of an image: *Show thumbnails*
+  for a local PDF, also *Thumbnails from servers* for a server PDF. Open folders follow a
+  change at once. Encrypted, damaged or page-less PDF: icon, no message.
+  - Local PDF, a trashed one too: `Nemo.Thumbnailer` (PRV-1), told type
+    `application/pdf`; a trashed one's stored copy has no extension, so the type comes
+    from the original name. No size limit. A link or a copy gone from the Trash has no
+    thumbnail.
+  - Server PDF: drawn by `lautta-pdf` (PRV-12) as wide as the thumbnail; page taller than
+    wide cut to square from its top. Served as JPEG by `image://lautta-thumb/<uri>?size=N`,
+    cached like PRV-2's (key: URI, size, mtime, etag): one draw per file version and size.
+    Read limit = size limit of PRV-2, never above the viewer's 200 MB. Larger: not read,
+    icon shows. Drawing = CPU work on the blocking pool, one PDF at a time app-wide
+    (stricter than ARC-7: battery, heat). Job whose delegate left before its turn never
+    runs; one already drawing finishes. PDF that cannot be drawn, a draw that panicked
+    included (RS-4), is remembered for the session, so scrolling back reads nothing. PDF
+    whose drawing killed the process (stack overflow, out of memory) gets a marker file
+    in the thumbnail folder and is never tried again.
 
 ## 13. Search and organisation
 
 - SRC-1: Instant filter in the current view (BRW-3).
-- SRC-2: *Search here*: recursive name search (substring or glob, type, size, date),
-  streaming results grouped by folder, cancelable; local via a Rust walker, remote via the
-  bridge's `Walk` (server-assisted where netvfs can).
+- SRC-2: *Search* (a folder's pulley): recursive name search below that folder (substring
+  or glob, type, size, date), streaming results grouped by folder, cancelable; local via a
+  Rust walker, remote via the bridge's `Walk` (server-assisted where netvfs can).
 - SRC-3: Depth limit unlimited locally, 8 remotely (setting).
 - SRC-4: Recent searches per location (10).
 - SRC-5: Later: full-text and global search via Tracker with the `MediaIndexing`
   permission. Not in 1.0 (keeps the permission set minimal).
-- ORG-1: Favourites: any folder, local or remote, reorderable, with label and colour.
-- ORG-2: Recents: files opened, previewed or transferred; filterable; clearable; can be
-  switched off.
+- ORG-1: Favourites: any folder or file, local or remote, reorderable (Settings › Browse
+  page, BRW-12), with label, colour and icon. The icon is one of a range of theme icons
+  (star, home, work, person, people, documents, pictures, camera, videos, music, downloads,
+  folder, cloud, computer, games, calendar, mail, internet, travel, car, health, kids,
+  private, Android; pictures, videos, music and folder are the app's file-type glyphs,
+  UI-2), shown in Browse tinted with the colour; without a chosen one (or with one the
+  app does not know) a folder favourite shows the star and a file favourite its file's
+  glyph. A file favourite shows the folder it is in, and opens like the file does in
+  its folder (viewer or *Open with*); a folder favourite opens the folder. Whether a
+  favourite is a folder is stored with it (DAT-2), so Browse never asks the location.
+  The favourite page (*Edit favourite*, and *Add to favourites*, which makes the item a
+  favourite at once with its name, no colour and the default icon) is a plain page with
+  the label, the folder, colour and icon, no pulley: a pick is saved at once, the label
+  when typing pauses and when the page is left. Removing is Browse's long-press menu.
+- ORG-2: Recents: files opened, previewed or transferred, newest first, in the date
+  sections of the Activity page (§15.4, without *In progress*); each row is the file's
+  name and where it is ("NAS › /srv/photos", not how it was used); not filterable;
+  clearable (pulley *Clear recents*); can be switched off in Settings. Opened from its
+  row in Browse's *On this device*, there while recents are on.
 
 ## 14. System integration
 
@@ -601,11 +861,11 @@ bridge).
 flowchart TD
   B[Browse] --> D[Directory]
   B --> R[Recents]
+  B --> RD[Trash]
   B --> T[Activity]
-  B --> CS[Connect to server<br/>bridge only]
+  B --> CS[Connect to server<br/>nearby and recent servers]
   B --> S[Settings / About]
   D --> D
-  D --> I[Info]
   D --> V[Viewers]
   D --> P[Folder picker]
   D --> SR[Search results]
@@ -614,52 +874,158 @@ flowchart TD
 
 ### 15.2 Browse
 
-Sections: *Favourites*, *On this device* (user folders), *Android*, *Volumes* (when
-present), *Servers* (bridge only: accounts, recent ad-hoc servers, status dot,
-attention badge), *Nearby* (bridge only, hidden when empty). Rows the user hid are left
-out and rows keep the order the user gave them (BRW-12).
+Sections: *Favourites*, *On this device* (*Recents* while recents are remembered
+(ORG-2), first until the user orders the section, then the user folders and *Trash* while
+it is on), *Android*, *Volumes* (when present), *Servers* (bridge only:
+accounts, recent ad-hoc servers, each with its connection state as one glowing dot on the
+right (NVB-4), so a server row is as tall as a folder row), *Nearby*
+(bridge only, hidden when empty). Rows show no item counts (folders, *Recents*, *Trash*)
+and no text about a connection or a mount. Rows the user hid are left out, so is a
+*Volumes* or *Servers* section the user switched off, and rows keep the order the user
+gave them (BRW-12).
+Tapping a nearby or recent ad-hoc server opens *Connect to server* prefilled (LOC-6,
+NVB-6).
 
-Pulley: *Settings*, *Connect to server* (bridge only), *Add server* (bridge only, NVB-5),
-*Activity* (live count). Push-up: *Recents*. Long-press server: *Disconnect*, *Edit
-account* (NVB-5), *Copy address*, *Remove from recents* (ad-hoc). Swipe left: Activity.
+Pulley: *Settings*, *Add server* (bridge only, NVB-5), *Activity* (live count).
+Long-press menus: favourite: *Edit favourite*, *Copy address*, *Remove from
+favourites*; folder: *Add to favourites*, *Copy address*; volume:
+*Add to favourites*, *Copy address*, *Unmount* (drives the bridge mounts, LOC-3),
+*Open Storage settings* (bridge only, LOC-3, NVB-13); a drive that
+is not mounted: *Mount*, *Open Storage settings*; a locked drive: *Open Storage settings*
+only (none without it); account: *Edit
+server*, *Update sign-in* or *Review server identity* while
+netvfs asks for it (NVB-5), *Copy address*; ad-hoc server:
+*Connect* (recent ones), *Copy address*, *Remove from recents*. Hiding a row is
+*Settings › Browse page* only (BRW-12).
+Connections are netvfs' to open and close: no menu disconnects a server. Nothing is
+attached to swipe to: Activity is in the pulley and the activity bar (XFR-13).
 
 ### 15.3 Directory page
 
 Header with the folder name only (no breadcrumb); tap → path menu. Slim progress line while listing
-or receiving transfers. List view with icon or thumbnail and "size · modified"; grid view
-for media folders (suggested when > 60 % images). Pulley: *Select*, *New folder/file*,
-*Paste* (with clipboard), *Search here*, *View options* (no *Refresh*, BRW-11). Push-up: *Info*,
-*Add to favourites*. Context menu: plain Silica rows *Share* (files), *Copy*, *Cut*,
-*Rename*, *Details*, *Delete*; fixed order, capability-filtered. The rarer actions sit
-in the Details page's pulley: *Open with* (files) and *Compress*. Archives need no
-*Extract* row: they open as a location with *Extract all*. Selection starts from the pulley's *Select*, in list and grid alike;
-tapping an icon opens the item like the rest of the row. Its actions sit in a
-`DockedPanel` that stays open while selecting and ends with a button that leaves
-selection; the panel's actions, a finished delete and deselecting the last item leave it
-too.
-Placeholders: empty, no permission, offline, error with *Retry*/*Details*.
+or receiving transfers. Header, progress line, path menu and notices (offline, large, suggested
+grid, error) are fixed at the top of the page: list or grid scrolls under them, clipped, in portrait
+and landscape. The pulley is the page's, as on any Silica page: pulling at the top of the content
+moves header and content together and the menu comes out above the header. While selecting the
+header shows the count in place of the name, on the same single line: the header keeps its
+height. The path menu scrolls when taller than the rest of the page. Opening a folder starts at its very top (nothing in the scroller can grow above
+the first item); going back to a folder on the page stack shows it where it was left. List view
+with icon or thumbnail and "size · modified"; grid view for media folders (suggested when > 60 %
+images). The grid has 3 tiles per row in portrait (landscape keeps the tile size, so it fits
+more); the glyph is about half the tile wide, snapped to a multiple of 28 px (UI-2;
+thumbnails fill the tile, a video's with its glyph on a disc, PRV-1) and under it stand the name on
+up to two lines, centred (a name that does not fit keeps its start on the first line and its end,
+the extension, on the second behind an ellipsis in the middle), and right under the name up to two
+small lines in the secondary colour, each cut at the end: a file's
+modified time and size; a folder's item count ("N items") on this device and on drives,
+hidden files left out unless shown, "More than N items" past 1000 entries, none while
+counting or when the folder cannot be read; a folder on a server or in an archive its
+modified time (counting would list it over the network). A folder is counted when its cell
+appears and again when its modified time or the hidden files setting changes, once per
+cell and off the GUI thread, from its names alone, with no timer or polling (PRF-8). As in iOS
+Files each row of tiles is only as tall as its tallest tile, so a row of one-line names with one
+caption line is short and a row with a two-line name taller. No line is kept empty, apart from
+the count line of a counted folder while its count is to come (or when the folder cannot be
+read, which looks the same), so that the row does not grow when the count comes. Only the rows
+on screen and near it are measured, never every name of a folder (PRF-1, PRF-3). Pulley, top to
+bottom: *Activity* (live count, as in Browse; at the top, as it leads away), *View options*
+(BRW-4; no *Refresh*, BRW-11), *Search*, *Select*, *Paste* (with clipboard), *New* (makes a folder): the
+folder's own actions nearest the content. While selecting *Select all* and
+*Clear selection*. The folder picker and the share target, dialogs that choose a
+destination, have no *Activity*. The
+folder itself is made a favourite from the path menu (BRW-9). Context menu: plain
+Silica rows *Share* (files), *Copy*, *Cut*, *Rename*, *Delete*, *More actions*; fixed
+order, capability-filtered. *More actions* opens a page of *Add to favourites*,
+*Compress* and *Move to new folder* for that item (OPS-12, OPS-13); there is no details page. *Rename*
+is a dialog of the plain Silica dialog header, titled *Rename*, and the name field
+only; *New* opens one titled *New folder* (accept *Create*) with the name
+field. A taken or invalid name is an error in the field's label. Archives need no *Extract* row: they open as a location with *Extract all*. Selection starts from the pulley's *Select*, in list and grid alike,
+and in grid view also by holding an item, as in photo apps (iOS Photos, Immich): holding
+selects the item and starts selection, and there is no long-press menu in the grid.
+Keeping the finger down and moving it selects by dragging: every item from the held one
+to the one under the finger, in reading order, takes the held item's new state (selected;
+deselected when the held item was selected), moving back shrinks the range and the items
+it leaves get their earlier state back, and near the top or bottom edge the view scrolls
+on by itself, faster nearer the edge, with the range following. While selecting, holding
+a list row does the same; outside selection a list row's long-press menu stays.
+Tapping an icon opens the item like the rest of the row. The selection's actions sit in a
+`DockedPanel` that stays open while selecting: icons spread over its width in the
+long-press menu's order (*Share*, *Copy*, *Cut*, *Delete*), *More actions* and a last
+button that leaves selection, set apart on a key of the ambience's highlight background
+with its icon in the highlight colour. The panel is the same for one item or several, with no
+push-up menu; waiting for the first item it has only the last button, and ending selection
+leaves it with the buttons it had while it slides out. *More actions* opens a page of its
+own (OPS-12): *Compress* and *Move to new folder* for any number of items, and for one item
+also *Rename* and *Add to favourites*, so every action of an item is reachable from the
+grid. Backing out of the page keeps the selection. The panel's
+*Share*, *Copy* and *Cut*, an action of the page, a finished delete and deselecting the
+last item leave selection. Archives and *Compress* show the app's archive glyph
+everywhere (UI-2). An item's glyph takes the highlight colour with its name: pressed or
+selected, in list and grid.
+Placeholders: empty, no permission, offline, error with *Retry*/*Details*. They and the
+loading indicator are part of the view's content, so pulling the pulley moves them with the
+header.
 
 ### 15.4 Activity page
 
 Every copy, move, upload, download, delete, compress and extract is a task here
-(the engine calls them transfers, §11). Groups: *Active*, *Waiting for you*, *Paused*,
-*History*. Rows with direction icon, title (past tense once completed: "Deleted 4
-items"), progress, "1.2 GB of 4.0 GB · 11.4 MB/s · 4 min". The activity bar (XFR-13)
-leads here from any depth.
+(the engine calls them transfers, §11). Sections by date: *In progress* first, every
+task that has not ended (running, scanning, queued, waiting or paused) in queue order;
+then the ended tasks by when they ended, newest first: *Today*, *Yesterday*, *Last 7
+days*, *Last 30 days*, *Older*. Calendar days in the device's time zone: yesterday
+starts at last midnight, today counts as one of the 7 and of the 30, and a time after
+now (the clock was moved back) is today. Recents use the same sections (ORG-2). Rows
+with direction icon, title (past tense once completed: "Deleted 4 items"), progress,
+"1.2 GB of 4.0 GB · 11.4 MB/s · 4 min"; the row's state (running, waiting for you,
+paused) is in its status line and context menu. Pulley: *Clear activity history*, *Resume all*,
+*Pause all*, as they apply. The activity bar (XFR-13) leads here from any depth.
 
 ### 15.5 Rules
 
 - UI-1: Silica components only; no custom chrome.
 - UI-2: Theme colours and sizes; light and dark ambiences; theme icons where they exist,
-  otherwise SVG at all scale factors under `/usr/share/harbour-lautta`.
+  otherwise SVG at all scale factors under `/usr/share/harbour-lautta`. File-type glyphs
+  (folder, image, video, audio, archive, package, database, document) are the app's own
+  SVGs (`qml/icons/file-<kind>-<set>.svg`) wherever a kind of file shows: folder list and
+  grid, Trash, search, Recents, operations pages, *More actions*, Browse rows and
+  favourites, folder picker, cover. Why: the theme's are soft at the grid's sizes and
+  have no database glyph. Text, code, PDF and office files share the document glyph.
+  Three sets, edges on whole pixels at their sizes: `-28` (28-unit grid, any multiple of
+  28 px), `-32` (32-unit grid, multiples of 32 px: list at scale 1.0, 1.5, 2.0), `-80`
+  (drawn for 80 px: list at 1.25). Size rule: multiple of 28 → `-28`, else of 32 →
+  `-32`, else of 80 → `-80`, else `-28` (soft). The grid's glyph and the cover's snap to
+  a multiple of 28 px. White with
+  partly transparent parts, tinted as theme icons: primary colour, highlight colour when
+  pressed or selected.
 - UI-3: Portrait and landscape.
 - UI-4: Nothing modal blocks navigation; all long work is visible and cancelable.
-- UI-5: Destructive actions use remorse; permanent remote deletes say so.
+- UI-5: Destructive actions use remorse; a permanent delete (volumes, servers, the Trash
+  switched off) asks first in a dialog instead (OPS-8).
 - UI-6: Text follows the system font size; touch targets ≥ `Theme.itemSizeSmall`.
-- UI-7: All strings translatable (`qsTrId` with `//%` engineering English, plurals with
-  `%n`); `.qm` files under `/usr/share/harbour-lautta/translations`.
+- UI-7: All strings translatable (`qsTrId` with `//%` engineering English); `.qm` files
+  under `/usr/share/harbour-lautta/translations`, built by `lrelease -idbased` from every
+  `translations/*.ts`. A text with a count is one string with `%n` in its plural form,
+  called as `qsTrId(id, n)`; never "(s)", never a separate id for the singular. The engineering
+  English catalogue `translations/harbour-lautta.ts` has `language="en"` and both English
+  forms of every `%n` string ("%n item", "%n items"), so every language without its own
+  catalogue reads "1 item", not "1 items". `make translations` makes the forms: the plural
+  is the `//%` text, the singular follows by rule (`tools/english-plurals.py`, a singular
+  the rule misses is written by hand and stays until the text changes). `make check` fails
+  when a form is missing. A language catalogue is installed after it and asked first; it
+  lists only what it translates, as an unfinished plural there would hide the English
+  forms.
 - UI-8: Standalone mode shows no traces of bridge features: no empty *Servers* section,
   no disabled menu entries.
+- UI-9: A line that names a place on a server (LOC-7) has a small server icon (the
+  theme's `icon-m-computer`, the icon of Browse's server rows) right before the name, in
+  the line's colour: a favourite's place in Browse and in the favourite dialog, a
+  recent's place, the folder headers of a search on a server and the destination in an
+  Activity title. Local places have none.
+- UI-10: Bars at the bottom of a page (selection and paste panels, activity bar, search
+  progress) are opaque: Silica's docked panel gradient on the ambience's
+  dimmer highlight colour, so content scrolling under them never shows through. Their
+  icons share the theme's stroke weight and optical size; the app's own icons are drawn
+  on the theme's 64-unit grid with 2-unit strokes.
 
 ## 16. Security and privacy
 
@@ -673,7 +1039,7 @@ leads here from any depth.
   are therefore readable by other apps with the Downloads permission while they exist;
   this is stated in the UI and the copies expire.
 - SEC-5: Caches (listings, thumbnails) are in the app's private folders, 0700/0600, with
-  *Clear cache* and per-location opt-outs. Removing an account in Settings purges its
+  *Clear cache*. Removing an account in Settings purges its
   caches, recents and favourites at the next `LocationsChanged`.
 - SEC-6: Logging: `log` crate, default `warn`; paths and host names only at `debug`;
   never secrets or file contents.
@@ -697,31 +1063,46 @@ copies through the app for local↔remote).
 
 ## 18. Settings
 
-Global: default view options, hidden files, folders first, thumbnail limits, cache sizes,
-*Recently deleted* on/off and retention, remorse duration, local transfer concurrency,
-preserve mtimes/permissions, verify with checksums, auto-resume, history retention,
-date format, large-operation threshold.
+Global, on pages opened from *Settings*, which lists them as Salama does: an entry per
+page with an icon and, under its name, what is chosen there. *Browsing*: *Browse page*
+(BRW-12), *View options* (BRW-4; Settings links to that page instead of repeating it; the
+thumbnails are there: the switch for all of them, server thumbnails with their size limit
+and the thumbnail cache size), *Search* (depth on servers, SRC-3), *Recents* (on/off,
+*Clear recents*, ORG-2). *Files*: *Deleting* (move deleted items to *Trash* on/off, how
+long Trash keeps them, remorse duration, OPS-8), *Transfers* (local transfer concurrency,
+connections per server, preserve mtimes/permissions, verify with checksums, auto-resume,
+history retention, large-operation threshold), *Storage* (how long stored listings are
+kept, cache size, *Clear cache*, *Clear app data*, which says it empties Trash too,
+DAT-3). Then *About Lautta*. There is no date format setting: every date follows the
+system's formats (Silica `Format`); a value an earlier version stored is ignored.
 
 Per location (app DB): lane sizes (remote), start folder, listing/thumbnail cache opt-out,
-display name override.
+display name override. The app has no page for them: a server's name, start folder and
+sign-in are netvfs' (NVB-5); stored values still apply.
 
 `Nemo.Configuration` (dconf under `/apps/harbour-lautta/`) for simple preferences;
 SQLite for everything structured.
 
 ## 19. Persistence
 
-- DAT-1: `~/.local/share/org.netvfs/lautta/lautta.db` (SQLite, WAL) and `.../trash/`;
+- DAT-1: `~/.local/share/org.netvfs/lautta/lautta.db` (SQLite, WAL), `.../trash/` (the
+  Trash, OPS-8);
   `~/.cache/org.netvfs/lautta/` (thumbs, dircache blobs). Simple
   preferences live in dconf via `Nemo.Configuration`; `~/.config/org.netvfs/lautta/` is
   unused.
-- DAT-2: Schema with `PRAGMA user_version`, forward migrations only: `favourites`,
+- DAT-2: Schema with `PRAGMA user_version`, forward migrations only: `favourites`
+  (`is_dir`: folder or file, ORG-1, schema 5; older rows are folders; `icon`: the chosen
+  icon's name, ORG-1, schema 6; NULL for the default icon and for older rows),
   `recents`, `transfers`, `transfer_items`, `working_copies`, `dircache`,
-  `trash_items(id, original_uri, trashed_at, stored_name)`, `reading_positions(uri,
+  `trash_items(id, original_uri, trashed_at, stored_name, is_dir, size)` (OPS-8; the
+  table also has a `bin` column and the schema a `trash_drain` table, left by schemas 4
+  and 7, which nothing reads or writes: dropping them takes a migration of its own),
+  `reading_positions(uri,
   location_id, page, at_ms)` (PRV-12), `browse_layout(section, item, hidden, position)`
   (BRW-12).
 - DAT-3: The netvfs socket directory `~/.local/share/org.netvfs/lautta/netvfs/` belongs
   to netvfs; the app only reads it. *Clear app data* in Settings deletes it along with
-  everything else; netvfs recreates it (netvfs XB-4).
+  everything else (the Trash too, OPS-8); netvfs recreates it (netvfs XB-4).
 
 ## 20. Error presentation
 
@@ -756,7 +1137,10 @@ One table for all providers (RS-8); examples:
 - TST-5: Mutation testing (`cargo-mutants`) on planner, queue and conflict modules and the PDF document handling (PRV-12);
   `clippy -D warnings`; `miri` for the `sys` module tests that can run under it.
 - TST-6: QML tests (`TestCase` in the SDK target) for page logic; load test of every QML
-  file; screenshot checklist (light/dark/landscape, standalone/bridge modes).
+  file; screenshot checklist (light/dark/landscape, standalone/bridge modes). The
+  English plural forms (UI-7) are read from the built catalogue by QML's `qsTrId`
+  (`tests/translations`): on the host from `lrelease` of the `.ts`, in the SDK target
+  from the catalogue the RPM installed.
 - TST-7: Every CI build runs `sdk-harbour-rpmvalidator` on the RPM; any error fails the
   build; warnings must be listed in `doc/harbour-warnings.md` with a reason.
 - TST-8: Device matrix before release: Jolla phone on 5.2, one other aarch64 device on the
@@ -802,7 +1186,7 @@ lautta/
 | Milestone | Scope | Exit criteria |
 |---|---|---|
 | M0 – skeleton | workspace, SailfishApp bootstrap from Rust, booster check, rpmvalidator in CI, Browse page with user folders | validator clean; launches via booster on device |
-| M1 – local MVP | directory page, sorting/filter, cache, file operations, clipboard, folder picker, Recently deleted, image/text viewers, local thumbnails, transfers for local copies, cover | Harbour submission of a standalone 1.0 candidate; PRF-1/3/5 met |
+| M1 – local MVP | directory page, sorting/filter, cache, file operations, clipboard, folder picker, Trash, image/text viewers, local thumbnails, transfers for local copies, cover | Harbour submission of a standalone 1.0 candidate; PRF-1/3/5 met |
 | M2 – bridge | netvfs provider, consent flow, accounts and ad-hoc servers, remote browse and operations, local↔remote transfers with resume, remote thumbnails | contract tests with netvfs green; device test with SFTP and SMB |
 | M3 – depth | MediaSource streaming, share target, search, archives, Nearby | Appendix A complete |
 | M4 – power | server copy everywhere available | — |
@@ -824,7 +1208,16 @@ when the netvfs bridge they depend on is released.
   when it is created after the app started.
 - File descriptor passing over p2p D-Bus between the sandboxed app and the unsandboxed
   bridge (no proxy is involved on a direct socket; still test it).
-- *Open with* and the settings handoff (Storage) from a sandboxed app (PRV-5, LOC-3).
+- *Open with* from a sandboxed app (PRV-5), and that netvfs' `OpenStorageSettings`
+  (Settings' `showPage("system_settings/system/storage")`) opens the Storage page (LOC-3).
+- Inside the sandbox: a volume mounted from Settings while the app runs appears without
+  leaving Browse (inotify on `/run/media/<user>`, LOC-3); a card or USB drive mounted by
+  netvfs' `Mount` (UDisks2 `Filesystem.Mount` for the active session's user, polkit
+  `filesystem-mount` without a question) shows its files inside the sandbox, not an
+  empty folder (mount propagation into the app's namespace), and `Unmount` of a volume
+  the app is not using succeeds; and a delete in `~/Documents`
+  and in `~/android_storage/DCIM` lands in the Trash (a copy across the sandbox's mounts,
+  OPS-8) and restores from it.
 - `ShareProvider` delivery of files from other apps' locations (INT-1).
 - Harbour accepting an aarch64-only upload (the validator accepts the architecture; the
   store's per-release policy needs confirming).
@@ -852,8 +1245,8 @@ when the netvfs bridge they depend on is released.
 
 Harbour File Browser (in-sandbox scope): browse ✓; search ✓ SRC; share/open externally ✓
 PRV-5/7; previews of images, audio, video, archives, PDFs ✓ PRV-4/10/12; database previews ✗
-(*Open with*); multi-select ✓; copy/link/move in bulk ✓; bulk rename ✗;
-permissions shown ✓ OPS-12, editing ✗; new files/folders ✓; hidden files ✓; edit/enter
+(*Open with*); multi-select ✓; copy/move in bulk ✓; links ✗; bulk rename ✗;
+permissions ✗ (no details page, OPS-12); new folders ✓, new empty files ✗; hidden files ✓; edit/enter
 paths ✓ BRW-9; quick filter ✓; per-folder view settings ✗ (global, BRW-4); shortcuts ✓
 ORG-1; multiple windows ✗ (single process; revisit); root mode ✗ (out of scope).
 
@@ -863,7 +1256,7 @@ sync/compare ✗; server-side copy ✓; recursive permissions ✗; preserve time
 Bonjour discovery ✓ (via bridge).
 
 iOS Files: Browse/Recents ✓; Favourites ✓; Tags ✗; Connect to server ✓; quick look ✓;
-Recently deleted ✓ OPS-8; compress/uncompress ✓.
+Recently deleted ✓ (the *Trash*, OPS-8); compress/uncompress ✓.
 
 ## Appendix B — Core provider trait (sketch)
 

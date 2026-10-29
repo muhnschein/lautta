@@ -266,8 +266,8 @@ impl Core {
         Ok(before.total())
     }
 
-    /// *Clear app data* (DAT-3): every table of the database, Recently
-    /// deleted, all caches and the netvfs socket folder (netvfs recreates
+    /// *Clear app data* (DAT-3): every table of the database, the Trash
+    /// (OPS-8), all caches and the netvfs socket folder (netvfs recreates
     /// it). Refused while transfers are unfinished.
     pub fn clear_app_data(&self) -> Result<()> {
         if self.engine.pending_summary() > 0 {

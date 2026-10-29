@@ -2,21 +2,18 @@
 //! `LocationsModel`: the rows of the Browse page (SPEC §15.2).
 //!
 //! Roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
-//! `colour`, `count`, `itemId`, `place`, `provider`, `host`, `free`,
-//! `total`, `fs` (see `lautta_core::app_browse::Row` for the values).
+//! `colour`, `itemId`, `place`, `provider`, `host`, `free`, `total`, `fs`,
+//! `connection`, `connectionError`, `isFile`, `drive` (see
+//! `lautta_core::app_browse::Row` for the values).
 
-use super::{cell_data, role_names, store_changed, store_subscribe, Cell, Guard};
-use crate::runtime::{blocking_then, core, handle, spawn_then};
-use lautta_core::app::Core;
+use super::{cell_data, role_names, watch_sources, Cell, Guard};
+use crate::runtime::{core, spawn_then};
 use lautta_core::app_browse::Row;
-use lautta_core::browse_layout::layout_item;
 use qmetaobject::prelude::*;
-use qmetaobject::{queued_callback, QPointer};
+use qmetaobject::QPointer;
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
 
-const COLUMNS: [&str; 16] = [
+const COLUMNS: [&str; 19] = [
     "section",
     "uri",
     "name",
@@ -25,7 +22,6 @@ const COLUMNS: [&str; 16] = [
     "status",
     "attention",
     "colour",
-    "count",
     "itemId",
     "place",
     "provider",
@@ -33,10 +29,11 @@ const COLUMNS: [&str; 16] = [
     "free",
     "total",
     "fs",
+    "connection",
+    "connectionError",
+    "isFile",
+    "drive",
 ];
-
-/// Changes that arrive together are applied together.
-const SETTLE: Duration = Duration::from_millis(80);
 
 fn cells(r: &Row) -> Vec<Cell> {
     vec![
@@ -48,7 +45,6 @@ fn cells(r: &Row) -> Vec<Cell> {
         Cell::s(r.status),
         Cell::s(&r.attention),
         Cell::s(&r.colour),
-        Cell::Int(r.count),
         Cell::s(&r.item_id),
         Cell::s(&r.place),
         Cell::s(&r.provider),
@@ -56,6 +52,10 @@ fn cells(r: &Row) -> Vec<Cell> {
         Cell::Int(r.free),
         Cell::Int(r.total),
         Cell::s(&r.fs),
+        Cell::s(r.connection),
+        Cell::s(&r.connection_error),
+        Cell::Bool(r.is_file),
+        Cell::s(&r.drive),
     ]
 }
 
@@ -73,8 +73,6 @@ pub struct LocationsModel {
     nearbyCount: qt_property!(i32; NOTIFY countChanged),
     countChanged: qt_signal!(),
     refresh: qt_method!(fn(&mut self)),
-    /// Hides a row from Browse (BRW-12); Settings › Browse page shows it again.
-    hide: qt_method!(fn(&mut self, section: QString, kind: QString, itemId: QString)),
     sectionCount: qt_method!(fn(&self, section: QString) -> i32),
 
     rows: Vec<Vec<Cell>>,
@@ -92,7 +90,7 @@ impl LocationsModel {
         let Some(core) = core() else { return };
         if !self.watching {
             self.watching = true;
-            self.watch(core.clone());
+            watch_sources(QPointer::from(&*self), &core, &self.guard, Self::refresh);
         }
         self.generation += 1;
         let generation = self.generation;
@@ -107,54 +105,9 @@ impl LocationsModel {
         });
     }
 
-    fn hide(&mut self, section: QString, kind: QString, itemId: QString) {
-        let Some(core) = core() else { return };
-        let Some(item) = layout_item(&kind.to_string(), &itemId.to_string()) else {
-            return;
-        };
-        let section = section.to_string();
-        blocking_then(
-            move || {
-                if let Err(e) = core.browse_layout.set_hidden(&section, &item, true) {
-                    log::error!("hiding a Browse row failed: {e}");
-                }
-            },
-            |()| store_changed(),
-        );
-    }
-
     fn sectionCount(&self, section: QString) -> i32 {
         let section = section.to_string();
         self.sections.iter().filter(|s| **s == section).count() as i32
-    }
-
-    fn watch(&mut self, core: Arc<Core>) {
-        let me = QPointer::from(&*self);
-        let notify = queued_callback(move |()| {
-            if let Some(model) = me.as_pinned() {
-                model.borrow_mut().refresh();
-            }
-        });
-        let mut stop = self.guard.subscribe();
-        handle().spawn(async move {
-            let mut locations = core.locations.subscribe();
-            let mut store = store_subscribe();
-            let mut status = core.bridge.as_ref().map(|b| b.watch_status());
-            let mut nearby = core.bridge.as_ref().map(|b| b.watch_nearby());
-            loop {
-                tokio::select! {
-                    r = locations.changed() => if r.is_err() { return },
-                    r = store.changed() => if r.is_err() { return },
-                    ok = changed(&mut status) => if !ok { return },
-                    ok = changed_nearby(&mut nearby) => if !ok { return },
-                    _ = stop.changed() => return,
-                }
-                tokio::time::sleep(SETTLE).await;
-                locations.borrow_and_update();
-                store.borrow_and_update();
-                notify(());
-            }
-        });
     }
 
     /// Shows `rows`. Rows that keep their identity stay (an open context
@@ -208,24 +161,6 @@ fn splice(old: &[String], new: &[String]) -> (usize, usize, usize) {
     (start, old.len() - start - end, new.len() - start - end)
 }
 
-/// Waits for the next bridge status change; false when the bridge is gone.
-/// Never completes without a bridge.
-async fn changed(rx: &mut Option<tokio::sync::watch::Receiver<lautta_core::bridge::BridgeStatus>>) -> bool {
-    match rx {
-        Some(rx) => rx.changed().await.is_ok(),
-        None => std::future::pending().await,
-    }
-}
-
-async fn changed_nearby(
-    rx: &mut Option<tokio::sync::watch::Receiver<Arc<Vec<lautta_core::bridge::NearbyServer>>>>,
-) -> bool {
-    match rx {
-        Some(rx) => rx.changed().await.is_ok(),
-        None => std::future::pending().await,
-    }
-}
-
 impl QAbstractListModel for LocationsModel {
     fn row_count(&self) -> i32 {
         self.rows.len() as i32
@@ -248,6 +183,40 @@ mod tests {
     fn cells_match_the_columns() {
         let cells = cells(&Row::default());
         assert_eq!(cells.len(), COLUMNS.len());
+    }
+
+    #[test]
+    fn no_row_shows_an_item_count() {
+        assert!(!COLUMNS.contains(&"count"), "Browse shows no counts (SPEC §15.2)");
+    }
+
+    #[test]
+    fn a_server_row_tells_its_connection() {
+        let row = Row {
+            kind: "account",
+            connection: "failed",
+            connection_error: "Timeout".into(),
+            ..Row::default()
+        };
+        let cells = cells(&row);
+        let at = |name: &str| &cells[COLUMNS.iter().position(|c| *c == name).unwrap()];
+        assert_eq!(at("connection"), &Cell::s("failed"));
+        assert_eq!(at("connectionError"), &Cell::s("Timeout"));
+        assert_eq!(at("kind"), &Cell::s("account"));
+    }
+
+    #[test]
+    fn a_volume_row_names_its_drive() {
+        let row = Row {
+            kind: "volume",
+            status: "unmounted",
+            drive: "mmcblk1p1".into(),
+            ..Row::default()
+        };
+        let cells = cells(&row);
+        let at = |name: &str| &cells[COLUMNS.iter().position(|c| *c == name).unwrap()];
+        assert_eq!(at("drive"), &Cell::s("mmcblk1p1"));
+        assert_eq!(at("status"), &Cell::s("unmounted"));
     }
 
     fn keys(names: &[&str]) -> Vec<String> {

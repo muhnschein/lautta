@@ -7,7 +7,8 @@
 #     carries no RPATH and needs only HBR-2 libraries;
 #   - the package installs into the target and every library resolves;
 #   - every shipped QML file and tests/qml/tst_*.qml load in the target (TST-6);
-#     a test with a `scenarioRunning` property runs until it clears it.
+#     a test with a `scenarioRunning` property runs until it clears it;
+#   - the catalogue the package ships gives the English plural forms (UI-7).
 # Env: SDK_IMAGE (container image), TARGET (sb2 target name), DOCKER_ARGS.
 set -eu
 : "${SDK_IMAGE:?}" "${TARGET:?}"
@@ -20,7 +21,7 @@ if [ "${1:-}" != --in-sdk ]; then
     git clone -q https://github.com/sailfishos/sdk-harbour-rpmvalidator.git "$work/.validator"
     git -C "$work/.validator" checkout -q "$VALIDATOR_COMMIT"
     # The SDK runs as mersdk (uid 100000): check a world-writable copy.
-    (cd "$root" && cp -r --parents RPMS tests/qml tools/ci doc/harbour-warnings.md "$work/")
+    (cd "$root" && cp -r --parents RPMS tests/qml tests/translations tools/ci doc/harbour-warnings.md "$work/")
     chmod -R a+rwX "$work"
     # shellcheck disable=SC2086
     docker run --rm ${DOCKER_ARGS:-} -e TARGET -e SDK_IMAGE -v "$work:/home/mersdk/src" -w /home/mersdk/src \
@@ -108,6 +109,13 @@ mkdir -p "$home/Documents" "$home/Downloads" "$home/Pictures"
 if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal \
         /usr/bin/harbour-lautta --qml-check -I /usr/share/harbour-lautta/qml $shipped $qml_files; then
     fail "QML check on the target"
+fi
+# The catalogue the package installed, read by the target's Qt 5.6: "1 item",
+# not "1 items" (UI-7). `-T` fails when the package ships no catalogue.
+if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal \
+        /usr/bin/harbour-lautta --qml-check -T /usr/share/harbour-lautta/translations \
+        "$PWD/tests/translations/tst_english_plurals.qml"; then
+    fail "English plural forms on the target"
 fi
 rm -rf "$work" "$home"
 exit $status

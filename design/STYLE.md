@@ -11,7 +11,7 @@ Silica idioms to use instead:
 - PageHeader: right-aligned, light weight, highlight colour; description below it.
 - Back navigation = swipe right; shown only by the page-stack indicator (top-left
   small dots `.ind-back`). Attached page (swipe left) = `.ind-fwd` top-right.
-- Actions = PulleyMenu (top, pull down) only. NO PushUpMenu anywhere (hard to discover); folder-level actions (Info, Add to favourites) live in the header path menu. Closed state shows
+- Actions = PulleyMenu (top, pull down) only. NO PushUpMenu anywhere (hard to discover); folder-level actions (Copy address, Edit path, Favourite) live in the header path menu. Closed state shows
   only the thin glowing `.pull-ind` line at the top edge (`.push-ind` at bottom).
   Open state: menu items centred, primary colour, the item under the finger in
   highlight colour, highlight-tinted gradient backdrop; page content pushed down.
@@ -197,7 +197,7 @@ body{margin:0}
 .remorse>i{position:absolute;left:0;top:0;bottom:0;background:var(--hldim);display:block}
 .remorse b{font-weight:400;font-size:19px;position:relative}
 .remorse span{font-size:15px;color:var(--sec);position:relative}
-/* banner (in-page notice, e.g. offline / undo) */
+/* banner (in-page notice, e.g. offline) */
 .banner{margin:6px 18px;padding:12px 14px;background:var(--hldim);display:flex;gap:12px;align-items:center;font-size:15px}
 .banner .act{color:var(--hl);font-size:15px;margin-left:auto;flex:none}
 /* interaction hint label */
