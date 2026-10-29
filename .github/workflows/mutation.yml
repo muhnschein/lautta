@@ -63,6 +63,12 @@ jobs:
         shard: [0, 1, 2, 3, 4, 5, 6, 7]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      # Prebuilt, same version as install-host-deps.sh: building it takes minutes.
+      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        with:
+          tool: cargo-mutants@25.0.1
       - name: Install dependencies
         run: ./tools/ci/install-host-deps.sh mutants
       - name: Mutation check

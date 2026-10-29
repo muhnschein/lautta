@@ -7,16 +7,48 @@ on:
     types: [opened, synchronize, reopened]
 permissions:
   contents: read
+concurrency:
+  group: sonar-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
 jobs:
-  sonarqube:
-    name: SonarQube
+  # Docs-only pull request: no scan, as ci.yml. Rules: tools/ci/changes.sh.
+  changes:
+    name: What changed
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
+          persist-credentials: false
+          fetch-depth: 2  # the merge commit and its base parent
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+        run: ./tools/ci/changes.sh >> "$GITHUB_OUTPUT"
+
+  sonarqube:
+    name: SonarQube
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+      # Prebuilt, same version as install-host-deps.sh: building it takes minutes.
+      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+        with:
+          tool: cargo-llvm-cov@0.6.16
       - name: Install dependencies
         run: ./tools/ci/install-host-deps.sh coverage
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Coverage and clippy reports
         run: |
           make coverage
