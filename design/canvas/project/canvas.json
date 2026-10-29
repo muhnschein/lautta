@@ -522,28 +522,52 @@
       "x": 1440,
       "y": 8200
     },
-    "TextThumbSheetGlyph.dc.html": {
+    "TextThumbFullFold.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Text thumbnail \u00b7 1 glyph size, type band",
+      "title": "Text thumbnail \u00b7 6a folded sheet, outline",
       "w": 400,
       "x": 5720,
       "y": 2060
     },
-    "TextThumbSheetLabel.dc.html": {
+    "TextThumbFullFlap.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Text thumbnail \u00b7 4 twice the glyph, type as text",
+      "title": "Text thumbnail \u00b7 6b folded sheet, no outline",
       "w": 400,
       "x": 6200,
       "y": 2060
     },
-    "TextThumbSheetFull.dc.html": {
+    "TextThumbFullPlain.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Text thumbnail \u00b7 6 full tile, type as text",
+      "title": "Text thumbnail \u00b7 6c plain",
       "w": 400,
       "x": 6680,
+      "y": 2060
+    },
+    "TextThumbFullFade.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Text thumbnail \u00b7 6d text fades out",
+      "w": 400,
+      "x": 7160,
+      "y": 2060
+    },
+    "TextThumbFullHeader.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Text thumbnail \u00b7 6e type as heading",
+      "w": 400,
+      "x": 7640,
+      "y": 2060
+    },
+    "TextThumbFullRuled.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Text thumbnail \u00b7 6f ruled",
+      "w": 400,
+      "x": 8120,
       "y": 2060
     }
   },
@@ -659,9 +683,12 @@
     "NewItem.dc.html",
     "Rename.dc.html",
     "GridIcons.dc.html",
-    "TextThumbSheetGlyph.dc.html",
-    "TextThumbSheetLabel.dc.html",
-    "TextThumbSheetFull.dc.html",
+    "TextThumbFullFold.dc.html",
+    "TextThumbFullFlap.dc.html",
+    "TextThumbFullPlain.dc.html",
+    "TextThumbFullFade.dc.html",
+    "TextThumbFullHeader.dc.html",
+    "TextThumbFullRuled.dc.html",
     "StateEmpty.dc.html",
     "StateNoAccess.dc.html",
     "StateOffline.dc.html",
