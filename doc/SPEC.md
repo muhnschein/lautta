@@ -1044,6 +1044,12 @@ paused) is in its status line and context menu. Pulley: *Clear activity history*
 - SEC-6: Logging: `log` crate, default `warn`; paths and host names only at `debug`;
   never secrets or file contents.
 - SEC-7: No telemetry. The app opens no network sockets.
+- SEC-8: Text from files, drives and servers (names, paths, volume labels, server
+  prompts, error texts, metadata) shows as plain text, never as markup: the app window
+  sets Silica's label default (`_defaultLabelFormat`) to plain text, as Jolla's Settings
+  and Share do, so a name cannot style the page or make Qt load an image from a URL
+  (SEC-7). Only text the app escapes itself is Qt StyledText (text viewer rows, PRV-13;
+  search hits); Markdown is rich text made in the core, images never loaded (PRV-4).
 
 ## 17. Performance budgets (reference: current Jolla phone, aarch64)
 

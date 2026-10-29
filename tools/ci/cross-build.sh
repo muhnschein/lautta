@@ -34,11 +34,9 @@ export LIBSQLITE3_SYS_USE_PKG_CONFIG=1
 # xz is compiled in, as before the switch (lzma-sys builds it whenever the
 # variable is set): the validator refuses liblzma's versioned symbols.
 export LZMA_API_STATIC=0
-# Reproducible binary (PKG-4): the build paths it records (panic locations
-# of registry crates, `__FILE__` of Qt's inline asserts) mapped to fixed
-# names, so SDK and cargo home may live anywhere. Checkout and out dir need
-# none: cargo names the workspace's sources relative to it, and nothing
-# from out reaches the binary. No spaces in these paths (RUSTFLAGS splits).
+# Reproducible (PKG-4): SDK and cargo home = only build paths in binary
+# (registry crates' panic locations, Qt inline asserts' `__FILE__`), mapped
+# to fixed names; workspace sources are relative already. No spaces: RUSTFLAGS splits.
 rust_maps=""
 c_maps=""
 map() {

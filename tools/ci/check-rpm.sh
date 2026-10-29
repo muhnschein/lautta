@@ -99,17 +99,38 @@ qml_files=$(find "$PWD/tests/qml" -path '*/host' -prune -o -name 'tst_*.qml' -pr
 rm -rf "$PWD/qml"
 cp -r "/srv/mer/targets/$TARGET/usr/share/harbour-lautta/qml" "$PWD/qml"
 shipped=$(cd "/srv/mer/targets/$TARGET" && find usr/share/harbour-lautta/qml -name '*.qml' | sort | sed 's|^|/|')
-# A fresh home with the user folders the tests put fixtures in, as
-# tools/sdk-qml-check.sh gives them. It lives in the checked-out tree:
+# QML_JOBS processes at once (default one per core): emulated loads were most
+# of the job. Each gets own home with the user folders tests put fixtures in
+# (as tools/sdk-qml-check.sh): no shared files or database. Homes in the tree:
 # a mktemp folder under /tmp did not reach the app under scratchbox.
+jobs=${QML_JOBS:-$(nproc)}
+share="$PWD/.qml-share"
+rm -rf "$share"
+mkdir -p "$share"
+i=0
+for file in $shipped $qml_files; do
+    echo "$file" >> "$share/$((i % jobs)).list"
+    i=$((i + 1))
+done
+k=0
+while [ "$k" -lt "$jobs" ] && [ -f "$share/$k.list" ]; do
+    mkdir -p "$share/$k.home/Documents" "$share/$k.home/Downloads" "$share/$k.home/Pictures"
+    # shellcheck disable=SC2046 # one word per file
+    (sb2 -t "$TARGET" env HOME="$share/$k.home" QT_QPA_PLATFORM=minimal \
+        /usr/bin/harbour-lautta --qml-check -I /usr/share/harbour-lautta/qml $(cat "$share/$k.list") \
+        > "$share/$k.log" 2>&1 || touch "$share/$k.failed") &
+    k=$((k + 1))
+done
+wait
+k=0
+while [ -f "$share/$k.list" ]; do
+    cat "$share/$k.log"
+    [ ! -f "$share/$k.failed" ] || fail "QML check on the target (share $k, log above)"
+    k=$((k + 1))
+done
 home="$PWD/.qml-home"
 rm -rf "$home"
-mkdir -p "$home/Documents" "$home/Downloads" "$home/Pictures"
-# shellcheck disable=SC2086 # one word per file
-if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal \
-        /usr/bin/harbour-lautta --qml-check -I /usr/share/harbour-lautta/qml $shipped $qml_files; then
-    fail "QML check on the target"
-fi
+mkdir -p "$home"
 # The catalogue the package installed, read by the target's Qt 5.6: "1 item",
 # not "1 items" (UI-7). `-T` fails when the package ships no catalogue.
 if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal \
@@ -117,5 +138,5 @@ if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal \
         "$PWD/tests/translations/tst_english_plurals.qml"; then
     fail "English plural forms on the target"
 fi
-rm -rf "$work" "$home"
+rm -rf "$work" "$home" "$share"
 exit $status
