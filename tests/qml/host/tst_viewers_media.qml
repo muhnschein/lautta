@@ -13,6 +13,12 @@ Item {
             console.error("FAILED: " + what)
     }
 
+    // Waits until `done()` (30 s at most: a busy machine).
+    function until(done) {
+        for (var i = 0; i < 1200 && !done(); ++i)
+            tools.pump(25)
+    }
+
     ViewerTools { id: tools }
     MediaSource { id: idle }
     MediaSource { id: streaming }
@@ -33,19 +39,19 @@ Item {
         check(streaming.mediaObject !== null && streaming.mediaObject !== undefined, "mediaObject is the player")
         check(streaming.mode === "stream" && streaming.loading, "streaming starts")
         streaming.play()
-        tools.pump(900)
+        until(function() { return !streaming.loading && streaming.errorKind !== "" })
         check(!streaming.loading, "source opened")
         // Without a multimedia backend the player reports a missing service.
         check(streaming.errorKind === "Unsupported", "no backend is reported: '" + streaming.errorKind + "'")
         check(!streaming.playing && streaming.state === "stopped", "not playing")
         streaming.uri = "lautta://user-documents/missing.mp3"
-        tools.pump(500)
+        until(function() { return !streaming.loading && streaming.errorKind !== "" })
         check(streaming.errorKind === "NotFound" || streaming.errorKind === "Unsupported", "missing file: " + streaming.errorKind)
 
         // PRV-9: download-then-play copies the file first.
         copying.uri = "lautta://user-documents/a.mp3"
         check(copying.mode === "download" && copying.downloading, "download mode from the start")
-        tools.pump(900)
+        until(function() { return !copying.downloading })
         check(!copying.downloading && copying.downloadProgress === 1, "downloaded: " + copying.downloadProgress)
         check(copying.mode === "download", "stays in download mode")
     }

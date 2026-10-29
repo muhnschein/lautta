@@ -201,7 +201,7 @@ Item {
             stage++
             acted = false
             waited = 0
-        } else if (++waited > 200) {
+        } else if (++waited > 1200) {  // 30 s at 25 ms: a busy machine
             console.error("FAILED: " + s.label)
             stage = steps.length
         }

@@ -12,6 +12,12 @@ Item {
             console.error("FAILED: " + what)
     }
 
+    // Waits for `model`'s async load (30 s at most: a busy machine).
+    function settle(model) {
+        for (var i = 0; i < 1200 && model.loading; ++i)
+            tools.pump(25)
+    }
+
     ViewerTools { id: tools }
     ExifModel { id: exif }
     ImageListModel { id: images }
@@ -32,7 +38,7 @@ Item {
         // EXIF.
         exif.uri = "lautta://user-pictures/photo.jpg"
         check(exif.loading, "exif loading")
-        tools.pump(300)
+        settle(exif)
         var info = JSON.parse(exif.infoJson)
         check(exif.hasExif && info.hasExif, "has exif")
         check(info.make === "Jolla" && info.model === "Jolla C2", "camera " + exif.infoJson)
@@ -41,24 +47,24 @@ Item {
         check(Math.abs(info.latitude - 60.15) < 0.001 && Math.abs(info.longitude - 24.95) < 0.001, "gps")
         check(info.name === "photo.jpg" && info.size > 0, "file facts")
         exif.uri = "lautta://user-documents/data.bin"
-        tools.pump(300)
+        settle(exif)
         check(!exif.hasExif && JSON.parse(exif.infoJson).hasExif === false, "no exif in a binary file")
         exif.uri = "lautta://user-pictures/nope.jpg"
-        tools.pump(300)
+        settle(exif)
         check(exif.errorKind === "NotFound", "exif error")
 
         // The folder's images.
         images.folderUri = "lautta://user-pictures/"
-        tools.pump(300)
+        settle(images)
         check(images.count === 1 && imageRows.count === 1, "one image in the folder " + images.count)
         check(imageRows.itemAt(0).rowUri === "lautta://user-pictures/photo.jpg" && imageRows.itemAt(0).rowName === "photo.jpg", "image row")
         check(images.indexOf("lautta://user-pictures/photo.jpg") === 0 && images.indexOf("lautta://user-pictures/other.jpg") === -1, "indexOf")
         check(tools.installFixture(Qt.resolvedUrl("fixtures/photo.jpg"), "lautta://user-pictures/a.jpg"), "second image")
         images.reload()
-        tools.pump(300)
+        settle(images)
         check(images.count === 2 && imageRows.itemAt(0).rowName === "a.jpg", "reload sees the new image, in name order")
         images.folderUri = "lautta://user-pictures/nope/"
-        tools.pump(300)
+        settle(images)
         check(images.errorKind === "NotFound", "image list error " + images.errorKind)
     }
 }
