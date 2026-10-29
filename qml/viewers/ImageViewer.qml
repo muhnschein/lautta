@@ -26,7 +26,8 @@ FullscreenContentPage {
     property bool listed
     // indexOf is a method: images.count makes the binding follow the listing.
     readonly property bool inFolder: images.count > 0 && (listed || images.indexOf(uri) >= 0)
-    readonly property string currentUri: slideshow.currentItem ? slideshow.currentItem.imageUri : uri
+    readonly property var slideshow: viewLoader.item
+    readonly property string currentUri: slideshow && slideshow.currentItem ? slideshow.currentItem.imageUri : uri
     readonly property int total: inFolder ? images.count : 1
     // Where the view was when an image was deleted, to land next to it.
     property int keepIndex: -1
@@ -96,8 +97,7 @@ FullscreenContentPage {
     }
 
     // On the image the viewer opened with (or renamed) once the folder's
-    // listing shows it. Called when the view takes up the listing as well:
-    // that may come after the listing's own change.
+    // listing shows it again.
     function place() {
         if (page.inFolder && page.keepIndex < 0)
             slideshow.currentIndex = images.indexOf(page.uri)
@@ -105,7 +105,7 @@ FullscreenContentPage {
 
     allowedOrientations: Orientation.All
     // Zoomed in, drags pan the image; a tap zooms out and swipes go back.
-    backNavigation: !slideshow.zoomed
+    backNavigation: !(slideshow && slideshow.zoomed)
 
     // Renames only (no folder listed).
     DirectoryModel {
@@ -141,15 +141,32 @@ FullscreenContentPage {
 
     onCurrentUriChanged: tools.noteViewed(currentUri)
 
-    // The images, swiped, with the overlay over them.
-    FlickableImageView {
-        id: slideshow
-
-        objectName: "flickableView"
+    // The images, swiped, with the overlay over them. A new view once the
+    // listing comes: Silica's PagedView slides on a model swap, and takes
+    // currentIndex without a slide only as a binding at creation.
+    Loader {
+        id: viewLoader
         anchors.fill: parent
-        model: page.inFolder ? images : [page.uri]
-        held: remorse.active
-        onModelChanged: page.place()
+        sourceComponent: page.inFolder ? folderView : imageView
+    }
+
+    Component {
+        id: imageView
+        FlickableImageView {
+            objectName: "flickableView"
+            model: [page.uri]
+            held: remorse.active
+        }
+    }
+
+    Component {
+        id: folderView
+        FlickableImageView {
+            objectName: "flickableView"
+            model: images
+            held: remorse.active
+            currentIndex: Math.max(0, images.indexOf(page.uri))
+        }
     }
 
     // Declared after the view: the page's children go in this order when it
@@ -172,7 +189,7 @@ FullscreenContentPage {
     }
 
     Connections {
-        target: slideshow.overlay
+        target: page.slideshow ? page.slideshow.overlay : null
         onDetails: page.showDetails()
         onRemove: page.remove()
         onOpenWith: external.openWith()
