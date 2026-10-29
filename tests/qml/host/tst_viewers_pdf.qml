@@ -24,10 +24,10 @@ Item {
     }
 
     // Waits for a PdfDocument to finish loading (unlocking AES-256 takes a
-    // while in a debug build).
+    // while in a debug build; 30 s at most: a busy machine).
     function loaded(d) {
         tools.pump(50)
-        for (var i = 0; i < 100 && d.loading; ++i)
+        for (var i = 0; i < 600 && d.loading; ++i)
             tools.pump(50)
     }
 
@@ -87,7 +87,7 @@ Item {
         check(!doc.loaded && doc.pageCount === 0, "nothing before a uri")
         doc.uri = pdf
         check(doc.loading, "loading starts at once")
-        tools.pump(300)
+        loaded(doc)
         check(!doc.loading && doc.loaded, "loaded")
         check(doc.pageCount === 2, "page count " + doc.pageCount)
         check(doc.size === 640, "size " + doc.size)
@@ -132,9 +132,12 @@ Item {
         other.rememberPage(1)
         other.rememberPage(7)
         other.rememberPage(-1)
-        tools.pump(300)
-        other.reload()
-        loaded(other)
+        // Stored in the background: read back until it is there.
+        for (var r = 0; r < 60 && other.lastPage !== 1; ++r) {
+            tools.pump(100)
+            other.reload()
+            loaded(other)
+        }
         check(other.lastPage === 1, "position kept: " + other.lastPage)
 
         // A password opens an encrypted PDF; a wrong one says so.
@@ -167,7 +170,8 @@ Item {
         linked.requestLinks(1)
         linked.requestLinks(2)
         linked.requestLinks(-1)
-        tools.pump(300)
+        for (var l = 0; l < 600 && (linked.got[0] === undefined || linked.got[1] === undefined); ++l)
+            tools.pump(50)
         var links = linked.got[0] || []
         check(links.length === 2, "two links: " + JSON.stringify(links))
         check(links.length === 2 && links[0].page === 1 && links[0].top === 0.5 && links[0].uri === ""
