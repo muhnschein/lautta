@@ -310,7 +310,7 @@ pub fn sniff(head: &[u8]) -> Option<&'static str> {
 
 /// UTF-8 (a multi-byte character cut at the end of the sample is fine), no
 /// NUL, and almost no control characters.
-fn looks_like_text(head: &[u8]) -> bool {
+pub(crate) fn looks_like_text(head: &[u8]) -> bool {
     if head.is_empty() {
         return false;
     }

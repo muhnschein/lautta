@@ -8,7 +8,9 @@
 // be made (an encrypted PDF) leaves the category's glyph, and
 // `thumbnailFailed` says so. A shown video thumbnail keeps the video glyph at
 // the size and place the plain glyph has, on a translucent dark disc, so it
-// reads as a video, not as a photo (PRV-1).
+// reads as a video, not as a photo (PRV-1). `previewText`, the grid's text
+// thumbnail (PRV-15), takes the glyph's place: the file's first lines at
+// caption size, faded out above its type icon.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.Thumbnailer 1.0
@@ -30,6 +32,11 @@ Item {
     property bool highlighted
     readonly property bool thumbnailReady: thumbnailLoader.item ? thumbnailLoader.item.ready : false
     readonly property bool thumbnailFailed: thumbnailLoader.item ? thumbnailLoader.item.failed : false
+    property string previewText
+    property bool previewMono
+    // An app icon name, qml/icons/types/.
+    property string typeIcon
+    readonly property bool previewShown: previewText.length > 0
     // A video's thumbnail shows: the glyph stays over it, light on a dark disc.
     readonly property bool videoShown: thumbnailReady && category === "video" && !isDir
 
@@ -112,7 +119,56 @@ Item {
                                         : Theme.highlightColor
         highlighted: icon.highlighted
         opacity: icon.videoShown ? Theme.opacityOverlay : 1
-        visible: !icon.thumbnailReady || icon.videoShown
+        visible: !(icon.thumbnailReady || icon.previewShown) || icon.videoShown
+    }
+
+    Loader {
+        anchors.fill: parent
+        active: icon.previewShown
+        sourceComponent: textThumbnail
+    }
+
+    Component {
+        id: textThumbnail
+
+        Item {
+            Label {
+                id: previewLabel
+
+                objectName: "textPreview"
+                anchors {
+                    fill: parent
+                    margins: Theme.paddingMedium
+                }
+                text: icon.previewText
+                textFormat: Text.PlainText
+                wrapMode: icon.previewMono ? Text.NoWrap : Text.Wrap
+                clip: true
+                font.pixelSize: Theme.fontSizeTiny
+                font.family: icon.previewMono ? "monospace" : Theme.fontFamily
+                color: icon.highlighted ? Theme.highlightColor : Theme.secondaryColor
+            }
+            // Solid to half its height, gone at 80 %: no text behind the type icon.
+            OpacityRampEffect {
+                anchors.fill: previewLabel
+                sourceItem: previewLabel
+                direction: OpacityRamp.TopToBottom
+                offset: 0.5
+                slope: 1 / 0.3
+            }
+            AppIcon {
+                objectName: "typeIcon"
+
+                anchors {
+                    right: parent.right
+                    bottom: parent.bottom
+                    margins: Theme.paddingMedium
+                }
+                icon: icon.typeIcon
+                iconSize: Math.round(Theme.iconSizeSmall * 2 / 3)
+                highlighted: icon.highlighted
+            }
+        }
     }
 
     // A link badge on symlinks (board Directory, "Old drafts").

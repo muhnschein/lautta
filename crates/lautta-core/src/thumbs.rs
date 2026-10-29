@@ -54,6 +54,9 @@ pub enum ThumbSource {
     System,
     /// The app, through [`app_thumbnail_url`]: remote images and PDFs.
     App,
+    /// The file's first lines, drawn by the grid (PRV-15,
+    /// [`crate::thumbs_text`]): text, code and Markdown that is not empty.
+    Text,
 }
 
 /// The settings that decide which files get a thumbnail, apart from the
@@ -86,12 +89,18 @@ impl ThumbSettings {
 /// or not. `shown` is the folder's *Show thumbnails*. A PDF follows the
 /// switches an image does: *Show thumbnails* for a local one and also
 /// *Thumbnails from servers* for a remote one; a remote one larger than
-/// [`ThumbSettings::pdf_limit`] has none.
+/// [`ThumbSettings::pdf_limit`] has none. Text, code and Markdown follow the
+/// same switches; an empty one has none.
 pub fn thumbnail_source(entry: &Entry, local: bool, shown: bool, set: &ThumbSettings) -> ThumbSource {
     if !shown || entry.flags.contains(EntryFlags::NOT_ACCESSIBLE) {
         return ThumbSource::Icon;
     }
     match (category_of(entry), local) {
+        (FileCategory::Text | FileCategory::Code | FileCategory::Markdown, _)
+            if (local || set.remote) && entry.size != Some(0) =>
+        {
+            ThumbSource::Text
+        }
         (FileCategory::Image | FileCategory::Video | FileCategory::Pdf, true) => ThumbSource::System,
         (FileCategory::Image, false) if set.remote => ThumbSource::App,
         (FileCategory::Pdf, false) if set.remote && entry.size.is_none_or(|s| s <= set.pdf_limit()) => {
@@ -843,6 +852,48 @@ mod tests {
     }
 
     #[test]
+    fn text_code_and_markdown_get_their_first_lines() {
+        let on = settings();
+        let off = ThumbSettings { remote: false, ..on };
+        for name in ["notes.txt", "main.rs", "README.md", "data.csv"] {
+            for local in [true, false] {
+                assert_eq!(
+                    thumbnail_source(&file(name, Some(5)), local, true, &on),
+                    ThumbSource::Text,
+                    "{name} local {local}"
+                );
+                assert_eq!(
+                    thumbnail_source(&file(name, Some(5)), local, false, &on),
+                    ThumbSource::Icon,
+                    "{name}: Show thumbnails off, local {local}"
+                );
+            }
+            assert_eq!(
+                thumbnail_source(&file(name, None), true, true, &off),
+                ThumbSource::Text,
+                "{name}: the server switch does not touch local files; size unknown"
+            );
+            assert_eq!(
+                thumbnail_source(&file(name, Some(5)), false, true, &off),
+                ThumbSource::Icon,
+                "{name} on a server needs Thumbnails from servers"
+            );
+            assert_eq!(
+                thumbnail_source(&file(name, Some(0)), true, true, &on),
+                ThumbSource::Icon,
+                "{name}: an empty file keeps its glyph"
+            );
+        }
+        for name in ["a.docx", "a.zip", "unknown"] {
+            assert_eq!(
+                thumbnail_source(&file(name, Some(5)), true, true, &on),
+                ThumbSource::Icon,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
     fn pdfs_follow_the_switches_of_their_place() {
         let on = settings();
         let pdf = file("a.pdf", Some(1_000));
@@ -927,7 +978,7 @@ mod tests {
     fn other_files_and_unreachable_ones_have_none() {
         let on = settings();
         for local in [true, false] {
-            for name in ["a.txt", "a.zip", "noext"] {
+            for name in ["a.zip", "a.mp3", "noext"] {
                 assert_eq!(
                     thumbnail_source(&file(name, Some(5)), local, true, &on),
                     ThumbSource::Icon,
@@ -936,7 +987,7 @@ mod tests {
             }
             let dir = Entry::new(b"photos.jpg", crate::entry::Kind::Dir);
             assert_eq!(thumbnail_source(&dir, local, true, &on), ThumbSource::Icon);
-            for name in ["a.jpg", "a.pdf"] {
+            for name in ["a.jpg", "a.pdf", "a.txt"] {
                 let mut e = file(name, Some(5));
                 e.flags |= EntryFlags::NOT_ACCESSIBLE;
                 assert_eq!(

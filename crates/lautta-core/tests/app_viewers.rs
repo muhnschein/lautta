@@ -933,3 +933,94 @@ async fn pdfs_have_their_outline_and_links() {
         .unwrap();
     assert!(plain.outline.is_empty());
 }
+
+async fn text_thumb(h: &Home, previews: &Arc<lautta_core::app_viewers::Previews>, u: &str) -> Option<String> {
+    previews.request_text(h.core.clone(), uri(u)).rx.await.unwrap()
+}
+
+#[tokio::test]
+async fn a_text_thumbnail_is_the_head_of_the_file() {
+    let h = home().await;
+    let long = format!("# Packing\n\n{}", "- socks\n".repeat(200));
+    std::fs::write(h.root.join("Documents/list.md"), &long).unwrap();
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let text = text_thumb(&h, &previews, "lautta://user-documents/list.md")
+        .await
+        .unwrap();
+    assert!(text.starts_with("# Packing\n\n- socks\n"), "{text}");
+    assert_eq!(text.len(), 512, "512 bytes read");
+    assert!(text.ends_with("\n- soc"), "cut where the read ends");
+    assert_eq!(previews.cache().len(), 0, "local heads are read again, not kept");
+
+    std::fs::write(h.root.join("Documents/blob.txt"), b"PK\x03\x04\0\0").unwrap();
+    std::fs::write(h.root.join("Documents/empty.txt"), b"").unwrap();
+    std::fs::write(h.root.join("Documents/a.jpg"), jpeg(8, 8)).unwrap();
+    for name in ["blob.txt", "empty.txt", "a.jpg", "gone.txt"] {
+        let u = format!("lautta://user-documents/{name}");
+        assert_eq!(text_thumb(&h, &previews, &u).await, None, "{name}");
+    }
+}
+
+#[tokio::test]
+async fn a_server_text_thumbnail_is_cached_per_version() {
+    let h = home().await;
+    h.nas.add_file("n/notes.txt", b"Ferry at 06:00\n", 9_000);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let u = "lautta://nv-nas/n/notes.txt";
+    assert_eq!(
+        text_thumb(&h, &previews, u).await.as_deref(),
+        Some("Ferry at 06:00")
+    );
+    assert_eq!(previews.cache().len(), 1);
+    let before = open_reads(&h.nas);
+    assert_eq!(
+        text_thumb(&h, &previews, u).await.as_deref(),
+        Some("Ferry at 06:00")
+    );
+    assert_eq!(open_reads(&h.nas), before, "second one from the cache (PRV-2)");
+
+    h.nas.add_file("n/notes.txt", b"Ferry at 07:00\n", 10_000);
+    assert_eq!(
+        text_thumb(&h, &previews, u).await.as_deref(),
+        Some("Ferry at 07:00")
+    );
+
+    let mut s = h.core.settings();
+    s.thumbnails_remote = false;
+    h.core.apply_settings(s);
+    assert_eq!(
+        text_thumb(&h, &previews, u).await,
+        None,
+        "Thumbnails from servers off"
+    );
+}
+
+#[tokio::test]
+async fn a_text_thumbnail_cancelled_while_queued_never_runs() {
+    let h = home().await;
+    h.nas.add_file("a.txt", b"hei", 0);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    // A semaphore, not a Notify: the blocking jobs may not have run yet when released.
+    let gate = Arc::new(tokio::sync::Semaphore::new(0));
+    for i in 0..2 {
+        let g = gate.clone();
+        previews
+            .jobs()
+            .request(&format!("block{i}"), "nv-nas", async move {
+                let _ = g.acquire().await;
+            });
+    }
+    let first = previews.request_text(h.core.clone(), uri("lautta://nv-nas/a.txt"));
+    let second = previews.request_text(h.core.clone(), uri("lautta://nv-nas/a.txt"));
+    assert_eq!(
+        previews.jobs().queued("nv-nas"),
+        2,
+        "text waits in the same queue (PRV-3)"
+    );
+    previews.cancel_text(&first.key);
+    assert_eq!(previews.jobs().queued("nv-nas"), 1, "the other request stays");
+    gate.add_permits(2);
+    assert_eq!(second.rx.await.unwrap().as_deref(), Some("hei"));
+    assert!(first.rx.await.is_err(), "a cancelled request never answers");
+    assert_eq!(open_reads(&h.nas), 1);
+}

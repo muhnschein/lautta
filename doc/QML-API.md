@@ -169,7 +169,10 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   `Nemo.Thumbnailer`, `image://lautta-thumb/` URL, or empty; PRV-1, PRV-2, PRV-14),
   `selected`, `transferState`, `inaccessible`, `itemCount` (items of a folder, `-1` until
   `requestCount` has made it, for files, and for folders that are not counted),
-  `itemCountCapped` (the folder has more entries than were counted)); properties
+  `itemCountCapped` (the folder has more entries than were counted), `textThumb` (the file
+  has a text thumbnail, PRV-15), `textPreview` (its first lines, empty until
+  `requestPreview` made them or when it has none), `textPreviewMono` (monospace, no
+  wrapping), `typeIcon` (app icon name, `types/…`)); properties
   `loading`, `stale`, `large`, `offline`,
   `errorKind`, `errorMessage`, `count`, `selectedCount`, `sortKey`, `descending`,
   `foldersFirst`, `showHidden`, `viewMode`, `filterText`, `suggestGrid`,
@@ -184,7 +187,10 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   (`folder`, `file` or empty, like `nameKind(name)` but by uri), `requestCount(uri)` (counts
   the items of that folder off the GUI thread, from its names, at most 1000 entries; the
   `itemCount` role of its row changes when done; asking again for an unchanged folder does
-  nothing, a changed modified time or `showHidden` counts anew). An open model follows
+  nothing, a changed modified time or `showHidden` counts anew), `requestPreview(uri)`
+  (makes that file's `textPreview` in the thumbnail jobs, PRV-3; again only after its
+  modified time or size changed), `cancelPreview(uri)` (drops one still queued; a made one
+  stays). An open model follows
   every change of the global view settings at once (BRW-4).
 - The grid (SPEC §15.3): `components/directory/GridMetrics.qml` (`portraitColumns` (3), `gap`,
   `nameLineHeight`, `captionHeight` (one line each), `cellHeight(cellWidth, textHeight)`,
@@ -388,7 +394,9 @@ Each area owns its types and pages. Names are fixed here so areas can use each o
   for `Operations.needsSummary`, `Transfers.needsAnswer`, `Bridge.question` and the
   app-wide `KeepAlive`.
 - `components/ErrorText.js`, `components/Open.js`, `components/FileIcon.qml { category,
-  isDir, thumbnailSource, mimeType, size, glyphSize, highlighted }` (`glyphSize`: the side
+  isDir, thumbnailSource, mimeType, size, glyphSize, highlighted, previewText, previewMono,
+  typeIcon }` (`previewText`: a text thumbnail in place of the glyph, PRV-15; read-only
+  `previewShown`; `glyphSize`: the side
   of the glyph in the tile, `AppIcon.iconSize`; `highlighted`: glyph in the
   highlight colour, bound to the row's or tile's pressed or selected state; read-only
   `thumbnailReady`, `thumbnailFailed`: the thumbnail shows / could not be made, so the

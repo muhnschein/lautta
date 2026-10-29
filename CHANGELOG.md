@@ -18,6 +18,7 @@
 - In grid view, holding and dragging selects a range. Bars at the bottom are opaque.
 - The grid has one size, so View options offers just grid or list. Its icons are bigger, names take up to two lines and keep their extension, each row is only as tall as its tallest tile, and each tile shows, right under its name, the date and size, or how many items a folder on the phone or a drive holds, counting up to 1000.
 - File icons are Lautta's own drawings, sharp in the grid and in every list at any screen scale. An icon turns the highlight colour with its name when pressed or selected.
+- In grid view, text files, code and Markdown show their first lines, with a small icon of their type in the corner. Rust files get a crab. The plain document icon is now an outline, like the folder and image icons.
 - Video thumbnails show the video icon on a see-through dark disc, at the size and place the icon has without a thumbnail, so they stand apart from photos.
 - A folder's header stays in place while its contents scroll, and the pulley opens above it. A folder opens at its top, and going back returns to where you were. Starting or ending selection no longer makes the header jump.
 - Closing the selection bar no longer flashes its empty state as it slides away.
