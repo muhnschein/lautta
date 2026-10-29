@@ -1,0 +1,10 @@
+# Scope of workflow "CodeQL" (codeql.yml): code that ships, as
+# sonar-project.properties draws it. Left out: integration tests, the host
+# QML tests and the vendored qttypes (third_party: crates.io code with a patch
+# of ours, a dependency like the others). Test modules inside src/ and the
+# test-only `sample` and `fake` features drop out through the extractor
+# options in the workflow.
+paths-ignore:
+  - crates/*/tests
+  - tests
+  - third_party
