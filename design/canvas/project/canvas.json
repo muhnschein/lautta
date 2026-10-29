@@ -529,6 +529,14 @@
       "w": 400,
       "x": 5720,
       "y": 2060
+    },
+    "DocumentGlyph.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Document glyph \u00b7 aligned with JetBrains text",
+      "w": 860,
+      "x": 6200,
+      "y": 2060
     }
   },
   "createdOnFiles": {
@@ -644,6 +652,7 @@
     "Rename.dc.html",
     "GridIcons.dc.html",
     "TextThumbFullPlainIcon.dc.html",
+    "DocumentGlyph.dc.html",
     "StateEmpty.dc.html",
     "StateNoAccess.dc.html",
     "StateOffline.dc.html",
