@@ -196,7 +196,8 @@ ApplicationWindow {
     }
 
     // A shown video thumbnail keeps the plain glyph's size and centre, on a
-    // dark disc round the glyph's ring; it takes the light colour.
+    // dark disc round the glyph's ring; it takes the light colour, both a
+    // little translucent.
     function checkOver(plain, what) {
         var icon = overThumbnail(plain)
         var glyph = named(icon, "fileGlyph")
@@ -209,9 +210,10 @@ ApplicationWindow {
                what + ": a disc round the glyph's ring: " + disc.width + " for " + plain.glyphSize)
         var middle = disc.mapToItem(icon, disc.width / 2, disc.height / 2)
         expect(middle.x === glyphBox(plain)[2] && middle.y === glyphBox(plain)[3], what + ": the disc is centred on the glyph")
-        expect(disc.color.a === Theme.opacityOverlay && Math.max(disc.color.r, disc.color.g, disc.color.b) < 0.35,
+        expect(Math.abs(disc.color.a - Theme.opacityHigh) < 0.01 && Math.max(disc.color.r, disc.color.g, disc.color.b) < 0.35,
                what + ": the disc is dark and translucent: " + disc.color)
         same(String(glyph.color), String(Theme.lightPrimaryColor), what + ": the glyph is light over the disc")
+        expect(glyph.opacity === Theme.opacityOverlay, what + ": the glyph is a little translucent: " + glyph.opacity)
         same(String(glyph.highlightColor), String(Theme.highlightFromColor(Theme.highlightColor, Theme.LightOnDark)),
              what + ": pressed, the highlight colour for a dark ground")
         icon.highlighted = true
@@ -245,6 +247,7 @@ ApplicationWindow {
         expect(!named(plainList, "videoBadge").visible && named(plainList, "fileGlyph").visible,
                "a video without thumbnail shows its glyph, no disc")
         same(String(named(plainList, "fileGlyph").color), String(Theme.primaryColor), "the plain glyph is in the primary colour")
+        expect(named(plainList, "fileGlyph").opacity === 1, "the plain glyph is opaque")
         expect(!named(failed, "videoBadge").visible && named(failed, "fileGlyph").visible,
                "a video whose thumbnail failed shows its glyph, no disc")
         var made = [plainList, plainGrid, image, failed]

@@ -668,8 +668,8 @@ bridge).
   back the other local thumbnails, not the app. No size limit: the app reads nothing of
   the file. A shown video thumbnail keeps the video glyph (UI-2) over it, the same glyph
   at the same size and place as the item's plain icon in that view (grid tile, list row,
-  Trash), light (`Theme.lightPrimaryColor`) on a round translucent dark disc
-  (`Theme.opacityOverlay`, dark whatever the ambience) about 0.8 of the glyph wide, as Jolla
+  Trash), light (`Theme.lightPrimaryColor`, opacity `Theme.opacityOverlay`) on a round
+  translucent dark disc (`Theme.opacityHigh`, dark whatever the ambience) about 0.8 of the glyph wide, as Jolla
   Gallery's overlays on media: the disc keeps the glyph readable on bright and dark
   frames and in light ambiences while the frame shows around it. Pressed or selected, the glyph takes the highlight colour for a
   dark ground, as the name. Else a video reads as a photo. No glyph over an image's

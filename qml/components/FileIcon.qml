@@ -83,7 +83,8 @@ Item {
     // Behind the glyph over a video's thumbnail: dark whatever the ambience, as
     // Jolla Gallery's overlays, a little wider than the glyph's ring so the
     // frame shows around it; an even step in from the glyph's side keeps it
-    // centred on whole pixels. Contrast on bright and dark frames (PRV-1).
+    // centred on whole pixels. Contrast on bright and dark frames (PRV-1);
+    // translucent enough that the frame shows through.
     Rectangle {
         objectName: "videoBadge"
 
@@ -92,14 +93,14 @@ Item {
         height: width
         radius: width / 2
         color: Theme.rgba(Theme.highlightDimmerFromColor(Theme.highlightDimmerColor, Theme.LightOnDark),
-                          Theme.opacityOverlay)
+                          Theme.opacityHigh)
         visible: icon.videoShown
     }
 
     // The category's glyph: alone when no thumbnail shows, else over a video's
     // (the one item, so the glyph is the plain one in size and place). Light
-    // on the dark disc, its highlight colour for that scheme (Jolla Gallery,
-    // VerticalPageBackHint).
+    // on the dark disc and a little translucent, its highlight colour for that
+    // scheme (Jolla Gallery, VerticalPageBackHint).
     AppIcon {
         objectName: "fileGlyph"
 
@@ -110,6 +111,7 @@ Item {
         highlightColor: icon.videoShown ? Theme.highlightFromColor(Theme.highlightColor, Theme.LightOnDark)
                                         : Theme.highlightColor
         highlighted: icon.highlighted
+        opacity: icon.videoShown ? Theme.opacityOverlay : 1
         visible: !icon.thumbnailReady || icon.videoShown
     }
 
