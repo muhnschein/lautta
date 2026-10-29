@@ -132,6 +132,11 @@ Item {
         id: textThumbnail
 
         Item {
+            id: textTile
+
+            // `icon` inside AppIcon is its own property, not this file's id.
+            readonly property Item fileIcon: icon
+
             Label {
                 id: previewLabel
 
@@ -164,9 +169,9 @@ Item {
                     bottom: parent.bottom
                     margins: Theme.paddingMedium
                 }
-                icon: icon.typeIcon
+                icon: textTile.fileIcon.typeIcon
                 iconSize: Math.round(Theme.iconSizeSmall * 2 / 3)
-                highlighted: icon.highlighted
+                highlighted: textTile.fileIcon.highlighted
             }
         }
     }

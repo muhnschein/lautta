@@ -137,10 +137,13 @@ Item {
 
     function testSwitchedOff() {
         check(thumbs.setViewPrefs(JSON.stringify({ thumbnails: false })), "thumbnails off")
-        check(!row("run.sh").has, "no text thumbnail with thumbnails off")
-        ask("README.md")
+        check(!row("run.sh").has && row("run.sh").text === "", "no text thumbnail with thumbnails off")
+        var before = root.changes
+        ask("notes.txt")
+        tools.pump(300)
+        check(root.changes === before, "none is made while off")
         thumbs.setViewPrefs(JSON.stringify({ thumbnails: true }))
-        check(row("run.sh").has, "back on")
+        check(row("run.sh").has && row("run.sh").text !== "", "back on, the made one shows again")
     }
 
     Component.onCompleted: {

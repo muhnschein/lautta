@@ -3,7 +3,8 @@
 // Markdown file's tile shows its first lines in place of the glyph, code in
 // the monospace font without wrapping, prose wrapped, faded out above its
 // type icon; an empty file and other files keep the glyph. The list keeps
-// glyphs; with Show thumbnails off no tile has text. Fails when a tile shows
+// glyphs; with Show thumbnails off no tile has text, switched on the tiles
+// already shown get theirs. Fails when a tile shows
 // no text, the wrong text, font or icon, or the glyph stays under it. Looks
 // and the fade stay unproven until a phone shows them.
 import QtQuick 2.6
@@ -102,10 +103,15 @@ ApplicationWindow {
         tools.installFixture(Qt.resolvedUrl("host/fixtures/empty.txt"), base + "empty.txt")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), base + "a.jpg")
         App.setSetting("view_mode", JSON.stringify("grid"))
+        App.setSetting("thumbnails_local", JSON.stringify(false))
         pageStack.push(pageComponent, { "folderUri": base }, PageStackAction.Immediate)
         tools.pump(500)
         var view = pageStack.currentPage.view
         expect(view.gridMode, "a grid")
+        expect(until(function () { return iconsOf(view, "code").length === 1 }) && shownIcons(view).length === 0,
+               "thumbnails off: glyphs")
+        // Switched on, the cells already there ask.
+        App.setSetting("thumbnails_local", JSON.stringify(true))
 
         checkTile(view, "text", function (t) { return t === "line one\nline two" }, false, "types/text")
         checkTile(view, "code", function (t) { return t.indexOf("#!/bin/sh\n") === 0 }, true, "types/shell")

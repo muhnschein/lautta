@@ -1012,15 +1012,16 @@ async fn a_text_thumbnail_cancelled_while_queued_never_runs() {
     }
     let first = previews.request_text(h.core.clone(), uri("lautta://nv-nas/a.txt"));
     let second = previews.request_text(h.core.clone(), uri("lautta://nv-nas/a.txt"));
-    assert_eq!(
-        previews.jobs().queued("nv-nas"),
-        2,
-        "text waits in the same queue (PRV-3)"
-    );
+    let queued = previews.jobs().queued("nv-nas");
     previews.cancel_text(&first.key);
-    assert_eq!(previews.jobs().queued("nv-nas"), 1, "the other request stays");
+    let left = previews.jobs().queued("nv-nas");
+    // Every job done before asserting: a runtime dropped with jobs queued hangs.
     gate.add_permits(2);
-    assert_eq!(second.rx.await.unwrap().as_deref(), Some("hei"));
-    assert!(first.rx.await.is_err(), "a cancelled request never answers");
+    let second = second.rx.await.unwrap();
+    let first = first.rx.await;
+    assert_eq!(queued, 2, "text waits in the same queue (PRV-3)");
+    assert_eq!(left, 1, "the other request stays");
+    assert_eq!(second.as_deref(), Some("hei"));
+    assert!(first.is_err(), "a cancelled request never answers");
     assert_eq!(open_reads(&h.nas), 1);
 }

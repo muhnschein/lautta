@@ -565,8 +565,12 @@ impl DirectoryModel {
         }
     }
 
-    /// The text thumbnail of `e` as it is now, empty while it is made.
+    /// The text thumbnail of `e` as it is now, empty while it is made or
+    /// with thumbnails off.
     fn preview_of(&self, e: &Entry) -> &str {
+        if self.thumb_source(e) != ThumbSource::Text {
+            return "";
+        }
         self.previews
             .get(&e.name)
             .filter(|slot| slot.stamp == Self::preview_stamp(e))
