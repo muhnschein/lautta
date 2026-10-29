@@ -50,28 +50,12 @@
       "x": 2880,
       "y": 8200
     },
-    "BreadcrumbsEditA.dc.html": {
+    "BreadcrumbsEdit.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Edit path A \u00b7 in the open path",
-      "w": 400,
-      "x": 2400,
-      "y": 15900
-    },
-    "BreadcrumbsEditB.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Edit path B \u00b7 in the header",
+      "title": "Edit path \u00b7 dialog",
       "w": 400,
       "x": 2880,
-      "y": 15900
-    },
-    "BreadcrumbsEditC.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Edit path C \u00b7 dialog page",
-      "w": 400,
-      "x": 3360,
       "y": 15900
     },
     "BreadcrumbsHeader.dc.html": {
@@ -82,36 +66,44 @@
       "x": 0,
       "y": 15900
     },
-    "BreadcrumbsPaneA.dc.html": {
+    "BreadcrumbsOpenA.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Path open A \u00b7 staircase",
-      "w": 400,
-      "x": 480,
-      "y": 15900
-    },
-    "BreadcrumbsPaneB.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Path open B \u00b7 plain, actions first",
+      "title": "Path open \u00b7 actions A, menu items",
       "w": 400,
       "x": 960,
       "y": 15900
     },
-    "BreadcrumbsPaneC.dc.html": {
+    "BreadcrumbsOpenB.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Path open C \u00b7 parent first",
+      "title": "Path open \u00b7 actions B, icon rows",
       "w": 400,
       "x": 1440,
       "y": 15900
     },
-    "BreadcrumbsPaneD.dc.html": {
+    "BreadcrumbsOpenC.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Path open D \u00b7 crumbs wrapped",
+      "title": "Path open \u00b7 actions C, header buttons",
       "w": 400,
       "x": 1920,
+      "y": 15900
+    },
+    "BreadcrumbsOpenD.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Path open \u00b7 actions D, to the pulley",
+      "w": 400,
+      "x": 2400,
+      "y": 15900
+    },
+    "BreadcrumbsOpening.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Path \u00b7 opening, subtitle fades",
+      "w": 400,
+      "x": 480,
       "y": 15900
     },
     "BrowsePulley.dc.html": {
@@ -752,13 +744,12 @@
     "ActivityBarQuestion.dc.html",
     "ActivityBarDone.dc.html",
     "BreadcrumbsHeader.dc.html",
-    "BreadcrumbsPaneA.dc.html",
-    "BreadcrumbsPaneB.dc.html",
-    "BreadcrumbsPaneC.dc.html",
-    "BreadcrumbsPaneD.dc.html",
-    "BreadcrumbsEditA.dc.html",
-    "BreadcrumbsEditB.dc.html",
-    "BreadcrumbsEditC.dc.html"
+    "BreadcrumbsOpening.dc.html",
+    "BreadcrumbsOpenA.dc.html",
+    "BreadcrumbsOpenB.dc.html",
+    "BreadcrumbsOpenC.dc.html",
+    "BreadcrumbsOpenD.dc.html",
+    "BreadcrumbsEdit.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"
