@@ -521,6 +521,46 @@
       "w": 400,
       "x": 1440,
       "y": 8200
+    },
+    "TextThumbPaper.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Text thumbnail \u00b7 A paper",
+      "w": 400,
+      "x": 5720,
+      "y": 2060
+    },
+    "TextThumbSheet.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Text thumbnail \u00b7 B ambience sheet",
+      "w": 400,
+      "x": 6200,
+      "y": 2060
+    },
+    "TextThumbFolded.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Text thumbnail \u00b7 C folded page with type",
+      "w": 400,
+      "x": 6680,
+      "y": 2060
+    },
+    "TextThumbFill.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Text thumbnail \u00b7 D text fills tile",
+      "w": 400,
+      "x": 7160,
+      "y": 2060
+    },
+    "TextThumbStyled.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Text thumbnail \u00b7 E styled by kind",
+      "w": 400,
+      "x": 7640,
+      "y": 2060
     }
   },
   "createdOnFiles": {
@@ -635,6 +675,11 @@
     "NewItem.dc.html",
     "Rename.dc.html",
     "GridIcons.dc.html",
+    "TextThumbPaper.dc.html",
+    "TextThumbSheet.dc.html",
+    "TextThumbFolded.dc.html",
+    "TextThumbFill.dc.html",
+    "TextThumbStyled.dc.html",
     "StateEmpty.dc.html",
     "StateNoAccess.dc.html",
     "StateOffline.dc.html",
