@@ -50,6 +50,54 @@
       "x": 2880,
       "y": 8200
     },
+    "BreadcrumbsMenu.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Breadcrumbs B \u00b7 path menu, parent first",
+      "w": 400,
+      "x": 960,
+      "y": 15900
+    },
+    "BreadcrumbsSide.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Breadcrumbs D \u00b7 path page",
+      "w": 400,
+      "x": 2400,
+      "y": 15900
+    },
+    "BreadcrumbsSideDir.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Breadcrumbs D \u00b7 folder, path page attached",
+      "w": 400,
+      "x": 1920,
+      "y": 15900
+    },
+    "BreadcrumbsStrip.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Breadcrumbs C \u00b7 crumb strip",
+      "w": 400,
+      "x": 1440,
+      "y": 15900
+    },
+    "BreadcrumbsToday.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Breadcrumbs \u00b7 today, 8 deep",
+      "w": 400,
+      "x": 0,
+      "y": 15900
+    },
+    "BreadcrumbsTrail.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Breadcrumbs A \u00b7 way here in the header",
+      "w": 400,
+      "x": 480,
+      "y": 15900
+    },
     "BrowsePulley.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -290,6 +338,14 @@
       "x": 2400,
       "y": 2060
     },
+    "PdfViewer.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "PDF viewer",
+      "w": 400,
+      "x": 1440,
+      "y": 8200
+    },
     "PlanSummary.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -513,14 +569,6 @@
       "w": 400,
       "x": 3360,
       "y": 2060
-    },
-    "PdfViewer.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "PDF viewer",
-      "w": 400,
-      "x": 1440,
-      "y": 8200
     }
   },
   "createdOnFiles": {
@@ -611,6 +659,14 @@
       "w": 240,
       "x": 0,
       "y": 14140
+    },
+    "r10": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Breadcrumbs for deep folders (options)",
+      "w": 240,
+      "x": 0,
+      "y": 15600
     }
   },
   "order": [
@@ -678,7 +734,13 @@
     "ImageDeleteRemote.dc.html",
     "ActivityBar.dc.html",
     "ActivityBarQuestion.dc.html",
-    "ActivityBarDone.dc.html"
+    "ActivityBarDone.dc.html",
+    "BreadcrumbsToday.dc.html",
+    "BreadcrumbsTrail.dc.html",
+    "BreadcrumbsMenu.dc.html",
+    "BreadcrumbsStrip.dc.html",
+    "BreadcrumbsSideDir.dc.html",
+    "BreadcrumbsSide.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"
