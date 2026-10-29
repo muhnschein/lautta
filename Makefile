@@ -35,8 +35,16 @@ fmt-check:
 clippy:
 	$(CARGO) clippy --workspace --all-targets $(HOST_FEATURES) -- -D warnings
 
+# nextest if installed (.config/nextest.toml: 32 at once, ~1 min down to ~40s),
+# else `cargo test`. nextest skips doctests: `--doc` beside.
 test:
-	QT_QPA_PLATFORM=offscreen $(CARGO) test --workspace $(HOST_FEATURES)
+	@if command -v cargo-nextest >/dev/null 2>&1; then \
+		QT_QPA_PLATFORM=offscreen $(CARGO) nextest run --workspace $(HOST_FEATURES); \
+	else \
+		echo "test: cargo-nextest not installed, running cargo test (install-host-deps.sh nextest)"; \
+		QT_QPA_PLATFORM=offscreen $(CARGO) test --workspace $(HOST_FEATURES); \
+	fi
+	$(CARGO) test --workspace --doc $(HOST_FEATURES)
 
 coverage:
 	mkdir -p coverage

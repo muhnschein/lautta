@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Host build dependencies for CI (Ubuntu 24.04): Qt 5 for the Qt glue crates,
 # the pinned Rust toolchain (rust-toolchain.toml), and optional tools:
-#   install-host-deps.sh [coverage] [mutants] [cross]
+#   install-host-deps.sh [nextest] [coverage] [mutants] [cross]
 # A cargo tool already at its pinned version is kept: CI puts prebuilt ones
 # there first (taiki-e/install-action, same versions), building them takes
 # minutes.
@@ -22,6 +22,7 @@ cargo_tool() {
 }
 for tool in "$@"; do
     case $tool in
+        nextest) cargo_tool cargo-nextest 0.9.148 ;;
         coverage) cargo_tool cargo-llvm-cov 0.6.16 ;;
         mutants) cargo_tool cargo-mutants 25.0.1 ;;
         # The SDK's cross compiler is an i386 program (tools/ci/lift-sdk.sh).
