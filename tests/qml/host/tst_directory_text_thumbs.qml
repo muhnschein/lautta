@@ -83,13 +83,16 @@ Item {
               && row("README.md").type === "types/markdown", "type icons by name")
     }
 
+    // Each request asked for ends in one change of its row, binary data too.
     function testMade() {
+        var before = root.changes
         ask("notes.txt")
         ask("run.sh")
         ask("blob.txt")
         ask("a.jpg")
         ask("Sub")
-        waitFor(function () { return row("notes.txt").text !== "" && row("run.sh").text !== "" }, 3000)
+        waitFor(function () { return root.changes - before >= 3 }, 3000)
+        check(root.changes - before === 3, "three made: " + (root.changes - before))
         check(row("notes.txt").text === "line one\nline two", "first lines, CRLF tidied: " + JSON.stringify(row("notes.txt").text))
         check(row("run.sh").text.indexOf("#!/bin/sh\n") === 0, "a script's first line: " + row("run.sh").text)
         check(row("blob.txt").text === "", "binary data has none")
