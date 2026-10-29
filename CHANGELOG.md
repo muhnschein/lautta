@@ -32,3 +32,4 @@
 - Photos show the date they were taken, in the system's formats.
 - Settings › Storage opens from Lautta where the system allows it.
 - Names and server messages that contain tags, such as `<b>x</b>`, show exactly as typed instead of changing how the text looks or loading images.
+- Reproducible builds: a commit always builds to the same RPM, byte for byte. `tools/verify-rpm.sh` checks one for you (doc/VERIFYING.md).

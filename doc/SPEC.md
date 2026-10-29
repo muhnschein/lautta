@@ -1186,6 +1186,11 @@ lautta/
   `qt5-qtsvg-plugin-imageformat-svg` (the app's icons are SVG; all on the allowed
   `Requires` list). Never a dependency on netvfs.
 - PKG-3: Icons 86, 108, 128, 172 px and the desktop file as the validator requires.
+- PKG-4: Reproducible: a commit builds to the same RPM, byte for byte. Build time and file
+  dates are the commit's time (`SOURCE_DATE_EPOCH`), the build host is fixed, the binary
+  records no build path, and every input is pinned (SDK image by digest, Rust toolchain,
+  `Cargo.lock`). `tools/verify-rpm.sh` rebuilds a commit and compares; CI runs it on every
+  push (`doc/VERIFYING.md`).
 
 ## 23. Roadmap
 

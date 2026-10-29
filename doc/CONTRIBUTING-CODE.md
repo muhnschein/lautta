@@ -16,6 +16,8 @@ screen; `design/STYLE.md` is the Silica style kit).
   `cargo +stable update -p <crate>` / `cargo +stable generate-lockfile`, so no crate
   newer than the workspace's `rust-version` allows is picked.
 - New dependencies: pure Rust preferred (SPEC RS-2). Native links only to HBR-2 libraries.
+- RPM reproducible (SPEC PKG-4): no build path, time or host may reach it. CI job "RPM
+  rebuilds byte for byte" runs `tools/verify-rpm.sh`; `doc/VERIFYING.md` says how and why.
 
 ## Rules
 
