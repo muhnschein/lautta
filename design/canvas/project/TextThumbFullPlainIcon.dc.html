@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Text thumbnail 6h plain, fade, type icon</title>
+<!-- File-type icons: JetBrains intellij-community platform/icons/src/expui/fileTypes, Copyright 2000-2022 JetBrains s.r.o. and contributors, Apache-2.0. Rust icon: intellij-rust, Copyright 2015 Aleksey Kladov, Evgeny Kurbatsky, Alexey Kudinkin and contributors, MIT. -->
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600&amp;family=Source+Code+Pro:wght@400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.amb{--pri:#ffffff;--sec:rgba(255,255,255,.62);--hl:#74d4ff;--hl2:#5fb3d9;--hlbg:rgba(116,212,255,.30);--hldim:rgba(116,212,255,.13);--ov:rgba(8,14,20,.55);--line:rgba(255,255,255,.28);--btn:rgba(255,255,255,.16);--warn:#ffb067;
+ background:radial-gradient(130% 70% at 85% -5%,#2a4a63 0%,#13222f 45%,#0a1219 100%);
+ color:var(--pri);font-family:'Source Sans 3',system-ui,sans-serif;font-size:19px;font-weight:400;position:relative;overflow:hidden;box-sizing:border-box}
+.amb.light{--pri:#15191d;--sec:rgba(21,25,29,.66);--hl:#00639c;--hl2:#2a74a3;--hlbg:rgba(0,99,156,.20);--hldim:rgba(0,99,156,.09);--ov:rgba(240,244,247,.7);--line:rgba(21,25,29,.3);--btn:rgba(21,25,29,.10);--warn:#a14d00;
+ background:radial-gradient(130% 70% at 85% -5%,#ffffff 0%,#e7eef3 50%,#d6e1e9 100%)}
+.amb *{box-sizing:border-box}
+.amb button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:inherit}
+.amb a{color:inherit;text-decoration:none}
+.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.m{width:40px;height:40px;stroke-width:1.2}
+.ic.l{width:64px;height:64px;stroke-width:1}
+.hl{color:var(--hl)}.sec{color:var(--sec)}.hl2{color:var(--hl2)}.warn{color:var(--warn)}
+.small{font-size:15px}.xs{font-size:13px}.tiny{font-size:12px}.large{font-size:26px;font-weight:300}.xl{font-size:34px;font-weight:300}
+.mono{font-family:'Source Code Pro',monospace}
+/* page-stack indicators */
+.ind-back,.ind-fwd{position:absolute;top:14px;display:flex;gap:4px}
+.ind-back{left:10px}.ind-fwd{right:10px}
+.ind-back i,.ind-fwd i{display:block;width:4px;height:4px;border-radius:2px;background:var(--hl);opacity:.9}
+.ind-back i+i,.ind-fwd i+i{opacity:.45}
+/* pulley/push-up indicators (closed) */
+.pull-ind{position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--hl) 50%,transparent);opacity:.7}
+.push-ind{position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--hl) 50%,transparent);opacity:.7}
+/* open pulley / push-up menu */
+.pulley{padding:18px 18px 6px;background:linear-gradient(180deg,var(--hlbg),var(--hldim) 70%,transparent);display:flex;flex-direction:column}
+.pushup{padding:6px 18px 18px;background:linear-gradient(0deg,var(--hlbg),var(--hldim) 70%,transparent);display:flex;flex-direction:column}
+.mi{height:56px;display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--pri);width:100%;text-align:center}
+.mi.on{color:var(--hl)}
+.mi .cnt{margin-left:8px;color:var(--sec);font-size:15px}
+.mi.on .cnt{color:var(--hl2)}
+.mi.dis{color:var(--sec);opacity:.5}
+/* page header */
+.hdr{min-height:80px;padding:14px 18px 6px 60px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;text-align:right}
+.hdr-t{font-size:28px;font-weight:300;color:var(--hl);line-height:1.15}
+.hdr-d{font-size:15px;color:var(--hl2);margin-top:2px}
+/* dialog header */
+.dlg{height:80px;padding:0 18px;display:flex;align-items:center;justify-content:space-between}
+.dlg-c{font-size:19px;color:var(--pri)}
+.dlg-a{font-size:28px;font-weight:300;color:var(--hl)}
+.dlg-a.dis{opacity:.4}
+.dlg-sub{padding:0 18px 8px;text-align:right;font-size:15px;color:var(--hl2)}
+/* section header */
+.sh{padding:14px 18px 6px;text-align:right;font-size:15px;color:var(--hl)}
+/* list item */
+.li{min-height:72px;padding:6px 18px;display:flex;align-items:center;gap:14px;width:100%}
+.li.s{min-height:56px}
+.li.pressed{background:var(--hlbg)}
+.li.selected{background:var(--hldim)}
+.li-ic{width:48px;height:48px;display:flex;align-items:center;justify-content:center;flex:none;color:var(--pri);position:relative}
+.li-ic.sel::after{content:"";position:absolute;inset:2px;border:2px solid var(--hl);border-radius:3px}
+.thumb{width:48px;height:48px;flex:none;background:linear-gradient(135deg,#4b6b7f,#9bb7a0);}
+.li-b{flex:1;min-width:0}
+.li-t{font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li-s{font-size:15px;color:var(--sec);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li-r{font-size:15px;color:var(--sec);flex:none;text-align:right}
+.li.pressed .li-t{color:var(--hl)}
+/* context menu (inline, under pressed item) */
+.cm{background:var(--hldim);display:flex;flex-direction:column;padding:4px 0}
+/* badges / dots */
+.dot{width:8px;height:8px;border-radius:4px;background:var(--hl);display:inline-block;flex:none}
+.dot.off{background:transparent;border:1px solid var(--sec)}
+.badge{font-size:13px;color:var(--warn);display:inline-flex;align-items:center;gap:4px}
+.tagdot{width:12px;height:12px;border-radius:6px;display:inline-block;flex:none}
+.lossy{font-size:12px;border:1px solid var(--sec);color:var(--sec);border-radius:3px;padding:0 4px;margin-left:6px;vertical-align:middle}
+/* progress */
+.prog{height:3px;background:var(--line);position:relative;overflow:hidden}
+.prog>i{position:absolute;left:0;top:0;bottom:0;background:var(--hl);display:block}
+.slim{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--hl),transparent);opacity:.85}
+/* busy indicator */
+.busy{width:64px;height:64px;border-radius:50%;border:3px solid var(--hldim);border-top-color:var(--hl);border-right-color:var(--hl)}
+.busy.s{width:24px;height:24px;border-width:2px}
+/* placeholder */
+.ph{position:absolute;left:18px;right:18px;text-align:center}
+.ph-t{font-size:34px;font-weight:300;color:var(--hl);opacity:.85;line-height:1.2}
+.ph-h{font-size:19px;color:var(--hl2);margin-top:12px;line-height:1.35}
+/* buttons */
+.btn{min-width:150px;height:52px;padding:0 26px;border-radius:0;background:var(--btn);color:var(--pri);font-size:19px;display:inline-flex;align-items:center;justify-content:center}
+.btn.down{background:var(--hlbg);color:var(--hl)}
+.btns{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;padding:12px 18px}
+.ibtn{width:56px;height:56px;display:inline-flex;align-items:center;justify-content:center;color:var(--pri)}
+.ibtn.on{color:var(--hl)}
+/* docked panel */
+.dock{position:absolute;left:0;right:0;bottom:0;min-height:80px;background:var(--ov);backdrop-filter:blur(6px);border-top:1px solid var(--hldim);display:flex;align-items:center;justify-content:space-around;padding:0 6px}
+/* text switch */
+.sw{display:flex;gap:14px;padding:10px 18px;align-items:flex-start;width:100%}
+.sw-d{width:18px;height:18px;border-radius:9px;border:1.5px solid var(--sec);margin-top:5px;flex:none}
+.sw.on .sw-d{border-color:var(--hl);background:var(--hl);box-shadow:0 0 10px 2px var(--hlbg)}
+.sw-t{font-size:19px}.sw-x{font-size:15px;color:var(--sec);margin-top:2px;line-height:1.3}
+/* combo box */
+.cb{display:flex;flex-direction:column;padding:10px 18px;width:100%}
+.cb-r{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.cb-l{font-size:19px}.cb-v{font-size:19px;color:var(--hl)}
+.cb-x{font-size:15px;color:var(--sec);margin-top:2px}
+/* slider */
+.sl{padding:8px 18px 12px}
+.sl-v{text-align:center;font-size:26px;font-weight:300;color:var(--hl)}
+.sl-t{height:2px;background:var(--line);margin:14px 6px;position:relative}
+.sl-t>i{position:absolute;left:0;top:0;bottom:0;background:var(--hl)}
+.sl-t>b{position:absolute;top:-9px;width:20px;height:20px;border-radius:10px;background:var(--hl);box-shadow:0 0 12px 3px var(--hlbg);margin-left:-10px}
+.sl-l{text-align:center;font-size:15px;color:var(--sec)}
+/* text field */
+.tf{padding:10px 18px}
+.tf input,.tf textarea{width:100%;background:transparent;border:0;border-bottom:1px solid var(--line);color:var(--pri);font:inherit;font-size:19px;padding:6px 0;outline:none}
+.tf.focus input{border-bottom-color:var(--hl)}
+.tf label{display:block;font-size:15px;color:var(--sec);margin-top:4px}
+.tf.focus label{color:var(--hl)}
+.tf.err input{border-bottom-color:var(--warn)}
+.tf.err label{color:var(--warn)}
+/* remorse */
+.remorse{min-height:72px;background:var(--hlbg);position:relative;padding:10px 18px;display:flex;flex-direction:column;justify-content:center;overflow:hidden}
+.remorse>i{position:absolute;left:0;top:0;bottom:0;background:var(--hldim);display:block}
+.remorse b{font-weight:400;font-size:19px;position:relative}
+.remorse span{font-size:15px;color:var(--sec);position:relative}
+/* banner (in-page notice, e.g. offline) */
+.banner{margin:6px 18px;padding:12px 14px;background:var(--hldim);display:flex;gap:12px;align-items:center;font-size:15px}
+.banner .act{color:var(--hl);font-size:15px;margin-left:auto;flex:none}
+/* interaction hint label */
+.hintlabel{position:absolute;left:0;right:0;bottom:0;padding:40px 30px 30px;text-align:center;font-size:19px;color:var(--hl);background:linear-gradient(0deg,var(--ov),transparent)}
+/* key/value detail (DetailItem) */
+.di{display:flex;gap:12px;padding:5px 18px;font-size:15px}
+.di-l{flex:1;text-align:right;color:var(--sec)}
+.di-v{flex:1;color:var(--pri);word-break:break-all}
+/* notification popup (system) */
+.note{background:rgba(20,30,40,.92);color:#fff;padding:12px 16px;display:flex;gap:12px;align-items:flex-start;border-radius:6px}
+.cell{width:117.33px;flex:none}
+.tile{height:117.33px;position:relative;display:flex;align-items:center;justify-content:center;color:var(--pri);overflow:hidden;background:var(--hldim)}
+.tile.img{background:none}
+.tile.txt{background:none}
+.cell-n{font-size:13px;text-align:center;line-height:17px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 2px}
+.cell-c{font-size:12px;text-align:center;line-height:15px;color:var(--sec)}
+.row{display:flex;gap:6px;padding:0 18px 10px}
+.ph-img{position:absolute;inset:0;background:linear-gradient(160deg,#9fc3d9 0%,#5d8fae 45%,#2f4f3a 46%,#47704f 100%)}
+.amb{--pg:rgba(116,212,255,.16);--pgline:rgba(255,255,255,.45);--flap:rgba(255,255,255,.22);--rule:rgba(255,255,255,.10)}
+.amb.light{--pg:rgba(255,255,255,.60);--pgline:rgba(21,25,29,.45);--flap:rgba(21,25,29,.16);--rule:rgba(21,25,29,.10)}
+.sheet{position:absolute;inset:0;background:var(--pg)}
+.tx{position:absolute;margin:0;overflow:hidden;font-family:'Source Sans 3',sans-serif;font-size:12px;line-height:15px;color:var(--sec);white-space:pre-wrap;word-break:break-word}
+.tx.code{font-family:'Source Code Pro',monospace;white-space:pre}
+.lt,.hd{position:absolute;font-size:12px;font-weight:600;letter-spacing:.4px;color:var(--pri)}
+.hr{position:absolute;height:1px;background:var(--pgline);opacity:.6}
+.rl{position:absolute;height:1px;background:var(--rule)}
+.sh-o{position:absolute;left:-0.5px;top:-0.5px;overflow:visible;fill:none;stroke:var(--pgline);stroke-width:1;stroke-linejoin:round}
+.sh-o .flap{fill:var(--flap);stroke:var(--pgline)}
+.cell.pressed .sheet{background:var(--hlbg)}
+.cell.pressed .tx,.cell.pressed .lt,.cell.pressed .hd,.cell.pressed .cell-n{color:var(--hl)}
+.cell.pressed .tile{color:var(--hl);background:var(--hlbg)}
+.cell.pressed .sh-o{stroke:var(--hl)}
+.cell.pressed .hr{background:var(--hl)}
+.ic16{position:absolute;width:16px;height:16px}
+.ji,.jl,.jd{display:block;width:16px;height:16px}
+.jb{display:block}
+.amb.dark .jl,.amb.light .jd{display:none}
+.ji-rs path{fill:#CED0D6}
+.amb.light .ji-rs path{fill:#6C707E}
+</style>
+</helmet>
+<div class="amb {{amb}}" style="width: 400px; height: 860px">
+<div class="pull-ind"></div>
+<div class="ind-back"><i></i><i></i></div>
+<div class="hdr"><div class="hdr-t">Notes</div></div>
+<div class="row"><div class="cell"><div class="tile"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Folder" width="56" height="56" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5V6a1 1 0 0 1 1-1h4.4c.5 0 .9.2 1.2.5l2 2h-.3c-1.3 0-1.7 2-3 2z" fill="currentColor" fill-opacity="0.6" stroke="none"/><path d="M4.5 9.5h4.8c1.3 0 1.7-2 3-2h10.2a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1z"/></svg></div><div class="cell-n">Drafts</div><div class="cell-c">4 items</div><div class="cell-c"></div></div><div class="cell"><div class="tile txt"><div class="sheet" style=""><pre class="tx" style="-webkit-mask-image:linear-gradient(180deg,#000 62%,transparent 100%);mask-image:linear-gradient(180deg,#000 62%,transparent 100%);left:12.0px;right:12.0px;top:12.0px;height:93.33px">Ferry timetable, Nauvo–Parainen
+Weekdays from 06:00 every 20 min, nights every hour. Last one 00:30.
+
+Ask Anni about the cabin keys before Friday. Sauna wood: 2 sacks.
+Check boat battery, charger is in the shed behind the paint cans.</pre><div class="ic16" style="right:12.0px;bottom:12.0px"><span class="ji"><span class="jl"><svg width="16" height="16" class="jb" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="2" y="12" width="8" height="1" rx="0.5" fill="#6C707E"/>
+<rect x="2" y="6" width="8" height="1" rx="0.5" fill="#6C707E"/>
+<rect x="2" y="9" width="12" height="1" rx="0.5" fill="#6C707E"/>
+<rect x="2" y="3" width="12" height="1" rx="0.5" fill="#6C707E"/>
+</svg>
+</span><span class="jd"><svg width="16" height="16" class="jb" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="2" y="12" width="8" height="1" rx="0.5" fill="#CED0D6"/>
+<rect x="2" y="6" width="8" height="1" rx="0.5" fill="#CED0D6"/>
+<rect x="2" y="9" width="12" height="1" rx="0.5" fill="#CED0D6"/>
+<rect x="2" y="3" width="12" height="1" rx="0.5" fill="#CED0D6"/>
+</svg>
+</span></span></div></div></div><div class="cell-n">notes.txt</div><div class="cell-c">Today 16:05</div><div class="cell-c">412 B</div></div><div class="cell"><div class="tile txt"><div class="sheet" style=""><pre class="tx" style="-webkit-mask-image:linear-gradient(180deg,#000 62%,transparent 100%);mask-image:linear-gradient(180deg,#000 62%,transparent 100%);left:12.0px;right:12.0px;top:12.0px;height:93.33px"># Lautta
+A file manager for Sailfish OS.
+
+## Build
+    make rpm
+
+## Features
+- Local folders, SD card, USB
+- SFTP and SMB servers
+- Trash, search, transfers</pre><div class="ic16" style="right:12.0px;bottom:12.0px"><span class="ji"><span class="jl"><svg width="16" height="16" class="jb" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M12.5929 9.9438L12.5929 4.70001L13.7929 4.70002L13.7929 9.94379L15.0763 8.66037L15.9248 9.5089L13.1929 12.2409L10.4609 9.5089L11.3095 8.66037L12.5929 9.9438Z" fill="#3574F0"/>
+<path d="M0.5 4.70001H2.94558L4.65385 9.14463L4.76288 9.60155L4.85635 9.14463L6.51269 4.70001H8.98423V11.9692H7.14096V7.59732L7.17212 7.12482L5.34442 11.9692H4.08269L2.31212 7.17155L2.34327 7.59732V11.9692H0.5V4.70001Z" fill="#3574F0"/>
+</svg>
+</span><span class="jd"><svg width="16" height="16" class="jb" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M12.5929 9.9438L12.5929 4.70001L13.7929 4.70002L13.7929 9.94379L15.0763 8.66037L15.9248 9.5089L13.1929 12.2409L10.4609 9.5089L11.3095 8.66037L12.5929 9.9438Z" fill="#548AF7"/>
+<path d="M0.5 4.70001H2.94558L4.65385 9.14463L4.76288 9.60155L4.85635 9.14463L6.51269 4.70001H8.98423V11.9692H7.14096V7.59732L7.17212 7.12482L5.34442 11.9692H4.08269L2.31212 7.17155L2.34327 7.59732V11.9692H0.5V4.70001Z" fill="#548AF7"/>
+</svg>
+</span></span></div></div></div><div class="cell-n">README.md</div><div class="cell-c">Today 11:40</div><div class="cell-c">1.8 kB</div></div></div>
+<div class="row"><div class="cell"><div class="tile txt"><div class="sheet" style=""><pre class="tx code" style="-webkit-mask-image:linear-gradient(180deg,#000 62%,transparent 100%);mask-image:linear-gradient(180deg,#000 62%,transparent 100%);left:12.0px;right:12.0px;top:12.0px;height:93.33px">#!/bin/sh
+# Nightly copy of Documents to NAS
+set -eu
+SRC=&quot;$HOME/Documents&quot;
+DST=&quot;nas:/backup/phone&quot;
+rsync -a --delete \
+  &quot;$SRC/&quot; &quot;$DST/&quot;
+echo &quot;done $(date +%F)&quot;</pre><div class="ic16" style="right:12.0px;bottom:12.0px"><span class="ji"><span class="jl"><svg width="16" height="16" class="jb" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="#EBECF0" stroke="#6C707E"/>
+<path d="M4 6L6 8L4 10" stroke="#6C707E" stroke-width="1.2"/>
+<path d="M7.5 10.5H11.5" stroke="#6C707E" stroke-width="1.2"/>
+</svg>
+</span><span class="jd"><svg width="16" height="16" class="jb" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="#43454A" stroke="#CED0D6"/>
+<path d="M4 6L6 8L4 10" stroke="#CED0D6" stroke-width="1.2"/>
+<path d="M7.5 10.5H11.5" stroke="#CED0D6" stroke-width="1.2"/>
+</svg>
+</span></span></div></div></div><div class="cell-n">backup.sh</div><div class="cell-c">Yesterday</div><div class="cell-c">236 B</div></div><div class="cell pressed"><div class="tile txt"><div class="sheet" style=""><pre class="tx" style="-webkit-mask-image:linear-gradient(180deg,#000 62%,transparent 100%);mask-image:linear-gradient(180deg,#000 62%,transparent 100%);left:12.0px;right:12.0px;top:12.0px;height:93.33px">Packing list, Lapland
+- wool socks x4
+- headlamp + spare batteries
+- thermos
+- map of Pallas-Yllästunturi
+- power bank
+- sauna towel
+- reindeer jerky for Matti</pre><div class="ic16" style="right:12.0px;bottom:12.0px"><span class="ji"><span class="jl"><svg width="16" height="16" class="jb" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="2" y="12" width="8" height="1" rx="0.5" fill="#6C707E"/>
+<rect x="2" y="6" width="8" height="1" rx="0.5" fill="#6C707E"/>
+<rect x="2" y="9" width="12" height="1" rx="0.5" fill="#6C707E"/>
+<rect x="2" y="3" width="12" height="1" rx="0.5" fill="#6C707E"/>
+</svg>
+</span><span class="jd"><svg width="16" height="16" class="jb" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="2" y="12" width="8" height="1" rx="0.5" fill="#CED0D6"/>
+<rect x="2" y="6" width="8" height="1" rx="0.5" fill="#CED0D6"/>
+<rect x="2" y="9" width="12" height="1" rx="0.5" fill="#CED0D6"/>
+<rect x="2" y="3" width="12" height="1" rx="0.5" fill="#CED0D6"/>
+</svg>
+</span></span></div></div></div><div class="cell-n">packing-list.txt</div><div class="cell-c">Yesterday</div><div class="cell-c">198 B</div></div><div class="cell"><div class="tile txt"><div class="sheet" style=""><pre class="tx code" style="-webkit-mask-image:linear-gradient(180deg,#000 62%,transparent 100%);mask-image:linear-gradient(180deg,#000 62%,transparent 100%);left:12.0px;right:12.0px;top:12.0px;height:93.33px">use std::env;
+
+fn main() {
+    let args: Vec&lt;String&gt; =
+        env::args().collect();
+    let name = args.get(1)
+        .map_or(&quot;world&quot;, |s| s);
+    println!(&quot;Hei, {name}!&quot;);
+}</pre><div class="ic16" style="right:12.0px;bottom:12.0px"><span class="ji ji-rs"><svg width="16" height="16" class="jb" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+ <path d="m7.49947 1.88503a0.475558 0.475562 0 0 1 0.951117 0 0.475558 0.475562 0 0 1-0.951117 0m-5.67319 4.30577a0.475558 0.475562 0 0 1 0.951117 0 0.475558 0.475562 0 0 1-0.951117 0m11.3462 0.0221868a0.475559 0.475562 0 0 1 0.951117 0 0.475559 0.475562 0 0 1-0.951117 0m-9.96959 0.651526c0.218806-0.0971628 0.317651-0.353611 0.220489-0.572878l-0.211002-0.477092h0.829779v3.74023h-1.67409a5.85497 5.85502 0 0 1-0.189581-2.23505zm3.47106 0.091961v-1.10245h1.97598c0.102059 0 0.720682 0.117973 0.720682 0.580529 0 0.384061-0.474487 0.521772-0.864666 0.521772zm-2.69774 5.93581a0.475558 0.475562 0 0 1 0.951117 0 0.475558 0.475562 0 0 1-0.951117 0m7.04631 0.02219a0.475558 0.475562 0 0 1 0.951117 0 0.475558 0.475562 0 0 1-0.951117 0m0.147044-1.07844c-0.23426-0.05019-0.464695 0.09885-0.514882 0.333567l-0.238697 1.11393a5.85497 5.85502 0 0 1-4.88274-0.023412l-0.238544-1.11393c-0.0501877-0.234414-0.280622-0.383755-0.514729-0.333413l-0.983402 0.211157a5.85497 5.85502 0 0 1-0.508456-0.599349h4.78496c0.054166 0 0.090276-0.0097 0.090276-0.05906v-1.69262c0-0.049266-0.03611-0.05906-0.090276-0.05906h-1.39944v-1.07293h1.51359c0.138169 0 0.738737 0.039477 0.930766 0.80714 0.060134 0.236097 0.192182 1.00407 0.282458 1.24996 0.08997 0.275728 0.456279 0.826571 0.84661 0.826571h2.47052a5.85497 5.85502 0 0 1-0.542271 0.627657zm2.65704-4.46903a5.85497 5.85502 0 0 1 0.0124 1.01646h-0.600722c-0.06013 0-0.08431 0.039477-0.08431 0.098387v0.275881c0 0.649383-0.366156 0.790614-0.687021 0.826571-0.305563 0.034427-0.64433-0.127918-0.686102-0.314899-0.180251-1.01386-0.480612-1.23037-0.954946-1.60449 0.588634-0.373809 1.20114-0.925265 1.20114-1.6634 0-0.797041-0.546403-1.29907-0.918831-1.54527-0.522533-0.344431-1.10107-0.413439-1.25714-0.413439h-6.21271a5.85497 5.85502 0 0 1 3.27566-1.84869l0.732311 0.768275c0.165558 0.173363 0.439754 0.179789 0.612962 0.014077l0.819374-0.783729a5.85497 5.85502 0 0 1 4.00828 2.85475l-0.560938 1.26694c-0.09686 0.219267 2e-3 0.475715 0.220642 0.572878zm1.39898 0.020503-0.01913-0.195856 0.577771-0.538909c0.117518-0.109557 0.0736-0.330048-0.07666-0.38605l-0.738581-0.276187-0.057838-0.190654 0.460717-0.639898c0.09394-0.13006 0.0076-0.337698-0.150563-0.36371l-0.778827-0.126694-0.093642-0.174893 0.327291-0.718393c0.06702-0.14628-0.05753-0.333414-0.2185-0.327293l-0.790456 0.0275427-0.124857-0.151482 0.181625-0.769958c0.036722-0.156379-0.121949-0.315206-0.278328-0.278483l-0.769799 0.181473-0.151786-0.124858 0.02769-0.790462c0.0062-0.160051-0.181166-0.285062-0.327138-0.218655l-0.718232 0.327446-0.174891-0.093796-0.127-0.778986c-0.025702-0.157909-0.233491-0.244208-0.363551-0.150565l-0.640351 0.46072-0.190346-0.0576858-0.276185-0.738743c-0.0560021-0.150564-0.276644-0.193867-0.385894-0.0769652l-0.538905 0.578233-0.195854-0.0191265-0.41619-0.672489c-0.084156-0.136181-0.309541-0.136181-0.393392 0l-0.41619 0.672489-0.196007 0.0191265-0.539058-0.578233c-0.10925-0.116901-0.329892-0.073599-0.385894 0.0769652l-0.276185 0.738743-0.190499 0.0576858-0.640198-0.46072c-0.13006-0.0939497-0.338001-0.0073446-0.363707 0.150564l-0.126999 0.778986-0.174892 0.0937965-0.718234-0.327446c-0.145973-0.0667134-0.333258 0.0586036-0.327138 0.218655l0.027542 0.790462-0.151787 0.124858-0.769799-0.181473c-0.156377-0.0364168-0.315203 0.122104-0.27848 0.278482l0.181318 0.769958-0.124551 0.151482-0.790455-0.0275422c-0.159438-0.0045904-0.285059 0.181014-0.218653 0.327293l0.327444 0.718393-0.0937958 0.174893-0.778826 0.126694c-0.158213 0.0257061-0.2439 0.23365-0.150563 0.36371l0.460716 0.639898-0.0578382 0.190654-0.738737 0.276187c-0.149951 0.056002-0.193865 0.276493-0.0766585 0.38605l0.577923 0.538909-0.0191264 0.195856-0.672331 0.416194c-0.13618 0.084156-0.13618 0.309544 0 0.393395l0.672331 0.416194 0.0191265 0.195854-0.577923 0.539063c-0.117206 0.109251-0.0732923 0.329587 0.0766585 0.385896l0.738737 0.276187 0.057838 0.190654-0.460716 0.64005c-0.0936427 0.130366-0.007497 0.338157 0.150716 0.363557l0.778673 0.126694 0.093796 0.175199-0.327444 0.718087c-0.066712 0.145974 0.059216 0.33372 0.218653 0.327293l0.790149-0.02769 0.124857 0.151788-0.181318 0.770111c-0.036722 0.156073 0.122102 0.314594 0.27848 0.27787l0.769799-0.181319 0.151787 0.124551-0.027542 0.790615c-0.00612 0.160051 0.181165 0.285215 0.327138 0.218502l0.718234-0.327293 0.174892 0.0938 0.126999 0.778526c0.025705 0.15852 0.233648 0.244208 0.363707 0.15087l0.639892-0.461026 0.190652 0.05799 0.276185 0.738436c0.056002 0.149953 0.276644 0.194174 0.385894 0.07666l0.539058-0.577927 0.196007 0.01959 0.41619 0.672336c0.08385 0.135569 0.309235 0.135875 0.393391 0l0.41619-0.672336 0.195854-0.01959 0.538905 0.577927c0.109249 0.117515 0.329892 0.07329 0.385894-0.07666l0.276185-0.738436 0.190652-0.05799 0.640045 0.461026c0.13006 0.09334 0.337849 0.0074 0.363555-0.15087l0.126999-0.778526 0.174892-0.0938 0.718234 0.327293c0.145972 0.06671 0.332953-0.05815 0.327138-0.218502l-0.02754-0.790615 0.151633-0.124551 0.769799 0.181319c0.156377 0.03672 0.31505-0.121795 0.278328-0.27787l-0.181319-0.770111 0.124551-0.151788 0.790456 0.02769c0.159436 0.0064 0.285518-0.181319 0.2185-0.327293l-0.327291-0.718087 0.09365-0.175199 0.778827-0.126694c0.158518-0.0254 0.244511-0.233191 0.150563-0.363557l-0.460717-0.64005 0.05784-0.190654 0.738585-0.276187c0.150256-0.056309 0.19417-0.276646 0.07666-0.385896l-0.577771-0.539063 0.01913-0.195854 0.67233-0.416194c0.136181-0.083851 0.136334-0.309238 1.53e-4 -0.393395z" stroke-width="1.23349"/>
+</svg>
+</span></div></div></div><div class="cell-n">main.rs</div><div class="cell-c">26 Oct</div><div class="cell-c">204 B</div></div></div>
+<div class="row"><div class="cell"><div class="tile img"><span class="ph-img"></span></div><div class="cell-n">Saimaa.jpg</div><div class="cell-c">24 Oct</div><div class="cell-c">3.4 MB</div></div><div class="cell"><div class="tile txt"><div class="sheet" style=""><pre class="tx" style="-webkit-mask-image:linear-gradient(180deg,#000 62%,transparent 100%);mask-image:linear-gradient(180deg,#000 62%,transparent 100%);left:12.0px;right:12.0px;top:12.0px;height:93.33px"># This week
+- [x] Renew bus card
+- [ ] Book ferry to Utö
+- [ ] Return library books
+- [ ] Call grandma Sunday
+- [ ] Fix bike light</pre><div class="ic16" style="right:12.0px;bottom:12.0px"><span class="ji"><span class="jl"><svg width="16" height="16" class="jb" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M12.5929 9.9438L12.5929 4.70001L13.7929 4.70002L13.7929 9.94379L15.0763 8.66037L15.9248 9.5089L13.1929 12.2409L10.4609 9.5089L11.3095 8.66037L12.5929 9.9438Z" fill="#3574F0"/>
+<path d="M0.5 4.70001H2.94558L4.65385 9.14463L4.76288 9.60155L4.85635 9.14463L6.51269 4.70001H8.98423V11.9692H7.14096V7.59732L7.17212 7.12482L5.34442 11.9692H4.08269L2.31212 7.17155L2.34327 7.59732V11.9692H0.5V4.70001Z" fill="#3574F0"/>
+</svg>
+</span><span class="jd"><svg width="16" height="16" class="jb" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M12.5929 9.9438L12.5929 4.70001L13.7929 4.70002L13.7929 9.94379L15.0763 8.66037L15.9248 9.5089L13.1929 12.2409L10.4609 9.5089L11.3095 8.66037L12.5929 9.9438Z" fill="#548AF7"/>
+<path d="M0.5 4.70001H2.94558L4.65385 9.14463L4.76288 9.60155L4.85635 9.14463L6.51269 4.70001H8.98423V11.9692H7.14096V7.59732L7.17212 7.12482L5.34442 11.9692H4.08269L2.31212 7.17155L2.34327 7.59732V11.9692H0.5V4.70001Z" fill="#548AF7"/>
+</svg>
+</span></span></div></div></div><div class="cell-n">todo.md</div><div class="cell-c">22 Oct</div><div class="cell-c">131 B</div></div><div class="cell"><div class="tile txt"><div class="sheet" style=""><pre class="tx code" style="-webkit-mask-image:linear-gradient(180deg,#000 62%,transparent 100%);mask-image:linear-gradient(180deg,#000 62%,transparent 100%);left:12.0px;right:12.0px;top:12.0px;height:93.33px">[sync]
+interval = &quot;1h&quot;
+folders = [
+  &quot;Documents&quot;,
+  &quot;Pictures/Camera&quot;,
+]
+keep_versions = 5
+wifi_only = true</pre><div class="ic16" style="right:12.0px;bottom:12.0px"><span class="ji"><span class="jl"><svg width="16" height="16" class="jb" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="2.5" y="2.5" width="11" height="11" rx="1.5" fill="#F5F8FE" stroke="#3574F0"/>
+<path d="M5.21826 4.5H10.7783V5.645H8.61826V11.5H7.38826V5.645H5.21826V4.5Z" fill="#3574F0"/>
+</svg>
+</span><span class="jd"><svg width="16" height="16" class="jb" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="2.5" y="2.5" width="11" height="11" rx="1.5" fill="#25324D" stroke="#548AF7"/>
+<path d="M5.21826 4.5H10.7783V5.645H8.61826V11.5H7.38826V5.645H5.21826V4.5Z" fill="#548AF7"/>
+</svg>
+</span></span></div></div></div><div class="cell-n">config.toml</div><div class="cell-c">20 Oct</div><div class="cell-c">117 B</div></div></div>
+<div class="row"><div class="cell"><div class="tile"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document" width="56" height="56" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="18" height="22" rx="1.5" fill="currentColor" fill-opacity="0.5" stroke="none"/><path d="M9 7.75h10M9 11.75h10M9 15.75h10M9 19.75h6" stroke-width="1.5"/></svg></div><div class="cell-n">empty.txt</div><div class="cell-c">19 Oct</div><div class="cell-c">0 B</div></div><div class="cell"><div class="tile txt"><div class="sheet" style=""><pre class="tx" style="-webkit-mask-image:linear-gradient(180deg,#000 62%,transparent 100%);mask-image:linear-gradient(180deg,#000 62%,transparent 100%);left:12.0px;right:12.0px;top:12.0px;height:93.33px"># Team sync 28 Oct
+**Present:** Aino, Jussi, Leena
+
+## Decisions
+- Ship 0.2 after the ferry trip
+- Grid stays default for photos
+
+## Next
+- Jussi: release notes
+- Leena: icons for SD card</pre><div class="ic16" style="right:12.0px;bottom:12.0px"><span class="ji"><span class="jl"><svg width="16" height="16" class="jb" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M12.5929 9.9438L12.5929 4.70001L13.7929 4.70002L13.7929 9.94379L15.0763 8.66037L15.9248 9.5089L13.1929 12.2409L10.4609 9.5089L11.3095 8.66037L12.5929 9.9438Z" fill="#3574F0"/>
+<path d="M0.5 4.70001H2.94558L4.65385 9.14463L4.76288 9.60155L4.85635 9.14463L6.51269 4.70001H8.98423V11.9692H7.14096V7.59732L7.17212 7.12482L5.34442 11.9692H4.08269L2.31212 7.17155L2.34327 7.59732V11.9692H0.5V4.70001Z" fill="#3574F0"/>
+</svg>
+</span><span class="jd"><svg width="16" height="16" class="jb" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M12.5929 9.9438L12.5929 4.70001L13.7929 4.70002L13.7929 9.94379L15.0763 8.66037L15.9248 9.5089L13.1929 12.2409L10.4609 9.5089L11.3095 8.66037L12.5929 9.9438Z" fill="#548AF7"/>
+<path d="M0.5 4.70001H2.94558L4.65385 9.14463L4.76288 9.60155L4.85635 9.14463L6.51269 4.70001H8.98423V11.9692H7.14096V7.59732L7.17212 7.12482L5.34442 11.9692H4.08269L2.31212 7.17155L2.34327 7.59732V11.9692H0.5V4.70001Z" fill="#548AF7"/>
+</svg>
+</span></span></div></div></div><div class="cell-n">team-sync.md</div><div class="cell-c">18 Oct</div><div class="cell-c">322 B</div></div><div class="cell"><div class="tile txt"><div class="sheet" style=""><pre class="tx" style="-webkit-mask-image:linear-gradient(180deg,#000 62%,transparent 100%);mask-image:linear-gradient(180deg,#000 62%,transparent 100%);left:12.0px;right:12.0px;top:12.0px;height:93.33px">Karelian pies (16)
+Filling: 2 dl rice, 5 dl water, 5 dl milk, salt. Simmer 40 min.
+Crust: 1 dl water, 2 dl rye flour, 1/2 tsp salt. Roll thin, fill, pinch the edges. Bake at 275 °C for 12–15 min.
+Brush with butter and milk.</pre><div class="ic16" style="right:12.0px;bottom:12.0px"><span class="ji"><span class="jl"><svg width="16" height="16" class="jb" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="2" y="12" width="8" height="1" rx="0.5" fill="#6C707E"/>
+<rect x="2" y="6" width="8" height="1" rx="0.5" fill="#6C707E"/>
+<rect x="2" y="9" width="12" height="1" rx="0.5" fill="#6C707E"/>
+<rect x="2" y="3" width="12" height="1" rx="0.5" fill="#6C707E"/>
+</svg>
+</span><span class="jd"><svg width="16" height="16" class="jb" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="2" y="12" width="8" height="1" rx="0.5" fill="#CED0D6"/>
+<rect x="2" y="6" width="8" height="1" rx="0.5" fill="#CED0D6"/>
+<rect x="2" y="9" width="12" height="1" rx="0.5" fill="#CED0D6"/>
+<rect x="2" y="3" width="12" height="1" rx="0.5" fill="#CED0D6"/>
+</svg>
+</span></span></div></div></div><div class="cell-n">recipe.txt</div><div class="cell-c">12 Oct</div><div class="cell-c">264 B</div></div></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":400,"height":860}}'>
+class Component extends DCLogic {
+renderVals() {
+return { amb: (this.props.ambience ?? 'dark') === 'light' ? 'light' : 'dark' };
+}
+}
+</script>
+</body>
+</html>
