@@ -50,26 +50,50 @@
       "x": 2880,
       "y": 8200
     },
-    "BreadcrumbsMenu.dc.html": {
+    "BreadcrumbsBottom.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Breadcrumbs B \u00b7 path menu, parent first",
+      "title": "Crumbs 5 \u00b7 at the bottom",
+      "w": 400,
+      "x": 3840,
+      "y": 15900
+    },
+    "BreadcrumbsEdit.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Crumbs 4 \u00b7 edit path",
+      "w": 400,
+      "x": 3360,
+      "y": 15900
+    },
+    "BreadcrumbsFolded.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Crumbs 3 \u00b7 folded strip",
       "w": 400,
       "x": 960,
       "y": 15900
     },
-    "BreadcrumbsSide.dc.html": {
+    "BreadcrumbsHeader.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Breadcrumbs D \u00b7 path page",
+      "title": "Crumbs 2 \u00b7 in the header",
       "w": 400,
-      "x": 2400,
+      "x": 480,
       "y": 15900
     },
-    "BreadcrumbsSideDir.dc.html": {
+    "BreadcrumbsPane.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Breadcrumbs D \u00b7 folder, path page attached",
+      "title": "Crumbs 4 \u00b7 pane: whole path, actions",
+      "w": 400,
+      "x": 2880,
+      "y": 15900
+    },
+    "BreadcrumbsSlim.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Crumbs 4 \u00b7 slim while scrolling",
       "w": 400,
       "x": 1920,
       "y": 15900
@@ -77,25 +101,25 @@
     "BreadcrumbsStrip.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Breadcrumbs C \u00b7 crumb strip",
-      "w": 400,
-      "x": 1440,
-      "y": 15900
-    },
-    "BreadcrumbsToday.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Breadcrumbs \u00b7 today, 8 deep",
+      "title": "Crumbs 1 \u00b7 flicking strip",
       "w": 400,
       "x": 0,
       "y": 15900
     },
-    "BreadcrumbsTrail.dc.html": {
+    "BreadcrumbsUnfolded.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Breadcrumbs A \u00b7 way here in the header",
+      "title": "Crumbs 3 \u00b7 unfolded",
       "w": 400,
-      "x": 480,
+      "x": 1440,
+      "y": 15900
+    },
+    "BreadcrumbsWhole.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Crumbs 4 \u00b7 whole at rest",
+      "w": 400,
+      "x": 2400,
       "y": 15900
     },
     "BrowsePulley.dc.html": {
@@ -663,7 +687,7 @@
     "r10": {
       "kind": "title1",
       "maxW": 5200,
-      "text": "Breadcrumbs for deep folders (options)",
+      "text": "Breadcrumbs for deep folders (crumb strip variants)",
       "w": 240,
       "x": 0,
       "y": 15600
@@ -735,12 +759,15 @@
     "ActivityBar.dc.html",
     "ActivityBarQuestion.dc.html",
     "ActivityBarDone.dc.html",
-    "BreadcrumbsToday.dc.html",
-    "BreadcrumbsTrail.dc.html",
-    "BreadcrumbsMenu.dc.html",
     "BreadcrumbsStrip.dc.html",
-    "BreadcrumbsSideDir.dc.html",
-    "BreadcrumbsSide.dc.html"
+    "BreadcrumbsHeader.dc.html",
+    "BreadcrumbsFolded.dc.html",
+    "BreadcrumbsUnfolded.dc.html",
+    "BreadcrumbsSlim.dc.html",
+    "BreadcrumbsWhole.dc.html",
+    "BreadcrumbsPane.dc.html",
+    "BreadcrumbsEdit.dc.html",
+    "BreadcrumbsBottom.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"
