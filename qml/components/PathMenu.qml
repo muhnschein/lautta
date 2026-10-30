@@ -10,6 +10,8 @@ Item {
     property string currentUri
     property bool open
     property bool editing
+    // Share dialog: ends in Locations (navigate("")), offers only path editing.
+    property bool picking
     property real maxHeight: -1
 
     signal navigate(string uri)
@@ -84,9 +86,34 @@ Item {
                 }
             }
 
+            BackgroundItem {
+                visible: menu.picking
+                width: content.width
+                height: Theme.itemSizeExtraSmall
+                onClicked: {
+                    menu.close()
+                    menu.navigate("")
+                }
+
+                Label {
+                    anchors {
+                        left: parent.left
+                        right: parent.right
+                        margins: Theme.horizontalPageMargin
+                        verticalCenter: parent.verticalCenter
+                    }
+                    horizontalAlignment: Text.AlignHCenter
+                    //% "Locations"
+                    text: qsTrId("lautta-dir-path-locations")
+                    color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
+                }
+            }
+
             IconRow {
                 menu: null
-                actions: [
+                actions: menu.picking ? [
+                    { "id": "edit", "icon": "image://theme/icon-m-edit", "text": qsTrId("lautta-dir-path-edit") }
+                ] : [
                     //% "Copy address"
                     { "id": "copy", "icon": "image://theme/icon-m-link", "text": qsTrId("lautta-dir-path-copy-address") },
                     //% "Edit path"

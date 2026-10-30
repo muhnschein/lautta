@@ -45,9 +45,9 @@ Item {
              "the menu's order, then More actions, then leaving")
         same(ids(Selection.panelButtons(1, true)), ["share", "copy", "cut", "delete", "more", "done"],
              "one item: the same buttons, no push-up menu")
-        same(ids(Selection.panelButtons(3, false)), ["share", "copy", "more", "done"], "read-only folder")
+        same(ids(Selection.panelButtons(3, false)), ["share", "copy", "done"], "read-only folder")
         same(ids(Selection.panelButtons(1, false)), ["share", "copy", "more", "done"],
-             "read-only folder, one item: Add to favourites and Compress stay")
+             "read-only folder, one item: Add to favourites stays")
         same(ids(Selection.panelButtons(0, true)), ["done"], "waiting for the first item")
         var buttons = Selection.panelButtons(1, true)
         same(buttons.map(function (b) { return b.icon }),
@@ -64,12 +64,12 @@ Item {
              "one item: Rename, then its own More actions page")
         same(ids(Selection.moreRows(1, { "isDir": true, "writable": true })),
              ["rename", "favourite", "compress", "moveToNewFolder"], "one folder")
-        same(ids(Selection.moreRows(1, { "isDir": false, "writable": false })), ["favourite", "compress"],
-             "no Rename in a read-only folder")
+        same(ids(Selection.moreRows(1, { "isDir": false, "writable": false })), ["favourite"],
+             "no Rename or Compress in a read-only folder")
         same(ids(Selection.moreRows(2, file)), ["compress", "moveToNewFolder"],
              "several items: only what works on several")
-        same(ids(Selection.moreRows(5, { "isDir": false, "writable": false })), ["compress"],
-             "several, read-only: no Move to new folder")
+        same(ids(Selection.moreRows(5, { "isDir": false, "writable": false })), [],
+             "several, read-only: nothing, the archive would land there")
         same(Selection.moreRows(0, file), [], "nothing selected")
         same(Selection.moreRows(1, file).map(function (r) { return r.icon }),
              ["image://theme/icon-m-edit", "image://theme/icon-m-favorite", "file-archive", "file-folder"], "icons")

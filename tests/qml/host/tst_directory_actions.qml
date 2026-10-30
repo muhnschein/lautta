@@ -36,7 +36,7 @@ Item {
             var menu = ids(Actions.menu(ctxs[i]))
             check(menu[menu.length - 1] === "more", "More actions is the last row: " + JSON.stringify(ctxs[i]))
             same(ids(Actions.more(ctxs[i])),
-                 ctxs[i].writable ? ["favourite", "compress", "moveToNewFolder"] : ["favourite", "compress"],
+                 ctxs[i].writable ? ["favourite", "compress", "moveToNewFolder"] : ["favourite"],
                  "More actions: " + JSON.stringify(ctxs[i]))
         }
         same(ids(Actions.more({ "isDir": false })), ["favourite", "compress"], "More actions of the image viewer")
@@ -47,7 +47,7 @@ Item {
         same(Actions.more({ "isDir": false, "writable": true }).map(function(r) { return r.icon }),
              [favourite, "file-archive", "file-folder"], "More actions icons, writable folder")
         same(Actions.more({ "isDir": true, "writable": false }).map(function(r) { return r.icon }),
-             [favourite, "file-archive"], "More actions icons, read-only folder")
+             [favourite], "More actions icons, read-only folder")
         same(Actions.icon("moveToNewFolder"), "file-folder", "Move to new folder: the folder glyph")
         same(Actions.icon("favourite"), "image://theme/icon-m-favorite", "Add to favourites")
         same(Actions.icon("rename"), "image://theme/icon-m-edit", "Rename, a row for the selection's one item")

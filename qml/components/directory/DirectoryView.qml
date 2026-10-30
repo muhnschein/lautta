@@ -11,12 +11,18 @@ import "../ErrorText.js" as ErrorText
 import "DirFormat.js" as DirFormat
 import "GridRows.js" as GridRows
 import "Selection.js" as Selection
+import "../operations/Compress.js" as Compress
 
 Item {
     id: view
 
     property string uri
     property bool selectionMode
+    // Share dialog body: folders open, files dimmed, no item actions; pulley offers New folder.
+    property bool picking
+    property string pickAcceptText
+    property string pickNote
+    property bool pickNoteWarns
     property bool selectionWaiting
     property bool detailsShown
     property alias model: dir
@@ -280,8 +286,7 @@ Item {
         case "delete": remove(uris, listItem); break
         case "more": moreActions(info); break
         case "moveToNewFolder": newFolder(uris); break
-        // CompressDialog takes the list itself, not its JSON text.
-        case "compress": openDialog("../../dialogs/CompressDialog.qml", { "uris": uris }); break
+        case "compress": Compress.start(App, Operations, uris, info.isDir === true); break
         case "favourite":
             openDialog("../../pages/FavouritePage.qml", { "uri": uris[0], "isDir": info.isDir !== false })
             break
@@ -348,6 +353,9 @@ Item {
                    //% "You don't have permission to open this folder."
                    : qsTrId("lautta-dir-noaccess-permission")
         case "empty":
+            if (picking && dir.writable)
+                //% "You can use this folder or pull down to make one"
+                return qsTrId("lautta-dir-picker-empty-hint")
             return dir.writable
                    //% "Pull down to create a folder or paste"
                    ? qsTrId("lautta-dir-empty-hint")
@@ -491,9 +499,9 @@ Item {
             }
 
             contentHeight: Theme.itemSizeMedium
-            menu: view.selecting || model.inaccessible ? null : contextMenu
-            enabled: !model.inaccessible
-            opacity: model.inaccessible ? Theme.opacityLow : 1
+            menu: view.selecting || view.picking || model.inaccessible ? null : contextMenu
+            enabled: !model.inaccessible && (model.isDir || !view.picking)
+            opacity: enabled ? 1 : Theme.opacityLow
             onClicked: {
                 if (view.selecting)
                     dir.toggle(model.uri)
@@ -634,6 +642,8 @@ Item {
 
             x: (index % grid.columns) * width
             width: grid.cellWidth
+            enabled: model.isDir || !view.picking
+            opacity: enabled ? 1 : Theme.opacityLow
             height: parent ? parent.height : implicitHeight
             implicitHeight: gridMetrics.cellHeight(width, caption.implicitHeight)
             onCountKeyChanged: cell.countItems()
@@ -652,7 +662,7 @@ Item {
                 else
                     view.openItem(model.uri, model.isDir, model.mimeType)
             }
-            onPressAndHold: dragSelect.begin(cell, index, mouse.x, mouse.y)
+            onPressAndHold: if (!view.picking) dragSelect.begin(cell, index, mouse.x, mouse.y)
             onPositionChanged: if (dragSelect.holder === cell) dragSelect.move(mouse.x, mouse.y)
             onReleased: cell.letGo()
             onCanceled: cell.letGo()
@@ -835,11 +845,28 @@ Item {
                 id: headerBar
 
                 width: parent.width
-                height: pageHeader.height
+                height: view.picking ? pickHeader.height : pageHeader.height
+
+                Loader {
+                    id: pickHeader
+
+                    width: parent.width
+                    active: view.picking
+                    sourceComponent: PickHeader {
+                        acceptText: view.pickAcceptText
+                        title: dir.title
+                        subtitle: Operations.displayPath(App.parentUri(view.uri))
+                        note: view.pickNote
+                        noteWarns: view.pickNoteWarns
+                        tappable: true
+                        onTapped: pathMenu.open = !pathMenu.open
+                    }
+                }
 
                 PageHeader {
                     id: pageHeader
 
+                    visible: !view.picking
                     objectName: "folderPageHeader"
                     title: view.selecting
                            //% "%n selected"
@@ -848,7 +875,7 @@ Item {
                 }
                 MouseArea {
                     anchors.fill: parent
-                    enabled: !view.selecting
+                    enabled: !view.selecting && !view.picking
                     onClicked: pathMenu.open = !pathMenu.open
                 }
             }
@@ -868,6 +895,7 @@ Item {
                 maxHeight: Math.max(0, view.height - y - Theme.itemSizeLarge)
                 pathModel: path
                 currentUri: view.uri
+                picking: view.picking
                 onNavigate: view.openFolder(uri)
                 onFavouriteRequested: view.runAction("favourite", [view.uri], {}, null)
             }
@@ -985,7 +1013,7 @@ Item {
         id: panelSpace
 
         width: 1
-        height: (view.selecting || App.clipboardCount > 0 ? Theme.itemSizeLarge : 0) + activityBar.space
+        height: (view.selecting || clipboardPanel.open ? Theme.itemSizeLarge : 0) + activityBar.space
     }
 
     // States sit in content of list or grid, as Silica's ViewPlaceholder: pulley moves them with
@@ -1045,7 +1073,7 @@ Item {
     ActivityBar {
         id: activityBar
 
-        allowed: !view.selecting
+        allowed: !view.selecting && !view.picking
         anchors.bottomMargin: clipboardPanel.visibleSize
     }
 }

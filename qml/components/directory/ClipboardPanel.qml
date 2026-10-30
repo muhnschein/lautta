@@ -25,7 +25,7 @@ DockedPanel {
     dock: Dock.Bottom
     width: parent ? parent.width : 0
     height: Theme.itemSizeLarge
-    open: owner ? App.clipboardCount > 0 && !owner.selecting : false
+    open: owner ? App.clipboardCount > 0 && !owner.selecting && !owner.picking : false
     background: BarBackground { }
 
     Row {

@@ -108,20 +108,179 @@ async fn compress_local_then_extract_round_trip() {
         .collect();
     assert!(parts.is_empty(), "no partial files stay");
 
-    let info = h.core.archive_info(&zip).await.unwrap();
-    assert_eq!((info.files, info.dirs, info.bytes), (2, 2, 9));
-    assert_eq!(info.folder_name, "bundle");
-
-    let into = uri("lautta://user-documents/bundle");
-    let started = h.core.extract(&zip, &into).await.unwrap();
+    let moved = h.root.join("Documents/bundle.zip");
+    std::fs::rename(h.root.join("Downloads/bundle.zip"), &moved).unwrap();
+    let (into, started) = h
+        .core
+        .extract_here(&uri("lautta://user-documents/bundle.zip"))
+        .await
+        .unwrap();
+    assert_eq!(
+        into,
+        uri("lautta://user-documents/src%202"),
+        "one top folder lands as itself"
+    );
     finish(&h, started).await;
     assert_eq!(
-        std::fs::read(h.root.join("Documents/bundle/src/a.txt")).unwrap(),
+        std::fs::read(h.root.join("Documents/src 2/a.txt")).unwrap(),
         b"alpha"
     );
     assert_eq!(
-        std::fs::read(h.root.join("Documents/bundle/src/sub/b.txt")).unwrap(),
+        std::fs::read(h.root.join("Documents/src 2/sub/b.txt")).unwrap(),
         b"beta"
+    );
+}
+
+async fn pack(h: &Home, sources: &[&str], dest: &str, name: &str, kind: ArchiveKind) -> Uri {
+    let sources: Vec<Uri> = sources.iter().map(|s| uri(s)).collect();
+    h.core
+        .compress_to(
+            &sources,
+            &uri(dest),
+            name,
+            kind,
+            no_progress(),
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await
+        .unwrap()
+}
+
+async fn extract_here(h: &Home, archive: &Uri) -> Uri {
+    let (into, started) = h.core.extract_here(archive).await.unwrap();
+    finish(h, started).await;
+    into
+}
+
+#[tokio::test]
+async fn extract_here_puts_several_items_in_a_folder_named_after_the_archive() {
+    let h = home().await;
+    write(&h.root.join("Documents/a.txt"), b"alpha");
+    write(&h.root.join("Documents/b/c.txt"), b"gamma");
+    let archive = pack(
+        &h,
+        &["lautta://user-documents/a.txt", "lautta://user-documents/b"],
+        "lautta://user-downloads/",
+        "dataset",
+        ArchiveKind::TarGz,
+    )
+    .await;
+    assert_eq!(archive, uri("lautta://user-downloads/dataset.tar.gz"));
+
+    let into = extract_here(&h, &archive).await;
+    assert_eq!(into, uri("lautta://user-downloads/dataset"));
+    assert_eq!(
+        std::fs::read(h.root.join("Downloads/dataset/a.txt")).unwrap(),
+        b"alpha"
+    );
+    assert_eq!(
+        std::fs::read(h.root.join("Downloads/dataset/b/c.txt")).unwrap(),
+        b"gamma"
+    );
+
+    let again = extract_here(&h, &archive).await;
+    assert_eq!(
+        again,
+        uri("lautta://user-downloads/dataset%202"),
+        "a taken name gets a number"
+    );
+    assert_eq!(
+        std::fs::read(h.root.join("Downloads/dataset 2/a.txt")).unwrap(),
+        b"alpha"
+    );
+}
+
+#[tokio::test]
+async fn extract_here_does_not_double_a_single_top_folder() {
+    let h = home().await;
+    write(&h.root.join("Documents/dataset/x.txt"), b"x");
+    let archive = pack(
+        &h,
+        &["lautta://user-documents/dataset"],
+        "lautta://user-downloads/",
+        "release",
+        ArchiveKind::Zip,
+    )
+    .await;
+    let into = extract_here(&h, &archive).await;
+    assert_eq!(
+        into,
+        uri("lautta://user-downloads/dataset"),
+        "top folder keeps its own name"
+    );
+    assert_eq!(
+        std::fs::read(h.root.join("Downloads/dataset/x.txt")).unwrap(),
+        b"x"
+    );
+    assert!(!h.root.join("Downloads/release").exists());
+    assert!(!h.root.join("Downloads/dataset/dataset").exists());
+}
+
+#[tokio::test]
+async fn extract_here_wraps_a_single_file_and_an_empty_top_folder() {
+    let h = home().await;
+    write(&h.root.join("Documents/one.txt"), b"1");
+    std::fs::create_dir_all(h.root.join("Documents/hollow")).unwrap();
+    let file = pack(
+        &h,
+        &["lautta://user-documents/one.txt"],
+        "lautta://user-downloads/",
+        "single",
+        ArchiveKind::Zip,
+    )
+    .await;
+    assert_eq!(
+        extract_here(&h, &file).await,
+        uri("lautta://user-downloads/single")
+    );
+    assert_eq!(
+        std::fs::read(h.root.join("Downloads/single/one.txt")).unwrap(),
+        b"1"
+    );
+
+    let empty = pack(
+        &h,
+        &["lautta://user-documents/hollow"],
+        "lautta://user-downloads/",
+        "shell",
+        ArchiveKind::Zip,
+    )
+    .await;
+    assert_eq!(
+        extract_here(&h, &empty).await,
+        uri("lautta://user-downloads/shell")
+    );
+    assert!(h.root.join("Downloads/shell/hollow").is_dir());
+}
+
+#[tokio::test]
+async fn extract_here_refuses_a_read_only_folder() {
+    let h = home().await;
+    write(&h.root.join("Documents/pack/f.txt"), b"f");
+    pack(
+        &h,
+        &["lautta://user-documents/pack/f.txt"],
+        "lautta://user-documents/pack/",
+        "inner",
+        ArchiveKind::Zip,
+    )
+    .await;
+    let outer = pack(
+        &h,
+        &["lautta://user-documents/pack"],
+        "lautta://user-documents/",
+        "outer",
+        ArchiveKind::Zip,
+    )
+    .await;
+    let location = h.core.open_archive(&outer).await.unwrap();
+    let inner = Uri::parse(&format!("lautta://{location}/pack/inner.zip")).unwrap();
+    let err = h.core.extract_here(&inner).await.unwrap_err();
+    assert_eq!(err.kind, ErrorKind::ReadOnlyFilesystem);
+    let root = Uri::parse(&format!("lautta://{location}/")).unwrap();
+    assert!(
+        h.core.extract_here(&root).await.is_err(),
+        "an archive root has no folder"
     );
 }
 
@@ -602,10 +761,8 @@ async fn empty_archives_are_refused_and_display_paths() {
     write(&h.root.join("Documents/not-an-archive.zip"), b"junk");
     let err = h
         .core
-        .extract(
-            &uri("lautta://user-documents/not-an-archive.zip"),
-            &uri("lautta://user-documents/out"),
-        )
+        .extract_here(&uri("lautta://user-documents/not-an-archive.zip"))
         .await;
     assert!(err.is_err());
+    assert!(!h.root.join("Documents/not-an-archive").exists());
 }

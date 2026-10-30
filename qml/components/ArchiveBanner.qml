@@ -12,9 +12,7 @@ BackgroundItem {
     width: parent ? parent.width : Screen.width
     height: inArchive ? Math.max(Theme.itemSizeSmall, content.height + Theme.paddingLarge) : 0
     visible: inArchive
-    onClicked: pageStack.push(Qt.resolvedUrl("../dialogs/ExtractDialog.qml"), {
-        "archiveUri": Operations.archiveSource(uri)
-    })
+    onClicked: Operations.extractHere(Operations.archiveSource(uri))
 
     Row {
         id: content

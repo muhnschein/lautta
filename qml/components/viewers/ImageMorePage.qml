@@ -4,6 +4,7 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../directory/ContextActions.js" as Actions
+import "../operations/Compress.js" as Compress
 
 Page {
     id: page
@@ -23,7 +24,8 @@ Page {
             pageStack.replace(Qt.resolvedUrl("../../pages/FavouritePage.qml"), { "uri": page.uri, "isDir": false })
             break
         case "compress":
-            pageStack.replace(Qt.resolvedUrl("../../dialogs/CompressDialog.qml"), { "uris": [page.uri] })
+            Compress.start(App, Operations, [page.uri], false)
+            pageStack.pop()
             break
         }
     }

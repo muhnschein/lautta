@@ -1,23 +1,31 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import Nemo.Configuration 1.0
 import Lautta 1.0
-import "../components/operations"
+import "../components"
+import "../components/directory"
+import "../components/ErrorText.js" as ErrorText
+import "../components/FileIcons.js" as FileIcons
+import "../components/operations/Json.js" as Json
+import "../components/operations/Share.js" as Share
 
+// Folder view inside the dialog, changed in place: a back swipe cancels a dialog. Empty
+// `destUri` = Locations.
 Dialog {
     id: page
 
     property var resources: []
-    property string destUri
-    property string customUri
     property var entries: []
-    property var destinations: []
-
-    readonly property int readableCount: countReadable(true)
-    readonly property int skippedCount: countReadable(false)
-
-    allowedOrientations: Orientation.All
-    canAccept: readableCount > 0 && destUri.length > 0
+    property string destUri
+    readonly property var recent: Share.usable(Json.value(recentStore.value, []),
+                                               function (uri) { return App.locationName(uri).length > 0 })
+    readonly property var skippedNames: entries.filter(function (e) { return !e.readable })
+                                               .map(function (e) { return e.name })
+    readonly property int readableCount: entries.length - skippedNames.length
+    readonly property string note: Share.note(readableCount, skippedNames)
+    //% "Save here"
+    readonly property string acceptText: qsTrId("lautta-share-accept")
 
     function pathOf(resource) {
         if (typeof resource === "string")
@@ -25,189 +33,170 @@ Dialog {
         return resource.filePath || resource.url || ""
     }
 
-    function countReadable(readable) {
-        var n = 0
-        for (var i = 0; i < entries.length; ++i)
-            if (entries[i].readable === readable)
-                ++n
-        return n
+    function load() {
+        var paths = resources.map(pathOf)
+        var probed = JSON.parse(Operations.probeShared(JSON.stringify(paths)))
+        for (var i = 0; i < probed.length; ++i)
+            if (paths[i].length === 0)
+                probed[i].readable = false
+        entries = probed
+        destUri = recent.length > 0 ? recent[0] : downloads()
     }
 
-    function load() {
-        var paths = []
-        for (var i = 0; i < resources.length; ++i)
-            paths.push(pathOf(resources[i]))
-        var probed = JSON.parse(Operations.probeShared(JSON.stringify(paths)))
-        var list = []
-        for (var j = 0; j < probed.length; ++j) {
-            var file = probed[j]
-            if (paths[j].length === 0)
-                file.readable = false
-            list.push(file)
-        }
-        entries = list
-        destinations = JSON.parse(Operations.destinationsJson())
-        for (var k = 0; k < destinations.length; ++k) {
-            if (destinations[k].uri.indexOf("user-downloads") >= 0)
-                destUri = destinations[k].uri
-        }
-        if (destUri.length === 0 && destinations.length > 0)
-            destUri = destinations[0].uri
+    function downloads() {
+        var all = JSON.parse(Operations.destinationsJson())
+        for (var i = 0; i < all.length; ++i)
+            if (all[i].uri.indexOf("user-downloads") >= 0)
+                return all[i].uri
+        return all.length > 0 ? all[0].uri : ""
     }
+
+    allowedOrientations: Orientation.All
+    canAccept: readableCount > 0 && destUri.length > 0 && folder.model.writable && !folder.model.loading
+               && folder.model.errorKind === ""
 
     onAccepted: {
-        var uris = []
-        for (var i = 0; i < entries.length; ++i)
-            if (entries[i].readable)
-                uris.push(entries[i].uri)
+        var uris = entries.filter(function (e) { return e.readable }).map(function (e) { return e.uri })
+        recentStore.value = JSON.stringify(Share.remember(recent, destUri))
         Operations.copyTo(JSON.stringify(uris), destUri)
     }
 
     Component.onCompleted: load()
 
-    SilicaListView {
-        id: list
+    ConfigurationValue {
+        id: recentStore
+        key: "/apps/harbour-lautta/share/recent"
+        defaultValue: "[]"
+    }
 
+    DirectoryView {
+        id: folder
+
+        objectName: "shareFolder"
         anchors.fill: parent
-        model: page.entries
-        currentIndex: -1
+        visible: page.destUri.length > 0
+        uri: page.destUri
+        picking: true
+        pickAcceptText: page.acceptText
+        pickNote: page.note
+        pickNoteWarns: page.skippedNames.length > 0
+        onOpenFolder: page.destUri = uri
+    }
+
+    SilicaListView {
+        id: locations
+
+        objectName: "shareLocations"
+        anchors.fill: parent
+        visible: page.destUri.length === 0
+        model: visible ? roots : null
+
+        PickerRootsModel {
+            id: roots
+        }
 
         header: Column {
-            width: list.width
+            width: locations.width
 
-            DialogHeader {
-                //% "Save here"
-                acceptText: qsTrId("lautta-share-accept")
+            PickHeader {
+                acceptText: page.acceptText
+                //% "Locations"
+                title: qsTrId("lautta-share-locations")
+                note: page.note
+                noteWarns: page.skippedNames.length > 0
             }
-            DialogSubtitle {
-                //% "Save %n files"
-                text: qsTrId("lautta-share-count", page.entries.length)
-            }
-        }
-
-        delegate: Item {
-            width: list.width
-            height: Theme.itemSizeMedium
-
-            OpIcon {
-                id: glyph
-                x: Theme.horizontalPageMargin
-                anchors.verticalCenter: parent.verticalCenter
-                category: App.categoryOf(modelData.name)
-                opacity: modelData.readable ? 1.0 : Theme.opacityLow
-            }
-            Column {
-                anchors {
-                    left: glyph.right
-                    leftMargin: Theme.paddingMedium
-                    right: sizeLabel.left
-                    rightMargin: Theme.paddingMedium
-                    verticalCenter: parent.verticalCenter
-                }
-                Label {
-                    width: parent.width
-                    text: modelData.name
-                    color: modelData.readable ? Theme.primaryColor : Theme.secondaryColor
-                    truncationMode: TruncationMode.Fade
-                }
-                Label {
-                    width: parent.width
-                    visible: !modelData.readable
-                    color: Theme.errorColor
-                    font.pixelSize: Theme.fontSizeExtraSmall
-                    truncationMode: TruncationMode.Fade
-                    //% "This file can't be read by Lautta"
-                    text: qsTrId("lautta-share-unreadable")
-                }
-            }
-            Label {
-                id: sizeLabel
-                anchors {
-                    right: parent.right
-                    rightMargin: Theme.horizontalPageMargin
-                    verticalCenter: parent.verticalCenter
-                }
-                color: Theme.secondaryColor
-                font.pixelSize: Theme.fontSizeSmall
-                text: Format.formatFileSize(modelData.size)
-            }
-        }
-
-        footer: Column {
-            width: list.width
 
             SectionHeader {
-                //% "Save to"
-                text: qsTrId("lautta-share-save-to")
+                visible: page.recent.length > 0
+                //% "Saved here lately"
+                text: qsTrId("lautta-share-recent")
             }
+
             Repeater {
-                model: page.destinations
+                model: page.recent
 
                 BackgroundItem {
-                    width: list.width
-                    height: Theme.itemSizeSmall
-                    highlighted: down || page.destUri === modelData.uri
-                    onClicked: page.destUri = modelData.uri
+                    width: locations.width
+                    height: Theme.itemSizeMedium
+                    onClicked: page.destUri = modelData
 
-                    Label {
+                    AppIcon {
+                        id: clock
+                        x: Theme.horizontalPageMargin
+                        anchors.verticalCenter: parent.verticalCenter
+                        icon: "image://theme/icon-m-history"
+                        highlighted: parent.highlighted
+                    }
+                    Column {
                         anchors {
-                            left: parent.left
-                            leftMargin: Theme.horizontalPageMargin
+                            left: clock.right
+                            leftMargin: Theme.paddingLarge
                             right: parent.right
                             rightMargin: Theme.horizontalPageMargin
                             verticalCenter: parent.verticalCenter
                         }
-                        text: modelData.name
-                        color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
-                        truncationMode: TruncationMode.Fade
+
+                        Label {
+                            width: parent.width
+                            text: App.nameOf(modelData)
+                            truncationMode: TruncationMode.Fade
+                            color: parent.parent.highlighted ? Theme.highlightColor : Theme.primaryColor
+                        }
+                        Label {
+                            visible: text.length > 0
+                            width: parent.width
+                            text: Operations.displayPath(App.parentUri(modelData))
+                            truncationMode: TruncationMode.Fade
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            color: parent.parent.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
+                        }
                     }
                 }
             }
-            BackgroundItem {
-                width: list.width
-                height: Theme.itemSizeSmall
-                highlighted: down || (page.customUri.length > 0 && page.destUri === page.customUri)
-                onClicked: {
-                    var picker = pageStack.push(Qt.resolvedUrl("../dialogs/FolderPickerDialog.qml"), {
-                        //% "Save to"
-                        "title": qsTrId("lautta-share-pick"),
-                        //% "Select"
-                        "acceptText": qsTrId("lautta-share-pick-accept"),
-                        "startUri": page.destUri
-                    })
-                    picker.accepted.connect(function() {
-                        page.customUri = picker.selectedUri
-                        page.destUri = picker.selectedUri
-                    })
+
+            SectionHeader {
+                text: qsTrId("lautta-share-locations")
+            }
+        }
+
+        delegate: BackgroundItem {
+            width: locations.width
+            height: Theme.itemSizeMedium
+            enabled: model.selectable
+            opacity: enabled ? 1 : Theme.opacityLow
+            onClicked: page.destUri = model.uri
+
+            AppIcon {
+                id: glyph
+                x: Theme.horizontalPageMargin
+                anchors.verticalCenter: parent.verticalCenter
+                icon: FileIcons.sized(Share.locationIcon(model.kind), iconSize)
+                highlighted: parent.highlighted
+            }
+            Column {
+                anchors {
+                    left: glyph.right
+                    leftMargin: Theme.paddingLarge
+                    right: parent.right
+                    rightMargin: Theme.horizontalPageMargin
+                    verticalCenter: parent.verticalCenter
                 }
 
                 Label {
-                    anchors {
-                        left: parent.left
-                        leftMargin: Theme.horizontalPageMargin
-                        right: parent.right
-                        rightMargin: Theme.horizontalPageMargin
-                        verticalCenter: parent.verticalCenter
-                    }
-                    text: page.customUri.length > 0
-                          ? Operations.displayPath(page.customUri)
-                          //% "Another folder…"
-                          : qsTrId("lautta-share-other")
-                    color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
+                    width: parent.width
+                    text: model.name
+                    truncationMode: TruncationMode.Fade
+                    color: parent.parent.highlighted ? Theme.highlightColor : Theme.primaryColor
+                }
+                Label {
+                    visible: model.status !== "ready"
+                    width: parent.width
+                    text: model.attention.length > 0 ? model.attention
+                                                     : ErrorText.message("NetworkUnreachable", { "location": model.name })
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
                     truncationMode: TruncationMode.Fade
                 }
-            }
-            Label {
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.Wrap
-                color: Theme.secondaryColor
-                font.pixelSize: Theme.fontSizeSmall
-                //% "%n files will be saved."
-                text: qsTrId("lautta-share-will-save", page.readableCount) + (page.skippedCount > 0
-                      //% "%n files are skipped."
-                      ? " " + qsTrId("lautta-share-skipped", page.skippedCount) : "")
             }
         }
 

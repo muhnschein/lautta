@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Locations the folder picker starts from; plain list of `core.locations.locations()`.
+//! Locations the share dialog lists; plain list of `core.locations.locations()`.
 
 use crate::runtime::core;
 use cpp::cpp;

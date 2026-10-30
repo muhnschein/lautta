@@ -31,7 +31,7 @@ QtObject {
         plural("lautta-xfr-cover-count", "1 task", "%n tasks")
         plural("lautta-xfr-note-failed-body", "1 file couldn't be transferred. Tap to retry.",
                "%n files couldn't be transferred. Tap to retry.")
-        plural("lautta-share-skipped", "1 file is skipped.", "%n files are skipped.")
+        plural("lautta-share-skipped-many", "1 file can't be read, skipped", "%n files can't be read, skipped")
         plural("lautta-xfr-header-paused", "1 paused", "%n paused")
         plural("lautta-dir-selected", "1 selected", "%n selected")
 

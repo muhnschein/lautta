@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Extract all and Compress no longer ask anything, as in iOS Files. Extracting puts the contents next to the archive, in a folder named after it, or the archive's own folder when it holds just one. Compressing makes a zip next to the items, named after the item, or "Archive" for several. Compress is gone from read-only folders.
+- Saving files shared from another app shows the folder view to save into: open folders in place, make one from the pulley, or pick a place under Locations. It starts in the folder you saved to last.
 - Servers show a server icon instead of a laptop.
 - Browse rows have even heights. Servers, memory cards and USB drives show their state as a glowing dot. It pulses while a server connects or a drive mounts or unmounts, and turns red or orange on failure or warning.
 - Browse shows no item counts any more.

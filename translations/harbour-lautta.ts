@@ -569,41 +569,6 @@
         <source>Archive</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-compress-accept">
-        <source>Compress</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-compress-count" numerus="yes">
-        <source>Compress %n items</source>
-        <translation>
-            <numerusform>Compress %n item</numerusform>
-            <numerusform>Compress %n items</numerusform>
-        </translation>
-    </message>
-    <message id="lautta-compress-name">
-        <source>Name</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-compress-format">
-        <source>Format</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-compress-save-to">
-        <source>Save to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-compress-pick">
-        <source>Save archive to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-compress-pick-accept">
-        <source>Select</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-compress-size">
-        <source>Size before compression</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-conflict-merge">
         <source>Merge</source>
         <translation type="unfinished"></translation>
@@ -685,72 +650,6 @@
             <numerusform>Do this for the remaining %n conflict</numerusform>
             <numerusform>Do this for the remaining %n conflicts</numerusform>
         </translation>
-    </message>
-    <message id="lautta-extract-files" numerus="yes">
-        <source>%n files</source>
-        <translation>
-            <numerusform>%n file</numerusform>
-            <numerusform>%n files</numerusform>
-        </translation>
-    </message>
-    <message id="lautta-extract-folders" numerus="yes">
-        <source>%n folders</source>
-        <translation>
-            <numerusform>%n folder</numerusform>
-            <numerusform>%n folders</numerusform>
-        </translation>
-    </message>
-    <message id="lautta-extract-contents">
-        <source>%1, %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-accept">
-        <source>Extract</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-title">
-        <source>Extract %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-contents-label">
-        <source>Contents</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-size">
-        <source>Size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-uncompressed">
-        <source>%1 uncompressed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-into">
-        <source>Into</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-new-folder">
-        <source>New folder &apos;%1&apos;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-here">
-        <source>The destination itself</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-pick">
-        <source>Extract to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-pick-accept">
-        <source>Select</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-destination">
-        <source>Destination</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-open">
-        <source>Open folder when done</source>
-        <translation type="unfinished"></translation>
     </message>
     <message id="lautta-plan-move-to">
         <source>Move to %1</source>
@@ -905,40 +804,6 @@
         <translation>
             <numerusform>Save %n file</numerusform>
             <numerusform>Save %n files</numerusform>
-        </translation>
-    </message>
-    <message id="lautta-share-unreadable">
-        <source>This file can&apos;t be read by Lautta</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-share-save-to">
-        <source>Save to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-share-pick">
-        <source>Save to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-share-pick-accept">
-        <source>Select</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-share-other">
-        <source>Another folder…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-share-will-save" numerus="yes">
-        <source>%n files will be saved.</source>
-        <translation>
-            <numerusform>%n file will be saved.</numerusform>
-            <numerusform>%n files will be saved.</numerusform>
-        </translation>
-    </message>
-    <message id="lautta-share-skipped" numerus="yes">
-        <source>%n files are skipped.</source>
-        <translation>
-            <numerusform>%n file is skipped.</numerusform>
-            <numerusform>%n files are skipped.</numerusform>
         </translation>
     </message>
     <message id="lautta-viewers-details">
@@ -1936,22 +1801,6 @@
         <source>Folder · from cache</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-picker-new-folder">
-        <source>New folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-picker-locations">
-        <source>Locations</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-picker-in">
-        <source>In %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-picker-empty">
-        <source>No folders</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-picker-empty-hint">
         <source>You can use this folder or pull down to make one</source>
         <translation type="unfinished"></translation>
@@ -2664,6 +2513,33 @@
         <source>Ferry at 06:00
 Sauna wood: 2 sacks
 Cabin keys from Anni</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-menu-new-folder">
+        <source>New folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-share-skipped-one">
+        <source>%1 can&apos;t be read, skipped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-share-skipped-many" numerus="yes">
+        <source>%n files can&apos;t be read, skipped</source>
+        <translation>
+            <numerusform>%n file can&apos;t be read, skipped</numerusform>
+            <numerusform>%n files can&apos;t be read, skipped</numerusform>
+        </translation>
+    </message>
+    <message id="lautta-dir-path-locations">
+        <source>Locations</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-share-locations">
+        <source>Locations</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-share-recent">
+        <source>Saved here lately</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

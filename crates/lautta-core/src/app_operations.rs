@@ -9,7 +9,7 @@ use crate::entry::{cap, Entry, Kind};
 use crate::error::{Error, ErrorKind, Result};
 use crate::mime;
 use crate::ops::conflict as conflict_ops;
-use crate::ops::names::{keep_both_name, split_extension};
+use crate::ops::names::{keep_both_dir_name, keep_both_name, split_extension};
 use crate::ops::{Conflict, ConflictChoice, OperationKind, Plan};
 use crate::provider::{list_all, Disposition, Lane, ProgressSink, Provider, WriteOptions};
 use crate::settings::Settings;
@@ -18,7 +18,7 @@ use crate::thumbs::{thumbnail_source, ThumbSettings, ThumbSource};
 use crate::transfer::TransferId;
 use crate::trash::TrashItem;
 use crate::uri::Uri;
-use crate::vpath::{display_name, validate_name, VPath};
+use crate::vpath::{display_name, validate_name};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -248,18 +248,6 @@ pub struct Measure {
     pub bytes: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ArchiveInfo {
-    pub location: String,
-    pub root_uri: String,
-    pub name: String,
-    pub folder_name: String,
-    pub files: u64,
-    pub dirs: u64,
-    pub bytes: u64,
-}
-
 impl ArchiveKind {
     pub fn parse(text: &str) -> Option<ArchiveKind> {
         match text {
@@ -483,55 +471,53 @@ impl Core {
         })
     }
 
-    pub async fn archive_info(&self, archive: &Uri) -> Result<ArchiveInfo> {
+    /// Lands next to the archive, as iOS Files does. One top folder lands as itself, anything
+    /// else in a folder named after the archive; taken names get a number. Returns the folder.
+    pub async fn extract_here(&self, archive: &Uri) -> Result<(Uri, Started)> {
+        let parent = archive
+            .parent()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "the archive has no folder"))?;
         let location = self.open_archive(archive).await?;
-        let provider = self.provider(&location)?;
-        let mut info = ArchiveInfo {
-            location: location.clone(),
-            root_uri: Uri::root(location).to_string(),
-            name: String::new(),
-            folder_name: String::new(),
-            files: 0,
-            dirs: 0,
-            bytes: 0,
-        };
-        let name = archive.name().map(display_name).unwrap_or_default();
-        info.folder_name = archive_folder_name(&name);
-        info.name = name;
-        let mut pending = vec![VPath::root()];
-        while let Some(dir) = pending.pop() {
-            for e in list_all(provider.as_ref(), &dir, Lane::Interactive).await? {
-                if e.kind == Kind::Dir {
-                    info.dirs += 1;
-                    pending.push(dir.join(&e.name)?);
-                } else {
-                    info.files += 1;
-                    info.bytes += e.size.unwrap_or(0);
-                }
-            }
-        }
-        Ok(info)
-    }
-
-    pub async fn extract(&self, archive: &Uri, dest: &Uri) -> Result<Started> {
-        let location = self.open_archive(archive).await?;
-        let root = Uri::root(location.clone());
         let source = self.provider(&location)?;
-        let children = list_all(source.as_ref(), &root.path, Lane::Interactive).await?;
+        let mut from = Uri::root(location);
+        let mut children = list_all(source.as_ref(), &from.path, Lane::Interactive).await?;
         if children.is_empty() {
             return Err(Error::new(ErrorKind::InvalidArgument, "the archive is empty"));
         }
+        let mut name =
+            archive_folder_name(&archive.name().map(display_name).unwrap_or_default()).into_bytes();
+        if let [only] = children.as_slice() {
+            let inner = from.join(&only.name)?;
+            let grandchildren = match only.kind {
+                Kind::Dir => list_all(source.as_ref(), &inner.path, Lane::Interactive).await?,
+                _ => Vec::new(),
+            };
+            if !grandchildren.is_empty() {
+                name.clone_from(&only.name);
+                from = inner;
+                children = grandchildren;
+            }
+        }
+        let target = self.provider(&parent.location)?;
+        if !target.capabilities().writable() {
+            return Err(Error::kind(ErrorKind::ReadOnlyFilesystem));
+        }
+        let taken: HashSet<Vec<u8>> = list_all(target.as_ref(), &parent.path, Lane::Interactive)
+            .await?
+            .into_iter()
+            .map(|e| e.name)
+            .collect();
+        let dest = parent.join(&free_dir_name(&name, &taken))?;
+        target.make_dir(&dest.path, true).await?;
+        self.invalidate(&parent);
         let sources = children
             .iter()
-            .map(|e| root.join(&e.name))
+            .map(|e| from.join(&e.name))
             .collect::<Result<Vec<_>>>()?;
-        let target = self.provider(&dest.location)?;
-        target.make_dir(&dest.path, false).await?;
-        if let Some(parent) = dest.parent() {
-            self.invalidate(&parent);
-        }
-        self.copy_or_move(OperationKind::Copy, sources, dest.clone())
-            .await
+        let started = self
+            .copy_or_move(OperationKind::Copy, sources, dest.clone())
+            .await?;
+        Ok((dest, started))
     }
 
     /// Failed or canceled run leaves no partial file.
@@ -688,6 +674,14 @@ impl Core {
 fn free_name(name: &[u8], taken: &HashSet<Vec<u8>>) -> Vec<u8> {
     if taken.contains(name) {
         keep_both_name(name, &|n| taken.contains(n))
+    } else {
+        name.to_vec()
+    }
+}
+
+fn free_dir_name(name: &[u8], taken: &HashSet<Vec<u8>>) -> Vec<u8> {
+    if taken.contains(name) {
+        keep_both_dir_name(name, &|n| taken.contains(n))
     } else {
         name.to_vec()
     }
