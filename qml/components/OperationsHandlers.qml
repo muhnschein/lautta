@@ -11,6 +11,7 @@ Item {
 
     // Off in --qml-check: no session bus for the share provider to register on.
     property bool shareEnabled: Qt.application.arguments.indexOf("--qml-check") < 0
+    property string pendingFolder
 
     // Resolved when used: window publishes its instance once created.
     function stack() {
@@ -26,6 +27,20 @@ Item {
         if (!subject)
             return {}
         return { "item": Operations.displayPath(subject), "location": App.locationName(subject) }
+    }
+
+    function openFolder(uri) {
+        pendingFolder = uri
+        openPending()
+    }
+
+    // PageStack drops a push during a transition, e.g. the extract dialog closing.
+    function openPending() {
+        if (stack().busy)
+            return
+        var uri = pendingFolder
+        pendingFolder = ""
+        stack().push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": uri })
     }
 
     function background() {
@@ -59,8 +74,13 @@ Item {
         }
         onExtractFinished: {
             if (ok)
-                handlers.stack().push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": destUri })
+                handlers.openFolder(destUri)
         }
+    }
+
+    Connections {
+        target: handlers.pendingFolder.length > 0 ? handlers.stack() : null
+        onBusyChanged: handlers.openPending()
     }
 
     Loader {
