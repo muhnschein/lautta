@@ -130,6 +130,22 @@
       "x": 480,
       "y": 15900
     },
+    "BreadcrumbsPicker.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Copy to\u2026 picker \u00b7 path line",
+      "w": 400,
+      "x": 480,
+      "y": 16960
+    },
+    "BreadcrumbsPickerOpen.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Copy to\u2026 picker \u00b7 path menu",
+      "w": 400,
+      "x": 960,
+      "y": 16960
+    },
     "BrowsePulley.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -801,6 +817,8 @@
     "BreadcrumbsOmniTyping.dc.html",
     "BreadcrumbsOmniPath.dc.html",
     "BreadcrumbsLongRows.dc.html",
+    "BreadcrumbsPicker.dc.html",
+    "BreadcrumbsPickerOpen.dc.html",
     "BreadcrumbsLandColumns.dc.html",
     "BreadcrumbsLandOmni.dc.html",
     "BreadcrumbsLandOmniHits.dc.html"
