@@ -79,7 +79,7 @@ Page {
     }
 
     Connections {
-        target: pageStack
+        target: page.pageContainer
         onBusyChanged: page.goOnIfAsked()
     }
 
