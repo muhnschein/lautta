@@ -61,9 +61,9 @@
     "BreadcrumbsLandColumns.dc.html": {
       "h": 400,
       "is_interactive": true,
-      "title": "Landscape \u00b7 path menu B, two columns",
+      "title": "Landscape \u00b7 path menu, two columns",
       "w": 860,
-      "x": 940,
+      "x": 0,
       "y": 18020
     },
     "BreadcrumbsLandOmni.dc.html": {
@@ -71,7 +71,7 @@
       "is_interactive": true,
       "title": "Landscape \u00b7 go to folder, keyboard up",
       "w": 860,
-      "x": 1880,
+      "x": 940,
       "y": 18020
     },
     "BreadcrumbsLandOmniHits.dc.html": {
@@ -79,47 +79,15 @@
       "is_interactive": true,
       "title": "Landscape \u00b7 go to folder, hits dragged",
       "w": 860,
-      "x": 2820,
+      "x": 1880,
       "y": 18020
-    },
-    "BreadcrumbsLandScroll.dc.html": {
-      "h": 400,
-      "is_interactive": true,
-      "title": "Landscape \u00b7 path menu A, scrolls",
-      "w": 860,
-      "x": 0,
-      "y": 18020
-    },
-    "BreadcrumbsLongProblem.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Long words (de) \u00b7 the problem",
-      "w": 400,
-      "x": 0,
-      "y": 16960
     },
     "BreadcrumbsLongRows.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Long words \u00b7 A actions fall back to rows",
+      "title": "Long words (de) \u00b7 actions fall back to rows",
       "w": 400,
-      "x": 480,
-      "y": 16960
-    },
-    "BreadcrumbsLongStacked.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Long words \u00b7 C label under icon",
-      "w": 400,
-      "x": 1440,
-      "y": 16960
-    },
-    "BreadcrumbsLongTwoLine.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Long words \u00b7 B labels on two lines",
-      "w": 400,
-      "x": 960,
+      "x": 0,
       "y": 16960
     },
     "BreadcrumbsOmni.dc.html": {
@@ -805,11 +773,7 @@
     "BreadcrumbsOmni.dc.html",
     "BreadcrumbsOmniTyping.dc.html",
     "BreadcrumbsOmniPath.dc.html",
-    "BreadcrumbsLongProblem.dc.html",
     "BreadcrumbsLongRows.dc.html",
-    "BreadcrumbsLongTwoLine.dc.html",
-    "BreadcrumbsLongStacked.dc.html",
-    "BreadcrumbsLandScroll.dc.html",
     "BreadcrumbsLandColumns.dc.html",
     "BreadcrumbsLandOmni.dc.html",
     "BreadcrumbsLandOmniHits.dc.html"
