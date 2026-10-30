@@ -119,17 +119,10 @@ ApplicationWindow {
         expect(subBanner && subBanner.visible, "the banner shows in a folder inside the archive")
 
         subBanner.clicked(null)
-        var dialog
-        waitFor(function () {
-            dialog = pageStack.currentPage
-            return dialog && dialog.archiveUri !== undefined && !pageStack.busy
-        }, "the extract dialog")
-        expect(dialog.archiveUri === base + "pack.zip", "the dialog extracts the archive: " + dialog.archiveUri)
-        waitFor(function () { return dialog.canAccept }, "the archive inspected")
-        dialog.accept()
         waitFor(function () { return window.extractedTo.length > 0 }, "the extract")
-        expect(window.extractedTo === base + "pack", "extracts next to the archive: " + window.extractedTo)
-        inside.uri = base + "pack/Inner/"
+        // One top folder lands as itself; `Inner` is taken, so it gets a number.
+        expect(window.extractedTo === base + "Inner%202", "extracts next to the archive: " + window.extractedTo)
+        inside.uri = base + "Inner%202/"
         listed(inside, "a.md", "file")
     }
 
