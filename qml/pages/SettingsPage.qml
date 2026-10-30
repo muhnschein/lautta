@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Settings (SPEC §18; design: Settings), laid out as Salama's settings: a
-// list of entries, each opening a page of settings and telling under its
-// name what is chosen there. Values are persisted through App.setSetting;
-// QML keeps no copy.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -23,7 +19,6 @@ Page {
 
     objectName: "settingsPage"
     allowedOrientations: Orientation.All
-    // Back from Storage, where the cache may have been cleared.
     onStatusChanged: if (status === PageStatus.Activating) cache.refresh()
 
     CacheInfo {
@@ -56,8 +51,6 @@ Page {
                 onClicked: page.open("BrowseSettingsPage.qml")
             }
             SettingsEntry {
-                // The view settings live on their own page, the one folders
-                // open from their pulley (BRW-4), with the thumbnails.
                 objectName: "viewOptionsRow"
                 iconSource: "image://theme/icon-m-month-view"
                 //% "View options"

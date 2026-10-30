@@ -1,13 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): a rename is undone from a Silica
-// remorse on the renamed item's row (SPEC OPS-9, board DirectoryRemorse),
-// not from a banner. The row of the new name shows "File renamed"; the
-// listing makes that row anew (here by switching to the grid and back) and
-// the new row, also a grid cell, shows the rest of the same remorse; tapping
-// it renames the file back, with no remorse for that. A folder says "Folder
-// renamed", and once its remorse runs out the new name stays and the remorse
-// does not come back. Fails when the rename shows no remorse, a new row loses
-// the remorse, or cancel keeps the new name.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -66,7 +57,6 @@ ApplicationWindow {
         scenarioRunning = false
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)
@@ -82,14 +72,13 @@ ApplicationWindow {
         return out
     }
 
-    // Headless, no render loop polishes the views: lay them out by hand.
+    // No render loop headless: lay out by hand.
     function layOut() {
         var views = findAll(win.contentItem, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < views.length; ++i)
             views[i].forceLayout()
     }
 
-    // The list rows or grid cells of `shown`: a grid's cells sit in its rows.
     function rowsIn(shown) {
         var out = []
         var kids = shown ? shown.contentItem.children : []
@@ -101,8 +90,6 @@ ApplicationWindow {
         return out
     }
 
-    // The row of `uri` in the list or grid shown: a list row by its item, a
-    // grid cell by its name.
     function rowOf(uri) {
         var name = App.nameOf(uri)
         var rows = rowsIn(shownView())
@@ -114,8 +101,6 @@ ApplicationWindow {
         return null
     }
 
-    // Silica rows give their content as `children`: the remorse item sits
-    // in the row's own `data`.
     function activeRemorse(row) {
         var kids = row.data
         for (var i = 0; i < kids.length; ++i) {
@@ -144,7 +129,6 @@ ApplicationWindow {
         return true
     }
 
-    // Types `name` into the open rename dialog and accepts it.
     function acceptName(name) {
         var dialog = pageStack.currentPage
         if (!dialog || dialog.newName === undefined || pageStack.busy)
@@ -159,8 +143,6 @@ ApplicationWindow {
         return true
     }
 
-    // The remorse on the row of `uri`, checked to be in that row and to
-    // tell `text`; null while it is not there yet.
     function remorseOn(uri, ids) {
         var row = rowOf(uri)
         var r = row ? activeRemorse(row) : null
@@ -249,7 +231,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 6:
-                // The grid made the cells anew: the cell shows the rest.
                 if (!win.view.gridMode)
                     break
                 var cellRemorse = win.remorseOn(win.after, ["File renamed", "lautta-dir-renamed-file"])
@@ -266,7 +247,6 @@ ApplicationWindow {
                     break
                 if (listRemorse._timeout >= win.fullTimeout)
                     return win.fail("a new row shows the rest of the remorse: " + listRemorse._timeout + " of " + win.fullTimeout)
-                // What tapping it does.
                 listRemorse.cancel()
                 win.next()
                 break
@@ -275,7 +255,6 @@ ApplicationWindow {
                     break
                 if (win.view.renamed !== null)
                     return win.fail("the undone rename is forgotten")
-                // The rename back has no remorse of its own.
                 if (win.waited < 15)
                     break
                 if (win.anyRemorse())
@@ -295,7 +274,6 @@ ApplicationWindow {
                     win.next()
                 break
             case 11:
-                // Run out: the new name stays, the remorse does not come back.
                 if (win.anyRemorse() || win.view.renamed !== null)
                     break
                 if (!win.rowOf(win.kept) || win.rowOf(win.sub))

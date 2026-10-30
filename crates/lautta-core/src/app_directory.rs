@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! User-level actions of the directory area on [`Core`](crate::app::Core):
-//! streaming listings (BRW-5, BRW-8), the path menu (BRW-9) and the folder
-//! picker's location list.
+//! Directory area actions on `Core`: streaming listings, path menu, folder picker locations.
 
 use crate::app::Core;
 use crate::entry::Entry;
@@ -18,31 +16,22 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
-/// What a folder listing reports while it runs.
 #[derive(Debug)]
 pub enum ListEvent {
-    /// The cached listing (BRW-5); only sent when asked for and present.
     Cached { entries: Vec<Entry>, fetched_ms: i64 },
-    /// A batch of the fresh listing, in provider order (BRW-8).
     Batch(Vec<Entry>),
-    /// The listing ended; always the last event.
     Done(Result<()>),
 }
 
-/// One step of the path from a location's root to a folder.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PathStep {
     pub uri: Uri,
-    /// The location's name for the root step, otherwise the folder's name.
     pub name: String,
 }
 
-/// Batches buffered between a provider and the event sender.
 const BATCH_QUEUE: usize = 8;
 
 impl Core {
-    /// Lists `dir` as a stream of events. With `use_cache` the cached listing
-    /// goes first. The fresh listing refreshes the cache once complete.
     pub async fn list_stream(&self, dir: &Uri, use_cache: bool, out: UnboundedSender<ListEvent>) {
         let result = self.stream_listing(dir, use_cache, &out).await;
         let _ = out.send(ListEvent::Done(result));
@@ -63,7 +52,6 @@ impl Core {
             }
         }
         let provider = self.provider(&dir.location)?;
-        // Learnt with the first listing, for the actions the UI offers.
         provider.known_capabilities().await;
         let (tx, mut rx) = mpsc::channel::<Vec<Entry>>(BATCH_QUEUE);
         let collect = async {
@@ -80,8 +68,6 @@ impl Core {
         Ok(())
     }
 
-    /// The capability flags of a location (local: per file system; remote:
-    /// from the bridge), sorted, for the UI to filter actions (§10.1).
     pub fn capability_flags(&self, location: &str) -> Vec<String> {
         match self.provider(location) {
             Ok(p) => p.capabilities().raw.into_iter().collect(),
@@ -89,8 +75,6 @@ impl Core {
         }
     }
 
-    /// The path from the location's root to `uri` for the path menu (BRW-9):
-    /// the root first (named like the location), `uri` last.
     pub fn path_steps(&self, uri: &Uri) -> Vec<PathStep> {
         let root_name = self.location(&uri.location).map(|l| l.name).unwrap_or_default();
         let mut steps = vec![PathStep {
@@ -109,8 +93,6 @@ impl Core {
         steps
     }
 
-    /// The text the path editor starts with: local folders as `~/…` or an
-    /// absolute path, remote ones as the path inside the location.
     pub fn edit_address(&self, uri: &Uri) -> String {
         match self.locations.to_local_path(uri) {
             Some(path) => home_relative(&self.paths.home, &path),
@@ -119,8 +101,7 @@ impl Core {
         }
     }
 
-    /// Turns what the user typed in the path editor into a folder URI. Local
-    /// absolute paths, `~/…`, `file://` and `lautta://` work everywhere;
+    /// Local absolute paths, `~/…`, `file://` and `lautta://` work everywhere;
     /// `/…` is a path inside `base`'s location when that is remote.
     pub fn resolve_address(&self, text: &str, base: &Uri) -> Option<Uri> {
         let text = text.trim();
@@ -153,9 +134,6 @@ impl Core {
         self.locations.uri_for_local_path(path)
     }
 
-    /// Folder completions for the path editor from cached listings (BRW-9):
-    /// the cached sub-folders of the text before the last `/` whose names
-    /// start with what follows it (case and accents ignored).
     pub fn complete_address(&self, prefix: &str, base: &Uri) -> Vec<Uri> {
         let Some(cut) = prefix.rfind('/') else {
             return Vec::new();
@@ -180,10 +158,8 @@ impl Core {
             .collect()
     }
 
-    /// The items of the folder `uri` for the grid captions (SPEC §15.3):
-    /// counted with the other file system work (ARC-6), local folders
-    /// only. `None` for servers and archives, where counting would list
-    /// the folder over the network, and for a folder that cannot be read.
+    /// Local folders only: `None` for servers and archives (counting would list over the network)
+    /// and unreadable folders.
     pub async fn count_folder(&self, uri: &Uri, show_hidden: bool) -> Option<FolderCount> {
         let path = self.locations.to_local_path(uri)?;
         let permit = self.locations.io_semaphore().acquire_owned().await.ok()?;
@@ -196,15 +172,13 @@ impl Core {
         .flatten()
     }
 
-    /// The locations the folder picker starts from (OPS-10), in display
-    /// order. Locations that need the user (sign-in, offline) are included
-    /// so the picker can show why they are not selectable.
+    /// Includes locations needing the user (sign-in, offline) so the picker can show why they are
+    /// not selectable.
     pub fn picker_locations(&self) -> Vec<Location> {
         self.locations.locations()
     }
 }
 
-/// `~/…` for paths inside `home`, the absolute path otherwise.
 fn home_relative(home: &Path, path: &Path) -> String {
     match path.strip_prefix(home) {
         Ok(rest) if rest.as_os_str().is_empty() => "~".to_owned(),
@@ -213,7 +187,6 @@ fn home_relative(home: &Path, path: &Path) -> String {
     }
 }
 
-/// Bytes kept literally in a `file://` URL path.
 const URL_SET: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
     .remove(b'/')
     .remove(b'-')
@@ -221,8 +194,7 @@ const URL_SET: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
     .remove(b'.')
     .remove(b'~');
 
-/// A `file://` URL for a local path, safe for QML `url` properties even when
-/// the name holds `%`, `#`, `?` or spaces (thumbnails, PRV-1).
+/// Safe for QML `url` properties when the name holds `%`, `#`, `?` or spaces.
 pub fn file_url(path: &Path) -> String {
     format!(
         "file://{}",

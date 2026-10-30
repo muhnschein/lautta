@@ -1,11 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): Recents' sections are the rows'
-// date groups, the Activity page's (ORG-2, SPEC §15.4), in the shared
-// DateSectionHeader; a row's second line is where the file is, without how
-// it was used, with the server icon before a server's place (§15.5); there
-// is no Show filter and no pulley entry that turns recents off; with
-// recents off the placeholder points to Settings. Fails when any of them
-// comes back.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -17,7 +10,6 @@ ApplicationWindow {
     property int step: 0
     property int waited: 0
     property var page
-    // The section headers in order: [qsTrId id, engineering English].
     readonly property var expected: [
         ["lautta-date-today", "Today"],
         ["lautta-date-yesterday", "Yesterday"],
@@ -37,8 +29,6 @@ ApplicationWindow {
         ListElement { itemId: 6; uri: "lautta://user-documents/old.csv"; name: "old.csv"; kind: "opened"; place: ""; at: 6; dateGroup: "older" }
     }
 
-    // Loaded rather than declared: a page item on its own gets no size
-    // here, and its list would make no delegates.
     initialPage: Component {
         Loader {
             source: Qt.resolvedUrl("../../qml/pages/RecentsPage.qml")
@@ -54,8 +44,6 @@ ApplicationWindow {
         scenarioRunning = false
     }
 
-    // Every item under `item` that `pred` accepts. A flickable's
-    // contentItem is one of its children too: each item is looked at once.
     function findAll(item, pred, out) {
         if (out === undefined) {
             out = []
@@ -78,15 +66,13 @@ ApplicationWindow {
         return findAll(win.page, function(x) { return x.text === id || x.text === english })
     }
 
-    // The section headers top to bottom, all of them made.
     function sections() {
-        // Headless, no render loop polishes the list: lay it out by hand.
+        // No render loop headless: lay out by hand.
         var views = findAll(win.page, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined })
         for (var i = 0; i < views.length; ++i) {
             views[i].cacheBuffer = 100000
             views[i].forceLayout()
         }
-        // The page is not on screen here, so `visible` is false throughout.
         var found = findAll(win.page, function(x) { return x.objectName === "dateSection" })
         found.sort(function(a, b) { return a.y - b.y })
         return found.map(function(x) { return x.text })
@@ -121,7 +107,6 @@ ApplicationWindow {
         return checkPlaces()
     }
 
-    // place → whether its line has the server icon, for every row.
     readonly property var places: ({
         "NAS › /srv/photos": true,
         "NAS": true,

@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Share target "Save to Lautta" (INT-1): files received from other apps are
-// saved to a folder of the user's choice, on this device or a server. Files
-// the sandbox does not let Lautta read are reported and skipped.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -10,8 +7,6 @@ import "../components/operations"
 Dialog {
     id: page
 
-    // The resources of ShareProvider.triggered: URLs, paths or objects with
-    // a filePath.
     property var resources: []
     property string destUri
     property string customUri
@@ -46,7 +41,6 @@ Dialog {
         var list = []
         for (var j = 0; j < probed.length; ++j) {
             var file = probed[j]
-            // Data resources without a file have nothing to copy.
             if (paths[j].length === 0)
                 file.readable = false
             list.push(file)

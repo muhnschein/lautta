@@ -1,12 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): in an empty folder, pulling the
-// pulley moves the whole view, the placeholder with the header, as it does
-// in any Silica view (SPEC §15.3, boards StateEmpty, StateError). Checked in
-// the list and the grid and for a folder that cannot be opened, with the
-// page's pulley host pulled and with a finger dragged down on the empty
-// content (ViewerTools.mouse); the loading indicator sits with them. Fails
-// when the placeholder, the header or the loading indicator stays put while
-// the page is pulled, or a drag on the empty content does not pull it.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -43,7 +35,6 @@ ApplicationWindow {
         scenarioRunning = false
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)
@@ -67,7 +58,6 @@ ApplicationWindow {
         return false
     }
 
-    // The folder view of the page on top, once it is settled.
     function folderView() {
         var page = pageStack.currentPage
         if (!page || pageStack.busy || page.status !== PageStatus.Active)
@@ -81,14 +71,10 @@ ApplicationWindow {
         return all.length === 1 ? all[0] : null
     }
 
-    // How far down the view `item` is.
     function at(view, item) {
         return item.mapToItem(view, 0, 0).y
     }
 
-    // Pulls the page down by `by` as a finger does on the pulley, and checks
-    // that the placeholder of `kind` and the header move with it; then pulls
-    // it with a finger on the empty content.
     function checkPull(view, kind, by) {
         if (view.placeholderKind() !== kind)
             return false
@@ -111,8 +97,6 @@ ApplicationWindow {
         if (Math.abs(moved - by) > 1 || Math.abs(headerMoved - by) > 1)
             return fail(where + ": the placeholder moves " + moved + " and the header " + headerMoved
                         + " when the page is pulled " + by)
-        // A finger down on the empty content, above the placeholder, and
-        // back up before it lets go (so no pulley entry runs).
         var x = flick.width / 2
         var y = flick.height * 0.2
         tools.mouse(flick, "press", x, y)
@@ -122,13 +106,10 @@ ApplicationWindow {
         var followed = at(view, holder) - before
         tools.mouse(flick, "move", x, y)
         tools.mouse(flick, "release", x, y)
-        // Let go pulled, the host returns by its own animation. Stopped and
-        // closed by hand: the next step starts with the host at rest.
         host.cancelFlick()
         host.contentY = 0
         if (pulled < Theme.paddingLarge || Math.abs(followed - pulled) > 1)
             return fail(where + ": a finger pulls the page " + pulled + ", the placeholder follows " + followed)
-        // The loading indicator is the placeholder's neighbour.
         var busy = []
         var kids = holder.parent.children
         for (var k = 0; k < kids.length; ++k) {

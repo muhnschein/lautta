@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// RenameDialog on the target (real Silica): the plain dialog header titled
-// Rename with Silica's own accept and cancel texts, and the name field,
-// nothing else. The name is selected without its extension, and a name that
-// is taken shows as an error in the field's label.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -18,7 +14,6 @@ ApplicationWindow {
             console.error("FAILED: " + what)
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)

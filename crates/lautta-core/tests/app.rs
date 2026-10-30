@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The app context end to end on a temporary home folder: user folders,
-//! rename, the Trash, copy/move through the engine,
-//! listings with the cache, archives as locations.
 
 use lautta_core::app::{Core, Started};
 use lautta_core::locations::LocationRegistry;
@@ -51,7 +48,7 @@ async fn user_folders_are_locations() {
     assert!(h.core.location("user-downloads").is_some());
     assert!(
         h.core.location("user-music").is_none(),
-        "missing folders are not shown (LOC-1)"
+        "missing folders are not shown"
     );
 }
 
@@ -173,13 +170,9 @@ async fn only_this_devices_folders_delete_to_the_trash() {
     let doc = uri("lautta://user-documents/a");
     let card = uri("lautta://vol-CARD/photo.jpg");
     assert!(h.core.deletes_to_trash(&doc));
-    assert!(
-        !h.core.deletes_to_trash(&card),
-        "volumes delete permanently (OPS-8)"
-    );
+    assert!(!h.core.deletes_to_trash(&card), "volumes delete permanently");
     assert!(!h.core.deletes_to_trash(&uri("lautta://nv-1/a")), "so do servers");
 
-    // Delete follows the same decision: the card's file goes for good.
     let id = h
         .core
         .delete(std::slice::from_ref(&card))
@@ -276,7 +269,6 @@ async fn large_plans_need_the_summary() {
 
 #[tokio::test]
 async fn settings_changes_are_announced() {
-    // BRW-4: open folders learn of new view settings through this.
     let h = home().await;
     let mut rx = h.core.watch_settings();
     h.core.apply_settings(Settings::default());

@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): a file favourite (ORG-1) shows in
-// Browse with its file icon and the folder it is in, and tapping it opens
-// the file (here the Markdown viewer), not a folder page. Folder
-// favourites still open their folder. Both favourites are removed again at
-// the end, so later scenarios sharing the database see none of them.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -40,7 +35,6 @@ ApplicationWindow {
         scenarioRunning = false
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)
@@ -57,7 +51,7 @@ ApplicationWindow {
     }
 
     function favouriteRow(name) {
-        // Headless, no render loop polishes the list: lay it out by hand.
+        // No render loop headless: lay out by hand.
         var views = findAll(win.contentItem, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < views.length; ++i)
             views[i].forceLayout()
@@ -72,12 +66,10 @@ ApplicationWindow {
         return null
     }
 
-    // The app's document glyph at a row icon's size (FileIcons.js).
     function documentGlyph() {
         return String(Qt.resolvedUrl("../../qml/icons/" + FileIcons.glyph("markdown", false, Theme.iconSizeMedium) + ".svg"))
     }
 
-    // The row's icon is its first image (the page is not shown, headless).
     function icons(row) {
         return findAll(row, function(x) { return x.highlightColor !== undefined && x.source !== undefined }, [])
     }

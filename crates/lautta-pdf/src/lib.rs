@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `lautta-pdf`: PDF pages as pixels for the built-in viewer (SPEC PRV-10).
-//!
-//! The renderer is [hayro](https://github.com/LaurenzV/hayro), pure Rust.
-//! It works on the bytes it is given and nothing else: it has no file,
-//! network or process access, runs no scripts and follows no links or
-//! actions. The standard fonts and CMaps are compiled in. No unsafe code
-//! here (workspace lint).
+//! PDF pages as pixels, via [hayro](https://github.com/LaurenzV/hayro) (pure Rust). Works on given
+//! bytes only: no file, network or process access, no scripts, links and actions not followed.
+//! Standard fonts and CMaps compiled in.
 
 use hayro::hayro_interpret::InterpreterSettings;
 use hayro::hayro_syntax::{LoadPdfError, Pdf};
@@ -16,23 +12,17 @@ use std::fmt;
 mod nav;
 pub use nav::{Link, LinkTarget, OutlineItem};
 
-/// Largest PDF the viewer opens: the whole file is held in memory.
 pub const MAX_PDF_BYTES: u64 = 200_000_000;
-/// Longest edge of a rendered page, in pixels: at most 64 MiB of RGBA.
 pub const MAX_EDGE: u32 = 4096;
 
-/// Why a PDF or a page cannot be shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PdfError {
     /// Not a PDF, or damaged beyond repair.
     Invalid,
-    /// Encrypted with a password.
+    /// Password-protected.
     Encrypted,
-    /// The document has no pages.
     Empty,
-    /// No page with that number.
     NoSuchPage,
-    /// The file is larger than [`MAX_PDF_BYTES`].
     TooLarge,
 }
 
@@ -50,16 +40,14 @@ impl fmt::Display for PdfError {
 
 impl std::error::Error for PdfError {}
 
-/// A page's size in PDF points (1/72 inch), as it is shown (rotation applied).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PageSize {
     pub width: f32,
     pub height: f32,
 }
 
-/// An area of a page as it is shown (rotation applied), in fractions of
-/// the shown width and height from its top left corner; 0..=1 when the area
-/// lies on the page.
+/// As shown (rotation applied), in fractions of shown width and height from the top left; 0..=1 on
+/// the page.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PageRect {
     pub x: f32,
@@ -68,8 +56,8 @@ pub struct PageRect {
     pub height: f32,
 }
 
-/// A rendered page: premultiplied RGBA, 4 bytes per pixel, rows top to
-/// bottom, no padding. Pages are drawn on white, so every pixel is opaque.
+/// Premultiplied RGBA, 4 bytes per pixel, rows top to bottom, no padding. Drawn on white: all
+/// pixels opaque.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedPage {
     pub width: u32,
@@ -77,7 +65,6 @@ pub struct RenderedPage {
     pub rgba: Vec<u8>,
 }
 
-/// An open PDF.
 pub struct PdfDocument {
     pdf: Pdf,
     sizes: Vec<PageSize>,
@@ -92,14 +79,12 @@ impl fmt::Debug for PdfDocument {
 }
 
 impl PdfDocument {
-    /// Parses a PDF. Damaged cross-reference tables are repaired where
-    /// possible; documents encrypted with an empty user password open.
+    /// Damaged cross-reference tables are repaired where possible; empty user password opens.
     pub fn open(bytes: Vec<u8>) -> Result<PdfDocument, PdfError> {
         PdfDocument::load(bytes, Pdf::new)
     }
 
-    /// Parses a PDF encrypted with `password` (the user or the owner
-    /// password). [`PdfError::Encrypted`] when it does not open it.
+    /// `password` may be user or owner password. [`PdfError::Encrypted`] when it does not open it.
     pub fn open_with_password(bytes: Vec<u8>, password: &str) -> Result<PdfDocument, PdfError> {
         PdfDocument::load(bytes, |b| Pdf::new_with_password(b, password))
     }
@@ -133,14 +118,11 @@ impl PdfDocument {
         self.sizes.len()
     }
 
-    /// Every page's size, in page order.
     pub fn page_sizes(&self) -> &[PageSize] {
         &self.sizes
     }
 
-    /// Renders page `index` (0-based) `width` pixels wide, keeping its
-    /// aspect ratio. The result is smaller when an edge would exceed
-    /// [`MAX_EDGE`].
+    /// `width` pixels wide, aspect ratio kept; smaller when an edge would exceed [`MAX_EDGE`].
     pub fn render(&self, index: usize, width: u32) -> Result<RenderedPage, PdfError> {
         let size = *self.sizes.get(index).ok_or(PdfError::NoSuchPage)?;
         let page = self.pdf.pages().get(index).ok_or(PdfError::NoSuchPage)?;
@@ -149,8 +131,7 @@ impl PdfDocument {
         let pixmap = render(
             page,
             &cache,
-            // The default draws widgets and links as on paper; nothing is
-            // clickable.
+            // default draws widgets and links as on paper; nothing clickable
             &InterpreterSettings::default(),
             &RenderSettings::default(),
             &PixmapSettings {
@@ -167,9 +148,8 @@ impl PdfDocument {
     }
 }
 
-/// Scale from points to pixels so the page is `width` pixels wide, reduced
-/// so that no edge exceeds [`MAX_EDGE`]. Degenerate pages count as at least
-/// one point per edge.
+/// Page ends up `width` pixels wide, reduced so no edge exceeds [`MAX_EDGE`]. Degenerate pages
+/// count as at least one point per edge.
 pub fn render_scale(size: PageSize, width: u32) -> f32 {
     let w = f64::from(size.width.max(1.0));
     let h = f64::from(size.height.max(1.0));

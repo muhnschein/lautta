@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Search here (SRC-2..4): recursive name search below a folder with results
-// streaming in, grouped by folder (design: Search).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -12,16 +10,12 @@ import "../components/search/SearchText.js" as SearchText
 Page {
     id: page
 
-    // The folder (or location root) searched.
     property string rootUri
-    // Whether a search was run since the page opened (for the placeholder).
     property bool searched
-    // On a server: the folder headers have its icon (§15.5).
     readonly property bool remote: App.isRemote(rootUri)
 
     allowedOrientations: Orientation.All
 
-    // The match mode and types; the folder is the header's description.
     function summary() {
         var parts = [searchModel.matchMode === "glob"
                      //% "glob"
@@ -46,10 +40,8 @@ Page {
             searched = true
     }
 
-    // The model's query is set here rather than bound to the field: the
-    // filters dialog sets it too, which would drop a binding and leave later
-    // typing unsearched. Text equal to the query is the dialog's own name
-    // coming back, already searched.
+    // Model query set here, not bound: filters dialog sets it too, which would drop a binding. Text
+    // equal to the query is the dialog's own name coming back, already searched.
     function edited(text) {
         if (text === searchModel.query)
             return
@@ -81,11 +73,8 @@ Page {
         onTriggered: page.start()
     }
 
-    // The field and the filter summary sit above the list, not in its header
-    // (SRC-2): each search resets the model and the list then makes its first
-    // new row current, which takes the focus inside the list, so a field in
-    // the header lost the keyboard; it also scrolled away with the rows.
-    // Without a pulley nothing needs a flickable around the two.
+    // Field and filter summary sit above the list, not in its header: each search resets model,
+    // list makes first new row current and takes focus, so a header field lost the keyboard.
     Column {
         id: heading
 
@@ -120,7 +109,6 @@ Page {
             Component.onCompleted: forceActiveFocus()
         }
 
-        // The filters are reached from here only.
         BackgroundItem {
             objectName: "searchFilters"
             width: parent.width
@@ -156,12 +144,10 @@ Page {
             bottom: parent.bottom
             bottomMargin: progressPanel.visibleSize
         }
-        // Rows otherwise draw over the heading when scrolled.
+        // Rows otherwise draw over heading when scrolled.
         clip: true
         model: searchModel
 
-        // A section header (its height, padding, font and colour) with
-        // the folder's name in a PlaceLabel.
         section {
             property: "section"
             delegate: Item {
@@ -251,7 +237,6 @@ Page {
         VerticalScrollDecorator { }
     }
 
-    // Progress and Stop while the search runs (design: Search).
     DockedPanel {
         id: progressPanel
 
@@ -259,7 +244,6 @@ Page {
         height: Theme.itemSizeMedium
         dock: Dock.Bottom
         open: searchModel.running
-        // The panel hides the progress row once the search is done.
         modal: false
         background: BarBackground { }
 

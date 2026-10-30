@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The shared contract (SPEC TST-2): the golden sequences replay against the
-//! fake bridge, and the fake serves the interface the XML describes.
+//! Golden sequences replay against the fake; the fake serves the interface the XML describes.
 #![cfg(feature = "fake")]
 
 use lautta_bridge_proto::fake::replay;
@@ -26,7 +25,6 @@ async fn every_golden_sequence_replays() {
     assert!(ran.len() >= 6, "{ran:?}");
 }
 
-/// `(kind, member) -> [(direction, type)]` of the `org.netvfs.Bridge1` interface.
 fn members(xml: &str) -> BTreeMap<(String, String), Vec<(String, String)>> {
     fn attr(line: &str, name: &str) -> Option<String> {
         let marker = format!("{name}=\"");

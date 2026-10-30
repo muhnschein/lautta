@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Zip central directory parser and entry reader (PRV-10).
-//!
-//! The `zip` crate reads every entry's local header when it opens an entry,
-//! which would touch the whole file just to list it. This reader parses the
-//! end-of-central-directory record and the central directory (two or three
-//! ranged reads), and reads an entry's local header only when it is opened.
+//! Zip central directory parser and entry reader. The `zip` crate reads every entry's local header
+//! on open, touching the whole file just to list it. This reads end-of-central-directory and
+//! central directory (2-3 ranged reads), local header only on open.
 
 use super::blocks::{from_io, BlockReader, BlockSource};
 use super::{Loc, RawEntry};
@@ -22,10 +19,8 @@ const ZIP64_EOCD_SIG: u32 = 0x0606_4b50;
 const CENTRAL_SIG: u32 = 0x0201_4b50;
 const LOCAL_SIG: u32 = 0x0403_4b50;
 const CENTRAL_FIXED: usize = 46;
-/// A central directory larger than this is refused (memory bound).
 const MAX_DIRECTORY: u64 = 256 * 1024 * 1024;
 
-/// Where and how an entry's bytes are stored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ZipLoc {
     pub method: u16,
@@ -57,14 +52,12 @@ fn le64(b: &[u8], at: usize) -> Option<u64> {
     Some(u64::from_le_bytes(a))
 }
 
-/// Location of the central directory: (offset, size, entry count).
 struct Directory {
     offset: u64,
     size: u64,
     count: u64,
 }
 
-/// Reads the whole archive's entries (ranged: tail, then the directory).
 pub fn read_entries(reader: &mut BlockReader) -> Result<Vec<RawEntry>> {
     let dir = locate_directory(reader)?;
     if dir.size > MAX_DIRECTORY || dir.offset.checked_add(dir.size).is_none_or(|e| e > reader.size()) {
@@ -208,8 +201,7 @@ fn extra_fields(mut extra: &[u8]) -> Vec<(u16, &[u8])> {
     out
 }
 
-/// The zip64 field carries, in order, only the values that were `0xFFFFFFFF`
-/// in the fixed header; whichever ones the header marks are replaced here.
+/// zip64 field holds, in order, only the values that were `0xFFFFFFFF` in the fixed header.
 fn apply_zip64(data: &[u8], size: &mut u64, compressed: &mut u64, offset: &mut u64) {
     let mut at = 0;
     for slot in [size, compressed, offset] {
@@ -251,7 +243,7 @@ fn classify(made_by: u16, attrs: u32, name: &[u8]) -> (Kind, Option<u32>) {
     }
 }
 
-/// DOS date/time (local time, treated as UTC) to `SystemTime`.
+/// Local time treated as UTC.
 pub fn dos_to_time(date: u16, time: u16) -> SystemTime {
     let year = 1980 + i64::from(date >> 9);
     let month = i64::from((date >> 5) & 0xF).clamp(1, 12);
@@ -273,7 +265,6 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     era * 146_097 + doe - 719_468
 }
 
-/// Opens the decompressed bytes of one entry (reads its local header).
 pub fn open_entry(src: &Arc<BlockSource>, loc: &ZipLoc) -> Result<Box<dyn Read + Send>> {
     if loc.flags & 1 != 0 {
         return Err(Error::new(ErrorKind::Unsupported, "encrypted zip entry"));
@@ -299,8 +290,7 @@ pub fn open_entry(src: &Arc<BlockSource>, loc: &ZipLoc) -> Result<Box<dyn Read +
     Ok(Box::new(Checked::new(stream, loc)))
 }
 
-/// Bounds the output to the declared size and verifies CRC-32 at the end, so
-/// a decompression bomb or a corrupt entry cannot pass silently.
+/// Bounds output to declared size, verifies CRC-32: bombs and corrupt entries cannot pass.
 struct Checked {
     inner: io::Take<Box<dyn Read + Send>>,
     crc: flate2::Crc,

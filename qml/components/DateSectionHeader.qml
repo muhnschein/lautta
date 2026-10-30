@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The date sections of Activity and Recents (SPEC §15.4, ORG-2): a row's
-// `dateGroup` role in words. The groups come from the core (DateGroup), by
-// calendar day in the device's time zone.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
 SectionHeader {
-    // `inProgress`, `today`, `yesterday`, `last7Days`, `last30Days` or `older`.
     property string group
 
     objectName: "dateSection"

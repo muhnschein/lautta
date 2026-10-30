@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The summary sheet of a large plan (OPS-1): totals, space, conflicts, names
-// that change, and the options of this one run. "Start" queues the transfer.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -10,7 +8,6 @@ import "../components/operations/Json.js" as Json
 Dialog {
     id: dialog
 
-    // The id from Operations.needsSummary and its summary (object or JSON).
     property int planId: -1
     property var summary
 
@@ -51,8 +48,6 @@ Dialog {
         })
     }
 
-    // Walks through the open conflicts one by one (OPS-2); each answer comes
-    // back as Operations.conflictResolved.
     function resolveNext() {
         var open = JSON.parse(Operations.conflictsJson(planId))
         conflictCount = open.length
@@ -79,8 +74,8 @@ Dialog {
     canAccept: planId >= 0
 
     onAccepted: Operations.startPlanWith(planId, optionsJson())
-    // Silica emits done() before accepted(), with the result already set:
-    // only a dialog that was not accepted lets its plan go.
+    // Silica emits done() before accepted(), result already set: only a non-accepted dialog drops
+    // its plan.
     onDone: {
         if (result !== DialogResult.Accepted)
             Operations.discardPlan(planId)

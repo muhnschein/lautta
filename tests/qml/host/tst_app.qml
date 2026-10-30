@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of the App singleton (no Silica): URI helpers, settings,
-// clipboard and viewer choice behave as doc/QML-API.md says.
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -18,8 +16,6 @@ QtObject {
         check(App.parentUri(child) === docs, "parentUri")
         check(App.nameOf(child) === "a b.txt", "nameOf")
         check(App.childUri(docs, "x/y") === "", "names with a slash are refused")
-        // Servers, known or gone, are remote; the device, volumes and
-        // archives are not (§15.5).
         check(App.isRemote("lautta://nv-account:1/srv/photos"), "an account is remote")
         check(App.isRemote("lautta://nv-adhoc:9/"), "an ad-hoc server is remote")
         check(!App.isRemote(child), "a local folder is not remote")

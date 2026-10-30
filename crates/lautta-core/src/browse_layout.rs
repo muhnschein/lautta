@@ -1,34 +1,23 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! What the Browse page shows and in which order (SPEC BRW-12): the rows the
-//! user hid and the order they gave the rows of a section. Sections keep
-//! their fixed order; favourites keep their own order (ORG-1).
+//! Browse page layout: rows the user hid and the order they gave a section's rows. Sections keep a
+//! fixed order; favourites keep their own.
 //!
-//! A row is named by its section and an item: the location id of a folder,
-//! volume or server, `recents` for *Recents*, `deleted` for the *Trash*
-//! and `nearby` for all nearby servers together. *Volumes* and *Servers*
-//! have a switch for the whole section, stored as the hidden flag of the
-//! item `section`; the flags of the section's rows are left as they are
-//! while it is off, so that switching it on again restores them. The store
-//! is blocking: call it from `spawn_blocking` (ARC-6).
+//! A row is named by section and item: location id, `recents`, `deleted`, `nearby` (all nearby
+//! servers). *Volumes* and *Servers* have a section switch, stored as hidden flag of item
+//! `section`; its rows' flags stay while it is off. Blocking: call from `spawn_blocking`.
 
 use crate::db::Db;
 use crate::error::Result;
 use rusqlite::params;
 use std::collections::{BTreeMap, BTreeSet};
 
-/// The item of the *Trash* in the `device` section.
 pub const DELETED_ITEM: &str = "deleted";
-/// The item of *Recents* in the `device` section (ORG-2).
 pub const RECENTS_ITEM: &str = "recents";
-/// The one item that stands for every nearby server.
 pub const NEARBY_ITEM: &str = "nearby";
-/// The item of a section's own switch. No location id is called this.
+/// No location id is called this.
 pub const SECTION_ITEM: &str = "section";
-/// The sections with a switch of their own, in Browse order.
 pub const SWITCHED_SECTIONS: [&str; 2] = ["volumes", "servers"];
 
-/// The layout item of a Browse row of `kind` with id `item_id`; `None` for
-/// rows the layout does not cover (favourites and the bridge notices).
 pub fn layout_item(kind: &str, item_id: &str) -> Option<String> {
     match kind {
         "deleted" => Some(DELETED_ITEM.to_owned()),
@@ -39,7 +28,6 @@ pub fn layout_item(kind: &str, item_id: &str) -> Option<String> {
     }
 }
 
-/// Hidden rows and per-section order as stored.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Layout {
     hidden: BTreeSet<(String, String)>,
@@ -51,25 +39,18 @@ impl Layout {
         self.hidden.contains(&(section.to_owned(), item.to_owned()))
     }
 
-    /// Whether the section is on: its rows show on the Browse page. Only
-    /// the sections in [`SWITCHED_SECTIONS`] can be turned off.
     pub fn section_shown(&self, section: &str) -> bool {
         !SWITCHED_SECTIONS.contains(&section) || !self.is_hidden(section, SECTION_ITEM)
     }
 
-    /// The stored place of `item` in its section, if the user moved rows
-    /// of that section.
     pub fn position(&self, section: &str, item: &str) -> Option<i64> {
         self.positions
             .get(&(section.to_owned(), item.to_owned()))
             .copied()
     }
 
-    /// Orders `rows` (grouped by section, sections in their fixed order)
-    /// within each section: rows with a stored place first, by that place;
-    /// the others after them in the order they came. `key` gives a row's
-    /// section and layout item (`None`: keep it where it is among the
-    /// unplaced rows).
+    /// Rows with a stored place first, by place; others after, in arrival order. `None` from `key`:
+    /// keep it where it is among the unplaced rows.
     pub fn arrange<T>(&self, rows: Vec<T>, key: impl Fn(&T) -> (String, Option<String>)) -> Vec<T> {
         let mut out: Vec<T> = Vec::with_capacity(rows.len());
         let mut group: Vec<(Option<i64>, usize, T)> = Vec::new();
@@ -140,8 +121,7 @@ impl BrowseLayout {
         tidy(&conn)
     }
 
-    /// Stores `items` as the order of `section`; rows of the section that
-    /// are not in `items` lose their place.
+    /// Rows not in `items` lose their place.
     pub fn set_order(&self, section: &str, items: &[String]) -> Result<()> {
         let mut conn = self.db.lock();
         let tx = conn.transaction()?;
@@ -161,14 +141,11 @@ impl BrowseLayout {
         Ok(())
     }
 
-    /// Back to the defaults: every row and section shown, in its natural
-    /// order.
     pub fn reset(&self) -> Result<()> {
         self.db.lock().execute("DELETE FROM browse_layout", [])?;
         Ok(())
     }
 
-    /// Forgets the rows of a removed location (SEC-5).
     pub fn forget(&self, item: &str) -> Result<()> {
         self.db
             .lock()

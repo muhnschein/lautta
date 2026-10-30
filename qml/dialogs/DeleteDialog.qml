@@ -1,8 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// Asks before a delete that skips the Trash (OPS-8, board ImageDeleteRemote):
-// on volumes and servers, and anywhere while the Trash is switched off. It
-// names the item (or the count) and where it is. The dialog only asks: the
-// caller deletes when it is accepted, with no remorse timer after it.
+// SPDX-License-Identifier: LGPL-2.1-or-later Only asks; caller deletes on accept, no remorse timer
+// after.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -10,7 +7,6 @@ import Lautta 1.0
 Dialog {
     id: dialog
 
-    // The URIs of the items to delete.
     property var uris: []
 
     readonly property int count: uris ? uris.length : 0

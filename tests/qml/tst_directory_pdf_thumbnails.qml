@@ -1,16 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// PDF thumbnails on the target (PRV-1, PRV-14). In a folder of this device a
-// PDF asks the system thumbnailer for its first page at the icon's size, with
-// the PDF type, without which it draws no PDF, in the grid and the list. In an
-// archive (it stands in for a server: neither is on this device) the app
-// draws the first page, and an encrypted PDF keeps its icon. With Show
-// thumbnails off no PDF has one (the name under the tile stays either way,
-// tst_directory_grid_captions.qml). Fails when a local PDF asks without its
-// type, a readable archive PDF shows no thumbnail, an unreadable one is not
-// marked as failed, or the switch changes nothing. Here the system
-// thumbnailer draws nothing (no scene graph: a `Thumbnail` stays `Null`, a
-// JPEG's too): only a phone shows a local PDF's page, or its icon when the
-// page cannot be drawn.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -41,7 +29,6 @@ ApplicationWindow {
         return ok
     }
 
-    // Items are reached both as children and as a content item: each once.
     function findAll(item, pred, out) {
         if (!item || out.indexOf(item) >= 0)
             return out
@@ -55,15 +42,13 @@ ApplicationWindow {
         return out
     }
 
-    // Headless, no render loop polishes the view: lays out the delegates.
+    // No render loop headless: lay out by hand.
     function layOut(view) {
         var flicks = findAll(view, function (x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < flicks.length; ++i)
             flicks[i].forceLayout()
     }
 
-    // The icon of the row `name`: the one whose thumbnail is that file's, or
-    // for a row without one, the only icon of its category left over.
     function iconOf(view, category, name) {
         layOut(view)
         var icons = findAll(view, function (x) { return x.thumbnailFailed !== undefined && x.category === category }, [])
@@ -71,12 +56,10 @@ ApplicationWindow {
         return own.length === 1 ? own[0] : null
     }
 
-    // The system thumbnail inside `icon`, undefined while it has none.
     function systemThumbnailOf(icon) {
         return findAll(icon, function (x) { return x.priority !== undefined && x.mimeType !== undefined }, [])[0]
     }
 
-    // Lets the event loop run until `done()` holds, for at most 10 s.
     function until(done) {
         for (var i = 0; i < 200 && !done(); ++i)
             tools.pump(50)
@@ -89,8 +72,6 @@ ApplicationWindow {
         return pageStack.currentPage.view
     }
 
-    // Each local PDF asks the system thumbnailer for its own file, as a PDF,
-    // at the icon's size.
     function checkLocal(view) {
         until(function () { return iconOf(view, "pdf", "readable.pdf") && iconOf(view, "pdf", "secret.pdf") })
         var names = ["readable.pdf", "secret.pdf"]
@@ -110,7 +91,6 @@ ApplicationWindow {
         }
     }
 
-    // In an archive the app draws the first page; an encrypted PDF fails.
     function checkArchive() {
         Operations.compress(JSON.stringify([base + "readable.pdf", base + "secret.pdf"]), "lautta://user-documents/",
                             "pdf-thumbnails", "zip")
@@ -139,7 +119,6 @@ ApplicationWindow {
         expect(view.gridMode, "a grid")
 
         checkLocal(view)
-        // The list's rows ask the same way.
         App.setSetting("view_mode", JSON.stringify("list"))
         expect(until(function () { return !view.gridMode }), "a list")
         checkLocal(view)

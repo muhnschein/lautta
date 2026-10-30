@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! One live connection to the bridge: the proxy plus the routing of listing and
-//! job signals to the requests that wait for them (NVB-7, NVB-10).
+//! One live bridge connection: proxy plus routing of listing and job signals to waiting requests.
 
 use super::convert::{entry_from_wire, finished_error, map_error};
 use super::registry::Registry;
@@ -13,8 +12,6 @@ use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-/// Result of a finished job: the integers of `JobFinished.extra` (`bytes`,
-/// `files`, `dirs`, `entries`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct JobOutcome {
     pub extra: HashMap<String, i64>,
@@ -36,7 +33,6 @@ pub(crate) enum JobEvent {
     Finished(Result<JobOutcome>),
 }
 
-/// Maps the result of a proxy call into the app's error model.
 pub(crate) fn rpc<T>(r: ProxyResult<T>) -> Result<T> {
     r.map_err(|e| map_error(BridgeError::from(e)))
 }
@@ -70,7 +66,6 @@ impl Link {
         &self.conn
     }
 
-    /// Routes list and job signals; hands back the others.
     pub(crate) fn route(&self, signal: Signal) -> Option<Signal> {
         match signal {
             Signal::ListBatch { req, entries } => self.lists.push(req, ListEvent::Batch(entries)),
@@ -98,14 +93,12 @@ impl Link {
                 };
                 self.jobs.push(job, JobEvent::Finished(result));
             }
-            // Walk results are consumed by `Walk` users only, which this client has none of yet.
             Signal::WalkBatch { .. } => {}
             other => return Some(other),
         }
         None
     }
 
-    /// The socket closed: everything waiting ends with `ConnectionLost`.
     pub(crate) fn close(&self) {
         self.lists.close();
         self.jobs.close();
@@ -118,19 +111,17 @@ impl Link {
         }
     }
 
-    /// Asks the bridge to stop a request or job, without waiting for it.
     fn cancel_later(self: &Arc<Self>, id: u32) {
         if let Ok(rt) = tokio::runtime::Handle::try_current() {
             let link = self.clone();
             rt.spawn(async move {
-                // The connection may be gone already, which cancels everything (XB-13).
+                // Connection may be gone already, which cancels everything.
                 let _ = link.proxy().cancel(id).await;
             });
         }
     }
 
-    /// Streams a listing into `out` until `ListDone` (NVB-7). Dropping the
-    /// future cancels the request at the bridge.
+    /// Dropping the future cancels the request at the bridge.
     pub(crate) async fn list(
         self: &Arc<Self>,
         loc: &str,
@@ -146,7 +137,6 @@ impl Link {
                 ListEvent::Batch(batch) => {
                     let entries = batch.iter().map(entry_from_wire).collect();
                     if out.send(entries).await.is_err() {
-                        // The reader went away: stop the listing (the guard cancels).
                         return Err(Error::new(ErrorKind::Canceled, "listing no longer wanted"));
                     }
                 }
@@ -164,9 +154,7 @@ impl Link {
         Err(lost())
     }
 
-    /// Starts a job with `start` (which returns the job id) and waits for
-    /// `JobFinished`, reporting `JobProgress` to `progress`. Dropping the
-    /// future cancels the job at the bridge.
+    /// Dropping the future cancels the job at the bridge.
     pub(crate) async fn run_job<F>(self: &Arc<Self>, start: F, progress: &ProgressSink) -> Result<JobOutcome>
     where
         F: Future<Output = ProxyResult<u32>>,
@@ -194,7 +182,6 @@ pub(crate) fn lost() -> Error {
     Error::new(ErrorKind::ConnectionLost, "the connection to the bridge was lost")
 }
 
-/// Cancels the request at the bridge when its future is dropped early.
 struct RequestGuard {
     link: Arc<Link>,
     kind: Kind,
@@ -252,7 +239,7 @@ mod tests {
     async fn listing_signals_go_to_their_request_even_when_early() {
         let link = link().await;
         let batch = vec![WireEntry::unknown(b"a", 1)];
-        // The batch arrives before anyone has subscribed to request 4.
+        // Batch arrives before anyone has subscribed to request 4.
         assert!(link
             .route(Signal::ListBatch {
                 req: 4,

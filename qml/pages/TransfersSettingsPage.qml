@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Settings › Transfers (SPEC §18, §15): how many run at once, what a copy
-// keeps and checks, resuming, history and the size that asks first.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -10,7 +8,6 @@ import "../components/search/SettingsText.js" as SettingsText
 Page {
     id: page
 
-    // Item and byte thresholds offered by "Ask before large operations".
     readonly property var largeOps: [[100, 100000000], [1000, 1000000000], [10000, 10000000000]]
 
     function setting(key) {

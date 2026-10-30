@@ -1,34 +1,28 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Text viewer model (SPEC PRV-4): bounded loading and UTF-8 validation.
-//!
-//! The loaded `text` is normalised for display: line breaks are `\n`, a BOM
-//! is dropped and the single final line break is *not* part of it, so the
-//! viewer shows exactly the lines of the file.
+//! Text viewer model: bounded loading, UTF-8 validation. `text` is normalised: line breaks `\n`,
+//! BOM dropped, single final line break not part of it.
 
 use crate::error::Result;
 use crate::provider::{read_all, ReadHandle};
 
-/// The viewer reads at most this much (PRV-4).
 pub const MAX_TEXT_BYTES: usize = 1024 * 1024;
 
 const BOM: &[u8] = b"\xEF\xBB\xBF";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextDoc {
-    /// Normalised text (see the module docs); lossy when `valid_utf8` is false.
+    /// Lossy when `valid_utf8` is false.
     pub text: String,
-    /// The file is longer than [`MAX_TEXT_BYTES`]; `text` is its beginning.
     pub truncated: bool,
     pub valid_utf8: bool,
 }
 
-/// Reads up to [`MAX_TEXT_BYTES`] from `handle` and analyses it.
 pub async fn load_text(handle: &dyn ReadHandle) -> Result<TextDoc> {
     let bytes = read_all(handle, MAX_TEXT_BYTES as u64 + 1).await?;
     Ok(analyze(&bytes))
 }
 
-/// Analyses raw bytes: `bytes.len() > MAX_TEXT_BYTES` means "truncated".
+/// `bytes.len() > MAX_TEXT_BYTES` means truncated.
 pub fn analyze(bytes: &[u8]) -> TextDoc {
     let truncated = bytes.len() > MAX_TEXT_BYTES;
     let raw = &bytes[..bytes.len().min(MAX_TEXT_BYTES)];
@@ -46,7 +40,7 @@ pub fn analyze(bytes: &[u8]) -> TextDoc {
     }
 }
 
-/// UTF-8 decoding; a multi-byte sequence cut by truncation is not an error.
+/// Multi-byte sequence cut by truncation is not an error.
 fn decode(raw: &[u8], truncated: bool) -> (bool, String) {
     match std::str::from_utf8(raw) {
         Ok(s) => (true, s.to_owned()),
@@ -58,7 +52,6 @@ fn decode(raw: &[u8], truncated: bool) -> (bool, String) {
     }
 }
 
-/// CRLF and lone CR become LF.
 fn normalise(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
@@ -75,22 +68,17 @@ fn normalise(text: &str) -> String {
     out
 }
 
-/// How the viewer presents a file by its name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextKind {
-    /// Prose: proportional font.
     Plain,
     Markdown,
-    /// Source code, with a language label for the viewer.
     Code(&'static str),
     Config,
     Log,
-    /// CSV, JSON, XML and similar.
     Data,
 }
 
 impl TextKind {
-    /// Monospace font in the viewer.
     pub fn monospace(self) -> bool {
         !matches!(self, TextKind::Plain | TextKind::Markdown)
     }
@@ -161,7 +149,6 @@ const SPECIAL_NAMES: &[(&str, TextKind)] = &[
     (".profile", TextKind::Code("Shell")),
 ];
 
-/// Classifies by file name (extension, then well-known names).
 pub fn text_kind(name: &[u8]) -> TextKind {
     let lower = String::from_utf8_lossy(name).to_lowercase();
     if let Some((_, kind)) = SPECIAL_NAMES.iter().find(|(n, _)| *n == lower) {

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Client side of the peer-to-peer connection (SPEC NVB-2, SEC-3): a unix
-//! socket with fd passing, no bus daemon, no other socket is ever opened.
+//! Peer-to-peer unix socket with fd passing, no bus daemon. No other socket is ever opened.
 
 use crate::errors::BridgeError;
 use crate::proxy::Bridge1Proxy;
@@ -13,7 +12,6 @@ use std::task::{Context, Poll};
 use tokio::net::UnixStream;
 use zeroize::{Zeroize, Zeroizing};
 
-/// A connected bridge: the zbus connection and its proxy.
 #[derive(Clone)]
 pub struct Connection {
     conn: zbus::Connection,
@@ -26,16 +24,13 @@ impl std::fmt::Debug for Connection {
     }
 }
 
-/// Connects to the bridge socket (NVB-2). The socket path is the only thing
-/// the app ever connects to (SEC-3).
 pub async fn connect(socket_path: &Path) -> Result<Connection, BridgeError> {
     let stream = UnixStream::connect(socket_path).await?;
     Connection::from_stream(stream).await
 }
 
 impl Connection {
-    /// Runs the (peer-to-peer) client handshake over an already connected
-    /// stream. Used by [`connect`] and by the fake bridge.
+    /// Used by [`connect`] and the fake bridge.
     pub async fn from_stream(stream: UnixStream) -> Result<Connection, BridgeError> {
         let conn = zbus::connection::Builder::unix_stream(stream)
             .p2p()
@@ -53,14 +48,11 @@ impl Connection {
         &self.conn
     }
 
-    /// Closes the socket; calls and signals end with a disconnect.
     pub async fn close(&self) {
-        // Closing an already closed connection is not an error worth reporting.
         let _ = self.conn.clone().close().await;
     }
 
-    /// All signals in arrival order. The stream ends when the socket closes.
-    /// Create it before the first call so that no signal is missed.
+    /// Create before the first call or signals are missed.
     pub fn signals(&self) -> SignalStream {
         SignalStream {
             inner: zbus::MessageStream::from(&self.conn),
@@ -68,10 +60,8 @@ impl Connection {
         }
     }
 
-    /// `ConnectAdHoc` that wipes `secret` before returning, also when the call
-    /// fails or the future is dropped (SPEC NVB-6, SEC-1). The secret is passed
-    /// as `ay`; the copy that zbus serialises into the outgoing message lives
-    /// in the message buffer until it has been sent.
+    /// Wipes `secret` before returning, also on failure or drop. The copy zbus serialises
+    /// lives in the message buffer until sent.
     pub async fn connect_ad_hoc_wiping(
         &self,
         url: &str,
@@ -84,7 +74,6 @@ impl Connection {
         result.map_err(BridgeError::from)
     }
 
-    /// `Answer` whose keyboard-interactive `answers` are wiped afterwards.
     pub async fn answer_wiping(
         &self,
         id: &str,
@@ -113,7 +102,6 @@ impl Drop for WipeOnDrop<'_> {
     }
 }
 
-/// Ordered stream of decoded signals.
 pub struct SignalStream {
     inner: zbus::MessageStream,
     done: bool,

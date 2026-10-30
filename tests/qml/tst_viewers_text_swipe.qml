@@ -1,12 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The text viewer (PRV-4) on the target: it always wraps its lines, so its
-// list flicks only up and down and a swipe goes back to the page below, with
-// the whole header shown at the top. Its pulley offers Open with and Share,
-// no way to unwrap. Markdown's "View source" opens it the same, and a swipe
-// goes back to the Markdown page.
-//
-// The Silica window sits in a Qt Quick window: only items in one get the
-// mouse events a swipe needs.
 import QtQuick 2.6
 import QtQuick.Window 2.2 as QtQuick
 import QtTest 1.0
@@ -17,7 +9,6 @@ import "../../qml/viewers"
 QtQuick.Window {
     id: window
 
-    // What Silica's pages look up in the window they are in.
     property var __silica_applicationwindow_instance: app
     property var pageStack: app.pageStack
 
@@ -33,7 +24,6 @@ QtQuick.Window {
     function findAll(item, pred, out) {
         if (!item)
             return out
-        // A flickable's contentItem is one of its children too.
         if (pred(item) && out.indexOf(item) < 0)
             out.push(item)
         var kids = item.children || []
@@ -53,7 +43,6 @@ QtQuick.Window {
         return findAll(viewer, function(x) { return x.headerItem !== undefined }, [])[0]
     }
 
-    // Pushes the text viewer on `uri` and waits for its rows.
     function openText(uri) {
         var viewer = app.pageStack.push(textComponent, { "uri": uri }, PageStackAction.Immediate)
         var view = listOf(viewer)
@@ -62,7 +51,6 @@ QtQuick.Window {
         return viewer
     }
 
-    // A finger moving from the left of the page to its right.
     function swipe(page) {
         var y = page.height * 0.7
         events.mousePress(page, 20, y, Qt.LeftButton, Qt.NoModifier, -1)
@@ -82,19 +70,15 @@ QtQuick.Window {
         return view.flickableDirection === Flickable.VerticalFlick && view.contentWidth <= view.width
     }
 
-    // A text is the id of a string, or its English text where one is loaded.
     function isOneOf(text, id, english) {
         return text === id || text === english
     }
 
-    // The texts of the pulley's entries.
     function pulleyTexts(viewer) {
         return findAll(viewer, function(x) { return x.hasOwnProperty("__silica_menuitem") }, [])
             .map(function(item) { return item.text })
     }
 
-    // A wide line takes several rows, the whole header shows, the pulley has
-    // no unwrap entry, and the page swipes back.
     function wraps(below) {
         var viewer = openText("lautta://user-documents/wide.txt")
         var view = listOf(viewer)
@@ -107,20 +91,17 @@ QtQuick.Window {
                + ", " + view.contentWidth + " wide in " + view.width)
         expect(Math.abs(view.contentY - view.originY) < 0.5 && view.headerItem.description.trim() !== "",
                "the whole header shows: contentY " + view.contentY + ", originY " + view.originY)
-        // The fourth line is wider than the page.
         view.positionViewAtIndex(3, ListView.Beginning)
         view.forceLayout()
         var wide = findAll(view.contentItem, function(x) { return x.text !== undefined && String(x.text).indexOf("let address") === 0 }, [])
         expect(wide.length === 1 && wide[0].lineCount > 1 && wide[0].width < view.width,
                "the wide line wraps: " + (wide.length ? wide[0].lineCount + " rows, " + wide[0].width + " wide" : "not shown"))
         swipesBack(viewer, below, "wrapped")
-        // Narrow lines too.
         var narrow = openText("lautta://user-documents/short.txt")
         expect(vertical(listOf(narrow)), "narrow lines flick only up and down")
         swipesBack(narrow, below, "narrow lines")
     }
 
-    // Markdown's "View source" opens the text viewer.
     function viewSource() {
         var markdown = app.pageStack.push(markdownComponent, {}, PageStackAction.Immediate)
         tools.pump(300)

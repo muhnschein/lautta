@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Small text helpers of the viewers (headers and details).
 .pragma library
 .import Sailfish.Silica 1.0 as Silica
 
-// "1:42" or "1:02:03" from milliseconds.
 function clock(ms) {
     var total = Math.max(0, Math.floor((ms || 0) / 1000))
     var s = total % 60
@@ -13,13 +11,11 @@ function clock(ms) {
     return h > 0 ? h + ":" + two(m) + ":" + two(s) : m + ":" + two(s)
 }
 
-// "60.15° N, 24.95° E"
 function coordinates(lat, lon) {
     var f = function (v) { return Math.abs(v).toFixed(2) }
     return f(lat) + "° " + (lat < 0 ? "S" : "N") + ", " + f(lon) + "° " + (lon < 0 ? "W" : "E")
 }
 
-// The EXIF orientation as a phrase; the viewer always applies it.
 function orientation(o) {
     switch (o) {
     case 3:
@@ -42,9 +38,6 @@ function orientation(o) {
     }
 }
 
-// "Taken" row: the EXIF time "2026-09-12 18:42:11", local time without a
-// zone, in the system's date and time formats like every date the app
-// shows (§18); text in another shape is shown as recorded.
 function taken(raw) {
     var parts = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(raw || "")
     if (!parts)
@@ -55,7 +48,6 @@ function taken(raw) {
         + Silica.Format.formatDate(date, Silica.Formatter.TimeValue)
 }
 
-// "Exposure" row: "1/640 s · f/1.8 · ISO 50", missing parts left out.
 function exposureLine(info) {
     var parts = []
     if (info.exposure)
@@ -67,7 +59,6 @@ function exposureLine(info) {
     return parts.join(" · ")
 }
 
-// "Jolla C2": the model, with the make in front unless the model has it.
 function camera(info) {
     var make = info.make || ""
     var model = info.model || ""

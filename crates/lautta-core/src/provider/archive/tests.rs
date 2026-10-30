@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Archive provider tests: archives are built in memory with the same crates
-//! the readers use (zip, tar, flate2, bzip2, xz2, zstd, sevenz-rust).
+//! Archives built in memory with the crates the readers use.
 
 use super::*;
 use crate::provider::memory::MemoryProvider;
@@ -11,7 +10,6 @@ fn vp(s: &str) -> VPath {
     VPath::parse(s.as_bytes()).unwrap_or_default()
 }
 
-/// Incompressible deterministic bytes.
 fn noise(len: usize, mut seed: u64) -> Vec<u8> {
     (0..len)
         .map(|_| {
@@ -45,8 +43,7 @@ fn tar_add(b: &mut tar::Builder<Vec<u8>>, name: &str, data: &[u8], kind: tar::En
     h.set_mode(0o644);
     h.set_mtime(1_700_000_000);
     h.set_entry_type(kind);
-    // Raw name bytes: the builder's own setters refuse `..`, hostile
-    // archives do not.
+    // Raw name bytes: builder setters refuse `..`, hostile archives do not.
     h.as_old_mut().name[..name.len()].copy_from_slice(name.as_bytes());
     h.set_cksum();
     b.append(&h, data).unwrap();

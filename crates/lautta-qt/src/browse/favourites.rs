@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `FavouritesModel` (ORG-1): favourites in their order, with label, colour
-//! and icon. Roles: `itemId`, `uri`, `label`, `colour`, `place`, `isDir`,
-//! `icon` (the chosen icon name, empty for the default), `defaultIcon`
-//! (the icon shown without a chosen one: a theme icon URL or a glyph token,
-//! `Favourite::icon_source`).
+//! Roles: `itemId`, `uri`, `label`, `colour`, `place`, `isDir`, `icon` (chosen name, empty for
+//! default), `defaultIcon` (`Favourite::icon_source`: theme icon URL or glyph token).
 
 use super::{cell_data, error_parts, role_names, store_changed, Cell};
 use crate::json::to_json;
@@ -67,7 +64,6 @@ fn bool_at(row: &[Cell], col: usize) -> bool {
     matches!(row.get(col), Some(Cell::Bool(true)))
 }
 
-/// No colour or icon for an empty one: the default.
 fn chosen(value: &str) -> Option<&str> {
     Some(value).filter(|c| !c.is_empty())
 }
@@ -77,32 +73,22 @@ pub struct FavouritesModel {
     base: qt_base_class!(trait QAbstractListModel),
     count: qt_property!(i32; NOTIFY countChanged),
     countChanged: qt_signal!(),
-    /// True once the first load finished.
     loaded: qt_property!(bool; NOTIFY loadedChanged),
     loadedChanged: qt_signal!(),
 
     reload: qt_method!(fn(&mut self)),
-    /// Adds a favourite for a folder.
     add: qt_method!(fn(&mut self, uri: QString, label: QString, colour: QString)),
-    /// Adds a favourite for a folder (`isDir`) or a file, or changes label,
-    /// colour and icon (a name of `iconChoices`, empty for the default) of
-    /// the one it already is.
+    /// `icon`: a name of `iconChoices`, empty for default.
     save:
         qt_method!(fn(&mut self, uri: QString, label: QString, colour: QString, icon: QString, isDir: bool)),
     edit: qt_method!(fn(&mut self, id: i32, label: QString, colour: QString)),
     remove: qt_method!(fn(&mut self, id: i32)),
-    /// Removes the favourite of a folder or file, if it is one.
     removeUri: qt_method!(fn(&mut self, uri: QString)),
     moveTo: qt_method!(fn(&mut self, id: i32, index: i32)),
-    /// `{id, uri, label, colour, place, isDir, icon, defaultIcon}` of a
-    /// loaded favourite, or `{}`.
     get: qt_method!(fn(&self, id: i32) -> QString),
-    /// The id of the favourite for a folder or file, `-1` when it is none.
     idOf: qt_method!(fn(&self, uri: QString) -> i32),
-    /// `Location › folder` for a folder URI (no I/O).
     placeOf: qt_method!(fn(&self, uri: QString) -> QString),
-    /// The icons a favourite can have, theme names (`icon-m-<name>`), the
-    /// default star first.
+    /// Theme names (`icon-m-<name>`), default star first.
     iconChoices: qt_method!(fn(&self) -> QVariantList),
     failed: qt_signal!(kind: QString, message: QString),
 
@@ -143,16 +129,14 @@ impl FavouritesModel {
         self.failed(kind, message);
     }
 
-    /// Runs a store change off the GUI thread, then tells the other models
-    /// and shows the new list.
     fn change(&mut self, work: impl FnOnce(Arc<Core>) -> lautta_core::Result<()> + Send + 'static) {
         let Some(core) = core() else { return };
         let me = QPointer::from(&*self);
         blocking_then(
             move || work(core),
             move |res| {
-                // Before the model check: a dialog's model may be gone by
-                // now, the Browse page still has to see the change.
+                // Before the model check: a dialog's model may be gone, Browse still must see the
+                // change.
                 store_changed();
                 let Some(model) = me.as_pinned() else { return };
                 let mut model = model.borrow_mut();

@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `PathModel { uri }`: the ancestors of a folder for the path menu (BRW-9)
-//! and the path editor's completion from cached listings.
 
 use crate::runtime::core;
 use lautta_core::Uri;
@@ -16,10 +14,8 @@ pub struct PathModel {
     base: qt_base_class!(trait QAbstractListModel),
     uri: qt_property!(QString; NOTIFY uriChanged WRITE set_uri),
     uriChanged: qt_signal!(),
-    /// Text for the path editor: `~/Documents/Uni` or `/srv/photos`.
     address: qt_property!(QString; NOTIFY uriChanged),
     count: qt_property!(i32; NOTIFY uriChanged),
-    /// All names down to the folder joined with " › ".
     fullPath: qt_property!(QString; NOTIFY uriChanged),
 
     complete: qt_method!(fn(&self, prefix: QString) -> QVariantList),

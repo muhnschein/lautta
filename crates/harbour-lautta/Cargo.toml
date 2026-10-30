@@ -8,7 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [lints.rust]
-# The exported C `main` (SPEC RS-3) needs #[no_mangle].
+# Exported C `main` needs `#[no_mangle]`.
 unsafe_code = "allow"
 
 [lints.clippy]

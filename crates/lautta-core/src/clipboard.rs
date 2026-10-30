@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Cut/copy clipboard (OPS-10).
-//!
-//! `Clipboard` is the app-wide slot; its content is a [`ClipboardContents`]
-//! (mode, items and the folder they were taken from). Copy persists across
-//! pastes, cut is consumed by the paste.
+//! Cut/copy clipboard. Copy persists across pastes, cut is consumed.
 
 use crate::error::{Error, ErrorKind, Result};
 use crate::uri::Uri;
@@ -18,7 +14,6 @@ pub enum ClipboardMode {
 pub struct ClipboardContents {
     pub mode: ClipboardMode,
     pub items: Vec<Uri>,
-    /// The folder the items were taken from (their parent, OPS-10).
     pub source: Uri,
 }
 
@@ -32,7 +27,6 @@ impl Clipboard {
         Clipboard::default()
     }
 
-    /// Replaces the clipboard. Fails for an empty list or a location root.
     pub fn set(&mut self, mode: ClipboardMode, items: Vec<Uri>) -> Result<()> {
         let source = items
             .first()
@@ -60,7 +54,6 @@ impl Clipboard {
         self.contents.is_none()
     }
 
-    /// What a paste takes: a copy stays on the clipboard, a cut is consumed.
     pub fn take(&mut self) -> Option<ClipboardContents> {
         match self.contents.as_ref().map(|c| c.mode) {
             Some(ClipboardMode::Cut) => self.contents.take(),
@@ -69,8 +62,7 @@ impl Clipboard {
         }
     }
 
-    /// Whether a paste into `dest` makes sense: not into one of the items or
-    /// below it (a folder cannot contain itself).
+    /// A folder cannot contain itself.
     pub fn can_paste_into(&self, dest: &Uri) -> bool {
         match &self.contents {
             Some(c) => !c.items.iter().any(|item| dest.is_inside(item)),

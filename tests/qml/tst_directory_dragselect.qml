@@ -1,15 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Drag selection on the target (real Silica, SPEC §15.3), with a finger
-// sent through the window (ViewerTools.mouse). Grid view: holding an item
-// starts selection with that item selected; moving on over other items
-// selects the range from it in reading order, moving back shrinks it, and
-// letting go keeps it. Holding near the bottom edge scrolls the grid on and
-// the range follows; the held item keeps the finger after its row has
-// scrolled far out of view. List view keeps its long-press menu outside
-// selection and drags while selecting. A renamed item far down is scrolled
-// into view by its row. Fails when holding does not select, a move does not
-// extend or shrink the range, the edge does not scroll, the finger is lost
-// or the renamed item stays out of view.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -46,7 +35,6 @@ ApplicationWindow {
             tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + nameOf(i))
     }
 
-    // The first child of the view that `pred` takes.
     function child(pred) {
         for (var i = 0; i < view.children.length; ++i) {
             if (pred(view.children[i]))
@@ -55,7 +43,6 @@ ApplicationWindow {
         return null
     }
 
-    // The grid or the list, whichever is shown.
     function flick() {
         return view.flickable
     }
@@ -65,7 +52,6 @@ ApplicationWindow {
         return panel ? panel.height : 0
     }
 
-    // The list rows or the grid's cells, which sit in its rows.
     function delegates(f) {
         var out = []
         var kids = f.contentItem.children
@@ -77,8 +63,6 @@ ApplicationWindow {
         return out
     }
 
-    // The delegate of item `index`, laid out by hand: headless, no render
-    // loop polishes the view.
     function cell(index) {
         var f = flick()
         f.forceLayout()
@@ -93,12 +77,10 @@ ApplicationWindow {
         return null
     }
 
-    // How far `item` reaches down the content of `f`.
     function bottomOf(f, item) {
         return item.mapToItem(f.contentItem, 0, item.height).y
     }
 
-    // The indices selected, in order.
     function selected() {
         return view.model.selectedUris().map(function (u) { return view.model.indexOf(u) })
     }
@@ -119,9 +101,6 @@ ApplicationWindow {
         tools.mouse(c, "press", c.width / 2, c.height / 2)
     }
 
-    // Moves the finger in two steps to the middle of item `index`. No event
-    // loop runs in between: the checks' small screen is edge zones nearly
-    // everywhere, and the view must not scroll on by itself here.
     function moveTo(index) {
         var c = cell(index)
         if (!expect(c !== null, "item " + index + " is on screen"))
@@ -154,7 +133,6 @@ ApplicationWindow {
         release()
         same(selected(), [0, 1, 2], "letting go keeps the range")
         expect(view.selecting, "still selecting")
-        // A second drag adds a range; starting on a selected item removes one.
         press(9)
         tools.pump(1200)
         moveTo(10)
@@ -171,20 +149,16 @@ ApplicationWindow {
     function checkEdgeScroll() {
         var grid = flick()
         grid.contentY = grid.originY
-        // Not in the first row: the view keeps that row anyway, its current item.
         var held = 4
         press(held)
         tools.pump(1200)
         var anchor = cell(held)
-        // To the bottom of the items, above the panel: the grid scrolls on.
         var y = grid.height - panelHeight() - 4
         tools.mouse(anchor, "move", anchor.width / 2, anchor.height / 2 + 10)
         tools.pump(30)
         var p = anchor.mapFromItem(grid, grid.width / 2, y)
         tools.mouse(anchor, "move", p.x, p.y)
         var top = grid.contentY
-        // Until the held item's row is far out of view, past what the view
-        // keeps ready (cacheBuffer); ten seconds at most.
         var gone = function () { return bottomOf(grid, anchor) < grid.contentY - grid.cacheBuffer }
         for (var i = 0; i < 200 && !gone(); ++i)
             tools.pump(50)
@@ -192,7 +166,6 @@ ApplicationWindow {
         var picked = selected()
         expect(picked.length > 8 && picked[0] === held && picked[picked.length - 1] === picked.length + held - 1,
                "the range follows the scrolling: " + JSON.stringify(picked))
-        // It still has the finger.
         expect(gone(), "scrolled past the cache: " + bottomOf(grid, anchor) + " " + grid.contentY + " " + grid.cacheBuffer)
         var middle = grid.itemIndexAt(grid.width / 2, grid.contentY + grid.height / 3)
         p = anchor.mapFromItem(grid, grid.width / 2, grid.height / 3)
@@ -204,8 +177,6 @@ ApplicationWindow {
         grid.contentY = grid.originY
     }
 
-    // A renamed item out of sight is brought into view with its row, and
-    // so its remorse (OPS-9): the grid scrolls by rows, not by items.
     function checkReveal() {
         var grid = flick()
         grid.contentY = grid.originY
@@ -260,8 +231,6 @@ ApplicationWindow {
         Page {
             property alias view: folder
 
-            // Taller than the page: the checks' small screen leaves no room for the
-            // rows of tiles with captions between the header and the selection panel.
             DirectoryView {
                 id: folder
                 width: parent.width

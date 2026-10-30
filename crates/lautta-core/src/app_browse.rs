@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! User-level actions of the browse area on [`Core`](crate::app::Core): the
-//! rows of the Browse page (SPEC §15.2), recent ad-hoc servers (NVB-6),
-//! volume space, mounting and unmounting (LOC-3) and the purge of what the
-//! app remembers about a removed account (SEC-5).
-//!
-//! Everything blocking here runs in `spawn_blocking`; the Qt layer only
-//! turns the returned values into model rows.
+//! Browse area actions on `Core`. Blocking work runs in `spawn_blocking`; Qt layer only maps values
+//! to model rows.
 
 use crate::app::Core;
 use crate::bridge::{AdHocOptions, BridgeStatus, Drive, DriveKind, NearbyServer, RemoteKind};
@@ -27,16 +22,12 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 use zeroize::Zeroizing;
 
-/// Separator of the "Location › folder" lines.
 const PLACE_SEPARATOR: &str = " › ";
 
-/// How long a drive the bridge mounted may take to show as a volume in the
-/// sandbox (LOC-3): this many looks, this far apart.
+/// Drive mounted by bridge takes time to show in sandbox: this many looks, this far apart.
 const MOUNT_LOOKS: u32 = 10;
 const MOUNT_LOOK_EVERY: Duration = Duration::from_millis(200);
 
-/// One row of the Browse page, with plain values only (the Qt layer maps
-/// them to model roles; QML turns engineering values into translated text).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Row {
     /// `favourites`, `device`, `android`, `volumes`, `servers`, `nearby`.
@@ -47,35 +38,24 @@ pub struct Row {
     pub uri: String,
     pub name: String,
     pub icon: String,
-    /// `ready`, `connecting`, `offline`, `attention`; `unmounted` for a
-    /// volume the bridge can mount, `locked` for one Settings › Storage
-    /// unlocks first (LOC-3).
+    /// `ready`, `connecting`, `offline`, `attention`; `unmounted` for a mountable
+    /// volume, `locked` for one Settings › Storage unlocks first.
     pub status: &'static str,
     /// `auth-failed`, `server-identity-changed` or empty.
     pub attention: String,
-    /// A server's connection state (NVB-4, [`ConnectionState::name`]):
-    /// `connected`, `connecting`, `disconnected`, `failed`, or empty when
-    /// the bridge does not tell.
+    /// `connected`, `connecting`, `disconnected`, `failed`, or empty.
     pub connection: &'static str,
-    /// The netvfs error name of a `failed` connection (`AuthFailed`,
-    /// `Timeout`, …), empty otherwise.
+    /// netvfs error name of a `failed` connection (`AuthFailed`, `Timeout`, …).
     pub connection_error: String,
     pub colour: String,
-    /// Favourite or location id; the nearby index.
     pub item_id: String,
-    /// `Location › folder` for favourites (the folder a file is in), the
-    /// address for servers.
     pub place: String,
-    /// Protocol label such as `SFTP`.
     pub provider: String,
     pub host: String,
     pub free: i64,
     pub total: i64,
     pub fs: String,
-    /// A favourite that is a file (ORG-1): opened, not browsed.
     pub is_file: bool,
-    /// The bridge's id of a volume's drive, which it mounts and unmounts
-    /// (LOC-3, netvfs XB-20); empty when it cannot.
     pub drive: String,
 }
 
@@ -91,41 +71,30 @@ impl Row {
         }
     }
 
-    /// Identity of the row, to tell a changed row from a new one.
     pub fn key(&self) -> (&'static str, &'static str, &str, &str) {
         (self.section, self.kind, &self.uri, &self.item_id)
     }
 }
 
-/// The kind of the row that switches a whole section (BRW-12).
 pub const SECTION_KIND: &str = "section";
 
-/// The sections of the Browse page in order.
 const SECTIONS: [&str; 5] = ["favourites", "device", "android", "volumes", "servers"];
 
-/// One row of Settings › Browse page (BRW-12): every row the user can hide
-/// or move, hidden ones included, in Browse order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LayoutRow {
     pub section: &'static str,
-    /// The kind of the Browse row (`favourite`, `folder`, `recents`, …);
-    /// `nearby` stands for every nearby server and [`SECTION_KIND`] for
-    /// the switch of *Volumes* or *Servers*, which leads its section.
+    /// `nearby` stands for every nearby server, [`SECTION_KIND`] for the switch of
+    /// *Volumes* or *Servers*.
     pub kind: &'static str,
-    /// The layout item; the favourite id for favourites.
     pub item: String,
     pub name: String,
-    /// For a section's switch: the section is off.
     pub hidden: bool,
 }
 
-/// Whether the layout hides `row`.
 fn is_hidden(layout: &Layout, row: &Row) -> bool {
     layout_item(row.kind, &row.item_id).is_some_and(|item| layout.is_hidden(row.section, &item))
 }
 
-/// The settings row of a Browse row; `None` for rows the layout does not
-/// cover.
 fn layout_row(layout: &Layout, row: &Row) -> Option<LayoutRow> {
     let item = match row.kind {
         "favourite" => Some(row.item_id.clone()),
@@ -140,11 +109,7 @@ fn layout_row(layout: &Layout, row: &Row) -> Option<LayoutRow> {
     })
 }
 
-/// The settings rows of one section. *Volumes* and *Servers* lead with their
-/// switch and list their rows only while it is on. Switch is always there,
-/// rows or not, so an empty section can be switched before its first row
-/// comes. Servers switch is a trace of the bridge, so standalone (no bridge
-/// answers) has none (UI-8).
+/// Switch is always there so an empty section can be switched. No Servers switch standalone.
 fn section_rows(
     section: &'static str,
     rows: Vec<LayoutRow>,
@@ -172,7 +137,6 @@ fn section_rows(
     out
 }
 
-/// Free and total space and the file system of a volume (LOC-3).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VolumeInfo {
     pub free: u64,
@@ -180,17 +144,14 @@ pub struct VolumeInfo {
     pub fs: String,
 }
 
-/// A recent ad-hoc server, shown in Servers while not connected (NVB-6).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdHocRecent {
     pub location_id: String,
-    /// Address without secrets.
     pub url: String,
     pub name: String,
     pub last_used_ms: i64,
 }
 
-/// A recents row with what the page shows (ORG-2).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecentRow {
     pub id: i64,
@@ -199,12 +160,9 @@ pub struct RecentRow {
     pub kind: &'static str,
     pub place: String,
     pub at_ms: i64,
-    /// The section it is listed under, by `at_ms`.
     pub date_group: DateGroup,
 }
 
-/// The name of the file system with `statfs` magic `magic`, for the volume
-/// line ("58.2 GB free of 128 GB · exFAT"). Unknown ones are `""`.
 pub fn fs_kind_name(magic: u64) -> &'static str {
     match magic {
         0x2011_BAB0 => "exFAT",
@@ -220,7 +178,6 @@ pub fn fs_kind_name(magic: u64) -> &'static str {
     }
 }
 
-/// Protocol label for a netvfs provider name.
 pub fn provider_label(provider: &str) -> String {
     match provider {
         "sftp" | "ssh" => "SFTP".to_owned(),
@@ -230,7 +187,6 @@ pub fn provider_label(provider: &str) -> String {
     }
 }
 
-/// The address a nearby server prefills in *Connect to server* (LOC-6).
 pub fn nearby_url(n: &NearbyServer) -> String {
     let default_port = match n.provider.as_str() {
         "sftp" | "ssh" => 22,
@@ -264,7 +220,6 @@ pub fn public_url(url: &str) -> String {
     }
 }
 
-/// The host part of a URL, for naming a recent ad-hoc server.
 pub fn url_host(url: &str) -> String {
     let rest = url.split_once("://").map_or(url, |(_, r)| r);
     let authority = rest.split('/').next().unwrap_or(rest);
@@ -284,7 +239,6 @@ fn clamp_i64(v: u64) -> i64 {
     i64::try_from(v).unwrap_or(i64::MAX)
 }
 
-/// The account ids (`nv-account:…`) of a bridge location list.
 fn account_ids(list: &[crate::bridge::RemoteLocation]) -> BTreeSet<String> {
     list.iter()
         .filter(|l| l.kind == RemoteKind::Account)
@@ -292,14 +246,11 @@ fn account_ids(list: &[crate::bridge::RemoteLocation]) -> BTreeSet<String> {
         .collect()
 }
 
-/// The location id inside a stored `lautta://<location>/…` string.
 fn location_of(uri: &str) -> Option<&str> {
     uri.strip_prefix("lautta://")?.split('/').next()
 }
 
 impl Core {
-    /// `Location › folder` for a URI: components joined by `›` for local
-    /// locations, `/path` for remote ones (the board lines of favourites).
     pub fn place_of(&self, uri: &Uri) -> String {
         let name = self
             .location(&uri.location)
@@ -316,8 +267,6 @@ impl Core {
         format!("{name}{PLACE_SEPARATOR}{}", parts.join(PLACE_SEPARATOR))
     }
 
-    /// The line under a favourite: the folder itself, or the folder a file
-    /// favourite is in (ORG-1).
     pub fn favourite_place(&self, f: &Favourite) -> String {
         match f.uri.parent().filter(|_| !f.is_dir) {
             Some(folder) => self.place_of(&folder),
@@ -325,14 +274,11 @@ impl Core {
         }
     }
 
-    /// Visible items of the cached listing of a folder (the cover, INT-3);
-    /// `None` when nothing is cached.
     pub fn cached_folder_count(&self, uri: &Uri) -> Option<usize> {
         let hit = self.dircache.get(uri).ok()??;
         Some(hit.entries.iter().filter(|e| !e.is_hidden()).count())
     }
 
-    /// Space and file system of a volume (LOC-3), through the provider.
     pub async fn volume_info(&self, uri: &Uri) -> Result<VolumeInfo> {
         let provider = self.provider(&uri.location)?;
         let space = provider.space(&VPath::root()).await?;
@@ -353,9 +299,6 @@ impl Core {
         })
     }
 
-    /// Every row of the Browse page in display order (SPEC §15.2), without
-    /// the rows the user hid and the sections the user switched off
-    /// (BRW-12).
     pub async fn browse_rows(self: &Arc<Self>) -> Vec<Row> {
         let (rows, layout) = self.arranged_rows().await;
         rows.into_iter()
@@ -363,8 +306,6 @@ impl Core {
             .collect()
     }
 
-    /// The rows of Settings › Browse page (BRW-12), in Browse order. Nearby
-    /// servers are one row, there whenever the bridge is.
     pub async fn browse_layout_rows(self: &Arc<Self>) -> Vec<LayoutRow> {
         let (rows, layout) = self.arranged_rows().await;
         let bridge_there = self
@@ -395,8 +336,6 @@ impl Core {
         out
     }
 
-    /// Moves a row of Settings › Browse page to `index` within its section
-    /// (BRW-12); favourites move in their own order (ORG-1).
     pub async fn move_browse_row(self: &Arc<Self>, section: &str, item: &str, index: usize) -> Result<()> {
         let core = self.clone();
         if section == "favourites" {
@@ -420,10 +359,7 @@ impl Core {
         blocking(move || core.browse_layout.set_order(&section, &items)).await
     }
 
-    /// All rows in Browse order, hidden ones included, and the layout. The
-    /// local locations are rescanned first: a volume shows up (LOC-3) even
-    /// when the media watch missed its mount, which inotify can inside the
-    /// sandbox's mount namespace.
+    /// Rescans local locations first: inotify can miss mounts inside the sandbox's mount namespace.
     async fn arranged_rows(self: &Arc<Self>) -> (Vec<Row>, Layout) {
         let core = self.clone();
         let blocking = tokio::task::spawn_blocking(move || {
@@ -453,8 +389,6 @@ impl Core {
             .collect();
         let settings = self.settings();
         let mut device = Vec::new();
-        // Recents is a row of its own while they are remembered, the first
-        // of the section until the user orders it (§15.2, ORG-2, BRW-12).
         if settings.recents_enabled {
             let mut row = Row::new("device", "recents");
             row.icon = "image://theme/icon-m-history".to_owned();
@@ -512,7 +446,6 @@ impl Core {
         rows
     }
 
-    /// The mounted volumes, and the drives the bridge can mount (LOC-3).
     async fn volume_rows(&self) -> Vec<Row> {
         let drives = self.bridge.as_ref().map(|b| b.drives()).unwrap_or_default();
         let mut rows = Vec::new();
@@ -552,8 +485,6 @@ impl Core {
         rows
     }
 
-    /// *Mount* of a drive (LOC-3): the bridge mounts it (netvfs XB-20), and
-    /// the volume's root is returned once the sandbox shows it.
     pub async fn mount_drive(self: &Arc<Self>, drive: &str) -> Result<Uri> {
         let point = self.drive_client()?.mount_drive(drive).await?;
         for look in 0..MOUNT_LOOKS {
@@ -571,7 +502,6 @@ impl Core {
         ))
     }
 
-    /// *Unmount* of a volume's drive (LOC-3, netvfs XB-20).
     pub async fn unmount_drive(self: &Arc<Self>, drive: &str) -> Result<()> {
         self.drive_client()?.unmount_drive(drive).await?;
         let core = self.clone();
@@ -585,7 +515,6 @@ impl Core {
             .ok_or_else(|| Error::new(ErrorKind::BridgeUnavailable, "drives are mounted by netvfs"))
     }
 
-    /// The volume mounted on `point`, after a rescan.
     fn volume_at(&self, point: &Path) -> Option<Uri> {
         self.locations.refresh_volumes();
         self.locations
@@ -595,8 +524,6 @@ impl Core {
             .map(|l| Uri::root(l.id))
     }
 
-    /// The Servers section (SPEC §3.4, NVB-3, NVB-12): nothing without a
-    /// usable bridge, the consent row until the user decided.
     async fn server_rows(&self, prefs: &BTreeMap<String, LocationPrefs>) -> Vec<Row> {
         let Some(client) = &self.bridge else {
             return Vec::new();
@@ -660,7 +587,6 @@ impl Core {
             .collect()
     }
 
-    /// Recent ad-hoc servers that are not connected now (NVB-6).
     fn recent_adhoc_rows(&self, listed: &[Row]) -> Vec<Row> {
         let urls: BTreeSet<String> = listed.iter().map(|r| r.place.clone()).collect();
         self.adhoc_recents()
@@ -710,9 +636,6 @@ impl Core {
             .collect()
     }
 
-    // ---- recent ad-hoc servers (NVB-6) ------------------------------------
-
-    /// Recent ad-hoc servers, newest first.
     pub fn adhoc_recents(&self) -> Result<Vec<AdHocRecent>> {
         let conn = self.db.lock();
         let mut stmt = conn.prepare(
@@ -733,7 +656,7 @@ impl Core {
 
     fn remember_adhoc(&self, location_id: &str, url: &str, name: &str) -> Result<()> {
         let conn = self.db.lock();
-        // One row per address: a new connection to a known server replaces it.
+        // One row per address: a new connection replaces it.
         conn.execute("DELETE FROM adhoc_servers WHERE url = ?1", [url])?;
         conn.execute(
             "INSERT OR REPLACE INTO adhoc_servers(location_id, url, name, last_used_ms) VALUES (?1, ?2, ?3, ?4)",
@@ -742,7 +665,6 @@ impl Core {
         Ok(())
     }
 
-    /// Forgets a recent ad-hoc server (and what the app remembers about it).
     pub fn remove_adhoc_recent(&self, location_id: &str) -> Result<()> {
         self.db
             .lock()
@@ -750,9 +672,7 @@ impl Core {
         self.purge_location_data(location_id)
     }
 
-    /// *Connect to server* (NVB-6, SEC-1): the secret is moved into a wiping
-    /// buffer at once and wiped when the call ends, whatever its outcome.
-    /// Returns the location id.
+    /// Secret moves into a wiping buffer at once, wiped when the call ends whatever the outcome.
     pub async fn connect_adhoc(&self, url: &str, secret: Vec<u8>, opts: AdHocOptions) -> Result<String> {
         let mut secret = Zeroizing::new(secret);
         let client = self
@@ -765,19 +685,13 @@ impl Core {
         Ok(id)
     }
 
-    /// Forgets an ad-hoc server in the bridge and here (XB-14, SEC-5).
     pub async fn forget_adhoc(&self, location_id: &str) -> Result<()> {
         if let Some(client) = &self.bridge {
-            // A server that is not connected has nothing to forget there.
             let _ = client.forget_adhoc(location_id).await;
         }
         self.remove_adhoc_recent(location_id)
     }
 
-    // ---- purge (SEC-5) ------------------------------------------------------
-
-    /// Removes everything remembered about a location: favourites, recents,
-    /// preferences and cached listings (SEC-5).
     pub fn purge_location_data(&self, location: &str) -> Result<()> {
         org::purge_location(&self.db, location)?;
         self.location_prefs.remove(location)?;
@@ -786,7 +700,6 @@ impl Core {
         Ok(())
     }
 
-    /// Remote account ids that favourites, recents or preferences refer to.
     pub fn remembered_accounts(&self) -> Result<BTreeSet<String>> {
         let conn = self.db.lock();
         let mut found = BTreeSet::new();
@@ -810,13 +723,7 @@ impl Core {
         Ok(found)
     }
 
-    /// Starts following the bridge's location list: an account that
-    /// disappears for good (it was in the list while the bridge was usable
-    /// and is not any more) is purged (SEC-5). A list that is empty because
-    /// consent was withdrawn or the bridge is away never purges. At the first
-    /// usable list, accounts remembered from earlier runs that are gone are
-    /// purged too. `on_purged` is called after a purge, so that what shows
-    /// the data can read it again. Needs a tokio runtime; ends with the core.
+    /// Empty list from withdrawn consent or absent bridge never purges. Needs tokio runtime.
     pub fn spawn_account_purge(self: &Arc<Self>, on_purged: impl Fn() + Send + Sync + 'static) {
         let Some(client) = self.bridge.clone() else {
             return;
@@ -843,10 +750,6 @@ impl Core {
         });
     }
 
-    // ---- recents (ORG-2) ----------------------------------------------------
-
-    /// Recents for the page, newest first, with their date sections (the
-    /// Activity page's, §15.4).
     pub fn recent_rows(&self, filter: &RecentsFilter) -> Result<Vec<RecentRow>> {
         let now = now_ms();
         Ok(self
@@ -859,7 +762,7 @@ impl Core {
 
     fn recent_row(&self, r: Recent, now: i64) -> RecentRow {
         let folder = r.uri.parent().unwrap_or_else(|| r.uri.clone());
-        // Transfers say where they went: the location, not the folder.
+        // Transfers record the location, not the folder.
         let place = if r.kind == org::RecentKind::Transferred {
             self.location(&r.uri.location).map(|l| l.name).unwrap_or_default()
         } else {
@@ -893,11 +796,8 @@ fn drive_icon(kind: DriveKind) -> &'static str {
     }
 }
 
-/// A drive that is not mounted (LOC-3): shown as the volume it becomes, by
-/// the folder it is mounted on, so that what the user hid or moved stays
-/// hidden or in place (BRW-12). It has no address until it is mounted. A
-/// locked one is named by its LUKS label or UUID: its filesystem is not
-/// known before Settings › Storage unlocks it.
+/// Locked drive is named by LUKS label or UUID: filesystem unknown before Settings › Storage
+/// unlocks it.
 fn unmounted_row(d: &Drive) -> Row {
     let name = d.mount_name();
     let mut row = Row::new("volumes", "volume");
@@ -924,8 +824,6 @@ fn now_ms() -> i64 {
         .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
-/// One look at the bridge state for [`Core::spawn_account_purge`]. `None`
-/// when the core is gone.
 async fn purge_step(
     weak: &Weak<Core>,
     status: BridgeStatus,

@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of the Operations singleton and TrashModel (no Silica): what can
-// be decided without waiting for the transfer engine. End to end runs are
-// covered by crates/lautta-core/tests/app_operations.rs.
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -28,7 +25,6 @@ QtObject {
 
         check(Operations.jobsActive === 0, "no jobs at start")
 
-        // Bad arguments are refused at once, with the engineering kind.
         Operations.copyTo("not json", "lautta://user-documents/")
         check(lastFailure() === "InvalidArgument", "copyTo refuses bad uris: " + lastFailure())
         Operations.moveTo(JSON.stringify(["lautta://user-documents/a"]), "nope")
@@ -45,7 +41,6 @@ QtObject {
         Operations.measure("[1]")
         check(failures.length === 7, "measure refuses bad uris")
 
-        // Plans that do not exist (starting one: tst_operations_plans.qml).
         Operations.resolveConflict(999, 0, "KeepBoth", false)
         check(lastFailure() === "NotFound", "unknown plan has no conflicts to answer")
         Operations.resolveConflict(999, 0, "Smash", false)
@@ -54,11 +49,9 @@ QtObject {
         check(Operations.conflictsJson(999) === "[]", "no conflicts for an unknown plan")
         Operations.cancelJob(42)
 
-        // Helpers for the pages.
         check(!Operations.isArchive("lautta://user-documents/"), "a user folder is not an archive")
         check(Operations.archiveSource("lautta://user-documents/") === "", "no archive source for a folder")
-        // The registry only knows the user folders when the test home is
-        // visible to the process (not under the SDK's sb2 sandbox).
+        // Registry knows user folders only if test home is visible (not under SDK sb2).
         var known = App.locationName("lautta://user-documents/") === "Documents"
         var shown = Operations.displayPath("lautta://user-documents/Uni/x.txt")
         check(shown.indexOf(" \u203a Uni \u203a x.txt") > 0, "display path: " + shown)
@@ -76,7 +69,6 @@ QtObject {
         check(probed[0].name === "shared file.jpg", "file URLs are decoded: " + probed[0].name)
         check(JSON.parse(Operations.probeShared("junk")).length === 0, "junk paths probe to nothing")
 
-        // The Trash starts empty and unloaded.
         check(trash.count === 0 && trash.totalSize === 0 && !trash.loaded && !trash.busy, "empty trash model")
     }
 }

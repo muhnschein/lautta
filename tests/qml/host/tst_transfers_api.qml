@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of the Transfers singleton and models (no Silica): the
-// synchronous behaviour of doc/QML-API.md on an empty queue. The queue
-// itself (copy, conflicts, history) is exercised by
-// crates/lautta-qt/tests/transfers_flow.rs.
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -30,8 +26,7 @@ Item {
     }
 
     Component.onCompleted: {
-        // connect() instead of Connections: Qt 5.6 on the target and Qt 5.15
-        // here disagree about the onFoo syntax.
+        // connect(), not Connections: Qt 5.6 and 5.15 disagree on onFoo syntax.
         Transfers.failed.connect(function(kind, message) {
             root.lastKind = kind
             root.failedCount += 1

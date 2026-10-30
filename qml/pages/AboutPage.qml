@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// About (SPEC §2.2, §3.4, NVB-2, NVB-3; design: About). The network section
-// appears only when a netvfs bridge is present; standalone mode shows
-// nothing about it.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -9,7 +6,6 @@ import Lautta 1.0
 Page {
     id: page
 
-    // The bridge singleton belongs to the browse area.
     readonly property string bridgeStatus: typeof Bridge !== "undefined" ? String(Bridge.status) : "absent"
     readonly property string denialReason: typeof Bridge !== "undefined" && Bridge.consentReason
                                            ? String(Bridge.consentReason) : ""

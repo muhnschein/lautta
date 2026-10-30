@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `TransfersModel`: the list of the Activity page (§15.4): what has not
-//! ended in queue order, then what ended, newest first, with each row's
-//! date section (`dateGroup`) and what it is doing (`group`: active,
-//! waiting, paused or history).
+//! Activity page list: unended in queue order, then ended, newest first. Per row `dateGroup` and
+//! `group` (active, waiting, paused or history).
 
 use super::events;
 use crate::runtime::core;
@@ -14,7 +12,6 @@ use qmetaobject::QPointer;
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
-/// Role names in role-id order (`Qt::UserRole + 1 + index`).
 const ROLES: [&str; 23] = [
     "transferId",
     "group",
@@ -42,7 +39,6 @@ const ROLES: [&str; 23] = [
 ];
 const FIRST_ROLE: i32 = 257;
 
-/// Everything a row shows, flat, so rows can be compared for changes.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub(super) struct RowData {
     pub id: i64,
@@ -150,7 +146,6 @@ pub struct TransfersModel {
 
 impl QAbstractListModel for TransfersModel {
     fn row_count(&self) -> i32 {
-        // Views ask for the row count first, before any role names.
         self.ensure_registered();
         self.rows.len() as i32
     }
@@ -175,8 +170,7 @@ impl QAbstractListModel for TransfersModel {
 }
 
 impl TransfersModel {
-    /// Connects to the engine's events the first time a view looks at the
-    /// model (QML gives list models no start-up hook).
+    /// QML gives list models no start-up hook.
     fn ensure_registered(&self) {
         if self.registered.replace(true) {
             return;
@@ -223,8 +217,7 @@ impl TransfersModel {
         self.apply(rows.iter().map(transfer_row).collect());
     }
 
-    /// Updates changed rows in place when the row order is the same (keeps
-    /// the scroll position and open context menus), resets otherwise.
+    /// Same row order: update in place (keeps scroll position and open context menus); else reset.
     fn apply(&mut self, new: Vec<RowData>) {
         let same = new.len() == self.rows.len() && new.iter().zip(&self.rows).all(|(a, b)| a.id == b.id);
         if same {

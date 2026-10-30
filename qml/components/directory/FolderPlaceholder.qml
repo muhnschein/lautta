@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Big light text with a hint and optional buttons, for the empty, not
-// accessible and error states of a folder (boards StateEmpty, StateNoAccess,
-// StateError). Buttons are { text, action } objects; `triggered(action)`.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 

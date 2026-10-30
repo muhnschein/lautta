@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Opens an item: folders and archives browse, viewable files get their
-// viewer page (PRV-4), everything else goes to the system handler (PRV-5,
-// remote files are copied out first, PRV-6).
 .pragma library
 
 var viewerPages = {
@@ -13,9 +10,6 @@ var viewerPages = {
     "pdf": "../viewers/PdfViewer.qml"
 }
 
-// pageStack: the window's page stack; app: the App singleton;
-// operations: the Operations singleton (archives); base: Qt.resolvedUrl of
-// the calling file's folder ("components/").
 function open(pageStack, app, operations, uri, isDir, mimeType, folderUri) {
     if (isDir) {
         pageStack.push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": uri })
@@ -40,8 +34,6 @@ function open(pageStack, app, operations, uri, isDir, mimeType, folderUri) {
     return "external"
 }
 
-// Hands a file to the system: as it is when local, after OpenRemoteDialog
-// when remote.
 function openWith(pageStack, app, uri) {
     if (app.isLocal(uri))
         Qt.openUrlExternally(app.localUrl(uri))

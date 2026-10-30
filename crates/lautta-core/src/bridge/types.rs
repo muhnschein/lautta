@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Public value types of the bridge client: status, consent, locations, nearby
-//! servers, drives, configuration (SPEC NVB-3, NVB-4, NVB-12, LOC-3, LOC-6,
-//! LOC-7).
+//! Value types of the bridge client.
 
 use crate::locations::ConnectionState;
 use crate::paths::AppPaths;
@@ -16,34 +14,27 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::time::Duration;
 
-/// What the app knows about the bridge (SPEC §3.4 detection, NVB-1..3, NVB-12).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BridgeStatus {
-    /// No socket, or nothing answers: standalone mode, no message (NVB-1).
+    /// No socket, or nothing answers: standalone, no message.
     Absent,
-    /// A connection and the handshake are in progress.
     Connecting,
-    /// Waiting for the user's decision in netvfs' notification (NVB-3).
     ConsentUnknown,
     ConsentDenied,
     Ready,
-    /// The connection was lost; reconnecting with backoff (NVB-12).
     Reconnecting,
 }
 
 impl BridgeStatus {
-    /// True when bridge locations can be browsed.
     pub fn is_ready(self) -> bool {
         self == BridgeStatus::Ready
     }
 
-    /// True when network locations are shown as "Reconnecting…" (NVB-12).
     pub fn is_reconnecting(self) -> bool {
         self == BridgeStatus::Reconnecting
     }
 }
 
-/// The user's decision for this app (netvfs XB-6).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Consent {
     Unknown,
@@ -52,8 +43,7 @@ pub enum Consent {
 }
 
 impl Consent {
-    /// Parses the wire string; anything unrecognised is `Unknown`, the
-    /// state in which nothing is shown.
+    /// Anything unrecognised is `Unknown`: nothing shown.
     pub fn from_wire(s: &str) -> Consent {
         match s {
             "granted" => Consent::Granted,
@@ -63,14 +53,11 @@ impl Consent {
     }
 }
 
-/// Attention state netvfs reports for an account (NVB-4, netvfs `location.cpp`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Attention {
     #[default]
     None,
-    /// The server did not accept the sign-in: *Update sign-in* (NVB-5).
     AuthFailed,
-    /// The server presents another identity: *Review in Settings* (NVB-5).
     ServerIdentityChanged,
 }
 
@@ -86,18 +73,14 @@ impl Attention {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RemoteKind {
-    /// A netvfs account with *Files* enabled.
     Account,
-    /// A server of this app, from *Connect to server* (NVB-6).
     AdHoc,
 }
 
-/// A bridge location as the Servers section shows it (NVB-4).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteLocation {
-    /// `nv-<bridge id>` (LOC-7).
     pub id: LocationId,
-    /// The id the bridge uses (`account:1`, `adhoc:3`).
+    /// Bridge's id (`account:1`, `adhoc:3`).
     pub bridge_id: String,
     pub provider: String,
     pub name: String,
@@ -106,18 +89,15 @@ pub struct RemoteLocation {
     pub port: Option<u16>,
     pub user: Option<String>,
     pub account_id: Option<i64>,
-    /// Where the account starts browsing (`info.path`).
     pub start_path: VPath,
-    /// Display and copy address, never containing a secret (LOC-7).
+    /// Never contains a secret.
     pub url: Option<String>,
     pub attention: Attention,
-    /// `info.state` and `info.stateError` (netvfs XB-10, XB-12).
     pub connection: ConnectionState,
 }
 
-/// Reads `info.state` (with `info.stateError` for a failure); a missing or
-/// unknown state is [`ConnectionState::Unknown`], so that a bridge that
-/// does not report states shows none rather than a wrong one (NVB-4).
+/// Missing or unknown state is [`ConnectionState::Unknown`]: a bridge not reporting states shows
+/// none rather than a wrong one.
 fn connection_from_wire(state: Option<&str>, error: Option<String>) -> ConnectionState {
     match state {
         Some(location_state::DISCONNECTED) => ConnectionState::Disconnected,
@@ -128,23 +108,19 @@ fn connection_from_wire(state: Option<&str>, error: Option<String>) -> Connectio
     }
 }
 
-/// Prefix of internal location ids of bridge locations (LOC-7).
 pub const LOCATION_PREFIX: &str = "nv-";
 
-/// `nv-account:1` for `account:1`.
 pub fn location_id(bridge_id: &str) -> LocationId {
     format!("{LOCATION_PREFIX}{bridge_id}")
 }
 
-/// The bridge's id for an internal location id; ids without the prefix are
-/// taken as bridge ids already.
+/// Ids without the prefix are taken as bridge ids.
 pub fn bridge_id(location: &str) -> &str {
     location.strip_prefix(LOCATION_PREFIX).unwrap_or(location)
 }
 
 impl RemoteLocation {
-    /// Reads a `ListLocations` element. A location with an odd `info` still
-    /// appears (unknown keys are ignored; missing ones are unknown).
+    /// A location with an odd `info` still appears (unknown keys ignored; missing ones unknown).
     pub fn from_wire(w: &WireLocation) -> RemoteLocation {
         let str_of = |k: &str| w.info.get(k).and_then(|v| value_str(v));
         let int_of = |k: &str| w.info.get(k).and_then(|v| value_i64(v));
@@ -179,8 +155,7 @@ impl RemoteLocation {
     }
 }
 
-/// A server found by discovery; tapping prefills *Connect to server*, nothing
-/// connects automatically (LOC-6).
+/// Tapping prefills *Connect to server*; nothing connects automatically.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NearbyServer {
     pub name: String,
@@ -201,32 +176,24 @@ impl NearbyServer {
     }
 }
 
-/// What a [`Drive`] is (netvfs XB-20).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DriveKind {
-    /// A memory card.
     Card,
-    /// A USB drive (also one the bridge names in a way this app does not know).
+    /// Also one the bridge names in a way this app does not know.
     Usb,
 }
 
-/// A memory card or USB drive that the bridge mounts and unmounts (LOC-3,
-/// netvfs XB-20), mounted or not.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Drive {
-    /// The bridge's id (`mmcblk1p1`, `sda1`); opaque.
+    /// Bridge's id (`mmcblk1p1`, `sda1`); opaque.
     pub id: String,
-    /// The filesystem's label; empty without one.
     pub label: String,
-    /// The filesystem's UUID; empty when unknown.
     pub uuid: String,
-    /// Where it is mounted.
     pub mount_point: Option<PathBuf>,
     pub kind: DriveKind,
     /// Bytes, -1 when unknown.
     pub size: i64,
-    /// A LUKS device not unlocked: Settings › Storage unlocks it; the
-    /// bridge never mounts it (LOC-3, netvfs XB-20).
+    /// Locked LUKS device: Settings › Storage unlocks it; bridge never mounts it.
     pub locked: bool,
 }
 
@@ -257,10 +224,9 @@ impl Drive {
         }
     }
 
-    /// The folder below the media folder UDisks2 mounts it on, as Settings
-    /// mounts it (udisks' `calculate_mount_point`): its label with `/` as `_`,
-    /// else its UUID, else `disk`. Also the name shown while it is not
-    /// mounted, as the mounted volume is shown by its folder (LOC-3).
+    /// Folder below the UDisks2 media folder, as Settings mounts it (udisks'
+    /// `calculate_mount_point`): label with `/` as `_`, else UUID, else `disk`. Also the name shown
+    /// while unmounted.
     pub fn mount_name(&self) -> String {
         if !self.label.is_empty() {
             self.label.replace('/', "_")
@@ -272,7 +238,6 @@ impl Drive {
     }
 }
 
-/// Options of *Connect to server* besides the URL and the secret (NVB-6).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AdHocOptions {
     pub user: Option<String>,
@@ -280,30 +245,22 @@ pub struct AdHocOptions {
     pub security_profile: Option<String>,
 }
 
-/// How the client finds and keeps the bridge.
 #[derive(Debug, Clone)]
 pub struct BridgeConfig {
     pub socket: PathBuf,
-    /// Sent in `Hello`.
     pub client_name: String,
-    /// Waits before reconnect attempts after a loss; the last repeats (NVB-12).
+    /// Waits before reconnect attempts after a loss; the last repeats.
     pub backoff: Vec<Duration>,
-    /// Re-checks for a missing socket this often while in the foreground, in
-    /// addition to start and [`crate::bridge::BridgeClient::poke`] (NVB-1).
     pub poll_interval: Option<Duration>,
-    /// A bridge that accepts a connection but does not answer within this is as
-    /// good as gone; `None` waits forever (tests on a paused clock).
+    /// A bridge that accepts a connection but does not answer within this is as good as gone;
+    /// `None` waits forever (tests on a paused clock).
     pub handshake_timeout: Option<Duration>,
-    /// Whether the app is in the foreground at start.
     pub foreground: bool,
-    /// How long nearby servers shown before a restart of the discovery stay
-    /// while it finds them again (LOC-6).
     pub nearby_settle: Duration,
 }
 
 impl BridgeConfig {
-    /// The defaults of the app: the socket of `paths`, `Hello("lautta <version>")`,
-    /// backoff 1, 2, 4, 8 s then 15 s (NVB-12).
+    /// Socket of `paths`, `Hello("lautta <version>")`, backoff 1, 2, 4, 8 s then 15 s.
     pub fn for_app(paths: &AppPaths) -> BridgeConfig {
         BridgeConfig {
             socket: paths.bridge_socket(),
@@ -316,7 +273,6 @@ impl BridgeConfig {
         }
     }
 
-    /// The wait before attempt number `attempt` (0 based) after a loss.
     pub fn backoff_for(&self, attempt: usize) -> Duration {
         self.backoff
             .get(attempt)
@@ -403,7 +359,7 @@ mod tests {
             state(OptsBuilder::new().str("state", "failed")),
             ConnectionState::Failed(String::new())
         );
-        // Older bridges send none; a state from a newer one is not guessed at.
+        // Older bridges send none; a newer bridge's state is not guessed at.
         assert_eq!(state(OptsBuilder::new()), ConnectionState::Unknown);
         assert_eq!(
             state(OptsBuilder::new().str("state", "suspended")),
@@ -505,7 +461,6 @@ mod tests {
         );
         assert_eq!(card.mount_name(), "CARD");
         assert!(!card.locked);
-        // Unknown kinds, no size, not mounted.
         let other = Drive::from_wire(&wire_drive("a/b", b"", OptsBuilder::new().str("kind", "nvme")));
         assert_eq!(
             (other.kind, other.size, other.mount_point.as_deref()),
@@ -519,7 +474,6 @@ mod tests {
         let locked = |info: OptsBuilder| Drive::from_wire(&wire_drive("VAULT", b"", info)).locked;
         assert!(locked(OptsBuilder::new().str("kind", "sd").bool("locked", true)));
         assert!(!locked(OptsBuilder::new().bool("locked", false)));
-        // Of another type: not told.
         assert!(!locked(OptsBuilder::new().str("locked", "yes")));
     }
 

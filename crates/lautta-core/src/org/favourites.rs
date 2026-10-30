@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Favourites (ORG-1): any folder or file, local or remote, with label,
-//! colour and icon, reorderable. Whether it is a folder is stored with it, so
-//! Browse can show and open a favourite without asking its location.
+//! Favourites: any folder or file, local or remote, with label, colour and icon, reorderable.
+//! Whether it is a folder is stored with it, so Browse can show and open a favourite without asking
+//! its location.
 
 use super::{location_prefix, move_to, next_position, parse_uri, renumber, rewrite_uris};
 use crate::db::Db;
@@ -10,10 +10,8 @@ use crate::mime::{category_of_name, FileCategory};
 use crate::uri::Uri;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
-/// The icons a favourite can have (ORG-1), by name, in the order the
-/// favourite page offers them: `file-…` ones are the app's own file-type
-/// glyphs (UI-2), the others theme icons (`image://theme/icon-m-<name>`, all
-/// in the Sailfish OS 5.2 theme). The first, the star, is what a folder
+/// `file-…` icons are the app's own file-type glyphs, the others theme icons
+/// (`image://theme/icon-m-<name>`, Sailfish OS 5.2 theme). The first, the star, is what a folder
 /// favourite shows until another is chosen.
 pub const ICONS: [&str; 24] = [
     "favorite",
@@ -42,9 +40,7 @@ pub const ICONS: [&str; 24] = [
     "android",
 ];
 
-/// `icon` when it is one of [`ICONS`]. Anything else (a name a later
-/// version stored, a typo) is no choice: the favourite keeps its default
-/// icon rather than showing an empty square.
+/// Anything else (unknown name, a typo) is no choice: default icon, not an empty square.
 fn known_icon(icon: Option<&str>) -> Option<&str> {
     icon.filter(|i| ICONS.contains(i))
 }
@@ -56,16 +52,12 @@ pub struct Favourite {
     pub label: String,
     pub colour: Option<String>,
     pub position: i64,
-    /// A folder; false for a file.
     pub is_dir: bool,
-    /// The chosen icon, one of [`ICONS`]; `None` for the default one.
     pub icon: Option<String>,
 }
 
 impl Favourite {
-    /// The icon Browse shows for the favourite: the chosen one, or the
-    /// default ([`Favourite::default_icon`]). A theme icon's URL, or the
-    /// token of an own glyph (`file-folder`), which QML sizes
+    /// A theme icon's URL, or the token of an own glyph (`file-folder`), which QML sizes
     /// (`FileIcons.sized`).
     pub fn icon_source(&self) -> String {
         match known_icon(self.icon.as_deref()) {
@@ -75,9 +67,7 @@ impl Favourite {
         }
     }
 
-    /// The icon of a favourite without a chosen one: the star for a folder,
-    /// the glyph of the file's kind for a file, as the folder view shows it
-    /// (`FileIcons.kind`).
+    /// The star for a folder, the glyph of the file's kind for a file (`FileIcons.kind`).
     pub fn default_icon(&self) -> &'static str {
         if self.is_dir {
             return "image://theme/icon-m-favorite";
@@ -135,7 +125,6 @@ fn clean_label(label: &str) -> Result<&str> {
     Ok(label)
 }
 
-/// Appends a row; returns its id.
 fn insert(
     conn: &Connection,
     uri: &str,
@@ -153,7 +142,6 @@ fn insert(
     Ok(conn.last_insert_rowid())
 }
 
-/// The favourite stored as row `id`.
 fn read(conn: &Connection, id: i64) -> Result<Favourite> {
     let raw = conn.query_row(
         &format!("SELECT {COLUMNS} FROM favourites WHERE id = ?1"),
@@ -168,9 +156,7 @@ impl Favourites {
         Favourites { db }
     }
 
-    /// Appends a favourite for the folder (`is_dir`) or file `uri`, with the
-    /// default icon. An item can be a favourite once (`AlreadyExists`); an
-    /// empty label is `InvalidArgument`.
+    /// An item can be a favourite once (`AlreadyExists`); an empty label is `InvalidArgument`.
     pub fn add(&self, uri: &Uri, label: &str, colour: Option<&str>, is_dir: bool) -> Result<Favourite> {
         let label = clean_label(label)?;
         let conn = self.db.lock();
@@ -185,11 +171,9 @@ impl Favourites {
         read(&conn, id)
     }
 
-    /// Adds a favourite for the folder (`is_dir`) or file `uri`, or changes
-    /// label, colour and icon of the one it already is, which keeps what it
-    /// was stored as: what the favourite page does on every change, without
-    /// the caller tracking ids. An icon that is not one of [`ICONS`] is
-    /// stored as no choice.
+    /// Adds, or changes label, colour and icon of the existing one, which keeps what it was stored
+    /// as: lets the favourite page save on every change without tracking ids. An icon not in
+    /// [`ICONS`] is stored as no choice.
     pub fn save(
         &self,
         uri: &Uri,
@@ -255,7 +239,6 @@ impl Favourites {
         Ok(())
     }
 
-    /// Removes by id; returns whether a row existed.
     pub fn remove(&self, id: i64) -> Result<bool> {
         let conn = self.db.lock();
         let n = conn.execute("DELETE FROM favourites WHERE id = ?1", [id])?;
@@ -270,18 +253,14 @@ impl Favourites {
         Ok(n > 0)
     }
 
-    /// Moves a favourite to `index` (clamped to the end).
     pub fn move_to(&self, id: i64, index: usize) -> Result<()> {
         move_to(&self.db.lock(), "favourites", id, index)
     }
 
-    /// Follows an item moved or renamed by the app, including favourites
-    /// inside it.
     pub fn on_moved(&self, old: &Uri, new: &Uri) -> Result<usize> {
         rewrite_uris(&self.db.lock(), "favourites", old, new)
     }
 
-    /// SEC-5: forget every favourite of a removed location.
     pub fn remove_location(&self, location: &str) -> Result<usize> {
         let prefix = location_prefix(location);
         let conn = self.db.lock();
@@ -481,7 +460,6 @@ mod tests {
             Some("game-controller"),
             "added with its icon"
         );
-        // Relabelling and recolouring keep the icon; saving none clears it.
         f.update(saved.id, "Papers", None).unwrap();
         assert_eq!(
             f.get_by_uri(&docs).unwrap().unwrap().icon.as_deref(),
@@ -499,7 +477,6 @@ mod tests {
         let folder = f.add(&u("lautta://x/Uni"), "Uni", None, true).unwrap();
         assert_eq!(folder.default_icon(), "image://theme/icon-m-favorite");
         assert_eq!(folder.icon_source(), "image://theme/icon-m-favorite");
-        // A file keeps its file's icon until another is chosen.
         let file = f.add(&u("lautta://x/Uni/a.mp3"), "A", None, false).unwrap();
         assert_eq!(file.icon_source(), "file-audio");
         let chosen = f
@@ -533,9 +510,8 @@ mod tests {
                 "file-document",
                 "file-document",
             ],
-            "the glyph the folder view shows for the file (UI-2)"
+            "the glyph the folder view shows for the file"
         );
-        // A chosen file-type icon is the own glyph too; the others are theme icons.
         let a = u("lautta://x/a");
         let folder = f.save(&a, "a", None, Some("file-folder"), false).unwrap();
         assert_eq!(folder.icon_source(), "file-folder");
@@ -572,7 +548,7 @@ mod tests {
         let docs = u("lautta://x/Docs");
         let saved = f.save(&docs, "Docs", None, Some("no-such-icon"), true).unwrap();
         assert_eq!(saved.icon, None, "an unknown icon is not stored");
-        // One stored by something else (a later version) reads as none.
+        // One stored by something else reads as none.
         f.db.lock()
             .execute("UPDATE favourites SET icon = 'heart' WHERE id = ?1", [saved.id])
             .unwrap();

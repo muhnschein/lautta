@@ -5,15 +5,13 @@ use crate::{PageRect, PageSize, PdfDocument, PdfError, TextHit, MAX_PAGE_CHARS, 
 use hayro::hayro_interpret::hayro_cmap::BfString;
 use hayro::kurbo::{Affine, Point, Rect};
 
-/// Helvetica advance widths, per 1000 units of the font size.
+/// Helvetica advance widths per 1000 units of font size.
 const HELLO: f32 = 722.0 + 556.0 + 222.0 + 222.0 + 556.0;
 const WORLD: f32 = 722.0 + 556.0 + 333.0 + 222.0 + 556.0;
-/// Width of `units` of 12 pt text.
 fn pt(units: f32) -> f32 {
     units * 12.0 / 1000.0
 }
 
-/// Searches a 200 × 100 pt page showing `content`.
 fn search(content: &str, query: &str) -> Vec<TextHit> {
     let doc = PdfDocument::open(build(&[page(200, 100, content)])).unwrap();
     doc.search_page(0, query).unwrap()
@@ -27,7 +25,6 @@ fn assert_near(r: PageRect, x: f32, y: f32, width: f32, height: f32) {
     );
 }
 
-/// The one area of the one hit.
 fn only_area(hits: &[TextHit]) -> PageRect {
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].areas.len(), 1, "{hits:?}");
@@ -37,8 +34,7 @@ fn only_area(hits: &[TextHit]) -> PageRect {
 #[test]
 fn a_word_is_found_where_it_is_shown() {
     let hits = search(&text(10, 50, "Hello world"), "hello");
-    // The box spans the advance and 0.2 em below to 0.8 em above the
-    // baseline; y counts from the top.
+    // box spans the advance, 0.2 em below to 0.8 em above the baseline; y counts from the top
     let top = 100.0 - 50.0 - pt(800.0);
     assert_near(only_area(&hits), 0.05, top / 100.0, pt(HELLO) / 200.0, 0.12);
 }
@@ -68,7 +64,6 @@ fn every_hit_is_found_in_order() {
 
 #[test]
 fn a_gap_between_text_pieces_reads_as_a_space() {
-    // `Td` moves 40 pt from the line start: a gap of about one em.
     let pieces = "BT /F1 12 Tf 10 50 Td (Hello) Tj 40 0 Td (world) Tj ET";
     let width = 40.0 + pt(WORLD);
     assert_near(
@@ -79,7 +74,6 @@ fn a_gap_between_text_pieces_reads_as_a_space() {
         0.12,
     );
     assert!(search(pieces, "helloworld").is_empty());
-    // Kerning keeps a word together; a wide adjustment separates words.
     let kerned = "BT /F1 12 Tf 10 50 Td [(Hel) -20 (lo) -300 (world)] TJ ET";
     assert_eq!(search(kerned, "hello world").len(), 1);
     assert!(search(kerned, "helloworld").is_empty());
@@ -123,7 +117,6 @@ fn areas_follow_the_page_rotation() {
         content: text(10, 20, "Hello"),
     };
     let doc = PdfDocument::open(build(&[rotated])).unwrap();
-    // Shown 200 × 100, turned clockwise: PDF y runs right, PDF x down.
     let hits = doc.search_page(0, "hello").unwrap();
     let left = 20.0 - pt(200.0);
     assert_near(only_area(&hits), left / 200.0, 0.1, 0.06, pt(HELLO) / 100.0);
@@ -158,7 +151,6 @@ fn work_per_page_is_bounded() {
 
 #[test]
 fn broken_content_is_read_as_far_as_it_goes() {
-    // No such font and no size: a fallback font at 1 pt.
     let broken = "BT /F9 Tf (Hello) Tj ET ] [ << Q Q Td Tj BT (";
     assert_eq!(search(broken, "hello").len(), 1);
 }
@@ -180,14 +172,12 @@ fn gaps_are_measured_in_the_last_glyphs_space() {
     assert_eq!(at(0.0, -LINE_SHIFT - 1.0), Gap::Line);
     assert_eq!(at(-LINE_BACK, 0.0), Gap::None);
     assert_eq!(at(-LINE_BACK - 1.0, 0.0), Gap::Line);
-    // After the glyph's advance, scaled into its space.
     let wide = Placed {
         inverse: Affine::scale(0.5),
         advance: 500.0,
     };
     assert_eq!(gap(wide, Point::new(1300.0, 0.0)), Gap::None);
     assert_eq!(gap(wide, Point::new(1400.0, 0.0)), Gap::Word);
-    // A degenerate transform cannot place the glyph: a new line.
     let flat = Placed {
         inverse: Affine::scale(0.0).inverse(),
         advance: 0.0,

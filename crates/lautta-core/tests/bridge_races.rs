@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Orderings that must not confuse the client: answers that arrive after the
-//! situation has moved on (SPEC NVB-3, NVB-9).
 
 mod bridge_support;
 
@@ -19,7 +17,6 @@ async fn a_late_location_list_does_not_resurrect_a_revoked_consent() {
     rig.fake.set_consent(Consent::Denied).await;
     rig.client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
 
-    // The user allows and takes it back at once, while ListLocations is slow.
     rig.fake.set_latency(Duration::from_millis(300));
     rig.fake.set_consent(Consent::Granted).await;
     rig.fake.set_consent(Consent::Denied).await;
@@ -31,7 +28,6 @@ async fn a_late_location_list_does_not_resurrect_a_revoked_consent() {
     );
 }
 
-/// How many descriptors of this process refer to the pipe with `inode`.
 fn descriptors_on_pipe(inode: u64) -> usize {
     let want = format!("pipe:[{inode}]");
     std::fs::read_dir("/proc/self/fd")
@@ -56,9 +52,8 @@ async fn the_apps_copy_of_the_descriptor_is_closed_once_the_bridge_has_it() {
     let check = async {
         eventually("the job to start", || !rig.fake.calls_of("Upload").is_empty()).await;
         tokio::time::sleep(Duration::from_millis(150)).await;
-        // Left are the writer's end and the bridge's reader (a message of the fake may hold
-        // one more for a moment). A copy kept by the app would stay for the whole job and
-        // would hide a stalled reader from the writer (NVB-9).
+        // Left: writer's end and bridge's reader (a fake message may hold one more briefly). An app
+        // copy would hide a stalled reader from the writer.
         eventually("the app's copy to be closed", || descriptors_on_pipe(inode) <= 2).await;
         File::from(writer).write_all(b"abc").unwrap();
     };

@@ -1,20 +1,17 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Wire types of `org.netvfs.Bridge1` (netvfs SPEC-v2 XB-9). Paths and names
-//! are `ay` (raw bytes), never `s` (SPEC NVB-8).
+//! Paths and names are `ay` (raw bytes), never `s`.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use zbus::zvariant::{OwnedValue, Type, Value};
 
-/// Object path and interface of the bridge (XB-8).
 pub const OBJECT_PATH: &str = "/org/netvfs/Bridge";
 pub const INTERFACE: &str = "org.netvfs.Bridge1";
-/// Largest `Read` the bridge accepts (XB-17).
+/// Largest `Read` the bridge accepts.
 pub const MAX_READ_BYTES: u32 = 1 << 20;
-/// Largest `ListBatch` size the bridge accepts (XB-17).
+/// Largest `ListBatch` size the bridge accepts.
 pub const MAX_LIST_BATCH: u32 = 512;
 
-/// Entry flags (XB-9).
 pub mod entry_flags {
     pub const HIDDEN: u16 = 0x1;
     pub const READ_ONLY: u16 = 0x2;
@@ -44,7 +41,6 @@ pub struct WireEntry {
 }
 
 impl WireEntry {
-    /// An entry with every optional field unknown.
     pub fn unknown(name: &[u8], kind: u8) -> WireEntry {
         WireEntry {
             name: name.to_vec(),
@@ -70,16 +66,12 @@ pub struct WireCapabilities {
     pub max_name_bytes: i64,
 }
 
-/// The connection state of a location: info key `state` of
-/// `ListLocations` (netvfs SPEC-v2 XB-10, XB-12), with `stateError` (the
-/// XC-21 name) when it is [`FAILED`](location_state::FAILED).
+/// Info key `state` of `ListLocations`, with `stateError` (bare error name) when
+/// [`FAILED`](location_state::FAILED).
 pub mod location_state {
-    /// The info key of the state.
     pub const KEY: &str = "state";
-    /// The info key of the error of a failed state.
     pub const ERROR_KEY: &str = "stateError";
-    /// No connection of the consumer's pool is established or being
-    /// established.
+    /// No connection of the consumer's pool established or being established.
     pub const DISCONNECTED: &str = "disconnected";
     /// None is established, at least one is being established.
     pub const CONNECTING: &str = "connecting";
@@ -89,32 +81,28 @@ pub mod location_state {
     pub const FAILED: &str = "failed";
 }
 
-/// The names `GetFeatures` answers (netvfs SPEC-v2 XB-19): the optional parts
-/// of the interface a bridge offers. Names this client does not know are
-/// ignored; a bridge without `GetFeatures` offers none.
+/// Names `GetFeatures` answers. Unknown names are ignored; a bridge without `GetFeatures` offers
+/// none.
 pub mod feature {
-    /// `OpenStorageSettings` opens Settings › Storage (XB-15).
+    /// `OpenStorageSettings`.
     pub const STORAGE_SETTINGS: &str = "storage-settings";
-    /// `ListDrives`, `Mount`, `Unmount` and `DrivesChanged` (XB-20).
+    /// `ListDrives`, `Mount`, `Unmount`, `DrivesChanged`.
     pub const DRIVES: &str = "drives";
 }
 
-/// `(ssaya{sv})`: a memory card or USB drive of `ListDrives`, mounted or not
-/// (netvfs SPEC-v2 XB-20).
+/// `(ssaya{sv})`: memory card or USB drive, mounted or not.
 #[derive(Debug, Serialize, Deserialize, Type)]
 pub struct WireDrive {
     /// Opaque to consumers (`mmcblk1p1`, `sda1`).
     pub id: String,
-    /// The filesystem's label (a locked drive's: its LUKS header's); empty
-    /// without one.
+    /// Filesystem label (locked drive: LUKS header's); empty without one.
     pub label: String,
-    /// Where it is mounted; empty when it is not.
+    /// Empty when not mounted.
     pub mount_point: Vec<u8>,
     /// [`drive_info`] keys; unknown ones are ignored.
     pub info: HashMap<String, OwnedValue>,
 }
 
-/// The info keys of a [`WireDrive`] (XB-20).
 pub mod drive_info {
     /// `s`: [`KIND_SD`] or [`KIND_USB`].
     pub const KIND: &str = "kind";
@@ -126,14 +114,11 @@ pub mod drive_info {
     pub const READ_ONLY: &str = "readOnly";
     /// `s`, when known.
     pub const UUID: &str = "uuid";
-    /// `s`: the drive's vendor and model, when known.
+    /// `s`: vendor and model, when known.
     pub const MODEL: &str = "model";
-    /// `b`, true: a LUKS device not unlocked. Settings › Storage unlocks it;
-    /// `Mount` answers `Unsupported`.
+    /// `b`: LUKS device not unlocked; `Mount` answers `Unsupported`.
     pub const LOCKED: &str = "locked";
-    /// A memory card.
     pub const KIND_SD: &str = "sd";
-    /// A USB drive.
     pub const KIND_USB: &str = "usb";
 }
 
@@ -163,10 +148,8 @@ pub struct WireWalkItem {
     pub entry: WireEntry,
 }
 
-/// An `a{sv}` argument built from plain Rust values.
 pub type Opts = HashMap<String, Value<'static>>;
 
-/// Builder for option dictionaries (`opts`, `changes`, `answer`).
 #[derive(Debug, Default)]
 pub struct OptsBuilder(Opts);
 
@@ -190,13 +173,11 @@ impl OptsBuilder {
         self
     }
 
-    /// A byte array (`ay`), as `info.path` carries a path.
     pub fn bytes(mut self, key: &str, v: &[u8]) -> OptsBuilder {
         self.0.insert(key.to_owned(), Value::from(v.to_vec()));
         self
     }
 
-    /// An array of byte arrays (`aay`), as `Answer` carries keyboard answers.
     pub fn byte_arrays(mut self, key: &str, v: &[Vec<u8>]) -> OptsBuilder {
         let items: Vec<Vec<u8>> = v.to_vec();
         self.0.insert(key.to_owned(), Value::from(items));
@@ -207,18 +188,16 @@ impl OptsBuilder {
         self.0
     }
 
-    /// The dictionary as the bridge sends it (`a{sv}` with owned values), for
-    /// building server-side messages and test fixtures.
+    /// For server-side messages and test fixtures.
     pub fn build_owned(self) -> HashMap<String, OwnedValue> {
         self.0
             .into_iter()
-            // Plain values hold no file descriptors, the only case that fails.
+            // only fd values fail; plain values hold none
             .filter_map(|(k, v)| OwnedValue::try_from(v).ok().map(|o| (k, o)))
             .collect()
     }
 }
 
-/// Reads a string out of an `a{sv}` value.
 pub fn value_str(v: &Value<'_>) -> Option<String> {
     match v {
         Value::Str(s) => Some(s.as_str().to_owned()),
@@ -226,7 +205,6 @@ pub fn value_str(v: &Value<'_>) -> Option<String> {
     }
 }
 
-/// Reads any integer out of an `a{sv}` value.
 pub fn value_i64(v: &Value<'_>) -> Option<i64> {
     match v {
         Value::U8(n) => Some(i64::from(*n)),
@@ -240,7 +218,6 @@ pub fn value_i64(v: &Value<'_>) -> Option<i64> {
     }
 }
 
-/// Reads a boolean out of an `a{sv}` value.
 pub fn value_bool(v: &Value<'_>) -> Option<bool> {
     match v {
         Value::Bool(b) => Some(*b),
@@ -248,7 +225,6 @@ pub fn value_bool(v: &Value<'_>) -> Option<bool> {
     }
 }
 
-/// Reads a byte array out of an `a{sv}` value (`ay`, as `info.path`).
 pub fn value_bytes(v: &Value<'_>) -> Option<Vec<u8>> {
     match v {
         Value::Array(a) => a
@@ -262,7 +238,6 @@ pub fn value_bytes(v: &Value<'_>) -> Option<Vec<u8>> {
     }
 }
 
-/// Reads an array of strings out of an `a{sv}` value.
 pub fn value_strings(v: &Value<'_>) -> Option<Vec<String>> {
     match v {
         Value::Array(a) => a

@@ -1,7 +1,4 @@
-# The compiler the Sailfish OS SDK will ship (sailfishos/rust has 1.95; the
-# 5.2 target still has 1.75). Until a target ships it, the RPM's binary is
-# cross-built with this toolchain (tools/ci/cross-build.sh, SPEC RS-6);
-# host builds, lints and tests use the same release.
+# SDK 5.2 target has 1.75: RPM binary is cross-built with this toolchain.
 [toolchain]
 channel = "1.95.0"
 components = ["clippy", "rustfmt", "llvm-tools-preview"]

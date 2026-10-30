@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): accepting the summary sheet of a
-// large plan starts it. Silica emits done() before accepted(), so a sheet
-// that let its plan go on done() made every large copy or move fail with
-// "no longer exists".
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -63,7 +59,6 @@ ApplicationWindow {
                 return win.fail("step " + win.step + " timed out")
             switch (win.step) {
             case 0:
-                // Two files are a large plan once one item is the limit.
                 if (!App.setSetting("large_op_items", JSON.stringify(1)))
                     return win.fail("large_op_items not set")
                 win.install("doc.md", "lautta://user-documents/plan-start.md")

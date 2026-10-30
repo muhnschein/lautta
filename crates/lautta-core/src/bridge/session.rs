@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The supervisor: finds the socket, connects, says `Hello`, follows consent,
-//! locations, drives and questions, and reconnects with backoff while the app
-//! is in the foreground (SPEC NVB-1..4, NVB-12, LOC-3).
+//! Supervisor: finds the socket, connects, says `Hello`, follows consent, locations, drives and
+//! questions; reconnects with backoff in the foreground.
 
 use super::client::Inner;
 use super::link::{rpc, Link};
@@ -21,7 +20,6 @@ use tokio::sync::watch;
 use tokio::time::{sleep, timeout};
 
 enum Attempt {
-    /// Connected and served until the connection ended.
     Ended,
     Failed,
 }
@@ -64,7 +62,6 @@ pub(super) async fn supervise(inner: Arc<Inner>) {
     }
 }
 
-/// Waits until the app is in the foreground; true if it had to wait.
 async fn wait_foreground(inner: &Inner) -> bool {
     let mut rx = inner.foreground.subscribe();
     let mut waited = false;
@@ -84,7 +81,6 @@ async fn socket_present(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Waits for a poke, or for the next poll of a missing bridge (NVB-1).
 async fn idle(inner: &Inner) {
     match inner.config.poll_interval {
         Some(every) => wait_or_wake(inner, every).await,
@@ -117,7 +113,6 @@ fn clear_lists(inner: &Inner) {
     });
 }
 
-/// Runs `work` within `limit`, if there is one; `None` when it ran out.
 async fn bounded<T>(limit: Option<Duration>, work: impl Future<Output = T>) -> Option<T> {
     match limit {
         Some(limit) => timeout(limit, work).await.ok(),
@@ -131,7 +126,7 @@ async fn attempt_session(inner: &Arc<Inner>, lost: bool) -> Attempt {
     let Some(Ok(conn)) = bounded(limit, lautta_bridge_proto::connect(&inner.config.socket)).await else {
         return Attempt::Failed;
     };
-    // Subscribed before the first call so that no signal is missed.
+    // Subscribed before the first call so no signal is missed.
     let mut signals = conn.signals();
     let link = Link::new(conn.clone());
     let shaken = bounded(limit, handshake(inner, &link))
@@ -148,8 +143,6 @@ async fn attempt_session(inner: &Arc<Inner>, lost: bool) -> Attempt {
     Attempt::Ended
 }
 
-/// `Hello` (NVB-2), the features, then the consent (NVB-3). Failure is an
-/// `Attempt`.
 async fn handshake(inner: &Arc<Inner>, link: &Arc<Link>) -> Result<(), Attempt> {
     let proxy = link.proxy();
     let version = rpc(proxy.hello(&inner.config.client_name).await).map_err(|_| Attempt::Failed)?;
@@ -166,9 +159,8 @@ async fn handshake(inner: &Arc<Inner>, link: &Arc<Link>) -> Result<(), Attempt> 
     Ok(())
 }
 
-/// What `GetFeatures` tells (NVB-13): a bridge without the method offers
-/// none of the optional parts, and the app works as with it, without them.
-/// Only a lost connection fails the handshake.
+/// Bridge without `GetFeatures` offers no optional parts; app works without them. Only a lost
+/// connection fails the handshake.
 fn features(answer: Result<Vec<String>, BridgeError>) -> Result<Vec<String>, Attempt> {
     match answer {
         Ok(features) => Ok(features),
@@ -193,7 +185,6 @@ async fn run_signals(inner: &Arc<Inner>, link: &Arc<Link>, signals: &mut SignalS
     }
 }
 
-/// The connection is gone: wait for nothing, ask nothing (NVB-12).
 fn teardown(inner: &Arc<Inner>, link: &Arc<Link>) {
     link.close();
     let questions = {
@@ -211,7 +202,7 @@ fn teardown(inner: &Arc<Inner>, link: &Arc<Link>) {
         *n = Arc::new(Vec::new());
         changed
     });
-    // Without the bridge nothing mounts them (LOC-3).
+    // Without the bridge nothing mounts them.
     publish(&inner.drives, Vec::new());
 }
 
@@ -240,9 +231,8 @@ fn consent_granted(inner: &Inner) -> bool {
     inner.info().consent == Some(Consent::Granted)
 }
 
-/// The consent decides what the app shows (NVB-3): nothing but the status
-/// until it is `granted`. `Ready` follows the first list of locations, so that
-/// the Servers section never flashes empty.
+/// Nothing but status until consent is `granted`. `Ready` follows the first list of locations so
+/// Servers never flashes empty.
 fn apply_consent(inner: &Arc<Inner>, link: &Arc<Link>, consent: Consent) {
     inner.info().consent = Some(consent);
     match consent {
@@ -255,7 +245,7 @@ fn apply_consent(inner: &Arc<Inner>, link: &Arc<Link>, consent: Consent) {
                     .link
                     .as_ref()
                     .is_some_and(|l| Arc::ptr_eq(l, &link2));
-                // The consent or the connection may have changed meanwhile.
+                // Consent or connection may have changed meanwhile.
                 if current && consent_granted(&inner2) {
                     inner2.set_status(BridgeStatus::Ready);
                 }
@@ -290,8 +280,7 @@ fn show_nearby(inner: &Inner, list: Vec<NearbyServer>) {
     });
 }
 
-/// The discovery is about to (re)start: the servers shown stay until it has
-/// settled (see [`super::nearby`]).
+/// Servers shown stay until discovery has settled (see [`super::nearby`]).
 pub(super) fn begin_settle(inner: &Arc<Inner>) {
     let generation = inner.info().nearby.begin();
     let inner = inner.clone();
@@ -310,13 +299,13 @@ fn spawn_refresh(inner: &Arc<Inner>, link: &Arc<Link>) {
     tokio::spawn(async move { refresh_locations(&inner, &link).await });
 }
 
-/// `ListLocations`; of overlapping refreshes the newest request wins.
+/// Of overlapping refreshes the newest request wins.
 async fn refresh_locations(inner: &Arc<Inner>, link: &Arc<Link>) {
     let generation = inner.refreshes.fetch_add(1, Ordering::SeqCst) + 1;
     let wire = match rpc(link.proxy().list_locations().await) {
         Ok(wire) => wire,
         Err(e) => {
-            // The Servers section stays as it is; say why, for the journal.
+            // Servers section stays as it is; say why, for the journal.
             log::warn!("bridge locations not listed: {e}");
             return;
         }
@@ -338,8 +327,7 @@ async fn refresh_locations(inner: &Arc<Inner>, link: &Arc<Link>) {
     });
 }
 
-/// `ListDrives`, when the bridge has the drives (LOC-3, NVB-13); they need
-/// no consent.
+/// Needs no consent.
 fn spawn_drives(inner: &Arc<Inner>, link: &Arc<Link>) {
     if !inner.info().features.iter().any(|f| f == feature::DRIVES) {
         return;
@@ -349,8 +337,7 @@ fn spawn_drives(inner: &Arc<Inner>, link: &Arc<Link>) {
     tokio::spawn(async move { refresh_drives(&inner, &link).await });
 }
 
-/// Of overlapping `ListDrives` the newest request wins, and only while its
-/// connection is the current one.
+/// Of overlapping `ListDrives` the newest request wins, only while its connection is current.
 async fn refresh_drives(inner: &Arc<Inner>, link: &Arc<Link>) {
     let generation = inner.drive_refreshes.fetch_add(1, Ordering::SeqCst) + 1;
     let wire = match rpc(link.proxy().list_drives().await) {
@@ -372,7 +359,6 @@ async fn refresh_drives(inner: &Arc<Inner>, link: &Arc<Link>) {
     publish(&inner.drives, list);
 }
 
-/// Shows `value` unless it is what is shown.
 fn publish<T: PartialEq>(tx: &watch::Sender<Arc<T>>, value: T) {
     tx.send_if_modified(|current| {
         let changed = **current != value;
@@ -383,7 +369,6 @@ fn publish<T: PartialEq>(tx: &watch::Sender<Arc<T>>, value: T) {
     });
 }
 
-/// A display string for a question detail.
 fn show(v: &Value<'_>) -> String {
     match v {
         Value::Str(s) => s.as_str().to_owned(),
@@ -397,7 +382,6 @@ fn show(v: &Value<'_>) -> String {
     }
 }
 
-/// A question of the bridge goes to the hub; the answer goes back (NVB-6).
 fn spawn_question(
     inner: &Arc<Inner>,
     link: &Arc<Link>,
@@ -425,7 +409,7 @@ async fn send_answer(conn: &Connection, id: &str, answer: Option<Answer>) {
         Some(Answer::Decline) | None => (false, Zeroizing::new(Vec::new())),
     };
     if let Err(e) = conn.answer_wiping(id, accept, &mut secrets).await {
-        // The question is gone with its connection; nothing is left to answer.
+        // Question is gone with its connection; nothing is left to answer.
         log::debug!("answer to {id} not delivered: {e}");
     }
 }

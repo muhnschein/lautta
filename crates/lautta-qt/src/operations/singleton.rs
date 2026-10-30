@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The `Operations` singleton: copy/move with plan summaries, delete,
-//! conflicts before the run, compress/extract and archives as locations.
-//!
-//! All methods take `&self` and keep their state in cells: QML may call back
-//! from inside a signal handler while this object is still on the stack.
+//! All methods take `&self`, state in cells: QML may call back from inside a signal handler while
+//! this object is on the stack.
 
 use super::{error_parts, parse_uri, parse_uris};
 use crate::json::{from_json, to_json};
@@ -22,10 +19,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// At most one progress signal per job in this interval.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
 
-/// What starting an operation led to.
 enum Launched {
     Transfer(i64),
     Summary(Box<Plan>, String),
@@ -33,9 +28,7 @@ enum Launched {
 
 #[derive(Default)]
 struct State {
-    /// Folder to open when the extract transfer with this id completes.
     open_after: HashMap<i64, String>,
-    /// The same, for extract plans that still wait for their summary.
     open_after_plan: HashMap<u64, String>,
     jobs: HashMap<i64, Arc<AtomicBool>>,
     listening: bool,
@@ -71,7 +64,7 @@ pub struct Operations {
 
     needsSummary: qt_signal!(planId: i32, summaryJson: QString),
     started: qt_signal!(transferId: i64),
-    /// `subject`: the URI of the item the error is about, or empty.
+    /// `subject`: URI the error is about, or empty.
     failed: qt_signal!(kind: QString, message: QString, subject: QString),
     removed: qt_signal!(trashedCount: i32, transferId: i64),
     conflictResolved: qt_signal!(planId: i32, remaining: i32),
@@ -111,12 +104,10 @@ fn bad_arguments() -> Error {
     Error::new(ErrorKind::InvalidArgument, "bad arguments")
 }
 
-/// The plan of a summary sheet is gone (started or discarded already).
 fn plan_gone() -> Error {
     Error::new(ErrorKind::NotFound, "the planned operation is no longer pending")
 }
 
-/// `file:///a%20b` or `/a b` as a path.
 fn local_path(text: &str) -> std::path::PathBuf {
     let raw = text.strip_prefix("file://").unwrap_or(text);
     let bytes = raw.as_bytes();
@@ -162,8 +153,6 @@ impl Operations {
         self.jobs_changed();
     }
 
-    // ------------------------------------------------------ copy and move
-
     fn copyTo(&self, uris_json: QString, dest_uri: QString) {
         self.transfer_op(OperationKind::Copy, &uris_json, &dest_uri);
     }
@@ -188,7 +177,6 @@ impl Operations {
         );
     }
 
-    /// A started or planned operation reached the GUI thread.
     fn arrived(&self, res: Result<Launched>, open_after: Option<String>) {
         match res {
             Ok(Launched::Transfer(id)) => {
@@ -227,7 +215,6 @@ impl Operations {
         let me = QPointer::from(self);
         spawn_then(
             async move {
-                // A conflict answer may still be working on the plan.
                 let plan = pending.take_when_returned(id).await.ok_or_else(plan_gone)?;
                 let started = match options {
                     Some(text) => {
@@ -251,8 +238,6 @@ impl Operations {
         self.pending.discard(id);
         self.state.borrow_mut().open_after_plan.remove(&id);
     }
-
-    // ------------------------------------------------------ conflicts
 
     fn conflictsJson(&self, plan_id: i32) -> QString {
         let Some(core) = core() else {
@@ -297,8 +282,6 @@ impl Operations {
         );
     }
 
-    // ------------------------------------------------------ delete
-
     fn remove(&self, uris_json: QString) {
         let (Some(core), Some(items)) = (core(), parse_uris(&uris_json)) else {
             return self.emit_failed(&bad_arguments());
@@ -306,7 +289,6 @@ impl Operations {
         let me = QPointer::from(self);
         spawn_then(
             async move {
-                // A delete that succeeds trashed every item that goes there.
                 let trashed = items.iter().filter(|u| core.deletes_to_trash(u)).count();
                 (core.delete(&items).await, trashed)
             },
@@ -323,17 +305,13 @@ impl Operations {
         );
     }
 
-    /// True when `remove` would delete any of the items for good: they
-    /// skip the Trash (OPS-8), so the page asks first. Junk counts as
-    /// permanent: asking is the safe side.
+    /// Items skipping the Trash, so the page asks first. Junk counts as permanent.
     fn deletesPermanently(&self, uris_json: QString) -> bool {
         match (core(), parse_uris(&uris_json)) {
             (Some(core), Some(items)) => items.iter().any(|u| !core.deletes_to_trash(u)),
             _ => true,
         }
     }
-
-    // ------------------------------------------------------ compress
 
     fn compress(&self, uris_json: QString, dest_uri: QString, name: QString, kind: QString) {
         let (Some(core), Some(sources), Some(dest), Some(kind)) = (
@@ -379,7 +357,6 @@ impl Operations {
         );
     }
 
-    /// Progress as signals on the GUI thread, at most a few times a second.
     fn progress_sink(&self, job: i32) -> lautta_core::provider::ProgressSink {
         let me = QPointer::from(self);
         let deliver = qmetaobject::queued_callback(move |(done, total): (i64, i64)| {
@@ -424,8 +401,6 @@ impl Operations {
         });
     }
 
-    // ------------------------------------------------------ archives
-
     fn extract(&self, archive_uri: QString, dest_uri: QString) {
         self.extract_op(&archive_uri, &dest_uri, false);
     }
@@ -451,7 +426,6 @@ impl Operations {
         );
     }
 
-    /// Listens to the engine once, to tell when an extract finished.
     fn listen(&self) {
         let Some(core) = core() else { return };
         if std::mem::replace(&mut self.state.borrow_mut().listening, true) {
@@ -522,12 +496,10 @@ impl Operations {
         });
     }
 
-    /// Whether the URI lies inside an opened archive (LOC-5).
     fn isArchive(&self, uri: QString) -> bool {
         self.archive_location(&uri).is_some()
     }
 
-    /// The archive file a location inside an archive was opened from.
     fn archiveSource(&self, uri: QString) -> QString {
         self.archive_location(&uri)
             .and_then(|l| l.url)
@@ -540,8 +512,6 @@ impl Operations {
         matches!(location.kind, lautta_core::locations::LocationKind::Archive).then_some(location)
     }
 
-    // ------------------------------------------------------ helpers for pages
-
     fn displayPath(&self, uri: QString) -> QString {
         match (core(), parse_uri(&uri)) {
             (Some(core), Some(u)) => QString::from(core.display_path(&u).as_str()),
@@ -549,8 +519,7 @@ impl Operations {
         }
     }
 
-    /// Which of the received files Lautta can read (INT-1); the paths may be
-    /// `file://` URLs.
+    /// Paths may be `file://` URLs.
     fn probeShared(&self, paths_json: QString) -> QString {
         let paths: Vec<String> = from_json(&paths_json.to_string()).unwrap_or_default();
         let paths: Vec<std::path::PathBuf> = paths.iter().map(|p| local_path(p)).collect();

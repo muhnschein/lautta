@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Persistence of the queue in `transfers` / `transfer_items` (XFR-11, DAT-2).
-//! All methods are blocking; callers run them on blocking threads (ARC-6).
+//! Persistence of the queue in `transfers` / `transfer_items`. All methods block; callers run them
+//! on blocking threads.
 
 use super::model::{
     kind_from_name, kind_name, operation_from_name, operation_name, ItemExtra, ItemState, Transfer,
@@ -13,9 +13,9 @@ use crate::uri::Uri;
 use rusqlite::{params, Connection, Row};
 use std::collections::HashMap;
 
-/// Progress is written at most this often per transfer (XFR-11).
+/// Progress is written at most this often per transfer.
 pub const PROGRESS_WRITE_INTERVAL_MS: i64 = 2000;
-/// History is kept this long (XFR-10).
+/// History is kept this long.
 pub const DEFAULT_RETENTION_DAYS: u32 = 30;
 
 const DAY_MS: i64 = 86_400_000;
@@ -28,7 +28,6 @@ pub fn to_u64(v: i64) -> u64 {
     u64::try_from(v).unwrap_or(0)
 }
 
-/// Decides when a progress write is due.
 #[derive(Debug, Clone)]
 pub struct ProgressThrottle {
     interval_ms: i64,
@@ -76,7 +75,6 @@ impl Store {
         Store { db }
     }
 
-    /// Inserts the transfer and its items; assigns `id` and `position`.
     pub fn insert(&self, t: &mut Transfer) -> Result<()> {
         let conn = self.db.lock();
         let tx = conn.unchecked_transaction()?;
@@ -125,7 +123,6 @@ impl Store {
         write_item(&self.db.lock(), transfer, item)
     }
 
-    /// Applies a batch of writes in one transaction.
     pub fn apply(&self, writes: &[Write]) -> Result<()> {
         let conn = self.db.lock();
         let tx = conn.unchecked_transaction()?;
@@ -171,8 +168,7 @@ impl Store {
         Ok(transfers)
     }
 
-    /// Deletes finished transfers older than the retention (XFR-10).
-    /// Returns how many were removed.
+    /// Deletes finished transfers older than the retention. Returns how many.
     pub fn purge_history(&self, now_ms: i64, retention_days: u32) -> Result<usize> {
         let cutoff = now_ms - i64::from(retention_days) * DAY_MS;
         let n = self.db.lock().execute(
@@ -184,7 +180,6 @@ impl Store {
     }
 }
 
-/// One persisted change.
 #[derive(Debug, Clone)]
 pub enum Write {
     Summary(TransferSummary),

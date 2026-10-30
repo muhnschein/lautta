@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The viewers' core actions end to end: text, Markdown, EXIF, the folder's
-//! images, remote thumbnails (PRV-2/3), playback copies and Recents (ORG-2).
 
 use lautta_core::app::Core;
 use lautta_core::locations::{Location, LocationKind, LocationRegistry};
@@ -56,7 +54,6 @@ fn jpeg(w: u32, h: u32) -> Vec<u8> {
     out.into_inner()
 }
 
-/// A JPEG start, an APP1 block with Make and Orientation, an end marker.
 fn exif_jpeg(orientation: u16) -> Vec<u8> {
     let mut tiff = vec![b'I', b'I', 0x2a, 0, 8, 0, 0, 0, 2, 0];
     tiff.extend_from_slice(&[0x0f, 0x01, 2, 0, 6, 0, 0, 0, 38, 0, 0, 0]);
@@ -91,7 +88,7 @@ async fn large_and_binary_files_are_flagged() {
     let h = home().await;
     h.nas.add_file("big.txt", &vec![b'a'; 1024 * 1024 + 10], 0);
     let l = h.core.load_text(&uri("lautta://nv-nas/big.txt")).await.unwrap();
-    assert!(l.doc.truncated, "1 MiB notice (PRV-4)");
+    assert!(l.doc.truncated, "1 MiB notice");
 
     h.nas.add_file("bin.dat", &[0xff, 0xfe, 0x00, 0x80], 0);
     let l = h.core.load_text(&uri("lautta://nv-nas/bin.dat")).await.unwrap();
@@ -115,7 +112,6 @@ async fn markdown_is_rendered_and_truncation_is_reported() {
     assert!(!r.truncated);
 }
 
-/// The viewer's lines once the colouring is done.
 async fn colours_of(
     viewed: lautta_core::app_viewers::ViewedText,
 ) -> lautta_core::preview::highlight::ColouredText {
@@ -259,10 +255,9 @@ async fn remote_thumbnails_are_cached_and_shared() {
     assert_eq!(
         before,
         open_reads(&h.nas),
-        "second thumbnail comes from the cache (PRV-2)"
+        "second thumbnail comes from the cache"
     );
 
-    // The cache key includes the mtime: a changed file is rendered again.
     h.nas.add_file("p/a.jpg", &jpeg(100, 50), 10_000);
     let t4 = previews.request(h.core.clone(), u, 64);
     t4.rx.await.unwrap().unwrap();
@@ -279,7 +274,7 @@ async fn local_files_and_switched_off_thumbnails_are_refused() {
     assert_eq!(
         err.kind,
         ErrorKind::Unsupported,
-        "PRV-1: Nemo.Thumbnailer does local files"
+        "Nemo.Thumbnailer does local files"
     );
 
     h.nas.add_file("x.jpg", &jpeg(8, 8), 0);
@@ -293,7 +288,6 @@ async fn local_files_and_switched_off_thumbnails_are_refused() {
 #[tokio::test]
 async fn remote_thumbnails_follow_the_size_setting() {
     let h = home().await;
-    // 1.5 MB that only decode whole: no EXIF thumbnail to fall back on.
     let mut big = jpeg(64, 64);
     big.resize(1_500_000, 0);
     h.nas.add_file("big.jpg", &big, 0);
@@ -314,8 +308,6 @@ async fn remote_thumbnails_follow_the_size_setting() {
     assert!(t.rx.await.unwrap().is_ok(), "within 2 MB it is made");
 }
 
-/// A PDF of two pages: a red square in the top left corner of the first,
-/// the second all blue.
 fn pdf() -> Vec<u8> {
     use lautta_pdf::sample::{build, page};
     build(&[
@@ -347,7 +339,7 @@ async fn a_remote_pdf_thumbnail_is_its_first_page_made_once_per_version() {
 
     let bytes = thumbnail(&h, &previews, u, 64).await.unwrap();
     let img = thumb_pixels(&bytes);
-    assert_eq!(img.dimensions(), (64, 64), "the size asked for (PRV-14)");
+    assert_eq!(img.dimensions(), (64, 64), "the size asked for");
     let corner = img.get_pixel(2, 2).0;
     assert!(
         corner[0] > 200 && corner[1] < 60 && corner[2] < 60,
@@ -382,7 +374,7 @@ async fn local_pdfs_are_left_to_the_system_thumbnailer() {
         .unwrap_err();
     assert_eq!(
         err.message, "no app thumbnail for this file",
-        "Nemo.Thumbnailer draws it, in a process of its own (PRV-1)"
+        "Nemo.Thumbnailer draws it, in a process of its own"
     );
     assert!(previews.cache().is_empty());
 }
@@ -416,7 +408,6 @@ async fn server_pdfs_follow_the_server_thumbnail_switch() {
 #[tokio::test]
 async fn pdfs_over_the_size_limit_are_refused_before_they_are_read() {
     let h = home().await;
-    // Valid, with spaces after the end marker.
     let mut big = pdf();
     big.resize(1_500_000, b' ');
     h.nas.add_file("big.pdf", &big, 0);
@@ -457,7 +448,6 @@ async fn pdfs_that_cannot_be_drawn_are_refused_and_not_read_again() {
     let leftovers: Vec<_> = std::fs::read_dir(previews.cache().dir()).unwrap().collect();
     assert!(leftovers.is_empty(), "no markers stay behind");
 
-    // The verdict is on one version of the file: a new one is tried.
     h.nas.add_file("broken.pdf", &pdf(), 2);
     thumbnail(&h, &previews, "lautta://nv-nas/broken.pdf", 32)
         .await
@@ -477,11 +467,7 @@ async fn a_pdf_request_that_is_cancelled_while_queued_never_runs() {
             .request(&format!("block{i}"), "nv-nas", async move { g.notified().await });
     }
     let t = previews.request(h.core.clone(), uri("lautta://nv-nas/a.pdf"), 32);
-    assert_eq!(
-        previews.jobs().queued("nv-nas"),
-        1,
-        "PDFs wait in the same queue (PRV-3)"
-    );
+    assert_eq!(previews.jobs().queued("nv-nas"), 1, "PDFs wait in the same queue");
     t.cancel();
     assert_eq!(
         previews.jobs().queued("nv-nas"),
@@ -504,7 +490,6 @@ async fn a_smaller_thumbnail_cache_is_trimmed_at_once() {
     let mut s = h.core.settings();
     s.thumbnail_cache_mb = 10;
     h.core.apply_settings(s);
-    // The files go off the caller's thread: wait for them.
     for _ in 0..300 {
         if cache.total_bytes() <= 10_000_000 {
             break;
@@ -525,7 +510,6 @@ async fn cancelling_the_last_waiter_cancels_the_job() {
     let h = home().await;
     h.nas.add_file("x.jpg", &jpeg(8, 8), 0);
     let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
-    // Fill both slots of the location so the next job stays queued (PRV-3).
     let gate = Arc::new(tokio::sync::Notify::new());
     for i in 0..2 {
         let g = gate.clone();
@@ -620,7 +604,6 @@ async fn pdfs_open_and_render_from_any_location() {
         assert_eq!(opened.size, Some(sample_pdf().len() as u64));
         let page = h.core.pdf_page(&uri(u), 0, 50).await.unwrap();
         assert_eq!((page.width, page.height), (50, 100));
-        // The red square fills the bottom left quarter: 25 px of 50.
         let at = ((90 * 50 + 5) * 4) as usize;
         assert_eq!(page.rgba[at..at + 4], [255, 0, 0, 255], "{u}");
     }
@@ -642,7 +625,6 @@ async fn a_page_is_rendered_without_opening_first_and_sees_no_stale_copy() {
         h.core.pdf_page(&u, 2, 60).await.unwrap_err(),
         PdfFailure::Pdf(lautta_pdf::PdfError::NoSuchPage)
     );
-    // Opening again reads the file again: the changed file is seen.
     h.nas.add_file("docs/fresh.pdf", &build(&[page(10, 10, "")]), 2);
     assert_eq!(h.core.open_pdf(&u, None).await.unwrap().pages.len(), 1);
     assert_eq!(
@@ -651,7 +633,6 @@ async fn a_page_is_rendered_without_opening_first_and_sees_no_stale_copy() {
     );
 }
 
-/// What `open_pdf` of `u` fails with, as "file <kind>" or "pdf <problem>".
 async fn pdf_failure(h: &Home, u: &str) -> String {
     use lautta_core::app_pdf::PdfFailure;
     match h.core.open_pdf(&uri(u), None).await.unwrap_err() {
@@ -755,8 +736,6 @@ async fn pdfs_reopen_where_reading_stopped() {
     assert_eq!(h.core.open_pdf(&u, None).await.unwrap().last_page, Some(0));
 }
 
-/// Four pages; "lautta" is on pages 0, 2 (twice, the second across two
-/// lines) and 3.
 fn searchable_pdf() -> Vec<u8> {
     use lautta_pdf::sample::{build, page, text};
     build(&[
@@ -771,8 +750,6 @@ fn searchable_pdf() -> Vec<u8> {
     ])
 }
 
-/// Every page a search of `u` sends, with its hits' area counts, and how
-/// the search ended.
 async fn search_pdf(
     h: &Home,
     u: &str,
@@ -834,8 +811,6 @@ async fn a_pdf_search_stops_at_the_hit_limit() {
     use lautta_pdf::sample::{build, page, text};
     use lautta_pdf::MAX_PAGE_HITS;
     let h = home().await;
-    // Every page has as many hits as a page may; the pages after those that
-    // fill the limit are not searched.
     let full = "x ".repeat(MAX_PAGE_HITS);
     let pages: Vec<_> = (0..MAX_SEARCH_HITS / MAX_PAGE_HITS + 2)
         .map(|_| page(200, 100, &text(0, 50, &full)))
@@ -977,7 +952,7 @@ async fn a_server_text_thumbnail_is_cached_per_version() {
         text_thumb(&h, &previews, u).await.as_deref(),
         Some("Ferry at 06:00")
     );
-    assert_eq!(open_reads(&h.nas), before, "second one from the cache (PRV-2)");
+    assert_eq!(open_reads(&h.nas), before, "second one from the cache");
 
     h.nas.add_file("n/notes.txt", b"Ferry at 07:00\n", 10_000);
     assert_eq!(
@@ -1000,7 +975,7 @@ async fn a_text_thumbnail_cancelled_while_queued_never_runs() {
     let h = home().await;
     h.nas.add_file("a.txt", b"hei", 0);
     let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
-    // A semaphore, not a Notify: the blocking jobs may not have run yet when released.
+    // Semaphore, not Notify: blocking jobs may not have run yet when released.
     let gate = Arc::new(tokio::sync::Semaphore::new(0));
     for i in 0..2 {
         let g = gate.clone();
@@ -1015,7 +990,7 @@ async fn a_text_thumbnail_cancelled_while_queued_never_runs() {
     assert_eq!(
         previews.jobs().queued("nv-nas"),
         2,
-        "text waits in the same queue (PRV-3)"
+        "text waits in the same queue"
     );
     previews.cancel_text(&first.key);
     assert_eq!(previews.jobs().queued("nv-nas"), 1, "the other request stays");

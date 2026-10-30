@@ -1,10 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The pulley menu of a folder (boards DirectoryPulley, DirectorySelectPulley).
-// `owner` is the DirectoryView. Entries that do not apply are not shown
-// (UI-8), never disabled. Top to bottom: Activity (leads away from the
-// folder, top as Sailfish places such entries), View options, Search,
-// Select, Paste (only with a clipboard), New: the folder's own actions
-// nearest the content.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0

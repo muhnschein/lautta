@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! operations area facades (doc/QML-API.md): the `Operations` singleton and
-//! the model behind the Trash.
 
 mod singleton;
 mod trash;
@@ -12,7 +10,6 @@ use qmetaobject::prelude::*;
 pub use singleton::Operations;
 pub use trash::TrashModel;
 
-/// Registers this area's QML types under `Lautta 1.0`.
 pub fn register() {
     let uri = crate::qml_uri();
     qmetaobject::qml_register_singleton_type::<Operations>(&uri, 1, 0, &crate::cstr("Operations"));
@@ -23,13 +20,12 @@ pub(crate) fn parse_uri(s: &QString) -> Option<Uri> {
     Uri::parse(&s.to_string()).ok()
 }
 
-/// A JSON array of URI strings; `None` when any entry is not a URI.
+/// `None` when any entry is not a URI.
 pub(crate) fn parse_uris(json: &QString) -> Option<Vec<Uri>> {
     let list: Vec<String> = from_json(&json.to_string())?;
     list.iter().map(|s| Uri::parse(s).ok()).collect()
 }
 
-/// The error as QML sees it: engineering kind and detail (SPEC §20).
 pub(crate) fn error_parts(e: &Error) -> (QString, QString) {
     (QString::from(e.kind.name()), QString::from(e.message.as_str()))
 }

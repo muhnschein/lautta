@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Text and code viewer (PRV-4, boards TextViewer, TextViewerPulley): read-only
-// up to 1 MiB with line numbers, the lines wrapped to the page's width,
-// coloured by the file's language (PRV-13), on a backdrop that darkens a dark
-// ambience and lightens a light one.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -18,11 +14,9 @@ Page {
     property string uri
 
     readonly property string fileName: App.nameOf(uri)
-    // The text in rows (TextRows.js): the list's model.
     readonly property var layout: doc.loaded ? TextRows.rows(doc.text) : TextRows.empty
     readonly property real charWidth: metrics.advanceWidth
     readonly property real gutter: Math.max(2, String(layout.lines).length) * charWidth + Theme.paddingLarge
-    // The ambience's colours for the syntax classes (PRV-13).
     readonly property string colours: SyntaxColours.palette(Theme)
 
     allowedOrientations: Orientation.All
@@ -45,9 +39,7 @@ Page {
 
     Notice { id: notice }
 
-    // Colour Page.highContrast dims a page with, stronger: black on a dark
-    // ambience, light grey on a light one. Opaque enough for text and syntax
-    // colours to read over any wallpaper (PRV-4).
+    // Stronger than Page.highContrast; opaque enough for text over any wallpaper.
     Rectangle {
         objectName: "textBackdrop"
         anchors.fill: parent
@@ -67,8 +59,7 @@ Page {
         anchors.fill: parent
         model: page.layout.rows
         clip: true
-        // Never sideways: a list that can flick sideways keeps the swipe
-        // back from the page stack (PRV-4).
+        // Never sideways: sideways-flickable list keeps swipe-back from page stack.
         flickableDirection: Flickable.VerticalFlick
 
         PullDownMenu {
@@ -87,11 +78,8 @@ Page {
         header: PageHeader {
             width: view.width
             title: page.fileName
-            // The list is put at its top (above the header) when the text
-            // arrives, and a ListView keeps contentY when its header grows:
-            // a description line that came only with the text would push
-            // the top of the header out of view. So the line is there,
-            // blank, from the start.
+            // List at top when text arrives; ListView keeps contentY when header grows, so
+            // description line is there, blank, from the start.
             description: doc.loaded
                          //% "Read-only · %1"
                          ? qsTrId("lautta-viewers-read-only").arg(Format.formatFileSize(doc.size))
@@ -106,7 +94,6 @@ Page {
                 x: Theme.paddingSmall
                 width: page.gutter - Theme.paddingLarge
                 horizontalAlignment: Text.AlignRight
-                // A line's number on its first row only.
                 text: modelData.number > 0 ? modelData.number : ""
                 font.family: "monospace"
                 font.pixelSize: Theme.fontSizeExtraSmall
@@ -116,12 +103,10 @@ Page {
             Label {
                 id: line
                 x: page.gutter
-                // Never implicitWidth: wrapping makes that depend on the
-                // width again (a binding loop).
+                // Never implicitWidth: wrapping makes it depend on width again (binding loop).
                 width: parent.width - page.gutter - Theme.horizontalPageMargin
-                // The row's characters come back escaped from the core, with
-                // the colours of its part of the line, so nothing in the file
-                // is read as markup (PRV-13).
+                // Row characters come back escaped from core with colours: file never read as
+                // markup.
                 text: doc.styledRow(modelData.text, modelData.line, modelData.start, doc.highlighted ? page.colours : "")
                 font.family: "monospace"
                 font.pixelSize: Theme.fontSizeExtraSmall

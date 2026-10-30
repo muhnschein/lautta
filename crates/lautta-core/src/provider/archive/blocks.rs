@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `Read + Seek` over a [`ReadHandle`] with a 64 KiB block cache (PRV-10), so a
-//! remote zip needs ranged reads only: the end of the file (central
-//! directory) first, then the blocks of the entries that are actually read.
+//! `Read + Seek` over a [`ReadHandle`] with 64 KiB block cache: remote zip needs ranged reads only.
 
 use crate::error::{Error, ErrorKind};
 use crate::provider::ReadHandle;
@@ -9,19 +7,17 @@ use std::io::{self, Read, Seek, SeekFrom};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-/// Cache block size.
 pub const BLOCK: u64 = 64 * 1024;
-/// Blocks kept (2 MiB).
+/// 2 MiB.
 const CACHE_BLOCKS: usize = 32;
 
 type Cache = Vec<(u64, Arc<Vec<u8>>)>;
 
-/// Wraps a lautta error so it survives a trip through `std::io`.
+/// Survives a trip through `std::io`.
 pub fn to_io(err: Error) -> io::Error {
     io::Error::other(err)
 }
 
-/// Inverse of [`to_io`]; plain I/O errors are mapped by kind.
 pub fn from_io(err: io::Error) -> Error {
     let inner = err
         .get_ref()
@@ -36,7 +32,6 @@ pub fn from_io(err: io::Error) -> Error {
     }
 }
 
-/// Shared block cache over one read handle.
 pub struct BlockSource {
     handle: Arc<dyn ReadHandle>,
     rt: tokio::runtime::Handle,
@@ -72,7 +67,6 @@ impl BlockSource {
         self.size
     }
 
-    /// Ranged reads issued to the underlying handle so far.
     pub fn read_count(&self) -> u64 {
         self.reads.load(Ordering::Relaxed)
     }
@@ -133,7 +127,6 @@ impl BlockSource {
     }
 }
 
-/// A cursor over a [`BlockSource`].
 pub struct BlockReader {
     src: Arc<BlockSource>,
     pos: u64,
@@ -144,7 +137,6 @@ impl BlockReader {
         self.src.size
     }
 
-    /// Reads exactly `len` bytes at `offset`.
     pub fn read_exact_at(&mut self, offset: u64, len: usize) -> io::Result<Vec<u8>> {
         self.pos = offset;
         let mut buf = vec![0u8; len];

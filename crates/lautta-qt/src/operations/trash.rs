@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `TrashModel`: the *Trash* (OPS-8): list, restore, delete now, empty.
-//! Call `reload()` when the page opens; it also purges what is past the
-//! retention setting.
+//! Call `reload()` when the page opens; it also purges past retention.
 
 use super::error_parts;
 use crate::runtime::{core, spawn_then};
@@ -24,7 +22,6 @@ const ROLE_DAYS_LEFT: i32 = 0x108;
 const ROLE_MIME_TYPE: i32 = 0x109;
 const ROLE_THUMBNAIL: i32 = 0x10a;
 
-/// Total bytes of the entries (unknown sizes count as zero).
 fn total_size(entries: &[TrashEntry]) -> i64 {
     entries
         .iter()
@@ -108,7 +105,6 @@ impl TrashModel {
             async move {
                 let now = now_secs();
                 tokio::task::spawn_blocking(move || {
-                    // What expired while the app was running goes first (OPS-8).
                     if let Err(e) = core.purge_trash(now) {
                         log::warn!("purging the Trash failed: {e}");
                     }
@@ -149,7 +145,6 @@ impl TrashModel {
         self.changed();
     }
 
-    /// Runs `work` off the GUI thread, then tells the page and reloads.
     fn run<T, F>(&mut self, work: F, done: impl FnOnce(&TrashModel, T) + 'static)
     where
         T: Send + 'static,
@@ -193,7 +188,6 @@ impl TrashModel {
         });
     }
 
-    /// "Delete now" for one item (after its remorse).
     fn remove(&mut self, id: i64) {
         self.run(
             move |core| core.trash.delete(id),
@@ -201,7 +195,6 @@ impl TrashModel {
         );
     }
 
-    /// Empties the Trash (after the remorse popup).
     fn empty(&mut self) {
         self.run(
             |core| core.empty_trash(),

@@ -1,14 +1,6 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// Transfer notifications (SPEC INT-2, XFR-6, XFR-8), shown while the app is
-// in the background: one updating progress notification, finished transfers
-// grouped in one, one per failed transfer, one per transfer that needs an
-// answer, and "will resume" when the app closes with work pending.
-//
-// Default actions: the running app reacts to `clicked` (openRequested). For a
-// closed app the notification carries a D-Bus action on the app's own name
-// (org.netvfs.lautta, SPEC §3.3): it starts the app through ExecDBus. Showing
-// a specific page after such a start needs a D-Bus object in the app, which
-// this release does not export, so the app comes up on its main page.
+// SPDX-License-Identifier: LGPL-2.1-or-later Closed app: notification carries a D-Bus action on
+// org.netvfs.lautta that starts the app through ExecDBus. App exports no D-Bus object, so it comes
+// up on its main page.
 import QtQuick 2.6
 import Nemo.Notifications 1.0
 import Lautta 1.0
@@ -17,14 +9,10 @@ import "transfers/TransferText.js" as TransferText
 Item {
     id: root
 
-    // The user tapped a notification while the app runs: page is
-    // "transfers" or "conflict" (then transferId says which transfer).
     signal openRequested(string page, int transferId)
-    // For page "edit" the second argument is the working copy's id.
 
     readonly property bool inBackground: Qt.application.state !== Qt.ApplicationActive
     property int finishedCount
-    // Notifications per transfer id (needs-answer), reused when it asks again.
     property var questionNotes: ({})
 
     function remoteAction(page) {
@@ -61,8 +49,6 @@ Item {
         progressNote.publish()
     }
 
-    // Called when the app is closing (XFR-6): what is still unfinished
-    // resumes the next time the app opens.
     function publishPending() {
         progressNote.close()
         if (Transfers.pendingCount > 0) {

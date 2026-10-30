@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The `Transfers` singleton (doc/QML-API.md): queue summary and control,
-//! cover data, keep-alive state and start-up restore (XFR-11).
 
 use super::events;
 use crate::json::to_json;
@@ -19,29 +17,21 @@ use std::time::Duration;
 #[derive(QObject, Default)]
 pub struct Transfers {
     base: qt_base_class!(trait QObject),
-    /// Queued, scanning or running transfers.
     activeCount: qt_property!(i32; NOTIFY changed),
-    /// Everything not finished: active, waiting and paused.
     pendingCount: qt_property!(i32; NOTIFY changed),
     pausedCount: qt_property!(i32; NOTIFY changed),
     waitingCount: qt_property!(i32; NOTIFY changed),
-    /// Transfers that wait for a conflict answer.
     questionCount: qt_property!(i32; NOTIFY changed),
-    /// Drives `KeepAlive` (XFR-5).
     busy: qt_property!(bool; NOTIFY changed),
     bytesDone: qt_property!(i64; NOTIFY changed),
     bytesTotal: qt_property!(i64; NOTIFY changed),
-    /// Bytes per second over the active transfers.
     rate: qt_property!(i64; NOTIFY changed),
-    /// Seconds left, -1 when unknown.
+    /// -1 when unknown.
     eta: qt_property!(i64; NOTIFY changed),
-    /// Transfers that came back paused at start (XFR-11), until resumed or
-    /// dismissed.
+    /// Came back paused at start, until resumed or dismissed.
     pendingAtStart: qt_property!(i32; NOTIFY changed),
-    /// The app is closing with work pending (XFR-6).
     closing: qt_property!(bool; NOTIFY changed),
-    /// The activity bar (XFR-13): a `BarMode` name, the transfer it names
-    /// (0 when hidden) and how many transfers are unfinished.
+    /// A `BarMode` name, the transfer it names (0 when hidden), count of unfinished transfers.
     barMode: qt_property!(QString; NOTIFY barChanged),
     barTransferId: qt_property!(i64; NOTIFY barChanged),
     barUnfinished: qt_property!(i32; NOTIFY barChanged),
@@ -50,11 +40,9 @@ pub struct Transfers {
 
     finished: qt_signal!(id: i64, ok: bool, failures: i32),
     needsAnswer: qt_signal!(id: i64, item: i32, conflictJson: QString),
-    /// A control call failed (`kind` is an ErrorKind name).
+    /// `kind` is an ErrorKind name.
     failed: qt_signal!(kind: QString, message: QString),
-    /// A queued transfer got its id (`queueCopy`).
     queued: qt_signal!(id: i64),
-    /// Someone (the cover) asks to show the Transfers page.
     showRequested: qt_signal!(),
 
     start: qt_method!(fn(&mut self)),
@@ -80,7 +68,6 @@ pub struct Transfers {
 
     book: ProgressBook,
     bar: ActivityBar,
-    /// A recompute is already scheduled for the end of a success flash.
     flash_timer: bool,
     notified: HashSet<i64>,
     started: bool,
@@ -99,8 +86,8 @@ impl QSingletonInit for Transfers {
         });
         self.barMode = QString::from(BarMode::Hidden.name());
         self.recompute();
-        // The window loads the persisted settings when its creation is done;
-        // starting one event-loop turn later sees them (XFR-11).
+        // Window loads persisted settings when its creation is done: start one event-loop turn
+        // later.
         let me = QPointer::from(&*self);
         qmetaobject::single_shot(Duration::from_millis(0), move || {
             if let Some(p) = me.as_pinned() {
@@ -132,8 +119,6 @@ impl Transfers {
         self.recompute();
     }
 
-    /// Re-reads the queue and updates the summary properties; `changed` is
-    /// emitted once when anything differs.
     fn recompute(&mut self) {
         let Some(core) = core() else { return };
         let list = core.engine.list();
@@ -177,7 +162,6 @@ impl Transfers {
         true
     }
 
-    /// The bar hides a success on its own: one recompute when the flash ends.
     fn schedule_flash_end(&mut self, ms: i64) {
         if self.flash_timer {
             return;
@@ -198,14 +182,12 @@ impl Transfers {
         core().map_or_else(Vec::new, |c| c.engine.list().iter().map(Task::from).collect())
     }
 
-    /// The bar was swiped away (XFR-13).
     fn dismissBar(&mut self) {
         let tasks = Self::tasks();
         self.bar.dismiss(&tasks);
         self.refresh_bar(&tasks);
     }
 
-    /// The Activity page is showing: the last outcome has been seen.
     fn barSeen(&mut self) {
         self.bar.seen();
         self.refresh_bar(&Self::tasks());
@@ -254,13 +236,10 @@ impl Transfers {
         true
     }
 
-    /// Completed and failed transfers are announced once (INT-2); canceled
-    /// ones are the user's own doing.
     fn notify_finished(&mut self, id: i64) {
         let Some(s) = core().and_then(|c| c.engine.get(id)) else {
             return;
         };
-        // A retried transfer ends again: the bar shows every end.
         self.bar.finished(id, s.state, SystemClock.now_ms());
         if s.state == TransferState::Canceled || !self.notified.insert(id) {
             return;
@@ -289,8 +268,7 @@ impl Transfers {
         }
     }
 
-    /// Restores the queue (XFR-11) once: the engine loads with auto-resume
-    /// when the setting is on and the bridge is reachable.
+    /// Engine loads with auto-resume when the setting is on and the bridge is reachable.
     fn start(&mut self) {
         if self.started {
             return;
@@ -377,8 +355,6 @@ impl Transfers {
         self.report(core.answer_question(id, item, &choice.to_string(), apply_to_all))
     }
 
-    /// Open questions of a transfer, a JSON array of conflict objects (the
-    /// same shape `needsAnswer` carries).
     fn questionsJson(&self, id: i64) -> QString {
         let list = core().and_then(|c| c.question_list(id).ok()).unwrap_or_default();
         QString::from(to_json(&list).as_str())
@@ -390,7 +366,6 @@ impl Transfers {
         i32::try_from(n).unwrap_or(i32::MAX)
     }
 
-    /// The restored-transfers banner was answered or dismissed.
     fn dismissRestored(&mut self) {
         if self.pendingAtStart != 0 {
             self.pendingAtStart = 0;
@@ -398,8 +373,6 @@ impl Transfers {
         }
     }
 
-    /// The app is about to close: the cover and the notification say what
-    /// happens to pending work (XFR-6).
     fn noteClosing(&mut self) {
         if !self.closing {
             self.closing = true;
@@ -411,9 +384,8 @@ impl Transfers {
         self.showRequested();
     }
 
-    /// Queues a plain copy of `uris_json` into the folder `dest`, asking
-    /// nothing (large plans start at once). The browse and operations areas
-    /// have their own entry points; this one serves tests and the cover.
+    /// Asks nothing (large plans start at once). Serves tests and the cover; browse and operations
+    /// have their own entry points.
     fn queueCopy(&self, uris_json: QString, dest: QString) {
         let Some(core) = core() else { return };
         let uris: Vec<Uri> = crate::json::from_json::<Vec<String>>(&uris_json.to_string())
@@ -449,8 +421,6 @@ impl Transfers {
         );
     }
 
-    /// One transfer's summary as JSON (title, kind, counters, options), or
-    /// an empty string when it is gone.
     fn summaryJson(&self, id: i64) -> QString {
         let text = core().and_then(|c| super::items::summary_json(&c, id, &self.book));
         QString::from(text.unwrap_or_default().as_str())

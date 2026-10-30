@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The PDF viewer's actions on [`Core`] (PRV-12): opening a PDF from any
-//! location, rendering its pages for `image://lautta-pdf/`, reading its
-//! outline and links and searching its text. Parsing, drawing and matching
-//! are `lautta-pdf`'s; this module reads the file, keeps the open
-//! documents, runs the search page by page and moves the CPU work off the
-//! runtime's threads. A panic in that work (a PDF that trips hayro or the
-//! code around it) fails that one request, not the app (RS-4).
+//! PDF viewer on `Core`. Panic in CPU work (PDF tripping hayro) fails that request, not the app.
 
 use crate::app::Core;
 use crate::error::{Error, ErrorKind, Result};
@@ -22,14 +16,10 @@ use tokio::sync::mpsc;
 
 pub use lautta_pdf::{Link, LinkTarget, OutlineItem, PageRect, PageSize, PdfError, TextHit};
 
-/// How many documents stay parsed: the one shown and the one before it.
 const KEPT_DOCUMENTS: usize = 2;
-/// Most hits a search of one document finds; it stops there, so memory
-/// stays bounded.
+/// Stops there to bound memory.
 pub const MAX_SEARCH_HITS: usize = 10_000;
 
-/// Why a PDF cannot be shown: the file could not be read, or it is not a
-/// PDF the viewer can show.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PdfFailure {
     File(Error),
@@ -48,7 +38,6 @@ impl From<PdfError> for PdfFailure {
     }
 }
 
-/// Engineering name of a PDF problem (doc/QML-API.md, `PdfDocument`).
 pub fn pdf_error_name(e: PdfError) -> &'static str {
     match e {
         PdfError::Invalid => "invalid",
@@ -59,14 +48,11 @@ pub fn pdf_error_name(e: PdfError) -> &'static str {
     }
 }
 
-/// An open PDF as the viewer sees it.
 #[derive(Debug, Clone)]
 pub struct OpenedPdf {
     pub pages: Vec<PageSize>,
     pub size: Option<u64>,
-    /// Where reading stopped last time (0-based, on a page it has).
     pub last_page: Option<usize>,
-    /// The outline (bookmarks), depth first; empty when there is none.
     pub outline: Vec<OutlineItem>,
 }
 
@@ -96,20 +82,16 @@ fn kept(uri: &Uri) -> Option<Arc<PdfDocument>> {
         .map(|(_, d)| Arc::clone(d))
 }
 
-/// Stops keeping this parse; a newer parse of its file stays.
 fn forget(doc: &Arc<PdfDocument>) {
     documents().retain(|(_, d)| !Arc::ptr_eq(d, doc));
 }
 
-/// The hits of a search on one searched page (0-based), none or more.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PageHits {
     pub page: usize,
     pub hits: Vec<TextHit>,
 }
 
-/// One area of a hit on its page (fractions of the shown page from its top
-/// left corner, as [`PageRect`]) and whether the hit is the current one.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct HitArea {
     pub x: f32,
@@ -119,22 +101,17 @@ pub struct HitArea {
     pub current: bool,
 }
 
-/// What a search of a document has found so far, in page order, and the
-/// hit being shown. Pages may arrive in any order.
+/// Pages may arrive in any order.
 #[derive(Debug, Default)]
 pub struct PdfSearchResults {
-    /// Only pages with hits.
     pages: BTreeMap<usize, Vec<TextHit>>,
     searched: usize,
     total: usize,
-    /// The hit shown: its page and its index there.
     current: Option<(usize, usize)>,
 }
 
 impl PdfSearchResults {
-    /// Adds a searched page. The first hit to arrive becomes the current
-    /// one: [`Core::search_pdf`] starts at the page being read, so that is
-    /// the first hit at or after it.
+    /// First hit to arrive becomes current: [`Core::search_pdf`] starts at the page being read.
     pub fn add(&mut self, page: PageHits) {
         self.searched += 1;
         if page.hits.is_empty() {
@@ -153,14 +130,12 @@ impl PdfSearchResults {
         self.total
     }
 
-    /// The current hit's number (0-based, in page order) and its page.
     pub fn current(&self) -> Option<(usize, usize)> {
         let (page, index) = self.current?;
         let before: usize = self.pages.range(..page).map(|(_, h)| h.len()).sum();
         Some((before + index, page))
     }
 
-    /// The areas of the hits on `page`, in content order.
     pub fn areas_on(&self, page: usize) -> Vec<HitArea> {
         let Some(hits) = self.pages.get(&page) else {
             return Vec::new();
@@ -180,8 +155,6 @@ impl PdfSearchResults {
             .collect()
     }
 
-    /// Makes the next hit (`forward`) or the previous one current, going
-    /// round from the last to the first and back.
     pub fn step(&mut self, forward: bool) {
         if let Some((page, index)) = self.current {
             self.current = if forward {
@@ -207,15 +180,10 @@ impl PdfSearchResults {
         }
         let mut earlier = self.pages.range(..page);
         let (prev, hits) = earlier.next_back().or_else(|| self.pages.iter().next_back())?;
-        // Kept pages have hits.
         Some((*prev, hits.len() - 1))
     }
 }
 
-/// Searches `doc` for `query` page by page from page `from` to the end and
-/// then from the first page, passing each searched page to `send` (false:
-/// nobody listens any more). Stops when `cancel` is set or after `limit`
-/// hits.
 fn search_pages(
     doc: &PdfDocument,
     query: &str,
@@ -240,8 +208,7 @@ fn search_pages(
     }
 }
 
-/// Splits `<uri>?page=N` of the page provider (N counts from 0). The URI
-/// may arrive percent-encoded once more (QML helpers).
+/// URI may arrive percent-encoded once more (QML helpers).
 pub fn parse_page_id(id: &str) -> Option<(Uri, usize)> {
     let (uri_part, query) = id.rsplit_once('?')?;
     let page = query.strip_prefix("page=")?.parse().ok()?;
@@ -254,8 +221,7 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
         .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))
 }
 
-/// `work`, with a panic in it as [`PdfError::Invalid`]: the viewer shows
-/// the file or the page as one it cannot read. `lost` runs after a panic.
+/// `lost` runs after a panic.
 fn caught<T>(
     work: impl FnOnce() -> std::result::Result<T, PdfError>,
     lost: impl FnOnce(),
@@ -266,9 +232,8 @@ fn caught<T>(
     })
 }
 
-/// Runs `work` on `doc` on the blocking pool. After a panic the document
-/// is no longer kept: hayro unwraps its locks, so a lock the panic poisoned
-/// would trip every later use; the next request parses the file again.
+/// After a panic the document is not kept: hayro unwraps its locks, a poisoned lock would trip
+/// every later use.
 async fn run_on<T: Send + 'static>(
     doc: Arc<PdfDocument>,
     work: impl FnOnce(&PdfDocument) -> std::result::Result<T, PdfError> + Send + 'static,
@@ -277,10 +242,8 @@ async fn run_on<T: Send + 'static>(
 }
 
 impl Core {
-    /// Reads and parses a PDF (always afresh, so a changed file is seen) and
-    /// keeps it for [`Core::pdf_page`]. `password` opens an encrypted one
-    /// (`None`: no password given); it is used for this parse only and never
-    /// stored. Notes the PDF in Recents (ORG-2).
+    /// Always parsed afresh so a changed file is seen. `password` used for this parse only, never
+    /// stored.
     pub async fn open_pdf(
         &self,
         uri: &Uri,
@@ -295,8 +258,8 @@ impl Core {
             return Err(PdfError::TooLarge.into());
         }
         let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
-        // A file that grew past the limit since the stat is cut there and
-        // then usually fails to parse; nothing larger is held in memory.
+        // File grown past the limit since the stat is cut there and usually fails to parse; nothing
+        // larger is held.
         let bytes = crate::provider::read_all(handle.as_ref(), MAX_PDF_BYTES).await?;
         let password = password.map(str::to_owned);
         let (doc, outline) = blocking(move || {
@@ -332,8 +295,6 @@ impl Core {
         })
     }
 
-    /// Remembers that reading `uri` stopped at `page` (0-based), with the
-    /// recents (ORG-2). Blocking: call from a blocking thread.
     pub fn remember_pdf_page(&self, uri: &Uri, page: usize) {
         let page = u32::try_from(page).unwrap_or(u32::MAX);
         if let Err(e) = self.recents.set_page(uri, page) {
@@ -341,7 +302,6 @@ impl Core {
         }
     }
 
-    /// Page `page` (0-based) of a PDF, `width` pixels wide.
     pub async fn pdf_page(
         &self,
         uri: &Uri,
@@ -351,13 +311,8 @@ impl Core {
         self.on_document(uri, move |doc| doc.render(page, width)).await
     }
 
-    /// Searches a PDF's text for `query` (case-insensitive, whitespace runs
-    /// alike; `lautta-pdf`'s matching) page by page, from page `from`
-    /// (0-based: the page being read) to the end and then from the first
-    /// page, sending every searched page to `out` as it is done. Stops when
-    /// `cancel` is set, when `out` is closed or after [`MAX_SEARCH_HITS`]
-    /// hits. A blank query searches nothing. An encrypted PDF can be
-    /// searched while it is kept after unlocking.
+    /// Matching is `lautta-pdf`'s. Blank query searches nothing. Encrypted PDF is searchable only
+    /// while kept after unlocking.
     pub async fn search_pdf(
         &self,
         uri: &Uri,
@@ -379,13 +334,11 @@ impl Core {
         .await
     }
 
-    /// The links of page `page` (0-based) of a PDF: to its own pages and to
-    /// http(s) URIs, nothing else.
+    /// Own pages and http(s) URIs only.
     pub async fn pdf_links(&self, uri: &Uri, page: usize) -> std::result::Result<Vec<Link>, PdfFailure> {
         self.on_document(uri, move |doc| doc.links(page)).await
     }
 
-    /// [`run_on`] with the kept document of `uri`, opened when not kept.
     async fn on_document<T: Send + 'static>(
         &self,
         uri: &Uri,
@@ -394,8 +347,7 @@ impl Core {
         run_on(self.pdf_document(uri).await?, work).await
     }
 
-    /// The kept document, opening the file when it is not kept (an
-    /// encrypted one then fails: its password is not kept).
+    /// Encrypted one fails to reopen: password not kept.
     async fn pdf_document(&self, uri: &Uri) -> std::result::Result<Arc<PdfDocument>, PdfFailure> {
         if let Some(doc) = kept(uri) {
             return Ok(doc);
@@ -415,10 +367,9 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
 
-    /// Tests that keep documents take turns: the kept list is the process's.
+    /// Kept list is process-wide.
     static KEPT_LIST: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-    /// A parse of a one-page PDF `width` points wide.
     fn parse(width: u32) -> Arc<PdfDocument> {
         use lautta_pdf::sample::{build, page};
         Arc::new(PdfDocument::open(build(&[page(width, 10, "")])).unwrap())
@@ -450,7 +401,6 @@ mod tests {
         }
     }
 
-    /// A hit with one area per entry of `xs`, at that x.
     fn hit(xs: &[f32]) -> TextHit {
         TextHit {
             areas: xs
@@ -472,8 +422,6 @@ mod tests {
         }
     }
 
-    /// Results of a search that went through pages 2, 3, 0 and 1: page 2 has
-    /// two hits, page 0 one, the others none.
     fn results() -> PdfSearchResults {
         let mut r = PdfSearchResults::default();
         r.add(page_hits(2, &[0.1, 0.2]));
@@ -483,7 +431,6 @@ mod tests {
         r
     }
 
-    /// The x of the current hit's areas on `page`.
     fn current_xs(r: &PdfSearchResults, page: usize) -> Vec<f32> {
         r.areas_on(page)
             .iter()
@@ -575,7 +522,6 @@ mod tests {
         assert!(r.areas_on(1).is_empty());
     }
 
-    /// Five pages; "apple" is on pages 0 (twice), 2 and 4.
     fn fruit() -> PdfDocument {
         use lautta_pdf::sample::{build, page, text};
         let shown = |s: &str| page(200, 100, &text(10, 50, s));
@@ -589,8 +535,6 @@ mod tests {
         .unwrap()
     }
 
-    /// The pages `search_pages` sends, with their hit counts; the receiver
-    /// goes away after `listen` pages.
     fn searched(from: usize, limit: usize, listen: usize) -> Vec<(usize, usize)> {
         let mut sent = Vec::new();
         search_pages(&fruit(), "apple", from, limit, &AtomicBool::new(false), |p| {

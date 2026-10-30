@@ -1,12 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): the pulley of a folder (SPEC §15.3,
-// board DirectoryPulley) holds, top to bottom, Activity, View options,
-// Search, Select and New (Paste above New only with a clipboard), so New is
-// nearest the content; Activity opens the Activity page as the Browse
-// pulley does. While selecting it holds only
-// Select all and Clear selection. Fails when an entry is missing, extra or
-// out of order, or Activity leads elsewhere. On the target the entries show
-// their ids (no translation is loaded).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -31,7 +23,6 @@ ApplicationWindow {
         scenarioRunning = false
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)
@@ -52,14 +43,12 @@ ApplicationWindow {
         return views.length === 1 ? views[0] : null
     }
 
-    // The entries of the pulley of the view shown, as the user sees them.
     function entries() {
         var menus = findAll(win.folderPage, function(x) {
             return x._isPullDownMenu === true && x.flickable && x.flickable.visible
         }, [])
         if (menus.length !== 1)
             return []
-        // The entries show only while the pulley is pulled (active).
         var menu = menus[0]
         menu.active = true
         var kids = menu._contentColumn.children
@@ -81,7 +70,6 @@ ApplicationWindow {
 
     function expectTexts(want, what) {
         var got = texts(entries())
-        // The live count of Browse's Activity too, while transfers run.
         if (got.length > 0 && got[0].indexOf("lautta-dir-menu-activity") === 0)
             got[0] = "lautta-dir-menu-activity"
         if (JSON.stringify(got) !== JSON.stringify(want))

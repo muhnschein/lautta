@@ -1,22 +1,17 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Remote thumbnails, the rule for which files get one and the thumbnail
-//! cache (SPEC PRV-1 to PRV-3, PRV-14).
+//! Remote thumbnails, which files get one, and the thumbnail cache.
 //!
-//! * [`thumbnail_source`]: the one rule for which files get a thumbnail and
-//!   who makes it. Every list that shows thumbnails asks it.
-//! * [`remote_thumbnail`]: EXIF thumbnail from the first 64 KiB when there is
-//!   one, otherwise the whole file (up to the size set in View options, 20 MB
-//!   by default) decoded and scaled, EXIF orientation applied.
-//! * [`ThumbnailCache`]: on-disk cache, LRU within the size set in View
-//!   options (200 MB by default, changed while in use), keyed by
-//!   sha256(URI, size, mtime, etag).
-//! * [`ThumbJobs`]: at most two jobs in flight per location, newest request
-//!   first (the delegates that are visible now), cancelable by key.
+//! * [`thumbnail_source`]: the one rule for which files get a thumbnail and who makes it; every
+//!   thumbnail list asks it.
+//! * [`remote_thumbnail`]: EXIF thumbnail from the first 64 KiB if any, else whole file (up to
+//!   View-options size, default 20 MB) decoded and scaled, orientation applied.
+//! * [`ThumbnailCache`]: on-disk LRU within View-options size (default 200 MB, changeable in use),
+//!   keyed by sha256(URI, size, mtime, etag).
+//! * [`ThumbJobs`]: at most two jobs in flight per location, newest first (visible delegates),
+//!   cancelable by key.
 //!
-//! Local images, videos and PDFs get theirs from `Nemo.Thumbnailer` in QML
-//! (PRV-1), not from here: it draws videos and PDFs in helper processes of
-//! its own, so a PDF that crashes the drawing leaves the app running. Server
-//! PDFs are made by [`crate::thumbs_pdf`].
+//! Local images, videos and PDFs come from `Nemo.Thumbnailer` in QML, not here: it draws them in
+//! helper processes, so a crashing PDF leaves the app running. Server PDFs: [`crate::thumbs_pdf`].
 
 use crate::entry::{Entry, EntryFlags};
 use crate::error::{Error, ErrorKind, Result};
@@ -36,31 +31,23 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-/// Head read looking for an EXIF thumbnail.
 pub const HEAD_BYTES: u64 = 64 * 1024;
 /// Images with more pixels than this are not decoded (memory bound).
 const MAX_PIXELS: u64 = 64_000_000;
 const JPEG_QUALITY: u8 = 85;
-/// Simultaneous jobs per location (PRV-3).
 pub const MAX_IN_FLIGHT_PER_LOCATION: usize = 2;
 
-/// Who makes a file's thumbnail (PRV-1, PRV-2, PRV-14).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThumbSource {
-    /// No thumbnail: the category's icon shows.
     Icon,
-    /// `Nemo.Thumbnailer`, given the file's `file://` URL and MIME type:
-    /// local images, videos and PDFs.
+    /// `Nemo.Thumbnailer`, given the `file://` URL and MIME type: local images, videos, PDFs.
     System,
-    /// The app, through [`app_thumbnail_url`]: remote images and PDFs.
     App,
-    /// The file's first lines, drawn by the grid (PRV-15,
-    /// [`crate::thumbs_text`]): text, code and Markdown that is not empty.
+    /// First lines drawn by the grid ([`crate::thumbs_text`]): non-empty text, code, Markdown.
     Text,
 }
 
-/// The settings that decide which files get a thumbnail, apart from the
-/// folder's *Show thumbnails* (BRW-4).
+/// Settings deciding which files get a thumbnail, apart from the folder's *Show thumbnails*.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ThumbSettings {
     /// *Thumbnails from servers*.
@@ -77,20 +64,16 @@ impl ThumbSettings {
         }
     }
 
-    /// Largest server PDF a thumbnail is made from: nothing larger is read.
-    /// A local one has no limit, as a local image has none: the system
-    /// thumbnailer reads it in its own process, the app reads none of it.
+    /// Largest server PDF thumbnailed; nothing larger is read. Local PDFs have no limit: the system
+    /// thumbnailer reads them in its own process.
     pub fn pdf_limit(&self) -> u64 {
         self.max_remote_bytes.min(lautta_pdf::MAX_PDF_BYTES)
     }
 }
 
-/// Who makes the thumbnail of `entry`, for a file of a local folder (`local`)
-/// or not. `shown` is the folder's *Show thumbnails*. A PDF follows the
-/// switches an image does: *Show thumbnails* for a local one and also
-/// *Thumbnails from servers* for a remote one; a remote one larger than
-/// [`ThumbSettings::pdf_limit`] has none. Text, code and Markdown follow the
-/// same switches; an empty one has none.
+/// `shown` is the folder's *Show thumbnails*. PDFs, text, code and Markdown follow the image
+/// switches: *Show thumbnails* locally, plus *Thumbnails from servers* remotely. Remote PDF over
+/// [`ThumbSettings::pdf_limit`] and empty text have none.
 pub fn thumbnail_source(entry: &Entry, local: bool, shown: bool, set: &ThumbSettings) -> ThumbSource {
     if !shown || entry.flags.contains(EntryFlags::NOT_ACCESSIBLE) {
         return ThumbSource::Icon;
@@ -110,12 +93,11 @@ pub fn thumbnail_source(entry: &Entry, local: bool, shown: bool, set: &ThumbSett
     }
 }
 
-/// The `Image` source of an app thumbnail; QML adds `?size=N`.
+/// QML adds `?size=N`.
 pub fn app_thumbnail_url(uri: &Uri) -> String {
     format!("image://lautta-thumb/{uri}")
 }
 
-/// Cache key: hex sha256 over URI, requested size, mtime and etag.
 pub fn thumb_key(uri: &str, size: u32, mtime_ms: Option<i64>, etag: Option<&[u8]>) -> String {
     let mut h = Sha256::new();
     // Length prefixes keep the fields unambiguous.
@@ -136,7 +118,6 @@ fn thumb_error(msg: &str) -> Error {
     Error::new(ErrorKind::Unsupported, msg)
 }
 
-/// Applies an EXIF orientation value (1-8) to an image.
 pub fn apply_orientation(img: DynamicImage, orientation: u8) -> DynamicImage {
     match orientation {
         2 => img.fliph(),
@@ -161,8 +142,7 @@ pub(crate) fn encode(img: &DynamicImage) -> Result<Vec<u8>> {
     Ok(out.into_inner())
 }
 
-/// Decodes `bytes`, scales it down to fit `target`×`target` (never up) and
-/// applies `orientation`. Pure CPU work: call from a blocking context.
+/// Never scales up. Pure CPU: call from a blocking context.
 pub fn render_thumbnail(bytes: &[u8], target: u32, orientation: u8) -> Result<Vec<u8>> {
     let target = target.max(1);
     let reader = image::io::Reader::new(Cursor::new(bytes))
@@ -184,9 +164,8 @@ pub fn render_thumbnail(bytes: &[u8], target: u32, orientation: u8) -> Result<Ve
     encode(&apply_orientation(img, orientation))
 }
 
-/// A thumbnail of a remote image (PRV-2). Without an EXIF thumbnail the
-/// whole file is read, when it has at most `max_bytes` (the setting
-/// `thumbnail_max_remote_mb`). Returns JPEG, or PNG for images with alpha.
+/// Without an EXIF thumbnail the whole file is read if at most `max_bytes`. Returns JPEG, or PNG
+/// for images with alpha.
 pub async fn remote_thumbnail(handle: &dyn ReadHandle, target_size: u32, max_bytes: u64) -> Result<Vec<u8>> {
     let head = read_all(handle, HEAD_BYTES).await?;
     let orientation = exif::orientation(&head);
@@ -255,10 +234,8 @@ impl CacheIndex {
     }
 }
 
-/// Disk cache of generated thumbnails with least-recently-used eviction.
 pub struct ThumbnailCache {
     dir: PathBuf,
-    /// The budget; the setting changes it while the cache is in use.
     max_bytes: AtomicU64,
     index: Mutex<CacheIndex>,
 }
@@ -336,7 +313,7 @@ impl ThumbnailCache {
         self.lock().entries.contains_key(key)
     }
 
-    /// The cached image; marks it as most recently used.
+    /// Marks it most recently used.
     pub fn get(&self, key: &str) -> Option<Vec<u8>> {
         if !valid_key(key) || !self.lock().touch(key) {
             return None;
@@ -367,7 +344,6 @@ impl ThumbnailCache {
         Ok(())
     }
 
-    /// Drops one entry.
     pub fn remove(&self, key: &str) {
         if valid_key(key) {
             self.lock().remove(key);
@@ -408,7 +384,7 @@ struct Pending {
 #[derive(Default)]
 struct LocationJobs {
     running: HashMap<String, futures::future::AbortHandle>,
-    /// Newest first: the most recent request is the visible one (PRV-3).
+    /// Newest first: the most recent request is the visible one.
     pending: VecDeque<Pending>,
 }
 
@@ -428,7 +404,6 @@ fn lock_jobs(state: &SharedJobs) -> MutexGuard<'_, JobState> {
     }
 }
 
-/// Frees the slot and starts the next job when a job ends or is aborted.
 struct SlotGuard {
     state: SharedJobs,
     rt: tokio::runtime::Handle,
@@ -481,7 +456,6 @@ fn pump(st: &mut JobState, shared: &SharedJobs, rt: &tokio::runtime::Handle, loc
     }
 }
 
-/// Thumbnail job scheduler (PRV-3).
 #[derive(Clone)]
 pub struct ThumbJobs {
     state: SharedJobs,
@@ -497,7 +471,6 @@ impl ThumbJobs {
         }
     }
 
-    /// The runtime the jobs run on.
     pub fn runtime(&self) -> &tokio::runtime::Handle {
         &self.rt
     }
@@ -522,8 +495,7 @@ impl ThumbJobs {
         true
     }
 
-    /// Cancels a queued job (it never runs) or aborts a running one.
-    /// Returns whether `key` was known.
+    /// Cancels a queued job (never runs) or aborts a running one. Returns whether `key` was known.
     pub fn cancel(&self, key: &str) -> bool {
         let aborted = {
             let mut st = lock_jobs(&self.state);
@@ -546,7 +518,6 @@ impl ThumbJobs {
         true
     }
 
-    /// Jobs queued for `location` that have not started.
     pub fn queued(&self, location: &str) -> usize {
         lock_jobs(&self.state)
             .locations
@@ -554,7 +525,6 @@ impl ThumbJobs {
             .map_or(0, |l| l.pending.len())
     }
 
-    /// Jobs running for `location`.
     pub fn running(&self, location: &str) -> usize {
         lock_jobs(&self.state)
             .locations
@@ -594,7 +564,6 @@ mod tests {
         (img.width(), img.height())
     }
 
-    /// The default of `thumbnail_max_remote_mb`, in bytes.
     const LIMIT: u64 = 20 * 1000 * 1000;
 
     async fn handle_for(data: &[u8]) -> Box<dyn ReadHandle> {

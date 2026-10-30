@@ -1,26 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// The folder's header on the target (real Silica, SPEC §15.3, boards
-// Directory, DirectoryGrid, DirectoryLandscape, DirectoryPulley,
-// DirectorySelect): the header bar with its progress line, path menu and
-// notices stays at the top of the page while the list or grid scrolls under
-// it, in portrait and landscape; the list or grid has no header of its own,
-// so a notice that comes after the rows cannot scroll it away from its top.
-// Selecting keeps the header's height (count in place of the name, no extra
-// line). The pulley is the page's, on a flickable that holds header and
-// content and never scrolls: it comes out above the header, and pulling
-// moves header and content together. With a finger sent through the window
-// (ViewerTools.mouse): a drag on the content scrolls the content, not the
-// host; a drag down at the content's top pulls the host. The empty-folder
-// placeholder sits in the area below the header. Opening a folder starts at
-// its very top, also while it still loads and when a notice comes after the
-// rows (a photo folder shown as grid); going back shows the folder where it
-// was left, the same item at its top, also in a grid whose rows differ in
-// height (long names take two lines). Fails when the header scrolls,
-// overlaps, leaves a gap or changes height with selection, when the pulley
-// sits on the content or under the header, when a drag goes to the wrong
-// flickable, when a view starts anywhere but its top or when going back
-// loses the position. Headless there is no render loop, so how the header's
-// height settles and how a pull feels on a device are not seen here.
+// SPDX-License-Identifier: LGPL-2.1-or-later Headless: no render loop, so header height settling
+// and pull feel are not seen here.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -30,8 +9,6 @@ ApplicationWindow {
     id: win
 
     readonly property string base: "lautta://user-documents/FolderHeader/"
-    // Names of one line in the grid, and every fifth one again with a name
-    // of two lines: grid rows of different heights all down the folder.
     readonly property int files: 72
 
     ViewerTools { id: tools }
@@ -45,14 +22,12 @@ ApplicationWindow {
         return ok
     }
 
-    // Pumps events until `done()` holds, ten seconds at most.
     function waitFor(done, what) {
         for (var i = 0; i < 200 && !done(); ++i)
             tools.pump(50)
         return expect(done(), "timed out waiting for " + what)
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)
@@ -86,15 +61,12 @@ ApplicationWindow {
         return false
     }
 
-    // a0 to f9, short enough for one line on the checks' small screen, then
-    // a0, a5 to f5 again with a long name.
     function nameOf(i) {
         var n = i < 60 ? i : (i - 60) * 5
         var name = String.fromCharCode(97 + Math.floor(n / 10)) + n % 10
         return i < 60 ? name : name + " and a name long enough for two lines in the grid.md"
     }
 
-    // The heights of the grid's rows made, each once.
     function rowHeights(f) {
         var out = []
         var kids = f.contentItem.children
@@ -123,7 +95,6 @@ ApplicationWindow {
         waitFor(function () { return inside.count === files + 3 }, "the files")
     }
 
-    // A folder page on the stack, listed.
     function push(uri, immediate) {
         pageStack.push(pageComponent, { "uri": uri }, immediate ? PageStackAction.Immediate : PageStackAction.Animated)
         return pageStack.currentPage
@@ -137,7 +108,6 @@ ApplicationWindow {
         return !pageStack.busy
     }
 
-    // The header at the top, the list or grid right under it, whole.
     function checkFixed(view, label) {
         var f = view.flickable
         var header = named(view, "folderHeader")
@@ -158,8 +128,6 @@ ApplicationWindow {
         f.contentY = f.originY
     }
 
-    // Selecting changes the title, not the height: no description line comes
-    // or goes, so nothing under the header jumps.
     function checkSelectionHeight(view, label) {
         var f = view.flickable
         var header = named(view, "folderHeader")
@@ -183,10 +151,6 @@ ApplicationWindow {
         same("after selecting")
     }
 
-    // The pulley is the page's: one, on the host that holds header and
-    // content; none on the list or grid, which stop at their top. It ends at
-    // the top of the page, above the header. The host never scrolls; pulled,
-    // header and content move together and the content stays at its top.
     function checkPulley(view, label) {
         var f = view.flickable
         var host = named(view, "folderPulleyHost")
@@ -216,15 +180,12 @@ ApplicationWindow {
         host.contentY = 0
     }
 
-    // A finger from (x, from) to (x, to) of `item` in steps, still down.
     function dragOn(item, x, from, to) {
         tools.mouse(item, "press", x, from)
         for (var i = 1; i <= 12; ++i)
             tools.mouse(item, "move", x, from + (to - from) * i / 12)
     }
 
-    // The finger goes back to where it started before it lets go: let go on
-    // a pulled pulley, an entry under the highlight would run.
     function letGo(item, x, at) {
         tools.mouse(item, "move", x, at)
         tools.mouse(item, "release", x, at)
@@ -236,8 +197,6 @@ ApplicationWindow {
         waitFor(function () { return !flick.moving }, "the flickable to stop")
     }
 
-    // Real drags: up and down on the content scroll the content and leave
-    // the host; down at the content's top pulls the host, header and all.
     function checkGestures(view, label) {
         var f = view.flickable
         var host = named(view, "folderPulleyHost")
@@ -253,7 +212,6 @@ ApplicationWindow {
         tools.mouse(f, "release", x, f.height * 0.2)
         stop(f)
         var scrolled = f.contentY
-        // Less far than it scrolled: the content does not reach its top.
         dragOn(f, x, f.height * 0.2, f.height * 0.5)
         expect(f.contentY < scrolled - Theme.paddingSmall && f.contentY > f.originY && host.contentY === 0,
                label + ": a drag down on scrolled content scrolls it back, not the host: "
@@ -272,16 +230,11 @@ ApplicationWindow {
         letGo(f, x, f.height * 0.2)
         tools.pump(100)
         expect(pageStack.currentPage === page && !pageStack.busy, label + ": letting go where it started runs no entry")
-        // Let go out of bounds, the pulley's own animation opens it in full.
-        // Closed at once as Silica closes it, which stops that animation;
-        // contentY set by hand leaves it running into the next check.
         host.pullDownMenu.close(true)
         tools.pump(100)
         expect(!host.pullDownMenu.active && host.contentY === 0, label + ": the pulley closes and stays closed: " + host.contentY)
     }
 
-    // The path menu is capped to leave the content a strip, and scrolls inside
-    // the cap. (Headless, no polish lays its rows out, so its height is not seen.)
     function checkPathMenu(view, label) {
         var menu = named(view, "folderPathMenu")
         var header = named(view, "folderHeader")
@@ -321,7 +274,6 @@ ApplicationWindow {
         pageStack.pop(null, PageStackAction.Immediate)
     }
 
-    // The empty-folder placeholder sits in the area below the header.
     function checkPlaceholder() {
         var page = push(base + "Empty/", true)
         var view = viewOf(page)
@@ -341,7 +293,6 @@ ApplicationWindow {
         pageStack.pop(null, PageStackAction.Immediate)
     }
 
-    // Opens `uri` from `parent`, watching the new page's position until it is listed.
     function openAtTop(from, uri, count, label) {
         from.openFolder(uri)
         var page = pageStack.currentPage
@@ -358,7 +309,6 @@ ApplicationWindow {
         return page
     }
 
-    // Down into a folder from a scrolled one, and back.
     function checkNavigation(mode) {
         App.setSetting("view_mode", JSON.stringify(mode))
         var parentPage = push(base, true)
@@ -383,13 +333,11 @@ ApplicationWindow {
         expect(Math.abs(f.contentY - left) < 1, mode + ": back at the old position: " + f.contentY + " vs " + left)
         var again = f.itemIndexAt(f.width / 2, f.contentY + 1)
         expect(again === topItem, mode + ": the same item at the top: " + again + " vs " + topItem)
-        // And down again: the folder starts at its top once more.
         openAtTop(parentView, base + "Child/", files, mode + " child again")
         pageStack.pop(null, PageStackAction.Immediate)
         pageStack.pop(null, PageStackAction.Immediate)
     }
 
-    // A photo folder in list view becomes a grid with a notice once listed.
     function checkPhotos() {
         App.setSetting("view_mode", JSON.stringify("list"))
         var parentPage = push(base, true)

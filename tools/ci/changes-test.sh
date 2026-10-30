@@ -24,12 +24,12 @@ says() {
     check "$want" "$(printf '%s\n' "$files" | "$script" --classify)" "$why"
 }
 
-says false "docs alone skip" "doc/SPEC.md
+says false "docs alone skip" "doc/PROJECT.md
 README.md"
 says false "changelog alone skips" "CHANGELOG.md"
 says false "agent rules alone skip" "AGENTS.md"
 says true "Rust source runs" "crates/lautta-core/src/lib.rs"
-says true "a page runs" "doc/SPEC.md
+says true "a page runs" "doc/PROJECT.md
 qml/pages/DirectoryPage.qml"
 says true "code after docs runs" "README.md
 Makefile"
