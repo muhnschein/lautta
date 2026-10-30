@@ -1,9 +1,6 @@
 name: CodeQL
-# Advanced setup, because default setup cannot leave paths out. Scans the
-# code that ships (.github/codeql/codeql-config.yml; Rust:
-# codeql-config-rust.yml, with our copy of one stock query in rust-queries/).
-# Default setup must be off (Settings > Code security): GitHub refuses this
-# upload while it is on.
+# Advanced setup: default setup cannot leave paths out. Default setup must be off
+# (Settings > Code security) or GitHub refuses the upload.
 on:
   push:
     branches:
@@ -29,9 +26,7 @@ jobs:
       matrix:
         language: [actions, rust]
     env:
-      # Rust as the shipped build sees it: no cfg(test), default features
-      # only (`sample` and `fake` are test support; `sailfish` gates no Rust
-      # code).
+      # Shipped build: no cfg(test), default features only.
       CODEQL_EXTRACTOR_RUST_OPTION_CARGO_CFG_OVERRIDES: -test
       CODEQL_EXTRACTOR_RUST_OPTION_CARGO_FEATURES: default
     steps:
@@ -45,8 +40,7 @@ jobs:
           build-mode: none
           config-file: ./.github/codeql/${{ matrix.language == 'rust' && 'codeql-config-rust.yml' || 'codeql-config.yml' }}
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
-      # Our query against planted cases: real findings reported, false
-      # positives it exists for silent.
+      # Our query against planted cases.
       - if: matrix.language == 'rust'
         run: '"$CODEQL" test run --additional-packs .github/codeql .github/codeql/rust-queries-tests'
         env:

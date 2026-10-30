@@ -1,18 +1,15 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `MediaSource` (PRV-8, PRV-9): plays a (remote) media file with
-//! QtMultimedia without downloading it first.
+//! Plays a (remote) media file with QtMultimedia without downloading first.
 //!
-//! QML's `MediaPlayer` cannot take a `QIODevice`, so this type owns a
-//! `QMediaPlayer` and exposes it as the `mediaObject` property, which is what
-//! `VideoOutput { source: mediaSource }` looks for. The player reads through
-//! a `QIODevice` subclass whose `readData` calls back into Rust, where a
-//! [`ReadAhead`] keeps a 2 MiB window over the bridge read handle.
+//! QML's `MediaPlayer` cannot take a `QIODevice`: this type owns a `QMediaPlayer` and exposes it as
+//! `mediaObject` (what `VideoOutput { source: mediaSource }` looks for). The player reads through a
+//! `QIODevice` subclass whose `readData` calls into Rust, where a [`ReadAhead`] keeps a 2 MiB
+//! window over the bridge read handle.
 //!
-//! PRV-9: when the device's GStreamer backend cannot play from a `QIODevice`
-//! (or cannot seek in it), the player reports a resource or format error.
-//! `MediaSource` then falls back to download-then-play with progress
-//! (`downloading`, `downloadProgress`), also selectable up front with
-//! `preferDownload`. `mode` tells which path is in use.
+//! If the device's GStreamer backend cannot play from or seek in a `QIODevice`, the player reports
+//! a resource or format error and `MediaSource` falls back to download-then-play (`downloading`,
+//! `downloadProgress`), also selectable up front with `preferDownload`. `mode` tells which path is
+//! in use.
 
 use super::{parse_uri, qstr, run_then};
 use crate::runtime::{core, handle};
@@ -31,7 +28,6 @@ pub fn register() {
     qml_register_type::<MediaSource>(&crate::qml_uri(), 1, 0, &crate::cstr("MediaSource"));
 }
 
-/// How often the player's position and state are read.
 const POLL: Duration = Duration::from_millis(250);
 
 cpp! {{
@@ -41,8 +37,8 @@ cpp! {{
     #include <QtCore/QUrl>
     #include <QtCore/QVariant>
 
-    // Random-access device over a Rust `ReadAhead` (PRV-8). Reads block the
-    // calling (player) thread until the provider answers.
+    // Random-access device over a Rust `ReadAhead`. Reads block the calling (player) thread until
+    // the provider answers.
     class LauttaMediaDevice : public QIODevice {
     public:
         LauttaMediaDevice(void *ctx, qint64 size) : m_ctx(ctx), m_size(size) { open(QIODevice::ReadOnly); }
@@ -118,7 +114,6 @@ cpp! {{
     }
 }}
 
-/// The `Arc<ReadAhead>` handed to the device, as a raw pointer.
 fn reader_ptr(r: Arc<ReadAhead>) -> *mut c_void {
     Arc::into_raw(r) as *mut c_void
 }
@@ -128,8 +123,6 @@ fn release_reader(ctx: *mut c_void) {
     drop(unsafe { Arc::from_raw(ctx as *const ReadAhead) });
 }
 
-/// Called on the player's thread: fills `buf` with up to `want` bytes at
-/// `off`; -1 on a read error.
 fn read_into(ctx: *mut c_void, off: i64, buf: *mut u8, want: i64) -> i64 {
     // SAFETY: the device keeps the reader alive while it can call us.
     let reader = unsafe { &*(ctx as *const ReadAhead) };
@@ -150,7 +143,6 @@ fn read_into(ctx: *mut c_void, off: i64, buf: *mut u8, want: i64) -> i64 {
     }
 }
 
-/// QMediaPlayer::Error to the app's error kinds.
 pub fn error_kind(code: i32) -> &'static str {
     match code {
         0 => "",
@@ -161,7 +153,6 @@ pub fn error_kind(code: i32) -> &'static str {
     }
 }
 
-/// QMediaPlayer::State to the engineering names.
 pub fn state_name(code: i32) -> &'static str {
     match code {
         1 => "playing",
@@ -170,7 +161,6 @@ pub fn state_name(code: i32) -> &'static str {
     }
 }
 
-/// QMediaPlayer errors a download can cure: the device source did not work.
 fn fallback_applies(code: i32) -> bool {
     matches!(code, 1 | 2)
 }
@@ -186,23 +176,18 @@ pub struct MediaSource {
     base: qt_base_class!(trait QObject),
     uri: qt_property!(QString; WRITE setUri NOTIFY uriChanged),
     uriChanged: qt_signal!(),
-    /// The `QMediaPlayer`, for `VideoOutput { source: … }`.
     mediaObject: qt_property!(QVariant; READ getMediaObject NOTIFY mediaObjectChanged),
     mediaObjectChanged: qt_signal!(),
-    /// `stopped`, `playing` or `paused`.
     state: qt_property!(QString; NOTIFY changed),
     playing: qt_property!(bool; NOTIFY changed),
-    /// Milliseconds.
     position: qt_property!(f64; NOTIFY changed),
     duration: qt_property!(f64; NOTIFY changed),
-    /// The source is being opened (stat, first read).
     loading: qt_property!(bool; NOTIFY changed),
-    /// `stream` (QIODevice, PRV-8) or `download` (PRV-9 fallback).
+    /// `stream` (QIODevice) or `download` (fallback).
     mode: qt_property!(QString; NOTIFY changed),
-    /// Plays after a full download instead of streaming (PRV-9).
     preferDownload: qt_property!(bool; WRITE setPreferDownload NOTIFY changed),
     downloading: qt_property!(bool; NOTIFY changed),
-    /// 0..1 while downloading, -1 when the size is unknown.
+    /// -1 when the size is unknown.
     downloadProgress: qt_property!(f64; NOTIFY changed),
     errorKind: qt_property!(QString; NOTIFY changed),
     errorMessage: qt_property!(QString; NOTIFY changed),
@@ -276,7 +261,6 @@ impl MediaSource {
         });
     }
 
-    /// Reads the player's state into the properties; signals only changes.
     fn poll(&mut self) {
         if self.media == 0 {
             return;
@@ -315,8 +299,6 @@ impl MediaSource {
         changed
     }
 
-    /// The player reported an error: fall back to a download (PRV-9) or
-    /// publish it.
     fn player_failed(&mut self, code: i32) -> bool {
         if self.mode.to_string() == "stream" && !self.fell_back && fallback_applies(code) {
             self.fell_back = true;
@@ -414,7 +396,7 @@ impl MediaSource {
         }
     }
 
-    /// PRV-9: copy the file into the private cache, then play that.
+    /// Copy into the private cache, then play that.
     fn start_download(&mut self) {
         let (Some(core), Some(uri)) = (core(), parse_uri(&self.uri)) else {
             return;
@@ -503,7 +485,7 @@ impl Drop for MediaSource {
     fn drop(&mut self) {
         if self.media != 0 {
             let m = self.player_ptr();
-            // The device (and with it the reader) goes with the player.
+            // Device (and its reader) goes with the player.
             cpp!(unsafe [m as "LauttaMedia*"] { lauttaMediaFree(m); });
         }
     }

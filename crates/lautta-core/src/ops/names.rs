@@ -1,21 +1,18 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Name handling for operations: "keep both" names (OPS-2), names that are
-//! invalid on the destination and their safe replacements (OPS-7), and
-//! case-only rename detection (OPS-3).
+//! Name handling: "keep both" names, names invalid on the destination and their safe replacements,
+//! case-only rename detection.
 
 use crate::entry::{cap, Capabilities};
 use crate::vpath::validate_name;
 
-/// Longest name most filesystems accept, in bytes.
 pub const DEFAULT_MAX_NAME_BYTES: usize = 255;
 
 const RESERVED_CHARS: &[u8] = b"<>:\"/\\|?*";
 
-/// Which naming rules a destination enforces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NameRules {
-    /// vfat/exFAT/SMB rules: reserved characters, trailing dots and spaces,
-    /// device names, UTF-8 only.
+    /// vfat/exFAT/SMB rules: reserved characters, trailing dots and spaces, device names, UTF-8
+    /// only.
     pub restricted: bool,
     pub max_bytes: usize,
     pub case_insensitive: bool,
@@ -45,9 +42,8 @@ impl NameRules {
     }
 }
 
-/// Splits `name` into stem and extension (the extension keeps its dot).
-/// Dotfiles have no extension; `.tar.gz` style double extensions stay together;
-/// folders never split.
+/// Dotfiles have no extension; `.tar.gz` style double extensions stay together; folders never
+/// split.
 pub fn split_extension(name: &[u8], is_dir: bool) -> (&[u8], &[u8]) {
     if is_dir {
         return (name, &[]);
@@ -64,8 +60,7 @@ pub fn split_extension(name: &[u8], is_dir: bool) -> (&[u8], &[u8]) {
     (stem, &name[last..])
 }
 
-/// Index of the dot that starts the extension, if the name has one. The
-/// extension must be short and free of spaces so "Mr. Smith" is not split.
+/// The extension must be short and free of spaces so "Mr. Smith" is not split.
 fn last_extension_start(name: &[u8]) -> Option<usize> {
     let dot = name.iter().rposition(|b| *b == b'.')?;
     let ext = &name[dot + 1..];
@@ -75,17 +70,14 @@ fn last_extension_start(name: &[u8]) -> Option<usize> {
     Some(dot)
 }
 
-/// `name 2.ext`, `name 3.ext`, … for a file; the first candidate not `taken`.
 pub fn keep_both_name(name: &[u8], taken: &dyn Fn(&[u8]) -> bool) -> Vec<u8> {
     numbered_name(name, false, taken)
 }
 
-/// Same for folders: the number is appended to the whole name.
 pub fn keep_both_dir_name(name: &[u8], taken: &dyn Fn(&[u8]) -> bool) -> Vec<u8> {
     numbered_name(name, true, taken)
 }
 
-/// Picks the file or folder variant of [`keep_both_name`].
 pub fn keep_both_for(name: &[u8], is_dir: bool, taken: &dyn Fn(&[u8]) -> bool) -> Vec<u8> {
     numbered_name(name, is_dir, taken)
 }
@@ -107,7 +99,6 @@ fn numbered_name(name: &[u8], is_dir: bool, taken: &dyn Fn(&[u8]) -> bool) -> Ve
         .unwrap_or_else(|| candidate(KEEP_BOTH_TRIES + 1))
 }
 
-/// True when `a` and `b` differ only in letter case (OPS-3).
 pub fn is_case_only_rename(a: &[u8], b: &[u8]) -> bool {
     if a == b {
         return false;
@@ -148,7 +139,6 @@ fn restricted_ok(name: &[u8]) -> bool {
     device_prefix_len(s).is_none()
 }
 
-/// Whether `name` can be created as-is on a destination with `rules` (OPS-7).
 pub fn is_valid_name(name: &[u8], rules: NameRules) -> bool {
     if validate_name(name).is_err() || name.len() > rules.max_bytes {
         return false;
@@ -156,7 +146,6 @@ pub fn is_valid_name(name: &[u8], rules: NameRules) -> bool {
     !rules.restricted || restricted_ok(name)
 }
 
-/// A name that is valid under `rules`, as close to `name` as possible.
 pub fn safe_name(name: &[u8], rules: NameRules) -> Vec<u8> {
     if is_valid_name(name, rules) {
         return name.to_vec();
@@ -411,11 +400,9 @@ mod tests {
             safe_name(b"abcdefghijklmnopqrstuvwxyz.tar.gz", wide),
             b"abcdefghijklm.tar.gz"
         );
-        // 2-byte chars: the cut must not split one.
         let out = safe_name("ééééééé.md".as_bytes(), p);
         assert_eq!(out, "ééé.md".as_bytes());
         assert!(std::str::from_utf8(&out).is_ok());
-        // extension too long: truncate the whole name
         assert_eq!(safe_name(b"a.abcdefghijklmn", p), b"a.abcdefgh");
         let tiny = NameRules { max_bytes: 4, ..p };
         let out = safe_name("日本語日本語日本語.txt".as_bytes(), tiny);

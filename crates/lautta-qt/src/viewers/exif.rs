@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `ExifModel`: the fields of the image details panel (PRV-4, board
-//! ImageExif). Values are raw; QML formats and translates them.
+//! Fields of the image details panel. Values raw; QML formats and translates.
 
 use super::{parse_uri, qstr, run_then};
 use crate::json::to_json;
@@ -13,9 +12,7 @@ pub fn register() {
     qml_register_type::<ExifModel>(&crate::qml_uri(), 1, 0, &crate::cstr("ExifModel"));
 }
 
-/// `{name, size, modifiedMs, hasExif, make, model, lens, dateTaken,
-/// exposure, aperture, iso, focalLengthMm, width, height, orientation,
-/// latitude, longitude}`; fields the file lacks are `null`.
+/// Fields the file lacks are `null`.
 pub fn report_json(r: &ExifReport) -> String {
     let i = r.info.as_ref();
     to_json(&serde_json::json!({
@@ -45,7 +42,7 @@ pub struct ExifModel {
     uri: qt_property!(QString; WRITE setUri NOTIFY uriChanged),
     uriChanged: qt_signal!(),
     loading: qt_property!(bool; NOTIFY stateChanged),
-    /// JSON object, see `report_json`; empty until loaded.
+    /// Empty until loaded.
     infoJson: qt_property!(QString; NOTIFY stateChanged),
     hasExif: qt_property!(bool; NOTIFY stateChanged),
     errorKind: qt_property!(QString; NOTIFY stateChanged),

@@ -1,19 +1,15 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Run-time conflict decisions (OPS-2). The planner may already have found a
-//! conflict, but only the destination at the moment of writing is
-//! authoritative, so the engine asks `decide` for every item. Pure logic.
+//! Run-time conflict decisions. Planner may already have found a conflict, but only the destination
+//! at write time is authoritative, so the engine asks `decide` for every item. Pure logic.
 
 use crate::entry::{Entry, Kind};
 use crate::ops::{Conflict, ConflictChoice, PlanItem};
 
-/// How to proceed when writing is allowed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct WriteMode {
-    /// Overwrite the existing destination (rename with `Replace`).
     pub replace: bool,
     /// Continue the partial destination file in place (*Resume*).
     pub resume: bool,
-    /// The destination folder exists and is merged into.
     pub merge: bool,
 }
 
@@ -29,8 +25,7 @@ fn is_real_dir(e: &Entry) -> bool {
     e.kind == Kind::Dir
 }
 
-/// Builds the question for the UI. The default choice is never *Replace*
-/// (OPS-2), which is why it is not listed first.
+/// Default choice is never *Replace*, so it is not listed first.
 pub fn build_conflict(plan: &PlanItem, dst: &Entry, can_resume: bool) -> Conflict {
     let src_is_dir = plan.kind == Kind::Dir;
     let dst_is_dir = is_real_dir(dst);
@@ -70,7 +65,6 @@ pub fn build_conflict(plan: &PlanItem, dst: &Entry, can_resume: bool) -> Conflic
     }
 }
 
-/// Decides what to do with `plan` given what exists at the destination.
 /// `default` is the "apply to all remaining" answer.
 pub fn decide(
     plan: &PlanItem,
@@ -115,8 +109,8 @@ pub fn decide(
     }
 }
 
-/// `name 2.ext`, `name 3.ext` (OPS-2 *Keep both*). Folders and dot files keep
-/// their whole name as the stem.
+/// *Keep both*: `name 2.ext`, `name 3.ext`. Folders and dot files keep their whole name as the
+/// stem.
 pub fn numbered_name(name: &[u8], n: u32, is_dir: bool) -> Vec<u8> {
     let dot = if is_dir {
         None

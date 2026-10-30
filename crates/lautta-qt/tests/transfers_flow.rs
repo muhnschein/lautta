@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The Transfers facade end to end on a temporary home: a folder is copied
-//! between two user folders through `Transfers.queueCopy`, the models follow
-//! (history row, items, summary), a second copy hits a conflict that is
-//! answered through `Transfers.answer`, and the history is cleared. The QML
-//! below runs in the real Qt event loop of `qml_check` as a scenario
-//! (`scenarioRunning`): each step acts once, then waits for its condition,
-//! polled between event loop passes, and fails by name when it never holds.
-//! The outcome is checked here afterwards (disk and engine).
+//! Transfers facade end to end on a temporary home. QML runs as a scenario (`scenarioRunning`) in
+//! the real Qt event loop of `qml_check`: each step acts once, then waits for its condition; fails
+//! by name when it never holds. Outcome (disk, engine) is checked here afterwards.
 
 const FLOW: &str = r#"
 import QtQuick 2.6
@@ -41,8 +36,6 @@ Item {
         waitingSection = section
     }
 
-    // Answers each open question of the queued transfer once: a question
-    // stays listed until the engine has taken the answer.
     function answerOpen() {
         var open = JSON.parse(Transfers.questionsJson(queuedId))
         var n = 0
@@ -86,8 +79,7 @@ Item {
         steps.push({ "label": label, "act": act, "ok": ok })
     }
 
-    // Steps run one after the other; the cap counts ticks, so a loaded
-    // runner gets more time, not a false failure.
+    // Cap counts ticks: a loaded runner gets more time, not a false failure.
     Timer {
         interval: 20
         repeat: true
@@ -124,8 +116,7 @@ Item {
         })
         Transfers.needsAnswer.connect(function(id, item, conflictJson) { root.asked.push(JSON.parse(conflictJson)) })
         Transfers.failed.connect(function(kind, message) { console.error("FAILED: unexpected failure " + kind + " " + message) })
-        // The start-up restore (loading the persisted queue) ends with
-        // `changed`; the queue is empty, so nothing else changes before.
+        // Start-up restore ends with `changed`; queue is empty, so nothing else changes before.
         Transfers.changed.connect(function() { root.restored = true })
         Transfers.start()
 
@@ -144,7 +135,6 @@ Item {
              function() {
                  check(queuedId > 0, "queued signal carried an id")
                  check(finishedId === queuedId && finishedOk, "first copy finished ok")
-                 // XFR-13: the bar flashes the completed copy.
                  check(Transfers.barTransferId === queuedId && Transfers.barUnfinished === 0,
                        "bar shows the finished copy: " + Transfers.barMode + " " + Transfers.barTransferId)
                  Transfers.barSeen()
@@ -152,7 +142,6 @@ Item {
                  var r = rows.itemAt(0)
                  check(r.g === "history" && r.k === "copy" && r.d === "local" && r.t === "src" && r.dn === "Downloads",
                        "history row " + r.g + "/" + r.k + "/" + r.d + "/" + r.t + "/" + r.dn + "/" + r.st)
-                 // §15.4: what ended just now is listed under Today.
                  check(r.dg === "today", "a copy that just ended is today's, got " + r.dg)
                  items.transferId = queuedId
              },
@@ -161,7 +150,6 @@ Item {
              function() {
                  var s = JSON.parse(items.summaryJson)
                  check(s.itemsDone === 2 && s.kind === "copy" && s.destName === "Downloads", "summary " + items.summaryJson)
-                 // Second copy: the folder exists now.
                  firstId = queuedId
                  Transfers.queueCopy(JSON.stringify(["lautta://user-documents/src"]), "lautta://user-downloads/")
              },
@@ -172,7 +160,6 @@ Item {
              })
         step("second copy finished",
              function() {
-                 // Waiting has not ended: In progress (§15.4).
                  check(waitingSection === "inProgress", "the waiting transfer is in progress, got " + waitingSection)
                  check(Transfers.barTransferId === queuedId && Transfers.barUnfinished === 1,
                        "bar leads with the question: " + Transfers.barMode + " " + Transfers.barUnfinished)
@@ -182,7 +169,6 @@ Item {
                  check(answerOpen() >= 1, "there was a question to answer")
              },
              function() {
-                 // Merging the folder may ask about the file inside.
                  if (finishedCount < 2)
                      answerOpen()
                  return finishedCount === 2 && idle() && Transfers.barMode === "done" && rows.count === 2

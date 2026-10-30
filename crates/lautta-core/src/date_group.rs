@@ -1,28 +1,20 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The date sections of the Activity and Recents lists (SPEC §15.4, ORG-2):
-//! *Today*, *Yesterday*, *Last 7 days*, *Last 30 days* and *Older*, with the
-//! tasks that have not ended above them on Activity, *In progress*. Calendar
-//! days in the device's time zone: yesterday starts at last midnight, not
-//! 24 hours ago, and today counts as one of the 7 and of the 30.
+//! Date sections of Activity and Recents. Calendar days in the device's time zone: yesterday starts
+//! at last midnight, not 24 hours ago; today counts as one of the 7 and of the 30.
 
 use chrono::{Local, TimeZone};
 
-/// One section, in display order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum DateGroup {
-    /// Not ended yet (Activity only).
     InProgress,
     Today,
     Yesterday,
-    /// Two to six days back.
     LastSevenDays,
-    /// Seven to 29 days back.
     LastThirtyDays,
     Older,
 }
 
 impl DateGroup {
-    /// Engineering name for the UI (the `dateGroup` role); QML translates it.
     pub fn name(self) -> &'static str {
         match self {
             DateGroup::InProgress => "inProgress",
@@ -34,8 +26,7 @@ impl DateGroup {
         }
     }
 
-    /// The section of a day `days_ago` calendar days before today. A day
-    /// after today (the clock was moved back) is today.
+    /// A day after today (clock moved back) is today.
     pub fn of_days_ago(days_ago: i64) -> DateGroup {
         match days_ago {
             i64::MIN..=0 => DateGroup::Today,
@@ -46,22 +37,20 @@ impl DateGroup {
         }
     }
 
-    /// The section of the instant `at_ms` when it is `now_ms` (both ms since
-    /// the epoch), by the calendar of `tz`. Each instant gets its own UTC
-    /// offset, so a daylight saving change in between moves no midnight.
+    /// Each instant gets its own UTC offset, so a daylight saving change in between moves no
+    /// midnight.
     pub fn at_in<Tz: TimeZone>(tz: &Tz, at_ms: i64, now_ms: i64) -> DateGroup {
         let day = |ms: i64| tz.timestamp_millis_opt(ms).single().map(|t| t.date_naive());
         let days_ago = match (day(at_ms), day(now_ms)) {
             (Some(at), Some(today)) => today.signed_duration_since(at).num_days(),
-            // Beyond chrono's calendar (some 260,000 years out): only which
-            // side of now it is on matters.
+            // Beyond chrono's calendar (some 260,000 years out): only which side of now it is on
+            // matters.
             _ if at_ms > now_ms => 0,
             _ => i64::MAX,
         };
         DateGroup::of_days_ago(days_ago)
     }
 
-    /// [`DateGroup::at_in`] in the device's time zone.
     pub fn at(at_ms: i64, now_ms: i64) -> DateGroup {
         DateGroup::at_in(&Local, at_ms, now_ms)
     }
@@ -75,7 +64,6 @@ mod tests {
     const HOUR: i64 = 3_600_000;
     const DAY: i64 = 24 * HOUR;
 
-    /// Ms since the epoch of a wall-clock time in `tz`.
     fn ms<Tz: TimeZone>(tz: &Tz, (y, m, d): (i32, u32, u32), (h, min): (u32, u32)) -> i64 {
         let wall = NaiveDate::from_ymd_opt(y, m, d)
             .and_then(|date| date.and_hms_opt(h, min, 0))
@@ -154,7 +142,6 @@ mod tests {
     fn calendar_days_back_reach_each_boundary() {
         let utc = Utc;
         let now = ms(&utc, (2026, 10, 19), (9, 0));
-        // The first and the last minute of a day.
         let first = |m: u32, d: u32| ms(&utc, (2026, m, d), (0, 0));
         let last = |m: u32, d: u32| ms(&utc, (2026, m, d), (23, 59));
         let expect = [
@@ -188,7 +175,6 @@ mod tests {
     #[test]
     fn the_utc_offset_moves_midnight() {
         let helsinki = FixedOffset::east_opt(3 * 3600).unwrap();
-        // 23:30 UTC on the 18th is 02:30 on the 19th in Helsinki.
         let now = ms(&Utc, (2026, 10, 19), (6, 0));
         let at = ms(&Utc, (2026, 10, 18), (23, 30));
         assert_eq!(DateGroup::at_in(&Utc, at, now), DateGroup::Yesterday);
@@ -204,7 +190,6 @@ mod tests {
             DateGroup::Yesterday,
             "21:00 UTC on the 18th"
         );
-        // West of Greenwich: 02:00 UTC on the 19th is still the 18th there.
         let new_york = FixedOffset::west_opt(4 * 3600).unwrap();
         let night = ms(&Utc, (2026, 10, 19), (2, 0));
         let noon = ms(&Utc, (2026, 10, 19), (12, 0));

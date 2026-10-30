@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! netvfs bridge protocol `org.netvfs.Bridge1` (netvfs SPEC-v2 §8a): wire
-//! types, the client proxy, and (feature `fake`) an in-process fake bridge
-//! that replays the shared contract sequences (SPEC TST-2).
+//! Client of netvfs `org.netvfs.Bridge1`: wire types, proxy, and (feature `fake`) an
+//! in-process fake bridge replaying the shared contract sequences.
 #![forbid(unsafe_code)]
 
 pub mod connect;
@@ -19,6 +18,5 @@ pub use proxy::Bridge1Proxy;
 pub use signals::Signal;
 pub use wire::*;
 pub use zeroize::Zeroizing;
-/// Result of a proxy call, so that users need not depend on zbus.
 pub type ProxyResult<T> = zbus::Result<T>;
 pub use zbus::zvariant;

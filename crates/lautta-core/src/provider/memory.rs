@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! An in-memory provider: the test double for planners, transfers, search and
-//! sync. Capabilities are configurable so tests can exercise capability-driven
-//! behaviour (SPEC ARC-4) without a real file system or bridge.
+//! In-memory provider: test double for planners, transfers, search and sync. Configurable
+//! capabilities exercise capability-driven behaviour without a real filesystem or bridge.
 
 use super::{
     AttributeChanges, CopyOptions, Disposition, Lane, ProgressSink, Provider, ReadHandle, ReadOptions,
@@ -38,15 +37,15 @@ enum Node {
 #[derive(Default)]
 struct State {
     nodes: BTreeMap<VPath, Node>,
-    /// Errors injected per path and operation name (`"list"`, `"stat"`, …).
+    /// Keyed by path and operation name (`"list"`, `"stat"`, …).
     failures: HashMap<(String, VPath), Vec<Error>>,
     calls: Vec<String>,
-    /// Where the location sits on its server: absolute link targets below
-    /// it resolve into the tree, others point outside (empty: at `/`).
+    /// Where the location sits on its server: absolute link targets below it resolve into the tree,
+    /// others point outside (empty: `/`).
     root_at: Vec<u8>,
 }
 
-/// Thread-safe in-memory tree. The root always exists.
+/// The root always exists.
 #[derive(Clone)]
 pub struct MemoryProvider {
     state: Arc<Mutex<State>>,
@@ -87,15 +86,13 @@ impl MemoryProvider {
         }
     }
 
-    /// The location starts at `dir` of its server (`/home/alice` for an
-    /// SFTP account): absolute link targets are written against the
-    /// server's root, and relative ones may climb out of `dir` and back.
+    /// Location starts at `dir` of its server (`/home/alice` for SFTP): absolute link targets are
+    /// written against the server root; relative ones may climb out of `dir` and back.
     pub fn rooted_at(self, dir: &str) -> MemoryProvider {
         self.lock().root_at = dir.trim_end_matches('/').as_bytes().to_vec();
         self
     }
 
-    /// Listing batch size (to test batched delivery).
     pub fn with_batch(mut self, batch: usize) -> MemoryProvider {
         self.batch = batch.max(1);
         self
@@ -112,7 +109,6 @@ impl MemoryProvider {
         VPath::parse(path.as_bytes()).unwrap_or_default()
     }
 
-    /// Adds a file (and missing parent folders) with an mtime in ms.
     pub fn add_file(&self, path: &str, data: &[u8], mtime_ms: i64) {
         let p = Self::vp(path);
         let mut st = self.lock();
@@ -160,7 +156,6 @@ impl MemoryProvider {
         self.lock().nodes.contains_key(&Self::vp(path))
     }
 
-    /// All paths, sorted (for assertions).
     pub fn paths(&self) -> Vec<String> {
         self.lock()
             .nodes
@@ -170,7 +165,7 @@ impl MemoryProvider {
             .collect()
     }
 
-    /// Makes the next `op` on `path` fail with `err` (queued, consumed in order).
+    /// Queued, consumed in order.
     pub fn fail_next(&self, op: &str, path: &str, err: Error) {
         self.lock()
             .failures
@@ -179,7 +174,6 @@ impl MemoryProvider {
             .push(err);
     }
 
-    /// Names of operations called so far, as `"op path"`.
     pub fn calls(&self) -> Vec<String> {
         self.lock().calls.clone()
     }
@@ -278,12 +272,11 @@ fn ensure_parents(st: &mut State, p: &VPath) {
     }
 }
 
-/// Links followed in one lookup before it gives up, as a file system does.
+/// Links followed per lookup before giving up.
 const MAX_HOPS: usize = 40;
 
-/// `path` with the links among its folders followed, as a real file system
-/// does when it opens a path; the last component too with `follow_last`.
-/// Reads go through this; changes address the nodes themselves.
+/// Follows links among the folders as a real filesystem does; last component too with
+/// `follow_last`. Reads use this; changes address nodes themselves.
 fn canonical(st: &State, path: &VPath, follow_last: bool) -> VPath {
     let names: Vec<&[u8]> = path.components().collect();
     let mut cur = VPath::root();
@@ -305,10 +298,9 @@ fn canonical(st: &State, path: &VPath, follow_last: bool) -> VPath {
     cur
 }
 
-/// Where a link at `link` leads, as the server resolves it: from the
-/// link's folder for a relative target, from the server's root for an
-/// absolute one, `..` past the location included. `None` when that is
-/// outside the location (`root_at` on the server).
+/// Where a link leads, as the server resolves it: relative from the link's folder, absolute from
+/// the server root, `..` past the location included. `None` outside the location (`root_at` on the
+/// server).
 fn resolve_link(link: &VPath, target: &[u8], root_at: &[u8]) -> Option<VPath> {
     let from = if target.first() == Some(&b'/') {
         Vec::new()

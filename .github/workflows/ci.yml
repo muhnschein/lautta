@@ -13,13 +13,12 @@ concurrency:
   cancel-in-progress: true
 env:
   CARGO_TERM_COLOR: always
-  # Runner is thrown away: incremental state never read. Off = smaller cache.
+  # Smaller cache.
   CARGO_INCREMENTAL: 0
   SDK_IMAGE: mirror.gcr.io/coderus/sailfishos-platform-sdk-aarch64:5.2.0.15@sha256:e5f7596d14502746b308c3dde36f65fc25d7f76c45a01acaed56a1f55b76f592
   TARGET: SailfishOS-5.2.0.15-aarch64
 jobs:
-  # Docs-only pull request: build and test jobs skipped. A job skipped by
-  # `if:` passes as a required check. Rules: tools/ci/changes.sh.
+  # Docs-only PR: build and test jobs skipped; skipped by `if:` passes as required check.
   changes:
     name: What changed
     runs-on: ubuntu-24.04
@@ -55,13 +54,10 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: make check
         run: make check
-      # Wrong rule = code pull request green without tests.
       - name: Docs-only rule
         run: ./tools/ci/changes-test.sh
 
-  # Pull requests mutate only the lines they change in the mutated files
-  # (SPEC TST-5); the whole set runs weekly and whenever the mutation setup
-  # changes (mutation.yml).
+  # PRs mutate changed lines only; full set: mutation.yml.
   mutation:
     name: Tests bite (mutation check, changed lines)
     needs: changes
@@ -76,8 +72,7 @@ jobs:
       - name: Diff against the base branch
         id: diff
         run: |
-          # HEAD is the PR merged into the current base, so HEAD^1..HEAD is
-          # exactly what the PR changes.
+          # HEAD is PR merged into base: HEAD^1..HEAD = the PR's changes.
           git diff HEAD^1 HEAD -- $(make -s mutants-paths) > "$RUNNER_TEMP/pr.diff"
           if [ ! -s "$RUNNER_TEMP/pr.diff" ]; then
             echo "No mutated file changed; nothing to check."
@@ -116,8 +111,7 @@ jobs:
         run: ./tools/ci/install-host-deps.sh cross
       - name: Pull the SDK
         run: docker pull "$SDK_IMAGE"
-      # Cross-built dependencies (tools/ci/cross-build.sh's target dir) and
-      # crates. Key adds the SDK target: a new sysroot never links old objects.
+      # Key adds SDK target: new sysroot never links old objects.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: ". -> prebuilt/target"
@@ -128,12 +122,10 @@ jobs:
         with:
           name: harbour-lautta-aarch64
           path: RPMS/harbour-lautta-*.rpm
-      # After upload: a package the checks reject is still worth installing.
+      # After upload: rejected package still worth installing.
       - name: Harbour validator, installability, QML on the target
         run: make check-rpm
 
-  # Workflows: `${{ }}` in scripts, tokens left in .git/config, cache trust.
-  # Wrongly raised findings: ignored in place, reason beside.
   zizmor:
     name: Workflow audit (zizmor, offline)
     runs-on: ubuntu-24.04

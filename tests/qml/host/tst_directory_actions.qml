@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of which actions an item offers where (ContextActions.js), SPEC
-// §15.3: the long-press menu, More actions last, and the rows of the More
-// actions page, each with its icon (OPS-12): Compress and Move to new folder
-// the app's archive and folder glyphs (FileIcons.js). There is no Details
-// page any more.
 import QtQuick 2.6
 import "../../../qml/components/directory/ContextActions.js" as Actions
 
@@ -44,8 +39,6 @@ Item {
                  ctxs[i].writable ? ["favourite", "compress", "moveToNewFolder"] : ["favourite", "compress"],
                  "More actions: " + JSON.stringify(ctxs[i]))
         }
-        // Where the folder is not said (the image viewer's More page) it is
-        // not offered: that page cannot follow the image into its new folder.
         same(ids(Actions.more({ "isDir": false })), ["favourite", "compress"], "More actions of the image viewer")
     }
 
@@ -63,7 +56,6 @@ Item {
     }
 
     function testText() {
-        // On the host qsTrId gives back the id.
         var entries = Actions.menu({ "isDir": false, "writable": true }).concat(Actions.more({ "isDir": false, "writable": true }))
         for (var i = 0; i < entries.length; ++i)
             check(entries[i].text.indexOf("lautta-dir-act-") === 0, entries[i].id + " has a translated text")

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of CacheInfo (SEC-5 Clear cache).
 import QtQuick 2.6
 import Lautta 1.0
 

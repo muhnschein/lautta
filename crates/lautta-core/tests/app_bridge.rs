@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The app context with a (fake) netvfs bridge: servers become locations
-//! that list and copy like local ones (SPEC §3.4, NVB-4), and disappear
-//! entirely without the bridge (UI-8).
 
 mod bridge_support;
 
@@ -101,7 +98,6 @@ async fn download_from_a_server() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn uploads_follow_the_server_name_rules() {
     let fake = fake_with_files().await;
-    // A share with Windows' name rules (SMB): a name it refuses gets a safe one.
     fake.set_capabilities("account:1", &["WindowsNames"], &[], 255);
     let (home, core, _l) = core_with(&fake, true).await;
     eventually("server location", || core.location(SERVER).is_some()).await;
@@ -131,7 +127,6 @@ async fn copying_from_a_server_that_went_away_says_so() {
     let fake = fake_with_files().await;
     let (_home, core, _l) = core_with(&fake, true).await;
     eventually("server location", || core.location(SERVER).is_some()).await;
-    // Copied while the server was there; it goes before the paste.
     fake.remove_location("account:1").await;
     eventually("server gone", || core.location(SERVER).is_none()).await;
     let photo = Uri::parse("lautta://nv-account:1/photos/a.jpg").unwrap();
@@ -179,9 +174,6 @@ async fn attention_reaches_the_location() {
     );
 }
 
-/// The location carries the bridge's connection state (NVB-4, netvfs
-/// XB-12) and follows each `LocationsChanged`; a server that is not
-/// connected stays ready to browse.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_connection_state_reaches_the_location() {
     let fake = fake_with_files().await;
@@ -190,7 +182,6 @@ async fn the_connection_state_reaches_the_location() {
     let connection = || core.location(SERVER).map(|l| l.connection);
     assert_eq!(connection(), Some(ConnectionState::Disconnected));
     assert_eq!(core.location(SERVER).unwrap().status, LocationStatus::Ready);
-    // Listing needs a connection: the bridge connects and tells.
     core.list(&Uri::parse("lautta://nv-account:1/photos").unwrap(), |_| {})
         .await
         .unwrap();
@@ -203,7 +194,6 @@ async fn the_connection_state_reaches_the_location() {
     assert_eq!(core.location(SERVER).unwrap().status, LocationStatus::Ready);
     fake.set_state("account:1", "connecting", None).await;
     eventually("connecting", || connection() == Some(ConnectionState::Connecting)).await;
-    // Closed when idle: still a location to browse.
     fake.set_state("account:1", "disconnected", None).await;
     eventually("disconnected", || {
         connection() == Some(ConnectionState::Disconnected)
@@ -212,8 +202,6 @@ async fn the_connection_state_reaches_the_location() {
     assert_eq!(core.location(SERVER).unwrap().status, LocationStatus::Ready);
 }
 
-/// Move to new folder on a server (OPS-13): the folder is made with
-/// `make_folder`, the items move into it as an ordinary same-location move.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn items_move_into_a_folder_made_on_a_server() {
     let fake = fake_with_files().await;

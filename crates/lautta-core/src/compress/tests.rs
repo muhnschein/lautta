@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Compression tests: archives are produced through `compress`, then read
-//! back both by independent readers (the `zip`, `tar` and `flate2` crates)
-//! and by `ArchiveProvider`.
+//! Archives are read back by independent readers (`zip`, `tar`, `flate2`) and by `ArchiveProvider`.
 
 use super::zipstream::ZipStream;
 use super::*;
@@ -18,7 +16,6 @@ fn uri(loc: &str, path: &str) -> Uri {
     Uri::new(loc, vp(path))
 }
 
-/// A `Write` sink the test can read afterwards.
 #[derive(Clone, Default)]
 struct SharedBuf(Arc<Mutex<Vec<u8>>>);
 
@@ -39,7 +36,6 @@ impl SharedBuf {
     }
 }
 
-/// Fails after `limit` bytes, like a pipe whose reader went away.
 struct BrokenPipe {
     limit: usize,
     written: usize,

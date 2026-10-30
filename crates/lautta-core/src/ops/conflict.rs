@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Conflict choices and resolution (OPS-2).
-//!
-//! Default choice: never *Replace*. Folders default to *Merge*, everything
-//! else to *Keep both* (it never loses data and needs no timestamps).
+//! Conflict choices and resolution. Default is never *Replace*; folders default to *Merge*,
+//! everything else to *Keep both* (never loses data, needs no timestamps).
 
 use super::names::{keep_both_for, NameRules};
 use super::{Conflict, ConflictChoice, Plan, PlanItem};
@@ -12,7 +10,6 @@ use crate::provider::{list_all, Lane, ProviderResolver};
 use crate::uri::Uri;
 use std::collections::{HashMap, HashSet};
 
-/// What one side of a conflict looks like.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Side {
     pub is_dir: bool,
@@ -20,16 +17,12 @@ pub struct Side {
     pub mtime_ms: Option<i64>,
 }
 
-/// Facts about the destination that decide which choices are offered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ConflictContext {
-    /// The destination can append to a partial file (cap `ResumeUpload`, or local).
     pub dest_can_resume: bool,
-    /// The source and the destination are the very same item (copy into its own folder).
     pub same_item: bool,
 }
 
-/// Builds the conflict for `src` landing on `dst`, with the applicable choices.
 pub fn make_conflict(src: Side, dst: Side, ctx: ConflictContext) -> Conflict {
     let resumable = !ctx.same_item && is_resumable(src, dst, ctx.dest_can_resume);
     let mut conflict = Conflict {
@@ -53,7 +46,6 @@ fn is_resumable(src: Side, dst: Side, dest_can_resume: bool) -> bool {
     matches!((src.size, dst.size), (Some(s), Some(d)) if d < s)
 }
 
-/// The choices that make sense, in display order (OPS-2).
 fn choices_for(c: &Conflict, same_item: bool) -> Vec<ConflictChoice> {
     use ConflictChoice::{KeepBoth, Merge, Replace, ReplaceIfNewer, Resume, Skip};
     if same_item {
@@ -75,7 +67,6 @@ fn choices_for(c: &Conflict, same_item: bool) -> Vec<ConflictChoice> {
     out
 }
 
-/// The choice preselected in the dialog; never *Replace*.
 pub fn default_choice(c: &Conflict) -> ConflictChoice {
     if c.src_is_dir && c.dst_is_dir && c.choices.contains(&ConflictChoice::Merge) {
         ConflictChoice::Merge
@@ -84,14 +75,11 @@ pub fn default_choice(c: &Conflict) -> ConflictChoice {
     }
 }
 
-/// Conflicts of one type are resolved together by "apply to all remaining".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ConflictType {
     FileOnFile,
     FolderOnFolder,
-    /// A file meets a folder or the other way round.
     Mismatch,
-    /// An item copied onto itself (no *Replace* offered).
     SameItem,
 }
 
@@ -109,7 +97,6 @@ impl ConflictType {
     }
 }
 
-/// Remembers "apply to all remaining" choices per conflict type.
 #[derive(Debug, Clone, Default)]
 pub struct ConflictPolicy {
     remembered: HashMap<ConflictType, ConflictChoice>,
@@ -120,13 +107,11 @@ impl ConflictPolicy {
         ConflictPolicy::default()
     }
 
-    /// Remembers `choice` for every later conflict of the same type as `c`.
     pub fn remember(&mut self, c: &Conflict, choice: ConflictChoice) {
         self.remembered.insert(ConflictType::of(c), choice);
     }
 
-    /// The remembered choice for `c`, only when it is applicable to it (a
-    /// remembered *Resume* does not apply to a file that is not a prefix).
+    /// A remembered *Resume* does not apply to a file that is not a prefix.
     pub fn choice_for(&self, c: &Conflict) -> Option<ConflictChoice> {
         self.remembered
             .get(&ConflictType::of(c))
@@ -139,7 +124,6 @@ impl ConflictPolicy {
     }
 }
 
-/// Conflicts that still wait for an answer.
 pub fn unresolved(plan: &Plan) -> Vec<usize> {
     plan.items
         .iter()
@@ -149,14 +133,9 @@ pub fn unresolved(plan: &Plan) -> Vec<usize> {
         .collect()
 }
 
-/// Applies `choice` to the conflict of item `index`; with `apply_to_all` also
-/// to every other unresolved conflict of the same type for which the choice
-/// is applicable. Returns the number of items resolved by this call.
-///
-/// A choice on a folder carries to its children: *Skip* and *Replace* mark
-/// them (their own conflicts disappear into the folder's), *Keep both* moves
-/// the whole subtree to the new name and clears the children's conflicts, and
-/// *Merge* leaves them to be answered one by one.
+/// A choice on a folder carries to its children: *Skip* and *Replace* mark them (their own
+/// conflicts disappear into the folder's), *Keep both* moves the whole subtree to the new name and
+/// clears the children's conflicts, *Merge* leaves them to be answered one by one.
 pub async fn resolve(
     plan: &mut Plan,
     index: usize,
@@ -221,8 +200,8 @@ async fn apply_one(
     Ok(1)
 }
 
-/// Exclusive end of the items below `index` (parents come first, so the
-/// children of a folder follow it directly and share its destination prefix).
+/// Parents come first, so the children of a folder follow it directly and share its destination
+/// prefix.
 fn subtree_end(items: &[PlanItem], index: usize) -> usize {
     if items[index].kind != Kind::Dir {
         return index + 1;
@@ -257,7 +236,6 @@ fn move_subtree(subtree: &mut [PlanItem], old_root: &Uri, new_root: &Uri) {
     }
 }
 
-/// Names present in a destination folder, normalised for the comparison.
 #[derive(Default)]
 struct NameCache {
     folders: HashMap<Uri, HashSet<Vec<u8>>>,
@@ -553,7 +531,6 @@ mod tests {
         assert_eq!(plan.items[0].resolution, Some(Skip));
         assert_eq!(plan.items[1].resolution, None);
         assert_eq!(unresolved(&plan), vec![1]);
-        // Resolving twice does nothing more.
         assert_eq!(resolve(&mut plan, 0, Skip, false, &r).await.unwrap(), 0);
     }
 

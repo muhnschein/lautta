@@ -1,6 +1,6 @@
 # AGENTS.md
 
-How to work on Lautta. What it is: `doc/SPEC.md` (requirement IDs such as `OPS-2`). Read `doc/CONTRIBUTING-CODE.md` before first change. User's words in chat beat this file.
+How to work on Lautta. What it is: `README.md`, `doc/PROJECT.md`. Read `doc/CONTRIBUTING-CODE.md` before first change. User's words in chat beat this file.
 
 ## Ground rules
 
@@ -24,7 +24,7 @@ In this order; later step only once earlier ones hold:
 
 PR opens as draft on first push. Mark ready for review only once steps 1–7 hold and their evidence is in PR body.
 
-Feature reachable from several places (folder pulley, item context menu, selection bar, viewers, cover, share target, folder picker) → all of them. Same for device folders and server locations; standalone mode shows no bridge traces (UI-8).
+Feature reachable from several places (folder pulley, item context menu, selection bar, viewers, cover, share target, folder picker) → all of them. Same for device folders and server locations; standalone mode shows no bridge traces.
 
 User tests RPM on phone; that test judges feel, lag, transitions. Say exactly what to check on device.
 
@@ -33,7 +33,7 @@ User tests RPM on phone; that test judges feel, lag, transitions. Say exactly wh
 - Test phone: OnePlus 6, SFOS 5.1, via `muhnschein-sfos-harness` workflow `do`; lautta's caller notes: its `apps/lautta.md`. Its AGENTS.md rules every phone run (baseline, no blind taps, reboot, language, `clean_slate`); helpers: its README, `scripts/lib.sh`. Test accounts and test servers only. Never run fork or others' PR code there: any job can root phone.
 - PR build onto phone: `install_artifact muhnschein/lautta RUN_ID harbour-lautta`, RUN_ID of this PR's green CI run.
 - Every run starts from named state; `state.txt` records it plus RPM name and sha256:
-  - `clean`: `reset`: quit app, drop sailjail grant, `rpm -e`, reset dconf `/apps/harbour-lautta/`, delete `~/.local/share/org.netvfs/lautta`, `~/.config/org.netvfs/lautta`, `~/.cache/org.netvfs/lautta` (and unsandboxed `harbour-lautta` dirs); install. Standalone: no netvfs on phone (UI-8).
+  - `clean`: `reset`: quit app, drop sailjail grant, `rpm -e`, reset dconf `/apps/harbour-lautta/`, delete `~/.local/share/org.netvfs/lautta`, `~/.config/org.netvfs/lautta`, `~/.cache/org.netvfs/lautta` (and unsandboxed `harbour-lautta` dirs); install. Standalone: no netvfs on phone.
   - `bridge`: `clean` plus netvfs RPMs (netvfs first), for server locations and bridge paths.
   - `fixture:NAME`: `clean`, then restore data snapshot (dirs plus dconf) saved with `fixture_save`.
   - `upgrade:FROM`: release FROM plus fixture, then install build over it. Required when change touches stored data (`lautta.db`, trash) or settings.
@@ -52,25 +52,25 @@ User tests RPM on phone; that test judges feel, lag, transitions. Say exactly wh
 - Missing tool (docker, cargo-mutants) → step skipped locally. Say which; CI runs all.
 - Local failure → rerun on untouched `main` before calling it environment.
 - Iterating → run only what change touches: `cargo test -p lautta-core <filter>`, host QML `cargo test -p lautta-qt --features lautta-bridge-proto/fake --test qml_host`, page tests `tools/sdk-qml-check.sh tests/qml/tst_<page>.qml`. Before every push: full `make check`. CI runs everything (docs-only PR: no build or test jobs, `tools/ci/changes.sh`).
-- Gates catch device-only breakage (Qt 5.6 QML, Harbour rules `HBR-*` of SPEC §3.2, linked libs, validator). Gate red → fix code, never loosen gate. New validator warning only if unavoidable, listed with reason in `doc/harbour-warnings.md`.
+- Gates catch device-only breakage (Qt 5.6 QML, Harbour rules of `doc/PROJECT.md` "Platform", linked libs, validator). Gate red → fix code, never loosen gate. New validator warning only if unavoidable, listed with reason in `doc/harbour-warnings.md`.
 - Mutant exclusion (`.cargo/mutants.toml`) only with proof it changes no observable behaviour, written beside it.
 - Tests wait on signals or conditions, not fixed sleeps or wall-clock asserts (those flake on loaded runners).
-- New dependency must earn its keep: well maintained, widely used, more than someone's pet project, builds at Rust 1.95, pure Rust preferred, native links only to HBR-2 libraries (RS-2). Say why in PR. `Cargo.lock` via `cargo +stable update -p <crate>` (CONTRIBUTING-CODE.md "Toolchain").
+- New dependency must earn its keep: well maintained, widely used, more than someone's pet project, builds at Rust 1.95, pure Rust preferred, native links only to Harbour's allowed libraries (`doc/PROJECT.md`). Say why in PR. `Cargo.lock` via `cargo +stable update -p <crate>` (CONTRIBUTING-CODE.md "Toolchain").
 
 ## UI and words
 
-- Silica stock components only (UI-1), built like existing pages; idioms in `design/STYLE.md` (pulley, no push-up menu, remorse, dialog pages). Jolla app has same feature (e.g. Gallery's image viewer) → match it. Feature references: SPEC Appendix A (Harbour File Browser, Transmit/Cyberduck, iOS Files).
+- Silica stock components only, built like existing pages; idioms in `design/STYLE.md` (pulley, no push-up menu, remorse, dialog pages). Jolla app has same feature (e.g. Gallery's image viewer) → match it. Feature references: Harbour File Browser, Transmit/Cyberduck, iOS Files.
 - "Design first" / "no PR yet" → artboard on design canvas (`design/canvas/project/*.dc.html`, kit `design/STYLE.md`), wait for approval, then code.
-- Every string `qsTrId()` with `//%` engineering English (UI-7); error text as SPEC §20. Changed strings → `make translations` (`make check` fails on drift). A count in a text → one `%n` plural string, never "(s)"; `make translations` adds its English singular (read the printed pairs).
+- Every string `qsTrId()` with `//%` engineering English; error text as `doc/PROJECT.md` "Words on screen". Changed strings → `make translations` (`make check` fails on drift). A count in a text → one `%n` plural string, never "(s)"; `make translations` adds its English singular (read the printed pairs).
 - Host QML tests have no Silica; target page tests have no finger, no phone: looks and gestures unproven until device test. Say so.
-- Phone = battery: no always-running animations, timers, polling. Idle in background = 0 % CPU, no timers (PRF-8); only a running transfer keeps device awake (XFR-5).
+- Phone = battery: no always-running animations, timers, polling. Idle in background = 0 % CPU, no timers; only a running transfer keeps device awake.
 
 ## Comments and docs
 
 - Caveman-full = drop articles, filler, pleasantries, hedging. Fragments OK, short words. Identifiers, paths, code, errors exact. E.g. "`Cargo.lock` from stable cargo with fallback resolver: no crate newer than `rust-version` allows."
-- Code comments, `doc/*.md`, this file: caveman-full. What is true now and why; keep constraints; cite requirement IDs. No changelog, bug report, history, story (git's job): delete comment rather than turn it into history. Existing prose: rewrite what you touch, not more.
+- Code comments, `doc/*.md`, this file: caveman-full. What is true now and why; keep constraints. No changelog, bug report, history, story (git's job): delete comment rather than turn it into history. Existing prose: rewrite what you touch, not more.
 - Default: no comment. One only for constraint, external quirk, invariant code can't show; one line where possible, four max. Applies to new and touched code; trim old long comments when changing that code anyway, no sweep.
-- SPDX header on every source file. Behaviour change → SPEC updated, same PR.
+- SPDX header on every source file. No specs: code and tests say what it does.
 - `README.md`, `CHANGELOG.md`, release notes, store and forum posts: plain prose for users, as short and to the point as possible.
 - User-visible change → line in `CHANGELOG.md` under `## Unreleased` (file or section missing → create it), same PR.
 - No plans, research notes, scratch files in repo.

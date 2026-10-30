@@ -1,10 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// A half-size picture of a folder for the view options page (BRW-4), like
-// the Browse page preview (BRW-12): sample folders and files, a hidden file
-// and a photo, drawn as DirectoryView draws a folder on a screen of the
-// page's size. It shows the global view settings and follows every change
-// at once, at a size that does not change with them; the order and the
-// hidden file come from the core (App.previewRows). Takes no input.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -15,7 +9,6 @@ import "GridRows.js" as GridRows
 Item {
     id: preview
 
-    // The page's size, which is a folder page's size.
     property real screenWidth
     property real screenHeight
     readonly property real miniature: 0.5
@@ -25,13 +18,9 @@ Item {
     readonly property bool showHidden: setting("show_hidden") === true
     readonly property bool gridMode: setting("view_mode") === "grid"
     readonly property bool thumbnails: setting("thumbnails_local") === true
-    // As DirectoryView: landscape keeps the tile size of portrait.
     readonly property real tileWidth: Math.min(Screen.width, Screen.height) / gridMetrics.portraitColumns
     readonly property int columns: GridRows.columns(screenWidth, tileWidth, gridMetrics.portraitColumns)
     readonly property real cellWidth: screenWidth / columns
-    // Modified times count back from now, so the rows read like a real
-    // folder's; folders have a number of items, as on the device. File names
-    // keep their extensions out of the translations.
     readonly property var sampleEntries: {
         var now = Date.now()
         var minute = 60 * 1000
@@ -53,8 +42,6 @@ Item {
             { "name": "." + qsTrId("lautta-view-preview-hidden"), "size": 12000, "modified": now - 3 * day }
         ]
     }
-    // The samples as a folder shows them: { name, isDir, size, modified,
-    // hidden, category } each.
     readonly property var rows: App.previewRows(JSON.stringify(sampleEntries), sortKey, descending,
                                                 foldersFirst, showHidden)
     readonly property int count: rows.length
@@ -64,7 +51,6 @@ Item {
         return App.setting(key)
     }
 
-    // The items of the sample folder called `name`, -1 for a file.
     function itemsOf(name) {
         for (var i = 0; i < sampleEntries.length; ++i) {
             if (sampleEntries[i].name === name && sampleEntries[i].dir)
@@ -73,9 +59,6 @@ Item {
         return -1
     }
 
-    // The rows as drawn, in order (tests): { name, isDir, size, photo, text,
-    // captions }, the captions as the lines under a tile; `text`: a text
-    // thumbnail.
     function shown() {
         var drawn = gridMode ? tiles() : rowsOf(listRows)
         return drawn.map(function (row) {
@@ -84,7 +67,6 @@ Item {
         })
     }
 
-    // The items of `repeater`, in order.
     function rowsOf(repeater) {
         var out = []
         for (var i = 0; i < repeater.count; ++i)
@@ -92,7 +74,6 @@ Item {
         return out
     }
 
-    // The tiles of the grid's rows, in order.
     function tiles() {
         return rowsOf(gridRows).reduce(function (all, row) { return all.concat(row.tiles()) }, [])
     }
@@ -103,7 +84,6 @@ Item {
         id: gridMetrics
     }
 
-    // A stand-in for the photo's thumbnail: sky, sun and a hill.
     Component {
         id: photoComponent
 
@@ -133,7 +113,6 @@ Item {
         }
     }
 
-    // A row of DirectoryView's list.
     Component {
         id: listRow
 
@@ -196,7 +175,6 @@ Item {
         }
     }
 
-    // A tile of DirectoryView's grid: the name and the caption lines under it.
     Component {
         id: gridTile
 
@@ -207,7 +185,6 @@ Item {
             readonly property bool isDir: modelData.isDir
             readonly property real size: modelData.size
             readonly property bool photo: preview.thumbnails && modelData.category === "image"
-            // The notes' first lines, as a text file's tile shows them (PRV-15).
             readonly property string previewText: preview.thumbnails && modelData.category === "text"
                                                   //% "Ferry at 06:00\nSauna wood: 2 sacks\nCabin keys from Anni"
                                                   ? qsTrId("lautta-view-preview-notes-text") : ""
@@ -215,7 +192,6 @@ Item {
             readonly property var captions: DirFormat.gridCaptions(modelData.isDir, modelData.size, modelData.modified,
                                                                    true, preview.itemsOf(modelData.name), false)
 
-            // Its column in its row, as tall as the row: the row's tallest tile.
             x: index * width
             width: preview.cellWidth
             height: parent ? parent.height : implicitHeight
@@ -267,7 +243,6 @@ Item {
         }
     }
 
-    // A row of DirectoryView's grid: as tall as its tallest tile.
     Component {
         id: gridRow
 
@@ -281,7 +256,6 @@ Item {
             }
 
             width: preview.screenWidth
-            // The tiles are its children; so is the Repeater, of no height.
             height: GridRows.tallest(children)
 
             Repeater {
@@ -293,9 +267,7 @@ Item {
         }
     }
 
-    // A half-size screen, as the Browse page preview: its size follows the
-    // page's alone, never the folder drawn in it, so that no view setting
-    // (list or grid, the hidden file) makes the preview grow or shrink.
+    // Size follows page's alone, never folder drawn: no view setting makes preview grow or shrink.
     Rectangle {
         id: frame
 
@@ -310,7 +282,6 @@ Item {
             color: Theme.rgba(Theme.primaryColor, Theme.opacityLow)
         }
 
-        // Full size scaled down, so the layout matches a real folder.
         Column {
             id: folder
 

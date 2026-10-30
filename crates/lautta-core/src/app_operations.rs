@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! User-level actions of the operations area on [`Core`](crate::app::Core):
-//! plan summaries and pending plans (OPS-1), conflicts before the run
-//! (OPS-2), compress and extract (PRV-10/11) and the *Trash*
-//! (OPS-8). Everything is Qt-free; the Qt layer only
-//! forwards.
+//! Operations area on `Core`: plan summaries, pending plans, conflicts, compress and extract,
+//! Trash, share. Qt-free.
 
 use crate::app::{Core, Started};
 use crate::app_directory::file_url;
@@ -29,9 +26,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-/// Separator of the breadcrumb shown for a folder ("Documents › Uni").
 const CRUMB: &str = " › ";
-/// Names listed in the summary sheet ("Names that need changing").
 const SUMMARY_RENAMES: usize = 50;
 const SECS_PER_DAY: i64 = 86_400;
 
@@ -46,14 +41,8 @@ fn join_err(e: tokio::task::JoinError) -> Error {
     Error::new(ErrorKind::Internal, e.to_string())
 }
 
-// ------------------------------------------------------------ pending plans
-
-/// Large plans wait for the user's confirmation under an id (OPS-1).
-///
-/// A plan is lent out while a conflict answer works on it across awaits
-/// ([`lend`](Self::lend)); starting it meanwhile waits for it to come back
-/// ([`take_when_returned`](Self::take_when_returned)) instead of finding
-/// nothing, and discarding it meanwhile drops it when it comes back.
+/// A plan is lent out while a conflict answer works on it across awaits; starting it meanwhile
+/// waits for it to come back, discarding it meanwhile drops it on return.
 #[derive(Default)]
 pub struct PendingPlans {
     next: AtomicU64,
@@ -71,19 +60,16 @@ impl PendingPlans {
         PendingPlans::default()
     }
 
-    /// Keeps `plan` and returns its id (1, 2, …).
     pub fn insert(&self, plan: Plan) -> u64 {
         let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
         guard(&self.plans).insert(id, Slot::Ready(Box::new(plan)));
         id
     }
 
-    /// Takes the plan out for good (to start it); `None` while it is lent.
     pub fn take(&self, id: u64) -> Option<Plan> {
         self.take_unless_lent(id).ok().flatten()
     }
 
-    /// The plan taken out, `Ok(None)` without one, `Err` while it is lent.
     fn take_unless_lent(&self, id: u64) -> std::result::Result<Option<Plan>, ()> {
         let mut plans = guard(&self.plans);
         match plans.remove(&id) {
@@ -96,8 +82,6 @@ impl PendingPlans {
         }
     }
 
-    /// The plan, once it is back if it is lent; `None` when there is no
-    /// such plan or it was discarded meanwhile.
     pub async fn take_when_returned(&self, id: u64) -> Option<Plan> {
         loop {
             let returned = self.returned.notified();
@@ -111,8 +95,6 @@ impl PendingPlans {
         }
     }
 
-    /// Takes the plan out to work on it across awaits; it stays known and
-    /// comes back with [`put_back`](Self::put_back).
     pub fn lend(&self, id: u64) -> Option<Plan> {
         let mut plans = guard(&self.plans);
         match std::mem::replace(plans.get_mut(&id)?, Slot::Lent) {
@@ -121,8 +103,6 @@ impl PendingPlans {
         }
     }
 
-    /// Returns a plan taken out with [`lend`](Self::lend); one discarded
-    /// while it was out is dropped.
     pub fn put_back(&self, id: u64, plan: Plan) {
         if let Some(slot) = guard(&self.plans).get_mut(&id) {
             *slot = Slot::Ready(Box::new(plan));
@@ -152,22 +132,18 @@ impl PendingPlans {
     }
 }
 
-// ------------------------------------------------------------ plan summary
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RenamePair {
     pub from: String,
     pub to: String,
 }
 
-/// The options of the summary sheet, seeded from the settings (OPS-5, XFR-4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartOptions {
     pub verify_checksums: bool,
     pub preserve_mtime: bool,
     pub preserve_mode: bool,
-    /// Keep the safe names the planner proposed (OPS-7).
     pub suggested_names: bool,
 }
 
@@ -181,7 +157,6 @@ impl StartOptions {
         }
     }
 
-    /// Reads the options sheet's JSON; missing keys keep `self`.
     pub fn merged_with_json(self, text: &str) -> StartOptions {
         let Ok(Value::Object(m)) = serde_json::from_str::<Value>(text) else {
             return self;
@@ -196,7 +171,6 @@ impl StartOptions {
     }
 }
 
-/// What the PlanSummary sheet shows.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlanSummary {
@@ -210,7 +184,7 @@ pub struct PlanSummary {
     pub destination_name: String,
     pub free_bytes: Option<u64>,
     pub renames: Vec<RenamePair>,
-    /// Both sides keep POSIX modes (OPS-5): the option is only offered then.
+    /// Offered only when both sides keep POSIX modes.
     pub permissions_supported: bool,
     pub options: StartOptions,
 }
@@ -234,8 +208,7 @@ fn rebase(uri: &Uri, old_root: &Uri, new_root: &Uri) -> Uri {
     }
 }
 
-/// Undoes the planner's safe-name proposals (OPS-7): every renamed item (and
-/// what lies below it) goes back to the source's own name.
+/// Every renamed item and what lies below it goes back to the source's own name.
 pub fn revert_suggested_names(plan: &mut Plan) {
     for i in 0..plan.items.len() {
         if plan.items[i].proposed_name.is_none() {
@@ -255,24 +228,19 @@ pub fn revert_suggested_names(plan: &mut Plan) {
     plan.totals.renamed = 0;
 }
 
-/// A conflict that waits for an answer before the run (OPS-2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConflictEntry {
     pub index: usize,
     pub name: String,
-    /// Where it already exists ("NAS › srv › photos").
     pub folder: String,
     pub source: String,
     pub destination: String,
     pub conflict: Conflict,
-    /// Never `Replace` (OPS-2).
+    /// Never `Replace`.
     pub default_choice: ConflictChoice,
 }
 
-// ------------------------------------------------------------ compress
-
-/// What the Compress dialog needs to size the job.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 pub struct Measure {
     pub files: u64,
@@ -280,14 +248,12 @@ pub struct Measure {
     pub bytes: u64,
 }
 
-/// Contents of an archive (Extract dialog, ArchiveView header).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchiveInfo {
     pub location: String,
     pub root_uri: String,
     pub name: String,
-    /// The archive's name without its extension(s): the "new folder".
     pub folder_name: String,
     pub files: u64,
     pub dirs: u64,
@@ -311,7 +277,6 @@ impl ArchiveKind {
     }
 }
 
-/// `name` with the archive extension (once).
 pub fn archive_file_name(name: &str, kind: ArchiveKind) -> String {
     let ext = kind.extension();
     if name.to_lowercase().ends_with(ext) {
@@ -321,7 +286,6 @@ pub fn archive_file_name(name: &str, kind: ArchiveKind) -> String {
     }
 }
 
-/// The archive's name without extension, for "New folder 'dataset'".
 pub fn archive_folder_name(name: &str) -> String {
     let (stem, _) = split_extension(name.as_bytes(), false);
     let stem = String::from_utf8_lossy(stem).into_owned();
@@ -332,9 +296,6 @@ pub fn archive_folder_name(name: &str) -> String {
     }
 }
 
-// ------------------------------------------------------------ trash
-
-/// One row of the *Trash* (OPS-8).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrashEntry {
@@ -345,25 +306,16 @@ pub struct TrashEntry {
     pub folder_name: String,
     pub is_dir: bool,
     pub size: Option<u64>,
-    /// Unix seconds.
     pub trashed_at: i64,
     pub days_left: i64,
-    /// From the original name's extension; empty when none is known. Stored
-    /// copy has no extension, so the system thumbnailer goes by this.
+    /// Stored copy has no extension; the system thumbnailer goes by this.
     pub mime_type: String,
-    /// `file://` URL of the stored copy of an image, video or PDF that gets
-    /// a thumbnail, else empty ([`trash_thumbnail`]).
     pub thumbnail_source: String,
 }
 
-/// What a trashed file shows as its thumbnail (OPS-8, PRV-1, PRV-14): the
-/// shared rule ([`thumbnail_source`]) decides by the original name, which
-/// the stored copy has lost. An image, video or PDF gives the stored copy's
-/// `file://` URL for the system thumbnailer, which goes by
-/// [`TrashEntry::mime_type`]. Empty = row keeps its glyph: thumbnails off
-/// (BRW-4), the rule says none, or stored item is no regular file. A trashed
-/// link would show its target, maybe outside the sandbox (BRW-10); a copy
-/// gone from the trash folder has nothing to show.
+/// Original name decides ([`thumbnail_source`]); the stored copy lost it. Empty: thumbnails off,
+/// rule says none, or stored item is no regular file. A trashed link would show its target, maybe
+/// outside the sandbox.
 fn trash_thumbnail(item: &TrashItem, settings: &Settings) -> String {
     let kind = if item.is_dir { Kind::Dir } else { Kind::File };
     let mut entry = Entry::new(item.original_uri.name().unwrap_or_default(), kind);
@@ -377,15 +329,11 @@ fn trash_thumbnail(item: &TrashItem, settings: &Settings) -> String {
     file_url(&stored)
 }
 
-/// Whole days left before purge, never negative (OPS-8).
 pub fn days_left(trashed_at: i64, now: i64, retention_days: u32) -> i64 {
     let ends = trashed_at.saturating_add(i64::from(retention_days) * SECS_PER_DAY);
     ((ends - now).max(0) + SECS_PER_DAY - 1) / SECS_PER_DAY
 }
 
-// ------------------------------------------------------------ share
-
-/// A file received through the share target (INT-1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SharedFile {
@@ -396,7 +344,6 @@ pub struct SharedFile {
     pub uri: String,
 }
 
-/// A place a shared file can be saved to.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Destination {
     pub uri: String,
@@ -415,10 +362,7 @@ fn location_kind_name(kind: &crate::locations::LocationKind) -> &'static str {
     }
 }
 
-// ============================================================ Core methods
-
 impl Core {
-    /// `Location › folder › subfolder` for a URI (what the sheets show).
     pub fn display_path(&self, uri: &Uri) -> String {
         let mut parts = vec![self
             .location(&uri.location)
@@ -427,15 +371,11 @@ impl Core {
         parts.join(CRUMB)
     }
 
-    /// The breadcrumb of the folder that contains `uri`.
     pub fn display_folder(&self, uri: &Uri) -> String {
         uri.parent()
             .map_or_else(|| self.display_path(uri), |p| self.display_path(&p))
     }
 
-    // -------------------------------------------------------- plans
-
-    /// The numbers and names the summary sheet shows (OPS-1).
     pub async fn plan_summary(&self, plan: &Plan) -> PlanSummary {
         let dest = &plan.destination;
         let free_bytes = match self.provider(&dest.location) {
@@ -477,9 +417,8 @@ impl Core {
         }
     }
 
-    /// Queues `plan` with the sheet's options (OPS-5, OPS-7, XFR-4). The
-    /// options only differ from the settings for this one start: the settings
-    /// are put back right after the transfer is queued.
+    /// Options differ from the settings for this start only: settings are put back right after
+    /// queueing.
     pub async fn start_plan_with(&self, mut plan: Plan, options: StartOptions) -> Result<TransferId> {
         if !options.suggested_names {
             revert_suggested_names(&mut plan);
@@ -502,7 +441,6 @@ impl Core {
         started
     }
 
-    /// The conflicts of a plan that still wait for an answer, in order.
     pub fn unresolved_conflicts(&self, plan: &Plan) -> Vec<ConflictEntry> {
         conflict_ops::unresolved(plan)
             .into_iter()
@@ -522,8 +460,6 @@ impl Core {
             .collect()
     }
 
-    /// Answers a conflict of a pending plan (OPS-2); returns how many items
-    /// the answer settled.
     pub async fn resolve_plan_conflict(
         &self,
         plan: &mut Plan,
@@ -534,9 +470,6 @@ impl Core {
         conflict_ops::resolve(plan, index, choice, apply_to_all, &self.locations).await
     }
 
-    // -------------------------------------------------------- archives
-
-    /// Totals of a selection (Compress: "Size before compression").
     pub async fn measure(&self, sources: &[Uri]) -> Result<Measure> {
         let first = sources
             .first()
@@ -550,7 +483,6 @@ impl Core {
         })
     }
 
-    /// Opens the archive as a location and counts what it holds (PRV-10).
     pub async fn archive_info(&self, archive: &Uri) -> Result<ArchiveInfo> {
         let location = self.open_archive(archive).await?;
         let provider = self.provider(&location)?;
@@ -581,8 +513,6 @@ impl Core {
         Ok(info)
     }
 
-    /// Extracts the whole archive into `dest` (created when missing): a copy
-    /// plan from the archive's root (XFR-3 "archive → anywhere").
     pub async fn extract(&self, archive: &Uri, dest: &Uri) -> Result<Started> {
         let location = self.open_archive(archive).await?;
         let root = Uri::root(location.clone());
@@ -604,10 +534,7 @@ impl Core {
             .await
     }
 
-    /// Creates a zip or tar.gz of `sources` as `name` in `dest_dir` (PRV-11):
-    /// straight into a local file, or into a pipe that is uploaded while the
-    /// archive is produced. A name that is taken gets "name 2.zip". A failed
-    /// or canceled run leaves no partial file. Returns the archive's URI.
+    /// Failed or canceled run leaves no partial file.
     pub async fn compress_to(
         &self,
         sources: &[Uri],
@@ -674,9 +601,6 @@ impl Core {
         finished
     }
 
-    // -------------------------------------------------------- trash
-
-    /// The *Trash*, newest first (OPS-8).
     pub fn trash_entries(&self, now_secs: i64) -> Result<Vec<TrashEntry>> {
         let settings = self.settings();
         let retention = settings.recently_deleted_retention_days;
@@ -709,34 +633,22 @@ impl Core {
             .collect())
     }
 
-    /// Removes what is older than the retention setting from the Trash
-    /// (OPS-8). Returns the number of items removed.
     pub fn purge_trash(&self, now_secs: i64) -> Result<usize> {
         let retention = self.settings().recently_deleted_retention_days;
         self.trash
             .purge_before(now_secs.saturating_sub(i64::from(retention) * SECS_PER_DAY))
     }
 
-    /// The Trash's work at start (OPS-8), once the settings are known: the
-    /// expired items go, then the copies that an interruption left half made
-    /// ([`Trash::tidy`](crate::trash::Trash::tidy)). Returns the number of
-    /// items purged. Blocking.
     pub fn tidy_trash(&self, now_secs: i64) -> Result<usize> {
         let purged = self.purge_trash(now_secs);
         let tidied = self.trash.tidy();
         purged.and_then(|n| tidied.map(|()| n))
     }
 
-    /// Empties the Trash: every item, and what a crash left in the trash
-    /// folder (OPS-8). Returns the number of items removed.
     pub fn empty_trash(&self) -> Result<usize> {
         self.trash.empty()
     }
 
-    // -------------------------------------------------------- share
-
-    /// Which received files Lautta can read and where they live (INT-1).
-    /// Only paths inside a location that the app can open are readable.
     pub fn probe_shared(&self, paths: &[PathBuf]) -> Vec<SharedFile> {
         paths
             .iter()
@@ -758,7 +670,6 @@ impl Core {
             .collect()
     }
 
-    /// The writable locations offered as share destinations.
     pub fn destinations(&self) -> Vec<Destination> {
         self.locations
             .locations()
@@ -774,7 +685,6 @@ impl Core {
     }
 }
 
-/// `name` when no item of that name exists, else "name 2.ext", ….
 fn free_name(name: &[u8], taken: &HashSet<Vec<u8>>) -> Vec<u8> {
     if taken.contains(name) {
         keep_both_name(name, &|n| taken.contains(n))
@@ -791,8 +701,7 @@ fn part_path(path: &Path) -> PathBuf {
     path.with_file_name(format!(".{name}.lautta-part"))
 }
 
-/// Archive into a pipe and upload its read end while it is written
-/// (PRV-11). Whichever side fails, the half-written file is removed.
+/// Whichever side fails, the half-written file is removed.
 async fn compress_remote(
     core: &Core,
     sources: &[Uri],
@@ -818,7 +727,6 @@ async fn compress_remote(
     Err(failure)
 }
 
-/// The engineering names of conflict choices (QML ⇄ core, OPS-2).
 pub fn parse_choice(name: &str) -> Option<ConflictChoice> {
     Some(match name {
         "Replace" => ConflictChoice::Replace,

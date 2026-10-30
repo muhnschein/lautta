@@ -1,8 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// One conflict (OPS-2): what is copied, what is already there, and the
-// resolution. The default is never Replace. A conflict before the run belongs
-// to a plan (planId, answered through Operations); one during the run belongs
-// to a transfer (transferId, answered through Transfers).
+// SPDX-License-Identifier: LGPL-2.1-or-later Default never Replace. Conflict before run: `planId`
+// (Operations); during run: `transferId` (Transfers).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -14,18 +11,12 @@ Dialog {
 
     property int planId: -1
     property int transferId: -1
-    // Index of the item in the plan or transfer.
     property int item: 0
-    // The Conflict of the core, as object or JSON text.
     property var conflict
     property string name
-    // Where it already exists (breadcrumb text).
     property string folder
-    // "copy", "move", …: only changes the wording of the first section.
     property string kind: "copy"
-    // Engineering name of the preselected choice; empty = first safe one.
     property string defaultChoice
-    // "3 of 12": position among the conflicts shown now.
     property int position: 1
     property int total: 1
 
@@ -52,7 +43,7 @@ Dialog {
         return parts.join(" · ")
     }
 
-    // The resolution rows in display order; Merge only for folders (OPS-2).
+    // Merge only for folders.
     function rows() {
         var list = []
         if (offered("Merge"))

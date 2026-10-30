@@ -1,11 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host scenario of TrashModel's thumbnail roles (OPS-8, PRV-1, PRV-14): a
-// trashed image or PDF has the stored copy as thumbnailSource and its type
-// from the original name as mimeType, which the system thumbnailer draws by;
-// a trashed text file has the type and no thumbnail, and the
-// Show thumbnails setting (BRW-4) switches them off at the next reload. The
-// Trash page draws its rows from these roles. Operations.removed counts the
-// items that went to the Trash.
 import QtQuick 2.6
 import QtQml 2.2
 import Lautta 1.0
@@ -27,7 +20,6 @@ Item {
 
     TrashModel { id: trash }
 
-    // One object per row, with the roles the page reads.
     Instantiator {
         id: rows
 
@@ -90,8 +82,7 @@ Item {
                         || !tools.installFixture(Qt.resolvedUrl("fixtures/two-pages.pdf"), test.docs + "trash-roles.pdf")
                         || !tools.installFixture(Qt.resolvedUrl("fixtures/doc.md"), test.docs + "trash-roles.md"))
                     return test.fail("fixtures not installed")
-                // The Trash is a device-folder feature: skip where the test
-                // home is not a registered folder (under the SDK's sb2).
+                // Skip where test home is not a registered folder (SDK sb2).
                 if (App.locationName(test.docs) !== "Documents")
                     return test.finish()
                 Operations.remove(JSON.stringify([test.docs + "trash-roles.jpg", test.docs + "trash-roles.pdf",
@@ -112,13 +103,10 @@ Item {
                 test.note = test.rowNamed("trash-roles.md")
                 if (!test.photo || !test.paper || !test.note)
                     break
-                // The stored copy has no extension: the type is the original's.
                 if (test.photo.mime !== "image/jpeg")
                     return test.fail("the image's type: " + test.photo.mime)
                 if (test.photo.thumb.indexOf("file://") !== 0 || test.photo.thumb.indexOf("trash-roles") >= 0)
                     return test.fail("the image's thumbnail is its stored copy: " + test.photo.thumb)
-                // A PDF too: the system thumbnailer draws it as a PDF by the
-                // original's type (PRV-1, PRV-14).
                 if (test.paper.mime !== "application/pdf")
                     return test.fail("the PDF's type: " + test.paper.mime)
                 if (test.paper.thumb.indexOf("file://") !== 0 || test.paper.thumb.indexOf("trash-roles") >= 0
@@ -132,8 +120,6 @@ Item {
                 test.next()
                 break
             case 3:
-                // The reload replaces the rows: wait for the new ones, the
-                // PDF's without a thumbnail like the image's.
                 var again = test.rowNamed("trash-roles.jpg")
                 var paperAgain = test.rowNamed("trash-roles.pdf")
                 if (!again || again.thumb !== "" || !paperAgain || paperAgain.thumb !== "")

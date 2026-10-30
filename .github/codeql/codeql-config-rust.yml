@@ -1,6 +1,4 @@
-# Rust scope of workflow "CodeQL" (codeql.yml): paths of codeql-config.yml
-# (keep both lists in step) plus query test's planted cases. Queries: default
-# suite with our rust/access-invalid-pointer (rust-queries/).
+# Paths of codeql-config.yml (keep both lists in step) plus query test's planted cases.
 disable-default-queries: true
 queries:
   - uses: ./.github/codeql/rust-queries/code-scanning.qls

@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of the names New folder and Rename refuse (Names.js), SPEC
-// §15.3: "/", "." and "..".
 import QtQuick 2.6
 import "../../../qml/components/directory/Names.js" as Names
 

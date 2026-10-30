@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Transfers end to end across two in-memory providers: copy, move, retries,
-//! resume, conflict questions, cancel, waiting states and persistence
-//! (SPEC §11).
 
 use lautta_core::db::Db;
 use lautta_core::entry::{cap, Capabilities, Kind};
@@ -484,8 +481,7 @@ async fn a_vanished_volume_waits_until_it_is_back() {
 
 #[tokio::test]
 async fn resumes_a_partial_destination_file_when_capable() {
-    // The partial deliberately does not match the source: bytes already
-    // committed must not be written again (XFR-12).
+    // Partial deliberately mismatches the source: committed bytes must not be written again.
     let r = rig();
     r.local.add_file("big", b"0123456789", 1);
     let temp = String::from_utf8(temp_name_for(b"big", 1, 0)).unwrap();
@@ -611,7 +607,6 @@ async fn apply_to_all_answers_the_other_open_and_future_questions() {
         .await
         .unwrap();
     in_state(&r.engine, id, TransferState::Waiting(WaitReason::Question)).await;
-    // Wait for the in-flight items to report their questions as well.
     tokio::time::timeout(Duration::from_secs(10), async {
         while r.engine.questions(id).unwrap().len() < 2 {
             tokio::task::yield_now().await;
@@ -939,7 +934,6 @@ async fn persistence_reload_brings_unfinished_transfers_back_paused() {
     in_state(&r.engine, ask, TransferState::Waiting(WaitReason::Question)).await;
     r.engine.flush().await;
 
-    // "Restart": a new engine on the same database.
     let r2 = rig_on(db.clone(), r.local.clone(), r.remote.clone());
     assert_eq!(r2.engine.load(false).await.unwrap(), 1);
     let list = r2.engine.list();
@@ -1121,7 +1115,6 @@ async fn an_empty_plan_completes_at_once() {
 
 #[tokio::test]
 async fn the_local_limit_caps_parallel_items_at_two() {
-    // Items of one transfer to a local destination start two at a time.
     let r = rig();
     let mut items = Vec::new();
     for n in 0..6 {
@@ -1144,7 +1137,6 @@ async fn the_local_limit_caps_parallel_items_at_two() {
         )
         .await
         .unwrap();
-    // Right after add, at most two items have been started.
     let running = r
         .engine
         .items(id)

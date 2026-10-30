@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The operations area on a temporary home: compress and extract through the
-//! engine, remote compress through a pipe, info, permissions, links,
-//! the Trash and the share probe.
 
 use lautta_core::app::{Core, Started};
 use lautta_core::app_operations::*;
@@ -192,7 +189,6 @@ async fn compress_tar_gz_and_errors() {
     assert!(none.is_err());
 }
 
-/// A server location backed by a folder (so uploads read real pipes).
 fn register_remote(h: &Home) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let provider = LocalProvider::new(dir.path().to_path_buf());
@@ -390,7 +386,6 @@ async fn the_trash_at_start_loses_the_expired_and_the_half_made_copies() {
         .unwrap();
     let partial = h.core.trash.dir().join(".lautta-partial-1");
     write(&partial.join("x"), b"half");
-    // Kept 40 days: after 31 nothing has expired, after 41 both items have.
     let mut settings = h.core.settings();
     settings.recently_deleted_retention_days = 40;
     h.core.apply_settings(settings);
@@ -401,7 +396,6 @@ async fn the_trash_at_start_loses_the_expired_and_the_half_made_copies() {
     assert!(h.core.trash.list().unwrap().is_empty());
 }
 
-/// Trashes `names` from Documents and returns the Trash's rows by name.
 async fn trashed(h: &Home, names: &[&str]) -> std::collections::HashMap<String, TrashEntry> {
     let uris: Vec<Uri> = names
         .iter()
@@ -451,7 +445,6 @@ async fn trashed_images_and_videos_carry_what_the_thumbnailer_needs() {
     .await;
     assert_eq!(rows.len(), 6);
 
-    // The stored copy has no extension: the type comes from the original name.
     let photo = &rows["photo.JPG"];
     assert_eq!(photo.mime_type, "image/jpeg");
     assert_eq!(photo.thumbnail_source, stored_url(&h, photo));
@@ -459,14 +452,12 @@ async fn trashed_images_and_videos_carry_what_the_thumbnailer_needs() {
     let clip = &rows["clip.mp4"];
     assert_eq!(clip.mime_type, "video/mp4");
     assert_eq!(clip.thumbnail_source, stored_url(&h, clip));
-    // Folders and other files keep their icons.
     assert_eq!(rows["notes.txt"].mime_type, "text/plain");
     assert_eq!(rows["notes.txt"].thumbnail_source, "");
     assert_eq!(rows["no extension"].mime_type, "");
     assert_eq!(rows["no extension"].thumbnail_source, "");
     assert_eq!(rows["album.png"].mime_type, "", "a folder has no file type");
     assert_eq!(rows["album.png"].thumbnail_source, "");
-    // A link would show its target, maybe outside the sandbox.
     assert_eq!(rows["link.png"].thumbnail_source, "");
 }
 
@@ -499,7 +490,7 @@ async fn trashed_pdfs_carry_what_the_thumbnailer_needs() {
     assert_eq!(
         doc.thumbnail_source,
         stored_url(&h, doc),
-        "the system thumbnailer draws the stored copy (PRV-1)"
+        "the system thumbnailer draws the stored copy"
     );
     assert_eq!(rows["dir.pdf"].thumbnail_source, "", "a folder");
     let huge = &rows["huge.pdf"];
@@ -534,7 +525,6 @@ async fn trashed_pdfs_follow_the_local_thumbnail_switch() {
     h.core.apply_settings(settings);
     assert_eq!(source(&h), "", "thumbnails off");
 
-    // A copy that is gone has nothing to show.
     let mut settings = h.core.settings();
     settings.thumbnails_local = true;
     h.core.apply_settings(settings);
@@ -557,7 +547,6 @@ async fn the_thumbnails_setting_decides_whether_trashed_media_show_them() {
     assert_eq!(off[0].thumbnail_source, "", "thumbnails switched off");
     assert_eq!(off[0].mime_type, "image/png", "the type does not depend on it");
 
-    // A copy that is gone has nothing to show.
     let mut settings = h.core.settings();
     settings.thumbnails_local = true;
     h.core.apply_settings(settings);

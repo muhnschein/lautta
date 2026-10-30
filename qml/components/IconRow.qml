@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The icon row at the top of busy context menus (design: DirectoryContext):
-// the most used actions as icons with a short label, the rest as menu items
-// below it. `actions` is a list of { id, icon, text } where icon is a theme
-// icon id ("image://theme/icon-m-share") or an app icon file name.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
@@ -10,7 +6,6 @@ Row {
     id: row
 
     property var actions: []
-    // The ContextMenu to close after a tap.
     property Item menu
 
     signal triggered(string actionId)

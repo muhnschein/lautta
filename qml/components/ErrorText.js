@@ -1,6 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// Error presentation (SPEC §20): one message per core ErrorKind name.
-// context: { location, item, needed, free } (sizes in bytes; any may be absent).
+// SPDX-License-Identifier: LGPL-2.1-or-later context: { location, item, needed, free }; sizes in
+// bytes, any may be absent.
 .pragma library
 .import Sailfish.Silica 1.0 as Silica
 
@@ -8,8 +7,7 @@ function _size(bytes) {
     return Silica.Format.formatFileSize(bytes)
 }
 
-// `named` with the subject filled in, or `unnamed` when there is none, so a
-// message never reads " no longer exists.".
+// `named` with subject filled in, `unnamed` when none: no message reads " no longer exists.".
 function _pick(subject, named, unnamed) {
     return subject ? named.arg(subject) : unnamed
 }
@@ -143,7 +141,6 @@ function _noSpace(loc, c) {
                  qsTrId("lautta-err-no-space-unnamed"))
 }
 
-// Actions offered with the message (§20).
 function actions(kind) {
     switch (kind) {
     case "AuthFailed": return ["updateSignIn"]

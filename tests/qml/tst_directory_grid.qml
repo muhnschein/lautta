@@ -1,10 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The grid view (View options, BRW-4) has one size: 3 tiles per row in
-// portrait, with the name and caption lines under every tile (their text is
-// checked in tst_directory_grid_captions.qml). A number of tiles per row
-// stored by an earlier version is no setting and changes nothing. Fails when
-// the grid shows another number of tiles per row, tiles without captions or
-// a setting for the size.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -20,8 +14,7 @@ ApplicationWindow {
             console.error("FAILED: " + what)
     }
 
-    // The tiles on screen, which are those that hold captions, in the
-    // grid's rows. Laid out by hand: headless, no render loop polishes the view.
+    // No render loop headless: lay out by hand.
     function tiles(grid) {
         var out = []
         grid.forceLayout()
@@ -40,7 +33,6 @@ ApplicationWindow {
         var grid = view.flickable
         expect(view.gridMode, what + ": the folder is a grid")
         expect(grid.columns === 3, what + ": 3 tiles per row, not " + grid.columns)
-        // A file's tile has its time and size under it; a folder's waits for its count.
         expect(tiles(grid).some(function (t) { return t.captions.length > 0 }), what + ": a tile has caption lines")
     }
 

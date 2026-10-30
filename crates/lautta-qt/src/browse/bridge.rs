@@ -1,15 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The `Bridge` singleton: netvfs bridge status, consent, hand-offs,
-//! ad-hoc servers, mounting drives (LOC-3) and the questions the bridge asks
-//! (SPEC §7).
+//! `status`: `absent`, `connecting`, `consentUnknown`, `consentDenied`, `ready`, `reconnecting`.
 //!
-//! `status` is one of `absent`, `connecting`, `consentUnknown`,
-//! `consentDenied`, `ready`, `reconnecting`.
-//!
-//! Secrets (SEC-1): the secret of *Connect to server* and the answers of a
-//! sign-in question are moved into buffers that core wipes. The `QString`
-//! the QML text field handed over cannot be wiped from Qt's memory; QML
-//! clears its field right after the call and keeps no other copy.
+//! Secrets moved into buffers core wipes. QML's `QString` cannot be wiped from Qt memory: QML
+//! clears its field right after the call, keeps no copy.
 
 use super::{error_parts, Guard};
 use crate::json::{from_json, to_json};
@@ -26,7 +19,6 @@ use zeroize::Zeroizing;
 
 static PURGE: Once = Once::new();
 
-/// The status as QML sees it.
 pub fn status_name(s: BridgeStatus) -> &'static str {
     match s {
         BridgeStatus::Absent => "absent",
@@ -38,8 +30,7 @@ pub fn status_name(s: BridgeStatus) -> &'static str {
     }
 }
 
-/// Provider preselected by *Add server* (the account is created in
-/// netvfs' Settings, where the user can change it, NVB-5).
+/// Provider preselected by *Add server*.
 const DEFAULT_PROVIDER: &str = "sftp";
 
 #[derive(Deserialize, Default)]
@@ -50,8 +41,7 @@ struct OptionsJson {
     security_profile: Option<String>,
 }
 
-/// An answer to a question, as QML sends it: `{"accept":true}`,
-/// `{"decline":true}` or `{"responses":["…"]}`.
+/// Answer from QML: `{"accept":true}`, `{"decline":true}` or `{"responses":["…"]}`.
 #[derive(Deserialize, Default)]
 #[serde(default)]
 struct AnswerJson {
@@ -59,8 +49,7 @@ struct AnswerJson {
     responses: Option<Vec<String>>,
 }
 
-/// Turns the answer text into an [`Answer`]; secret strings are moved, not
-/// copied, into the wiping buffer.
+/// Secret strings are moved, not copied, into the wiping buffer.
 fn parse_answer(json: Zeroizing<String>) -> Answer {
     let parsed: AnswerJson = from_json(&json).unwrap_or_default();
     match parsed.responses {
@@ -76,13 +65,11 @@ fn details_json(q: &Question) -> String {
     to_json(&q.details)
 }
 
-/// Questions of the bridge go to the UI; conflicts belong to transfers.
 fn is_ours(q: &Question) -> bool {
     q.kind != QuestionKind::Conflict
 }
 
-/// Drives with a mount or unmount under way, one entry per call: two calls on
-/// one drive keep it busy until both ended.
+/// One entry per call: two calls on one drive keep it busy until both ended.
 #[derive(Default)]
 struct Busy(Vec<String>);
 
@@ -110,21 +97,15 @@ pub struct Bridge {
     base: qt_base_class!(trait QObject),
     status: qt_property!(QString; NOTIFY statusChanged),
     statusChanged: qt_signal!(),
-    /// Bridge version text for About; empty while unknown.
     version: qt_property!(QString; NOTIFY statusChanged),
-    /// True when the Servers section and its hand-offs are usable.
     ready: qt_property!(bool; NOTIFY statusChanged),
-    /// True when the bridge opens Settings › Storage (NVB-13), whatever the
-    /// consent.
     storageSettings: qt_property!(bool; NOTIFY statusChanged),
-    /// Ids of drives with a mount or unmount under way, one entry per call
-    /// (LOC-3). Their Browse rows pulse (§15.2).
+    /// One entry per call. Browse rows pulse.
     busyDrives: qt_property!(QVariantList; NOTIFY statusChanged),
 
     requestConsent: qt_method!(fn(&mut self)),
     addServer: qt_method!(fn(&mut self, provider: QString)),
     openStorageSettings: qt_method!(fn(&mut self)),
-    /// *Mount* of a volume's drive (LOC-3); `name` is the volume's.
     mountDrive: qt_method!(fn(&mut self, drive: QString, name: QString)),
     unmountDrive: qt_method!(fn(&mut self, drive: QString, name: QString)),
     editAccount: qt_method!(fn(&mut self, location_uri: QString)),
@@ -139,10 +120,8 @@ pub struct Bridge {
 
     question: qt_signal!(questionId: QString, kind: QString, detailsJson: QString),
     questionResolved: qt_signal!(questionId: QString),
-    /// A location to open: the server *Connect to server* connected, the
-    /// volume a drive was mounted as.
     adhocConnected: qt_signal!(locationUri: QString),
-    /// A call failed; `subject` names what it was about (server, address).
+    /// `subject` names what it was about (server, address).
     failed: qt_signal!(kind: QString, message: QString, subject: QString),
 
     guard: Guard,
@@ -215,7 +194,6 @@ impl Bridge {
         });
         let mut stop = self.guard.subscribe();
         let mut events = core.questions.subscribe();
-        // Questions asked before the page looked are announced first.
         for q in core.questions.pending() {
             notify(QuestionEvent::Asked(q));
         }
@@ -246,7 +224,6 @@ impl Bridge {
         self.failed(kind, message, QString::from(subject));
     }
 
-    /// Runs a bridge call and reports its failure through `failed`.
     fn call<F>(&self, subject: String, f: impl FnOnce(Arc<Core>) -> F)
     where
         F: std::future::Future<Output = lautta_core::Result<()>> + Send + 'static,
@@ -260,8 +237,6 @@ impl Bridge {
         });
     }
 
-    /// Runs a call that ends in a location to open, and opens it
-    /// (`adhocConnected`) or reports its failure through `failed`.
     fn open_when<F>(&self, subject: String, f: impl FnOnce(Arc<Core>) -> F)
     where
         F: std::future::Future<Output = lautta_core::Result<Uri>> + Send + 'static,
@@ -278,9 +253,7 @@ impl Bridge {
         });
     }
 
-    /// Runs mount or unmount `f` of `drive`; `drive` is in `busyDrives` until
-    /// it ends. A volume it ends in is opened (`adhocConnected`), a failure
-    /// goes through `failed` (LOC-3).
+    /// `drive` is in `busyDrives` until the call ends.
     fn drive_call<F>(&mut self, drive: String, subject: String, f: impl FnOnce(Arc<Core>) -> F)
     where
         F: std::future::Future<Output = lautta_core::Result<Option<Uri>>> + Send + 'static,
@@ -301,7 +274,6 @@ impl Bridge {
         });
     }
 
-    /// One call of `drive` ended.
     fn drive_done(&mut self, drive: &str) {
         self.busy.end(drive);
         self.publish_busy();
@@ -334,7 +306,6 @@ impl Bridge {
         });
     }
 
-    /// *Open Storage settings* of a volume (LOC-3).
     fn openStorageSettings(&mut self) {
         self.call(String::new(), |core| async move {
             match &core.bridge {
@@ -344,7 +315,6 @@ impl Bridge {
         });
     }
 
-    /// Mounts the drive and opens the volume (LOC-3).
     fn mountDrive(&mut self, drive: QString, name: QString) {
         let drive = drive.to_string();
         self.drive_call(drive.clone(), name.to_string(), |core| async move {
@@ -370,7 +340,7 @@ impl Bridge {
     }
 
     fn connectAdHoc(&mut self, url: QString, secret: QString, options_json: QString) {
-        // Moved, not copied: the Vec is wiped by core when the call ends.
+        // Moved, not copied: core wipes the Vec when the call ends.
         let secret = secret.to_string().into_bytes();
         let options: OptionsJson = from_json(&options_json.to_string()).unwrap_or_default();
         let opts = AdHocOptions {
@@ -413,7 +383,6 @@ impl Bridge {
         }
     }
 
-    /// Looks for the bridge now: the app came back, *Retry* was tapped.
     fn poke(&mut self) {
         if let Some(b) = core().and_then(|c| c.bridge.clone()) {
             b.poke();
@@ -424,12 +393,11 @@ impl Bridge {
         let Some(core) = core() else { return };
         let answer = parse_answer(Zeroizing::new(answer_json.to_string()));
         if let Err(e) = core.questions.answer(&id.to_string(), answer) {
-            // A question that is gone (answered elsewhere, connection lost).
+            // Question gone (answered elsewhere, connection lost).
             log::debug!("answer not delivered: {e}");
         }
     }
 
-    /// The questions waiting for an answer, as `[{id, kind, details}]`.
     fn pending(&self) -> QString {
         let list: Vec<serde_json::Value> = core()
             .map(|c| c.questions.pending())
@@ -442,7 +410,6 @@ impl Bridge {
     }
 }
 
-/// The name of a location for messages (empty when unknown).
 fn name_of(id: &str) -> String {
     core()
         .and_then(|c| c.location(id))
@@ -450,7 +417,6 @@ fn name_of(id: &str) -> String {
         .unwrap_or_default()
 }
 
-/// The location id inside a URI, or the text itself when it is an id.
 fn location_id(uri_or_id: &str) -> String {
     Uri::parse(uri_or_id)
         .map(|u| u.location)

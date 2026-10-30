@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Favourites and recents (ORG-1, ORG-2). All
-//! stores wrap [`Db`] and are blocking: call them from `spawn_blocking`
-//! (ARC-6).
+//! Favourites and recents. Stores wrap [`Db`] and are blocking: call them from `spawn_blocking`.
 
 pub mod favourites;
 pub mod recents;
@@ -26,13 +24,12 @@ pub(crate) fn parse_uri(s: &str) -> Result<Uri> {
     Uri::parse(s).map_err(|_| Error::new(ErrorKind::Internal, "stored URI is malformed"))
 }
 
-/// `lautta://<location>/`: every URI of a location starts with this, so a
-/// purge can compare prefixes without LIKE wildcards (ids contain `_`).
+/// Every URI of a location starts with this, so a purge can compare prefixes without LIKE wildcards
+/// (ids contain `_`).
 pub(crate) fn location_prefix(location: &str) -> String {
     format!("lautta://{location}/")
 }
 
-/// Prefix of the strings of all descendants of `uri`.
 pub(crate) fn descendant_prefix(uri: &Uri) -> String {
     let s = uri.to_string();
     if s.ends_with('/') {
@@ -42,13 +39,12 @@ pub(crate) fn descendant_prefix(uri: &Uri) -> String {
     }
 }
 
-/// Next free `position` of an ordered table. `table` is always a literal.
+/// `table` is always a literal.
 pub(crate) fn next_position(conn: &Connection, table: &'static str) -> Result<i64> {
     let max: Option<i64> = conn.query_row(&format!("SELECT max(position) FROM {table}"), [], |r| r.get(0))?;
     Ok(max.map_or(0, |m| m + 1))
 }
 
-/// Rewrites `position` as 0..n in the current order.
 pub(crate) fn renumber(conn: &Connection, table: &'static str) -> Result<()> {
     let ids = ordered_ids(conn, table)?;
     write_order(conn, table, &ids)
@@ -70,7 +66,6 @@ fn write_order(conn: &Connection, table: &'static str, ids: &[i64]) -> Result<()
     Ok(())
 }
 
-/// Moves row `id` to `index` (clamped) and renumbers.
 pub(crate) fn move_to(conn: &Connection, table: &'static str, id: i64, index: usize) -> Result<()> {
     let mut ids = ordered_ids(conn, table)?;
     let from = ids
@@ -82,9 +77,7 @@ pub(crate) fn move_to(conn: &Connection, table: &'static str, id: i64, index: us
     write_order(conn, table, &ids)
 }
 
-/// Rewrites the `uri` column of rows equal to `old` or below it so they point
-/// below `new`. A row that would collide with an existing one replaces it.
-/// `table` is always a literal.
+/// A row that would collide with an existing one replaces it. `table` is always a literal.
 pub(crate) fn rewrite_uris(conn: &Connection, table: &'static str, old: &Uri, new: &Uri) -> Result<usize> {
     let old_s = old.to_string();
     let old_prefix = descendant_prefix(old);
@@ -106,7 +99,6 @@ pub(crate) fn rewrite_uris(conn: &Connection, table: &'static str, old: &Uri, ne
     Ok(rows.len())
 }
 
-/// Rows (rowid, uri) whose uri is `exact` or starts with `prefix`.
 fn select_below(
     conn: &Connection,
     table: &'static str,
@@ -122,14 +114,12 @@ fn select_below(
     Ok(rows)
 }
 
-/// What a location purge removed (SEC-5: account removal).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PurgeCounts {
     pub favourites: usize,
     pub recents: usize,
 }
 
-/// Removes everything the app remembers about `location` (SEC-5).
 pub fn purge_location(db: &Db, location: &str) -> Result<PurgeCounts> {
     Ok(PurgeCounts {
         favourites: Favourites::new(db.clone()).remove_location(location)?,

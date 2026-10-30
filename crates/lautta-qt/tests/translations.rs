@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! English plural forms of the engineering English catalogue (UI-7).
-//!
-//! The first test builds the catalogue like the RPM does (`lrelease -idbased`)
-//! and has the real QML engine read it (`tests/translations`): "1 item", not
-//! "1 items". The others run `tools/english-plurals.py`, which makes the forms
-//! in `make translations` and in `make translations-check`, on catalogues
-//! with a form missing or a message it must not guess.
+//! First test builds the catalogue like the RPM (`lrelease -idbased`) and has the real QML engine
+//! read it. Others run `tools/english-plurals.py` on catalogues with a form missing or a message it
+//! must not guess.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -19,7 +15,6 @@ fn catalogue() -> String {
     std::fs::read_to_string(root().join("translations/harbour-lautta.ts")).unwrap()
 }
 
-/// `lrelease -idbased` of `ts` into `dir/<name>.qm`, as the RPM spec does.
 fn release(ts: &str, dir: &Path, name: &str) {
     let source = dir.join(format!("{name}.ts"));
     std::fs::write(&source, ts).unwrap();
@@ -33,7 +28,6 @@ fn release(ts: &str, dir: &Path, name: &str) {
     assert!(dir.join(format!("{name}.qm")).exists());
 }
 
-/// Exit code of the QML check of `qml` with the catalogues of `dir` installed.
 fn check(dir: &Path, qml: &Path) -> i32 {
     lautta_qt::qml_check(&[
         "-T".to_owned(),
@@ -42,7 +36,6 @@ fn check(dir: &Path, qml: &Path) -> i32 {
     ])
 }
 
-/// The plural test (`tests/translations`) with `ts` as the installed catalogue.
 fn read_in_qml(ts: &str) -> i32 {
     let dir = tempfile::tempdir().unwrap();
     release(ts, dir.path(), "harbour-lautta");
@@ -52,7 +45,6 @@ fn read_in_qml(ts: &str) -> i32 {
     )
 }
 
-/// A German catalogue of one plural message, as lupdate and a translator leave it.
 const GERMAN: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
 <TS version="2.1" language="de">
@@ -69,8 +61,7 @@ const GERMAN: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 </TS>
 "#;
 
-/// Reads the grid's message, which German has, and the paste entry's, which it
-/// has not: English plural forms.
+/// Grid's message (German has it) and paste entry's (it has not).
 const LAYERS: &str = r#"import QtQuick 2.6
 QtObject {
     Component.onCompleted: {
@@ -83,8 +74,7 @@ QtObject {
 }
 "#;
 
-/// The user's language comes over engineering English and falls back to its
-/// English plural forms for what it lacks (the installation order of
+/// User's language over engineering English, falling back to English plural forms (install order of
 /// `lauttaInstallTranslations`).
 fn german_over_english(ts: &str) -> i32 {
     let dir = tempfile::tempdir().unwrap();
@@ -95,7 +85,6 @@ fn german_over_english(ts: &str) -> i32 {
     check(dir.path(), &qml)
 }
 
-/// `ts` with the singular form of message `id` made its plural form.
 fn plural_singular(ts: &str, id: &str) -> String {
     let marker = format!("<message id=\"{id}\" numerus=\"yes\">");
     let (before, message) = ts.split_once(&marker).unwrap();
@@ -111,8 +100,8 @@ fn plural_singular(ts: &str, id: &str) -> String {
     )
 }
 
-/// Qt takes one application per process: every run is in this test. The
-/// failing runs log QML errors, which are the point of them.
+/// Qt takes one application per process: every run is in this test. Failing runs log QML errors on
+/// purpose.
 #[test]
 fn the_built_catalogue_has_english_plural_forms() {
     let home = tempfile::tempdir().unwrap();
@@ -124,7 +113,6 @@ fn the_built_catalogue_has_english_plural_forms() {
     assert_eq!(read_in_qml(&ts), 0, "the shipped catalogue fails the plural test");
     assert_eq!(german_over_english(&ts), 0, "German does not come over English");
 
-    // The tests bite: with the singular of a message made its plural, they fail.
     let broken_grid = plural_singular(&ts, "lautta-dir-grid-items");
     assert_ne!(read_in_qml(&broken_grid), 0, "a wrong singular goes unnoticed");
     let broken_paste = plural_singular(&ts, "lautta-dir-menu-paste");
@@ -143,8 +131,7 @@ fn the_built_catalogue_has_english_plural_forms() {
         "a catalogue without a language goes unnoticed"
     );
 
-    // A folder without the engineering English catalogue fails the check itself,
-    // whatever the document does with it.
+    // Folder without the engineering English catalogue fails the check itself.
     let empty = tempfile::tempdir().unwrap();
     let nothing = empty.path().join("nothing.qml");
     std::fs::write(&nothing, "import QtQuick 2.6\nQtObject {}\n").unwrap();
@@ -155,9 +142,7 @@ fn the_built_catalogue_has_english_plural_forms() {
     );
 }
 
-/// Runs `english-plurals.py fill` with `text` on stdin, its stdio ASCII as
-/// in a locale without UTF-8: exit code, stderr and the filled catalogue
-/// (stdout).
+/// stdio ASCII as in a locale without UTF-8. Returns exit code, stderr, filled catalogue (stdout).
 fn fill(text: &str) -> (i32, String, String) {
     let mut child = Command::new("python3")
         .arg(root().join("tools/english-plurals.py"))
@@ -177,9 +162,8 @@ fn fill(text: &str) -> (i32, String, String) {
     )
 }
 
-/// A catalogue of messages as lupdate writes them: `(id, source, forms)`, a
-/// message with no forms being a new one (an empty form), a numerus one when
-/// its source has `%n`.
+/// As lupdate writes them: `(id, source, forms)`; no forms = new message (empty form), numerus when
+/// source has `%n`.
 fn lupdate_output(messages: &[(&str, &str, &[&str])]) -> String {
     let mut ts = String::from(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!DOCTYPE TS>\n<TS version=\"2.1\" language=\"en\">\n<context>\n    <name></name>\n",
@@ -203,7 +187,6 @@ fn lupdate_output(messages: &[(&str, &str, &[&str])]) -> String {
     ts + "</context>\n</TS>\n"
 }
 
-/// The forms of the numerus message `id` in `ts`.
 fn forms_of(ts: &str, id: &str) -> Vec<String> {
     let (_, message) = ts.split_once(&format!("<message id=\"{id}\"")).unwrap();
     let message = message.split_once("</message>").unwrap().0;
@@ -271,7 +254,6 @@ fn filling_twice_changes_nothing() {
 fn a_form_taken_away_is_made_again() {
     let ts = catalogue();
     for (from, to) in [
-        // The singular emptied, the plural emptied, one form dropped, a third one.
         (
             "<numerusform>%n item</numerusform>",
             "<numerusform></numerusform>",
@@ -296,7 +278,6 @@ fn a_form_taken_away_is_made_again() {
 
 #[test]
 fn a_changed_source_gets_new_forms_and_loses_the_old_source() {
-    // What lupdate leaves of a message whose `//%` text changed.
     let ts = lupdate_output(&[("a", "Pack %n things", &["Compress %n item", "Compress %n items"])]).replace(
         "        <translation type=\"unfinished\">",
         "        <oldsource>Compress %n items</oldsource>\n        <translation type=\"unfinished\">",
@@ -309,7 +290,6 @@ fn a_changed_source_gets_new_forms_and_loses_the_old_source() {
 
 #[test]
 fn a_singular_written_by_hand_stays_while_the_source_does() {
-    // "new" is no word the rule can tell: the singular is the hand's.
     let ts = lupdate_output(&[("a", "%n new files", &["%n new file", "%n new files"])])
         .replace(" type=\"unfinished\"", "");
     let (code, stderr, out) = fill(&ts);

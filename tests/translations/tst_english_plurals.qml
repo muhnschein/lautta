@@ -1,10 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// Catalogue test of the English plural forms (UI-7): with the built
-// engineering English catalogue installed (`--qml-check -T <folder>`), a
-// `%n` string reads "1 item" and "2 items", not "1 items". Run by
-// crates/lautta-qt/tests/translations.rs on the host (Qt 5.15) and by
-// tools/ci/check-rpm.sh on the target (Qt 5.6) against the catalogue the RPM
-// ships.
+// SPDX-License-Identifier: LGPL-2.1-or-later Run with `--qml-check -T <folder>` by
+// crates/lautta-qt/tests/translations.rs (host) and tools/ci/check-rpm.sh (target).
 import QtQuick 2.6
 
 QtObject {

@@ -1,10 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// TextViewer's backdrop on the target (PRV-4, real Silica): the page has a
-// backdrop under the text that darkens a dark ambience and lightens a light
-// one (the page's palette is switched to a light ambience to see both), and
-// the text reads on it over the worst wallpaper there can be: white behind
-// a dark ambience's backdrop, black behind a light one's. How it looks,
-// only a phone shows.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -13,7 +7,6 @@ import "../../qml/viewers"
 ApplicationWindow {
     id: window
 
-    // WCAG's contrast ratio wants at least this much for text.
     readonly property real readable: 4.5
 
     property bool scenarioRunning: true
@@ -49,7 +42,6 @@ ApplicationWindow {
         return -1
     }
 
-    // Relative luminance, WCAG.
     function luminance(c) {
         function linear(v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
         return 0.2126 * linear(c.r) + 0.7152 * linear(c.g) + 0.0722 * linear(c.b)
@@ -61,15 +53,12 @@ ApplicationWindow {
         return (high + 0.05) / (low + 0.05)
     }
 
-    // `top` laid over the opaque `ground`.
     function over(top, ground) {
         return Qt.rgba(top.r * top.a + ground.r * (1 - top.a),
                        top.g * top.a + ground.g * (1 - top.a),
                        top.b * top.a + ground.b * (1 - top.a), 1)
     }
 
-    // The backdrop in the scheme the page's palette has now: lighter or
-    // darker than the text, and the text reads on it over the worst wallpaper.
     function checkBackdrop(backdrop, dark) {
         var text = page.palette.primaryColor
         var worst = over(backdrop.color, dark ? Qt.rgba(1, 1, 1, 1) : Qt.rgba(0, 0, 0, 1))
@@ -97,7 +86,6 @@ ApplicationWindow {
             var backdrop = backdrops[0]
             if (backdrops.length !== 1)
                 return window.fail("one backdrop: " + backdrops.length)
-            // Under the text: the whole page, first in its stacking.
             var siblings = window.page.children
             var order = window.indexIn(siblings, backdrop) - window.indexIn(siblings, view)
             if (backdrop.width !== window.page.width || backdrop.height !== window.page.height || backdrop.parent !== window.page)

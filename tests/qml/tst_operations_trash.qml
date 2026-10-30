@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): a file deleted from Documents is in
-// the Trash page (OPS-8), titled Trash, with the note that deletes on
-// volumes and servers are permanent under the header, above the rows;
-// Restore from its menu puts the file back in Documents.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -42,7 +38,6 @@ ApplicationWindow {
         scenarioRunning = false
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)
@@ -147,7 +142,6 @@ ApplicationWindow {
                     win.next()
                 break
             case 5:
-                // Leave Documents as it was for the scenarios after this one.
                 App.setSetting("recently_deleted", JSON.stringify(false))
                 win.removed = false
                 Operations.remove(JSON.stringify([win.file]))

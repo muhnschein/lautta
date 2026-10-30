@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Compress a selection to zip or tar.gz (PRV-11). The archive is made in the
-// background; Operations reports progress and the result.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -10,7 +8,6 @@ import "../components/operations/Json.js" as Json
 Dialog {
     id: dialog
 
-    // The URIs of the items to pack.
     property var uris: []
     property string destUri: uris.length > 0 ? App.parentUri(uris[0]) : ""
     property real sourceBytes: -1

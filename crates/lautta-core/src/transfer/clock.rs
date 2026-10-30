@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Injectable wall clock (milliseconds since the Unix epoch) so persistence
-//! throttling, retention and expiry are testable without sleeping.
+//! Injectable wall clock (ms since Unix epoch): persistence throttling, retention and expiry
+//! testable without sleeping.
 
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
@@ -9,7 +9,6 @@ pub trait Clock: Send + Sync {
     fn now_ms(&self) -> i64;
 }
 
-/// The real clock.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SystemClock;
 
@@ -19,7 +18,7 @@ impl Clock for SystemClock {
     }
 }
 
-/// A clock moved by hand (tests, and callers that want deterministic output).
+/// Moved by hand (tests, deterministic output).
 #[derive(Debug, Default)]
 pub struct ManualClock {
     now: AtomicI64,

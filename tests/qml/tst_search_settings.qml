@@ -1,13 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Target test: Settings (SPEC §18) with real Silica and the real Lautta
-// types, laid out as Salama's: the page is a list of entries, each opening a
-// page of settings, with pages of their own for Deleting, Transfers, Search,
-// Recents and Storage. Every control writes the key it wrote before; the
-// thumbnails are in View options; no setting is left without a control.
-// There is no date format (dates follow the system) nor grid size, and no
-// view option is repeated (BRW-4): the View options entry opens that page. Fails when an
-// entry is missing or opens another page, a page lacks one of its settings
-// or a control writes nothing, or a setting can no longer be reached.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -16,7 +7,6 @@ import "../../qml/pages"
 ApplicationWindow {
     id: window
 
-    // Each entry of Settings, the page it opens and the keys set there.
     readonly property var subPages: [
         { "entry": "deletingEntry", "page": "deletingSettingsPage",
           "keys": ["recently_deleted", "recently_deleted_retention_days", "remorse_seconds"] },
@@ -28,12 +18,9 @@ ApplicationWindow {
         { "entry": "storageEntry", "page": "storageSettingsPage", "keys": ["listing_cache_days"] }
     ]
     readonly property var thumbnailKeys: ["thumbnails_remote", "thumbnail_max_remote_mb", "thumbnail_cache_mb"]
-    // Set on View options by its own controls, and by "Ask before large
-    // operations" two at once.
     readonly property var viewKeys: ["sort_key", "sort_descending", "folders_first", "show_hidden", "view_mode",
                                      "thumbnails_local"]
     readonly property var largeOpKeys: ["large_op_items", "large_op_bytes"]
-    // Every key a page of Settings sets (nothing lost).
     property var reached: []
 
     ViewerTools { id: tools }
@@ -44,7 +31,6 @@ ApplicationWindow {
         return ok
     }
 
-    // Items are reached both as children and as a content item: each once.
     function findAll(item, pred, out) {
         if (!item || out.indexOf(item) >= 0)
             return out
@@ -71,7 +57,6 @@ ApplicationWindow {
         return controls(page).map(function (x) { return x.settingKey })
     }
 
-    // The rows of a combo box's menu, in order.
     function menuItems(box) {
         var kids = box.menu._contentColumn.children
         var out = []
@@ -82,9 +67,6 @@ ApplicationWindow {
         return out
     }
 
-    // Changes a setting through its control as a finger would: a switch is
-    // pressed, a combo box gets another entry, a slider goes to another end.
-    // Gives back the value the setting should have now.
     function change(control, before) {
         if (control.values !== undefined) {
             var other = control.values.filter(function (v) { return v !== before })[0]
@@ -92,8 +74,6 @@ ApplicationWindow {
             return other
         }
         if (control.maximumValue !== undefined) {
-            // On release Silica takes the value from where the handle is:
-            // the finger left it at one end.
             var drag = control.drag
             var toMin = before === control.maximumValue
             drag.target.x = toMin ? drag.minimumX : drag.maximumX
@@ -104,7 +84,6 @@ ApplicationWindow {
         return !before
     }
 
-    // Each control writes its own key, and only that one.
     function exercise(control) {
         var key = control.settingKey
         var before = App.setting(key)
@@ -118,7 +97,6 @@ ApplicationWindow {
         App.setSetting(key, JSON.stringify(before))
     }
 
-    // Opens the page of one entry of Settings.
     function open(settings, entry) {
         var row = find(settings, entry)
         if (!expect(row !== null, "Settings has the entry " + entry))
@@ -141,7 +119,6 @@ ApplicationWindow {
         tools.pump(200)
     }
 
-    // "Ask before large operations" sets two keys from one menu.
     function checkLargeOps(settings) {
         var page = open(settings, "transfersEntry")
         var box = find(page, "largeOpsBox")
@@ -157,8 +134,6 @@ ApplicationWindow {
         tools.pump(200)
     }
 
-    // Opened from Settings, View options has no folder; it has the
-    // thumbnails, those from servers among them.
     function checkViewOptions(settings) {
         var options = open(settings, "viewOptionsRow")
         if (!expect(options.objectName === "viewOptionsPage" && !options.model,
@@ -173,7 +148,6 @@ ApplicationWindow {
         tools.pump(200)
     }
 
-    // The entries tell what is chosen on their pages, and follow changes.
     function checkValues(settings) {
         var names = ["viewOptionsRow", "searchEntry", "recentsEntry", "deletingEntry", "transfersEntry", "storageEntry"]
         names.forEach(function (name) {

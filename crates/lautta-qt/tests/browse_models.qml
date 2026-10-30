@@ -1,6 +1,5 @@
-// The scenario of crates/lautta-qt/tests/browse_models.rs: steps with an
-// action and a condition; a step fails when its condition does not hold
-// within five seconds. Qt 5.15 on the host, so no Connections here.
+// Scenario of browse_models.rs: steps with action and condition; a step fails when its condition
+// does not hold within five seconds. Qt 5.15 on host: no Connections here.
 Item {
     id: root
 
@@ -46,13 +45,10 @@ Item {
             property string ricon: icon
             property bool rfile: isFile
             property string rdrive: drive
-            // Set by a step to tell whether this delegate survived a change.
             property bool marked: false
         }
     }
 
-    // What each row of the remote folder gives: its thumbnail, and for a folder
-    // its modified time and item count.
     Repeater {
         id: remoteRows
         model: remoteDir
@@ -76,7 +72,6 @@ Item {
         }
     }
 
-    // Settings › Browse page (BRW-12).
     BrowseLayoutModel { id: layout }
 
     Repeater {
@@ -89,7 +84,6 @@ Item {
             property int lplace: place
             property bool lmovable: movable
             property bool lnested: nested
-            // Set by a step to tell whether this delegate survived a change.
             property bool marked: false
         }
     }
@@ -103,7 +97,6 @@ Item {
         return null
     }
 
-    // The list row of a layout row, -1 when none.
     function layoutIndex(section, item) {
         for (var i = 0; i < layoutRows.count; ++i) {
             var r = layoutRows.itemAt(i)
@@ -113,7 +106,6 @@ Item {
         return -1
     }
 
-    // The items of a section in the settings list, in order.
     function layoutKeys(section) {
         var items = []
         for (var i = 0; i < layoutRows.count; ++i) {
@@ -173,7 +165,6 @@ Item {
         return null
     }
 
-    // What the remote folder gives the file `name` as thumbnail, null without it.
     function thumbOf(name) {
         for (var i = 0; i < remoteRows.count; ++i) {
             if (remoteRows.itemAt(i).rname === name)
@@ -207,7 +198,6 @@ Item {
         }
     }
 
-    // Runs the steps one after the other, letting Qt work in between.
     function run() {
         while (stage < steps.length) {
             var before = stage
@@ -237,11 +227,9 @@ Item {
         step("consent row while the user has not decided",
              function() { locs.refresh() },
              function() { return Bridge.status === "consentUnknown" && has("consent") && !Bridge.ready })
-        step("Settings › Storage opens without the consent (NVB-13)",
+        step("Settings › Storage opens without the consent",
              function() { if (Bridge.storageSettings) Bridge.openStorageSettings() },
              function() { return JSON.parse(FakeWorld.handoffs()).indexOf("storage") >= 0 })
-        // A drive is mounted (where the sandbox does not see it here) and
-        // unmounted without the consent (LOC-3).
         step("a drive that is not mounted is a volume row",
              null,
              function() {
@@ -249,7 +237,6 @@ Item {
                  return v !== null && v.rstatus === "unmounted" && v.rdrive === "sda1" && v.ruri === ""
                         && v.ritem === "vol-STICK" && v.ricon === "image://theme/icon-m-usb"
              })
-        // Mounted where the sandbox does not see it, it is no row at all.
         step("a drive mounted out of the app's sight is an error naming it",
              function() {
                  Bridge.mountDrive("sda1", "STICK")
@@ -259,7 +246,6 @@ Item {
                  return root.failedKind === "NotFound" && root.failedSubject === "STICK"
                         && JSON.parse(FakeWorld.drives())[0].mounted && !has("volume", "STICK")
              })
-        // The drive is busy from the call to its end, the mount failing or not.
         step("the drive was busy while it was mounted and is not any more",
              null,
              function() { return root.busyAtOnce === "sda1" && Bridge.busyDrives.length === 0 })
@@ -312,8 +298,6 @@ Item {
                  var m = layoutRow("device", "user-music")
                  return !has("folder", "Music") && has("folder", "Documents") && m !== null && m.lhidden
              })
-        // Settings › Browse page follows what the Browse page follows: a
-        // drive that comes shows in both (BRW-12, LOC-3).
         step("a drive that comes shows in the Browse page and its settings",
              function() { FakeWorld.addDrive("mmcblk1p1", "CARD", false) },
              function() {
@@ -321,8 +305,6 @@ Item {
                  var l = layoutRow("volumes", "vol-CARD")
                  return v !== null && v.rdrive === "mmcblk1p1" && l !== null && !l.lhidden
              })
-        // A LUKS device not unlocked as well, as a locked volume without an
-        // address (LOC-3).
         step("a locked drive shows as locked in the Browse page and its settings",
              function() { FakeWorld.addDrive("mmcblk1p2", "VAULT", true) },
              function() {
@@ -331,8 +313,6 @@ Item {
                  return v !== null && v.rstatus === "locked" && v.rdrive === "mmcblk1p2" && v.ruri === ""
                         && v.ricon === "image://theme/icon-m-sd-card" && l !== null && !l.lhidden
              })
-        // The settings page keeps its rows (and the user's place in the
-        // list) on a switch and a move: no row is rebuilt.
         step("show it again from the settings",
              function() {
                  layoutRow("device", "user-music").marked = true
@@ -360,9 +340,6 @@ Item {
                  return deviceRows().indexOf("recents,Documents") === 0 && /,deleted$/.test(deviceRows())
                         && d !== null && d.lplace > 0
              })
-        // A dragged row follows the finger (BRW-12): it moves at once, by
-        // the same delegate, the places follow, and the order is stored
-        // behind it without the row moving back.
         step("a carried row moves at once and is stored",
              function() {
                  var at = layoutIndex("device", "recents")
@@ -380,10 +357,6 @@ Item {
                  return root.moved && root.movedAtOnce && root.refused
                         && deviceRows().split(",")[2] === "recents" && r.lplace === 2 && r.marked
              })
-        // Volumes and Servers lead with a switch each; off, the section's
-        // rows leave the settings list and the Browse page (and so the
-        // preview, which is the Browse page's model) and come back as they
-        // were (BRW-12). Rows change in place, no model reset.
         step("Volumes and Servers lead with their switch",
              function() { layout.reload() },
              function() {
@@ -463,8 +436,6 @@ Item {
                  root.relisted = remoteDir.loading
              },
              function() { return root.relisted && !remoteDir.loading && remoteDir.count === 2 })
-        // A server's pictures and PDFs are made by the app, with the switch
-        // of servers (PRV-2, PRV-14); an open folder follows it at once.
         step("a server's pictures and PDFs have the app's thumbnails",
              function() {
                  FakeWorld.putFile("account:1", "p.jpg")
@@ -482,8 +453,6 @@ Item {
         step("and on again gives them back",
              function() { App.setSetting("thumbnails_remote", JSON.stringify(true)) },
              function() { return thumbOf("p.jpg") !== "" && thumbOf("d.pdf") !== "" })
-        // A folder on a server shows its modified time in the grid, never an
-        // item count: counting would list it over the network (SPEC §15.3).
         step("a remote folder is listed with a folder in it",
              function() {
                  FakeWorld.putFile("account:1", "sub/inner.txt")
@@ -508,7 +477,6 @@ Item {
                  var nas = row("account", "NAS")
                  return nas !== null && nas.rconnection === "connected"
              })
-        // A state change is a change of the row, not a new row (NVB-4).
         step("a failed connection updates the server row in place",
              function() {
                  row("account", "NAS").marked = true
@@ -548,8 +516,8 @@ Item {
         step("edit it",
              function() { favs.edit(favs.idOf(docs), "Papers", "#4fa3e5") },
              function() { return has("favourite", "Papers") && !has("favourite", "Docs") })
-        // A row remorse lives in its delegate: a change elsewhere in the
-        // list must not rebuild the rows that stay.
+        // Row remorse lives in its delegate: a change elsewhere in the list must not rebuild rows
+        // that stay.
         step("order favourites, keeping the other rows",
              function() {
                  row("favourite", "Papers").marked = true
@@ -569,8 +537,6 @@ Item {
                  favs.remove(favs.idOf("lautta://user-music/"))
              },
              function() { return !has("favourite") })
-        // The favourite page: opened on a folder, it saves by URI, adds
-        // a second favourite next to the first and removes by URI.
         step("page adds a first favourite",
              function() { favs.save(docs, "Docs", "", "", true) },
              function() { return favouriteNames() === "Docs" })
@@ -580,8 +546,6 @@ Item {
         step("page relabels a favourite",
              function() { favs.save(docs, "Papers", "", "", true) },
              function() { return favouriteNames() === "Papers,Tunes" })
-        // ORG-1: the chosen icon is stored and shown, tinted; an unknown one
-        // is the default star.
         step("page gives a favourite an icon",
              function() { favs.save(docs, "Papers", "#e5604f", "home", true) },
              function() {
@@ -598,7 +562,6 @@ Item {
                  return f !== null && f.ricon === "image://theme/icon-m-favorite" && f.rcolour === ""
                         && JSON.parse(favs.get(favs.idOf(docs))).icon === ""
              })
-        // ORG-1: a file is a favourite as a file, under the folder it is in.
         step("page adds a file favourite",
              function() { favs.save(a, "Notes", "", "", false) },
              function() {
