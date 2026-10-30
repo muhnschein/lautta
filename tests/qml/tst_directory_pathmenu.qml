@@ -163,20 +163,84 @@ ApplicationWindow {
         var subtitle = named(page, "folderPathSubtitle")
         var actions = rows(menu, "pathMenuAction")
         expect(actions.length === 3, "three actions: " + actions.length)
-        var oldWidth = menu.width
-        menu.width = Theme.itemSizeHuge * 30
-        actions = rows(menu, "pathMenuAction")
-        expect(menu.actionsInRow && Math.abs(actions[0].width - menu.width / 3) < 0.5,
-               "room for every label: a third of the row each: " + actions[0].width)
-        menu.width = Theme.itemSizeHuge
-        expect(!menu.actionsInRow, "labels too long for their share: a row each")
-        actions = rows(menu, "pathMenuAction")
-        expect(actions[0].width === menu.width && actions[0].height < Theme.itemSizeMedium,
-               "full-width rows: " + actions[0].width + " " + actions[0].height)
-        menu.width = oldWidth
+        var first = entry(menu, "Run 12")
+        var isIcon = function (x) { return x.iconSize !== undefined }
+        var icons = findAll(first, isIcon, []).concat(findAll(actions[0], isIcon, []))
+        var labels = findAll(actions[0], function (x) { return x.truncationMode !== undefined }, [])
+        expect(icons.length === 2 && icons.every(function (i) { return i.iconSize === Theme.iconSizeMedium })
+               && labels[0].font.pixelSize === Theme.fontSizeMedium, "list item sizes: medium icons and text")
+        expect(actions.every(function (a) { return a.width === menu.width && a.height === Theme.itemSizeSmall }),
+               "actions are full-width list items: " + actions[0].width + " " + actions[0].height)
+        var lastEntry = entry(menu, "lautta-dir-path-browse")
+        expect(actions[0].mapToItem(menu, 0, 0).y >= lastEntry.mapToItem(menu, 0, lastEntry.height).y
+               && actions[2].mapToItem(menu, 0, 0).y > actions[1].mapToItem(menu, 0, 0).y,
+               "actions under the folders, one under another")
         click(entry(menu, "Run 12"))
         expect(!menu.open, "a tap closes the menu")
         waitFor(settled, "going to Run 12")
+        pageStack.pop(null, PageStackAction.Immediate)
+    }
+
+    // Hold the header, slide down, let go on a row: as Silica's context menu.
+    function checkHoldAndSlide() {
+        var bottom = depth()
+        walk(names.length)
+        var page = pageStack.currentPage
+        var menu = named(page, "folderPathMenu")
+        var press = named(page, "folderHeaderPress")
+        var host = named(page, "folderPulleyHost")
+        tools.mouse(press, "press", press.width / 2, press.height / 2)
+        waitFor(function () { return menu.open }, "the menu opening on hold")
+        expect(press.preventStealing && !host.interactive, "the finger stays with the menu: no pulley, no flick")
+        var thesis = entry(menu, "Thesis")
+        var at = thesis.mapToItem(press, thesis.width / 2, thesis.height / 2)
+        tools.mouse(press, "move", at.x, at.y)
+        expect(thesis.mapToItem(menu, 0, 0).y > menu.maxHeight && menu._dragRow === null,
+               "a row past the menu's height is hidden: none lights up")
+        // Test window is short.
+        menu.maxHeight = -1
+        tools.mouse(press, "move", at.x, at.y)
+        expect(thesis.highlighted && menu._dragRow === thesis, "the row under the finger lights up")
+        var goTo = rows(menu, "pathMenuAction")[1]
+        var atAction = goTo.mapToItem(press, goTo.width / 2, goTo.height / 2)
+        tools.mouse(press, "move", atAction.x, atAction.y)
+        expect(goTo.highlighted && !thesis.highlighted, "and only that row: actions too")
+        tools.mouse(press, "move", press.width / 2, press.height / 2)
+        expect(menu._dragRow === null, "back on the header: no row")
+        tools.mouse(press, "move", at.x, at.y)
+        tools.mouse(press, "release", at.x, at.y)
+        expect(!press.preventStealing && !menu.open, "letting go opens the row and closes the menu")
+        waitFor(function () { return settled() && pageStack.currentPage.uri === uriAt(3) }, "back on Thesis")
+        expect(depth() === bottom + 3, "as a tap on Thesis: " + depth())
+
+        page = pageStack.currentPage
+        menu = named(page, "folderPathMenu")
+        press = named(page, "folderHeaderPress")
+        tools.mouse(press, "press", press.width / 2, press.height / 2)
+        waitFor(function () { return menu.open }, "the menu opening on hold")
+        tools.mouse(press, "release", press.width / 2, press.height / 2)
+        tools.pump(100)
+        expect(menu.open && pageStack.currentPage === page, "let go on the header: menu stays open, rows tappable")
+        menu.close()
+        while (depth() > bottom)
+            pageStack.pop(null, PageStackAction.Immediate)
+    }
+
+    // Open menu: rest of the view dims; a press there only closes the menu.
+    function checkShade() {
+        var page = push(uriAt(5))
+        waitFor(function () { return !viewOf(page).model.loading && viewOf(page).model.count === 1 }, "Figures listed")
+        var shade = named(page, "pathMenuShade")
+        expect(!shade.visible, "no shade while the menu is closed")
+        var menu = openMenu(page)
+        expect(shade.visible, "shade under the open menu")
+        expect(shade.mapToItem(page, 0, 0).y >= menu.mapToItem(page, 0, 0).y, "shade starts under the menu, header stays bright")
+        var before = depth()
+        tools.mouse(shade, "press", shade.width / 2, Theme.itemSizeSmall / 2)
+        tools.mouse(shade, "release", shade.width / 2, Theme.itemSizeSmall / 2)
+        tools.pump(200)
+        expect(!menu.open, "a press beside the menu closes it")
+        expect(depth() === before && pageStack.currentPage === page, "and opens nothing under it: " + depth())
         pageStack.pop(null, PageStackAction.Immediate)
     }
 
@@ -270,6 +334,9 @@ ApplicationWindow {
         same(entryNames(menu).slice(0, 2), ["Run 12", "Source"], "read down first")
         expect(entries[0].parent === entries[4].parent && entries[5].parent !== entries[0].parent,
                "five in the first column, five in the second")
+        expect(Math.abs(entries[5].mapToItem(menu, 0, 0).x - menu.width / 2) < 0.5
+               && entries[5].mapToItem(menu, 0, 0).y === entries[0].mapToItem(menu, 0, 0).y,
+               "second column beside the first: " + entries[5].mapToItem(menu, 0, 0).x)
         menu.close()
         win.deviceOrientation = Orientation.Portrait
         waitFor(function () { return !page.isLandscape && !page.orientationTransitionRunning }, "portrait")
@@ -299,6 +366,8 @@ ApplicationWindow {
         checkSubtitle()
         checkEntriesAndActions()
         checkGoesBack()
+        checkHoldAndSlide()
+        checkShade()
         checkGoToFolder()
         checkLandscape()
         checkPicking()
