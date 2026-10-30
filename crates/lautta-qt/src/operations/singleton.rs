@@ -176,16 +176,17 @@ impl Operations {
     fn arrived(&self, res: Result<Launched>, open_after: Option<String>) {
         match res {
             Ok(Launched::Transfer(id)) => {
-                self.started(id);
                 if let Some(dest) = open_after {
                     self.state.borrow_mut().open_after.insert(id, dest);
                     self.listen();
-                    // A small transfer can finish before `listen` subscribes: its event is gone.
-                    if let Some(state) = core().and_then(|c| c.engine.get(id)).map(|t| t.state) {
-                        if state.is_finished() {
-                            self.transfer_finished(id, state == TransferState::Completed);
-                        }
-                    }
+                }
+                self.started(id);
+                // Ended before listen() subscribed: its Finished event never comes.
+                if let Some(t) = core()
+                    .and_then(|c| c.engine.get(id))
+                    .filter(|t| t.state.is_finished())
+                {
+                    self.transfer_finished(id, t.state == TransferState::Completed);
                 }
             }
             Ok(Launched::Summary(plan, summary)) => {
