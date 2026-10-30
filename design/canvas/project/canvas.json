@@ -130,20 +130,44 @@
       "x": 480,
       "y": 15900
     },
-    "BreadcrumbsPicker.dc.html": {
+    "BreadcrumbsShare.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Copy to\u2026 picker \u00b7 path line",
+      "title": "Share target \u00b7 folder view",
       "w": 400,
       "x": 480,
       "y": 16960
     },
-    "BreadcrumbsPickerOpen.dc.html": {
+    "BreadcrumbsShareGrid.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Copy to\u2026 picker \u00b7 path menu",
+      "title": "Share target \u00b7 photos as grid",
+      "w": 400,
+      "x": 1920,
+      "y": 16960
+    },
+    "BreadcrumbsShareLocations.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Share target \u00b7 locations",
+      "w": 400,
+      "x": 1440,
+      "y": 16960
+    },
+    "BreadcrumbsShareMenu.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Share target \u00b7 path menu",
       "w": 400,
       "x": 960,
+      "y": 16960
+    },
+    "BreadcrumbsSharePulley.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Share target \u00b7 pulley, new folder",
+      "w": 400,
+      "x": 2400,
       "y": 16960
     },
     "BrowsePulley.dc.html": {
@@ -817,8 +841,11 @@
     "BreadcrumbsOmniTyping.dc.html",
     "BreadcrumbsOmniPath.dc.html",
     "BreadcrumbsLongRows.dc.html",
-    "BreadcrumbsPicker.dc.html",
-    "BreadcrumbsPickerOpen.dc.html",
+    "BreadcrumbsShare.dc.html",
+    "BreadcrumbsShareMenu.dc.html",
+    "BreadcrumbsShareLocations.dc.html",
+    "BreadcrumbsShareGrid.dc.html",
+    "BreadcrumbsSharePulley.dc.html",
     "BreadcrumbsLandColumns.dc.html",
     "BreadcrumbsLandOmni.dc.html",
     "BreadcrumbsLandOmniHits.dc.html"
