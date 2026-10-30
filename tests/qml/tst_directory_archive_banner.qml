@@ -113,6 +113,8 @@ ApplicationWindow {
         if (!expect(banner && banner.visible && banner.height > 0, "the banner shows in an archive"))
             return
         expect(isInside(named(page, "folderHeader"), banner), "the banner sits in the folder header")
+        var pathMenu = named(page, "folderPathMenu")
+        expect(banner.y >= pathMenu.y + pathMenu.height, "the banner sits under the header: " + banner.y)
 
         var sub = open(findAll(page, function (x) { return x.runSelectionAction !== undefined }, [])[0].model.uriAt(0))
         var subBanner = named(sub, "folderArchiveBanner")
