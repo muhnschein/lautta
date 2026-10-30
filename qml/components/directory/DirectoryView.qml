@@ -10,6 +10,7 @@ import "../Open.js" as Open
 import "../ErrorText.js" as ErrorText
 import "DirFormat.js" as DirFormat
 import "GridRows.js" as GridRows
+import "PathFold.js" as PathFold
 import "Selection.js" as Selection
 
 Item {
@@ -32,6 +33,14 @@ Item {
     property var toMove: []
 
     signal openFolder(string uri)
+    // A folder elsewhere in the path or picked in Go to folder: the page goes back where it can.
+    signal goTo(string uri)
+    signal browse
+
+    onSelectionModeChanged: {
+        if (selectionMode)
+            pathMenu.close()
+    }
 
     function setSelection(state) {
         selectionMode = state.selecting
@@ -195,6 +204,23 @@ Item {
         toMove = []
         if (items.length > 0)
             Operations.moveTo(JSON.stringify(items), folderUri)
+    }
+
+    function trail(ancestorsJson, room) {
+        var names = []
+        try {
+            names = JSON.parse(ancestorsJson).map(function (a) { return a.name }).reverse()
+        } catch (e) {
+            return ""
+        }
+        return PathFold.fold(names, function (text) { return trailMetrics.advanceWidth(text) <= room })
+    }
+
+    function goToFolder() {
+        var dialog = openDialog("../../dialogs/GoToFolderDialog.qml", {
+            "folderUri": uri, "folderName": dir.title, "startText": path.address
+        })
+        dialog.accepted.connect(function () { view.goTo(dialog.chosenUri) })
     }
 
     function searchHere() {
@@ -835,7 +861,8 @@ Item {
                 id: headerBar
 
                 width: parent.width
-                height: pageHeader.height
+                height: Math.max(pageHeader.height, pathSubtitle.visible
+                                 ? pathSubtitle.y + pathSubtitle.height + Theme.paddingMedium : 0)
 
                 PageHeader {
                     id: pageHeader
@@ -845,6 +872,33 @@ Item {
                            //% "%n selected"
                            ? qsTrId("lautta-dir-selected", dir.selectedCount)
                            : dir.title
+                }
+                // Placed as PageHeader places its description; own Label so it can fade.
+                Label {
+                    id: pathSubtitle
+
+                    objectName: "folderPathSubtitle"
+                    y: pageHeader.topMargin + pageHeader.titleHeight
+                    anchors {
+                        right: parent.right
+                        rightMargin: pageHeader.rightMargin
+                    }
+                    width: Math.min(implicitWidth, parent.width - pageHeader.leftMargin - pageHeader.rightMargin)
+                    visible: text.length > 0
+                    text: view.trail(path.ancestorsJson, parent.width - pageHeader.leftMargin - pageHeader.rightMargin)
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.secondaryHighlightColor
+                    horizontalAlignment: implicitWidth > width ? Text.AlignLeft : Text.AlignRight
+                    truncationMode: TruncationMode.Fade
+                    opacity: pathMenu.open ? 0 : (view.selecting ? Theme.opacityLow : 1)
+
+                    Behavior on opacity { FadeAnimation { } }
+
+                    FontMetrics {
+                        id: trailMetrics
+
+                        font: pathSubtitle.font
+                    }
                 }
                 MouseArea {
                     anchors.fill: parent
@@ -868,7 +922,10 @@ Item {
                 maxHeight: Math.max(0, view.height - y - Theme.itemSizeLarge)
                 pathModel: path
                 currentUri: view.uri
-                onNavigate: view.openFolder(uri)
+                wide: view.width > view.height
+                onNavigate: view.goTo(uri)
+                onBrowse: view.browse()
+                onGoToRequested: view.goToFolder()
                 onFavouriteRequested: view.runAction("favourite", [view.uri], {}, null)
             }
 

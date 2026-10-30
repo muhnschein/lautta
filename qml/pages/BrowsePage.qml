@@ -15,6 +15,7 @@ Page {
     id: page
 
     property var listModel: locations
+    readonly property bool browsePage: true
     // Sandbox cannot open Settings › Storage; netvfs can. Tests set it.
     property bool storageSettings: Bridge.storageSettings
     readonly property bool discovering: status === PageStatus.Active

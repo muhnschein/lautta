@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A folder's header shows the way there under its name, shortened in the middle when long. Tapping it opens the path menu: the parent first, each folder up to the location, then Browse. Picking a folder goes back to it instead of opening it on top. Go to finds a folder by name among the folders here, recent, favourite and visited ones, or by a typed path, with Search as a fallback.
 - Servers show a server icon instead of a laptop.
 - Browse rows have even heights. Servers, memory cards and USB drives show their state as a glowing dot. It pulses while a server connects or a drive mounts or unmounts, and turns red or orange on failure or warning.
 - Browse shows no item counts any more.
