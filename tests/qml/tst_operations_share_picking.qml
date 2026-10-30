@@ -141,7 +141,7 @@ ApplicationWindow {
         }, "the saved copy")
         waitFor(function () { return !pageStack.busy && pageStack.depth === 1 }, "dialog closed")
 
-        // Stored value set by hand: no reliance on dconf reaching a second instance headless.
+        // SDK has no dconf session: each store instance keeps its own value, so set it by hand.
         var again = open(base + "a.md")
         again.recentJson = JSON.stringify([inner])
         again.load()

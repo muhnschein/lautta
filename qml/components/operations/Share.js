@@ -12,7 +12,7 @@ function remember(recent, uri) {
     return out
 }
 
-// `known(uri)`: its location is there now; a removed server or card drops out.
+// `known(uri)`: a writable place holds it now; a removed server or card drops out.
 function usable(recent, known) {
     return recent.filter(function (uri) { return typeof uri === "string" && known(uri) })
 }

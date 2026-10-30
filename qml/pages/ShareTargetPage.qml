@@ -19,8 +19,7 @@ Dialog {
     property var entries: []
     property string destUri
     property alias recentJson: recentStore.value
-    readonly property var recent: Share.usable(Json.value(recentStore.value, []),
-                                               function (uri) { return App.locationName(uri).length > 0 })
+    property var recent: []
     readonly property var skippedNames: entries.filter(function (e) { return !e.readable })
                                                .map(function (e) { return e.name })
     readonly property int readableCount: entries.length - skippedNames.length
@@ -41,15 +40,18 @@ Dialog {
             if (paths[i].length === 0)
                 probed[i].readable = false
         entries = probed
-        destUri = recent.length > 0 ? recent[0] : downloads()
+        var places = JSON.parse(Operations.destinationsJson())
+        recent = Share.usable(Json.value(recentStore.value, []), function (uri) {
+            return places.some(function (p) { return uri.indexOf(p.uri) === 0 })
+        })
+        destUri = recent.length > 0 ? recent[0] : downloads(places)
     }
 
-    function downloads() {
-        var all = JSON.parse(Operations.destinationsJson())
-        for (var i = 0; i < all.length; ++i)
-            if (all[i].uri.indexOf("user-downloads") >= 0)
-                return all[i].uri
-        return all.length > 0 ? all[0].uri : ""
+    function downloads(places) {
+        for (var i = 0; i < places.length; ++i)
+            if (places[i].uri.indexOf("user-downloads") >= 0)
+                return places[i].uri
+        return places.length > 0 ? places[0].uri : ""
     }
 
     allowedOrientations: Orientation.All
@@ -58,7 +60,8 @@ Dialog {
 
     onAccepted: {
         var uris = entries.filter(function (e) { return e.readable }).map(function (e) { return e.uri })
-        recentStore.value = JSON.stringify(Share.remember(recent, destUri))
+        recent = Share.remember(recent, destUri)
+        recentStore.value = JSON.stringify(recent)
         Operations.copyTo(JSON.stringify(uris), destUri)
     }
 
