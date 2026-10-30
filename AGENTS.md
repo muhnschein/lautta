@@ -24,6 +24,8 @@ In this order; later step only once earlier ones hold:
 
 PR opens as draft on first push. Mark ready for review only once steps 1–7 hold and their evidence is in PR body.
 
+Docs-only change (docs, comments, no code or string change): steps 6–7 skipped; no phone run.
+
 Feature reachable from several places (folder pulley, item context menu, selection bar, viewers, cover, share target, folder picker) → all of them. Same for device folders and server locations; standalone mode shows no bridge traces.
 
 User tests RPM on phone; that test judges feel, lag, transitions. Say exactly what to check on device.
