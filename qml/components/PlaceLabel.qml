@@ -58,7 +58,7 @@ Item {
         visible: line.iconShown
         x: line.start + line.leadWidth
         anchors.verticalCenter: parent.verticalCenter
-        source: "image://theme/icon-m-computer"
+        source: Qt.resolvedUrl("../icons/server.svg")
         // As tall as the text's capitals and descenders together.
         width: Math.round(line.fontSize * 1.25)
         height: width

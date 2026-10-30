@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Servers show a server icon instead of a laptop.
 - Browse rows have even heights. Servers, memory cards and USB drives show their state as a glowing dot. It pulses while a server connects or a drive mounts or unmounts, and turns red or orange on failure or warning.
 - Browse shows no item counts any more.
 - Memory cards and USB drives can be mounted and unmounted from Browse, including drives Sailfish OS does not mount on its own. This needs netvfs with drive mounting.

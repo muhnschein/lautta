@@ -220,7 +220,7 @@ music `<path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2"/><circle cx="17" 
 video `<rect x="3" y="6" width="13" height="12"/><path d="M16 10l5-3v10l-5-3"/>`
 archive `<rect x="4" y="3" width="16" height="18"/><path d="M12 3v2M12 7v2M12 11v2"/><rect x="10.5" y="14" width="3" height="4"/>`
 database `<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>`
-server `<rect x="3" y="4" width="18" height="7"/><rect x="3" y="13" width="18" height="7"/><path d="M7 7.5h.01M7 16.5h.01"/>`
+server `<rect x="3.5" y="4.5" width="17" height="6"/><rect x="3.5" y="13.5" width="17" height="6"/><circle cx="7" cy="7.5" r="1" fill="currentColor" stroke="none"/><circle cx="7" cy="16.5" r="1" fill="currentColor" stroke="none"/>`
 sd-card `<path d="M7 3h8l4 4v14H7zM10 3v4M13 3v4"/>`
 usb `<path d="M12 3v14M9 6l3-3 3 3M7 10v3l5 3M17 9v3l-5 3"/><circle cx="12" cy="19" r="2"/>`
 phone(android) `<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>`

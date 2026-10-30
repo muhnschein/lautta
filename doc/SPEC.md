@@ -1039,7 +1039,7 @@ paused) is in its status line and context menu. Pulley: *Clear activity history*
 - UI-8: Standalone mode shows no traces of bridge features: no empty *Servers* section,
   no disabled menu entries.
 - UI-9: A line that names a place on a server (LOC-7) has a small server icon (the
-  theme's `icon-m-computer`, the icon of Browse's server rows) right before the name, in
+  app's `qml/icons/server.svg`, the icon of Browse's server rows) right before the name, in
   the line's colour: a favourite's place in Browse and in the favourite dialog, a
   recent's place, the folder headers of a search on a server and the destination in an
   Activity title. Local places have none.
