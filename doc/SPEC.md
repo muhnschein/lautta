@@ -685,7 +685,8 @@ bridge).
   within the *Thumbnail cache* size of *View options* (200 MB by default); a smaller size
   evicts the least recently used thumbnails at once.
 - PRV-3: Thumbnail jobs: interactive lane, lowest priority, ≤ 2 in flight per location,
-  visible delegates only, canceled on scroll. Server PDF thumbnails (PRV-14) use same jobs.
+  visible delegates only, canceled on scroll. Server PDF thumbnails (PRV-14) and text
+  thumbnails (PRV-15) use same jobs.
 - PRV-4: Viewers: images (zoom, swipe through the folder, EXIF panel), text/code (read-
   only up to 1 MiB, then a notice; numbered lines always wrapped to the page's width, so
   the list never scrolls sideways and the page swipes back like any other, also from
@@ -803,6 +804,25 @@ bridge).
     included (RS-4), is remembered for the session, so scrolling back reads nothing. PDF
     whose drawing killed the process (stack overflow, out of memory) gets a marker file
     in the thumbnail folder and is never tried again.
+- PRV-15: Text thumbnails, grid only (list rows keep glyphs: too small to read). Text,
+  code and Markdown file not empty: tile shows its first lines in place of glyph, as
+  Finder's. Same switches as an image (PRV-14 rule): *Show thumbnails*, for server file
+  also *Thumbnails from servers*. Read: first 512 bytes (`thumbs_text`), about five lines
+  of a tile; server file's head cached like PRV-2's (key: URI, size 1, mtime, etag), local
+  read again. Not UTF-8, NUL or control bytes, blank: glyph stays. Byte order mark and
+  character cut by read dropped; CR LF and CR to line break, tab to 4 spaces, other
+  control characters dropped. Drawn by QML (`FileIcon`), not an image: ambience colours,
+  highlight colour when pressed or selected. Tile background as glyph's; text at
+  `Theme.fontSizeTiny` (caption size), `Theme.secondaryColor`, margin
+  `Theme.paddingMedium`; code, configuration, logs and data monospace without wrapping
+  (as text viewer, PRV-4), prose wrapped. Fades out (`OpacityRampEffect`): solid to half
+  its height, gone at 80 %, so no text behind type icon. Type icon: two thirds of
+  `Theme.iconSizeSmall`, bottom right, monochrome, by extension (`thumbs_text::type_icon`,
+  `qml/icons/types/`): JetBrains new-UI file-type icons (Apache-2.0, licence and notice
+  shipped beside them), crab drawn for Lautta for Rust; others plain text's lines.
+  Asked for when cell appears and again when file's modified time or size changes; cell
+  that leaves first drops its queued job (PRV-3). *View options* preview shows sample
+  notes this way.
 
 ## 13. Search and organisation
 
@@ -913,7 +933,8 @@ the first item); going back to a folder on the page stack shows it where it was 
 with icon or thumbnail and "size · modified"; grid view for media folders (suggested when > 60 %
 images). The grid has 3 tiles per row in portrait (landscape keeps the tile size, so it fits
 more); the glyph is about half the tile wide, snapped to a multiple of 28 px (UI-2;
-thumbnails fill the tile, a video's with its glyph on a disc, PRV-1) and under it stand the name on
+thumbnails fill the tile, a video's with its glyph on a disc, PRV-1; a text file shows its first
+lines, PRV-15) and under it stand the name on
 up to two lines, centred (a name that does not fit keeps its start on the first line and its end,
 the extension, on the second behind an ellipsis in the middle), and right under the name up to two
 small lines in the secondary colour, each cut at the end: a file's
@@ -989,7 +1010,8 @@ paused) is in its status line and context menu. Pulley: *Clear activity history*
   SVGs (`qml/icons/file-<kind>-<set>.svg`) wherever a kind of file shows: folder list and
   grid, Trash, search, Recents, operations pages, *More actions*, Browse rows and
   favourites, folder picker, cover. Why: the theme's are soft at the grid's sizes and
-  have no database glyph. Text, code, PDF and office files share the document glyph.
+  have no database glyph. Text, code, PDF and office files share the document glyph: page
+  outline with lines long, short, long, short.
   Three sets, edges on whole pixels at their sizes: `-28` (28-unit grid, any multiple of
   28 px), `-32` (32-unit grid, multiples of 32 px: list at scale 1.0, 1.5, 2.0), `-80`
   (drawn for 80 px: list at 1.25). Size rule: multiple of 28 → `-28`, else of 32 →

@@ -19,6 +19,7 @@ use lautta_core::locations::{LocationKind, LocationStatus};
 use lautta_core::mime;
 use lautta_core::sort::SortKey;
 use lautta_core::thumbs::{app_thumbnail_url, thumbnail_source, ThumbSettings, ThumbSource};
+use lautta_core::thumbs_text::{thumb_monospace, type_icon};
 use lautta_core::viewprefs::{suggest_grid, ViewMode, ViewPrefs};
 use lautta_core::watch::{DirWatcher, DIR_DEBOUNCE};
 use lautta_core::{Error, Uri};
@@ -32,7 +33,7 @@ use tokio::sync::mpsc::unbounded_channel;
 use tokio::task::AbortHandle;
 
 const ROLE_BASE: i32 = 0x0100;
-const ROLES: [&str; 22] = [
+const ROLES: [&str; 26] = [
     "name",
     "nameIsLossy",
     "uri",
@@ -55,6 +56,10 @@ const ROLES: [&str; 22] = [
     "inaccessible",
     "itemCount",
     "itemCountCapped",
+    "textThumb",
+    "textPreview",
+    "textPreviewMono",
+    "typeIcon",
 ];
 
 /// Errors that mean "can't reach it right now": a cached copy stays visible
@@ -86,6 +91,21 @@ struct CountStamp {
 struct CountSlot {
     stamp: CountStamp,
     result: Option<FolderCount>,
+}
+
+/// What a text thumbnail was made for: made again when the file changed.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct PreviewStamp {
+    modified: Option<i64>,
+    size: Option<u64>,
+}
+
+/// The text thumbnail of one file in the view (PRV-15): `key` while it is
+/// made, then `text`, `None` when the file has none.
+struct PreviewSlot {
+    stamp: PreviewStamp,
+    key: Option<String>,
+    text: Option<String>,
 }
 
 #[derive(QObject, Default)]
@@ -149,6 +169,11 @@ pub struct DirectoryModel {
     /// Counts the items of the folder `uri` for the `itemCount` role,
     /// off the GUI thread; asks again only when the folder changed.
     requestCount: qt_method!(fn(&mut self, uri: QString)),
+    /// Makes the `textPreview` of the file `uri` (PRV-15) in the thumbnail
+    /// jobs; asks again only when the file changed.
+    requestPreview: qt_method!(fn(&mut self, uri: QString)),
+    /// The cell of `uri` went: a preview still queued is dropped.
+    cancelPreview: qt_method!(fn(&mut self, uri: QString)),
     setTransferState: qt_method!(fn(&mut self, uri: QString, state: QString)),
     rename: qt_method!(fn(&mut self, uri: QString, name: QString)),
     createFolder: qt_method!(fn(&mut self, name: QString)),
@@ -185,6 +210,8 @@ pub struct DirectoryModel {
     /// Item counts of the folders in this one, by name; asked for by the
     /// cells that show them.
     counts: HashMap<Vec<u8>, CountSlot>,
+    /// Text thumbnails of the files in this folder, by name.
+    previews: HashMap<Vec<u8>, PreviewSlot>,
 }
 
 impl DirectoryModel {
@@ -258,6 +285,7 @@ impl DirectoryModel {
         self.suggestGrid = false;
         self.transfer_states.clear();
         self.counts.clear();
+        self.drop_previews();
         self.folderCounts = false;
         self.dir = None;
         self.local_dir = None;
@@ -508,23 +536,46 @@ impl DirectoryModel {
         (u.parent().as_ref() == self.dir.as_ref()).then(|| u.name().map(<[u8]>::to_vec))?
     }
 
-    fn thumbnail_source(&self, e: &Entry) -> String {
-        let Some(settings) = &self.thumb_settings else {
-            return String::new();
-        };
-        if !self.state.thumbnails_enabled() {
-            return String::new();
-        }
-        let local = self.local_dir.as_ref();
-        match thumbnail_source(e, local.is_some(), self.prefs.thumbnails, settings) {
-            ThumbSource::Icon => String::new(),
-            ThumbSource::System => {
-                local.map_or_else(String::new, |dir| file_url(&dir.join(OsStr::from_bytes(&e.name))))
+    fn thumb_source(&self, e: &Entry) -> ThumbSource {
+        match &self.thumb_settings {
+            Some(settings) if self.state.thumbnails_enabled() => {
+                thumbnail_source(e, self.local_dir.is_some(), self.prefs.thumbnails, settings)
             }
+            _ => ThumbSource::Icon,
+        }
+    }
+
+    fn thumbnail_source(&self, e: &Entry) -> String {
+        match self.thumb_source(e) {
+            ThumbSource::Icon | ThumbSource::Text => String::new(),
+            ThumbSource::System => self
+                .local_dir
+                .as_ref()
+                .map_or_else(String::new, |dir| file_url(&dir.join(OsStr::from_bytes(&e.name)))),
             ThumbSource::App => self
                 .entry_uri(e)
                 .map_or_else(String::new, |u| app_thumbnail_url(&u)),
         }
+    }
+
+    fn preview_stamp(e: &Entry) -> PreviewStamp {
+        PreviewStamp {
+            modified: e.modified_ms(),
+            size: e.size,
+        }
+    }
+
+    /// The text thumbnail of `e` as it is now, empty while it is made or
+    /// with thumbnails off.
+    fn preview_of(&self, e: &Entry) -> &str {
+        if self.thumb_source(e) != ThumbSource::Text {
+            return "";
+        }
+        self.previews
+            .get(&e.name)
+            .filter(|slot| slot.stamp == Self::preview_stamp(e))
+            .and_then(|slot| slot.text.as_deref())
+            .unwrap_or("")
     }
 
     fn stamp_of(&self, e: &Entry) -> CountStamp {
@@ -573,6 +624,10 @@ impl DirectoryModel {
             19 => e.flags.contains(EntryFlags::NOT_ACCESSIBLE).into(),
             20 => self.count_of(e).map_or(-1, |c| count_role(c.shown)).into(),
             21 => self.count_of(e).is_some_and(|c| c.capped).into(),
+            22 => (self.thumb_source(e) == ThumbSource::Text).into(),
+            23 => qs(self.preview_of(e)).into(),
+            24 => thumb_monospace(&e.name).into(),
+            25 => qs(type_icon(&e.name)).into(),
             _ => QVariant::default(),
         }
     }
@@ -822,6 +877,77 @@ impl DirectoryModel {
         }
     }
 
+    fn requestPreview(&mut self, uri: QString) {
+        let (Some(core), Some(name)) = (core(), self.name_of(&uri)) else {
+            return;
+        };
+        let Some(entry) = self.state.entry_named(&name) else {
+            return;
+        };
+        if self.thumb_source(entry) != ThumbSource::Text {
+            return;
+        }
+        let stamp = Self::preview_stamp(entry);
+        if self.previews.get(&name).is_some_and(|slot| slot.stamp == stamp) {
+            return;
+        }
+        let (Some(file), Ok(previews)) = (self.entry_uri(entry), core.previews(&runtime::handle())) else {
+            return;
+        };
+        if let Some(old) = self.previews.get(&name).and_then(|slot| slot.key.as_deref()) {
+            previews.cancel_text(old);
+        }
+        let ticket = previews.request_text(core, file);
+        self.previews.insert(
+            name.clone(),
+            PreviewSlot {
+                stamp,
+                key: Some(ticket.key),
+                text: None,
+            },
+        );
+        let me = QPointer::from(&*self);
+        let generation = self.generation;
+        spawn_then(async move { ticket.rx.await.ok().flatten() }, move |text| {
+            if let Some(m) = me.as_pinned() {
+                m.borrow_mut().previewed(generation, &name, stamp, text);
+            }
+        });
+    }
+
+    /// A text thumbnail arrived; one for an older state of the file is dropped.
+    fn previewed(&mut self, generation: u64, name: &[u8], stamp: PreviewStamp, text: Option<String>) {
+        if generation != self.generation {
+            return;
+        }
+        let Some(slot) = self.previews.get_mut(name).filter(|slot| slot.stamp == stamp) else {
+            return;
+        };
+        slot.key = None;
+        slot.text = text;
+        if let Some(i) = self.state.index_of(name) {
+            let idx = self.row_index(i as i32);
+            self.data_changed(idx, idx);
+        }
+    }
+
+    fn cancelPreview(&mut self, uri: QString) {
+        let Some(name) = self.name_of(&uri) else { return };
+        if let Some(key) = self.previews.get(&name).and_then(|slot| slot.key.clone()) {
+            self.previews.remove(&name);
+            cancel_text(&key);
+        }
+    }
+
+    /// Previews still queued are dropped with the folder.
+    fn drop_previews(&mut self) {
+        for slot in std::mem::take(&mut self.previews).into_values() {
+            if let Some(key) = slot.key {
+                cancel_text(&key);
+            }
+        }
+    }
+
     fn setTransferState(&mut self, uri: QString, state: QString) {
         let Some(name) = self.name_of(&uri) else { return };
         let state = state.to_string();
@@ -880,6 +1006,12 @@ impl DirectoryModel {
                 }
             },
         );
+    }
+}
+
+fn cancel_text(key: &str) {
+    if let Some(previews) = core().and_then(|core| core.previews(&runtime::handle()).ok()) {
+        previews.cancel_text(key);
     }
 }
 

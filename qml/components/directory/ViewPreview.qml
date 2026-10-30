@@ -73,13 +73,14 @@ Item {
         return -1
     }
 
-    // The rows as drawn, in order (tests): { name, isDir, size, photo,
-    // captions }, the captions as the lines under a tile.
+    // The rows as drawn, in order (tests): { name, isDir, size, photo, text,
+    // captions }, the captions as the lines under a tile; `text`: a text
+    // thumbnail.
     function shown() {
         var drawn = gridMode ? tiles() : rowsOf(listRows)
         return drawn.map(function (row) {
             return { "name": row.name, "isDir": row.isDir, "size": row.size, "photo": row.photo,
-                     "captions": row.captions }
+                     "text": !!row.previewText, "captions": row.captions }
         })
     }
 
@@ -206,6 +207,10 @@ Item {
             readonly property bool isDir: modelData.isDir
             readonly property real size: modelData.size
             readonly property bool photo: preview.thumbnails && modelData.category === "image"
+            // The notes' first lines, as a text file's tile shows them (PRV-15).
+            readonly property string previewText: preview.thumbnails && modelData.category === "text"
+                                                  //% "Ferry at 06:00\nSauna wood: 2 sacks\nCabin keys from Anni"
+                                                  ? qsTrId("lautta-view-preview-notes-text") : ""
             readonly property real gap: gridMetrics.gap
             readonly property var captions: DirFormat.gridCaptions(modelData.isDir, modelData.size, modelData.modified,
                                                                    true, preview.itemsOf(modelData.name), false)
@@ -236,6 +241,8 @@ Item {
                     glyphSize: gridMetrics.glyphSize(tile.width)
                     category: modelData.category
                     isDir: modelData.isDir
+                    previewText: cell.previewText
+                    typeIcon: "types/text"
                 }
                 Loader {
                     anchors.fill: parent

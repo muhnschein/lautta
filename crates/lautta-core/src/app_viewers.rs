@@ -14,13 +14,14 @@ use crate::preview::exif::{self, ExifInfo};
 use crate::preview::highlight::{self, ColourJob, ColouredText};
 use crate::preview::markdown;
 use crate::preview::text::{self as ptext, TextDoc};
-use crate::provider::{list_all, Lane, ProgressSink, Provider, ReadHandle, ReadOptions};
+use crate::provider::{list_all, read_all, Lane, ProgressSink, Provider, ReadHandle, ReadOptions};
 use crate::settings::Settings;
 use crate::sort::sort_permutation;
 use crate::thumbs::{
     remote_thumbnail, thumb_key, thumbnail_source, ThumbJobs, ThumbSettings, ThumbSource, ThumbnailCache,
 };
 use crate::thumbs_pdf::PdfThumbs;
+use crate::thumbs_text::{thumb_text, TEXT_THUMB_BYTES};
 use crate::uri::Uri;
 use crate::vpath::VPath;
 use std::collections::HashMap;
@@ -192,6 +193,16 @@ pub struct Previews {
 type ThumbResult = Result<Arc<Vec<u8>>>;
 type ThumbSender = oneshot::Sender<ThumbResult>;
 
+/// A pending text thumbnail (PRV-15): await `rx` for the text, `None` when
+/// the file has none; [`Previews::cancel_text`] with `key` drops it.
+pub struct TextTicket {
+    pub rx: oneshot::Receiver<Option<String>>,
+    pub key: String,
+}
+
+/// Cache key size of a text thumbnail's head: image sizes are 16 or more.
+const TEXT_KEY_SIZE: u32 = 1;
+
 /// A pending thumbnail: await `rx`; `cancel` (or the part kept after taking
 /// `rx`) drops the request when the delegate is gone.
 pub struct ThumbTicket {
@@ -261,6 +272,57 @@ impl Previews {
                 waiter,
             },
         }
+    }
+
+    /// Queues the text thumbnail of `uri` in the thumbnail jobs (PRV-3):
+    /// each request its own job, so cancelling one leaves the others.
+    pub fn request_text(self: &Arc<Self>, core: Arc<Core>, uri: Uri) -> TextTicket {
+        let n = self.next_waiter.fetch_add(1, Ordering::Relaxed);
+        let key = format!("text:{n}:{uri}");
+        let (tx, rx) = oneshot::channel();
+        let me = Arc::clone(self);
+        let location = uri.location.clone();
+        self.jobs.request(&key, &location, async move {
+            let _ = tx.send(me.make_text(&core, &uri).await);
+        });
+        TextTicket { rx, key }
+    }
+
+    /// Drops a text thumbnail request: queued, it never runs.
+    pub fn cancel_text(&self, key: &str) {
+        self.jobs.cancel(key);
+    }
+
+    /// The text of a thumbnail: the head of the file, from the cache for a
+    /// server file (PRV-2's cache, its own key size), else read.
+    async fn make_text(&self, core: &Core, uri: &Uri) -> Option<String> {
+        let file = ThumbFile::open(core, uri).await.ok()?;
+        let entry = &file.entry;
+        let settings = ThumbSettings::new(&core.settings());
+        if thumbnail_source(entry, file.local, true, &settings) != ThumbSource::Text {
+            return None;
+        }
+        let key = thumb_key(
+            &file.key_uri,
+            TEXT_KEY_SIZE,
+            entry.modified_ms(),
+            entry.etag.as_deref(),
+        );
+        if let Some(hit) = self.cache.get(&key).filter(|_| !file.local) {
+            return thumb_text(&hit);
+        }
+        let handle = file
+            .provider
+            .open_read(&file.path, Lane::Interactive)
+            .await
+            .ok()?;
+        let head = read_all(handle.as_ref(), TEXT_THUMB_BYTES).await.ok()?;
+        if !file.local {
+            if let Err(e) = self.cache.put(&key, &head) {
+                log::warn!("text thumbnail not cached: {e}");
+            }
+        }
+        thumb_text(&head)
     }
 
     fn finish(&self, key: &str, result: ThumbResult) {

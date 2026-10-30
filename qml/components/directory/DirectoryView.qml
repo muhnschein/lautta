@@ -684,6 +684,10 @@ Item {
             readonly property int items: model.itemCount
             readonly property bool counting: model.isDir && dir.folderCounts
             readonly property string countKey: counting + "/" + model.modified + "/" + dir.showHidden
+            // A text file's first lines (PRV-15), asked for as the count is;
+            // a cell that goes first drops its request.
+            readonly property string previewKey: model.textThumb ? model.uri + "/" + model.modified + "/" + model.size : ""
+            property string previewAsked
             readonly property var captions: DirFormat.gridCaptions(model.isDir, model.size, model.modified,
                                                                    dir.folderCounts, items, model.itemCountCapped)
             readonly property real gap: gridMetrics.gap
@@ -695,7 +699,15 @@ Item {
             height: parent ? parent.height : implicitHeight
             implicitHeight: gridMetrics.cellHeight(width, caption.implicitHeight)
             onCountKeyChanged: cell.countItems()
-            Component.onCompleted: cell.countItems()
+            onPreviewKeyChanged: cell.askPreview()
+            Component.onCompleted: {
+                cell.countItems()
+                cell.askPreview()
+            }
+            Component.onDestruction: {
+                if (previewAsked)
+                    dir.cancelPreview(previewAsked)
+            }
             onClicked: {
                 if (view.selecting)
                     dir.toggle(model.uri)
@@ -713,6 +725,14 @@ Item {
             function countItems() {
                 if (counting)
                     dir.requestCount(model.uri)
+            }
+
+            function askPreview() {
+                if (previewAsked && previewAsked !== model.uri)
+                    dir.cancelPreview(previewAsked)
+                previewAsked = model.textThumb ? model.uri : ""
+                if (previewAsked)
+                    dir.requestPreview(previewAsked)
             }
 
             function letGo() {
@@ -752,6 +772,9 @@ Item {
                     thumbnailSource: model.thumbnailSource
                     mimeType: model.mimeType
                     selected: model.selected
+                    previewText: model.textPreview
+                    previewMono: model.textPreviewMono
+                    typeIcon: model.typeIcon
                     // Coloured as the name under it.
                     highlighted: cell.highlighted || model.selected
                 }

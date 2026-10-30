@@ -2,7 +2,7 @@
 // View options on the target (BRW-4, board ViewOptions): a settings page,
 // not a dialog, with no description under its title. Every control changes
 // the global setting at once and the preview follows (order, folders first,
-// hidden file, list or grid with its caption lines, photo thumbnail) at a
+// hidden file, list or grid with its caption lines, photo and text thumbnails) at a
 // size that stays the same; a folder already open
 // follows too, and the folder the page came from takes a choice that only
 // differed there (List over a suggested grid). Its Thumbnails section, there
@@ -96,6 +96,10 @@ ApplicationWindow {
 
     function photoShown(rows) {
         return rows.some(function (r) { return r.photo })
+    }
+
+    function textShown(rows) {
+        return rows.some(function (r) { return r.text })
     }
 
     // The preview keeps the size it had when the page opened.
@@ -225,9 +229,10 @@ ApplicationWindow {
         sameSize(preview, size, "a grid")
 
         expect(photoShown(preview.shown()), "the grid shows the photo")
+        expect(textShown(preview.shown()), "and the notes' first lines")
         tap(page, "thumbnailsSwitch")
         expect(App.setting("thumbnails_local") === false, "Thumbnails applies at once")
-        expect(!photoShown(preview.shown()), "no thumbnail without thumbnails")
+        expect(!photoShown(preview.shown()) && !textShown(preview.shown()), "no thumbnail without thumbnails")
         tap(page, "hiddenSwitch")
         sameSize(preview, size, "no hidden file in the grid")
         tap(page, "hiddenSwitch")
