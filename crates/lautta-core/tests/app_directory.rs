@@ -639,6 +639,34 @@ async fn go_to_a_typed_path() {
 }
 
 #[tokio::test]
+async fn go_to_offers_the_user_folders_in_home() {
+    let h = home().await;
+    std::fs::create_dir_all(h.root.join("Dev")).unwrap();
+    let base = uri("lautta://user-documents/");
+    let docs = "lautta://user-documents/".to_owned();
+    let both = vec![docs.clone(), "lautta://user-downloads/".to_owned()];
+    assert_eq!(
+        path_of(&h, "~/D", &base),
+        (None, both.clone()),
+        "home can't be listed: its user folders, not other folders in it"
+    );
+    assert_eq!(path_of(&h, "~/", &base), (None, both.clone()));
+    assert_eq!(path_of(&h, "~/do", &base), (None, both.clone()));
+    assert_eq!(
+        path_of(&h, "~/dow", &base),
+        (None, vec!["lautta://user-downloads/".to_owned()])
+    );
+    let absolute = format!("{}/D", h.root.display());
+    assert_eq!(path_of(&h, &absolute, &base), (None, both));
+    assert_eq!(path_of(&h, "~/Documents", &base), (Some(docs), vec![]));
+    assert_eq!(
+        path_of(&h, "/D", &uri("lautta://nv-nas/")),
+        (None, vec![]),
+        "on a server, / is the server's"
+    );
+}
+
+#[tokio::test]
 async fn go_to_a_server_path_knows_what_was_listed() {
     let h = home().await;
     let provider = nas(&h);
