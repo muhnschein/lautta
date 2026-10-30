@@ -58,6 +58,11 @@ ApplicationWindow {
         return one(view, function (x) { return x.info !== undefined && x.info.uri === win.base + name }, "row " + name)
     }
 
+    function cell(view, name) {
+        view.flickable.forceLayout()
+        return one(view, function (x) { return x.itemName === name && x.captions !== undefined }, "cell " + name)
+    }
+
     function pulleyTexts(page) {
         var menu = one(page, function (x) { return x._isPullDownMenu === true && x.flickable && x.flickable.visible },
                        "pulley")
@@ -139,5 +144,24 @@ ApplicationWindow {
                 folder.refresh()
             return folder.count === 1
         }, "the saved copy")
+        checkGrid()
+    }
+
+    function checkGrid() {
+        waitFor(function () { return !pageStack.busy && pageStack.depth === 1 }, "the dialog to close")
+        var page = open(base + "a.md")
+        var view = one(page, function (x) { return x.objectName === "shareFolder" }, "folder view")
+        if (!view)
+            return
+        page.destUri = base
+        waitFor(function () { return view.uri === base && !view.model.loading && view.model.count === 2 }, "listing")
+        view.model.setViewPrefs(JSON.stringify({ "viewMode": "grid" }))
+        waitFor(function () { return view.gridMode }, "grid")
+        var file = cell(view, "a.md")
+        var sub = cell(view, "Inner")
+        if (!file || !sub)
+            return
+        // Hold on a cell stays for the device run: headless window is smaller than the dialog's header.
+        expect(!file.enabled && file.opacity < 1 && sub.enabled, "grid: files dimmed, folders open")
     }
 }
