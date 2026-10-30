@@ -82,6 +82,7 @@ Dialog {
         pickNote: page.note
         pickNoteWarns: page.skippedNames.length > 0
         onOpenFolder: page.destUri = uri
+        onGoTo: page.destUri = uri
     }
 
     SilicaListView {
@@ -99,12 +100,22 @@ Dialog {
         header: Column {
             width: locations.width
 
-            PickHeader {
+            DialogHeader {
                 acceptText: page.acceptText
+            }
+            PageHeader {
                 //% "Locations"
                 title: qsTrId("lautta-share-locations")
-                note: page.note
-                noteWarns: page.skippedNames.length > 0
+            }
+            Label {
+                visible: text.length > 0
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                horizontalAlignment: Text.AlignRight
+                wrapMode: Text.Wrap
+                text: page.note
+                color: page.skippedNames.length > 0 ? Theme.errorColor : Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeExtraSmall
             }
 
             SectionHeader {

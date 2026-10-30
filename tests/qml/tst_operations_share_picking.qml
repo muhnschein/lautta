@@ -124,7 +124,9 @@ ApplicationWindow {
 
         sub.clicked(null)
         expect(page.destUri === inner && view.uri === inner, "a folder opens in place: " + page.destUri)
-        view.openFolder("")
+        view.goTo(base)
+        expect(page.destUri === base, "the path menu goes back in place: " + page.destUri)
+        view.goTo("")
         expect(!view.visible && places.visible && !page.canAccept, "Locations: nothing to save into")
         page.destUri = inner
         waitFor(function () { return page.canAccept }, "Inner ready")

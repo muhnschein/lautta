@@ -10,6 +10,7 @@ import "../Open.js" as Open
 import "../ErrorText.js" as ErrorText
 import "DirFormat.js" as DirFormat
 import "GridRows.js" as GridRows
+import "PathFold.js" as PathFold
 import "Selection.js" as Selection
 import "../operations/Compress.js" as Compress
 
@@ -38,6 +39,14 @@ Item {
     property var toMove: []
 
     signal openFolder(string uri)
+    // A folder elsewhere in the path or picked in Go to folder: the page goes back where it can.
+    signal goTo(string uri)
+    signal browse
+
+    onSelectionModeChanged: {
+        if (selectionMode)
+            pathMenu.close()
+    }
 
     function setSelection(state) {
         selectionMode = state.selecting
@@ -201,6 +210,23 @@ Item {
         toMove = []
         if (items.length > 0)
             Operations.moveTo(JSON.stringify(items), folderUri)
+    }
+
+    function trail(ancestorsJson, room) {
+        var names = []
+        try {
+            names = JSON.parse(ancestorsJson).map(function (a) { return a.name }).reverse()
+        } catch (e) {
+            return ""
+        }
+        return PathFold.fold(names, function (text) { return trailMetrics.advanceWidth(text) <= room })
+    }
+
+    function goToFolder() {
+        var dialog = openDialog("../../dialogs/GoToFolderDialog.qml", {
+            "folderUri": uri, "folderName": dir.title, "startText": path.address, "searchable": !picking
+        })
+        dialog.accepted.connect(function () { view.goTo(dialog.chosenUri) })
     }
 
     function searchHere() {
@@ -845,38 +871,86 @@ Item {
                 id: headerBar
 
                 width: parent.width
-                height: view.picking ? pickHeader.height : pageHeader.height
+                height: titleArea.y + titleArea.height + (pickNote.visible ? pickNote.height + Theme.paddingSmall : 0)
 
                 Loader {
-                    id: pickHeader
+                    id: dialogBar
 
                     width: parent.width
                     active: view.picking
-                    sourceComponent: PickHeader {
+                    sourceComponent: DialogHeader {
                         acceptText: view.pickAcceptText
-                        title: dir.title
-                        subtitle: Operations.displayPath(App.parentUri(view.uri))
-                        note: view.pickNote
-                        noteWarns: view.pickNoteWarns
-                        tappable: true
-                        onTapped: pathMenu.open = !pathMenu.open
                     }
                 }
 
-                PageHeader {
-                    id: pageHeader
+                Item {
+                    id: titleArea
 
-                    visible: !view.picking
-                    objectName: "folderPageHeader"
-                    title: view.selecting
-                           //% "%n selected"
-                           ? qsTrId("lautta-dir-selected", dir.selectedCount)
-                           : dir.title
+                    y: dialogBar.height
+                    width: parent.width
+                    height: Math.max(pageHeader.height, pathSubtitle.visible
+                                     ? pathSubtitle.y + pathSubtitle.height + Theme.paddingMedium : 0)
+
+                    PageHeader {
+                        id: pageHeader
+
+                        objectName: "folderPageHeader"
+                        title: view.selecting
+                               //% "%n selected"
+                               ? qsTrId("lautta-dir-selected", dir.selectedCount)
+                               : dir.title
+                    }
+                    // Placed as PageHeader places its description; own Label so it can fade.
+                    Label {
+                        id: pathSubtitle
+
+                        objectName: "folderPathSubtitle"
+                        y: pageHeader.topMargin + pageHeader.titleHeight
+                        anchors {
+                            right: parent.right
+                            rightMargin: pageHeader.rightMargin
+                        }
+                        width: Math.min(implicitWidth, parent.width - pageHeader.leftMargin - pageHeader.rightMargin)
+                        visible: text.length > 0
+                        text: view.trail(path.ancestorsJson, parent.width - pageHeader.leftMargin - pageHeader.rightMargin)
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.secondaryHighlightColor
+                        horizontalAlignment: implicitWidth > width ? Text.AlignLeft : Text.AlignRight
+                        truncationMode: TruncationMode.Fade
+                        opacity: pathMenu.open ? 0 : (view.selecting ? Theme.opacityLow : 1)
+
+                        Behavior on opacity { FadeAnimation { } }
+
+                        FontMetrics {
+                            id: trailMetrics
+
+                            font: pathSubtitle.font
+                        }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: !view.selecting
+                        onClicked: pathMenu.open = !pathMenu.open
+                    }
                 }
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: !view.selecting && !view.picking
-                    onClicked: pathMenu.open = !pathMenu.open
+
+                Label {
+                    id: pickNote
+
+                    objectName: "pickNote"
+                    anchors {
+                        top: titleArea.bottom
+                        left: parent.left
+                        right: parent.right
+                        leftMargin: Theme.horizontalPageMargin
+                        rightMargin: Theme.horizontalPageMargin
+                    }
+                    visible: view.picking && text.length > 0
+                    horizontalAlignment: Text.AlignRight
+                    wrapMode: Text.Wrap
+                    text: view.pickNote
+                    color: view.pickNoteWarns ? Theme.errorColor : Theme.secondaryHighlightColor
+                    font.pixelSize: Theme.fontSizeExtraSmall
                 }
             }
 
@@ -896,7 +970,10 @@ Item {
                 pathModel: path
                 currentUri: view.uri
                 picking: view.picking
-                onNavigate: view.openFolder(uri)
+                wide: view.width > view.height
+                onNavigate: view.goTo(uri)
+                onBrowse: view.browse()
+                onGoToRequested: view.goToFolder()
                 onFavouriteRequested: view.runAction("favourite", [view.uri], {}, null)
             }
 
