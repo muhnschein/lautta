@@ -235,7 +235,7 @@ impl Previews {
             me.finish(&key, result);
         });
         if !started && lock(&self.waiters).get(&job_key).map_or(0, Vec::len) == 1 {
-            // Earlier job ended between check and now.
+            // The earlier job ended between our check and now.
             self.finish(
                 &job_key,
                 Err(Error::new(ErrorKind::Canceled, "thumbnail job vanished")),
