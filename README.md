@@ -4,6 +4,12 @@
 
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=muhnschein_lautta&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=muhnschein_lautta)[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=muhnschein_lautta&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=muhnschein_lautta)[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=muhnschein_lautta&metric=coverage)](https://sonarcloud.io/summary/new_code?id=muhnschein_lautta)[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=muhnschein_lautta&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=muhnschein_lautta)
 
+<p>
+  <img src="store/screenshots/1-browse.png" width="260" alt="Browse: favourites, phone folders, a USB drive, a locked memory card and two servers">
+  <img src="store/screenshots/2-folder.png" width="260" alt="A busy folder as a grid, four photos and videos selected">
+  <img src="store/screenshots/3-text.png" width="260" alt="A shell script from a server, with syntax colours">
+</p>
+
 ## Overview
 
 Lautta (Finnish: ferry) is a file manager for Sailfish OS. It is two things:
