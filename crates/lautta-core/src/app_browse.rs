@@ -23,6 +23,7 @@ use std::time::Duration;
 use zeroize::Zeroizing;
 
 const PLACE_SEPARATOR: &str = " › ";
+const SERVER_ICON: &str = "server";
 
 /// Drive mounted by bridge takes time to show in sandbox: this many looks, this far apart.
 const MOUNT_LOOKS: u32 = 10;
@@ -531,7 +532,7 @@ impl Core {
         match client.status() {
             BridgeStatus::ConsentUnknown => {
                 let mut row = Row::new("servers", "consent");
-                row.icon = "image://theme/icon-m-computer".to_owned();
+                row.icon = SERVER_ICON.to_owned();
                 vec![row]
             }
             BridgeStatus::Reconnecting => {
@@ -575,7 +576,7 @@ impl Core {
                 row.attention = l.attention.clone().unwrap_or_default();
                 row.connection = l.connection.name();
                 row.connection_error = l.connection.error().to_owned();
-                row.icon = "image://theme/icon-m-computer".to_owned();
+                row.icon = SERVER_ICON.to_owned();
                 row.place = l.url.clone().unwrap_or_default();
                 if let Some(r) = &remote {
                     row.provider = provider_label(&r.provider);
@@ -598,7 +599,7 @@ impl Core {
                 row.name = r.name;
                 row.status = "offline";
                 row.connection = ConnectionState::Disconnected.name();
-                row.icon = "image://theme/icon-m-computer".to_owned();
+                row.icon = SERVER_ICON.to_owned();
                 row.provider = r
                     .url
                     .split_once("://")
