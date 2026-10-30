@@ -22,18 +22,19 @@ network protocol: everything remote goes through netvfs.
 
 | | Jolla Store only | With netvfs |
 |---|:---:|:---:|
-| Documents, Downloads, Pictures, Music, Videos, Android folders | ✓ | ✓ |
-| Memory cards and USB drives the system has mounted | ✓ | ✓ |
-| Copy, move, rename, compress, favourites, recents, search, Trash | ✓ | ✓ |
-| Viewers for images, video, music, PDF, text, code, Markdown | ✓ | ✓ |
-| Thumbnails for photos, videos, PDFs and text files | ✓ | ✓ |
-| *Save to Lautta* in the share menu | ✓ | ✓ |
-| SFTP and SMB servers from *Settings → Accounts* | ✗ | ✓ |
-| Servers typed in by hand or found nearby | ✗ | ✓ |
-| Copy and move between phone and servers, in a queue that survives a restart | ✗ | ✓ |
-| Remote media streamed in place, remote files opened in other apps | ✗ | ✓ |
-| Mount and unmount memory cards and USB drives, see locked encrypted ones | ✗ | ✓ |
-| *Settings → Storage* one tap away | ✗ | ✓ |
+| Phone folders | ✓ | ✓ |
+| Mounted memory cards, USB drives | ✓ | ✓ |
+| Copy, move, favourites, Trash | ✓ | ✓ |
+| Search | ✓ | ✓ |
+| Image, video, PDF, text viewers | ✓ | ✓ |
+| Thumbnails | ✓ | ✓ |
+| *Save to Lautta* | ✓ | ✓ |
+| SFTP and SMB servers | ✗ | ✓ |
+| Servers nearby | ✗ | ✓ |
+| Phone ⇄ server transfers | ✗ | ✓ |
+| Remote media streaming | ✗ | ✓ |
+| Mount, unmount drives | ✗ | ✓ |
+| Locked encrypted drives | ✗ | ✓ |
 
 Lautta never sees a password or a key. Accounts live in Settings; netvfs asks
 once whether Lautta may use them. Without netvfs, nothing of it shows.
