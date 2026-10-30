@@ -50,6 +50,126 @@
       "x": 2880,
       "y": 8200
     },
+    "BreadcrumbsHeader.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Path \u00b7 subtitle of the header",
+      "w": 400,
+      "x": 0,
+      "y": 15900
+    },
+    "BreadcrumbsLandColumns.dc.html": {
+      "h": 400,
+      "is_interactive": true,
+      "title": "Landscape \u00b7 path menu, two columns",
+      "w": 860,
+      "x": 0,
+      "y": 18020
+    },
+    "BreadcrumbsLandOmni.dc.html": {
+      "h": 400,
+      "is_interactive": true,
+      "title": "Landscape \u00b7 go to folder, keyboard up",
+      "w": 860,
+      "x": 940,
+      "y": 18020
+    },
+    "BreadcrumbsLandOmniHits.dc.html": {
+      "h": 400,
+      "is_interactive": true,
+      "title": "Landscape \u00b7 go to folder, hits dragged",
+      "w": 860,
+      "x": 1880,
+      "y": 18020
+    },
+    "BreadcrumbsLongRows.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Long words (de) \u00b7 actions fall back to rows",
+      "w": 400,
+      "x": 0,
+      "y": 16960
+    },
+    "BreadcrumbsOmni.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Go to folder \u00b7 as opened",
+      "w": 400,
+      "x": 1440,
+      "y": 15900
+    },
+    "BreadcrumbsOmniPath.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Go to folder \u00b7 a path typed",
+      "w": 400,
+      "x": 2400,
+      "y": 15900
+    },
+    "BreadcrumbsOmniTyping.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Go to folder \u00b7 a name typed",
+      "w": 400,
+      "x": 1920,
+      "y": 15900
+    },
+    "BreadcrumbsOpen.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Path menu \u00b7 open",
+      "w": 400,
+      "x": 960,
+      "y": 15900
+    },
+    "BreadcrumbsOpening.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Path \u00b7 opening, subtitle fades",
+      "w": 400,
+      "x": 480,
+      "y": 15900
+    },
+    "BreadcrumbsShare.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Share target \u00b7 folder view",
+      "w": 400,
+      "x": 480,
+      "y": 16960
+    },
+    "BreadcrumbsShareGrid.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Share target \u00b7 photos as grid",
+      "w": 400,
+      "x": 1920,
+      "y": 16960
+    },
+    "BreadcrumbsShareLocations.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Share target \u00b7 locations",
+      "w": 400,
+      "x": 1440,
+      "y": 16960
+    },
+    "BreadcrumbsShareMenu.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Share target \u00b7 path menu",
+      "w": 400,
+      "x": 960,
+      "y": 16960
+    },
+    "BreadcrumbsSharePulley.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Share target \u00b7 pulley, new folder",
+      "w": 400,
+      "x": 2400,
+      "y": 16960
+    },
     "BrowsePulley.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -178,6 +298,14 @@
       "x": 480,
       "y": 14440
     },
+    "DocumentGlyph.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Document glyph \u00b7 aligned with JetBrains text",
+      "w": 860,
+      "x": 6200,
+      "y": 2060
+    },
     "Extract.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -290,6 +418,14 @@
       "x": 2400,
       "y": 2060
     },
+    "PdfViewer.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "PDF viewer",
+      "w": 400,
+      "x": 1440,
+      "y": 8200
+    },
     "PlanSummary.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -361,6 +497,14 @@
       "w": 400,
       "x": 4320,
       "y": 14440
+    },
+    "ServerIcon.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Server icon \u00b7 server and globe variants",
+      "w": 860,
+      "x": 7080,
+      "y": 2060
     },
     "ServerQuestion.dc.html": {
       "h": 860,
@@ -442,6 +586,14 @@
       "x": 2880,
       "y": 3580
     },
+    "TextThumbFullPlainIcon.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Text thumbnail \u00b7 fade and type icon",
+      "w": 400,
+      "x": 5720,
+      "y": 2060
+    },
     "TextViewer.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -512,38 +664,6 @@
       "title": "View options",
       "w": 400,
       "x": 3360,
-      "y": 2060
-    },
-    "PdfViewer.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "PDF viewer",
-      "w": 400,
-      "x": 1440,
-      "y": 8200
-    },
-    "TextThumbFullPlainIcon.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Text thumbnail \u00b7 fade and type icon",
-      "w": 400,
-      "x": 5720,
-      "y": 2060
-    },
-    "DocumentGlyph.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Document glyph \u00b7 aligned with JetBrains text",
-      "w": 860,
-      "x": 6200,
-      "y": 2060
-    },
-    "ServerIcon.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Server icon \u00b7 server and globe variants",
-      "w": 860,
-      "x": 7080,
       "y": 2060
     }
   },
@@ -635,6 +755,14 @@
       "w": 240,
       "x": 0,
       "y": 14140
+    },
+    "r10": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Breadcrumbs for deep folders",
+      "w": 240,
+      "x": 0,
+      "y": 15600
     }
   },
   "order": [
@@ -705,7 +833,22 @@
     "ImageDeleteRemote.dc.html",
     "ActivityBar.dc.html",
     "ActivityBarQuestion.dc.html",
-    "ActivityBarDone.dc.html"
+    "ActivityBarDone.dc.html",
+    "BreadcrumbsHeader.dc.html",
+    "BreadcrumbsOpening.dc.html",
+    "BreadcrumbsOpen.dc.html",
+    "BreadcrumbsOmni.dc.html",
+    "BreadcrumbsOmniTyping.dc.html",
+    "BreadcrumbsOmniPath.dc.html",
+    "BreadcrumbsLongRows.dc.html",
+    "BreadcrumbsShare.dc.html",
+    "BreadcrumbsShareMenu.dc.html",
+    "BreadcrumbsShareLocations.dc.html",
+    "BreadcrumbsShareGrid.dc.html",
+    "BreadcrumbsSharePulley.dc.html",
+    "BreadcrumbsLandColumns.dc.html",
+    "BreadcrumbsLandOmni.dc.html",
+    "BreadcrumbsLandOmniHits.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"

@@ -30,7 +30,13 @@ ApplicationWindow {
                 }
                 PathMenu {
                     open: true
-                    editing: true
+                    pathModel: path
+                    currentUri: "lautta://user-documents/Uni"
+                }
+                PathMenu {
+                    open: true
+                    picking: true
+                    wide: true
                     pathModel: path
                     currentUri: "lautta://user-documents/Uni"
                 }

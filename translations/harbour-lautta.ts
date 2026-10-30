@@ -1920,20 +1920,8 @@
         <source>Copy address</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-path-edit">
-        <source>Edit path</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-path-favourite">
         <source>Favourite</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-path-label">
-        <source>Path</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-path-from-cache">
-        <source>Folder · from cache</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-picker-new-folder">
@@ -2664,6 +2652,54 @@
         <source>Ferry at 06:00
 Sauna wood: 2 sacks
 Cabin keys from Anni</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-goto-recent">
+        <source>Recent</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-goto-favourite">
+        <source>Favourite</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-goto-go">
+        <source>Go to %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-path-locations">
+        <source>Locations</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-path-browse">
+        <source>Browse</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-path-goto">
+        <source>Go to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-goto-accept">
+        <source>Go</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-goto-none">
+        <source>No such folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-goto-best">
+        <source>%1 · Enter opens it</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-goto-label">
+        <source>Folder or path</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-goto-in">
+        <source>In %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-goto-search">
+        <source>Search “%1” in %2</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

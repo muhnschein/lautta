@@ -66,6 +66,18 @@ Item {
     DirectoryModel { id: broken; uri: "not a uri" }
     PathModel { id: path; uri: root.docs + "Zeta" }
     PathModel { id: rootPath; uri: root.docs }
+    GotoModel { id: goTo; folder: root.docs }
+    Repeater {
+        id: goToRows
+        model: goTo
+        delegate: Item {
+            property string nm: name
+            property string src: source
+            property string at: place
+            property string addr: address
+            property string link: uri
+        }
+    }
 
     function testBasics() {
         wait(300)
@@ -180,10 +192,47 @@ Item {
         check(rootPath.count === 1, "root path has one step")
         check(path.fullPath === "Documents › Zeta", "full path: " + path.fullPath)
         check(rootPath.fullPath === "Documents", "root full path")
-        var found = path.complete("~/Documents/z")
-        same(found, [zeta], "completion from the cached listing")
+        same(JSON.parse(path.ancestorsJson).map(function (a) { return [a.uri, a.name, a.icon] }),
+             [[root.docs, "Documents", "file-folder"]], "ancestors, parent first")
+        same(JSON.parse(rootPath.ancestorsJson), [], "none above a location")
         check(path.resolve("~/Documents/Zeta") === zeta, "resolve")
         check(path.resolve("nowhere") === "", "resolve refuses")
+    }
+
+    function goToAsked(text) {
+        goTo.query(text)
+        for (var i = 0; i < 40 && goTo.text !== text; ++i)
+            wait(25)
+        check(goTo.text === text, "go to answered " + text)
+        var out = []
+        for (var j = 0; j < goToRows.count; ++j) {
+            var r = goToRows.itemAt(j)
+            out.push([r.nm, r.src, r.at, r.addr])
+        }
+        return out
+    }
+
+    function testGoTo() {
+        wait(200)
+        var zeta = root.docs + "Zeta"
+        same(goToAsked("zet"), [["Zeta", "here", "Documents", ""]], "a folder here by name")
+        check(!goTo.isPath && goTo.count === 1 && goTo.firstUri === zeta && goTo.firstName === "Zeta"
+              && goTo.firstSource === "here", "top row: " + goTo.firstUri + " " + goTo.firstName + " " + goTo.firstSource)
+        same(goToAsked("~/Documents/Zeta"), [["Zeta", "go", "Documents", ""]], "a typed path names the folder")
+        check(goTo.isPath && goTo.firstSource === "go", "a path: " + goTo.firstSource)
+        same(goToAsked("~/Documents/z"), [["Zeta", "in", "", "~/Documents/Zeta/"]], "and drills in")
+        check(goTo.firstSource === "in", "no folder named, top row drills in: " + goTo.firstSource)
+        same(goToAsked("nothing like it"), [], "no hits")
+        check(goTo.firstUri === "" && goTo.firstName === "" && goTo.firstSource === "", "no top row")
+    }
+
+    function testInside() {
+        var zeta = root.docs + "Zeta"
+        check(App.isInside(zeta, root.docs) && App.isInside(zeta, zeta), "inside, and itself")
+        check(!App.isInside(root.docs, zeta), "a parent is not inside its child")
+        check(!App.isInside(root.docs + "Zetas", zeta), "a longer name is not inside")
+        check(!App.isInside("lautta://user-downloads/Zeta", zeta), "another location")
+        check(!App.isInside("not a uri", zeta) && !App.isInside(zeta, "not a uri"), "bad text")
     }
 
     function testPrefsAreGlobal() {
@@ -258,6 +307,8 @@ Item {
         testRename()
         testLiveUpdate()
         testStates()
+        testGoTo()
+        testInside()
         testPrefsAreGlobal()
         testOpenFoldersFollowSettings()
         testPdfThumbnails()
