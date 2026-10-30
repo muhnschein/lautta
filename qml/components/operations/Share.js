@@ -12,9 +12,23 @@ function remember(recent, uri) {
     return out
 }
 
-// `known(uri)`: a writable place holds it now; a removed server or card drops out.
-function usable(recent, known) {
-    return recent.filter(function (uri) { return typeof uri === "string" && known(uri) })
+function within(uri, places) {
+    return places.some(function (p) { return uri.indexOf(p.uri) === 0 })
+}
+
+// `places`: writable locations now; a folder on a removed server or card drops out.
+function usable(recent, places) {
+    return recent.filter(function (uri) { return typeof uri === "string" && within(uri, places) })
+}
+
+// Last folder saved to, else Downloads, else the first place.
+function start(recent, places) {
+    if (recent.length > 0)
+        return recent[0]
+    for (var i = 0; i < places.length; ++i)
+        if (places[i].uri.indexOf("user-downloads") >= 0)
+            return places[i].uri
+    return places.length > 0 ? places[0].uri : ""
 }
 
 // `skipped`: names of files Lautta can't read.

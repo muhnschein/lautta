@@ -18,8 +18,17 @@ Item {
         same(Share.remember(["b", "c", "d"], "a"), ["a", "b", "c"], "three kept")
         same(Share.remember(["a", "b", "c"], "a"), ["a", "b", "c"], "the newest again")
 
-        var known = function (uri) { return uri.indexOf("gone") < 0 }
-        same(Share.usable(["x", "gone/y", 3, "z"], known), ["x", "z"], "gone places and junk drop out")
+        var places = [{ "uri": "lautta://user-documents/" }, { "uri": "lautta://user-downloads/" },
+                      { "uri": "lautta://nas/" }]
+        same(Share.usable(["lautta://user-documents/Uni", "lautta://gone/x", 3, "lautta://nas2/y", "lautta://nas/"],
+                          places), ["lautta://user-documents/Uni", "lautta://nas/"],
+             "folders of gone or read-only places and junk drop out")
+        same(Share.start(["lautta://nas/a", "lautta://user-documents/"], places), "lautta://nas/a",
+             "starts in the last folder saved to")
+        same(Share.start([], places), "lautta://user-downloads/", "first time: Downloads")
+        same(Share.start([], [{ "uri": "lautta://user-documents/" }]), "lautta://user-documents/",
+             "no Downloads: the first place")
+        same(Share.start([], []), "", "no place at all")
 
         // Host has no catalogue: qsTrId gives the id; %n and %1 still fill in.
         var save = qsTrId("lautta-share-count", 2)

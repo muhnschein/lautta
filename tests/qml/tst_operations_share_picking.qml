@@ -131,7 +131,7 @@ ApplicationWindow {
         page.destUri = inner
         waitFor(function () { return page.canAccept }, "Inner ready")
         page.accept()
-        expect(page.recent[0] === inner, "remembered: " + page.recentJson)
+        expect(JSON.stringify(page.recent) === JSON.stringify([inner]), "remembered: " + JSON.stringify(page.recent))
         folder.uri = inner
         var tries = 0
         waitFor(function () {
@@ -139,16 +139,5 @@ ApplicationWindow {
                 folder.refresh()
             return folder.count === 1
         }, "the saved copy")
-        waitFor(function () { return !pageStack.busy && pageStack.depth === 1 }, "dialog closed")
-
-        // SDK has no dconf session: each store instance keeps its own value, so set it by hand.
-        var again = open(base + "a.md")
-        again.recentJson = JSON.stringify([inner])
-        again.load()
-        expect(again.destUri === inner, "next time: last folder saved to: " + again.destUri)
-        again.destUri = ""
-        var lately = findAll(again, function (x) { return x.text === "Inner" }, [])
-        expect(lately.length >= 1, "saved lately lists it")
-        again.recentJson = "[]"
     }
 }

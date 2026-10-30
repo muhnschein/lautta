@@ -18,7 +18,6 @@ Dialog {
     property var resources: []
     property var entries: []
     property string destUri
-    property alias recentJson: recentStore.value
     property var recent: []
     readonly property var skippedNames: entries.filter(function (e) { return !e.readable })
                                                .map(function (e) { return e.name })
@@ -41,17 +40,8 @@ Dialog {
                 probed[i].readable = false
         entries = probed
         var places = JSON.parse(Operations.destinationsJson())
-        recent = Share.usable(Json.value(recentStore.value, []), function (uri) {
-            return places.some(function (p) { return uri.indexOf(p.uri) === 0 })
-        })
-        destUri = recent.length > 0 ? recent[0] : downloads(places)
-    }
-
-    function downloads(places) {
-        for (var i = 0; i < places.length; ++i)
-            if (places[i].uri.indexOf("user-downloads") >= 0)
-                return places[i].uri
-        return places.length > 0 ? places[0].uri : ""
+        recent = Share.usable(Json.value(recentStore.value, []), places)
+        destUri = Share.start(recent, places)
     }
 
     allowedOrientations: Orientation.All
