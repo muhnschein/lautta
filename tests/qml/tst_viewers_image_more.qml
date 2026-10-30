@@ -14,6 +14,8 @@ ApplicationWindow {
 
     ViewerTools { id: tools }
 
+    DirectoryModel { id: folder; uri: "lautta://user-documents/ImageMore/" }
+
     DirectoryModel {
         id: documents
 
@@ -60,14 +62,13 @@ ApplicationWindow {
                 win.step++
                 break
             case 3:
-                if (pageStack.busy || !page || page.formats === undefined)
+                // No dialog: More goes, photo.zip lands next to the image.
+                if (win.waited % 10 === 0)
+                    folder.refresh()
+                if (pageStack.busy || folder.indexOf("lautta://user-documents/ImageMore/photo.zip") < 0)
                     break
-                if (JSON.stringify(page.uris) !== JSON.stringify([win.file]))
-                    return win.fail("Compress gets the image: " + JSON.stringify(page.uris))
-                if (!page.canAccept)
-                    return win.fail("the compress dialog can be accepted: into " + page.destUri)
-                if (pageStack.depth !== 2)
-                    return win.fail("the dialog takes More's place: depth " + pageStack.depth)
+                if (pageStack.depth !== 1)
+                    return win.fail("More closes: depth " + pageStack.depth)
                 win.scenarioRunning = false
                 break
             }

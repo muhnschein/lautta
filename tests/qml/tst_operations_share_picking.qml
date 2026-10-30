@@ -2,7 +2,6 @@
 // dialog's swipe stay for the device run.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-import Nemo.Configuration 1.0
 import Lautta 1.0
 import "../../qml/pages"
 
@@ -16,12 +15,6 @@ ApplicationWindow {
 
     DirectoryModel { id: documents; uri: "lautta://user-documents/" }
     DirectoryModel { id: folder }
-
-    ConfigurationValue {
-        id: recentStore
-        key: "/apps/harbour-lautta/share/recent"
-        defaultValue: "[]"
-    }
 
     Component {
         id: shareComponent
@@ -61,6 +54,7 @@ ApplicationWindow {
     }
 
     function row(view, name) {
+        view.flickable.forceLayout()
         return one(view, function (x) { return x.info !== undefined && x.info.uri === win.base + name }, "row " + name)
     }
 
@@ -100,7 +94,6 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        recentStore.value = "[]"
         makeFolder()
         var page = open(base + "a.md")
         var view = one(page, function (x) { return x.objectName === "shareFolder" }, "folder view")
@@ -136,6 +129,7 @@ ApplicationWindow {
         page.destUri = inner
         waitFor(function () { return page.canAccept }, "Inner ready")
         page.accept()
+        expect(page.recent[0] === inner, "remembered: " + page.recentJson)
         folder.uri = inner
         var tries = 0
         waitFor(function () {
@@ -143,14 +137,16 @@ ApplicationWindow {
                 folder.refresh()
             return folder.count === 1
         }, "the saved copy")
-        expect(JSON.parse(recentStore.value)[0] === inner, "remembered: " + recentStore.value)
         waitFor(function () { return !pageStack.busy && pageStack.depth === 1 }, "dialog closed")
 
+        // Stored value set by hand: no reliance on dconf reaching a second instance headless.
         var again = open(base + "a.md")
+        again.recentJson = JSON.stringify([inner])
+        again.load()
         expect(again.destUri === inner, "next time: last folder saved to: " + again.destUri)
         again.destUri = ""
         var lately = findAll(again, function (x) { return x.text === "Inner" }, [])
         expect(lately.length >= 1, "saved lately lists it")
-        recentStore.value = "[]"
+        again.recentJson = "[]"
     }
 }

@@ -4,6 +4,19 @@ import Sailfish.Silica 1.0
 import "../../qml/pages"
 
 ApplicationWindow {
+    id: win
+
+    function find(item, name) {
+        if (!item || item.objectName === name)
+            return item
+        for (var i = 0; i < item.children.length; ++i) {
+            var hit = find(item.children[i], name)
+            if (hit)
+                return hit
+        }
+        return null
+    }
+
     initialPage: Component {
         ShareTargetPage {
             id: share
@@ -14,11 +27,11 @@ ApplicationWindow {
                     console.error("unreadable files are skipped: " + readableCount + "/" + skippedNames.length)
                 if (canAccept)
                     console.error("nothing readable, nothing to save")
-                if (note !== "2 files can't be read, skipped")
+                if (note !== qsTrId("lautta-share-skipped-many", 2))
                     console.error("the note names the skipped files: " + note)
-                var view = share.children.filter(function (c) { return c.objectName === "shareFolder" })[0]
+                var view = win.find(share, "shareFolder")
                 if (!view || !view.picking)
-                    console.error("the body is a folder view in picking mode")
+                    return console.error("the body is a folder view in picking mode")
                 destUri = ""
                 if (view.visible)
                     console.error("Locations replace the folder view")

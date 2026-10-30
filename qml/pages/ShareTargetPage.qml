@@ -18,6 +18,7 @@ Dialog {
     property var resources: []
     property var entries: []
     property string destUri
+    property alias recentJson: recentStore.value
     readonly property var recent: Share.usable(Json.value(recentStore.value, []),
                                                function (uri) { return App.locationName(uri).length > 0 })
     readonly property var skippedNames: entries.filter(function (e) { return !e.readable })
