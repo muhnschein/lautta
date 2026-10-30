@@ -1,21 +1,17 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The app's panic hook (SPEC RS-4): a panic inside `panics::catch` is an
-//! error and the process goes on; any other panic ends the process. Each
-//! case runs in a child, this test binary started again for that one test:
-//! the hook is process-wide and an abort takes the whole process.
+//! Each case runs in a child (this binary again for one test): hook is process-wide, abort takes
+//! the whole process.
 
 use lautta_core::panics::{abort_outside_catch, catch, Panicked};
 use std::os::unix::process::ExitStatusExt;
 use std::process::{Command, Output};
 
-/// Set in the child: it runs the case instead of starting one.
 const CASE: &str = "LAUTTA_PANIC_HOOK_CASE";
 
 fn in_child() -> bool {
     std::env::var_os(CASE).is_some()
 }
 
-/// Runs the test `name` of this binary alone in a child.
 fn child(name: &str) -> Output {
     Command::new(std::env::current_exe().unwrap())
         .args([name, "--exact", "--nocapture", "--test-threads=1"])

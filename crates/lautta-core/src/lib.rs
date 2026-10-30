@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `lautta-core`: everything below the UI (SPEC ARC-2). No Qt dependency;
-//! testable on the host with `cargo test`. Unsafe code is denied crate-wide
-//! (workspace lint) and allowed only in [`sys`] (SPEC RS-5).
+//! `lautta-core`: everything below the UI. No Qt dependency. Unsafe code is denied crate-wide and
+//! allowed only in [`sys`].
 
 pub mod app;
 pub mod app_browse;
@@ -20,7 +19,6 @@ pub mod sys;
 pub mod uri;
 pub mod vpath;
 
-// Locations and browsing
 pub mod browse_layout;
 pub mod dircache;
 pub mod filter;
@@ -33,32 +31,26 @@ pub mod viewprefs;
 pub mod volumes;
 pub mod watch;
 
-// netvfs bridge
 pub mod bridge;
 pub mod questions;
 
-// Operations
 pub mod clipboard;
 pub mod ops;
 pub mod trash;
 
-// Transfers and edit-in-place
 pub mod activity;
 pub mod transfer;
 pub mod workcopy;
 
-// Preview
 pub mod compress;
 pub mod preview;
 pub mod thumbs;
 pub mod thumbs_pdf;
 pub mod thumbs_text;
 
-// Search, organisation
 pub mod org;
 pub mod search;
 
-// App-wide
 pub mod date_group;
 pub mod messages;
 pub mod panics;

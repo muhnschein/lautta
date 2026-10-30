@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of the text thumbnails of DirectoryModel (no Silica, PRV-15):
-// text, code and Markdown files have one (`textThumb`), made when a cell
-// asks (`requestPreview`), again only after the file changed, dropped when
-// the cell goes first (`cancelPreview`); its font and type icon by name;
-// none for other files, binary or empty ones, or with thumbnails off.
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -83,7 +78,6 @@ Item {
               && row("README.md").type === "types/markdown", "type icons by name")
     }
 
-    // Each request asked for ends in one change of its row, binary data too.
     function testMade() {
         var before = root.changes
         ask("notes.txt")

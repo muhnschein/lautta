@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of the browse facades without a bridge (standalone, SPEC §3.4):
-// the Bridge singleton is quiet, models start empty and their synchronous
-// methods and defaults behave as doc/QML-API.md says. Loading is checked
-// with the real event loop in crates/lautta-qt/tests/browse_models.rs.
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -20,14 +16,13 @@ QtObject {
     Component.onCompleted: {
         Bridge.failed.connect(function(kind) { console.error("FAILED: unexpected failure " + kind) })
         Bridge.question.connect(function() { console.error("FAILED: unexpected question") })
-        // No bridge socket in the temp HOME: standalone, nothing to see (UI-8).
         check(Bridge.status === "absent", "status absent: " + Bridge.status)
         check(!Bridge.ready, "bridge not ready")
         check(Bridge.version === "", "no bridge version")
-        check(!Bridge.storageSettings, "no Storage settings without the bridge (NVB-13)")
+        check(!Bridge.storageSettings, "no Storage settings without the bridge")
         check(Bridge.pending() === "[]", "no questions waiting")
         check(typeof Bridge.mountDrive === "function" && typeof Bridge.unmountDrive === "function",
-              "drives are mounted through the Bridge (LOC-3)")
+              "drives are mounted through the Bridge")
         Bridge.poke()
         Bridge.setForeground(true)
         Bridge.setDiscover(false)
@@ -47,7 +42,7 @@ QtObject {
         locations.refresh()
 
         check(recents.count === 0 && !recents.enabled && !recents.loaded, "recents start empty")
-        check(recents.kindFilter === undefined && recents.text === undefined, "recents have no filter (ORG-2)")
+        check(recents.kindFilter === undefined && recents.text === undefined, "recents have no filter")
 
         folder.uri = "lautta://user-documents/"
         check(folder.uri === "lautta://user-documents/", "folder uri is set")

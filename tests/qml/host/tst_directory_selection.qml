@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of selection mode (Selection.js), SPEC §15.3: when it starts and
-// ends, what its panel and its More actions page offer (every action of an
-// item's long-press menu with one item selected, as grid view selects on
-// hold; Compress and Move to new folder for several) and how a drag selects a
-// range and scrolls at the edges.
 import QtQuick 2.6
 import "../../../qml/components/directory/Selection.js" as Selection
 import "../../../qml/components/directory/ContextActions.js" as Actions
@@ -85,9 +80,6 @@ Item {
         check(Selection.moreRows(1, file)[3].text === Actions.text("moveToNewFolder"), "menu texts, third")
     }
 
-    // Grid view holds to select instead of opening the long-press menu: with
-    // one item selected the panel and its More actions page must offer every
-    // action of that menu.
     function testPanelParity() {
         var contexts = [{ "isDir": false, "writable": true }, { "isDir": true, "writable": true },
                         { "isDir": false, "writable": false }, { "isDir": true, "writable": false }]
@@ -103,8 +95,6 @@ Item {
         }
     }
 
-    // Runs a drag over `path` (the items under the finger, the first one
-    // held) on items whose states before it are `states`; the states after.
     function dragOver(states, path) {
         var now = states.slice()
         var before = function (i) { return states[i] }

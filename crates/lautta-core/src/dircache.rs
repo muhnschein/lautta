@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Directory listing cache (BRW-5, BRW-7, SEC-5): a small in-memory LRU in
-//! front of the `dircache` table. Listings older than seven days are never
-//! returned. A location can opt out (`location_prefs.no_listing_cache`),
-//! which also purges what is stored for it.
+//! Directory listing cache: small in-memory LRU in front of the `dircache` table. Listings older
+//! than seven days are never returned. A location can opt out (`location_prefs.no_listing_cache`),
+//! which also purges what is stored.
 
 use crate::db::Db;
 use crate::entry::{ms_to_system_time, system_time_to_ms, Entry, EntryFlags, Kind};
@@ -13,19 +12,16 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-/// BRW-5: cached listings older than this are not shown.
 pub const MAX_AGE_MS: i64 = 7 * 24 * 60 * 60 * 1000;
-/// A cached listing younger than this is not marked stale.
 pub const DEFAULT_FRESH_MS: i64 = 30_000;
 
-/// Milliseconds since the Unix epoch; injectable for tests.
+/// Injectable for tests.
 pub type Clock = Arc<dyn Fn() -> i64 + Send + Sync>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CachedListing {
     pub entries: Vec<Entry>,
     pub fetched_ms: i64,
-    /// Older than the fresh window: the UI marks it and revalidates.
     pub stale: bool,
 }
 
@@ -85,7 +81,6 @@ pub struct DirCache {
 }
 
 impl DirCache {
-    /// `capacity` is the number of listings kept in memory.
     pub fn new(db: Db, capacity: usize) -> Result<DirCache> {
         DirCache::with_clock(db, capacity, Arc::new(wall_clock_ms))
     }
@@ -115,8 +110,6 @@ impl DirCache {
         }
     }
 
-    /// The cached listing for `uri`, if there is one younger than seven days
-    /// and the location has not opted out.
     pub fn get(&self, uri: &Uri) -> Result<Option<CachedListing>> {
         let key = uri.to_string();
         let now = (self.clock)();
@@ -176,7 +169,6 @@ impl DirCache {
         Ok(())
     }
 
-    /// Stores a fresh listing. Does nothing for a location that opted out.
     pub fn put(&self, uri: &Uri, entries: &[Entry]) -> Result<()> {
         let mut inner = self.lock();
         if inner.disabled.contains(&uri.location) {
@@ -221,7 +213,6 @@ impl DirCache {
         Ok(())
     }
 
-    /// Drops stored listings past the seven-day limit (housekeeping).
     pub fn purge_expired(&self) -> Result<()> {
         let mut inner = self.lock();
         let cutoff = (self.clock)() - MAX_AGE_MS;
@@ -232,7 +223,6 @@ impl DirCache {
         Ok(())
     }
 
-    /// Per-location opt-out (SEC-5). Disabling also deletes what is cached.
     pub fn set_disabled(&self, location: &str, disabled: bool) -> Result<()> {
         let mut inner = self.lock();
         self.db.lock().execute(
@@ -253,7 +243,6 @@ impl DirCache {
         self.lock().disabled.contains(location)
     }
 
-    /// Number of listings currently held in memory.
     pub fn memory_len(&self) -> usize {
         self.lock().map.len()
     }
@@ -274,8 +263,7 @@ fn load_disabled(db: &Db) -> Result<HashSet<LocationId>> {
     Ok(out)
 }
 
-/// Compact on-disk form of an [`Entry`]. Names and etags are bytes, so they
-/// are stored as text when valid UTF-8 and as hex otherwise.
+/// Names and etags are bytes: stored as text when valid UTF-8, as hex otherwise.
 #[derive(Serialize, Deserialize)]
 struct EntryDto {
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -451,7 +439,6 @@ mod tests {
         assert_eq!(hit.fetched_ms, 1_700_000_000_000);
         assert!(!hit.stale);
 
-        // A second cache over the same database starts with an empty memory.
         let clock: Clock = Arc::new(|| 1_700_000_000_000);
         let cold = DirCache::with_clock(f.db.clone(), 8, clock).unwrap();
         assert_eq!(cold.memory_len(), 0);
@@ -523,7 +510,6 @@ mod tests {
         let (a, b, c) = (uri("lautta://l/a"), uri("lautta://l/b"), uri("lautta://l/c"));
         f.cache.put(&a, &sample()).unwrap();
         f.cache.put(&b, &sample()).unwrap();
-        // Touch a so b is the least recently used.
         assert!(f.cache.get(&a).unwrap().is_some());
         f.cache.put(&c, &sample()).unwrap();
         assert_eq!(f.cache.memory_len(), 2);
@@ -531,7 +517,6 @@ mod tests {
         assert!(keys.contains(&a.to_string()));
         assert!(keys.contains(&c.to_string()));
         assert!(!keys.contains(&b.to_string()));
-        // Evicted from memory but still in SQLite.
         assert!(f.cache.get(&b).unwrap().is_some());
     }
 
@@ -610,7 +595,6 @@ mod tests {
         assert_eq!(rows, 0);
         assert!(f.cache.get(&other).unwrap().is_some());
 
-        // The choice survives a restart.
         let again = DirCache::with_clock(f.db.clone(), 8, Arc::new(|| 1_700_000_000_000)).unwrap();
         assert!(again.is_disabled("nv-1"));
         assert!(!again.is_disabled("user-documents"));
@@ -637,7 +621,6 @@ mod tests {
                 .query_row("SELECT count(*) FROM dircache", [], |r| r.get(0))
                 .unwrap();
         assert_eq!(rows, 0);
-        // Bad hex in an otherwise valid document is also rejected.
         assert!(decode(br#"[{"nb":"zz","k":1}]"#).is_err());
         assert!(decode(br#"[{"n":"a","k":1,"e":"q"}]"#).is_err());
     }

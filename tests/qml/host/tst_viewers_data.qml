@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of ExifModel and ImageListModel (PRV-4)
-// on files in the temporary home.
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -12,7 +10,6 @@ Item {
             console.error("FAILED: " + what)
     }
 
-    // Waits for `model`'s async load (30 s at most: a busy machine).
     function settle(model) {
         for (var i = 0; i < 1200 && model.loading; ++i)
             tools.pump(25)
@@ -35,7 +32,6 @@ Item {
         check(tools.installFixture(Qt.resolvedUrl("fixtures/data.bin"), "lautta://user-documents/data.bin"), "bin fixture")
         check(tools.installFixture(Qt.resolvedUrl("fixtures/photo.jpg"), "lautta://user-pictures/photo.jpg"), "jpeg fixture")
 
-        // EXIF.
         exif.uri = "lautta://user-pictures/photo.jpg"
         check(exif.loading, "exif loading")
         settle(exif)
@@ -53,7 +49,6 @@ Item {
         settle(exif)
         check(exif.errorKind === "NotFound", "exif error")
 
-        // The folder's images.
         images.folderUri = "lautta://user-pictures/"
         settle(images)
         check(images.count === 1 && imageRows.count === 1, "one image in the folder " + images.count)

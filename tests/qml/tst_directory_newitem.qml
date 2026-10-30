@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): the folder pulley's New opens
-// NewItemDialog titled New folder, with the name field and no type to pick,
-// and accepting it makes a folder. Fails when the dialog offers a type or
-// makes something other than a folder.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -33,7 +29,6 @@ ApplicationWindow {
         scenarioRunning = false
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)

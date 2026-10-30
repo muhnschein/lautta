@@ -1,16 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The location registry (SPEC §5.3, §8): everything the user can browse,
-//! with the provider behind each location.
-//!
-//! * user folders (LOC-1) and Android storage (LOC-2) are found by looking
-//!   at the home folder; each is shown only if it exists and is readable;
-//! * removable volumes (LOC-3) come from [`crate::volumes`];
-//! * netvfs accounts and ad-hoc servers (LOC-4) are pushed in with
-//!   [`LocationRegistry::set_remote`];
-//! * archives (LOC-5) are added and removed with `register`/`unregister`.
-//!
-//! The registry is cheap to clone (shared state) and implements
-//! [`ProviderResolver`]. Interested parties follow changes through
+//! Location registry: everything the user can browse, with the provider behind each. User folders
+//! and Android storage are found by looking at the home folder, shown only if they exist and are
+//! readable. Removable volumes come from [`crate::volumes`]; netvfs accounts and ad-hoc servers are
+//! pushed in with [`LocationRegistry::set_remote`]; archives via `register`/`unregister`. Cheap to
+//! clone (shared state); implements [`ProviderResolver`]; follow changes with
 //! [`LocationRegistry::subscribe`].
 
 use crate::entry::cap;
@@ -29,7 +22,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 use tokio::sync::{watch, Semaphore};
 
-/// `(folder name, location id)` of the user folders (LOC-1), in display order.
 pub const USER_FOLDERS: [(&str, &str); 7] = [
     ("Documents", "user-documents"),
     ("Downloads", "user-downloads"),
@@ -40,7 +32,6 @@ pub const USER_FOLDERS: [(&str, &str); 7] = [
     ("Playlists", "user-playlists"),
 ];
 
-/// The folders under `~/android_storage` that the sandbox exposes (LOC-2).
 pub const ANDROID_FOLDERS: [(&str, &str); 7] = [
     ("Documents", "android-documents"),
     ("Download", "android-download"),
@@ -53,7 +44,6 @@ pub const ANDROID_FOLDERS: [(&str, &str); 7] = [
 
 const ANDROID_DIR: &str = "android_storage";
 
-/// Bytes escaped when a path is appended to a displayed address.
 const ADDRESS_SET: &AsciiSet = &CONTROLS
     .add(b' ')
     .add(b'"')
@@ -71,10 +61,7 @@ pub enum LocationKind {
     UserFolder,
     Android,
     Volume,
-    /// A netvfs account; `provider` is the netvfs provider name (sftp, smb, ...).
-    Server {
-        provider: String,
-    },
+    Server { provider: String },
     AdHoc,
     Archive,
 }
@@ -88,31 +75,22 @@ pub enum LocationStatus {
     NeedsAttention,
 }
 
-/// How the connection to a network location stands, as netvfs reports it
-/// (NVB-4; netvfs XB-10, XB-12). Kept apart from [`LocationStatus`]: a
-/// server that is not connected (never used, closed when idle) is still
-/// browsable, and opening it connects.
+/// Kept apart from [`LocationStatus`]: a server not connected (never used, closed when idle) is
+/// still browsable, opening it connects.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum ConnectionState {
-    /// Not a network location, or a bridge that does not tell (an older
-    /// netvfs, a state this app does not know): nothing is shown.
+    /// Not a network location, or a bridge that does not tell: nothing is shown.
     #[default]
     Unknown,
-    /// No connection is established or being established.
     Disconnected,
-    /// One is being established; also while the bridge itself reconnects
-    /// (NVB-12).
     Connecting,
-    /// At least one is established.
     Connected,
-    /// As disconnected, but the last attempt to connect failed: the
-    /// netvfs error name (XC-21, `""` when the bridge gave none).
+    /// As disconnected, but the last attempt failed: the netvfs error name (`""` when the bridge
+    /// gave none).
     Failed(String),
 }
 
 impl ConnectionState {
-    /// The engineering name the UI gets: `disconnected`, `connecting`,
-    /// `connected`, `failed`, or `""` when unknown.
     pub fn name(&self) -> &'static str {
         match self {
             ConnectionState::Unknown => "",
@@ -123,7 +101,6 @@ impl ConnectionState {
         }
     }
 
-    /// The error name of a failed state, `""` otherwise.
     pub fn error(&self) -> &str {
         match self {
             ConnectionState::Failed(error) => error,
@@ -137,16 +114,12 @@ pub struct Location {
     pub id: LocationId,
     pub kind: LocationKind,
     pub name: String,
-    /// Absolute folder for local locations.
     pub local_root: Option<PathBuf>,
-    /// Address shown to the user for remote locations (LOC-7). May contain a
-    /// user name but never a password; [`LocationRegistry::display_address`]
-    /// strips anything secret again.
+    /// May contain a user name but never a password; [`LocationRegistry::display_address`] strips
+    /// anything secret again.
     pub url: Option<String>,
-    /// Why the location needs the user (for example "Sign in again").
     pub attention: Option<String>,
     pub status: LocationStatus,
-    /// The bridge's connection state of a network location (NVB-4).
     pub connection: ConnectionState,
 }
 
@@ -205,8 +178,7 @@ struct State {
     volumes: Vec<Slot>,
     remote: Vec<Slot>,
     extra: Vec<Slot>,
-    /// Names of remote locations that went away, by id: URIs on them (the
-    /// clipboard, a page still open) are told apart from a missing item.
+    /// URIs on them (clipboard, a page still open) are told apart from a missing item.
     gone: BTreeMap<String, String>,
 }
 
@@ -245,13 +217,11 @@ pub struct LocationRegistry {
 }
 
 impl LocationRegistry {
-    /// Scans the user folders, Android storage and `/run/media/$USER` once.
     pub fn new(paths: AppPaths) -> LocationRegistry {
         let media_root = volumes::media_root(&paths);
         LocationRegistry::with_media_root(paths, media_root)
     }
 
-    /// Like [`LocationRegistry::new`] with an explicit removable-media root (tests).
     pub fn with_media_root(paths: AppPaths, media_root: PathBuf) -> LocationRegistry {
         let (changed, _) = watch::channel(0);
         let reg = LocationRegistry {
@@ -267,7 +237,6 @@ impl LocationRegistry {
         reg
     }
 
-    /// The permits blocking file system work shares (ARC-6).
     pub fn io_semaphore(&self) -> Arc<Semaphore> {
         self.inner.io.clone()
     }
@@ -283,13 +252,10 @@ impl LocationRegistry {
         self.inner.changed.send_modify(|generation| *generation += 1);
     }
 
-    /// A receiver whose value increases on every change of the location
-    /// list, statuses included.
     pub fn subscribe(&self) -> watch::Receiver<u64> {
         self.inner.changed.subscribe()
     }
 
-    /// Rescans the local folders and volumes. True when something changed.
     pub fn refresh(&self) -> bool {
         let user = self.scan_folders(&self.inner.paths.home, &USER_FOLDERS, LocationKind::UserFolder);
         let android_root = self.inner.paths.home.join(ANDROID_DIR);
@@ -304,7 +270,6 @@ impl LocationRegistry {
         changed
     }
 
-    /// The known folders below `base` that exist and can be listed.
     fn scan_folders(&self, base: &Path, table: &[(&str, &str)], kind: LocationKind) -> Vec<Location> {
         table
             .iter()
@@ -317,10 +282,8 @@ impl LocationRegistry {
             .collect()
     }
 
-    /// Provider for a local folder, sharing the I/O semaphore. Deletes in
-    /// user and Android folders go to the *Trash* (OPS-8) whatever mount
-    /// they are on: in the sandbox each of them is a mount of its own, apart
-    /// from `$HOME` (a tmpfs) and the app data (§3.3), and the trash copies
+    /// Deletes in user and Android folders go to the *Trash* whatever the mount: in the sandbox
+    /// each is a mount of its own, apart from `$HOME` (a tmpfs) and app data, and the trash copies
     /// what it cannot rename.
     fn local_provider(&self, root: &Path, keeps_trash: bool) -> Arc<dyn Provider> {
         let mut provider = LocalProvider::new(root.to_path_buf()).with_semaphore(self.inner.io.clone());
@@ -330,11 +293,8 @@ impl LocationRegistry {
         Arc::new(provider)
     }
 
-    /// Swaps in the new locations for one group, keeping unchanged slots
-    /// (same id, name and root) with their provider and status. True when
-    /// the list differs.
     fn replace_slots(&self, group: fn(&mut State) -> &mut Vec<Slot>, found: Vec<Location>) -> bool {
-        // Deletes on removable volumes are permanent (OPS-8).
+        // Deletes on removable volumes are permanent.
         let keeps_trash = !matches!(found.first().map(|l| &l.kind), Some(LocationKind::Volume));
         let old: Vec<Slot> = group(&mut self.state()).clone();
         let same =
@@ -366,7 +326,6 @@ impl LocationRegistry {
         self.replace_slots(|s| &mut s.volumes, locations)
     }
 
-    /// Re-reads `/run/media/$USER`.
     pub fn refresh_volumes(&self) -> bool {
         let changed = self.apply_volumes_inner(volumes::scan(&self.inner.media_root));
         if changed {
@@ -375,7 +334,6 @@ impl LocationRegistry {
         changed
     }
 
-    /// Applies one live volume change.
     pub fn apply_volume_event(&self, event: &VolumeEvent) -> bool {
         let mut current: Vec<Volume> = {
             let state = self.state();
@@ -411,14 +369,11 @@ impl LocationRegistry {
         changed
     }
 
-    /// Starts following the media root; changes are applied from a task on
-    /// the current tokio runtime. Dropping the returned watcher stops it.
     pub fn watch_volumes(&self) -> Result<VolumeWatcher> {
         let runtime = tokio::runtime::Handle::try_current()
             .map_err(|_| Error::new(ErrorKind::Internal, "volume watching needs a tokio runtime"))?;
         let (watcher, mut rx) =
             VolumeWatcher::start(self.inner.media_root.clone(), volumes::VOLUME_DEBOUNCE)?;
-        // Volumes mounted between the constructor and now.
         self.refresh_volumes();
         let registry = self.clone();
         runtime.spawn(async move {
@@ -429,7 +384,6 @@ impl LocationRegistry {
         Ok(watcher)
     }
 
-    /// Replaces all remote locations (netvfs accounts, ad-hoc servers).
     pub fn set_remote(&self, remote: Vec<(Location, Arc<dyn Provider>)>) {
         let slots: Vec<Slot> = remote
             .into_iter()
@@ -449,7 +403,6 @@ impl LocationRegistry {
         self.notify();
     }
 
-    /// The name of a location, also of a remote one that went away.
     pub fn name(&self, id: &str) -> Option<String> {
         let state = self.state();
         let name = state
@@ -459,7 +412,6 @@ impl LocationRegistry {
         name.or_else(|| state.gone.get(id).cloned())
     }
 
-    /// Adds or replaces one location (archives, LOC-5).
     pub fn register(&self, location: Location, provider: Arc<dyn Provider>) {
         {
             let mut state = self.state();
@@ -469,7 +421,6 @@ impl LocationRegistry {
         self.notify();
     }
 
-    /// Removes a location added with [`LocationRegistry::register`].
     pub fn unregister(&self, id: &str) -> bool {
         let removed = {
             let mut state = self.state();
@@ -483,8 +434,6 @@ impl LocationRegistry {
         removed
     }
 
-    /// Sets the status and the attention text of any location (reconnecting,
-    /// "Sign in again", ...). False when the id is unknown or nothing changed.
     pub fn set_status(&self, id: &str, status: LocationStatus, attention: Option<String>) -> bool {
         let changed = {
             let mut state = self.state();
@@ -503,8 +452,6 @@ impl LocationRegistry {
         changed
     }
 
-    /// All locations in display order: user folders, Android, volumes,
-    /// remote, then registered ones.
     pub fn locations(&self) -> Vec<Location> {
         self.state().all().map(|s| s.location.clone()).collect()
     }
@@ -516,9 +463,8 @@ impl LocationRegistry {
             .map(|s| s.location.clone())
     }
 
-    /// The address to show or copy (LOC-7): `file://` and the absolute path
-    /// for local locations, the netvfs URL plus the path for remote ones,
-    /// without credentials, query or fragment.
+    /// `file://` and the absolute path for local locations, the netvfs URL plus path for remote
+    /// ones, without credentials, query or fragment.
     pub fn display_address(&self, uri: &Uri) -> String {
         let Some(loc) = self.get(&uri.location) else {
             return uri.to_string();
@@ -540,8 +486,6 @@ impl LocationRegistry {
         }
     }
 
-    /// True when deletes in `location` go to the *Trash* (OPS-8): this
-    /// device's folders; not volumes, servers or archives.
     pub fn keeps_trash(&self, location: &str) -> bool {
         self.state()
             .all()
@@ -549,13 +493,10 @@ impl LocationRegistry {
             .is_some_and(slot_keeps_trash)
     }
 
-    /// The local path behind `uri`, `None` for remote locations and archives.
     pub fn to_local_path(&self, uri: &Uri) -> Option<PathBuf> {
         local_path_of(&self.get(&uri.location)?, uri)
     }
 
-    /// The URI of an absolute local path: the location with the longest
-    /// matching root. `.` and `..` are resolved lexically first.
     pub fn uri_for_local_path(&self, path: &Path) -> Option<Uri> {
         if !path.is_absolute() {
             return None;
@@ -582,7 +523,6 @@ fn slot_keeps_trash(slot: &Slot) -> bool {
     slot.location.local_root.is_some() && slot.provider.capabilities().has(cap::TRASH)
 }
 
-/// The absolute path of `uri` inside a local location.
 fn local_path_of(loc: &Location, uri: &Uri) -> Option<PathBuf> {
     let root = loc.local_root.as_ref()?;
     Some(if uri.path.is_root() {
@@ -605,7 +545,6 @@ impl ProviderResolver for LocationRegistry {
     }
 }
 
-/// Removes user name passwords, query and fragment from a URL.
 fn strip_secrets(url: &str) -> String {
     let cut = url.find(['?', '#']).unwrap_or(url.len());
     let url = &url[..cut];
@@ -840,10 +779,7 @@ mod tests {
             .capabilities()
             .has(cap::TRASH));
         let card = e.reg.provider("vol-CARD").unwrap().capabilities();
-        assert!(
-            !card.has(cap::TRASH),
-            "removable media delete permanently (OPS-8)"
-        );
+        assert!(!card.has(cap::TRASH), "removable media delete permanently");
         assert!(e.reg.keeps_trash("user-documents"));
         assert!(e.reg.keeps_trash("android-dcim"));
         assert!(!e.reg.keeps_trash("vol-CARD"));
@@ -857,8 +793,8 @@ mod tests {
 
     #[test]
     fn folders_on_another_device_than_home_keep_a_trash() {
-        // Sailjail: $HOME is a tmpfs and every permitted folder is mounted
-        // on it from the real file system, so no folder is on $HOME's device.
+        // Sailjail: $HOME is a tmpfs and every permitted folder is mounted on it from the real file
+        // system, so no folder is on $HOME's device.
         let e = env_with(&[]);
         let Ok(shm) = tempfile::tempdir_in("/dev/shm") else {
             return;
@@ -923,7 +859,6 @@ mod tests {
         assert_eq!(e.reg.provider("nv-9").err().unwrap().kind, ErrorKind::NotFound);
         assert_eq!(e.reg.name("nv-9"), None);
         assert_eq!(e.reg.name("user-documents").as_deref(), Some("Documents"));
-        // Back again, it is a location like before.
         e.reg.set_remote(vec![(nas(), mem())]);
         assert!(e.reg.provider("nv-1").is_ok());
         e.reg.set_remote(vec![(nas(), mem())]);
@@ -1034,8 +969,6 @@ mod tests {
         rx.borrow_and_update();
     }
 
-    // ---- addresses and paths ----------------------------------------------
-
     #[test]
     fn local_addresses_are_file_urls() {
         let e = env_with(&["Documents"]);
@@ -1135,7 +1068,7 @@ mod tests {
     #[test]
     fn longest_root_wins_and_outsiders_are_rejected() {
         let e = env_with(&["Documents", "Music"]);
-        // a prefix of another name must not match: Documents vs Documents2
+        // A prefix of another name must not match: Documents vs Documents2
         std::fs::create_dir(e.home.join("Documents2")).unwrap();
         assert_eq!(e.reg.uri_for_local_path(&e.home.join("Documents2/x")), None);
         let nested = e.home.join("Documents/Shared");

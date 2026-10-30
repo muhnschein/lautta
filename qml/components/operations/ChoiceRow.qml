@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// One resolution of a conflict: highlighted when selected, dimmed when it
-// does not apply to this conflict.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "Json.js" as Json

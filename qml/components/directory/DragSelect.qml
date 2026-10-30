@@ -1,13 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// Selecting by dragging (SPEC §15.3), as in iOS Photos and Immich: hold an
-// item, then move the finger over others. The range from the held item to
-// the one under the finger, in reading order, takes the held item's new
-// state; moving back shrinks it again (Selection.js). Near the top or the
-// bottom of the view it scrolls on by itself, faster nearer the edge, and
-// the range follows the finger. The held delegate keeps the finger (no
-// flick steals it) and reports its moves here; it stays alive while its row
-// scrolls out of view because that row is in DelegateModel's persisted
-// items while it is held.
+// SPDX-License-Identifier: LGPL-2.1-or-later Held delegate stays alive while its row scrolls out of
+// view: row is in DelegateModel's persisted items.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "Selection.js" as Selection
@@ -15,29 +7,22 @@ import "Selection.js" as Selection
 Item {
     id: drag
 
-    // The grid or the list shown (DirectoryView.flickable), and its
-    // DirectoryModel.
     property Flickable view
     property var model
-    // How much of the view's end the docked panel covers.
     property real bottomInset
-    // The delegate holding the finger, null when no drag runs.
     property Item holder
-    // Selection.dragStart's state, and the uris selected before the drag.
     property var range: null
     property var before: ({})
-    // Where the finger held and is, in the view's coordinates.
     property point heldAt
     property point finger
-    // Scrolling waits until the finger moves: holding an item near an edge,
-    // or one the opening panel slides over, must not scroll the view.
+    // Scroll waits until finger moves: holding near an edge, or under the opening panel, must not
+    // scroll.
     property bool moved
     readonly property real speed: holder && moved
                                   ? Selection.autoScroll(finger.y, 0, view.height - bottomInset,
                                                          Theme.itemSizeMedium, Theme.paddingLarge)
                                   : 0
 
-    // The delegate `item` of row `index` was held at (x, y) of it.
     function begin(item, index, x, y) {
         var uris = model.selectedUris()
         var was = {}
@@ -53,7 +38,6 @@ Item {
         reach(index)
     }
 
-    // The finger moved to (x, y) of the holding delegate.
     function move(x, y) {
         finger = view.mapFromItem(holder, x, y)
         if (Math.abs(finger.x - heldAt.x) + Math.abs(finger.y - heldAt.y) > Theme.startDragDistance)
@@ -69,8 +53,6 @@ Item {
         holder = null
     }
 
-    // The range up to the item under the finger; between items, on the
-    // header or past the last item it stays.
     function follow() {
         var p = view.contentItem.mapFromItem(view, finger.x, finger.y)
         var index = view.itemIndexAt(p.x, p.y)
@@ -85,7 +67,6 @@ Item {
             model.toggle(model.uriAt(step.flips[i]))
     }
 
-    // The holder went (the folder was listed anew): the drag is over.
     onHolderChanged: {
         if (!holder && range)
             end()

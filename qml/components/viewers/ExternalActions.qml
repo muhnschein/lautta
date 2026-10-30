@@ -1,8 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// Open with / Share for the file of a viewer (PRV-5, PRV-6, PRV-7): local
-// files go to the system as they are, remote files are copied to
-// ~/Downloads/Lautta/Opened first (SEC-4). Not visible; call openWith() or
-// share().
+// SPDX-License-Identifier: LGPL-2.1-or-later Remote files copied to ~/Downloads/Lautta/Opened
+// first; local go as is. Not visible: call openWith() or share().
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Sailfish.Share 1.0
@@ -12,9 +9,7 @@ Item {
     id: root
 
     property string uri
-    // True while a remote copy is being made.
     property bool busy
-    // "open" or "share": what to do when the copy is ready.
     property string pending
 
     signal failed(string kind, string message)

@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// DeleteDialog on the target (real Silica): a dialog header asking Delete
-// permanently? with Delete to accept, and a text that names the item or the
-// count, where it is, and that it can't be undone (OPS-8). Nothing to
-// delete can't be accepted.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -18,7 +14,6 @@ ApplicationWindow {
             console.error("FAILED: " + what)
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)
@@ -34,7 +29,6 @@ ApplicationWindow {
         return out
     }
 
-    // Engineering English, or the id where no translation is loaded.
     function either(text, english, id) {
         return text === english || text === id
     }

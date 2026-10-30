@@ -1,11 +1,6 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// The QML checks' finger (ViewerTools.mouse) on the target (real Silica,
-// Qt 5.6): once a drag on a SilicaFlickable has started, every move scrolls
-// it by that move's length at once, however fast the moves come. Moves sent
-// in a tight loop share a millisecond; a move with the time of the one
-// before scrolls no flickable until a later one comes, so drags in the page
-// tests would end short or not move at all, by runner speed. Fails when one
-// move lags, or a drag does not move.
+// SPDX-License-Identifier: LGPL-2.1-or-later Qt 5.6: moves in a tight loop share a millisecond; a
+// move with the previous move's time scrolls nothing. Each move of a drag on a SilicaFlickable must
+// scroll at once.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -31,8 +26,6 @@ ApplicationWindow {
         return ok
     }
 
-    // `moves` moves of 10 px up (direction 1) or down (-1): after the drag
-    // starts, each scrolls by 10. Nothing pumps events in between.
     function drag(direction, moves) {
         var step = 10 * direction
         var from = direction > 0 ? 280 : 20

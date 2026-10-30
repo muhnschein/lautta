@@ -1,10 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The image viewer's swipes and Delete on the target (PRV-4, real Silica
-// and Lautta types): a swipe goes to the folder's next image; Delete calls
-// remove(), whose remorse holds the swipes and the overlay while it runs;
-// cancelled, nothing is deleted; the close button goes back; the folder
-// goes at the end. Swipes are real mouse events, so the Silica window sits
-// in a Qt Quick window: only items in one get them.
 import QtQuick 2.6
 import QtQuick.Window 2.2 as QtQuick
 import QtTest 1.0
@@ -16,26 +10,19 @@ QtQuick.Window {
     id: window
 
     property bool scenarioRunning: true
-    // What Silica's pages look up in the window they are in, and the page
-    // stack that an app's ApplicationWindow, as the root, gives them all.
     property var __silica_applicationwindow_instance: app
     readonly property var pageStack: app.pageStack
     property int step: 0
     property int waited: 0
-    // The viewer: null once closed, as the page stack destroys it then.
     property var page
     property var view
-    // The viewer is pushed: the steps run from here on.
     property bool started
     property int readyFor
     property bool cleaned
-    // A swipe's moves wait between them, and the step timer must not run a
-    // step again meanwhile.
     property bool swiping
 
     ViewerTools { id: tools }
     TestEvent { id: events }
-    // Makes the folder of the test's images.
     DirectoryModel {
         id: pictures
         uri: "lautta://user-pictures/"
@@ -59,7 +46,6 @@ QtQuick.Window {
     function findAll(item, pred, out) {
         if (!item)
             return out
-        // A flickable's contentItem is one of its children too.
         if (pred(item) && out.indexOf(item) < 0)
             out.push(item)
         var kids = item.children || []
@@ -75,12 +61,10 @@ QtQuick.Window {
         return found.length > 0 ? found[0] : null
     }
 
-    // The image shown: the current slot's GalleryImage.
     function image() {
         return view.currentItem ? view.currentItem.item : null
     }
 
-    // Finger down right of the middle, moved left over half the view, up.
     function swipeLeft() {
         var y = view.height / 2
         var x = view.width * 0.8
@@ -92,7 +76,6 @@ QtQuick.Window {
         swiping = false
     }
 
-    // The state the steps wait on, for a timeout's message.
     function describe() {
         if (!page)
             return "viewer closed, " + app.pageStack.depth + " pages"
@@ -122,7 +105,6 @@ QtQuick.Window {
                     window.readyFor = 0
                     return
                 }
-                // Settled on the listing for a moment, as a finger would be.
                 if (++window.readyFor < 5)
                     return
                 window.expect(window.page.total === 2 && window.view.currentIndex === 0
@@ -162,7 +144,6 @@ QtQuick.Window {
                 if (app.pageStack.busy || app.pageStack.currentPage === window.page)
                     return
                 window.expect(app.pageStack.depth === 1, "closed: back on the page below: " + app.pageStack.depth)
-                // Leave Pictures as it was for the scenarios after this one.
                 window.cleaned = false
                 Operations.remove(JSON.stringify(["lautta://user-pictures/ViewerSwipe"]))
                 break
@@ -182,7 +163,6 @@ QtQuick.Window {
         tools.pump(500)
         tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), "lautta://user-pictures/ViewerSwipe/one.jpg")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), "lautta://user-pictures/ViewerSwipe/two.jpg")
-        // The page the viewer opens from, to go back to.
         app.pageStack.push(belowComponent, {}, PageStackAction.Immediate)
         tools.pump(300)
         page = app.pageStack.push(pageComponent, {}, PageStackAction.Immediate)

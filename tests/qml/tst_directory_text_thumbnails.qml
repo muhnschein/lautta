@@ -1,12 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Text thumbnails on the target (PRV-15). In the grid a text, code or
-// Markdown file's tile shows its first lines in place of the glyph, code in
-// the monospace font without wrapping, prose wrapped, faded out above its
-// type icon; an empty file and other files keep the glyph. The list keeps
-// glyphs; with Show thumbnails off no tile has text, switched on the tiles
-// already shown get theirs. Fails when a tile shows
-// no text, the wrong text, font or icon, or the glyph stays under it. Looks
-// and the fade stay unproven until a phone shows them.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -30,7 +22,6 @@ ApplicationWindow {
         return ok
     }
 
-    // Items are reached both as children and as a content item: each once.
     function findAll(item, pred, out) {
         if (!item || out.indexOf(item) >= 0)
             return out
@@ -48,14 +39,13 @@ ApplicationWindow {
         return findAll(item, function (x) { return x.objectName === name }, [])[0]
     }
 
-    // Headless, no render loop polishes the view: lays out the delegates.
+    // No render loop headless: lay out by hand.
     function layOut(view) {
         var flicks = findAll(view, function (x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < flicks.length; ++i)
             flicks[i].forceLayout()
     }
 
-    // The file icons of `category` in the view.
     function iconsOf(view, category) {
         layOut(view)
         return findAll(view, function (x) { return x.previewShown !== undefined && x.category === category }, [])
@@ -66,7 +56,6 @@ ApplicationWindow {
         return findAll(view, function (x) { return x.previewShown === true }, [])
     }
 
-    // Lets the event loop run until `done()` holds, for at most 10 s.
     function until(done) {
         for (var i = 0; i < 200 && !done(); ++i)
             tools.pump(50)
@@ -110,7 +99,6 @@ ApplicationWindow {
         expect(view.gridMode, "a grid")
         expect(until(function () { return iconsOf(view, "code").length === 1 }) && shownIcons(view).length === 0,
                "thumbnails off: glyphs")
-        // Switched on, the cells already there ask.
         App.setSetting("thumbnails_local", JSON.stringify(true))
 
         checkTile(view, "text", function (t) { return t === "line one\nline two" }, false, "types/text")

@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// "Archive contents are read-only. Extract all" (design: ArchiveView). Put it
-// at the top of a directory page whose folder lies inside an archive (LOC-5).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -8,7 +6,6 @@ import Lautta 1.0
 BackgroundItem {
     id: banner
 
-    // Any URI inside the archive location.
     property string uri
     readonly property bool inArchive: uri.length > 0 && Operations.isArchive(uri)
 

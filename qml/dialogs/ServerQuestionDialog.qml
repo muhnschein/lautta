@@ -1,9 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// A question of the bridge about an ad-hoc server (NVB-6): an unknown
-// identity, an unencrypted SMB connection (the `legacy` or `guest` profile),
-// or sign-in prompts. Answered in the
-// app; for accounts these questions never come here (NVB-5). `kind` is the
-// bridge's name of the question, `details` its display strings.
+// SPDX-License-Identifier: LGPL-2.1-or-later `kind` is bridge's name of the question, `details` its
+// display strings. Accounts' questions never come here.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -20,7 +16,6 @@ Dialog {
     readonly property bool signIn: kind === "keyboard-interactive"
     readonly property string host: details.host || ""
     readonly property var prompts: signIn && details.prompts ? String(details.prompts).split("\n") : []
-    // The question was settled elsewhere (answered, or the connection ended).
     property bool settled
     property bool answered
 
@@ -161,8 +156,7 @@ Dialog {
                     width: column.width
                     label: modelData.replace(/[:\s]+$/, "")
                     placeholderText: label
-                    // Whether a prompt echoes is the server's business; showing the
-                    // text only while it is typed keeps codes readable.
+                    // Prompt text shown while typed: keeps codes readable.
                     showEchoModeToggle: true
                     EnterKey.iconSource: index === fields.count - 1 ? "image://theme/icon-m-enter-accept"
                                                                     : "image://theme/icon-m-enter-next"

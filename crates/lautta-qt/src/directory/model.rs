@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `DirectoryModel { uri }` (doc/QML-API.md, SPEC §9): a folder listing on
-//! top of `lautta_core::listing::ListingState`. Listings stream in from the
-//! core (cached copy first, BRW-5), diffs become row inserts/removes/updates,
-//! local folders are watched (BRW-6) and the view settings are the global
-//! ones (BRW-4), followed while the folder is open.
+//! Folder listing on `lautta_core::listing::ListingState`: streamed from core (cached copy first),
+//! diffs become row inserts/removes/updates, local folders watched, view settings are the global
+//! ones, followed while open.
 
 use crate::browse::Guard;
 use crate::json::from_json;
@@ -62,8 +60,7 @@ const ROLES: [&str; 26] = [
     "typeIcon",
 ];
 
-/// Errors that mean "can't reach it right now": a cached copy stays visible
-/// and the page says it is offline (BRW-7).
+/// "Can't reach it right now": cached copy stays visible, page says offline.
 fn is_connectivity(kind: ErrorKind) -> bool {
     matches!(
         kind,
@@ -78,30 +75,26 @@ fn qs(s: &str) -> QString {
     QString::from(s)
 }
 
-/// What an item count was made for: it is counted again when the folder
-/// changed (its modified time) or the hidden files were switched.
+/// Counted again when folder mtime changed or hidden files were switched.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct CountStamp {
     modified: Option<i64>,
     show_hidden: bool,
 }
 
-/// The count of one folder in the view, `result` `None` until it is made
-/// or when the folder cannot be read.
+/// `result` `None` until made or when the folder cannot be read.
 struct CountSlot {
     stamp: CountStamp,
     result: Option<FolderCount>,
 }
 
-/// What a text thumbnail was made for: made again when the file changed.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct PreviewStamp {
     modified: Option<i64>,
     size: Option<u64>,
 }
 
-/// The text thumbnail of one file in the view (PRV-15): `key` while it is
-/// made, then `text`, `None` when the file has none.
+/// `key` while made, then `text`; `None` when the file has none.
 struct PreviewSlot {
     stamp: PreviewStamp,
     key: Option<String>,
@@ -122,14 +115,12 @@ pub struct DirectoryModel {
     errorKind: qt_property!(QString; NOTIFY stateChanged),
     errorMessage: qt_property!(QString; NOTIFY stateChanged),
     count: qt_property!(i32; NOTIFY stateChanged),
-    /// When the cached copy on screen was fetched (ms since the epoch), -1 if none.
     cachedAt: qt_property!(f64; NOTIFY stateChanged),
     capabilities: qt_property!(QVariantList; NOTIFY stateChanged),
     writable: qt_property!(bool; NOTIFY stateChanged),
     locationName: qt_property!(QString; NOTIFY stateChanged),
     title: qt_property!(QString; NOTIFY stateChanged),
-    /// Folders here have an item count (`requestCount`): the folder is on
-    /// this device or a drive, not on a server or in an archive.
+    /// Folder is on this device or a drive, not a server or archive.
     folderCounts: qt_property!(bool; NOTIFY stateChanged),
     stateChanged: qt_signal!(),
 
@@ -146,7 +137,6 @@ pub struct DirectoryModel {
     prefsChanged: qt_signal!(),
 
     filterText: qt_property!(QString; NOTIFY filterChanged WRITE set_filter_text),
-    /// Hide files (the folder picker).
     foldersOnly: qt_property!(bool; NOTIFY filterChanged WRITE set_folders_only),
     filterChanged: qt_signal!(),
 
@@ -160,19 +150,14 @@ pub struct DirectoryModel {
     selectedUris: qt_method!(fn(&self) -> QVariantList),
     setViewPrefs: qt_method!(fn(&mut self, prefs_json: QString) -> bool),
     indexOf: qt_method!(fn(&self, uri: QString) -> i32),
-    /// The uri of row `index`, empty outside the rows (drag selection, SPEC §15.3).
     uriAt: qt_method!(fn(&self, index: i32) -> QString),
     hasCapability: qt_method!(fn(&self, flag: QString) -> bool),
     nameKind: qt_method!(fn(&self, name: QString) -> QString),
-    /// "folder", "file" or "" for the item `uri` of this folder.
     kindOf: qt_method!(fn(&self, uri: QString) -> QString),
-    /// Counts the items of the folder `uri` for the `itemCount` role,
-    /// off the GUI thread; asks again only when the folder changed.
+    /// Off the GUI thread; asks again only when the folder changed.
     requestCount: qt_method!(fn(&mut self, uri: QString)),
-    /// Makes the `textPreview` of the file `uri` (PRV-15) in the thumbnail
-    /// jobs; asks again only when the file changed.
+    /// In the thumbnail jobs; asks again only when the file changed.
     requestPreview: qt_method!(fn(&mut self, uri: QString)),
-    /// The cell of `uri` went: a preview still queued is dropped.
     cancelPreview: qt_method!(fn(&mut self, uri: QString)),
     setTransferState: qt_method!(fn(&mut self, uri: QString, state: QString)),
     rename: qt_method!(fn(&mut self, uri: QString, name: QString)),
@@ -186,37 +171,27 @@ pub struct DirectoryModel {
     local_dir: Option<PathBuf>,
     state: ListingState,
     prefs: ViewPrefs,
-    /// The global view settings `prefs` last followed (BRW-4).
     global: ViewPrefs,
-    /// The view was set here (`setViewPrefs`) or for every folder since
-    /// the folder opened: no grid suggestion.
+    /// Set here (`setViewPrefs`) or for every folder since open: no grid suggestion.
     prefs_set: bool,
     filter: FilterOptions,
     flags: Vec<String>,
-    /// The settings that pick the files with a thumbnail, as of the last
-    /// load or change; none before the folder is open.
+    /// None before the folder is open.
     thumb_settings: Option<ThumbSettings>,
     shown: usize,
     generation: u64,
     task: Option<AbortHandle>,
     pending: Option<Vec<Entry>>,
     dirty: bool,
-    /// Archives do not change while open: coming back never lists them again.
     archive: bool,
     watcher: Option<DirWatcher>,
-    /// Ends the task following the settings when the model goes.
     settings_watch: Option<Guard>,
     transfer_states: HashMap<Vec<u8>, String>,
-    /// Item counts of the folders in this one, by name; asked for by the
-    /// cells that show them.
     counts: HashMap<Vec<u8>, CountSlot>,
-    /// Text thumbnails of the files in this folder, by name.
     previews: HashMap<Vec<u8>, PreviewSlot>,
 }
 
 impl DirectoryModel {
-    // ---- loading ----
-
     fn set_uri(&mut self, value: QString) {
         if self.uri == value {
             return;
@@ -339,9 +314,7 @@ impl DirectoryModel {
         self.watcher = Some(watcher);
     }
 
-    /// Follows the settings while the model lives: a change made on another
-    /// page (Settings, or View options in another folder) shows here at
-    /// once (BRW-4), not only when the folder is opened again.
+    /// Change on another page shows here at once, not only on reopen.
     fn watch_settings(&mut self, core: &Core) {
         let guard = Guard::default();
         let mut stop = guard.subscribe();
@@ -389,8 +362,7 @@ impl DirectoryModel {
         self.publish();
     }
 
-    /// The folder is on screen again (BRW-11): a folder nobody watches is
-    /// listed again, the cached rows staying until the fresh ones arrive.
+    /// Folder nobody watches is listed again, cached rows stay until fresh ones arrive.
     fn revisit(&mut self) {
         if self.watcher.is_none() && !self.archive && !self.loading {
             self.refresh();
@@ -474,8 +446,6 @@ impl DirectoryModel {
         self.errorMessage = qs(&e.message);
         self.publish();
     }
-
-    // ---- model plumbing ----
 
     fn apply(&mut self, changes: Vec<ListChange>) {
         for change in changes {
@@ -565,8 +535,7 @@ impl DirectoryModel {
         }
     }
 
-    /// The text thumbnail of `e` as it is now, empty while it is made or
-    /// with thumbnails off.
+    /// Empty while made or with thumbnails off.
     fn preview_of(&self, e: &Entry) -> &str {
         if self.thumb_source(e) != ThumbSource::Text {
             return "";
@@ -585,8 +554,7 @@ impl DirectoryModel {
         }
     }
 
-    /// The count of the folder `e` as it is now; none while it is being
-    /// made again after a change.
+    /// None while being made again after a change.
     fn count_of(&self, e: &Entry) -> Option<FolderCount> {
         let slot = self.counts.get(&e.name)?;
         if slot.stamp == self.stamp_of(e) {
@@ -632,15 +600,12 @@ impl DirectoryModel {
         }
     }
 
-    // ---- view settings, filter ----
-
     fn apply_prefs_state(&mut self) {
         let p = self.prefs;
         self.sortKey = qs(p.sort.as_str());
         self.descending = p.descending;
         self.foldersFirst = p.folders_first;
         self.showHidden = p.show_hidden;
-        // A suggested grid (SPEC 15.3) stays until a view is chosen.
         let mode = if self.suggestGrid {
             ViewMode::Grid
         } else {
@@ -652,8 +617,7 @@ impl DirectoryModel {
         self.prefsChanged();
     }
 
-    /// Shows the folder with other view settings. Storing them for every
-    /// folder is `App.setSetting`'s job.
+    /// Storing for every folder is `App.setSetting`'s job.
     fn setViewPrefs(&mut self, prefs_json: QString) -> bool {
         if self.dir.is_none() {
             return false;
@@ -691,8 +655,7 @@ impl DirectoryModel {
         true
     }
 
-    /// The global settings changed. What changed shows here at once; what
-    /// was set for this folder alone and did not change stays (BRW-4).
+    /// What was set for this folder alone and did not change stays.
     fn follow_settings(&mut self) {
         let Some(core) = core() else { return };
         let global = core.view_prefs();
@@ -709,14 +672,12 @@ impl DirectoryModel {
         self.show_prefs(prefs);
     }
 
-    /// A view was chosen for this folder or for all: it replaces a
-    /// suggested grid and no other is suggested.
+    /// Replaces a suggested grid; no other is suggested.
     fn view_chosen(&mut self) {
         self.prefs_set = true;
         self.suggestGrid = false;
     }
 
-    /// Shows the folder with the view settings `p`.
     fn show_prefs(&mut self, p: ViewPrefs) {
         self.prefs = p;
         self.apply_prefs_state();
@@ -727,7 +688,6 @@ impl DirectoryModel {
         self.publish();
     }
 
-    /// Thumbnails may have been switched: every row's data changed.
     fn reload_roles(&mut self) {
         if self.shown == 0 {
             return;
@@ -754,8 +714,6 @@ impl DirectoryModel {
         self.filterChanged();
         self.publish();
     }
-
-    // ---- selection ----
 
     fn select(&mut self, uri: QString) {
         if let Some(name) = self.name_of(&uri) {
@@ -796,8 +754,6 @@ impl DirectoryModel {
         out
     }
 
-    // ---- queries ----
-
     fn indexOf(&self, uri: QString) -> i32 {
         self.name_of(&uri)
             .and_then(|n| self.state.index_of(&n))
@@ -818,13 +774,11 @@ impl DirectoryModel {
         self.flags.contains(&flag)
     }
 
-    /// "folder", "file" or "" for what is called `name` here (before filtering).
     fn nameKind(&self, name: QString) -> QString {
         qs(kind_of(self.state.entry_named(name.to_string().as_bytes())))
     }
 
-    /// By uri, so names that are not UTF-8 are found too (the selection
-    /// panel's one item, SPEC §15.3).
+    /// By uri, so non-UTF-8 names are found too.
     fn kindOf(&self, uri: QString) -> QString {
         let name = self.name_of(&uri).unwrap_or_default();
         qs(kind_of(self.state.entry_named(&name)))
@@ -861,8 +815,7 @@ impl DirectoryModel {
         );
     }
 
-    /// A count arrived. One made for an older state of the folder, or for
-    /// another folder, is dropped: the cell asked again.
+    /// Count for an older state of the folder, or another folder, is dropped: the cell asks again.
     fn counted(&mut self, generation: u64, name: &[u8], stamp: CountStamp, result: Option<FolderCount>) {
         if generation != self.generation {
             return;
@@ -898,6 +851,7 @@ impl DirectoryModel {
             previews.cancel_text(old);
         }
         let ticket = previews.request_text(core, file);
+        let key = ticket.key.clone();
         self.previews.insert(
             name.clone(),
             PreviewSlot {
@@ -907,20 +861,20 @@ impl DirectoryModel {
             },
         );
         let me = QPointer::from(&*self);
-        let generation = self.generation;
         spawn_then(async move { ticket.rx.await.ok().flatten() }, move |text| {
             if let Some(m) = me.as_pinned() {
-                m.borrow_mut().previewed(generation, &name, stamp, text);
+                m.borrow_mut().previewed(&key, &name, text);
             }
         });
     }
 
-    /// A text thumbnail arrived; one for an older state of the file is dropped.
-    fn previewed(&mut self, generation: u64, name: &[u8], stamp: PreviewStamp, text: Option<String>) {
-        if generation != self.generation {
-            return;
-        }
-        let Some(slot) = self.previews.get_mut(name).filter(|slot| slot.stamp == stamp) else {
+    /// Only the slot's pending request counts: keys are never reused.
+    fn previewed(&mut self, key: &str, name: &[u8], text: Option<String>) {
+        let Some(slot) = self
+            .previews
+            .get_mut(name)
+            .filter(|slot| slot.key.as_deref() == Some(key))
+        else {
             return;
         };
         slot.key = None;
@@ -939,7 +893,6 @@ impl DirectoryModel {
         }
     }
 
-    /// Previews still queued are dropped with the folder.
     fn drop_previews(&mut self) {
         for slot in std::mem::take(&mut self.previews).into_values() {
             if let Some(key) = slot.key {
@@ -961,8 +914,6 @@ impl DirectoryModel {
             self.data_changed(idx, idx);
         }
     }
-
-    // ---- changes made here ----
 
     fn rename(&mut self, uri: QString, name: QString) {
         let (Some(core), Ok(u)) = (core(), Uri::parse(&uri.to_string())) else {
@@ -1015,12 +966,10 @@ fn cancel_text(key: &str) {
     }
 }
 
-/// The `itemCount` role: the count, `-1` when there is none.
 fn count_role(shown: usize) -> i32 {
     i32::try_from(shown).unwrap_or(i32::MAX)
 }
 
-/// What `nameKind` and `kindOf` answer for an entry or none.
 fn kind_of(entry: Option<&Entry>) -> &'static str {
     match entry {
         Some(e) if e.is_dir() => "folder",
@@ -1050,5 +999,45 @@ impl QAbstractListModel for DirectoryModel {
             .enumerate()
             .map(|(i, n)| (ROLE_BASE + i as i32, QByteArray::from(*n)))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn text_of<'a>(m: &'a DirectoryModel, name: &[u8]) -> Option<(Option<&'a str>, Option<&'a str>)> {
+        m.previews
+            .get(name)
+            .map(|slot| (slot.key.as_deref(), slot.text.as_deref()))
+    }
+
+    #[test]
+    fn a_text_thumbnail_counts_only_for_the_request_still_pending() {
+        let mut m = DirectoryModel::default();
+        let stamp = PreviewStamp {
+            modified: Some(1),
+            size: Some(3),
+        };
+        m.previews.insert(
+            b"a.txt".to_vec(),
+            PreviewSlot {
+                stamp,
+                key: Some("text:2:a".into()),
+                text: None,
+            },
+        );
+        m.previewed("text:1:a", b"a.txt", Some("old".into()));
+        assert_eq!(
+            text_of(&m, b"a.txt"),
+            Some((Some("text:2:a"), None)),
+            "a cancelled request's answer is dropped"
+        );
+        m.previewed("text:2:a", b"a.txt", Some("hei".into()));
+        assert_eq!(text_of(&m, b"a.txt"), Some((None, Some("hei"))));
+        m.previewed("text:2:a", b"a.txt", None);
+        assert_eq!(text_of(&m, b"a.txt"), Some((None, Some("hei"))), "answered once");
+        m.previewed("text:3:b", b"b.txt", Some("b".into()));
+        assert_eq!(text_of(&m, b"b.txt"), None, "never asked for");
     }
 }

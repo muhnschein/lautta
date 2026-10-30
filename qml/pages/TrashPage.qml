@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The Trash (OPS-8, boards RecentlyDeleted, RecentlyDeletedEmpty): restore,
-// delete now, or empty it. Only items deleted from this device's folders
-// are kept here; deletes on volumes and servers are permanent (note under the
-// header). Images, videos and PDFs show thumbnails.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -122,8 +118,6 @@ Page {
                 width: Theme.iconSizeMedium
                 height: width
 
-                // Image, video or PDF: thumbnail of the stored copy, as folder
-                // rows have; other rows keep their glyph (OPS-8, PRV-1, PRV-14).
                 FileIcon {
                     anchors.fill: parent
                     visible: model.thumbnailSource.length > 0

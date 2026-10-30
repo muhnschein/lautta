@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Typed signals of the bridge. Consumers read them from one ordered stream
-//! (`Connection::signals`), because per-signal proxy streams may be observed
-//! out of order relative to each other (`ListBatch` before `ListDone`).
+//! One ordered stream (`Connection::signals`): per-signal proxy streams may be observed
+//! out of order (`ListBatch` before `ListDone`).
 
 use crate::errors::BridgeError;
 use crate::wire::{WireEntry, WireNearby, WireWalkItem, INTERFACE};
@@ -44,7 +43,6 @@ pub enum Signal {
         kind: String,
         details: HashMap<String, OwnedValue>,
     },
-    /// `ListDrives` lists something else now (XB-20).
     DrivesChanged,
 }
 
@@ -57,9 +55,7 @@ where
         .map_err(|e| BridgeError::Protocol(e.to_string()))
 }
 
-/// Decodes a message into a [`Signal`]. `Ok(None)` for messages that are not
-/// signals of `org.netvfs.Bridge1` (and for signals this client does not
-/// know, which are ignored).
+/// `Ok(None)` for other messages and unknown signals.
 pub fn decode_signal(msg: &Message) -> Result<Option<Signal>, BridgeError> {
     let header = msg.header();
     if header.primary().msg_type() != MessageType::Signal {

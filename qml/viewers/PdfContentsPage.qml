@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Contents and pages of a PDF (PRV-12, boards Contents and No contents): the
-// outline with the section being read highlighted, and "Go to page" docked
-// at the bottom. Choosing either emits `chosen` with the page (from 0); the
-// viewer goes there and closes this page.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "../components/viewers/PdfText.js" as PdfText
@@ -14,7 +10,6 @@ Page {
     // [{title, level, page}] (PdfDocument.outline, parsed).
     property var outline: []
     property int pageCount
-    // The page being read, from 0.
     property int currentPage
 
     signal chosen(int index)
@@ -39,7 +34,6 @@ Page {
         delegate: BackgroundItem {
             id: item
 
-            // The section being read, or pressed.
             readonly property bool lit: highlighted || index === page.currentItem
 
             enabled: modelData.page >= 0

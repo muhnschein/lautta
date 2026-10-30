@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The transfers area on a temporary home folder: the grouped list with
-//! questions and history, and restore at start (XFR-11).
 
 use lautta_core::app::{Core, Started};
 use lautta_core::app_transfers::{ProgressBook, TransferGroup};
@@ -49,8 +47,6 @@ fn write(path: &Path, data: &[u8]) {
     std::fs::write(path, data).unwrap();
 }
 
-/// Queues a copy of Documents/a.txt into Downloads, which already holds a
-/// different a.txt: the transfer stops with a question.
 async fn conflicting_copy(h: &Home) -> i64 {
     write(&h.root.join("Documents/a.txt"), b"new content");
     write(&h.root.join("Downloads/a.txt"), b"old");
@@ -127,7 +123,7 @@ async fn unfinished_transfers_come_back_paused_or_resumed() {
     let h = home().await;
     let id = conflicting_copy(&h).await;
     h.core.engine.flush().await;
-    assert_eq!(h.core.pending_at_close(), 1, "XFR-6 counts unfinished work");
+    assert_eq!(h.core.pending_at_close(), 1, "counts unfinished work");
 
     let second = open(&h.paths, &h.root).await;
     let report = second.start_transfers(false).await.unwrap();

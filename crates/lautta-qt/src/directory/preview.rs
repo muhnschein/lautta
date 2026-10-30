@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The sample folder in the preview of the view options page (BRW-4),
-//! behind `App.previewRows` (doc/QML-API.md). QML gives the entries and the
-//! view settings; the core's `ListingState` orders and filters them, so the
-//! preview shows exactly what a real folder would.
+//! Sample folder of the view options preview, behind `App.previewRows`. Core's `ListingState`
+//! orders and filters QML's entries, so the preview matches a real folder.
 
 use crate::json::from_json;
 use lautta_core::entry::{ms_to_system_time, Entry, Kind};
@@ -13,18 +11,14 @@ use lautta_core::viewprefs::ViewPrefs;
 use qmetaobject::{QString, QVariant, QVariantList, QVariantMap};
 use serde::Deserialize;
 
-/// The fields of a row, in the order of `role_value`'s numbers.
 const FIELDS: [&str; 6] = ["name", "isDir", "size", "modified", "hidden", "category"];
 
-/// One sample entry as QML writes it.
 #[derive(Deserialize)]
 struct Sample {
     name: String,
     #[serde(default)]
     dir: bool,
-    /// Bytes; folders have none.
     size: Option<u64>,
-    /// Milliseconds since the epoch.
     modified: Option<i64>,
 }
 
@@ -36,8 +30,6 @@ fn to_entry(s: Sample) -> Entry {
     e
 }
 
-/// The entries of `json`, `[{name, dir, size, modified}]`; none when it is
-/// not such a list.
 fn parse_entries(json: &str) -> Vec<Entry> {
     from_json::<Vec<Sample>>(json)
         .unwrap_or_default()
@@ -46,7 +38,6 @@ fn parse_entries(json: &str) -> Vec<Entry> {
         .collect()
 }
 
-/// `entries` as a folder shows them with the view settings `prefs`.
 fn listing(entries: &[Entry], prefs: &ViewPrefs) -> ListingState {
     let mut state = ListingState::from_prefs(prefs);
     state.apply_batch(entries.to_vec());
@@ -54,8 +45,7 @@ fn listing(entries: &[Entry], prefs: &ViewPrefs) -> ListingState {
     state
 }
 
-/// The view settings the preview is asked for; an unknown sort key sorts
-/// by name, as a folder does.
+/// Unknown sort key sorts by name, as a folder does.
 pub(crate) fn prefs(sort_key: &str, descending: bool, folders_first: bool, show_hidden: bool) -> ViewPrefs {
     ViewPrefs {
         sort: SortKey::parse(sort_key).unwrap_or_default(),
@@ -66,8 +56,6 @@ pub(crate) fn prefs(sort_key: &str, descending: bool, folders_first: bool, show_
     }
 }
 
-/// The entries of `entries_json` as a folder shows them with `prefs`: one
-/// map of `FIELDS` per shown entry, in order.
 pub(crate) fn rows(entries_json: &str, prefs: &ViewPrefs) -> QVariantList {
     let mut out = QVariantList::default();
     for e in listing(&parse_entries(entries_json), prefs).visible_entries() {
@@ -139,8 +127,6 @@ mod tests {
             descending: true,
             ..base
         };
-        // Descending turns the sizes round; folders, which have none, stay
-        // first in name order.
         assert_eq!(order(by_size), ["Photos", "Work", "photo.jpg", "notes.txt"]);
         let mixed = ViewPrefs {
             sort: SortKey::Modified,

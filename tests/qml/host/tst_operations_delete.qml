@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of the one place that decides whether a delete goes to the Trash
-// or is permanent (OPS-8), Operations.deletesPermanently: the folder view,
-// the selection bar and the image viewer all ask it before they delete.
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -16,8 +13,7 @@ QtObject {
     }
 
     Component.onCompleted: {
-        // The registry only knows the user folders when the test home is
-        // visible to the process (not under the SDK's sb2 sandbox).
+        // Registry knows user folders only if test home is visible (not under SDK sb2).
         var known = App.locationName("lautta://user-documents/") === "Documents"
         var doc = "lautta://user-documents/Uni/thesis.odt"
         var server = "lautta://nv-1/srv/photo.jpg"

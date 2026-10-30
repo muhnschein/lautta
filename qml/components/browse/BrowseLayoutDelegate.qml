@@ -1,14 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// One row of Settings › Browse page (BRW-12), laid out and carried as
-// Salama's tab group rows. A tap shows or hides the row on the Browse page
-// (its switch tells which). A press on the grip at the right picks the row
-// up at once: it follows the finger, the rows it passes move aside, and let
-// go it settles into its place. Rows move within their section only, and
-// the model moves the row itself as the finger passes a row (moveRow), so
-// the list never shows an order that is not stored. Favourites have no
-// switch (removing one stays on the Browse page): their star sits where
-// the switch is. The first row of Volumes and Servers switches the whole
-// section; the rows of such a section stand a step in from it.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "BrowseText.js" as BrowseText
@@ -16,10 +6,7 @@ import "BrowseText.js" as BrowseText
 ListItem {
     id: delegate
 
-    // The BrowseLayoutModel of the list.
     property var layoutModel
-    // Ys in list coordinates (they do not move with the row); the row the
-    // finger is over is counted from startRow, the row picked up.
     property bool carried: false
     property int startRow: -1
     property int firstRow: -1
@@ -28,7 +15,6 @@ ListItem {
     property real grabY: 0
     property real fingerY: 0
 
-    // The row's roles, set by the list (BrowseLayoutModel).
     property string layoutSection
     property string layoutItem
     property string layoutKind
@@ -52,27 +38,22 @@ ListItem {
         }
     }
 
-    // Asks the page to show or hide the row.
     signal toggled()
 
     contentHeight: Theme.itemSizeSmall
-    // Favourites only move: a tap does nothing, so it lights nothing.
     highlighted: down && toggles
     z: carried ? 1 : 0
 
     onClicked: if (toggles) toggled()
-    // The list laid the carried row out again: keep it under the finger.
     onYChanged: if (carried) follow()
     Component.onDestruction: {
         if (ListView.view && ListView.view.carrier === delegate)
             ListView.view.carrier = null
     }
 
-    // The rows of the section around list row `row`.
     function sectionEnds(row) {
         var first = row
         var last = row
-        // The switch of a section is no row to pass: it has no place.
         while (first > 0 && layoutModel.sectionAt(first - 1) === layoutSection && layoutModel.placeAt(first - 1) >= 0)
             --first
         while (last + 1 < layoutModel.count && layoutModel.sectionAt(last + 1) === layoutSection)
@@ -96,9 +77,8 @@ ListItem {
         body.y = fingerY - grabY - (delegate.y - startY)
     }
 
-    // The row the finger is over is counted from where the carry started,
-    // not asked of the list: the list lays its rows out on the next frame,
-    // so a second move before then would read stale rows.
+    // Row under finger counted from carry start, not asked of list: list lays out next frame, a
+    // second move would read stale rows.
     function carryTo(y) {
         if (!carried)
             return
@@ -110,7 +90,6 @@ ListItem {
             layoutModel.moveRow(index, target)
     }
 
-    // The spring is on once the row is let go, before it goes home.
     function drop() {
         carried = false
         body.y = 0
@@ -133,7 +112,6 @@ ListItem {
             }
         }
 
-        // The carried row stands out as a pressed one does.
         Rectangle {
             objectName: "layoutCarryWash"
             anchors.fill: parent
@@ -141,8 +119,6 @@ ListItem {
             color: Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity)
         }
 
-        // Where TextSwitch has its switch. The row takes the taps: the
-        // switch only shows the state.
         Item {
             id: lead
 
@@ -180,8 +156,7 @@ ListItem {
             truncationMode: TruncationMode.Fade
         }
 
-        // Carries at once, without a hold; preventStealing keeps the list
-        // from scrolling under a vertical drag.
+        // preventStealing: list does not scroll under a vertical drag.
         MouseArea {
             id: grip
 

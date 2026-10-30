@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The committed 7z fixture (written once by sevenz-rust's writer) opens
-//! through the public archive API.
 
 use lautta_core::entry::Kind;
 use lautta_core::provider::archive::{ArchiveFormat, ArchiveProvider};

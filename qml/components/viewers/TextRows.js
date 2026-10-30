@@ -1,19 +1,12 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// The rows of the text viewer (PRV-4). A tab becomes the spaces up to the
-// next multiple of `tabWidth` columns, so that in the monospace font a row
-// is as wide as its characters. A line longer than `rowLength` characters
-// goes on over further rows: a minified file is one line, and one Text item
-// of a megabyte is slow to lay out and draw, and wider than glyphs are placed
-// exactly.
+// SPDX-License-Identifier: LGPL-2.1-or-later One Text item of a megabyte is slow to lay out and
+// draw: a line over `rowLength` characters goes on over further rows.
 .pragma library
 
 var tabWidth = 4
 var rowLength = 1000
 
-// No text (yet): no rows.
 var empty = { "rows": [], "lines": 0 }
 
-// `line` with its tabs expanded to spaces.
 function expandTabs(line) {
     var parts = line.split("\t")
     if (parts.length === 1)
@@ -28,8 +21,6 @@ function expandTabs(line) {
     return pieces.join("")
 }
 
-// Where a row of `line` that would end at `end` ends: at the line's end at
-// most, and never between the two halves of a surrogate pair.
 function rowEnd(line, end) {
     if (end >= line.length)
         return line.length
@@ -37,11 +28,6 @@ function rowEnd(line, end) {
     return c >= 0xDC00 && c <= 0xDFFF ? end - 1 : end
 }
 
-// `text` (lines separated by "\n") as { rows, lines }: rows are
-// { number, text, line, start }, number the line's from 1 on its first row
-// and 0 on the rows it goes on over, line the line's index (from 0) and
-// start where the row starts in the line with its tabs expanded, for the
-// line's colours (PRV-13); lines is the number of lines.
 function rows(text) {
     var lines = text.split("\n")
     var out = []

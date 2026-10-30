@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! MIME type and file category from extension and magic (BRW-1), and the
-//! viewer that handles a file (PRV-4).
+//! MIME type and file category from extension and magic, and the viewer that handles a file.
 
 use crate::entry::{Entry, Kind};
 
@@ -18,15 +17,13 @@ pub enum FileCategory {
     Document,
     Spreadsheet,
     Presentation,
-    /// SQLite databases.
     Database,
-    /// rpm and apk packages.
     Package,
     Other,
 }
 
 impl FileCategory {
-    /// Icon name for the UI (QML maps it to a glyph, `FileIcons.kind`).
+    /// QML maps it to a glyph (`FileIcons.kind`).
     pub fn icon_name(self) -> &'static str {
         match self {
             FileCategory::Folder => "folder",
@@ -48,8 +45,7 @@ impl FileCategory {
     }
 }
 
-/// Which built-in viewer opens a file (PRV-4, PRV-12). Office documents go
-/// to *Open with* (`External`).
+/// Office documents go to *Open with* (`External`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Viewer {
     Image,
@@ -62,8 +58,8 @@ pub enum Viewer {
     External,
 }
 
-/// Lowercased ASCII extension of a file name. A leading dot alone (`.bashrc`)
-/// is not an extension; non-ASCII or very long suffixes are ignored.
+/// Lowercased ASCII extension. A leading dot alone (`.bashrc`) is not an extension; non-ASCII or
+/// very long suffixes are ignored.
 pub fn extension_of(name: &[u8]) -> Option<String> {
     let dot = name.iter().rposition(|b| *b == b'.')?;
     let ext = &name[dot + 1..];
@@ -73,7 +69,6 @@ pub fn extension_of(name: &[u8]) -> Option<String> {
     Some(String::from_utf8_lossy(ext).to_ascii_lowercase())
 }
 
-/// Mime type and category for a lowercase extension.
 pub fn from_extension(ext: &str) -> Option<(&'static str, FileCategory)> {
     use FileCategory::*;
     Some(match ext {
@@ -224,7 +219,7 @@ const MIME_PREFIXES: &[(&str, FileCategory)] = &[
     ("inode/directory", FileCategory::Folder),
 ];
 
-/// Category for a MIME type given by a provider (parameters are ignored).
+/// Parameters are ignored.
 pub fn category_from_mime(mime: &str) -> FileCategory {
     let base = mime.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
     MIME_PREFIXES
@@ -233,15 +228,12 @@ pub fn category_from_mime(mime: &str) -> FileCategory {
         .map_or(FileCategory::Other, |(_, cat)| *cat)
 }
 
-/// Category by file name only (no entry kind, no provider type).
 pub fn category_of_name(name: &[u8]) -> FileCategory {
     extension_of(name)
         .and_then(|e| from_extension(&e))
         .map_or(FileCategory::Other, |(_, c)| c)
 }
 
-/// Category of an entry: folders (following symlinks), then the extension,
-/// then the provider's content type.
 pub fn category_of(entry: &Entry) -> FileCategory {
     if entry.is_dir() {
         return FileCategory::Folder;
@@ -259,7 +251,6 @@ pub fn category_of(entry: &Entry) -> FileCategory {
         .map_or(FileCategory::Other, category_from_mime)
 }
 
-/// MIME type of an entry: extension first, then the provider's content type.
 pub fn mime_of(entry: &Entry) -> Option<String> {
     if entry.is_dir() {
         return Some("inode/directory".to_owned());
@@ -272,7 +263,6 @@ pub fn mime_of(entry: &Entry) -> Option<String> {
 
 const TEXT_SNIFF_MAX_CONTROL_PERCENT: usize = 2;
 
-/// Magic sniffing from the first bytes of a file (BRW-1, local files).
 pub fn sniff(head: &[u8]) -> Option<&'static str> {
     const MAGIC: &[(&[u8], &str)] = &[
         (b"\x89PNG\r\n\x1a\n", "image/png"),
@@ -308,8 +298,8 @@ pub fn sniff(head: &[u8]) -> Option<&'static str> {
     looks_like_text(head).then_some("text/plain")
 }
 
-/// UTF-8 (a multi-byte character cut at the end of the sample is fine), no
-/// NUL, and almost no control characters.
+/// UTF-8 (a multi-byte character cut at the end of the sample is fine), no NUL, and almost no
+/// control characters.
 pub(crate) fn looks_like_text(head: &[u8]) -> bool {
     if head.is_empty() {
         return false;
@@ -331,8 +321,6 @@ pub(crate) fn looks_like_text(head: &[u8]) -> bool {
     control * 100 <= valid.chars().count() * TEXT_SNIFF_MAX_CONTROL_PERCENT
 }
 
-/// The built-in viewer for a file (PRV-4). `mime` is the best known type
-/// (extension, provider or sniffed).
 pub fn viewer_for(category: FileCategory, mime: &str) -> Viewer {
     match category {
         FileCategory::Image => Viewer::Image,
@@ -353,7 +341,7 @@ pub fn viewer_for(category: FileCategory, mime: &str) -> Viewer {
     }
 }
 
-/// Archive formats the core can open as locations (rar is not one of them).
+/// rar is not one of them.
 fn archive_viewer(mime: &str) -> Viewer {
     if mime == "application/vnd.rar" {
         Viewer::External
@@ -437,7 +425,6 @@ mod tests {
         e.content_type = Some("image/heic; charset=x".into());
         assert_eq!(category_of(&e), FileCategory::Image);
         assert_eq!(mime_of(&e).as_deref(), Some("image/heic; charset=x"));
-        // The extension wins over the provider type.
         let mut e = file("a.txt");
         e.content_type = Some("image/png".into());
         assert_eq!(category_of(&e), FileCategory::Text);
@@ -538,14 +525,12 @@ mod tests {
     fn sniff_text_heuristic() {
         assert_eq!(sniff(b"hello world\nline two\n"), Some("text/plain"));
         assert_eq!(sniff("caf\u{e9} \u{2603}".as_bytes()), Some("text/plain"));
-        // A multi-byte character cut by the sample end is still text.
         let snow = "ab\u{2603}".as_bytes();
         assert_eq!(sniff(&snow[..snow.len() - 1]), Some("text/plain"));
         assert_eq!(sniff(b""), None);
         assert_eq!(sniff(b"abc\x00def"), None);
         assert_eq!(sniff(b"abc\xffdef"), None);
         assert_eq!(sniff(&[0x01, 0x02, 0x03, 0x04]), None);
-        // Only a cut character: nothing valid to judge.
         assert_eq!(sniff(&"\u{2603}".as_bytes()[..2]), None);
     }
 

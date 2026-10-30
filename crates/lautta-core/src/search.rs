@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Recursive name search (SRC-2..4): substring or glob, type, size and date
-//! filters, results streamed per folder, cancelable. The tree is walked by
-//! the generic [`ListWalker`] (BFS over `Provider::list`) or by a
+//! Recursive name search: substring or glob, type, size and date filters, results streamed per
+//! folder, cancelable. Walked by generic [`ListWalker`] (BFS over `Provider::list`) or a
 //! provider-specific [`TreeWalker`] such as the bridge's `Walk`.
 
 use crate::db::Db;
@@ -20,9 +19,8 @@ use tokio::sync::mpsc;
 
 /// Listings in flight at once; remote locations cap their own lanes too.
 const WALK_CONCURRENCY: usize = 2;
-/// SRC-4.
 pub const RECENT_SEARCHES_PER_LOCATION: usize = 10;
-/// SRC-3 defaults; the caller decides which applies to a location.
+/// Defaults; caller decides which applies to a location.
 pub const REMOTE_DEPTH_DEFAULT: u32 = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -52,7 +50,6 @@ pub struct SearchHit {
     pub folder_uri: Uri,
 }
 
-/// One folder's listing as produced by a walker.
 #[derive(Debug, Clone)]
 pub struct FolderListing {
     pub folder: Uri,
@@ -61,7 +58,7 @@ pub struct FolderListing {
 
 #[derive(Debug, Clone)]
 pub struct WalkOptions {
-    /// Deepest folder level listed, root = 0; `None` is unlimited (SRC-3).
+    /// Deepest folder level listed, root = 0; `None` is unlimited.
     pub depth_limit: Option<u32>,
     pub include_hidden: bool,
     pub cancel: Arc<AtomicBool>,
@@ -174,7 +171,6 @@ fn enqueue_children(
     }
 }
 
-/// A query ready to match entries.
 struct Matcher<'q> {
     query: &'q SearchQuery,
     needle: String,
@@ -234,18 +230,16 @@ impl<'q> Matcher<'q> {
     }
 }
 
-/// What a finished search reports.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SearchSummary {
     pub folders: u64,
     pub hits: u64,
-    /// Sub-folders that could not be read.
     pub errors: u64,
     pub canceled: bool,
 }
 
-/// How a search runs: depth (SRC-3), cancellation and an optional
-/// provider-specific walker (bridge `Walk`) replacing the generic listing.
+/// Depth, cancellation and an optional provider-specific walker (bridge `Walk`) replacing the
+/// generic listing.
 #[derive(Clone)]
 pub struct SearchOptions {
     /// `None` is unlimited (local); remote locations use
@@ -270,9 +264,8 @@ impl SearchOptions {
     }
 }
 
-/// Searches below `root`, sending one batch of hits per folder that has any
-/// (SRC-2). Cancelling (the flag, or dropping the receiver) ends the search
-/// early with `canceled` set; it is not an error.
+/// Sends one batch of hits per folder that has any. Cancelling (the flag, or dropping the receiver)
+/// ends the search early with `canceled` set; not an error.
 pub async fn search(
     resolver: &dyn ProviderResolver,
     root: Uri,
@@ -360,7 +353,6 @@ pub fn classify_by_extension(entry: &Entry) -> String {
     category.to_owned()
 }
 
-/// Recent search strings per location (SRC-4).
 #[derive(Clone)]
 pub struct RecentSearches {
     db: Db,
@@ -397,7 +389,6 @@ impl RecentSearches {
         Ok(())
     }
 
-    /// Newest first.
     pub fn list(&self, location: &str) -> Result<Vec<String>> {
         let conn = self.db.lock();
         let mut stmt = conn.prepare(

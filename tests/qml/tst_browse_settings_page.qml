@@ -1,23 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Settings › Browse page (BRW-12) on the target, rows as Salama's tab group
-// rows: every row of the Browse page with its switch, Recents first in On
-// this device, and a preview that follows the switches. A tap on a row
-// switches it in place: the list keeps its position and its rows. A press
-// on a row's grip picks up that row only; moved by a row's height it moves
-// at once, by the same delegate (the rows it passes slide aside), it stays
-// there once let go and stored, in list rows (a favourite above makes them
-// differ from the places in the section). Restore defaults shows every row
-// again with Recents first. A favourite added elsewhere shows in the list
-// and the preview, as the Browse page shows it. Volumes and Servers lead
-// with a switch for the whole section, a row of its own with a switch and no
-// grip: the Volumes one is there without a volume (the target has none), on
-// or off, a tap on it or Restore defaults turns the section on again, in
-// place; the Servers one needs the bridge, which the target has not, so it
-// is not there either way (UI-8); the rows of such a section stand a step in
-// from the switch.
-//
-// The Silica window sits in a Qt Quick window: only items in one get the
-// mouse events the drag needs.
 import QtQuick 2.6
 import QtQuick.Window 2.2 as QtQuick
 import QtTest 1.0
@@ -30,7 +11,6 @@ QtQuick.Window {
     id: window
 
     property bool scenarioRunning: true
-    // What Silica's pages look up in the window they are in.
     property var __silica_applicationwindow_instance: app
     property int step: 0
     property int waited: 0
@@ -60,7 +40,6 @@ QtQuick.Window {
     function findAll(item, pred, out) {
         if (!item)
             return out
-        // A flickable's contentItem is one of its children too.
         if (pred(item) && out.indexOf(item) < 0)
             out.push(item)
         var kids = item.children || []
@@ -71,8 +50,6 @@ QtQuick.Window {
         return out
     }
 
-    // Settings rows the Browse page shows as rows of its own: not the switch
-    // of a section, nor the one for all nearby servers.
     function shownRows(layout) {
         var n = 0
         for (var i = 0; i < layout.count; ++i) {
@@ -82,7 +59,6 @@ QtQuick.Window {
         return n
     }
 
-    // How many rows of `section` the list has.
     function sectionRows(layout, section) {
         var n = 0
         for (var i = 0; i < layout.count; ++i) {
@@ -92,7 +68,6 @@ QtQuick.Window {
         return n
     }
 
-    // The list row of a device row, -1 when none.
     function rowOf(layout, item) {
         for (var i = 0; i < layout.count; ++i) {
             if (layout.sectionAt(i) === "device" && layout.itemAt(i) === item)
@@ -101,7 +76,6 @@ QtQuick.Window {
         return -1
     }
 
-    // The first device row, "" when none.
     function firstDeviceRow(layout) {
         for (var i = 0; i < layout.count; ++i) {
             if (layout.sectionAt(i) === "device")
@@ -110,7 +84,6 @@ QtQuick.Window {
         return ""
     }
 
-    // The first device folder (not Recents or Trash), "" when none.
     function deviceFolder(layout) {
         for (var i = 0; i < layout.count; ++i) {
             var item = layout.itemAt(i)
@@ -120,7 +93,6 @@ QtQuick.Window {
         return ""
     }
 
-    // "section/item" of every row, for failure messages.
     function describe(layout) {
         var out = []
         for (var i = 0; i < layout.count; ++i)
@@ -128,8 +100,7 @@ QtQuick.Window {
         return out.join(", ")
     }
 
-    // The delegates, all of them made (headless, no render loop lays the
-    // list out, and the list is shorter than the window).
+    // Headless: no render loop; list shorter than window, make all delegates.
     function delegates() {
         page.listView.cacheBuffer = 100000
         page.listView.forceLayout()
@@ -145,12 +116,10 @@ QtQuick.Window {
         return null
     }
 
-    // "item" of every delegate that is carried, or lit.
     function marked(what) {
         return delegates().filter(function(d) { return d[what] }).map(function(d) { return d.layoutItem }).join(",")
     }
 
-    // The delegate of the switch of `section`, null when it has none.
     function switchOf(section) {
         var all = delegates()
         for (var i = 0; i < all.length; ++i) {
@@ -160,7 +129,6 @@ QtQuick.Window {
         return null
     }
 
-    // The switch row of Volumes: its row, its switch, set as `on` says, and no grip.
     function checkSectionSwitch(row, on) {
         var toggle = named(row, "layoutSwitch")
         var grip = named(row, "layoutGrip")
@@ -175,7 +143,6 @@ QtQuick.Window {
         }
     }
 
-    // A row of a section with a switch stands in from it by two paddings.
     function checkIndent() {
         var flat = indentComponent.createObject(window.contentItem, { "layoutNested": false })
         var nested = indentComponent.createObject(window.contentItem, { "layoutNested": true })
@@ -188,8 +155,6 @@ QtQuick.Window {
         nested.destroy()
     }
 
-    // The rows a carried row can pass are the section's own: the switch
-    // that leads the section has no place and is not one of them.
     function checkSectionEnds() {
         var row = indentComponent.createObject(window.contentItem, { "layoutModel": sectionStub })
         row.sectionEnds(2)
@@ -215,10 +180,8 @@ QtQuick.Window {
         var toggle = named(folderRow, "layoutSwitch")
         if (!expect(toggle !== null && toggle.checked, "the row of " + folder + " has its switch on"))
             return
-        // Scrolled down a little, as when the user switches a row further down.
         page.listView.contentY = page.listView.contentY + 40
         scrolledTo = page.listView.contentY
-        // A tap on the row switches it.
         folderRow.clicked(null)
     }
 
@@ -266,8 +229,6 @@ QtQuick.Window {
                 window.start()
                 break
             case 1:
-                // The switch is off (a rebuilt row has no switch any more)
-                // and the preview followed.
                 var toggle = window.named(window.folderRow, "layoutSwitch")
                 if ((toggle && toggle.checked) || window.page.previewCount !== window.rows - 1)
                     return
@@ -276,7 +237,6 @@ QtQuick.Window {
                     window.carry()
                 break
             case 2:
-                // Stored and read again, the row stays where it was let go.
                 if (window.waited < 10)
                     return
                 window.expect(window.rowOf(layout, window.folder) === window.fromRow + 1,
@@ -291,22 +251,18 @@ QtQuick.Window {
                 favourites.add("lautta://user-music/", "Tunes", "")
                 break
             case 4:
-                // Both follow the store; the list has no reload of its own here.
                 if (layout.count !== window.listed + 1 || window.page.previewCount !== window.rows + 1)
                     return
                 favourites.removeUri("lautta://user-music/")
                 favourites.removeUri("lautta://user-documents/")
                 break
             case 5:
-                // Removed and gone from the list, which follows the store.
                 if (favourites.idOf("lautta://user-documents/") !== -1 || favourites.idOf("lautta://user-music/") !== -1
                         || window.sectionRows(layout, "favourites") > 0)
                     return
                 window.checkIndent()
                 window.checkSectionEnds()
                 window.listed = layout.count
-                // Without a volume the section is its switch, on; there is
-                // none for Servers, which need the bridge (UI-8).
                 var volumesOn = window.switchOf("volumes")
                 if (!window.expect(volumesOn !== null, "the Volumes switch is there without a volume: " + window.describe(layout)))
                     return
@@ -314,7 +270,6 @@ QtQuick.Window {
                 window.expect(window.sectionRows(layout, "volumes") === 1, "an empty Volumes section is more than its switch: " + window.describe(layout))
                 window.expect(window.switchOf("servers") === null && window.sectionRows(layout, "servers") === 0,
                               "standalone shows the Servers switch: " + window.describe(layout))
-                // Switched off, the same row changes in place.
                 layout.setHidden("volumes", "section", true)
                 break
             case 6:
@@ -323,7 +278,6 @@ QtQuick.Window {
                     return
                 window.expect(layout.count === window.listed, "switching Volumes off changed the rows: " + window.describe(layout))
                 window.checkSectionSwitch(volumes, false)
-                // A tap on the row turns the section on, as on any row.
                 volumes.clicked(null)
                 break
             case 7:
@@ -336,7 +290,6 @@ QtQuick.Window {
             case 8:
                 if (!window.switchOf("volumes") || !window.switchOf("volumes").layoutHidden)
                     return
-                // Restore defaults turns the sections on.
                 layout.restoreDefaults()
                 break
             case 9:
@@ -352,7 +305,6 @@ QtQuick.Window {
     }
 
     Component.onCompleted: {
-        // A favourite first: list rows and places in a section differ.
         favourites.add("lautta://user-documents/", "Docs", "")
         tools.pump(300)
         page = app.pageStack.push(pageComponent, {}, PageStackAction.Immediate)
@@ -370,7 +322,6 @@ QtQuick.Window {
         BrowseSettingsPage { }
     }
 
-    // The list of Servers: its switch, then two rows with places 0 and 1.
     QtObject {
         id: sectionStub
 

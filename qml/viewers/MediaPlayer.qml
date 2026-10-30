@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Audio and video player (PRV-4, PRV-8, PRV-9, boards VideoPlayer and
-// AudioPlayer). Local files use QtMultimedia's MediaPlayer directly; remote
-// files play through MediaSource (a QIODevice over the bridge read handle,
-// or download-then-play when the device's backend cannot stream).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-// This file is itself called MediaPlayer, so QtMultimedia's types are
-// reached through a prefix.
+// Named MediaPlayer: QtMultimedia types via `MM` prefix.
 import QtMultimedia 5.6 as MM
 import Nemo.KeepAlive 1.2
 import Lautta 1.0
@@ -95,7 +90,6 @@ Page {
         onClicked: page.chrome = !page.chrome
     }
 
-    // What the player is doing: download progress, streaming, errors.
     readonly property string statusText: {
         if (errorKind !== "")
             return ErrorText.message(errorKind, { "item": fileName, "location": App.locationName(uri) })
@@ -117,7 +111,6 @@ Page {
         Behavior on opacity { FadeAnimation { } }
     }
 
-    // Audio: a cover placeholder in the middle.
     Rectangle {
         anchors { horizontalCenter: parent.horizontalCenter; top: header.bottom; topMargin: Theme.paddingLarge * 2 }
         visible: !page.video && page.height > page.width
@@ -137,7 +130,6 @@ Page {
         running: remote.loading || (remote.downloading && remote.downloadProgress < 0)
     }
 
-    // Download progress while the fallback copies the file (PRV-9).
     ProgressBar {
         anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter }
         visible: remote.downloading && remote.downloadProgress >= 0

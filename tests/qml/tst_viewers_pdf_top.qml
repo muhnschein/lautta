@@ -1,11 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// A PDF opened for the first time starts at its top (PRV-12): once the
-// pages are there the whole page header shows, with the page count, and the
-// list stays there until the user scrolls. Two pages taller than the screen
-// together, and one page six times as tall as it is wide. A PDF left at its
-// top opens there again, also when the middle of the view is on a later page
-// (pages a sixth as tall as they are wide); one left at its second page
-// opens with that page at the top.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -27,7 +20,6 @@ ApplicationWindow {
         return out
     }
 
-    // The header's top is the list's top and in view.
     function checkTop(name, view, when) {
         if (Math.abs(view.contentY - view.originY) > 0.5 || view.headerItem.y < view.contentY - 0.5)
             console.error("FAILED: " + name + " " + when + ": the list is not at its top: contentY "
@@ -42,12 +34,10 @@ ApplicationWindow {
         return uri
     }
 
-    // Pushes the viewer and waits for its pages; returns its list.
     function show(uri) {
         var viewer = pageStack.push(pdfComponent, { "uri": uri }, PageStackAction.Immediate)
         for (var i = 0; i < 300 && !viewer.document.loaded; ++i)
             tools.pump(20)
-        // A remembered page is shown once the pages are laid out.
         tools.pump(100)
         var view = findAll(viewer, function(x) { return x.headerItem !== undefined }, [])[0]
         view.forceLayout()
@@ -60,14 +50,11 @@ ApplicationWindow {
             console.error("FAILED: " + fixture + ": " + view.count + " pages, " + view.contentHeight
                           + " high in a view " + view.height + " high, header '" + view.headerItem.description + "'")
         checkTop(fixture, view, "when loaded")
-        // The pages are rendered meanwhile.
         tools.pump(1500)
         checkTop(fixture, view, "a moment later")
         pageStack.pop(null, PageStackAction.Immediate)
     }
 
-    // Scrolled a little, the first page still at the top and the second in
-    // the middle of the view: reopened, the PDF is at its top again.
     function reopen() {
         var uri = install("strips.pdf")
         var view = show(uri)
@@ -78,7 +65,6 @@ ApplicationWindow {
         if (viewer.currentPage !== 2 || view.contentY >= first)
             console.error("FAILED: strips.pdf: page " + viewer.currentPage + " in the middle, contentY "
                           + view.contentY + " with the first page " + first + " high")
-        // Reading is remembered once scrolling has stopped for a moment.
         tools.pump(1500)
         pageStack.pop(null, PageStackAction.Immediate)
         tools.pump(300)

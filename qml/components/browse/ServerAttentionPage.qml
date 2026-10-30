@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// A server that needs the user: its sign-in failed, or it presents another
-// identity than before (SPEC §20, NVB-4, NVB-5). The fix is made in netvfs'
-// account settings; the button hands the user over.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -12,7 +9,6 @@ Page {
 
     property string locationId
     property string serverName
-    // "auth-failed" or "server-identity-changed"
     property string attention
 
     readonly property bool identity: attention === "server-identity-changed"

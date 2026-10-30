@@ -1,20 +1,15 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The *Trash* (SPEC OPS-8): what is deleted from this device's folders
-//! waits in one folder of the app data, `AppPaths::trash_dir` (DAT-1), until
-//! it is restored, deleted or purged. Volumes and servers delete permanently.
+//! The *Trash*: what is deleted from this device's folders waits in `AppPaths::trash_dir` until
+//! restored, deleted or purged. Volumes and servers delete permanently.
 //!
-//! Each item gets a unique stored name and a `trash_items` row (DAT-2) that
-//! remembers where it came from. An item moves in by `rename` where it can.
-//! In the sandbox it cannot: Sailjail bind-mounts every permitted folder and
-//! the app data folder on their own (§3.3), and `rename(2)` between two
-//! mounts fails with `EXDEV` even on one file system. The item is then
-//! copied in (folders, symlinks, modes and modification times) and removed
-//! from its folder only once the copy and its row are in place; a failed
-//! copy leaves it where it was. Restore goes back the same way.
+//! Each item gets a unique stored name and a `trash_items` row remembering where it came from. It
+//! moves in by `rename` where it can. Sailjail bind-mounts every permitted folder and the app data
+//! folder separately, so `rename(2)` between them fails with `EXDEV` even on one filesystem; then
+//! the item is copied in (folders, symlinks, modes, mtimes) and removed from its folder only once
+//! copy and row are in place. A failed copy leaves it where it was. Restore goes back the same way.
 //!
-//! All calls block: run them in `spawn_blocking` (ARC-6). The calls that
-//! move or remove items take turns, so a restore, an empty and a purge never
-//! work on one item at once.
+//! All calls block: run in `spawn_blocking`. Calls that move or remove items take turns, so
+//! restore, empty and purge never work on one item at once.
 
 use crate::db::Db;
 use crate::error::{Error, ErrorKind, Result};
@@ -29,7 +24,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Items are purged after this many days (OPS-8).
+/// Items are purged after this many days.
 pub const DEFAULT_RETENTION_DAYS: u32 = 30;
 /// A copy on its way into place has a name starting so; one that an
 /// interruption left in the trash folder goes at the next [`Trash::tidy`].
@@ -46,9 +41,8 @@ pub struct TrashItem {
     pub trashed_at: i64,
     pub stored_name: String,
     pub is_dir: bool,
-    /// Bytes of file content (recursive for folders).
+    /// Recursive for folders.
     pub size: Option<u64>,
-    /// The trash folder, which holds the item.
     pub dir: PathBuf,
 }
 
@@ -58,7 +52,6 @@ impl TrashItem {
     }
 }
 
-/// How an item got to its new place.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Moved {
     /// On one mount: the item is gone from where it was.
@@ -73,7 +66,6 @@ type RenameFn = fn(&Path, &Path) -> Result<()>;
 
 #[derive(Clone)]
 pub struct Trash {
-    /// The trash folder (DAT-1).
     dir: PathBuf,
     db: Db,
     /// Held by every call that moves or removes items.
@@ -81,7 +73,6 @@ pub struct Trash {
     rename: RenameFn,
 }
 
-/// Unix seconds now.
 pub fn now_secs() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -108,8 +99,7 @@ fn exists(path: &Path) -> bool {
 }
 
 impl Trash {
-    /// `dir` is the trash folder (`AppPaths::trash_dir`), made 0700 (SEC-5)
-    /// on the first delete.
+    /// `dir` is the trash folder, made 0700 on the first delete.
     pub fn new(dir: PathBuf, db: Db) -> Trash {
         Trash {
             dir,
@@ -119,7 +109,6 @@ impl Trash {
         }
     }
 
-    /// The trash folder.
     pub fn dir(&self) -> &Path {
         &self.dir
     }
@@ -139,11 +128,9 @@ impl Trash {
         Ok(())
     }
 
-    /// Moves `path` (a file, folder or symlink; never followed) into the
-    /// trash and records where it came from. Across mounts the item is
-    /// copied in and removed from its folder once its row is written; if
-    /// that removal fails, the error is returned and the item stays in the
-    /// trash too, so nothing is lost.
+    /// Never follows `path`. Across mounts the item is copied in and removed from its folder once
+    /// its row is written; if removal fails, the error is returned and the item stays in the trash
+    /// too, so nothing is lost.
     pub fn trash(&self, path: &Path, original_uri: &Uri) -> Result<TrashItem> {
         let st = sys::stat(path, false)?;
         self.guard(path)?;
@@ -179,7 +166,6 @@ impl Trash {
         Ok(TrashItem { id, ..item })
     }
 
-    /// Puts `path` into the trash folder under a fresh unique name.
     fn move_in(&self, path: &Path) -> Result<(String, Moved)> {
         for _ in 0..NAME_ATTEMPTS {
             let name = unique_name("");
@@ -192,11 +178,9 @@ impl Trash {
         Err(Error::new(ErrorKind::Internal, "no unique trash name"))
     }
 
-    /// Puts `from` at `to`, which must not exist: by rename on one mount,
-    /// else by a copy under a temporary name next to `to` that is renamed
-    /// into place. The copy is a step of a move, so `from` has to be one
-    /// this process can remove afterwards. A failed copy leaves `from` as it
-    /// was and nothing at `to`.
+    /// `to` must not exist: rename on one mount, else copy under a temp name next to `to`, renamed
+    /// into place. `from` must be removable by this process afterwards. A failed copy leaves `from`
+    /// as it was and nothing at `to`.
     fn put(&self, from: &Path, to: &Path) -> Result<Moved> {
         match (self.rename)(from, to) {
             Err(e) if e.kind == ErrorKind::CrossesDevice => {}
@@ -286,9 +270,8 @@ impl Trash {
         Ok(dest)
     }
 
-    /// Restores to `dest`, creating missing parent folders. Never replaces.
-    /// By rename on one mount, else by a copy that is removed from the trash
-    /// once it is in place (§3.3).
+    /// Creates missing parent folders. Never replaces. Rename on one mount, else a copy that is
+    /// removed from the trash once in place.
     pub fn restore_to(&self, id: i64, dest: &Path) -> Result<()> {
         let _turn = self.turn();
         let item = self.get(id)?;
@@ -313,7 +296,6 @@ impl Trash {
         Ok(())
     }
 
-    /// Deletes one item for good.
     pub fn delete(&self, id: i64) -> Result<()> {
         let _turn = self.turn();
         self.delete_unlocked(id)
@@ -344,7 +326,6 @@ impl Trash {
         first_error.map_or(Ok(removed), Err)
     }
 
-    /// Deletes items trashed before `cutoff` (unix seconds).
     pub fn purge_before(&self, cutoff: i64) -> Result<usize> {
         let _turn = self.turn();
         let old: Vec<i64> = self
@@ -361,25 +342,19 @@ impl Trash {
         Ok(removed)
     }
 
-    /// Deletes items older than `days` days.
     pub fn purge_older_than(&self, days: u32) -> Result<usize> {
         self.purge_before(now_secs() - i64::from(days) * SECS_PER_DAY)
     }
 
-    /// The default 30-day purge (OPS-8).
+    /// Default 30-day purge.
     pub fn purge_expired(&self) -> Result<usize> {
         self.purge_older_than(DEFAULT_RETENTION_DAYS)
     }
 
-    /// Total bytes of everything in the trash (from the recorded sizes).
     pub fn total_size(&self) -> Result<u64> {
         Ok(self.list()?.iter().filter_map(|i| i.size).sum())
     }
 
-    // ------------------------------------------------------ strays
-
-    /// Removes the copies that an interruption left on their way into the
-    /// trash folder (OPS-8). Safe to repeat.
     pub fn tidy(&self) -> Result<()> {
         let _turn = self.turn();
         remove_partials(&self.dir)
@@ -538,8 +513,6 @@ fn tree_size(path: &Path) -> Option<u64> {
     Some(total)
 }
 
-/// Removes a file, symlink or folder tree without following symlinks.
-/// A path that is already gone is fine.
 pub fn remove_tree(path: &Path) -> Result<()> {
     let st = match sys::stat(path, false) {
         Ok(st) => st,

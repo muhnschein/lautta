@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// One row of the Transfers page: direction icon, title, progress and status
-// (SPEC §15.4), with a context menu for the actions that fit its state.
-// Used inside a ListView over TransfersModel (roles are in scope).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -11,9 +8,7 @@ import "TransferText.js" as TransferText
 ListItem {
     id: item
 
-    // Rows of the restored-at-start prompt say where they resume from.
     property bool restored
-    // One TransfersModel row (the delegate's `model`).
     property var row: ({
         transferId: 0, group: "active", kind: "copy", title: "", state: "running", waitReason: "",
         bytesDone: 0, bytesTotal: 0, rate: 0, eta: -1, itemsDone: 0, itemsTotal: 0, itemsFailed: 0,
@@ -89,7 +84,6 @@ ListItem {
         Column {
             width: parent.width - directionIcon.width - parent.spacing
 
-            // A server the task goes to has its icon (§15.5).
             PlaceLabel {
                 width: parent.width
                 before: item.titleParts.before

@@ -1,14 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// TextViewer's colours on the target (PRV-13, real Silica and Qt 5.6's
-// StyledText): a shell script's rows are coloured with the ambience's
-// palette, a file of unknown type gets plain rows, and markup in a file shows
-// as its own characters: each row lays out in as many lines, as wide, as its
-// text laid out as plain text, so no tag, entity or space of the file was
-// taken as markup or lost. Rows that tabs and long lines make (PRV-4)
-// have the colours of their part of the line.
-//
-// The Silica window sits in a Qt Quick window so the list has a size and
-// lays out its rows.
+// SPDX-License-Identifier: LGPL-2.1-or-later Silica window sits in a Qt Quick window so the list
+// has a size and lays out rows.
 import QtQuick 2.6
 import QtQuick.Window 2.2 as QtQuick
 import Sailfish.Silica 1.0
@@ -19,7 +10,6 @@ QtQuick.Window {
     id: window
 
     property bool scenarioRunning: true
-    // What Silica's pages look up in the window they are in.
     property var __silica_applicationwindow_instance: app
     property int step: 0
     property int waited: 0
@@ -31,7 +21,6 @@ QtQuick.Window {
     ViewerTools { id: tools }
     TextDocument { id: warmUp }
 
-    // A row's line as plain text, to measure the row against.
     Label {
         id: plain
         visible: false
@@ -65,8 +54,6 @@ QtQuick.Window {
         return out
     }
 
-    // The text label of each row on screen by line number (from 1); the
-    // row's other label is its number.
     function rows() {
         var lists = findAll(page, function(x) { return x.forceLayout !== undefined }, [])
         if (lists.length > 0)
@@ -88,8 +75,6 @@ QtQuick.Window {
         return match ? match[2] : "none"
     }
 
-    // The row of line `number` shows exactly the characters of the line: as
-    // many lines, as wide, as the line's plain text in a label of its width.
     function showsItsLine(row, number) {
         var line = page.layout.rows[number - 1].text
         plain.width = row.width
@@ -101,8 +86,6 @@ QtQuick.Window {
                + " as plain text")
     }
 
-    // The page is small, and the rows wrap to several lines: the first
-    // two are on screen.
     function checkWrapped(shown) {
         console.log("palette " + page.colours)
         var comment = colourOf("comment")
@@ -114,7 +97,6 @@ QtQuick.Window {
             showsItsLine(shown[String(n)], n)
     }
 
-    // The rows below, after the list is scrolled to them.
     function checkScript(shown) {
         expect(shown["3"].text.indexOf('<font color="' + colourOf("function") + '">echo</font>') === 0,
                "echo is coloured: " + shown["3"].text)
@@ -129,14 +111,11 @@ QtQuick.Window {
         lists[0].positionViewAtIndex(index, ListView.Beginning)
     }
 
-    // A row with a tab.
     function checkTabbed(shown) {
         var tabbed = '&nbsp;&nbsp;&nbsp;&nbsp;<font color="' + colourOf("function") + '">echo</font>'
         expect(shown["2"].text.indexOf(tabbed) === 0, "the row with a tab: " + shown["2"].text)
     }
 
-    // The second row of a long line, which wraps over most of the page, so
-    // that the list is scrolled to it.
     function checkLong(shown) {
         var rest = '<font color="' + colourOf("comment") + '"># long</font>'
         expect(shown[""] !== undefined && shown[""].text.indexOf(rest) > 0, "the long line's second row: "
@@ -164,7 +143,6 @@ QtQuick.Window {
                                    + ", rows " + JSON.stringify(Object.keys(shown).map(function(n) { return n + ": " + shown[n].text })))
             switch (window.step) {
             case 0:
-                // The colours may come after the text.
                 if (!shown["2"] || shown["2"].text.indexOf("<font") < 0)
                     return
                 window.checkWrapped(shown)
@@ -174,14 +152,11 @@ QtQuick.Window {
                 if (!shown["4"] || shown["3"].text.indexOf("<font") < 0)
                     return
                 window.checkScript(shown)
-                // A new page: the list does not lay its rows out again here
-                // when they change height.
                 window.page = app.pageStack.replace(markupPage, {}, PageStackAction.Immediate)
                 break
             case 2:
                 if (!shown["1"])
                     return
-                // A plain file gets no colours later either.
                 if (window.waited < 10)
                     return
                 window.checkMarkup(window.rows())
@@ -209,9 +184,6 @@ QtQuick.Window {
         tools.installFixture(Qt.resolvedUrl("host/fixtures/script.sh"), "lautta://user-documents/script.sh")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/markup.xyz"), "lautta://user-documents/markup.xyz")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/rows.sh"), "lautta://user-documents/rows.sh")
-        // The emulated target compiles a grammar's patterns many times
-        // slower than a phone does, near the colours' time limit (PRV-13):
-        // colour a script once first, so the viewer's colours come in time.
         warmUp.uri = "lautta://user-documents/script.sh"
         var waited = 0
         for (; waited < 300 && (warmUp.loading || !warmUp.highlighted); ++waited)

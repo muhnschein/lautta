@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The app database (SPEC DAT-1, DAT-2): SQLite in WAL mode, schema versioned
-//! with `PRAGMA user_version`, forward migrations only.
+//! SQLite in WAL mode, schema versioned with `PRAGMA user_version`, forward migrations only.
 
 use crate::error::{Error, ErrorKind, Result};
 use rusqlite::Connection;
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-/// Migrations in order; index + 1 is the schema version they produce.
 const MIGRATIONS: &[&str] = &[
-    // 1: DAT-2 tables.
     r#"
     CREATE TABLE favourites (
         id INTEGER PRIMARY KEY,
@@ -108,7 +105,7 @@ const MIGRATIONS: &[&str] = &[
         last_used_ms INTEGER NOT NULL
     );
     "#,
-    // 2: where reading stopped in a viewer (PRV-12), forgotten with recents.
+    // 2: where reading stopped in a viewer, forgotten with recents.
     r#"
     CREATE TABLE reading_positions (
         uri TEXT PRIMARY KEY,
@@ -117,7 +114,6 @@ const MIGRATIONS: &[&str] = &[
         at_ms INTEGER NOT NULL
     );
     "#,
-    // 3: BRW-12, what the Browse page shows and in which order.
     r#"
     CREATE TABLE browse_layout (
         section TEXT NOT NULL,
@@ -127,23 +123,19 @@ const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (section, item)
     );
     "#,
-    // 4: `trash_items.bin`, unused: nothing reads or writes it (OPS-8). The
-    // column stays, as dropping it takes a migration of its own.
+    // 4: `trash_items.bin` unused; column stays, dropping it takes a migration of its own.
     r#"
     ALTER TABLE trash_items ADD COLUMN bin BLOB;
     "#,
-    // 5: ORG-1, files can be favourites too; the rows before were folders.
+    // 5: files can be favourites too; earlier rows were folders.
     r#"
     ALTER TABLE favourites ADD COLUMN is_dir INTEGER NOT NULL DEFAULT 1;
     "#,
-    // 6: ORG-1, the icon chosen for a favourite (a name of
-    // `org::favourites::ICONS`). NULL for the rows before and for no choice:
-    // the default icon.
+    // 6: icon chosen for a favourite (a name of `org::favourites::ICONS`). NULL: the default icon.
     r#"
     ALTER TABLE favourites ADD COLUMN icon TEXT;
     "#,
-    // 7: `trash_drain`, unused: nothing reads or writes it (OPS-8). The table
-    // stays, as dropping it takes a migration of its own.
+    // 7: `trash_drain` unused; table stays, dropping it takes a migration of its own.
     r#"
     CREATE TABLE trash_drain (due INTEGER NOT NULL);
     INSERT INTO trash_drain VALUES (1);
@@ -152,8 +144,7 @@ const MIGRATIONS: &[&str] = &[
 
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 
-/// Shared handle to the database. All access is serialised; callers run on
-/// blocking threads, never on the GUI thread.
+/// All access is serialised; callers run on blocking threads, never the GUI thread.
 #[derive(Clone)]
 pub struct Db {
     conn: Arc<Mutex<Connection>>,
@@ -216,7 +207,7 @@ fn migrate(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// SEC-5: private files are 0600.
+/// Private files are 0600.
 fn restrict_mode(path: &Path) {
     use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
@@ -260,7 +251,6 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("v4.db");
         {
-            // A database as schema 4 left it, with one favourite.
             let c = Connection::open(&path).unwrap();
             for sql in &MIGRATIONS[..4] {
                 c.execute_batch(sql).unwrap();
@@ -288,7 +278,6 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("v5.db");
         {
-            // A database as schema 5 left it, with a folder and a file.
             let c = Connection::open(&path).unwrap();
             for sql in &MIGRATIONS[..5] {
                 c.execute_batch(sql).unwrap();
@@ -370,9 +359,9 @@ mod tests {
 
     #[test]
     fn a_device_database_at_schema_7_keeps_opening_with_its_trash_rows() {
-        // The database on the device is at schema 7, with trash rows that
-        // name a bin. A migration that ran there may not be dropped or
-        // renumbered, or this app would call that database newer than itself.
+        // Device database is at schema 7 with trash rows that name a bin. A migration that ran
+        // there may not be dropped or renumbered, or this app would call that database newer than
+        // itself.
         const DEVICE_SCHEMA: usize = 7;
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("v7.db");

@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Recents (ORG-2): files opened, previewed or transferred, newest
-// first, in the date sections of Activity (§15.4). Clearable; switched on
-// and off in Settings.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -12,7 +9,6 @@ import "../components/browse"
 Page {
     id: page
 
-    // The rows; tests give the page a ListModel.
     property var listModel: recents
     readonly property bool recentsOn: JSON.parse(App.settingsJson).recents_enabled !== false
 
@@ -53,7 +49,6 @@ Page {
         }
 
         PullDownMenu {
-            // Only shown while there is something to clear.
             visible: recents.count > 0
 
             MenuItem {
@@ -107,8 +102,6 @@ Page {
                     color: row.highlighted ? Theme.highlightColor : Theme.primaryColor
                     truncationMode: TruncationMode.Fade
                 }
-                // Where the file is, without how it was used; a server's
-                // place has its icon (§15.5).
                 PlaceLabel {
                     width: parent.width
                     text: model.place

@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of the texts of the settings pages (SPEC §18): the line under
-// each entry of Settings tells what is chosen on its page, and the day and
-// size choices have their labels. On the host qsTrId gives back the id.
 import QtQuick 2.6
 import "../../../qml/components/search/SettingsText.js" as SettingsText
 

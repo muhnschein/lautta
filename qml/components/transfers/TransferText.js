@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Texts of the transfers area: titles, status lines and reasons, built from
-// the raw numbers and engineering names the Transfers models give (QML
-// formats sizes and times, doc/QML-API.md).
 .pragma library
 .import Sailfish.Silica 1.0 as Silica
 .import "../PlaceText.js" as PlaceText
@@ -22,7 +19,6 @@ function percent(done, total) {
     return total > 0 ? Math.min(100, Math.floor(done * 100 / total)) : 0
 }
 
-// The three forms of a task's name: what to do, what runs, what ended.
 var IMPERATIVE = 0
 var ONGOING = 1
 var ENDED = 2
@@ -133,15 +129,11 @@ function forms(r) {
         qsTrId("lautta-xfr-title-uploaded-one")], r.title, r.destName)
 }
 
-// "Copy 37 items to NAS", "Upload figure-3.png to NAS", "Download holiday.mp4";
-// completed ones in the past tense ("Deleted 4 items").
 // r: { kind, direction, state, title, itemsTotal, destName }
 function title(r) {
     return forms(r)[r.state === "completed" ? ENDED : IMPERATIVE]
 }
 
-// The title split around the destination's name (PlaceText.around), for
-// a line that marks a server's name with its icon (§15.5).
 function titleParts(r) {
     return PlaceText.around(function (dest) {
         var marked = {}
@@ -152,23 +144,18 @@ function titleParts(r) {
     }, r.destName)
 }
 
-// Whether a transfer's destination is on a server (LOC-7): uploads and
-// transfers between servers go to one.
 function toServer(direction) {
     return direction === "upload" || direction === "remote"
 }
 
-// "Copied 37 items to NAS", "Deleted notes.md", "Extracted dataset.tar.gz".
 function ended(r) {
     return forms(r)[ENDED]
 }
 
-// "Copying 37 items to NAS", "Deleting notes.md": what runs now.
 function ongoing(r) {
     return forms(r)[ONGOING]
 }
 
-// "1.2 GB of 4.0 GB · 11.4 MB/s · 4 min"
 function progressLine(done, total, rate, eta) {
     //% "%1 of %2"
     var text = qsTrId("lautta-xfr-progress").arg(size(done)).arg(size(total))
@@ -180,7 +167,6 @@ function progressLine(done, total, rate, eta) {
     return text
 }
 
-// "about 4 min left" for the details page.
 function etaLine(rate, eta) {
     if (rate <= 0)
         return ""
@@ -213,8 +199,6 @@ function needsAnswer(questions) {
     return qsTrId("lautta-xfr-needs-answer", questions)
 }
 
-// The second line of a transfer row. r is a TransfersModel row.
-// restored: add "resumes from where it stopped" to paused rows.
 function status(r, restored) {
     switch (r.group) {
     case "active":
@@ -285,7 +269,6 @@ function itemIcon(state) {
     }
 }
 
-// "Uploading · 6.8 MB", "Queued · 5.1 MB", "Completed · 7.2 MB" (details page).
 function itemStatus(state, kind, sizeBytes, direction) {
     var label
     switch (state) {
@@ -318,8 +301,7 @@ function itemStatus(state, kind, sizeBytes, direction) {
     return kind === "dir" || sizeBytes <= 0 ? label : label + " · " + size(sizeBytes)
 }
 
-// The activity bar (XFR-13). mode is Transfers.barMode, s the lead transfer's
-// summary (Transfers.summaryJson), others how many more are unfinished.
+// mode: Transfers.barMode; s: lead transfer's summary; others: count of further unfinished.
 function barTitle(mode, s) {
     if (mode === "done")
         return ended(s)
@@ -329,7 +311,6 @@ function barTitle(mode, s) {
     return mode === "running" && s.bytesTotal > 0 ? text + " · " + percent(s.bytesDone, s.bytesTotal) + "%" : text
 }
 
-// "120 MB of 290 MB · 1 min · 2 more", "Waiting for your answer", "Completed with 1 failure".
 function barDetail(mode, s, others, questions) {
     var text
     switch (mode) {

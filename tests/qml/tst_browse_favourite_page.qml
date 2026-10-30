@@ -1,15 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): the favourite page (ORG-1) is a
-// page, not a dialog, without a pulley or an order section. Opened from a
-// favourite's Edit favourite in Browse, each change is stored without
-// anything to accept: an icon and a colour as soon as they are picked, the
-// label once typing pauses and when the page is left while typing. Back in
-// Browse the row shows the chosen icon in the chosen colour. Opened on a
-// file that is no favourite yet (Add to favourites), the page makes it one
-// at once, as a file, offering the file's own icon first as its default;
-// file-type icons are the app's glyphs (UI-2).
-// Both favourites are removed again at the end, so later scenarios sharing
-// the database see none of them.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -40,7 +29,6 @@ ApplicationWindow {
         scenarioRunning = false
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)
@@ -61,7 +49,7 @@ ApplicationWindow {
     }
 
     function favouriteRow(name) {
-        // Headless, no render loop polishes the list: lay it out by hand.
+        // No render loop headless: lay out by hand.
         var views = findAll(win.contentItem, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < views.length; ++i)
             views[i].forceLayout()
@@ -75,14 +63,11 @@ ApplicationWindow {
         return null
     }
 
-    // "source colour" of a Browse row's icon, its first image.
     function rowIcon(row) {
         var icons = findAll(row, function(x) { return x.highlightColor !== undefined && x.source !== undefined }, [])
         return icons.length > 0 ? String(icons[0].source) + " " + String(icons[0].color) : "none"
     }
 
-    // The stored favourite of `uri` as last loaded, {} when none; loads
-    // again now and then, as the page's saves do not reach this model.
     function stored(uri) {
         if (win.waited % 3 === 0)
             favs.reload()
@@ -123,9 +108,6 @@ ApplicationWindow {
         return fields.length > 0 ? fields[0] : null
     }
 
-    // A page that saves as it goes: no dialog to accept, no pulley, and
-    // no order section: its texts are the header, the label field, the
-    // folder line and the colour and icon sections, nothing else.
     function checkShape() {
         if (page.accept !== undefined || page.canAccept !== undefined)
             return fail("the favourite is a dialog: " + page)
@@ -195,7 +177,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 4:
-                // Saved by the pick itself, the page still open.
                 if (win.stored(win.folder).icon !== "home")
                     break
                 if (!win.iconCell("home").chosen || win.iconCell("favorite").chosen)
@@ -213,7 +194,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 6:
-                // Once typing pauses.
                 if (win.stored(win.folder).label !== "Trips")
                     break
                 win.labelField().text = "Trips 2026"
@@ -221,7 +201,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 7:
-                // Left while typing: saved on the way out.
                 if (win.stored(win.folder).label !== "Trips 2026")
                     break
                 var shown = win.favouriteRow("Trips 2026")
@@ -250,7 +229,6 @@ ApplicationWindow {
                                                       + FileIcons.glyph("markdown", false, Theme.iconSizeMedium) + ".svg"))
                 if (image.length === 0 || String(image[0].source) !== document)
                     return win.fail("the file's own icon: " + (image.length > 0 ? image[0].source : "none"))
-                // A file-type choice is the app's glyph, as Browse shows it (UI-2).
                 var folderImage = win.findAll(win.iconCell("file-folder"), function(x) { return x.source !== undefined }, [])
                 var folderGlyph = String(Qt.resolvedUrl("../../qml/icons/"
                                                          + FileIcons.sized("file-folder", Theme.iconSizeMedium) + ".svg"))

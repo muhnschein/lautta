@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The image details panel (PRV-4, board ImageExif) on the target: the date
-// the photo was taken follows the system's date and time formats like every
-// date in the app (§18), not the "2026-09-12 18:42:11" EXIF records. Fails
-// when the raw EXIF text is shown.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0

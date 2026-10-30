@@ -1,27 +1,19 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Markdown to the Qt rich-text subset (SPEC PRV-4).
+//! Markdown to Qt rich-text subset: `h1`-`h6`, `p`, `em`, `strong`, `s`, `code`, `pre`,
+//! `ul`/`ol`/`li`, `blockquote`, `a`, `hr`, `br`, simple `table`. Wraps to viewer width, code
+//! blocks too.
 //!
-//! The output uses only tags Qt's `Text.RichText` understands: `h1`-`h6`,
-//! `p`, `em`, `strong`, `s`, `code`, `pre`, `ul`/`ol`/`li`, `blockquote`, `a`,
-//! `hr`, `br` and a simple `table`. Everything wraps to the viewer's width,
-//! code blocks too, whose lines Qt would otherwise never break (`PRE`).
-//! Nothing from the source is trusted:
-//! every text event is escaped, raw HTML (block or inline) is shown as
-//! escaped text, images become their alt text (no resource is ever
-//! requested), and link targets are limited to a few safe schemes.
+//! Source untrusted: text escaped, raw HTML shown as escaped text, images become alt text (no
+//! resource requested), link targets limited to safe schemes.
 
 use pulldown_cmark::{Alignment, Event, HeadingLevel, Options, Parser, Tag};
 
-/// Schemes a rendered link may carry; other targets are shown as plain text.
+/// Other targets shown as plain text.
 const SAFE_SCHEMES: [&str; 4] = ["http", "https", "mailto", "ftp"];
 
-/// A code block. Qt's rich text never breaks the lines of a plain `<pre>`
-/// (it lays them out as non-breakable), so a long line would run off the
-/// screen however the `Text` wraps (PRV-4). `pre-wrap` keeps the block's
-/// spaces and line breaks and lets long lines wrap.
+/// Qt never breaks lines of plain `<pre>`; `pre-wrap` keeps spaces and breaks and wraps long lines.
 const PRE: &str = "<pre style=\"white-space: pre-wrap\">";
 
-/// Escapes text for element content and double-quoted attributes.
 pub fn escape_html(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     push_escaped(&mut out, text);
@@ -42,7 +34,6 @@ fn push_escaped(out: &mut String, text: &str) {
     }
 }
 
-/// A link target is safe when it has no scheme (relative) or an allowed one.
 fn safe_href(url: &str) -> bool {
     let trimmed = url.trim();
     let scheme_end = trimmed.find(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.')));
@@ -78,13 +69,11 @@ fn align_attr(a: Alignment) -> &'static str {
 #[derive(Default)]
 struct Renderer {
     out: String,
-    /// Alignments of the table being rendered and the current column.
     aligns: Vec<Alignment>,
     column: usize,
     in_head: bool,
-    /// Alt text being collected for an image, if inside one.
     image_alt: Option<String>,
-    /// One flag per open link: its target was refused, so there is no `</a>`.
+    /// One flag per open link: target refused, so no `</a>`.
     refused_links: Vec<bool>,
 }
 
@@ -177,7 +166,6 @@ impl Renderer {
         }
     }
 
-    /// Images are never loaded: the alt text stands in for them.
     fn end_image(&mut self) {
         let alt = self.image_alt.take().unwrap_or_default();
         let label = if alt.trim().is_empty() {
@@ -200,7 +188,6 @@ impl Renderer {
                 push_escaped(&mut self.out, &c);
                 self.out.push_str("</code>");
             }
-            // Raw HTML is never passed through, it is displayed as text.
             Event::Html(h) => self.text(&h),
             Event::FootnoteReference(name) => self.text(&format!("[{name}]")),
             Event::SoftBreak => self.text(" "),
@@ -211,8 +198,7 @@ impl Renderer {
     }
 }
 
-/// Renders `md` to rich-text HTML. Total: any input yields a string and no
-/// source text ever reaches the output unescaped.
+/// Total: any input yields a string; no source text reaches output unescaped.
 pub fn render(md: &str) -> String {
     let options = Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
     let mut r = Renderer::default();

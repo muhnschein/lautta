@@ -1,17 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): the long-press menu of a file ends
-// with More actions (SPEC §15.3, OPS-12); tapping it closes the menu and
-// opens the More actions page, its header naming the file and one row per
-// action with its icon (Compress and Move to new folder the app's archive and
-// folder glyphs). Add to favourites opens the favourite page
-// in the page's place, which makes the file itself a favourite at once, as a
-// file;
-// Compress opens the compress dialog for the file in the page's place, ready
-// to accept. Fails when More actions changes the menu instead, a row is
-// missing or has no icon, a dialog stacks on the page (leaving it would
-// land on the page again), or an action gets the wrong item. The file's
-// favourite is removed again at the end, so later scenarios sharing the
-// database see none of it.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -30,7 +17,6 @@ ApplicationWindow {
     property var row
     property var menu
     property var folderPage
-    // The folder's favourite before (an earlier scenario's, or -1).
     property int folderBefore: -2
 
     ViewerTools { id: tools }
@@ -49,7 +35,6 @@ ApplicationWindow {
         scenarioRunning = false
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)
@@ -65,7 +50,7 @@ ApplicationWindow {
         return out
     }
 
-    // Headless, no render loop polishes the lists: lay them out by hand.
+    // No render loop headless: lay out by hand.
     function layOut(root) {
         var views = findAll(root, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < views.length; ++i)
@@ -101,7 +86,6 @@ ApplicationWindow {
         return true
     }
 
-    // The More actions page on top, settled, or null.
     function morePage() {
         var page = pageStack.currentPage
         if (!page || page.actions === undefined || page.choose === undefined || pageStack.busy
@@ -111,19 +95,16 @@ ApplicationWindow {
         return page
     }
 
-    // The app's glyph of `kind` at a medium icon's size (FileIcons.js).
     function glyph(kind) {
         return String(Qt.resolvedUrl("../../qml/icons/" + FileIcons.glyph(kind, false, Theme.iconSizeMedium) + ".svg"))
     }
 
-    // The rows of the More actions page: [{ row, icon, text }].
     function pageRows(page) {
         var icons = findAll(page, function(x) {
             return x.sourceSize !== undefined && x.highlightColor !== undefined && x.visible
         }, [])
         var out = []
         for (var i = 0; i < icons.length; ++i) {
-            // Icon in the row's content item, in the row.
             var row = icons[i].parent.parent
             var labels = findAll(row, function(x) { return x.truncationMode !== undefined && x.text !== undefined }, [])
             out.push({ "row": row, "icon": String(icons[i].source), "text": labels.length > 0 ? labels[0].text : "" })
@@ -145,7 +126,6 @@ ApplicationWindow {
         return rows
     }
 
-    // Taps the row `text` of the More actions page.
     function tapRow(text) {
         var page = morePage()
         if (!page)
@@ -162,7 +142,6 @@ ApplicationWindow {
         return false
     }
 
-    // The dialog in the More actions page's place: on the folder, settled.
     function dialogInPlace(pred) {
         var dialog = pageStack.currentPage
         if (!dialog || pageStack.busy || !pred(dialog))
@@ -220,7 +199,6 @@ ApplicationWindow {
                 break
             case 3:
                 var items = win.menuRows()
-                // As a tap does: Silica's own activation, closeOnActivation included.
                 win.menu._activatedMenuItem(items[items.length - 1])
                 win.next()
                 break
@@ -245,7 +223,6 @@ ApplicationWindow {
                     break
                 if (page.isDir !== false)
                     return win.fail("the favourite is a file, not a folder")
-                // Nothing to accept: the page adds the favourite itself.
                 if (!page.filled)
                     break
                 pageStack.pop()
@@ -271,7 +248,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 9:
-                // Back on the folder once the page is gone.
                 if (win.openMore())
                     win.next()
                 break
