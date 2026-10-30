@@ -11,7 +11,7 @@ Silica idioms to use instead:
 - PageHeader: right-aligned, light weight, highlight colour; description below it.
 - Back navigation = swipe right; shown only by the page-stack indicator (top-left
   small dots `.ind-back`). Attached page (swipe left) = `.ind-fwd` top-right.
-- Actions = PulleyMenu (top, pull down) only. NO PushUpMenu anywhere (hard to discover); folder-level actions (Copy address, Go to, Favourite) live in the header path menu: tap header (subtitle = path), menu opens under it. Closed state shows
+- Actions = PulleyMenu (top, pull down) only. NO PushUpMenu anywhere (hard to discover); folder-level actions (Copy address, Go to, Favourite) live in the header path menu: tap header (subtitle = path), or hold and slide to a row as in a ContextMenu; menu opens under it, rest of view dims, press there closes it. Closed state shows
   only the thin glowing `.pull-ind` line at the top edge (`.push-ind` at bottom).
   Open state: menu items centred, primary colour, the item under the finger in
   highlight colour, highlight-tinted gradient backdrop; page content pushed down.

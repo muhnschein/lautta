@@ -845,6 +845,7 @@ Item {
 
         objectName: "folderPulleyHost"
         anchors.fill: parent
+        interactive: !pathMenu.open
         // A flickable's content is 0x0 until told; anchors to parent go to it.
         contentWidth: width
         contentHeight: height
@@ -928,9 +929,38 @@ Item {
                         }
                     }
                     MouseArea {
+                        id: headerPress
+
+                        property bool tracking
+
+                        function stopTracking() {
+                            tracking = false
+                            preventStealing = false
+                        }
+
+                        objectName: "folderHeaderPress"
                         anchors.fill: parent
                         enabled: !view.selecting
                         onClicked: pathMenu.open = !pathMenu.open
+                        onPressAndHold: {
+                            tracking = true
+                            preventStealing = true
+                            pathMenu.open = true
+                        }
+                        onPositionChanged: {
+                            if (tracking)
+                                pathMenu.track(headerPress, mouse.x, mouse.y)
+                        }
+                        onReleased: {
+                            if (!tracking)
+                                return
+                            stopTracking()
+                            pathMenu.release()
+                        }
+                        onCanceled: {
+                            stopTracking()
+                            pathMenu.cancelTrack()
+                        }
                     }
                 }
 
@@ -1160,5 +1190,30 @@ Item {
 
         allowed: !view.selecting && !view.picking
         anchors.bottomMargin: clipboardPanel.visibleSize
+    }
+
+    // Under the open path menu: rest of view dims, a press there only closes the menu.
+    Item {
+        objectName: "pathMenuShade"
+        y: top.y + pathMenu.y + pathMenu.height - pulleyHost.contentY
+        width: view.width
+        height: Math.max(0, view.height - y)
+        visible: pathMenu.open || opacity > 0
+        opacity: pathMenu.open ? 1 : 0
+
+        Behavior on opacity { FadeAnimation { } }
+
+        Rectangle {
+            anchors.fill: parent
+            color: Theme.highlightDimmerColor
+            opacity: Theme.opacityHigh
+        }
+
+        // Also while fading out: a press meant to close never lands on the list.
+        MouseArea {
+            objectName: "pathMenuShadePress"
+            anchors.fill: parent
+            onPressed: pathMenu.close()
+        }
     }
 }

@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Looks like a stock context menu: Silica's own opens
-// only from a list item, this one from the header.
+// SPDX-License-Identifier: LGPL-2.1-or-later Works as a stock context menu (tap, or hold and slide
+// to a row): Silica's own opens only from a list item, this one from the header.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -47,15 +47,10 @@ Item {
             { "id": "favourite", "icon": "image://theme/icon-m-favorite", "text": qsTrId("lautta-dir-path-favourite") }
         ]
     }
-    // One row while every label fits its share; long translations get a row each.
-    readonly property bool actionsInRow: {
-        var share = width / actions.length
-        for (var i = 0; i < actions.length; ++i) {
-            if (Theme.iconSizeSmall + Theme.paddingMedium * 3 + actionMetrics.advanceWidth(actions[i].text) > share)
-                return false
-        }
-        return true
-    }
+    // Row under the finger while a press-and-hold on the header goes on; release opens it.
+    property Item _dragRow: null
+    readonly property var _columns: PathFold.columns(entries, wide ? 2 : 1)
+    readonly property real _fullHeight: maxHeight < 0 ? content.height : Math.min(content.height, maxHeight)
 
     signal navigate(string uri)
     signal browse
@@ -74,6 +69,37 @@ Item {
             navigate(entry.uri)
     }
 
+    // Press-and-hold on the header, finger moves on: as Silica's ContextMenu, row under it lights up.
+    function track(item, x, y) {
+        var p = mapFromItem(item, x, y)
+        _dragRow = open && p.y >= 0 && p.y < _fullHeight ? _rowAt(p.x, p.y) : null
+    }
+
+    function release() {
+        var row = _dragRow
+        _dragRow = null
+        if (row)
+            row.clicked(null)
+    }
+
+    function cancelTrack() {
+        _dragRow = null
+    }
+
+    function _rowAt(x, y) {
+        var item = scroller.contentItem
+        var p = mapToItem(item, x, y)
+        while (item) {
+            if (item.objectName === "pathMenuEntry" || item.objectName === "pathMenuAction")
+                return item
+            var child = item.childAt(p.x, p.y)
+            if (child)
+                p = item.mapToItem(child, p.x, p.y)
+            item = child
+        }
+        return null
+    }
+
     function _trigger(actionId) {
         close()
         switch (actionId) {
@@ -90,17 +116,11 @@ Item {
     }
 
     width: parent ? parent.width : 0
-    height: open ? (maxHeight < 0 ? content.height : Math.min(content.height, maxHeight)) : 0
+    height: open ? _fullHeight : 0
     visible: open || height > 0
     clip: true
 
     Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
-
-    FontMetrics {
-        id: actionMetrics
-
-        font.pixelSize: Theme.fontSizeExtraSmall
-    }
 
     Rectangle {
         anchors.fill: parent
@@ -109,33 +129,47 @@ Item {
     }
 
     SilicaFlickable {
+        id: scroller
+
         objectName: "pathMenuScroller"
         anchors.fill: parent
         contentHeight: content.height
 
-        Column {
+        // Placed by hand, not by Column and Row: those place only on polish.
+        Item {
             id: content
 
             width: parent.width
+            height: folders.height + actionsBox.height
 
-            Row {
+            Item {
+                id: folders
+
                 width: parent.width
+                height: menu._columns.reduce(function (most, c) { return Math.max(most, c.length) }, 0)
+                        * Theme.itemSizeSmall
 
                 Repeater {
                     id: columns
 
-                    model: PathFold.columns(menu.entries, menu.wide ? 2 : 1)
+                    model: menu._columns
 
-                    Column {
+                    Item {
+                        x: index * width
                         width: content.width / columns.count
+                        height: folders.height
 
                         Repeater {
                             model: modelData
 
                             BackgroundItem {
+                                id: entry
+
                                 objectName: "pathMenuEntry"
+                                y: index * height
                                 width: parent.width
                                 height: Theme.itemSizeSmall
+                                highlighted: down || menu._dragRow === entry
                                 onClicked: menu._activate(modelData)
 
                                 AppIcon {
@@ -146,7 +180,6 @@ Item {
                                         leftMargin: Theme.horizontalPageMargin
                                         verticalCenter: parent.verticalCenter
                                     }
-                                    small: true
                                     icon: FileIcons.sized(modelData.icon, iconSize)
                                     highlighted: parent.highlighted
                                 }
@@ -169,42 +202,48 @@ Item {
             }
 
             Rectangle {
+                id: actionsBox
+
+                y: folders.height
                 width: parent.width
-                height: actionsBox.height
+                height: menu.actions.length * Theme.itemSizeSmall
                 color: Theme.rgba(Theme.highlightDimmerColor, Theme.opacityHigh)
 
-                Flow {
-                    id: actionsBox
+                Repeater {
+                    model: menu.actions
 
-                    width: parent.width
+                    BackgroundItem {
+                        id: action
 
-                    Repeater {
-                        model: menu.actions
+                        objectName: "pathMenuAction"
+                        y: index * height
+                        width: parent.width
+                        height: Theme.itemSizeSmall
+                        highlighted: down || menu._dragRow === action
+                        onClicked: menu._trigger(modelData.id)
 
-                        BackgroundItem {
-                            objectName: "pathMenuAction"
-                            width: menu.actionsInRow ? actionsBox.width / menu.actions.length : actionsBox.width
-                            height: menu.actionsInRow ? Theme.itemSizeMedium : Theme.itemSizeSmall
-                            onClicked: menu._trigger(modelData.id)
+                        AppIcon {
+                            id: actionIcon
 
-                            Row {
-                                x: menu.actionsInRow ? (parent.width - width) / 2 : Theme.horizontalPageMargin
-                                anchors.verticalCenter: parent.verticalCenter
-                                spacing: menu.actionsInRow ? Theme.paddingMedium : Theme.paddingLarge
-
-                                AppIcon {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    small: true
-                                    icon: modelData.icon
-                                    highlighted: parent.parent.highlighted
-                                }
-                                Label {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: modelData.text
-                                    font.pixelSize: menu.actionsInRow ? Theme.fontSizeExtraSmall : Theme.fontSizeMedium
-                                    color: parent.parent.highlighted ? Theme.highlightColor : Theme.primaryColor
-                                }
+                            anchors {
+                                left: parent.left
+                                leftMargin: Theme.horizontalPageMargin
+                                verticalCenter: parent.verticalCenter
                             }
+                            icon: modelData.icon
+                            highlighted: parent.highlighted
+                        }
+                        Label {
+                            anchors {
+                                left: actionIcon.right
+                                leftMargin: Theme.paddingLarge
+                                right: parent.right
+                                rightMargin: Theme.horizontalPageMargin
+                                verticalCenter: parent.verticalCenter
+                            }
+                            text: modelData.text
+                            truncationMode: TruncationMode.Fade
+                            color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
                         }
                     }
                 }

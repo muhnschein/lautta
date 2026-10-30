@@ -15,7 +15,7 @@ use percent_encoding::percent_decode_str;
 use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 #[derive(Debug)]
@@ -156,26 +156,32 @@ impl Core {
         if text.starts_with("lautta://") {
             return Uri::parse(text).ok();
         }
-        if let Some(rest) = text.strip_prefix("file://") {
-            let bytes: Vec<u8> = percent_decode_str(rest).collect();
-            return self.local_uri(Path::new(OsStr::from_bytes(&bytes)));
-        }
-        if text == "~" || text.starts_with("~/") {
-            let rest = text.trim_start_matches('~').trim_start_matches('/');
-            return self.local_uri(&self.paths.home.join(rest));
+        if let Some(path) = self.local_dir_of(text, base) {
+            return self.local_uri(&path);
         }
         if !text.starts_with('/') {
             return self.location_address(text);
         }
-        if self
-            .locations
-            .to_local_path(&Uri::root(base.location.clone()))
-            .is_some()
-        {
-            return self.local_uri(Path::new(text));
-        }
         let path = VPath::parse(text.as_bytes()).ok()?;
         Some(Uri::new(base.location.clone(), path))
+    }
+
+    /// Local path `text` names, also outside every location (home itself).
+    fn local_dir_of(&self, text: &str, base: &Uri) -> Option<PathBuf> {
+        let text = text.trim();
+        if let Some(rest) = text.strip_prefix("file://") {
+            let bytes: Vec<u8> = percent_decode_str(rest).collect();
+            return Some(PathBuf::from(OsStr::from_bytes(&bytes)));
+        }
+        if text == "~" || text.starts_with("~/") {
+            let rest = text.trim_start_matches('~').trim_start_matches('/');
+            return Some(self.paths.home.join(rest));
+        }
+        let local_base = self
+            .locations
+            .to_local_path(&Uri::root(base.location.clone()))
+            .is_some();
+        (text.starts_with('/') && local_base).then(|| PathBuf::from(text))
     }
 
     /// `Documents/Uni`: a location's name, then a path inside it.
@@ -202,23 +208,32 @@ impl Core {
             return Vec::new();
         };
         let (parent_text, partial) = (&prefix[..=cut], &prefix[cut + 1..]);
-        let Some(parent) = self.resolve_address(parent_text, base) else {
-            return Vec::new();
-        };
-        let Ok(Some(hit)) = self.dircache.get(&parent) else {
-            return Vec::new();
-        };
         let needle = fold_text(partial);
-        let mut names: Vec<&Entry> = hit
-            .entries
-            .iter()
-            .filter(|e| e.is_dir() && fold_text(&e.display_name()).starts_with(&needle))
-            .collect();
-        names.sort_by_key(|e| fold_text(&e.display_name()));
-        names
-            .into_iter()
-            .filter_map(|e| parent.join(&e.name).ok())
-            .collect()
+        let mut found: Vec<(String, Uri)> = Vec::new();
+        if let Some(parent) = self.resolve_address(parent_text, base) {
+            if let Ok(Some(hit)) = self.dircache.get(&parent) {
+                found.extend(hit.entries.iter().filter(|e| e.is_dir()).filter_map(|e| {
+                    let key = fold_text(&e.display_name());
+                    Some((key, parent.join(&e.name).ok()?))
+                }));
+            }
+        }
+        // Sandbox lists no home: user folders in it are known all the same.
+        if let Some(dir) = self.local_dir_of(parent_text, base) {
+            for l in self.locations.locations() {
+                let Some(root) = l.local_root.filter(|r| r.parent() == Some(dir.as_path())) else {
+                    continue;
+                };
+                let key = fold_text(&root.file_name().unwrap_or_default().to_string_lossy());
+                let uri = Uri::root(l.id);
+                if !found.iter().any(|(_, u)| *u == uri) {
+                    found.push((key, uri));
+                }
+            }
+        }
+        found.retain(|(key, _)| key.starts_with(&needle));
+        found.sort_by(|a, b| a.0.cmp(&b.0));
+        found.into_iter().map(|(_, u)| u).collect()
     }
 
     /// Folders whose name matches `text`: name starts with it, then a word in it does, then it
