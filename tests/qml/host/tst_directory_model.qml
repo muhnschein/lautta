@@ -216,13 +216,14 @@ Item {
         wait(200)
         var zeta = root.docs + "Zeta"
         same(goToAsked("zet"), [["Zeta", "here", "Documents", ""]], "a folder here by name")
-        check(!goTo.isPath && goTo.count === 1 && goTo.firstUri === zeta && goTo.firstName === "Zeta",
-              "top row: " + goTo.firstUri + " " + goTo.firstName)
+        check(!goTo.isPath && goTo.count === 1 && goTo.firstUri === zeta && goTo.firstName === "Zeta"
+              && goTo.firstSource === "here", "top row: " + goTo.firstUri + " " + goTo.firstName + " " + goTo.firstSource)
         same(goToAsked("~/Documents/Zeta"), [["Zeta", "go", "Documents", ""]], "a typed path names the folder")
-        check(goTo.isPath, "a path")
+        check(goTo.isPath && goTo.firstSource === "go", "a path: " + goTo.firstSource)
         same(goToAsked("~/Documents/z"), [["Zeta", "in", "", "~/Documents/Zeta/"]], "and drills in")
+        check(goTo.firstSource === "in", "no folder named, top row drills in: " + goTo.firstSource)
         same(goToAsked("nothing like it"), [], "no hits")
-        check(goTo.firstUri === "" && goTo.firstName === "", "no top row")
+        check(goTo.firstUri === "" && goTo.firstName === "" && goTo.firstSource === "", "no top row")
     }
 
     function testInside() {

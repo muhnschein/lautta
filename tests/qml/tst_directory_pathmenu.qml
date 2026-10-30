@@ -282,6 +282,10 @@ ApplicationWindow {
         expect(pageStack.currentPage === startPage, "Browse goes back to the first page")
     }
 
+    function sections(dialog) {
+        return shown(dialog, "goToRow").map(function (r) { return r.section }).join()
+    }
+
     function checkGoToFolder() {
         var bottom = depth()
         var page = push(uriAt(2))
@@ -301,6 +305,11 @@ ApplicationWindow {
         shown(dialog, "goToRow")[0].clicked()
         expect(field.text === "~/Documents/Path/Uni/Thesis/Chapters/", "a folder of the path drills in: " + field.text)
         waitFor(function () { return dialog.fresh && dialog.chosenUri === uriAt(4) }, "Go to Chapters")
+        expect(sections(dialog) === ",lautta-goto-in", "In header under Go to: " + sections(dialog))
+        field.text = "~/D"
+        waitFor(function () { return dialog.fresh && shown(dialog, "goToRow").length === 2 }, "user folders in home")
+        same(shown(dialog, "goToRow").map(function (r) { return r.hit.name }), ["Documents", "Downloads"], "home lists none")
+        expect(sections(dialog) === ",", "and no In header between them: " + sections(dialog))
         field.text = "~/Documents/Path/Nope"
         waitFor(function () { return dialog.fresh }, "a path that names nothing")
         expect(dialog.noFolder && field.errorHighlight && field.label === "lautta-goto-none" && !dialog.canAccept,

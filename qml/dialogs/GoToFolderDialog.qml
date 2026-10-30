@@ -145,7 +145,7 @@ Dialog {
                                 hit: model
                                 typed: field.text.trim()
                                 //% "In %1"
-                                section: model.source === "in" && index === 1 ? qsTrId("lautta-goto-in").arg(hits.firstName) : ""
+                                section: index === 1 && hits.firstSource === "go" ? qsTrId("lautta-goto-in").arg(hits.firstName) : ""
                                 onClicked: dialog.choose(model)
                             }
                         }

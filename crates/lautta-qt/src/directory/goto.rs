@@ -26,6 +26,7 @@ pub struct GotoModel {
     /// Top row: what Go and Enter open.
     firstUri: qt_property!(QString; NOTIFY changed),
     firstName: qt_property!(QString; NOTIFY changed),
+    firstSource: qt_property!(QString; NOTIFY changed),
     changed: qt_signal!(),
 
     query: qt_method!(fn(&mut self, text: QString)),
@@ -120,6 +121,7 @@ impl GotoModel {
                 }
                 model.firstUri = rows.first().map(|r| cell_text(&r[0])).unwrap_or_default();
                 model.firstName = rows.first().map(|r| cell_text(&r[1])).unwrap_or_default();
+                model.firstSource = rows.first().map(|r| cell_text(&r[2])).unwrap_or_default();
                 model.begin_reset_model();
                 model.rows = rows;
                 model.end_reset_model();
