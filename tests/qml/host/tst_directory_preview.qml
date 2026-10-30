@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of App.previewRows (no Silica): the sample folder of the view
-// options preview (BRW-4) is ordered and filtered as a real folder under
-// the view settings it is asked for.
 import QtQuick 2.6
 import Lautta 1.0
 

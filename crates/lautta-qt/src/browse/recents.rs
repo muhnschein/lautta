@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `RecentsModel` (ORG-2): files opened, previewed or transferred,
-//! newest first. Roles: `itemId`, `uri`, `name`, `kind`, `place`, `at` (ms
-//! since the epoch), `dateGroup` (the Activity page's date sections, §15.4:
-//! `today`, `yesterday`, `last7Days`, `last30Days`, `older`).
+//! Roles: `itemId`, `uri`, `name`, `kind`, `place`, `at` (ms since epoch), `dateGroup` (`today`,
+//! `yesterday`, `last7Days`, `last30Days`, `older`).
 
 use super::{cell_data, error_parts, role_names, store_changed, Cell};
 use crate::runtime::{blocking_then, core};
@@ -31,7 +29,6 @@ fn cells(r: RecentRow) -> Vec<Cell> {
 pub struct RecentsModel {
     base: qt_base_class!(trait QAbstractListModel),
     count: qt_property!(i32; NOTIFY countChanged),
-    /// The setting `recents_enabled` as of the last reload.
     enabled: qt_property!(bool; NOTIFY countChanged),
     loaded: qt_property!(bool; NOTIFY countChanged),
     countChanged: qt_signal!(),

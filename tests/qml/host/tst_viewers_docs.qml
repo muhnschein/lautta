@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of TextDocument (PRV-4, colours PRV-13) and MarkdownDocument on files in the
-// temporary home. ViewerTools.pump runs the event loop so the async results
-// arrive while the test runs.
 import QtQuick 2.6
 import Lautta 1.0
 import "../../../qml/components/viewers/TextRows.js" as TextRows
@@ -14,8 +11,6 @@ Item {
             console.error("FAILED: " + what)
     }
 
-    // Waits while `o.loading` (30 s at most: a busy machine), then lets its
-    // signals arrive.
     function settle(o) {
         for (var i = 0; i < 1200 && o.loading; ++i)
             tools.pump(25)
@@ -28,7 +23,6 @@ Item {
     TextDocument { id: coloured }
     MarkdownDocument { id: md }
 
-    // Row `i` of `document` as TextViewer shows it, with `colours`.
     function styled(document, i, colours) {
         var row = TextRows.rows(document.text).rows[i]
         return document.styledRow(row.text, row.line, row.start, colours)
@@ -49,7 +43,6 @@ Item {
         check(tools.installFixture(Qt.resolvedUrl("fixtures/markup.xyz"), "lautta://user-documents/markup.xyz"), "markup installed")
         check(tools.installFixture(Qt.resolvedUrl("fixtures/rows.sh"), "lautta://user-documents/rows.sh"), "rows installed")
 
-        // Loading: text is normalised.
         check(!doc.loaded, "nothing loaded before a uri")
         doc.uri = uri
         check(doc.loading, "loading starts at once")
@@ -61,7 +54,6 @@ Item {
         check(!doc.highlighted && doc.syntax === "", "plain text has no colours: " + doc.syntax)
         check(styled(doc, 1, "keyword=#ff0000") === "line two", "a plain line: " + styled(doc, 1, ""))
 
-        // Colours (PRV-13), which may come after the text.
         waitForColours(coloured, "lautta://user-documents/script.sh")
         check(coloured.loaded && coloured.highlighted, "a shell script is coloured")
         check(coloured.syntax === "Bourne Again Shell (bash)", "by its name: " + coloured.syntax)
@@ -75,8 +67,6 @@ Item {
         var past = [coloured.styledRow("<b>", 9, 0, "comment=#123456"), coloured.styledRow("<b>", -1, -5, "comment=#123456")]
         check(past[0] === "&lt;b&gt;" && past[1] === "&lt;b&gt;", "past either end: escaped, no colours: " + past)
 
-        // The colours follow the rows: tabs expanded, columns in UTF-16
-        // units, a long line split.
         waitForColours(coloured, "lautta://user-documents/rows.sh")
         var palette = "comment=#123456,function=#654321,string=#abcdef"
         var tabbed = styled(coloured, 1, palette)
@@ -95,14 +85,12 @@ Item {
         check(markup === "&lt;img src=&quot;image://lautta-thumb/x&quot;&gt; &amp;lt;b&amp;gt; &amp; &lt;b&gt;bold&lt;/b&gt; &amp;nbsp;&lt;a href=&quot;x&quot;&gt;link&lt;/a&gt;",
               "markup in a file is text: " + markup)
 
-        // Errors.
         missing.uri = "lautta://user-documents/nope.txt"
         settle(missing)
         check(missing.errorKind === "NotFound" && !missing.loaded, "missing file: " + missing.errorKind)
         var invalid = Qt.createQmlObject('import Lautta 1.0; TextDocument { uri: "garbage" }', root)
         check(!invalid.loading && !invalid.loaded, "bad uri is ignored")
 
-        // Markdown.
         check(tools.installFixture(Qt.resolvedUrl("fixtures/doc.md"), "lautta://user-documents/doc.md"), "md fixture")
         md.uri = "lautta://user-documents/doc.md"
         check(md.loading, "markdown loading")

@@ -1,29 +1,18 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// A line that names a location (§15.5): a remote one, on a server (LOC-7),
-// has a small server icon right before its name, the icon of Browse's
-// Servers rows in the colour of the line; a local one has none. The name
-// may follow other text, as in "Copied 4 items to NAS": that text is
-// `before`, the name and what follows it is `text`. Too long a line fades
-// out at its end, as a Label does.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
 Item {
     id: line
 
-    // Shown before the name, without the icon.
     property string before
-    // The location's name and what follows it.
     property string text
     property bool remote
     property color color: Theme.secondaryColor
     property real fontSize: Theme.fontSizeExtraSmall
-    // Text.AlignLeft or Text.AlignRight (a section header).
     property int horizontalAlignment: Text.AlignLeft
     readonly property bool iconShown: remote && text.length > 0
 
-    // What each part takes, left to right. Too long a line keeps at least
-    // half of it for the text before the name, so that both show.
     readonly property real markWidth: iconShown ? icon.width + Theme.paddingSmall : 0
     readonly property real leadWidth: before.length > 0
                                       ? Math.min(lead.implicitWidth,
@@ -59,7 +48,6 @@ Item {
         x: line.start + line.leadWidth
         anchors.verticalCenter: parent.verticalCenter
         source: "image://theme/icon-m-computer"
-        // As tall as the text's capitals and descenders together.
         width: Math.round(line.fontSize * 1.25)
         height: width
         sourceSize.width: width

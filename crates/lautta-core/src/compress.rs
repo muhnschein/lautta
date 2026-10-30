@@ -1,23 +1,13 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Creating archives (SPEC PRV-11, §10.1 "Compress"): zip or tar.gz from any
-//! selection, streamed into a `std::io::Write` sink. When the destination is
-//! remote the caller passes the write end of a pipe and uploads the read end
-//! while the archive is being produced (NVB-9); nothing is buffered beyond a
-//! few chunks.
+//! Archives: zip or tar.gz streamed into a `Write` sink. For remote destinations the caller passes
+//! a pipe's write end and uploads the read end meanwhile.
 //!
-//! Choices worth knowing:
-//! * Folders are added recursively, children sorted by name, so the output is
-//!   deterministic.
-//! * Symbolic links are stored *as links* in both formats (tar symlink entry;
-//!   zip entry with unix mode `S_IFLNK` whose data is the target). They are
-//!   never followed: no cycles, nothing outside the selection is read, and
-//!   extracting restores what was there.
+//! * Folders are added recursively, children sorted by name: deterministic output.
+//! * Symlinks are stored as links in both formats, never followed: no cycles, nothing outside the
+//!   selection is read.
 //! * Special files (devices, sockets) are skipped and counted.
-//! * The zip writer is our own (the `zip` crate cannot write to a pipe): data
-//!   descriptors, deflate, zip64 whenever a size is unknown or ≥ 4 GiB, and
-//!   it reads back with any unzip tool and with [`crate::provider::archive`].
-//! * A file that changes size while it is read aborts the operation rather
-//!   than writing a corrupt tar entry.
+//! * The zip writer is our own: the `zip` crate cannot write to a pipe.
+//! * A file that changes size while read aborts the run rather than writing a corrupt tar entry.
 
 mod zipstream;
 
@@ -35,9 +25,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::mpsc;
 
-/// Bytes read from a source per request.
 const CHUNK: usize = 256 * 1024;
-/// Chunks in flight between the reader and the writer thread.
 const QUEUE: usize = 8;
 /// tar needs sizes up front; unknown-size files are spooled in memory up to this.
 const SPOOL_LIMIT: u64 = 64 * 1024 * 1024;
@@ -49,17 +37,13 @@ pub enum ArchiveKind {
     TarGz,
 }
 
-/// Knobs and hooks of one compression run.
 #[derive(Clone)]
 pub struct CompressOptions {
     pub kind: ArchiveKind,
     /// Deflate level 0-9 (default 6).
     pub level: u32,
-    /// Total input bytes when the planner knows them (progress denominator).
     pub total_hint: Option<u64>,
-    /// Called with (bytes read so far, `total_hint`).
     pub progress: ProgressSink,
-    /// Set to stop; the run ends with `ErrorKind::Canceled`.
     pub cancel: Arc<AtomicBool>,
 }
 
@@ -81,21 +65,17 @@ pub struct CompressStats {
     pub dirs: u64,
     pub symlinks: u64,
     pub skipped: u64,
-    /// Input bytes read.
     pub bytes: u64,
 }
 
-/// What the writer needs to know about one archive member.
 #[derive(Debug, Clone)]
 pub(crate) struct EntryMeta {
-    /// Archive-relative name, `/`-separated, no leading or trailing slash.
     pub path: Vec<u8>,
     pub kind: Kind,
     /// File size when known; the data stream must then match it exactly.
     pub size: Option<u64>,
     pub mtime: Option<SystemTime>,
     pub mode: Option<u32>,
-    /// Symlink target.
     pub link: Option<Vec<u8>>,
 }
 
@@ -106,7 +86,6 @@ enum Msg {
     Finish,
 }
 
-/// Presents the `Data` messages of the current file as a `Read`.
 struct ChunkReader<'a> {
     rx: &'a mut mpsc::Receiver<Msg>,
     buf: Vec<u8>,
@@ -139,9 +118,7 @@ impl Read for ChunkReader<'_> {
     }
 }
 
-/// A format writer fed one member at a time.
 pub(crate) trait MemberWriter: Send {
-    /// `data` yields the file's bytes (empty for folders and links).
     fn member(&mut self, meta: &EntryMeta, data: &mut dyn Read) -> io::Result<()>;
     fn finish(self: Box<Self>) -> io::Result<()>;
 }
@@ -208,7 +185,6 @@ fn new_writer<W: Write + Send + 'static>(kind: ArchiveKind, level: u32, sink: W)
     }
 }
 
-/// The writer thread: builds the archive from messages until `Finish`.
 fn write_archive(mut rx: mpsc::Receiver<Msg>, mut writer: Box<dyn MemberWriter>) -> Result<()> {
     loop {
         match rx.blocking_recv() {
@@ -357,7 +333,6 @@ impl Walker<'_> {
         self.send(Msg::Data(data)).await
     }
 
-    /// Sends exactly `size` bytes when known, to EOF otherwise.
     async fn stream_file(
         &mut self,
         handle: &dyn crate::provider::ReadHandle,
@@ -386,7 +361,6 @@ impl Walker<'_> {
     }
 }
 
-/// Top-level member name for a source.
 fn source_name(uri: &Uri) -> Result<Vec<u8>> {
     match uri.path.name() {
         Some(n) => Ok(n.to_vec()),
@@ -436,9 +410,8 @@ async fn walk(
     Ok(walker.stats)
 }
 
-/// Writes an archive of `sources` into `sink` (PRV-11). Blocks on `sink` only
-/// in a dedicated thread; reading sources is async and backpressured by the
-/// sink's speed. Top-level names must be distinct.
+/// Blocks on `sink` only in a dedicated thread; sources are read async, backpressured by the sink's
+/// speed. Top-level names must be distinct.
 pub async fn compress<W: Write + Send + 'static>(
     resolver: &dyn ProviderResolver,
     sources: &[Uri],
@@ -464,17 +437,14 @@ pub async fn compress<W: Write + Send + 'static>(
     }
 }
 
-/// One member of an archive as the transfer planner sees it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExtractItem {
-    /// Path relative to the extracted folder (or the file's own name).
     pub path: VPath,
     pub kind: Kind,
     pub size: u64,
 }
 
-/// What extracting `under` (a folder or a file inside `archive`) would create,
-/// parents before children (§10.1, XFR-3).
+/// Parents before children.
 pub fn extract_plan(archive: &ArchiveProvider, under: &VPath) -> Result<Vec<ExtractItem>> {
     let all = archive.entries();
     let Some(root) = all.iter().find(|e| &e.path == under) else {

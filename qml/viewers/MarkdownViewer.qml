@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Markdown viewer (PRV-4, board Markdown): the text rendered to the Qt rich
-// text subset in the core; nothing from the file is trusted or fetched.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0

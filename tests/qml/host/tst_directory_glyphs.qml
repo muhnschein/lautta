@@ -1,10 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of the app's own file-type glyphs (FileIcons.js, UI-2): the set
-// each pixel size gets, so strokes land on whole pixels (28-unit set at
-// multiples of 28, 32-unit set at multiples of 32, the 80 px set at 80); the
-// grid's snap to multiples of 28; the glyph of each category; glyph tokens
-// sized, anything else left as it is. Whether the glyphs look sharp only a
-// phone shows.
 import QtQuick 2.6
 import "../../../qml/components/FileIcons.js" as FileIcons
 
@@ -23,7 +17,6 @@ Item {
     }
 
     function testSets() {
-        // A list row's glyph is Theme.iconSizeMedium: scale 1.0, 1.25, 1.5, 1.75, 2.0.
         same(sets([64, 80, 96, 112, 128]), [32, 80, 32, 28, 32], "list sizes")
         same(sets([28, 56, 84, 112, 140, 168, 196, 224, 252]), [28, 28, 28, 28, 28, 28, 28, 28, 28],
              "multiples of 28: the grid")

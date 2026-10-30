@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The app context: one [`Core`] wires the stores, the location registry and
-//! the transfer engine together (SPEC §5.3) and offers the user-level
-//! actions the UI calls. Everything here is Qt-free; the Qt layer only
-//! forwards to these methods and turns results into model updates.
+//! App context: `Core` wires stores, location registry and transfer engine. Qt-free.
 
 use crate::bridge::{Attention, BridgeClient, BridgeConfig, BridgeStatus, RemoteKind, RemoteLocation};
 use crate::browse_layout::BrowseLayout;
@@ -34,20 +31,14 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, MutexGuard};
 use tokio::sync::watch;
 
-/// Listings kept in memory (BRW-5).
 const DIRCACHE_ENTRIES: usize = 64;
 
-/// The result of starting an operation (OPS-1).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Started {
-    /// Queued as a transfer.
     Transfer(TransferId),
-    /// Over the large-operation threshold: the UI shows the summary sheet and
-    /// calls [`Core::start_plan`] when the user confirms.
     NeedsSummary(Box<Plan>),
 }
 
-/// Shared application state. Create one per process with [`Core::open`].
 pub struct Core {
     pub paths: AppPaths,
     pub db: Db,
@@ -59,19 +50,14 @@ pub struct Core {
     pub recents: Recents,
     pub recent_searches: RecentSearches,
     pub location_prefs: LocationPrefsStore,
-    /// Hidden rows and row order of the Browse page (BRW-12).
     pub browse_layout: BrowseLayout,
     pub working_copies: WorkingCopies,
-    /// Pending prompts (bridge identity and sign-in questions, NVB-6).
     pub questions: Arc<Questions>,
-    /// The netvfs bridge client (SPEC §7); `None` only in tests without one.
+    /// `None` only in tests.
     pub bridge: Option<BridgeClient>,
     settings: Mutex<Settings>,
-    /// Counts the changes of `settings` (see [`Core::watch_settings`]).
     settings_changed: watch::Sender<u64>,
-    /// Follows the removable-media root for as long as the core lives
-    /// (LOC-3); `None` when inotify is not available, then Browse finds
-    /// volumes by rescanning when it refreshes.
+    /// Follows removable-media root; `None` without inotify, Browse then rescans on refresh.
     _volume_watch: Option<VolumeWatcher>,
 }
 
@@ -82,8 +68,6 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     }
 }
 
-/// Moves local items to the Trash when their location keeps one (OPS-8);
-/// everything else is deleted permanently by the engine.
 struct LocalTrasher {
     locations: LocationRegistry,
     trash: Trash,
@@ -99,11 +83,8 @@ impl Trasher for LocalTrasher {
     }
 }
 
-/// Moves one item of a location that keeps a trash into the Trash, by copy
-/// where the sandbox mounts the two apart (§3.3), on a blocking thread
-/// (ARC-6). Returns its trash id.
 async fn trash_one(locations: &LocationRegistry, trash: &Trash, uri: &Uri) -> Result<()> {
-    // An unknown or vanished location is an error, not a permanent delete.
+    // Unknown or vanished location is an error, not a permanent delete.
     locations.provider(&uri.location)?;
     let path = locations
         .to_local_path(uri)
@@ -117,22 +98,15 @@ async fn trash_one(locations: &LocationRegistry, trash: &Trash, uri: &Uri) -> Re
 }
 
 impl Core {
-    /// Opens the database and the stores, scans the locations and starts the
-    /// transfer engine. Must be called inside a tokio runtime.
     pub async fn open(paths: AppPaths) -> Result<Arc<Core>> {
         let bridge = BridgeConfig::for_app(&paths);
         Core::open_full(paths.clone(), LocationRegistry::new(paths), Some(bridge)).await
     }
 
-    /// As [`Core::open`] with a prepared registry (tests use a temporary
-    /// media root) and no bridge client.
     pub async fn open_with(paths: AppPaths, locations: LocationRegistry) -> Result<Arc<Core>> {
         Core::open_full(paths, locations, None).await
     }
 
-    /// As [`Core::open`] with a prepared registry and an optional bridge
-    /// configuration. Bridge locations join the registry as they come and
-    /// go (NVB-4); transfers wait while the bridge is away (NVB-12).
     pub async fn open_full(
         paths: AppPaths,
         locations: LocationRegistry,
@@ -191,7 +165,6 @@ impl Core {
         lock(&self.settings).clone()
     }
 
-    /// Applies settings stored by the UI (dconf, SPEC §18).
     pub fn apply_settings(&self, settings: Settings) {
         let settings = settings.sanitised();
         self.recents.set_enabled(settings.recents_enabled);
@@ -204,14 +177,10 @@ impl Core {
         }
     }
 
-    /// A receiver whose value increases whenever the settings change, so
-    /// what is already on screen can follow them (BRW-4: folders open
-    /// while the view settings change show the new ones at once).
     pub fn watch_settings(&self) -> watch::Receiver<u64> {
         self.settings_changed.subscribe()
     }
 
-    /// The view settings every folder uses (BRW-4).
     pub fn view_prefs(&self) -> ViewPrefs {
         view_defaults(&self.settings())
     }
@@ -224,8 +193,6 @@ impl Core {
         self.locations.get(id)
     }
 
-    /// Lists a folder: the cached listing first through `cached` (BRW-5),
-    /// then the fresh one, which also refreshes the cache.
     pub async fn list(&self, dir: &Uri, cached: impl FnOnce(Vec<Entry>)) -> Result<Vec<Entry>> {
         if let Ok(Some(hit)) = self.dircache.get(dir) {
             cached(hit.entries);
@@ -242,7 +209,6 @@ impl Core {
             .await
     }
 
-    /// New folder (exclusive create, §10 table).
     pub async fn make_folder(&self, parent: &Uri, name: &[u8]) -> Result<Uri> {
         let uri = parent.join(name)?;
         self.provider(&uri.location)?.make_dir(&uri.path, true).await?;
@@ -250,7 +216,6 @@ impl Core {
         Ok(uri)
     }
 
-    /// Renames without replacing (§10 table); favourites follow.
     pub async fn rename(&self, uri: &Uri, new_name: &[u8]) -> Result<Uri> {
         let parent = uri
             .parent()
@@ -271,17 +236,11 @@ impl Core {
         let _ = self.favourites.on_moved(from, to);
     }
 
-    /// True when deleting `uri` moves it to the Trash (OPS-8): the trash is
-    /// on and the item is in one of this device's folders. Every other
-    /// delete is permanent, and the UI asks first. The one place that
-    /// decides; [`Core::delete`] follows it.
+    /// The one place that decides; [`Core::delete`] follows it.
     pub fn deletes_to_trash(&self, uri: &Uri) -> bool {
         self.settings().recently_deleted && self.locations.keeps_trash(&uri.location)
     }
 
-    /// Deletes items (OPS-8): to the Trash where [`Core::deletes_to_trash`]
-    /// says so, after the remorse timer; the rest permanently through the
-    /// transfer engine, after the confirmation.
     pub async fn delete(&self, items: &[Uri]) -> Result<Option<TransferId>> {
         let mut permanent = Vec::new();
         let mut failed = None;
@@ -313,7 +272,6 @@ impl Core {
             .map(Some)
     }
 
-    /// Plans an operation (OPS-1).
     pub async fn plan(&self, kind: OperationKind, sources: Vec<Uri>, dest: Uri) -> Result<Plan> {
         let settings = self.settings();
         let dest_is_local = self.locations.to_local_path(&dest).is_some();
@@ -327,8 +285,6 @@ impl Core {
         Planner::plan(kind, sources, dest, &self.locations, &opts, &cancel, &|_| {}).await
     }
 
-    /// Copy or move: plans, then queues small plans at once; large ones need
-    /// the summary sheet first (OPS-1).
     pub async fn copy_or_move(&self, kind: OperationKind, sources: Vec<Uri>, dest: Uri) -> Result<Started> {
         let plan = self.plan(kind, sources, dest).await?;
         if plan.needs_summary {
@@ -337,7 +293,6 @@ impl Core {
         self.start_plan(plan).await.map(Started::Transfer)
     }
 
-    /// Queues a planned operation. Favourites follow a same-location move.
     pub async fn start_plan(&self, plan: Plan) -> Result<TransferId> {
         let settings = self.settings();
         if plan.kind == OperationKind::Move {
@@ -359,7 +314,6 @@ impl Core {
         self.engine.add(plan, &title, options).await
     }
 
-    /// Restores an item from the Trash to where it was.
     pub async fn restore(&self, id: i64) -> Result<Uri> {
         let trash = self.trash.clone();
         let locations = self.locations.clone();
@@ -377,7 +331,6 @@ impl Core {
         Ok(uri)
     }
 
-    /// Opens an archive as a read-only location (LOC-5) and returns its id.
     pub async fn open_archive(&self, uri: &Uri) -> Result<String> {
         let id = archive_location_id(uri);
         if self.locations.get(&id).is_some() {
@@ -397,19 +350,15 @@ impl Core {
         Ok(id)
     }
 
-    /// Drops the cached listing of a folder (after a change made by the app).
     pub fn invalidate(&self, dir: &Uri) {
         let _ = self.dircache.invalidate(dir);
     }
 
-    /// Sets a location's status shown in Browse (bridge reconnects, NVB-12).
     pub fn set_location_status(&self, id: &str, status: LocationStatus, attention: Option<String>) {
         self.locations.set_status(id, status, attention);
     }
 }
 
-/// Starts following mounts and unmounts below the media root (LOC-3). The
-/// app works without it, so a failure (no inotify, watch limit) is logged.
 fn watch_volumes(locations: &LocationRegistry) -> Option<VolumeWatcher> {
     match locations.watch_volumes() {
         Ok(watcher) => Some(watcher),
@@ -420,8 +369,6 @@ fn watch_volumes(locations: &LocationRegistry) -> Option<VolumeWatcher> {
     }
 }
 
-/// Keeps the registry's remote locations and the engine's bridge state in
-/// step with the bridge client. Holds only a weak reference to the core.
 fn spawn_bridge_sync(core: &Arc<Core>, client: BridgeClient) {
     let weak = Arc::downgrade(core);
     let mut locations = client.watch_locations();
@@ -444,9 +391,6 @@ fn spawn_bridge_sync(core: &Arc<Core>, client: BridgeClient) {
     });
 }
 
-/// Registry entries for the bridge's locations: hidden unless the bridge
-/// is usable (UI-8), shown as connecting while it reconnects (NVB-12),
-/// otherwise with the connection state the bridge reports (NVB-4).
 fn remote_entries(
     client: &BridgeClient,
     remote: &[RemoteLocation],
@@ -466,7 +410,7 @@ fn remote_entries(
                 RemoteKind::AdHoc => LocationKind::AdHoc,
             };
             let mut location = Location::remote(r.id.clone(), kind, r.name.clone(), r.url.clone());
-            // The states of the last list are stale while the bridge is away.
+            // Last list's states are stale while bridge is away.
             location.connection = match status {
                 BridgeStatus::Reconnecting => ConnectionState::Connecting,
                 _ => r.connection.clone(),
@@ -502,8 +446,6 @@ fn view_defaults(s: &Settings) -> ViewPrefs {
     }
 }
 
-/// A short engineering title for the transfer list (the first item's
-/// name); the UI renders translated text from the kind and counts.
 fn plan_title(plan: &Plan) -> String {
     plan.items
         .first()

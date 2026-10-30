@@ -1,12 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): pasting cut items moves them behind a
-// remorse (SPEC OPS-9), from the folder pulley and from the paste bar alike.
-// The remorse at the top of the page says what moves; tapping it cancels, so
-// nothing moves and the items stay cut; letting it run out moves them and
-// takes them off the clipboard; pasting again runs the pending move at once.
-// A copy has no remorse. Fails when a cut moves without the remorse, a
-// cancelled one moves, a remorse that ran out moves nothing, a pending move
-// is lost, or a copy waits.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -41,14 +33,12 @@ ApplicationWindow {
         return ok
     }
 
-    // Pumps events until `done()` holds, ten seconds at most.
     function waitFor(done, what) {
         for (var i = 0; i < 200 && !done(); ++i)
             tools.pump(50)
         return expect(done(), "timed out waiting for " + (typeof what === "function" ? what() : what))
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)
@@ -64,7 +54,6 @@ ApplicationWindow {
         return out
     }
 
-    // What `model` lists, to say in a failure.
     function names(model) {
         var out = []
         for (var i = 0; i < model.count; ++i)
@@ -72,9 +61,6 @@ ApplicationWindow {
         return JSON.stringify(out)
     }
 
-    // The listing of `model` once it has `name` or has not (`present`). A
-    // local folder is watched; asking again, now and then, is for a missed
-    // event (asking at every look would keep the model loading).
     function listed(model, name, present) {
         var looks = 0
         model.refresh()
@@ -87,12 +73,10 @@ ApplicationWindow {
         })
     }
 
-    // A text is the id of a string, or its English text where one is loaded.
     function isOneOf(text, ids) {
         return ids.indexOf(text) >= 0
     }
 
-    // The remorse of the folder view, once it has been used.
     function popup() {
         var found = findAll(window.contentItem, function (x) {
             return x.active !== undefined && x._countdown !== undefined && x.execute !== undefined
@@ -108,7 +92,6 @@ ApplicationWindow {
         return remorse
     }
 
-    // Taps the folder pulley's Paste entry.
     function pulleyPaste() {
         var menus = findAll(window.contentItem, function (x) {
             return x._isPullDownMenu === true && x.flickable && x.flickable.visible
@@ -125,7 +108,6 @@ ApplicationWindow {
         menus[0].active = false
     }
 
-    // Taps Paste here on the paste bar, once it is open.
     function panelPaste() {
         var panels = findAll(window.contentItem, function (x) { return x.fromText !== undefined && x.open !== undefined }, [])
         if (!expect(panels.length === 1, "one paste bar: " + panels.length))
@@ -164,7 +146,6 @@ ApplicationWindow {
         }, "the target folder open")
     }
 
-    // From the pulley: the remorse shows, tapping it cancels, nothing moves.
     function checkCancel() {
         App.setSetting("remorse_seconds", JSON.stringify(60))
         cut(["a.md"])
@@ -176,9 +157,6 @@ ApplicationWindow {
                + App.clipboardCount)
     }
 
-    // From the paste bar: the remorse runs out and the items move. The
-    // cancelled move of a.md was started first, so it is over when these two
-    // have moved: it must not have moved.
     function checkRunsOut() {
         App.setSetting("remorse_seconds", JSON.stringify(1))
         cut(["b.md", "c.md"])
@@ -204,8 +182,6 @@ ApplicationWindow {
         App.clearClipboard()
     }
 
-    // Pasting again runs the pending move at once, as Silica does when the
-    // page goes: its items move before their timer, and the new move waits.
     function checkPending() {
         App.setSetting("remorse_seconds", JSON.stringify(60))
         cut(["d.md"])

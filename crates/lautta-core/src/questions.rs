@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Blocking prompts: conflicts, ad-hoc identity, keyboard-interactive (§5.3).
-//! A generic hub: the asker registers a question and waits; the UI lists the
-//! pending ones, listens for new ones and answers by id.
+//! Blocking prompts: conflicts, ad-hoc identity, keyboard-interactive. Generic hub: asker registers
+//! a question and waits; UI lists pending ones, listens for new ones and answers by id.
 
 use crate::error::{Error, ErrorKind, Result};
 use std::collections::BTreeMap;
@@ -12,20 +11,15 @@ use zeroize::Zeroizing;
 
 pub type QuestionId = String;
 
-/// What is being asked. The first three come from the bridge (netvfs XB-10);
-/// `Conflict` is for transfers (OPS-2).
+/// First three come from the bridge; `Conflict` is for transfers.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum QuestionKind {
-    /// An ad-hoc server's identity is not known yet (NVB-6).
     IdentityUnknown,
-    /// Prompts of a keyboard-interactive sign-in, answered with
-    /// [`Answer::Responses`].
+    /// Answered with [`Answer::Responses`].
     KeyboardInteractive,
-    /// An ad-hoc server needs a connection without encryption (NVB-6).
     InsecureConsent,
-    /// A name clash at the destination of a transfer (OPS-2).
     Conflict,
-    /// A kind this version does not know; the UI shows a generic dialog.
+    /// Unknown to this version; UI shows a generic dialog.
     Other(String),
 }
 
@@ -51,8 +45,8 @@ impl QuestionKind {
     }
 }
 
-/// A question as the UI sees it. `details` are display strings (host,
-/// fingerprint, prompts, file names); the kind says how to read them.
+/// `details` are display strings (host, fingerprint, prompts, file names); the kind says how to
+/// read them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Question {
     pub id: QuestionId,
@@ -60,8 +54,7 @@ pub struct Question {
     pub details: BTreeMap<String, String>,
 }
 
-/// Secret answers of a keyboard-interactive prompt; wiped when dropped
-/// (SEC-1) and never printed.
+/// Wiped on drop, never printed.
 pub struct Responses(Zeroizing<Vec<Vec<u8>>>);
 
 impl Responses {
@@ -73,7 +66,6 @@ impl Responses {
         &self.0
     }
 
-    /// Moves the answers out as a wiping buffer.
     pub fn into_inner(self) -> Zeroizing<Vec<Vec<u8>>> {
         self.0
     }
@@ -89,7 +81,6 @@ impl fmt::Debug for Responses {
 pub enum Answer {
     Accept,
     Decline,
-    /// One of a list of choices, by name (a conflict resolution).
     Choice(String),
     Responses(Responses),
 }
@@ -112,7 +103,6 @@ struct State {
     pending: Vec<Entry>,
 }
 
-/// The hub of pending questions.
 pub struct Questions {
     state: Mutex<State>,
     events: broadcast::Sender<QuestionEvent>,
@@ -130,8 +120,7 @@ impl Questions {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Registers a question and announces it. The returned [`Pending`] resolves
-    /// with the answer; dropping it withdraws the question.
+    /// Dropping the returned [`Pending`] withdraws the question.
     pub fn ask(self: &Arc<Self>, kind: QuestionKind, details: BTreeMap<String, String>) -> Pending {
         let (tx, rx) = oneshot::channel();
         let question = {
@@ -164,7 +153,6 @@ impl Questions {
         Some(st.pending.remove(at))
     }
 
-    /// Answers a pending question.
     pub fn answer(&self, id: &str, answer: Answer) -> Result<()> {
         let entry = self
             .take(id)
@@ -179,7 +167,7 @@ impl Questions {
             .map_err(|_| Error::new(ErrorKind::Canceled, "the question was withdrawn"))
     }
 
-    /// Withdraws a question; its asker sees `None`. False if it was not pending.
+    /// Its asker sees `None`. False if not pending.
     pub fn cancel(&self, id: &str) -> bool {
         match self.take(id) {
             Some(entry) => {
@@ -190,7 +178,6 @@ impl Questions {
         }
     }
 
-    /// Questions waiting for an answer, oldest first.
     pub fn pending(&self) -> Vec<Question> {
         self.lock().pending.iter().map(|e| e.question.clone()).collect()
     }
@@ -200,7 +187,6 @@ impl Questions {
     }
 }
 
-/// The asker's side of a question.
 pub struct Pending {
     id: QuestionId,
     rx: oneshot::Receiver<Answer>,
@@ -212,7 +198,6 @@ impl Pending {
         &self.id
     }
 
-    /// Waits for the answer; `None` when the question was canceled.
     pub async fn wait(mut self) -> Option<Answer> {
         (&mut self.rx).await.ok()
     }
@@ -308,7 +293,6 @@ mod tests {
         assert!(hub.pending().is_empty());
         assert!(matches!(events.recv().await.unwrap(), QuestionEvent::Asked(_)));
         assert_eq!(events.recv().await.unwrap(), QuestionEvent::Resolved(id.clone()));
-        // Answering a withdrawn question reports that it is gone.
         assert_eq!(
             hub.answer(&id, Answer::Accept).unwrap_err().kind,
             ErrorKind::NotFound

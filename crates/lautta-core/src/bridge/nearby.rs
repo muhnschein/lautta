@@ -1,28 +1,20 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Nearby servers across a restart of the discovery (LOC-6).
+//! Nearby servers across a discovery restart.
 //!
-//! netvfs forgets what it found when the last client stops looking and, after
-//! a new `Discover(true)`, reports its fresh, empty cache right away; the
-//! servers come back a moment later, one answer at a time. Browse turns the
-//! discovery off whenever it is not on top, so without care every return to
-//! it would empty the Nearby section and fill it again. While the discovery
-//! settles after a start, the servers shown so far stay and new ones join
-//! them; when it has settled, the newest list is taken as it is.
+//! netvfs reports an empty cache right after `Discover(true)`, servers return one answer at a time.
+//! While discovery settles, shown servers stay and new ones join; once settled, the newest list is
+//! taken as is.
 
 use super::types::NearbyServer;
 
 #[derive(Debug, Default)]
 pub(super) struct Settle {
-    /// Number of the current settling window; a window that ended is stale.
     generation: u64,
     settling: bool,
-    /// The newest list the bridge reported in the window.
     latest: Option<Vec<NearbyServer>>,
 }
 
 impl Settle {
-    /// The discovery was (re)started: a window opens. Returns its number,
-    /// for [`Settle::finish`].
     pub fn begin(&mut self) -> u64 {
         self.generation += 1;
         self.settling = true;
@@ -30,8 +22,6 @@ impl Settle {
         self.generation
     }
 
-    /// A `NearbyChanged` with `list`: what to show, given that `shown` is
-    /// shown now.
     pub fn receive(&mut self, shown: &[NearbyServer], list: Vec<NearbyServer>) -> Vec<NearbyServer> {
         if !self.settling {
             return list;
@@ -41,14 +31,11 @@ impl Settle {
         merged
     }
 
-    /// The connection or the consent is gone: no window is open any more.
     pub fn cancel(&mut self) {
         self.settling = false;
         self.latest = None;
     }
 
-    /// Window `generation` is over: the newest list of the window, if the
-    /// bridge reported any and the window is still the current one.
     pub fn finish(&mut self, generation: u64) -> Option<Vec<NearbyServer>> {
         if generation != self.generation || !self.settling {
             return None;
@@ -58,8 +45,6 @@ impl Settle {
     }
 }
 
-/// `shown` in its order with entries updated from `list`, then the servers of
-/// `list` that are new: rows keep their places while answers come in.
 fn merge(shown: &[NearbyServer], list: &[NearbyServer]) -> Vec<NearbyServer> {
     let mut merged: Vec<NearbyServer> = shown
         .iter()
@@ -78,7 +63,6 @@ fn merge(shown: &[NearbyServer], list: &[NearbyServer]) -> Vec<NearbyServer> {
     merged
 }
 
-/// The same service: a renamed one stays one row.
 fn same_server(a: &NearbyServer, b: &NearbyServer) -> bool {
     a.provider == b.provider && a.host == b.host && a.port == b.port
 }
@@ -114,12 +98,10 @@ mod tests {
         let mut s = Settle::default();
         let window = s.begin();
         let shown = vec![a.clone(), b.clone()];
-        // The fresh cache of netvfs, then the answers one by one.
         let shown = s.receive(&shown, vec![]);
         assert_eq!(shown, vec![a.clone(), b.clone()]);
         let shown = s.receive(&shown, vec![c.clone(), b.clone()]);
         assert_eq!(shown, vec![a.clone(), b.clone(), c.clone()]);
-        // Settled: A did not answer, it is gone.
         assert_eq!(s.finish(window), Some(vec![c.clone(), b.clone()]));
         assert_eq!(s.receive(&[b.clone(), c.clone()], vec![c.clone()]), vec![c]);
     }
@@ -138,7 +120,6 @@ mod tests {
         let mut s = Settle::default();
         let window = s.begin();
         assert_eq!(s.finish(window), None);
-        // Finished once only.
         s.receive(&[], vec![]);
         assert_eq!(s.finish(window), None);
     }

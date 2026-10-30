@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of the name cut of a grid cell at 3 per row (GridName.js, SPEC
-// §15.3): a name that fits stays whole, a long one takes two lines with the
-// beginning on the first and the end, the extension kept, on the second, and
-// no cut splits a character. The width is measured with a fixed pitch of 10
-// per character, 150 for a line of 15.
 import QtQuick 2.6
 import "../../../qml/components/directory/GridName.js" as GridName
 
@@ -21,7 +16,6 @@ Item {
         check(JSON.stringify(a) === JSON.stringify(b), what + ": " + JSON.stringify(a) + " != " + JSON.stringify(b))
     }
 
-    // A pair counts for one character, as a glyph does.
     function measure(text) {
         return text.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, "x").length * 10
     }
@@ -61,7 +55,6 @@ Item {
              "words are not cut when the rest fits")
     }
 
-    // The board: the cut is in the middle of the second line and the end stays.
     function testLongNameKeepsItsExtension() {
         var name = "Minutes of the department meeting 2026-10-14.pdf"
         var out = lines(name, 200)
@@ -122,14 +115,10 @@ Item {
         return out
     }
 
-    // A line starting with the second half of a character, or ending with the
-    // first half of one, or an ellipsis cutting one in two.
     function torn(text) {
         return /(^|\u2026)[\uDC00-\uDFFF\u0300-\u036F\u200D\uFE0F]|[\uD800-\uDBFF]($|\u2026)/.test(text)
     }
 
-    // A cut never parts a pair of surrogates, a letter from its accent or a
-    // sequence from its joiner, at any width and any offset of the cut.
     function testNoSplitCharacters() {
         var bases = [
             repeated("\uD83D\uDE00", 40) + ".png",
@@ -166,8 +155,6 @@ Item {
         check(!torn(out[0]) && !torn(out[1]), "no break parts a mark from the dash before it: " + JSON.stringify(out))
     }
 
-    // The cuts pinned to the character, so that a break, a share or a bound
-    // moved by one shows.
     function testPinnedCuts() {
         same(lines("alpha-beta-gamma-delta-epsilon.txt"), ["alpha-beta-", "gamma-d\u2026lon.txt"],
              "a break after a dash")
@@ -200,7 +187,6 @@ Item {
         same(lines(repeated(" ", 20)), [""], "only spaces are one empty line")
     }
 
-    // Right to left names are cut in logical order, which Qt shows right.
     function testRightToLeft() {
         var out = lines("שלום עולם מסמך חשוב מאוד לקריאה.pdf")
         fits(out, "Hebrew")

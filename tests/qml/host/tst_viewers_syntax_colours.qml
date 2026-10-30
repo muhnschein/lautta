@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of the text viewer's syntax colours (PRV-13, SyntaxColours.js):
-// every class gets a colour in the form TextDocument.styledRow takes, from
-// the ambience's colours, with hues apart from the highlight colour's, made
-// readable by the theme for its colour scheme.
 import QtQuick 2.6
 import "../../../qml/components/viewers/SyntaxColours.js" as SyntaxColours
 
@@ -14,8 +10,7 @@ Item {
 
     property var schemes: []
 
-    // Silica's Theme as far as the palette uses it; a `marking` theme makes
-    // the colours it is asked to make readable translucent, to tell them.
+    // Theme stub; `marking` theme makes readable colours translucent to tell them.
     function theme(highlight, scheme, marking) {
         return {
             "highlightColor": highlight,
@@ -47,7 +42,6 @@ Item {
         return SyntaxColours.hsl({ "r": (n >> 16) / 255, "g": ((n >> 8) & 255) / 255, "b": (n & 255) / 255 }).h
     }
 
-    // Distance of two hues around the wheel, 0..0.5.
     function apart(a, b) {
         var d = Math.abs(a - b) % 1
         return Math.min(d, 1 - d)
@@ -86,7 +80,6 @@ Item {
         var made = ["function", "string", "type", "link", "variable", "number", "constant", "inserted"]
         for (var m = 0; m < made.length; ++m)
             check(marked[made[m]].length === 9, made[m] + " is made readable by the theme: " + marked[made[m]])
-        // A grey highlight still gives colours.
         var grey = parse(SyntaxColours.palette(theme(Qt.rgba(0.5, 0.5, 0.5, 1), 0)))
         var g = parseInt(grey.string.slice(1), 16)
         check((g >> 16) !== (g & 255) || ((g >> 8) & 255) !== (g & 255), "strings are coloured: " + grey.string)

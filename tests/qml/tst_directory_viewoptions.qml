@@ -1,18 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// View options on the target (BRW-4, board ViewOptions): a settings page,
-// not a dialog, with no description under its title. Every control changes
-// the global setting at once and the preview follows (order, folders first,
-// hidden file, list or grid with its caption lines, photo and text thumbnails) at a
-// size that stays the same; a folder already open
-// follows too, and the folder the page came from takes a choice that only
-// differed there (List over a suggested grid). Its Thumbnails section, there
-// from Settings and from a folder alike, has the switch for every thumbnail
-// and those of servers with their size limit and cache, each saying what it
-// costs; there is no limit for metered connections, which the app cannot
-// tell. Fails when the page waits for an Apply, the preview or an open
-// folder keeps the old view, the preview changes size or lacks the caption
-// lines, a grid size can be chosen, the folder keeps its suggestion, the
-// header has a description or a thumbnail setting is missing.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -33,13 +19,11 @@ ApplicationWindow {
         uri: "lautta://user-documents/"
     }
 
-    // A folder open further down the page stack.
     DirectoryModel {
         id: open
         uri: window.openUri
     }
 
-    // A folder of photos, shown as a suggested grid.
     DirectoryModel {
         id: suggested
         uri: window.suggestedUri
@@ -64,7 +48,6 @@ ApplicationWindow {
         return item.contentItem && item.contentItem !== item ? find(item.contentItem, name) : null
     }
 
-    // Taps `item` in the menu of the combo box `box`, as a finger does.
     function pick(page, box, item) {
         var menu = find(page, box).menu
         var kids = menu._contentColumn.children
@@ -81,7 +64,6 @@ ApplicationWindow {
         find(page, name).clicked(null)
     }
 
-    // The sizes of the files the preview shows, in order.
     function fileSizes(rows) {
         return rows.filter(function (r) { return !r.isDir }).map(function (r) { return r.size })
     }
@@ -102,7 +84,6 @@ ApplicationWindow {
         return rows.some(function (r) { return r.text })
     }
 
-    // The preview keeps the size it had when the page opened.
     function sameSize(preview, size, what) {
         expect(preview.width === size.width && preview.height === size.height,
                "the preview keeps its size with " + what + ": " + preview.width + "x" + preview.height
@@ -126,8 +107,6 @@ ApplicationWindow {
         return out
     }
 
-    // Where `item` is among the rows of the page (not its y: the headless
-    // window lays nothing out again).
     function rowOf(item) {
         var rows = item.parent.children
         for (var i = 0; i < rows.length; ++i) {
@@ -137,9 +116,6 @@ ApplicationWindow {
         return -1
     }
 
-    // No "Used in every folder" under the title; the thumbnails, those of
-    // servers too, in a section of their own below the preview, each switch
-    // saying what it costs.
     function checkLayout(page) {
         var header = find(page, "viewOptionsHeader")
         expect(header && header.description === "", "the header has no description: " + (header ? header.description : "none"))
@@ -156,7 +132,6 @@ ApplicationWindow {
                "both thumbnail switches say what they cost")
     }
 
-    // Servers' thumbnails need thumbnails, their size limit the servers' ones.
     function checkRemoteThumbnails(page) {
         var remote = find(page, "remoteThumbnailsSwitch")
         var limit = find(page, "remoteThumbnailLimitBox")
@@ -177,7 +152,6 @@ ApplicationWindow {
         tools.pump(500)
         documents.createFolder("ViewOptionsPhotos")
         tools.pump(500)
-        // The smaller file first by name.
         tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + "a.md")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), base + "b.jpg")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), "lautta://user-documents/ViewOptionsPhotos/a.jpg")
@@ -187,7 +161,6 @@ ApplicationWindow {
         expect(open.count === 2 && open.indexOf(base + "a.md") === 0, "the open folder lists a.md first: " + open.count)
     }
 
-    // Opened from Settings: no folder of its own.
     function checkControls(page) {
         var preview = page.preview
         var size = { "width": preview.width, "height": preview.height }
@@ -246,10 +219,6 @@ ApplicationWindow {
         expect(open.indexOf(base + "b.jpg") === 0, "the larger file is first now")
     }
 
-    // A preview made under each view setting has one size, the page's
-    // halved, whatever folder it draws. Made afresh each time: a window
-    // that is never shown lays out a folder only when it is made, so a
-    // preview kept open would keep its first layout and show no change.
     function checkFixedSize() {
         var views = [
             { "show_hidden": false, "view_mode": "list" },
@@ -286,7 +255,6 @@ ApplicationWindow {
         tools.pump(300)
     }
 
-    // Opened from a folder showing a suggested grid.
     function checkOwnFolder() {
         suggestedUri = "lautta://user-documents/ViewOptionsPhotos/"
         tools.pump(800)

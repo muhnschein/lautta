@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `ViewerTools`: small helpers the viewer pages need (Recents notes, ORG-2)
-//! and some for the QML tests.
+//! Helpers for the viewer pages (Recents notes) and QML tests.
 
 use super::parse_uri;
 use crate::runtime::core;
@@ -27,24 +26,17 @@ pub fn register() {
 #[derive(QObject, Default)]
 pub struct ViewerTools {
     base: qt_base_class!(trait QObject),
-    /// Notes a file the user looked at in Recents (previewed).
     noteViewed: qt_method!(fn(&self, uri: QString)),
-    /// Notes a file handed to another app in Recents (opened).
     noteOpened: qt_method!(fn(&self, uri: QString)),
-    /// Test support: runs the event loop for `ms` milliseconds so async
-    /// results of the viewer types arrive while a test is running.
+    /// Test support: pumps the event loop so async viewer results arrive during a test.
     pump: qt_method!(fn(&self, ms: i32)),
-    /// Test support: copies the local file `sourceUrl` (a `file://` URL) to
-    /// the local location path of `destUri`; true when it worked.
+    /// Test support: copies local `sourceUrl` (`file://`) to the local path of `destUri`.
     installFixture: qt_method!(fn(&self, source_url: QString, dest_uri: QString) -> bool),
-    /// Test support: sets the modified time of the local item `uri` to `ms`
-    /// milliseconds after the epoch; true when it worked.
+    /// Test support: sets mtime of local `uri` to `ms` since epoch.
     setModified: qt_method!(fn(&self, uri: QString, ms: f64) -> bool),
-    /// Test support: a finger's `kind` ("press", "move" or "release") at
-    /// (`x`, `y`) of `item`, sent to its window as the mouse event Qt makes of
-    /// a touch, so gestures run through the real mouse areas and flickables.
-    /// An item's tree without a window gets one first. False when `item` is
-    /// not an item or `kind` is unknown.
+    /// Test support: finger `kind` ("press", "move", "release") at (`x`, `y`) of `item`, sent as
+    /// the mouse event Qt makes of a touch, so gestures run through real mouse areas and
+    /// flickables. Gives a windowless tree a window first.
     mouse: qt_method!(fn(&self, item: QVariant, kind: QString, x: f64, y: f64) -> bool),
 }
 
@@ -85,8 +77,7 @@ impl ViewerTools {
                 return false;
             QQuickWindow *window = target->window();
             if (!window) {
-                // The QML checks create their scenes without a window (the app's
-                // comes from SailfishApp): the item's whole tree gets one.
+                // QML checks create scenes without a window (the app's comes from SailfishApp).
                 QQuickItem *root = target;
                 while (root->parentItem())
                     root = root->parentItem();
@@ -95,12 +86,10 @@ impl ViewerTools {
                 root->setParentItem(window->contentItem());
                 QObject::connect(root, &QObject::destroyed, window, &QObject::deleteLater);
             }
-            // Event times: wall clock, but at least one touch panel frame
-            // (16 ms) after the last event. On the target's Qt 5.6 a move in
-            // the same millisecond as the one before scrolls no flickable
-            // until a move with a later time comes: drag length would follow
-            // runner speed (tst_tools_finger). Flickables measure speed by
-            // these times; pauses (pumps) between gestures keep real length.
+            // Event times: wall clock, at least one touch frame (16 ms) after the last. Qt 5.6 on
+            // target: a move in the same millisecond as the one before scrolls no flickable until a
+            // later-timed move, so drag length would follow runner speed. Flickables measure speed
+            // by these times.
             static QElapsedTimer clock;
             static qint64 last = 0;
             if (!clock.isValid())

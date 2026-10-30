@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Settings (SPEC §18): the global preferences with their defaults and
-//! limits, and the per-location preferences kept in the app database.
+//! Global preferences with defaults and limits, and per-location preferences in the app database.
 //!
-//! The Qt layer keeps the simple global values in dconf
-//! (`Nemo.Configuration`); [`Settings::to_map`] and [`Settings::from_map`]
-//! are the generic bridge: flat string keys, JSON values, bad or unknown
+//! Qt layer keeps simple global values in dconf (`Nemo.Configuration`); [`Settings::to_map`] and
+//! [`Settings::from_map`] are the generic bridge: flat string keys, JSON values, bad or unknown
 //! entries ignored.
 
 use crate::db::Db;
@@ -27,30 +25,27 @@ pub const VIEW_MODES: [&str; 2] = ["list", "grid"];
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    // View options (BRW-4): one set for every folder.
+    // View options: one set for every folder.
     pub sort_key: String,
     pub sort_descending: bool,
     pub folders_first: bool,
     pub show_hidden: bool,
     pub view_mode: String,
 
-    // Thumbnails (PRV).
     pub thumbnails_local: bool,
     pub thumbnails_remote: bool,
-    /// Largest remote file read whole for a thumbnail (PRV-2). There is no
-    /// lower limit for metered connections: the app cannot tell one.
+    /// Largest remote file read whole for a thumbnail. No lower limit for metered connections: app
+    /// cannot tell one.
     pub thumbnail_max_remote_mb: u64,
 
-    // Caches.
     pub thumbnail_cache_mb: u64,
     pub listing_cache_days: u32,
 
-    // The Trash (OPS-8; stored as `recently_deleted`) and remorse timer.
+    // Trash (stored as `recently_deleted`) and remorse timer.
     pub recently_deleted: bool,
     pub recently_deleted_retention_days: u32,
     pub remorse_seconds: u32,
 
-    // Transfers (§15).
     pub local_concurrency: u32,
     pub remote_lanes: u32,
     pub preserve_mtimes: bool,
@@ -62,7 +57,7 @@ pub struct Settings {
     pub large_op_bytes: u64,
 
     pub recents_enabled: bool,
-    /// SRC-3: depth limit of remote searches.
+    /// Depth limit of remote searches.
     pub search_remote_depth: u32,
 }
 
@@ -102,7 +97,7 @@ fn clamp<T: Ord>(v: T, range: (T, T)) -> T {
 }
 
 impl Settings {
-    /// Forces every value into its allowed range (§18 limits).
+    /// Forces every value into its allowed range.
     pub fn sanitise(&mut self) {
         let defaults = Settings::default();
         if !SORT_KEYS.contains(&self.sort_key.as_str()) {
@@ -125,12 +120,10 @@ impl Settings {
         self.search_remote_depth = self.search_remote_depth.clamp(1, 64);
     }
 
-    /// `thumbnail_max_remote_mb` in bytes (PRV-2).
     pub fn thumbnail_max_remote_bytes(&self) -> u64 {
         self.thumbnail_max_remote_mb.saturating_mul(MB)
     }
 
-    /// `thumbnail_cache_mb` in bytes (PRV-2).
     pub fn thumbnail_cache_bytes(&self) -> u64 {
         self.thumbnail_cache_mb.saturating_mul(MB)
     }
@@ -154,7 +147,6 @@ impl Settings {
         }
     }
 
-    /// Flat key to value map for the dconf bridge.
     pub fn to_map(&self) -> BTreeMap<String, Value> {
         match serde_json::to_value(self) {
             Ok(Value::Object(obj)) => obj.into_iter().collect(),
@@ -200,7 +192,6 @@ impl Settings {
     }
 }
 
-/// Per-location preferences (§18, `location_prefs`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocationPrefs {
     pub location_id: String,
@@ -271,7 +262,6 @@ impl LocationPrefsStore {
         LocationPrefsStore { db }
     }
 
-    /// The stored preferences, or the defaults when none are stored.
     pub fn get(&self, location_id: &str) -> Result<LocationPrefs> {
         let conn = self.db.lock();
         let mut stmt = conn.prepare(&format!(
@@ -284,7 +274,6 @@ impl LocationPrefsStore {
         }
     }
 
-    /// Stores `prefs`; all-default preferences remove the row.
     pub fn set(&self, prefs: &LocationPrefs) -> Result<()> {
         let p = prefs.normalised();
         let conn = self.db.lock();
@@ -324,7 +313,6 @@ impl LocationPrefsStore {
         Ok(n > 0)
     }
 
-    /// Every location with non-default preferences.
     pub fn list(&self) -> Result<Vec<LocationPrefs>> {
         let conn = self.db.lock();
         let mut stmt = conn.prepare(&format!(
@@ -439,9 +427,6 @@ mod tests {
 
     #[test]
     fn a_stored_date_format_is_ignored() {
-        // Dates follow the system format (§18): there is no date format
-        // setting, and the value an earlier version left in dconf neither
-        // breaks the other keys nor survives the next save.
         let stored = r#"{"date_format":"iso","remorse_seconds":7}"#;
         let mut s = Settings::from_json(stored);
         assert_eq!(
@@ -458,8 +443,6 @@ mod tests {
 
     #[test]
     fn a_stored_grid_size_is_ignored() {
-        // The grid has one size (BRW-4): the number of tiles per row an
-        // earlier version stored is dropped like any unknown key.
         let stored = r#"{"grid_columns":3,"view_mode":"grid"}"#;
         let mut s = Settings::from_json(stored);
         assert_eq!(s.view_mode, "grid");
@@ -473,8 +456,6 @@ mod tests {
 
     #[test]
     fn a_stored_metered_limit_is_ignored() {
-        // The app cannot tell a metered connection (PRV-2): the limit an
-        // earlier version stored for one is dropped like any unknown key.
         let stored = r#"{"thumbnail_max_metered_mb":1,"thumbnail_max_remote_mb":50}"#;
         let mut s = Settings::from_json(stored);
         assert_eq!(s.thumbnail_max_remote_mb, 50);

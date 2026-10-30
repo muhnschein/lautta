@@ -1,13 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The browse facades with the real Qt event loop, a temporary HOME and a
-//! fake netvfs bridge: models load and follow changes, the `Bridge`
-//! singleton follows consent, questions, ad-hoc servers, drives and
-//! hand-offs, a server row follows its connection state in place, and a
-//! removed account is forgotten (SPEC §7, §13, §15.2, LOC-3, NVB-4, SEC-5).
-//!
-//! The scenario is a QML script that runs one step after the other, each
-//! with an action and a condition to wait for; the fake bridge is driven
-//! through the `Fake` object. One engine per process, hence one test.
+//! Browse facades with the real Qt event loop, a temporary HOME and a fake netvfs bridge. Scenario
+//! is a QML script (steps with action and condition); the fake bridge is driven through the `Fake`
+//! object. One engine per process, hence one test.
 
 #![allow(non_snake_case)]
 
@@ -29,7 +23,6 @@ fn run<T>(f: impl std::future::Future<Output = T>) -> T {
     lautta_qt::runtime::handle().block_on(f)
 }
 
-/// What the QML script can do to the world around the app.
 #[derive(QObject, Default)]
 struct FakeWorld {
     base: qt_base_class!(trait QObject),
@@ -85,7 +78,6 @@ impl FakeWorld {
         run(fake().add_account(n, "sftp", &name.to_string(), "office.home"));
     }
 
-    /// The app's core has the location, shown or not.
     fn locationKnown(&self, id: QString) -> bool {
         lautta_qt::runtime::core().is_some_and(|core| core.location(&id.to_string()).is_some())
     }
@@ -138,7 +130,6 @@ impl FakeWorld {
         QString::from(serde_json::to_string(&fake().handoffs()).unwrap().as_str())
     }
 
-    /// The fake's drives as `[{id, mounted}]`.
     fn drives(&self) -> QString {
         let list: Vec<serde_json::Value> = fake()
             .drives()
@@ -148,8 +139,6 @@ impl FakeWorld {
         QString::from(serde_json::to_string(&list).unwrap().as_str())
     }
 
-    /// A memory card comes (`DrivesChanged`): one the bridge can mount, or
-    /// a LUKS device not unlocked (`locked`).
     fn addDrive(&self, id: QString, label: QString, locked: bool) {
         let mut drives = fake().drives();
         let drive = FakeDrive::new(&id.to_string(), &label.to_string(), "sd", 8);
@@ -188,7 +177,6 @@ fn browse_models_follow_the_core_and_the_bridge() {
     std::env::set_var("HOME", home.path());
     std::env::set_var("QT_QPA_PLATFORM", "offscreen");
 
-    // The bridge listens before the app starts; the user has not decided yet.
     let bridge = FakeBridge::new();
     let paths = AppPaths::from_env();
     let _listener = run(async {
@@ -216,7 +204,7 @@ fn browse_models_follow_the_core_and_the_bridge() {
         format!("import QtQuick 2.6\nimport Lautta 1.0\nimport FakeWorld 1.0\n{SCRIPT}"),
     )
     .unwrap();
-    // `qml_check` fails on any console.error, which is how a step fails.
+    // `qml_check` fails on any console.error: that is how a step fails.
     assert_eq!(
         lautta_qt::qml_check(&[file.display().to_string()]),
         0,

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Bridge errors: `org.netvfs.Error.<Name>` D-Bus errors with the message as
-//! first argument and an `a{sv}` (`detail`, `retryAfterMs`) as second
-//! (netvfs XB-9, XC-24).
+//! `org.netvfs.Error.<Name>` D-Bus errors: message first, `a{sv}` (`detail`, `retryAfterMs`)
+//! second.
 
 use crate::wire::{value_i64, value_str};
 use std::collections::HashMap;
@@ -12,34 +11,26 @@ pub const NETVFS_ERROR_PREFIX: &str = "org.netvfs.Error.";
 const INVALID_ARGS: &str = "org.freedesktop.DBus.Error.InvalidArgs";
 const UNKNOWN_METHOD: &str = "org.freedesktop.DBus.Error.UnknownMethod";
 
-/// Failure of a bridge call.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum BridgeError {
-    /// A backend or policy error from the bridge (`org.netvfs.Error.*`).
     #[error("{name}: {message}")]
     Remote {
-        /// Full D-Bus error name.
         name: String,
         message: String,
         detail: Option<String>,
         retry_after_ms: Option<u64>,
     },
-    /// The bridge refused the arguments (malformed call).
     #[error("invalid arguments: {0}")]
     InvalidArgs(String),
-    /// The bridge has no such method.
     #[error("unknown method: {0}")]
     UnknownMethod(String),
-    /// The socket is gone or the connection broke.
     #[error("connection lost: {0}")]
     Disconnected(String),
-    /// The bridge sent something this client cannot decode.
     #[error("protocol error: {0}")]
     Protocol(String),
 }
 
 impl BridgeError {
-    /// A `Remote` error with just a name and message.
     pub fn remote(bare_name: &str, message: &str) -> BridgeError {
         BridgeError::Remote {
             name: format!("{NETVFS_ERROR_PREFIX}{bare_name}"),
@@ -49,7 +40,7 @@ impl BridgeError {
         }
     }
 
-    /// The XC-21 name (`NotFound`, …) of a netvfs error.
+    /// Bare name (`NotFound`, …) of a netvfs error.
     pub fn netvfs_name(&self) -> Option<&str> {
         match self {
             BridgeError::Remote { name, .. } => name.strip_prefix(NETVFS_ERROR_PREFIX),
@@ -57,8 +48,7 @@ impl BridgeError {
         }
     }
 
-    /// Builds the error of `ListDone` / `JobFinished`, where the error is a
-    /// bare name and an empty name means success.
+    /// For `ListDone` / `JobFinished`: bare name, empty means success.
     pub fn from_bare(name: &str, message: &str, extra: &HashMap<String, OwnedValue>) -> Option<BridgeError> {
         if name.is_empty() {
             return None;

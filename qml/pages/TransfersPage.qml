@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Activity (SPEC §15.4): what has not ended under In progress, in queue
-// order, then what ended by the day it ended (Today … Older, newest first),
-// with the prompt for transfers that stopped when the app closed
-// (XFR-11, board TransfersRestored).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -13,13 +9,11 @@ import "../components/transfers/TransferText.js" as TransferText
 Page {
     id: page
 
-    // The rows; tests give the page a ListModel.
     property var listModel: transfers
 
     objectName: "transfersPage"
     allowedOrientations: Orientation.All
 
-    // What ended is on screen now: the activity bar lets go of it (XFR-13).
     onStatusChanged: if (status === PageStatus.Active) Transfers.barSeen()
 
     function headerDescription() {
@@ -37,7 +31,6 @@ Page {
         return ""
     }
 
-    // What a tap on a row does: the unanswered conflict, or details.
     function activate(row) {
         if (row.questions > 0) {
             var asked = JSON.parse(Transfers.questionsJson(row.transferId))

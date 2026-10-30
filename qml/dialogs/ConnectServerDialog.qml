@@ -1,8 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// Connect to server (NVB-6, bridge only): an address, a user name and a
-// secret. The secret goes to the bridge once and is cleared from the field
-// at once; Lautta stores nothing. `url` prefills the address (a nearby or
-// recent server, LOC-6).
+// SPDX-License-Identifier: LGPL-2.1-or-later Secret goes to bridge once, cleared from field at
+// once; Lautta stores nothing.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0

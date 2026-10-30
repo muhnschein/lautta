@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): Compress in the image viewer's More
-// (OPS-12) opens the compress dialog for the image in the page's place,
-// ready to accept. Fails when the dialog gets anything but the list of the
-// image (its JSON text left it without a folder to pack into) or stacks on
-// the page.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -11,8 +6,6 @@ import Lautta 1.0
 ApplicationWindow {
     id: win
 
-    // A folder of its own: a photo among the documents would turn them
-    // into a suggested grid for the scenarios after this one.
     readonly property string file: "lautta://user-documents/ImageMore/photo.jpg"
     property bool scenarioRunning: true
     property int step: 0

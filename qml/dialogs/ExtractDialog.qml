@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Extract a whole archive (PRV-10, XFR-3): into a new folder named after the
-// archive or straight into the chosen folder.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -10,7 +8,6 @@ import "../components/operations/Json.js" as Json
 Dialog {
     id: dialog
 
-    // The archive file (not a location inside it).
     property string archiveUri
     property string destUri: archiveUri.length > 0 ? App.parentUri(archiveUri) : ""
     property var archive: ({})

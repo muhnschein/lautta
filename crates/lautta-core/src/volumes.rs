@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Removable volumes (SPEC LOC-3): SD cards and USB drives mounted below
-//! `/run/media/$USER/<label-or-uuid>`.
+//! Removable volumes: SD cards and USB drives mounted below `/run/media/$USER/<label-or-uuid>`.
 //!
-//! No UDisks2 listener: the folder scan plus an inotify watch on the media
-//! root sees the same mounts and unmounts (udisks creates and removes the
-//! mount point directories), needs no D-Bus dependency in the core, and is
-//! trivial to test. The core keeps a [`VolumeWatcher`] for its lifetime;
-//! as the watch can miss a mount inside the sandbox's mount namespace,
-//! Browse also rescans when it refreshes. A UDisks2 listener could feed
-//! [`VolumeEvent`]s into the same registry call without changing anything
-//! else. The sandbox mounts nothing itself: the bridge mounts and unmounts
-//! drives (netvfs XB-20, [`crate::app::Core::mount_drive`]).
+//! No UDisks2 listener: folder scan plus an inotify watch on the media root sees the same mounts
+//! and unmounts (udisks creates and removes mount point directories), needs no D-Bus dependency in
+//! core, and is trivial to test. Core keeps a [`VolumeWatcher`] for its lifetime; the watch can
+//! miss a mount inside the sandbox's mount namespace, so Browse also rescans on refresh. The
+//! sandbox mounts nothing itself: the bridge mounts and unmounts drives
+//! ([`crate::app::Core::mount_drive`]).
 
 use crate::error::Result;
 use crate::paths::AppPaths;
@@ -30,16 +26,14 @@ pub const VOLUME_DEBOUNCE: Duration = Duration::from_millis(300);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Volume {
-    /// The mount directory name, made safe for a location id.
     pub id: String,
-    /// Shown to the user: the mount directory name (the volume label, or the
-    /// UUID when it has none).
+    /// Shown to the user: mount directory name (volume label, or UUID when none).
     pub name: String,
     pub mount_path: PathBuf,
 }
 
 impl Volume {
-    /// `vol-<uuid-or-dirname>` (LOC-7).
+    /// `vol-<uuid-or-dirname>`.
     pub fn location_id(&self) -> String {
         format!("vol-{}", self.id)
     }
@@ -66,14 +60,13 @@ pub fn sanitize_id(name: &OsStr) -> String {
     out
 }
 
-/// The location id of a volume mounted on the folder `name` of the media
-/// root (LOC-7), as [`Volume::location_id`] makes it.
+/// Location id of a volume mounted on folder `name` of the media root, as [`Volume::location_id`]
+/// makes it.
 pub fn location_id_of(name: &OsStr) -> String {
     format!("vol-{}", sanitize_id(name))
 }
 
-/// The media root of the current user: `/run/media/$USER`, with the home
-/// folder's name standing in when `$USER` is unset.
+/// `/run/media/$USER`, with the home folder's name standing in when `$USER` is unset.
 pub fn media_root(paths: &AppPaths) -> PathBuf {
     let user = std::env::var("USER")
         .ok()
@@ -112,7 +105,6 @@ pub fn scan(root: &Path) -> Vec<Volume> {
     out
 }
 
-/// Changes between two scans: removals first, then additions.
 pub fn diff(old: &[Volume], new: &[Volume]) -> Vec<VolumeEvent> {
     let gone = old
         .iter()
@@ -127,21 +119,18 @@ pub fn diff(old: &[Volume], new: &[Volume]) -> Vec<VolumeEvent> {
     gone.chain(added).collect()
 }
 
-/// The deepest existing folder at or above `path`.
 fn nearest_existing(path: &Path) -> PathBuf {
     path.ancestors()
         .find(|p| p.is_dir())
         .map_or_else(|| PathBuf::from("/"), Path::to_path_buf)
 }
 
-/// Rescans on mount changes and reports appearing and disappearing volumes.
 pub struct VolumeWatcher {
     known: Arc<Mutex<Vec<Volume>>>,
     _watcher: Arc<Mutex<RecommendedWatcher>>,
     _stop: StopOnDrop,
 }
 
-/// State of the worker: which folder is currently watched.
 struct Rescanner {
     root: PathBuf,
     known: Arc<Mutex<Vec<Volume>>>,
@@ -165,7 +154,6 @@ impl Rescanner {
         }
     }
 
-    /// Returns false when nobody listens any more.
     fn rescan(&mut self) -> bool {
         self.retarget();
         let now = scan(&self.root);
@@ -225,7 +213,6 @@ impl VolumeWatcher {
         ))
     }
 
-    /// The volumes as of the last scan.
     pub fn current(&self) -> Vec<Volume> {
         lock(&self.known).clone()
     }

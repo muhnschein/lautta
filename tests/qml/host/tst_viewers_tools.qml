@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of ViewerTools.mouse, which the Silica scenarios use to hold
-// and drag a finger (drag selection, SPEC §15.3): the scene gets a window,
-// events reach the item under the point, a hold becomes pressAndHold, moves
-// keep the grab, and unknown kinds or objects that are not items fail.
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -54,8 +50,6 @@ Item {
         check(tools.mouse(left, "press", 20, 30), "press sent")
         check(left.pressed, "the area under the point is pressed")
         tools.pump(1200)
-        // Coordinates are the given item's: (10, 40) of `right` is (160, 40)
-        // of `left`, which has the grab and gets the move.
         check(tools.mouse(right, "move", 10, 40), "move sent")
         check(tools.mouse(left, "release", 160, 40), "release sent")
         same(events, ["press 20,30", "hold", "move 160,40", "release"], "a hold, then a move kept by the grab")

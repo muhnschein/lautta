@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `TextDocument` and `MarkdownDocument` (PRV-4).
 
 use super::{parse_uri, qstr, run_then};
 use crate::runtime::core;
@@ -15,7 +14,7 @@ pub fn register() {
     qml_register_type::<MarkdownDocument>(&crate::qml_uri(), 1, 0, &crate::cstr("MarkdownDocument"));
 }
 
-/// A text file: `text` is what the viewer shows (LF breaks, no final break).
+/// `text` as shown: LF breaks, no final break.
 #[derive(QObject, Default)]
 pub struct TextDocument {
     base: qt_base_class!(trait QObject),
@@ -24,25 +23,23 @@ pub struct TextDocument {
     loading: qt_property!(bool; NOTIFY stateChanged),
     loaded: qt_property!(bool; NOTIFY stateChanged),
     text: qt_property!(QString; NOTIFY stateChanged),
-    /// Only the first MiB is shown (PRV-4).
+    /// Only the first MiB is shown.
     truncated: qt_property!(bool; NOTIFY stateChanged),
     validUtf8: qt_property!(bool; NOTIFY stateChanged),
-    /// File size in bytes, -1 when unknown.
+    /// -1 when unknown.
     size: qt_property!(f64; NOTIFY stateChanged),
     errorKind: qt_property!(QString; NOTIFY stateChanged),
     errorMessage: qt_property!(QString; NOTIFY stateChanged),
-    /// The grammar of the colours, "" without (PRV-13).
+    /// Colour grammar, "" without.
     syntax: qt_property!(QString; NOTIFY stateChanged),
-    /// The first lines (or all) have colours; they may come after the text.
+    /// First lines (or all) have colours; may come after the text.
     highlighted: qt_property!(bool; NOTIFY stateChanged),
     stateChanged: qt_signal!(),
 
     reload: qt_method!(fn(&mut self)),
-    /// A row of the viewer (components/viewers/TextRows.js: the row's text,
-    /// its line from 0 and where it starts in the line with tabs expanded)
-    /// as StyledText: every character escaped, whitespace kept, coloured
-    /// as its part of the line with `colours` (`class=#rrggbb,…`,
-    /// SyntaxColours.js) (PRV-13).
+    /// Row as StyledText: every character escaped, whitespace kept, coloured per `colours`
+    /// (`class=#rrggbb,…`, SyntaxColours.js). `row` text, its line from 0 and its start in the line
+    /// with tabs expanded (components/viewers/TextRows.js).
     styledRow: qt_method!(fn(&self, row: QString, line: i32, start: i32, colours: QString) -> QString),
 
     generation: u64,
@@ -102,7 +99,6 @@ impl TextDocument {
         self.stateChanged();
     }
 
-    /// Shows the text; returns the colouring still at work.
     fn apply(&mut self, v: ViewedText) -> Option<ColourJob> {
         self.loaded = true;
         self.size = v.size.map_or(-1.0, |s| s as f64);
@@ -113,7 +109,6 @@ impl TextDocument {
         v.colouring
     }
 
-    /// The colours, once they come, for the text that is still shown.
     fn colour_later(&mut self, job: ColourJob) {
         let gen = self.generation;
         run_then(self, async move { Ok(job.finish().await) }, move |me, res| {
@@ -135,7 +130,7 @@ impl TextDocument {
 
     fn styledRow(&self, row: QString, line: i32, start: i32, colours: QString) -> QString {
         let palette = Palette::parse(&colours.to_string());
-        // A negative line is past every line: escaped, without colours.
+        // Negative line is past every line: escaped, no colours.
         let line = usize::try_from(line).unwrap_or(usize::MAX);
         let start = usize::try_from(start).unwrap_or_default();
         let styled = self.lines.styled_row(line, start, &row.to_string(), &palette);
@@ -162,7 +157,6 @@ impl TextDocument {
     }
 }
 
-/// A Markdown file as Qt rich text (PRV-4).
 #[derive(QObject, Default)]
 pub struct MarkdownDocument {
     base: qt_base_class!(trait QObject),

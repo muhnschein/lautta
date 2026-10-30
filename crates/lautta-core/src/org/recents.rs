@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Recents (ORG-2): files opened, previewed or transferred;
-//! filterable, clearable, can be switched off. Also where reading stopped in
-//! a document (PRV-12), which goes with them.
+//! Recents: files opened, previewed or transferred; filterable, clearable, can be switched off.
+//! Also where reading stopped in a document, which goes with them.
 
 use super::{location_prefix, now_ms, parse_uri};
 use crate::db::Db;
@@ -10,8 +9,8 @@ use crate::uri::Uri;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-/// Rows kept, of recents and of reading positions each; older ones are
-/// dropped on `record` and `set_page`.
+/// Rows kept, of recents and of reading positions each; older ones are dropped on `record` and
+/// `set_page`.
 pub const MAX_RECENTS: usize = 500;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -50,8 +49,6 @@ pub struct Recent {
     pub at_ms: i64,
 }
 
-/// Listing filter: empty `kinds` means all kinds; `text` is a
-/// case-insensitive substring of the name.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RecentsFilter {
     pub kinds: Vec<RecentKind>,
@@ -79,8 +76,7 @@ impl Recents {
         }
     }
 
-    /// The setting "Recents" (§18). Turning it off keeps existing rows; use
-    /// [`Recents::clear`] to forget them.
+    /// Turning it off keeps existing rows; use [`Recents::clear`] to forget them.
     pub fn set_enabled(&self, on: bool) {
         self.enabled.store(on, Ordering::Relaxed);
     }
@@ -89,8 +85,7 @@ impl Recents {
         self.enabled.load(Ordering::Relaxed)
     }
 
-    /// Records an event, now. The same (uri, kind) only moves to the top. A
-    /// no-op while recents are off.
+    /// The same (uri, kind) only moves to the top. No-op while recents are off.
     pub fn record(&self, uri: &Uri, name: &str, kind: RecentKind) -> Result<()> {
         self.record_at(uri, name, kind, now_ms())
     }
@@ -113,7 +108,6 @@ impl Recents {
         Ok(())
     }
 
-    /// Newest first.
     pub fn list(&self, filter: &RecentsFilter) -> Result<Vec<Recent>> {
         let all = self.load_all()?;
         let needle = filter.text.as_ref().map(|t| t.to_lowercase());
@@ -169,14 +163,12 @@ impl Recents {
             > 0)
     }
 
-    /// Forgets all recents and reading positions; counts the recents.
     pub fn clear(&self) -> Result<usize> {
         let conn = self.db.lock();
         conn.execute("DELETE FROM reading_positions", [])?;
         Ok(conn.execute("DELETE FROM recents", [])?)
     }
 
-    /// SEC-5: forget everything of a removed location; counts the recents.
     pub fn purge_location(&self, location: &str) -> Result<usize> {
         let conn = self.db.lock();
         let prefix = location_prefix(location);
@@ -191,8 +183,6 @@ impl Recents {
         Ok(n)
     }
 
-    /// Remembers that reading `uri` stopped at `page` (0-based). A no-op
-    /// while recents are off.
     pub fn set_page(&self, uri: &Uri, page: u32) -> Result<()> {
         if !self.is_enabled() {
             return Ok(());
@@ -211,8 +201,6 @@ impl Recents {
         Ok(())
     }
 
-    /// Where reading `uri` stopped; `None` when unknown or while recents
-    /// are off.
     pub fn page(&self, uri: &Uri) -> Result<Option<u32>> {
         if !self.is_enabled() {
             return Ok(None);

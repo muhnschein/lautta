@@ -1,13 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): Delete in the image viewer asks the
-// same as the folder view (OPS-8). To the Trash it is the remorse popup,
-// "Moving to trash", and no dialog. A permanent delete (here with the Trash
-// off; on volumes and servers likewise) opens the Delete permanently? dialog
-// instead, with no remorse: accepting it deletes the image at once, keeps the
-// viewer while other images are left and leaves it with the last one.
-// Before, an SD card's image said "Deleting" although it went for good.
-// (Headless, the slideshow does not follow a reload, so each part starts
-// from the image the viewer opened with.)
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -59,7 +50,6 @@ ApplicationWindow {
         finish(what)
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)
@@ -131,7 +121,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 3:
-                // To the Trash: the remorse popup, no dialog.
                 if (win.dialogOnTop())
                     return win.fail("a delete to the Trash asks nothing")
                 var popup = win.remorse()
@@ -144,7 +133,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 4:
-                // Longer than the remorse timer: the cancelled delete is gone.
                 if (win.waited < 40)
                     break
                 images.refresh()
@@ -172,7 +160,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 7:
-                // Deleted at once; another image is left, so the viewer stays.
                 if (!win.removed || pageStack.busy)
                     break
                 if (pageStack.currentPage !== win.viewer)
@@ -214,7 +201,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 12:
-                // The last image is gone: back past the viewer at once.
                 if (!win.removed || pageStack.currentPage !== win.below || pageStack.busy)
                     break
                 if (pageStack.depth !== 1)
@@ -226,7 +212,6 @@ ApplicationWindow {
                     images.refresh()
                 if (images.loading || images.nameKind("two.jpg") !== "")
                     break
-                // Leave Pictures as it was for the scenarios after this one.
                 win.removed = false
                 Operations.remove(JSON.stringify([win.folder.slice(0, -1)]))
                 win.next()

@@ -1,8 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// Rename one item (board Rename): the plain dialog header and the name, no
-// more. The dialog only asks: after it is accepted the caller calls
-// `DirectoryModel.rename(uri, newName)`. A name that is taken is an error
-// right away; there is no case hint.
+// SPDX-License-Identifier: LGPL-2.1-or-later Only asks; caller renames on accept.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -13,7 +9,6 @@ Dialog {
     id: dialog
 
     property string uri
-    // Folders are selected whole; files without their extension.
     property bool isDir
     readonly property string oldName: App.nameOf(uri)
     readonly property string newName: nameField.text
@@ -72,7 +67,6 @@ Dialog {
 
     Component.onCompleted: {
         nameField.forceActiveFocus()
-        // Select the name without its extension, like the system does.
         var dot = dialog.oldName.lastIndexOf(".")
         nameField.select(0, dot > 0 && !dialog.isDir ? dot : dialog.oldName.length)
     }

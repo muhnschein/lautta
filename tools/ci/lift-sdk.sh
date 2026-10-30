@@ -1,14 +1,10 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-2.1-or-later
-# Lifts what a host cargo needs to cross-build for the Sailfish OS target out
-# of the Platform SDK image (SPEC RS-6, doc/CONTRIBUTING-CODE.md "Toolchain"):
-# the SDK's aarch64 gcc and binutils (/opt/cross, i486 binaries), the host
-# libraries they load from the image, and the target's sysroot. Then adds
-# what the image leaves to scratchbox2: binutils under the names gcc looks
-# for, compiler wrappers with the sysroot, and link names plus pkg-config
-# files for the target libraries that ship without -devel packages (the
-# binary still records libsqlite3.so.0 and libbz2.so.1).
-# The host needs the i386 C library (Ubuntu: libc6-i386).
+# Lifts from the SDK image what a host cargo needs to cross-build: aarch64 gcc and
+# binutils (/opt/cross, i486), the host libraries they load, the target sysroot. Adds what
+# the image leaves to scratchbox2: binutils under gcc's names, sysroot compiler wrappers,
+# link names and pkg-config files for target libraries without -devel packages.
+# Host needs libc6-i386.
 # Usage: lift-sdk.sh <image> <target name> <dir>
 set -eu
 image=$1
@@ -20,8 +16,7 @@ mkdir -p "$dir/hostlib" "$dir/bin" "$dir/linklib/pkgconfig"
 dir=$(cd "$dir" && pwd)
 cid=$(docker create "$image" /bin/true)
 trap 'docker rm "$cid" > /dev/null' EXIT
-# Through tar, so that an unprivileged user can unpack it: no device nodes,
-# no ownership, and every file readable and removable afterwards.
+# Through tar: unprivileged unpack, no device nodes, no ownership.
 lift() {
     from=$1
     to=$2
@@ -34,7 +29,7 @@ lift "/srv/mer/targets/$target" "$dir/sysroot"
 for lib in libmpc.so.3 libmpfr.so.6 libgmp.so.10 libz.so.1 libzstd.so.1; do
     docker cp -L "$cid:/usr/lib/$lib" "$dir/hostlib/$lib"
 done
-# gcc runs as and ld from <prefix>/<triple>/bin; in the SDK sb2 maps them.
+# gcc runs as and ld from <prefix>/<triple>/bin; sb2 maps them in the SDK.
 mkdir -p "$dir/cross/$triple/bin"
 for tool in as ld ld.bfd ar nm objcopy objdump ranlib readelf strip; do
     if [ -e "$dir/cross/bin/$triple-$tool" ]; then
@@ -50,8 +45,7 @@ LD_LIBRARY_PATH="$dir/hostlib" exec "$dir/cross/bin/$triple-$tool" $sysroot "\$@
 WRAP
     chmod +x "$dir/bin/$triple-$tool"
 done
-# Link names and pkg-config files for libraries whose -devel packages the
-# target lacks; the crates ship their own bindings, so no headers are needed.
+# Crates ship their own bindings: no headers needed.
 link() {
     lib=$1
     soname=$2

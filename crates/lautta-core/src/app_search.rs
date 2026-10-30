@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! User-level actions of the search area on [`Core`](crate::app::Core):
-//! recursive search (SRC-2..4), cache and app-data clearing (SEC-5, DAT-3)
-//! and per-location preferences (§18).
+//! Search area on `Core`: recursive search, cache and app-data clearing, per-location preferences.
 
 use crate::app::Core;
 use crate::error::{Error, ErrorKind, Result};
@@ -22,14 +20,10 @@ use tokio::sync::mpsc;
 const MB: u64 = 1_000_000;
 const KB: u64 = 1_000;
 
-/// The categories `classify_by_extension` can return, in filter-chip order.
 pub const SEARCH_TYPES: [&str; 7] = ["folder", "image", "video", "audio", "document", "archive", "text"];
-/// Size filter presets (SRC-2) and what they mean.
 pub const SIZE_PRESETS: [&str; 6] = ["any", "gt1m", "gt10m", "gt100m", "lt100k", "lt1m"];
-/// Date filter presets (SRC-2).
 pub const DATE_PRESETS: [&str; 5] = ["any", "today", "week", "month", "year"];
 
-/// What the user typed and chose on the search page.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SearchRequest {
     pub text: String,
@@ -40,7 +34,6 @@ pub struct SearchRequest {
     pub include_hidden: bool,
 }
 
-/// `(min, max)` bytes of a size preset; unknown presets mean no limit.
 pub fn size_bounds(preset: &str) -> (Option<u64>, Option<u64>) {
     match preset {
         "gt1m" => (Some(MB), None),
@@ -52,9 +45,7 @@ pub fn size_bounds(preset: &str) -> (Option<u64>, Option<u64>) {
     }
 }
 
-/// The earliest modification time of a date preset as seen from `now`:
-/// today is since local midnight, a week and a month are rolling, the year
-/// starts on 1 January.
+/// Today: since local midnight; week and month rolling; year from 1 January.
 pub fn date_lower_bound(preset: &str, now: DateTime<Local>) -> Option<SystemTime> {
     let midnight =
         |date: chrono::NaiveDate| Local.from_local_datetime(&date.and_hms_opt(0, 0, 0)?).earliest();
@@ -69,8 +60,7 @@ pub fn date_lower_bound(preset: &str, now: DateTime<Local>) -> Option<SystemTime
 }
 
 impl SearchRequest {
-    /// Whether anything restricts the search; an empty request would list the
-    /// whole tree, which the UI only does on purpose.
+    /// Empty request would list the whole tree; UI only does that on purpose.
     pub fn is_restricted(&self) -> bool {
         !self.text.trim().is_empty()
             || !self.types.is_empty()
@@ -102,8 +92,6 @@ fn lower_chars(s: &str) -> Vec<char> {
     s.chars().map(|c| c.to_lowercase().next().unwrap_or(c)).collect()
 }
 
-/// The part of `text` that is shown highlighted in a hit's name: the whole
-/// text for substring search, the longest literal run for a glob.
 fn literal_needle(text: &str, mode: MatchMode) -> String {
     match mode {
         MatchMode::Substring => text.to_owned(),
@@ -115,8 +103,6 @@ fn literal_needle(text: &str, mode: MatchMode) -> String {
     }
 }
 
-/// `(start, length)` in characters of the first case-insensitive occurrence
-/// of the query's literal part in `name`.
 pub fn highlight_span(name: &str, text: &str, mode: MatchMode) -> Option<(usize, usize)> {
     let needle = lower_chars(&literal_needle(text.trim(), mode));
     if needle.is_empty() {
@@ -128,8 +114,6 @@ pub fn highlight_span(name: &str, text: &str, mode: MatchMode) -> Option<(usize,
         .map(|start| (start, needle.len()))
 }
 
-/// The group header of a hit's folder: the search root's name and the
-/// folders below it, "Documents › Uni › Thesis".
 pub fn section_label(root: &Uri, root_name: &str, folder: &Uri) -> String {
     let mut parts = vec![root_name.to_owned()];
     if let Some(rel) = folder.path.strip_prefix(&root.path) {
@@ -138,7 +122,6 @@ pub fn section_label(root: &Uri, root_name: &str, folder: &Uri) -> String {
     parts.join(" \u{203a} ")
 }
 
-/// What the app's caches occupy, in bytes (Settings → Storage).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct CacheSizes {
     pub thumbnails: u64,
@@ -152,7 +135,6 @@ impl CacheSizes {
     }
 }
 
-/// Bytes of the regular files below `path` (symlinks are not followed).
 pub fn dir_size(path: &Path) -> u64 {
     let Ok(read) = std::fs::read_dir(path) else {
         return 0;
@@ -166,7 +148,6 @@ pub fn dir_size(path: &Path) -> u64 {
         .sum()
 }
 
-/// Deletes everything inside `dir` and keeps `dir`. Returns the bytes freed.
 fn remove_contents(dir: &Path) -> Result<u64> {
     let freed = dir_size(dir);
     let read = match std::fs::read_dir(dir) {
@@ -194,7 +175,7 @@ fn remove_tree(dir: &Path) -> Result<()> {
 }
 
 impl Core {
-    /// SRC-3: unlimited on local locations, the setting on remote ones.
+    /// Unlimited on local locations, the setting on remote ones.
     pub fn search_depth(&self, root: &Uri) -> Option<u32> {
         if self.locations.to_local_path(root).is_some() {
             None
@@ -203,8 +184,6 @@ impl Core {
         }
     }
 
-    /// Searches below `root` and streams one batch of hits per folder (SRC-2).
-    /// A non-blank query is remembered for the location (SRC-4).
     pub async fn search_tree(
         &self,
         root: Uri,
@@ -233,12 +212,10 @@ impl Core {
         .await
     }
 
-    /// Recent searches of the root's location, newest first (SRC-4).
     pub fn recent_searches_of(&self, root: &Uri) -> Vec<String> {
         self.recent_searches.list(&root.location).unwrap_or_default()
     }
 
-    /// Sizes of the thumbnail, listing and archive caches.
     pub fn cache_sizes(&self) -> CacheSizes {
         let listings: i64 = self
             .db
@@ -256,8 +233,6 @@ impl Core {
         }
     }
 
-    /// *Clear cache* (SEC-5): thumbnails, stored listings and extracted
-    /// archives. All user data stays. Returns bytes freed.
     pub fn clear_cache(&self) -> Result<u64> {
         let before = self.cache_sizes();
         remove_contents(&self.paths.thumbs_dir())?;
@@ -266,9 +241,7 @@ impl Core {
         Ok(before.total())
     }
 
-    /// *Clear app data* (DAT-3): every table of the database, the Trash
-    /// (OPS-8), all caches and the netvfs socket folder (netvfs recreates
-    /// it). Refused while transfers are unfinished.
+    /// netvfs recreates its socket folder. Refused while transfers are unfinished.
     pub fn clear_app_data(&self) -> Result<()> {
         if self.engine.pending_summary() > 0 {
             return Err(Error::new(ErrorKind::Locked, "transfers are still running"));
@@ -297,11 +270,9 @@ impl Core {
         Ok(())
     }
 
-    /// Stores a location's preferences and applies the ones that act at
-    /// once: the listing cache opt-out (SEC-5) and the remote lanes (XFR-2).
     pub fn set_location_prefs(&self, prefs: &LocationPrefs) -> Result<()> {
-        // The opt-out first: switching it off writes a row, which the store
-        // removes again below when everything is default.
+        // Opt-out first: switching it off writes a row, which the store removes again below when
+        // all is default.
         self.dircache
             .set_disabled(&prefs.location_id, prefs.no_listing_cache)?;
         self.location_prefs.set(prefs)?;

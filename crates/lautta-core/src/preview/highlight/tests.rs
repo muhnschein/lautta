@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Highlighting tests (PRV-13): grammar choice, classes of real samples,
-//! state across lines, the limits, and that Qt shows exactly the file's
-//! characters (a model of Qt's StyledText parser reads the output back,
-//! for fixed and pseudo-random lines full of markup).
+//! Highlighting tests: grammar choice, classes of samples, state across lines, limits, and that Qt
+//! shows exactly the file's characters (model of Qt's StyledText parser reads output back).
 
 use super::*;
 
@@ -18,7 +16,6 @@ fn coloured(name: &str, text: &str) -> ColouredText {
     colour(name.as_bytes(), text.to_owned(), &limits)
 }
 
-/// The pieces of line `index` with their classes.
 fn pieces(doc: &ColouredText, index: usize) -> Vec<(&str, Class)> {
     let line = doc.line(index).unwrap_or_default();
     let mut from = 0;
@@ -30,7 +27,6 @@ fn pieces(doc: &ColouredText, index: usize) -> Vec<(&str, Class)> {
     out
 }
 
-/// The class of the first piece of line `index` that contains `text`.
 fn class_of(doc: &ColouredText, index: usize, text: &str) -> Option<Class> {
     pieces(doc, index)
         .into_iter()
@@ -54,12 +50,10 @@ fn grammars_by_name_extension_and_first_line() {
     );
     assert_eq!(syntax_name("Main.qml", ""), Some("JavaScript"));
     assert_eq!(syntax_name("harbour-lautta.desktop", ""), Some("Java Properties"));
-    // The first line decides when the name does not.
     assert_eq!(syntax_name("configure", "#!/bin/sh"), bash);
     assert_eq!(syntax_name("run", "#!/usr/bin/env bash"), bash);
     assert_eq!(syntax_name("tool", "#!/usr/bin/python3"), Some("Python"));
     assert_eq!(syntax_name("meson.build", "#!/bin/sh"), bash, "not NAnt");
-    // Plain text stays plain.
     assert_eq!(syntax_name("notes.txt", "#!/bin/sh"), None);
     assert_eq!(syntax_name("meson.build", "project('x')"), None);
     assert_eq!(syntax_name("start.s", ""), None);
@@ -125,7 +119,6 @@ fn a_shell_script_has_its_classes() {
     assert_eq!(class_of(&doc, 3, ">"), Some(Class::Operator));
     assert_eq!(class_of(&doc, 4, "done"), Some(Class::Keyword));
     assert_eq!(class_of(&doc, 5, "name"), Some(Class::Variable));
-    // The here-document is one string over three lines.
     assert_eq!(class_of(&doc, 7, "here "), Some(Class::String));
     assert_eq!(class_of(&doc, 8, "EOF"), Some(Class::Keyword));
     assert_eq!(class_of(&doc, 9, "show"), Some(Class::Function));
@@ -165,7 +158,6 @@ fn markdown_has_its_classes() {
     assert_eq!(class_of(&doc, 4, "a link"), Some(Class::Link));
     assert_eq!(class_of(&doc, 4, "https://example.org"), Some(Class::Link));
     assert_eq!(class_of(&doc, 6, "quoted"), Some(Class::Markup));
-    // A fenced block is code until it closes.
     assert_eq!(pieces(&doc, 9), vec![("let x = 1;", Class::String)]);
     assert_eq!(class_of(&doc, 11, "Back"), Some(Class::Plain));
 }
@@ -240,7 +232,6 @@ fn an_overlong_line_ends_the_colours() {
     let palette = Palette::parse("function=#112233");
     assert!(doc.styled_row(0, 0, "echo a", &palette).contains("<font"));
     assert_eq!(doc.styled_row(2, 0, "echo b", &palette), "echo b");
-    // A line at the limit is still coloured.
     let at_limit = format!("echo a\n{}\necho b", &long[..4096]);
     assert_eq!(coloured("x.sh", &at_limit).coloured_lines(), 3);
 }
@@ -258,8 +249,6 @@ fn colours_stop_when_time_is_up() {
     assert_eq!(doc.syntax(), Some("Bourne Again Shell (bash)"));
 }
 
-/// Colours `text` against a real clock with a short budget, checking that
-/// it comes back soon after the budget, coloured lines first.
 fn colour_against_the_clock(name: &str, text: String) -> ColouredText {
     let limits = Limits {
         budget: Duration::from_millis(200),
@@ -281,14 +270,11 @@ fn colour_against_the_clock(name: &str, text: String) -> ColouredText {
 
 #[test]
 fn pathological_files_stay_within_their_limits() {
-    // Minified: one line of a whole MiB.
     let doc = colour_against_the_clock("x.sh", "$((".repeat(350_000));
     assert_eq!((doc.coloured_lines(), doc.line_count()), (0, 1));
-    // Deep nesting over many lines.
     let doc = colour_against_the_clock("x.sh", "echo \"$(echo \"$( [[ ${a[(((1\n".repeat(100_000));
     assert!(doc.coloured_lines() > 0);
-    // Lines of nothing but markup openers, each just under the limit: tens
-    // of milliseconds a line on a fast machine, so the time runs out.
+    // Markup openers just under the limit: tens of ms a line, so time runs out.
     let doc = colour_against_the_clock("x.md", ("*_[`<".repeat(800) + "\n").repeat(2000));
     assert!(doc.coloured_lines() > 0 && doc.coloured_lines() < doc.line_count());
     let doc = colour_against_the_clock("x.html", "<a href=\"".repeat(400).repeat(1000));
@@ -328,7 +314,6 @@ fn palette() -> Palette {
     Palette::parse(&spec.join(","))
 }
 
-/// One line with the given pieces, as `ColouredText` would hold it.
 fn doc_of(pieces: &[(&str, Class)]) -> ColouredText {
     let line: String = pieces.iter().map(|(p, _)| *p).collect();
     let mut doc = ColouredText::plain(line);
@@ -362,7 +347,6 @@ fn styled_rows_escape_and_colour() {
         doc.styled_row(0, 0, line, &Palette::default()),
         "if &lt;img src=&quot;a.png&quot;&gt; &amp;lt; &amp; a;b"
     );
-    // Past the last line, and plain documents: escaped all the same.
     assert_eq!(doc.styled_row(1, 0, "<b>", &palette()), "&lt;b&gt;");
     assert_eq!(
         doc.styled_row(usize::MAX, 0, "\"x\"", &palette()),
@@ -388,7 +372,6 @@ fn styled_rows_keep_whitespace() {
 #[test]
 fn colours_follow_tabs_and_rows() {
     let p = palette();
-    // The rows of a line have their tabs expanded (TextRows.js).
     let doc = doc_of(&[
         ("\t", Class::Plain),
         ("if", Class::Keyword),
@@ -400,14 +383,12 @@ fn colours_follow_tabs_and_rows() {
         doc.styled_row(0, 0, "    if  x", &p),
         "&nbsp;&nbsp;&nbsp;&nbsp;<font color=\"#000002\">if</font>&nbsp;&nbsp;<font color=\"#000004\">x</font>"
     );
-    // A tab takes the colour of its span, all its columns.
     let doc = doc_of(&[("a", Class::Plain), ("\tb", Class::Comment)]);
     assert_eq!(
         doc.styled_row(0, 0, "a   b", &p),
         "a<font color=\"#000001\">&nbsp;&nbsp;&nbsp;b</font>"
     );
-    // Columns are UTF-16 units, as JavaScript counts them: the tab after
-    // an emoji (two units) is two columns.
+    // Columns are UTF-16 units: tab after an emoji is two columns.
     let doc = doc_of(&[
         ("\u{1F600}\t", Class::Plain),
         ("x", Class::Keyword),
@@ -420,7 +401,6 @@ fn colours_follow_tabs_and_rows() {
         doc.styled_row(0, 0, row, &p),
         "\u{1F600}&nbsp;&nbsp;<font color=\"#000002\">x</font>\u{1F600}<font color=\"#000002\">y</font>"
     );
-    // A row further on in a long line has the colours of its own part.
     let doc = doc_of(&[
         ("a".repeat(998).as_str(), Class::Plain),
         ("echo", Class::Function),
@@ -437,9 +417,8 @@ fn colours_follow_tabs_and_rows() {
     }
 }
 
-/// What Qt's StyledText parser (qquickstyledtext.cpp, Qt 5.6) shows for
-/// `styled`: each character with its colour. Any tag but lautta's font
-/// tags, any entity but the five escapes, and NUL (where Qt stops) fail.
+/// Mirrors Qt 5.6 qquickstyledtext.cpp: fails on any tag but lautta's font tags, any entity but the
+/// five escapes, and NUL (where Qt stops).
 fn shown_by_qt(styled: &str) -> Vec<(char, Option<String>)> {
     let mut qt = QtParser {
         shown: Vec::new(),
@@ -536,10 +515,8 @@ impl QtParser {
     }
 }
 
-/// The viewer's rows of `line` as TextRows.js makes them, with where each
-/// starts: tabs to the next multiple of four columns, a row ending after
-/// 1000 columns or before (never inside a pair of surrogates), counted in
-/// UTF-16 units.
+/// Rows as TextRows.js makes them, with starts: tabs to next multiple of four, row ends after 1000
+/// columns or before (never inside a surrogate pair), UTF-16 units.
 fn rows_of(line: &str) -> Vec<(usize, String)> {
     let mut expanded = String::new();
     let mut column = 0;
@@ -567,8 +544,7 @@ fn rows_of(line: &str) -> Vec<(usize, String)> {
     rows
 }
 
-/// What the viewer must show for a row: its characters, whitespace as a
-/// space, NUL as U+FFFD.
+/// Whitespace as space, NUL as U+FFFD.
 fn expected(row: &str) -> String {
     row.chars()
         .map(|c| match c {
@@ -579,8 +555,6 @@ fn expected(row: &str) -> String {
         .collect()
 }
 
-/// The class of each column of `doc`'s line `index`, worked out by the
-/// characters (as the rows lay them out) rather than by the spans' ends.
 fn column_classes(doc: &ColouredText, index: usize) -> Vec<Option<Class>> {
     let line = doc.line(index).unwrap();
     let spans = doc.spans(index).unwrap_or_default();
@@ -601,8 +575,6 @@ fn column_classes(doc: &ColouredText, index: usize) -> Vec<Option<Class>> {
     out
 }
 
-/// Checks that Qt shows `row` (from column `start` of line `index`) as it
-/// is, each visible character in the colour of its part of the line.
 fn check_row(doc: &ColouredText, index: usize, (start, row): (usize, &str), palette: &Palette) {
     let styled = doc.styled_row(index, start, row, palette);
     let shown = shown_by_qt(&styled);
@@ -626,14 +598,13 @@ fn check_row(doc: &ColouredText, index: usize, (start, row): (usize, &str), pale
     assert_eq!(shown_colours, colours, "{row:?} became {styled:?}");
 }
 
-/// Checks every row of `doc`'s line `index` with [`check_row`].
 fn check_shown(doc: &ColouredText, index: usize, palette: &Palette) {
     for (start, row) in rows_of(doc.line(index).unwrap()) {
         check_row(doc, index, (start, &row), palette);
     }
 }
 
-/// A small deterministic generator (xorshift), so failures reproduce.
+/// Deterministic xorshift: failures reproduce.
 struct Rng(u64);
 
 impl Rng {
@@ -708,7 +679,6 @@ fn qt_shows_random_markup_as_text() {
     let mut rng = Rng(0x5eed_1a77a);
     let classes: Vec<Class> = CLASSES.iter().map(|(c, _)| *c).collect();
     for n in 0..2000 {
-        // Some lines go on over rows.
         let line = nasty_line(&mut rng).repeat(if n % 20 == 0 { 120 } else { 1 });
         let cuts: Vec<usize> = line.char_indices().map(|(i, _)| i).skip(1).collect();
         let cuts: Vec<usize> = cuts.into_iter().filter(|_| rng.below(3) == 0).collect();
@@ -744,8 +714,6 @@ fn qt_shows_highlighted_random_files_as_text() {
 
 #[test]
 fn the_model_of_qt_catches_unescaped_text() {
-    // The checks above bite: raw markup, an unknown entity and a collapsed
-    // space all fail the model.
     for styled in ["<img src=x>", "&apos;", "a\0b"] {
         assert!(
             std::panic::catch_unwind(|| shown_by_qt(styled)).is_err(),
@@ -760,8 +728,8 @@ fn the_model_of_qt_catches_unescaped_text() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_job_colours_off_the_runtime() {
-    // Budget that cannot run out: the coverage build on a busy runner can
-    // need more than LIMITS' 3 s, and `finish` would then race GRACE.
+    // Budget cannot run out: coverage build on busy runner can exceed LIMITS' 3 s, then `finish`
+    // races GRACE.
     let limits = Limits {
         budget: Duration::from_secs(600),
         ..LIMITS
@@ -771,7 +739,6 @@ async fn a_job_colours_off_the_runtime() {
     let doc = doc.unwrap().unwrap();
     assert_eq!(doc.syntax(), Some("Bourne Again Shell (bash)"));
     assert_eq!(doc.coloured_lines(), doc.line_count());
-    // A job that is not done yet comes back, and finishes later.
     let job = start_with(b"x.md".to_vec(), MARKDOWN.repeat(20), limits, GRACE);
     let job = job.wait(Duration::ZERO).await.unwrap_err();
     let doc = job.finish().await.unwrap();
@@ -786,7 +753,6 @@ fn a_job_that_overruns_its_time_is_dropped() {
         budget: Duration::from_millis(200),
         max_line_bytes: usize::MAX,
     };
-    // One line takes seconds, and lines are only cut between lines.
     let line = "echo \"$x\" 'y' ${z} # c ".repeat(80_000);
     let finished = rt.block_on(async {
         start_with(b"x.sh".to_vec(), line, limits, Duration::ZERO)

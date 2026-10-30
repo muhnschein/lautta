@@ -1,10 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// "More" of the image viewer (board ImageViewer): the file actions of the
-// folder view for the image being shown, Rename and the folder view's More
-// actions (ContextActions.js), handled by the other areas' dialogs and the
-// favourite page. Rename goes back to the viewer (renameChosen): RenameDialog
-// only asks, and the viewer, not this page, is there to rename once it is
-// accepted.
+// SPDX-License-Identifier: LGPL-2.1-or-later Rename goes back to viewer (renameChosen):
+// RenameDialog only asks, viewer does the rename.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0

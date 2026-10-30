@@ -1,6 +1,6 @@
 # Jolla Gallery's image viewer (adapted)
 
-The image viewer (SPEC PRV-4) is Jolla Gallery's. These files are adapted
+The image viewer is Jolla Gallery's. These files are adapted
 copies, BSD-3-Clause, © Jolla Ltd., Open Mobile Platform LLC and Jolla Mobile
 Ltd (the licence and its copyright lines: [`BSD-3-Clause.txt`](BSD-3-Clause.txt);
 each file keeps its own SPDX header):

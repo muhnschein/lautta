@@ -1,16 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of the rows of the grid (GridRows.js, SPEC §15.3, BRW-4): 3
-// tiles per row in portrait, more in landscape at the same tile size, the
-// rows a folder takes, which item is under a point and the height of a row,
-// which is its tallest cell's. Fails when the number per row, the grouping
-// into rows, the item under a finger or a row's height is wrong.
 import QtQuick 2.6
 import "../../../qml/components/directory/GridRows.js" as GridRows
 
 Item {
     id: root
 
-    // A phone's screen, 540 by 960: 3 tiles of 180 in portrait.
     readonly property real tile: 180
 
     function check(cond, what) {
@@ -22,8 +16,6 @@ Item {
         check(JSON.stringify(a) === JSON.stringify(b), what + ": " + JSON.stringify(a) + " != " + JSON.stringify(b))
     }
 
-    // The items of each row of `count` items in a view `width` wide, as the
-    // grid groups them.
     function grouped(count, width) {
         var columns = GridRows.columns(width, root.tile, 3)
         var rows = []
@@ -73,7 +65,6 @@ Item {
         same(GridRows.indexAt(0, 10, 0, 3, 7), -1, "a view of no width")
     }
 
-    // Rotating regroups the same items into longer rows and back.
     function testRegroup() {
         same(grouped(7, 540), [[0, 1, 2], [3, 4, 5], [6]], "7 items in portrait")
         same(grouped(7, 960), [[0, 1, 2, 3, 4], [5, 6]], "and in landscape")

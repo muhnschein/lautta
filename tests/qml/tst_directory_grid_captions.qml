@@ -1,17 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The grid on the target (SPEC §15.3, BRW-4, board DirectoryGrid): under
-// every tile the name on up to two lines, a long one
-// cut in the middle so that its end stays, and caption lines: a file's
-// modified time and size, a folder's item count on this device (hidden files
-// only when they are shown), a folder's modified time where counting would
-// list it over the network (an archive stands in for a server here, both
-// are not local); the glyph is about half the tile, at a multiple of 28 px
-// (FileIcons.js). A cell keeps no line it does not show, and its row is as
-// tall as its tallest cell (more in tst_directory_grid_rows.qml). The View
-// options preview draws the same cells at the same size. Fails when a
-// caption line, the count, the cut name or the glyph size is missing or
-// wrong, when a cell keeps an empty line or its row's height is not its
-// tallest cell's, or when the preview lays a cell out differently.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -55,7 +42,6 @@ ApplicationWindow {
         expect(JSON.stringify(a) === JSON.stringify(b), what + ": " + JSON.stringify(a) + " != " + JSON.stringify(b))
     }
 
-    // Pumps events until `done()` holds, ten seconds at most.
     function waitFor(done, what) {
         for (var i = 0; i < 200 && !done(); ++i)
             tools.pump(50)
@@ -81,9 +67,7 @@ ApplicationWindow {
         return null
     }
 
-    // The cells of the grid on screen, which are those that hold captions,
-    // in the grid's rows. Laid out by hand: headless, no render loop
-    // polishes the view.
+    // No render loop headless: lay out by hand.
     function cells(view) {
         var out = []
         view.flickable.forceLayout()
@@ -172,7 +156,6 @@ ApplicationWindow {
         same(empty.captions, [qsTrId("lautta-dir-grid-items", 0)], "an empty folder has a count too")
     }
 
-    // Hidden files count when the view shows them.
     function checkHiddenCount(view) {
         var folder = cellNamed(view, "Inner")
         App.setSetting("show_hidden", JSON.stringify(true))
@@ -181,7 +164,6 @@ ApplicationWindow {
         waitFor(function () { return folder.items === 3 }, "the count without it")
     }
 
-    // A folder of more than the counted entries says "More than".
     function checkHugeFolder() {
         var huge = "lautta://user-downloads/GridCaptionsHuge/"
         downloads.createFolder("GridCaptionsHuge")
@@ -199,7 +181,6 @@ ApplicationWindow {
         pageStack.pop(null, PageStackAction.Immediate)
     }
 
-    // The icon of a cell: the item that knows whether its thumbnail failed.
     function iconIn(item) {
         if (!item)
             return null
@@ -214,10 +195,6 @@ ApplicationWindow {
         return null
     }
 
-    // Under a tile the name and the lines stay whether a PDF's
-    // first page covers the tile or the page could not be made (encrypted).
-    // The PDFs are in an archive, where the app draws them: the system
-    // thumbnailer, which draws local ones, draws nothing here (no scene graph).
     function checkPdfThumbnails() {
         var pdfs = "lautta://user-downloads/GridCaptionsPdf/"
         downloads.createFolder("GridCaptionsPdf")
@@ -249,7 +226,6 @@ ApplicationWindow {
         App.setSetting("thumbnails_local", JSON.stringify(false))
     }
 
-    // A file added to the folder changes its modified time: the cell counts again.
     function checkChangedFolder(view) {
         var folder = cellNamed(view, "Inner")
         install("c.txt", base + "Inner/")
@@ -258,9 +234,6 @@ ApplicationWindow {
         same(folder.captions, [qsTrId("lautta-dir-grid-items", 4)], "and says so")
     }
 
-    // The screen of this check is 240 pixels wide and its font a box per
-    // letter, too small for a name to show: the cut is checked in a caption
-    // as wide as sixteen of the widest letter.
     function checkNames() {
         var caption = captionComponent.createObject(window.contentItem,
                                                     { "width": 16 * letter.advanceWidth("m"), "metrics": metrics })
@@ -301,9 +274,6 @@ ApplicationWindow {
                    cell.itemName + ": as tall as its row, which is as tall as its tallest cell: "
                    + [cell.height, row.height, tallest])
             expect(cell.height > grid.cellWidth, "cells are taller than wide: " + cell.height + " " + grid.cellWidth)
-            // The last line ends close to the cell's own end, which is the
-            // height of the tile and the lines it has with the space around
-            // them: no line is cut, no room wasted.
             var last = find(cell, "gridCaption" + (cell.captions.length - 1))
             var room = cell.implicitHeight - last.mapToItem(cell, 0, last.height).y
             expect(Math.abs(room - (cell.gap + Theme.paddingSmall / 2)) <= 1,
@@ -311,7 +281,6 @@ ApplicationWindow {
         }
     }
 
-    // A folder that is not on this device shows its modified time, not a count.
     function checkArchive() {
         Operations.compress(JSON.stringify([base + "Inner"]), "lautta://user-downloads/", "grid-captions", "zip")
         waitFor(function () { return window.archiveRoot.length > 0 }, "the archive")
@@ -354,7 +323,6 @@ ApplicationWindow {
         same(DirFormat.gridCaptions(true, -1, -1, false, -1, false), [], "and none if that is unknown")
     }
 
-    // The preview of View options has the cell size and the lines of the folder.
     function checkPreview(view) {
         var preview = previewComponent.createObject(window.contentItem,
                                                     { "screenWidth": view.width, "screenHeight": view.height })

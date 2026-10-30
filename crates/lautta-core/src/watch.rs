@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! inotify watching with debouncing (SPEC BRW-6).
+//! inotify watching with debouncing.
 //!
-//! [`DirWatcher`] watches a set of local folders (not recursively) while
-//! they are open in the browser and sends one [`WatchEvent::Changed`] per
-//! folder after changes have been quiet for the debounce time.
+//! [`DirWatcher`] watches a set of local folders (not recursively) while open in the browser and
+//! sends one [`WatchEvent::Changed`] per folder after changes were quiet for the debounce time.
 //!
-//! Raw `notify` events are handled on a small worker thread that owns the
-//! debounce state; consumers get events through an unbounded tokio channel.
-//! The watcher stops its thread when dropped.
+//! Raw `notify` events are handled on a small worker thread owning the debounce state; consumers
+//! get events through an unbounded tokio channel. The thread stops when the watcher is dropped.
 
 use crate::error::{Error, ErrorKind, Result};
 use notify::event::{AccessKind, AccessMode};
@@ -21,18 +19,15 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
-/// Quiet time before a folder change is reported.
 pub const DIR_DEBOUNCE: Duration = Duration::from_millis(250);
 /// How often the worker checks whether it should stop.
 const STOP_POLL: Duration = Duration::from_millis(100);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WatchEvent {
-    /// Something in this folder was created, removed, renamed or modified.
     Changed(PathBuf),
 }
 
-/// Collapses bursts: a key is due once no new event for it arrived for `delay`.
 pub(crate) struct Debouncer<K> {
     delay: Duration,
     pending: HashMap<K, Instant>,
@@ -50,7 +45,6 @@ impl<K: Eq + Hash + Clone> Debouncer<K> {
         self.pending.insert(key, now);
     }
 
-    /// Removes and returns the keys whose quiet period has passed.
     pub(crate) fn take_due(&mut self, now: Instant) -> Vec<K> {
         let delay = self.delay;
         let due: Vec<K> = self
@@ -65,7 +59,6 @@ impl<K: Eq + Hash + Clone> Debouncer<K> {
         due
     }
 
-    /// When the next key becomes due.
     pub(crate) fn next_deadline(&self) -> Option<Instant> {
         self.pending.values().map(|last| *last + self.delay).min()
     }
@@ -75,7 +68,6 @@ impl<K: Eq + Hash + Clone> Debouncer<K> {
     }
 }
 
-/// Tells the worker thread to stop when its owner is dropped.
 pub(crate) struct StopOnDrop(pub(crate) Arc<AtomicBool>);
 
 impl Drop for StopOnDrop {
@@ -93,7 +85,6 @@ pub(crate) fn map_notify_error(e: notify::Error) -> Error {
     }
 }
 
-/// A `notify` watcher whose raw events arrive on a std channel.
 pub(crate) fn raw_watcher() -> Result<(RecommendedWatcher, mpsc::Receiver<notify::Result<Event>>)> {
     let (tx, rx) = mpsc::channel();
     let watcher = notify::recommended_watcher(move |res| {
@@ -111,10 +102,8 @@ pub(crate) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     }
 }
 
-/// Runs the debounce loop on its own thread until `stop` is set, the raw
-/// channel closes, or `emit` returns false (the consumer is gone).
-/// `classify` maps a raw event to the keys it touches; `emit` delivers a
-/// due key.
+/// Stops when `stop` is set, the raw channel closes, or `emit` returns false (consumer gone).
+/// `classify` maps a raw event to the keys it touches; `emit` delivers a due key.
 pub(crate) fn spawn_worker<K, C, E>(
     raw: mpsc::Receiver<notify::Result<Event>>,
     delay: Duration,
@@ -159,7 +148,6 @@ pub(crate) fn spawn_worker<K, C, E>(
     }
 }
 
-/// Events that change what a folder listing shows.
 fn changes_listing(kind: &EventKind) -> bool {
     match kind {
         EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(_) | EventKind::Any => true,
@@ -168,7 +156,6 @@ fn changes_listing(kind: &EventKind) -> bool {
     }
 }
 
-/// Watches folders for changes (BRW-6).
 pub struct DirWatcher {
     watcher: Mutex<RecommendedWatcher>,
     watched: Arc<Mutex<HashSet<PathBuf>>>,
@@ -176,8 +163,7 @@ pub struct DirWatcher {
 }
 
 impl DirWatcher {
-    /// Creates a watcher; changes arrive on the returned receiver after
-    /// `debounce` of quiet.
+    /// Changes arrive on the returned receiver after `debounce` of quiet.
     pub fn new(debounce: Duration) -> Result<(DirWatcher, UnboundedReceiver<WatchEvent>)> {
         let (watcher, raw) = raw_watcher()?;
         let (tx, rx) = unbounded_channel();
@@ -215,7 +201,6 @@ impl DirWatcher {
         Ok(())
     }
 
-    /// Stops watching `dir`; unknown folders are ignored.
     pub fn unwatch(&self, dir: &Path) -> Result<()> {
         if !lock(&self.watched).remove(dir) {
             return Ok(());
@@ -234,7 +219,6 @@ impl DirWatcher {
     }
 }
 
-/// Which watched folders a raw event concerns.
 fn dirs_touched(watched: &HashSet<PathBuf>, ev: &Event) -> Vec<PathBuf> {
     if ev.need_rescan() {
         // The kernel queue overflowed: assume everything changed.
@@ -279,8 +263,6 @@ mod tests {
             .is_err()
     }
 
-    // ---- debouncer (deterministic) ---------------------------------------
-
     #[test]
     fn debouncer_waits_for_quiet_and_restarts_on_new_events() {
         let t0 = Instant::now();
@@ -312,8 +294,6 @@ mod tests {
         assert_eq!(d.next_deadline(), Some(t0 + Duration::from_millis(160)));
         assert_eq!(d.take_due(t0 + Duration::from_millis(160)), [2]);
     }
-
-    // ---- classification (deterministic) ----------------------------------
 
     fn ev(kind: EventKind, paths: &[&str]) -> Event {
         let mut e = Event::new(kind);
@@ -349,18 +329,15 @@ mod tests {
             )),
             [PathBuf::from("/w/a")]
         );
-        // the watched folder itself (deleted or renamed)
         assert_eq!(
             touched(ev(EventKind::Remove(RemoveKind::Folder), &["/w/a"])),
             [PathBuf::from("/w/a")]
         );
-        // moves between two watched folders touch both, once each
         let both = touched(ev(
             EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
             &["/w/a/x", "/w/b/x"],
         ));
         assert_eq!(both.len(), 2);
-        // not watched, grandchildren, reads and opens
         assert!(touched(ev(EventKind::Create(CreateKind::File), &["/w/c/x"])).is_empty());
         assert!(touched(ev(EventKind::Create(CreateKind::File), &["/w/a/sub/x"])).is_empty());
         assert!(touched(ev(EventKind::Access(AccessKind::Read), &["/w/a/x"])).is_empty());
@@ -379,8 +356,6 @@ mod tests {
         got.sort();
         assert_eq!(got, [PathBuf::from("/w/a"), PathBuf::from("/w/b")]);
     }
-
-    // ---- real inotify ----------------------------------------------------
 
     #[tokio::test]
     async fn dir_watcher_reports_a_burst_once() {

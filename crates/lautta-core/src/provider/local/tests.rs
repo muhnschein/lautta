@@ -54,8 +54,6 @@ fn read_only_provider(root: &Path) -> LocalProvider {
     LocalProvider::new(root.to_path_buf()).with_capabilities(caps)
 }
 
-// ---- capabilities -------------------------------------------------------
-
 #[test]
 fn capabilities_come_from_the_filesystem() {
     let (_d, p) = setup();
@@ -84,12 +82,9 @@ fn real_path_stays_under_root() {
     let (d, p) = setup();
     assert_eq!(p.real_path(&VPath::root()), d.path());
     assert_eq!(p.real_path(&vp("a/b")), d.path().join("a/b"));
-    // `..` never survives VPath parsing, so there is no way to build an escape
     assert!(VPath::parse(b"../etc/passwd").is_err());
     assert_eq!(p.real_path(&vp("a/./b//c")), d.path().join("a/b/c"));
 }
-
-// ---- listing ------------------------------------------------------------
 
 #[tokio::test]
 async fn listing_is_batched_to_256() {
@@ -222,7 +217,6 @@ async fn listing_waits_for_a_shared_permit() {
         .unwrap();
     assert_eq!(batch.unwrap().len(), 1);
     task.await.unwrap().unwrap();
-    // the permit is returned when the listing is done
     assert_eq!(sem.available_permits(), IO_PERMITS);
 }
 
@@ -264,8 +258,6 @@ async fn owner_names_come_from_the_injected_tables() {
     assert_eq!(e.group.as_deref(), Some("testers"));
 }
 
-// ---- stat ---------------------------------------------------------------
-
 #[tokio::test]
 async fn stat_follow_and_nofollow() {
     let (d, p) = setup();
@@ -300,8 +292,6 @@ async fn read_link_returns_raw_bytes() {
         ErrorKind::NotFound
     );
 }
-
-// ---- create and remove --------------------------------------------------
 
 #[tokio::test]
 async fn make_dir_exclusive_and_idempotent() {
@@ -411,14 +401,11 @@ async fn read_only_provider_refuses_every_write() {
     ro(p.server_copy(&vp("f"), &vp("c"), CopyOptions::default()).await);
     assert!(d.path().join("f").exists());
     assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 1);
-    // reading is still fine
     assert_eq!(
         p.stat(&vp("f"), false, Lane::Interactive).await.unwrap().size,
         Some(1)
     );
 }
-
-// ---- rename -------------------------------------------------------------
 
 #[tokio::test]
 async fn rename_no_replace_refuses_collision_and_keeps_both() {
@@ -563,7 +550,6 @@ fn case_rename_restores_the_name_when_the_second_step_fails() {
     let d = tempfile::tempdir().unwrap();
     let from = d.path().join("a.txt");
     std::fs::write(&from, "x").unwrap();
-    // A destination in a folder that does not exist makes step two fail.
     let to = d.path().join("missing/A.TXT");
     let r = rename_case_only(&from, &to, RenameMode::NoReplace);
     assert!(r.is_err());
@@ -584,7 +570,6 @@ fn noreplace_fallback_behaves_like_the_syscall() {
     rename_noreplace_fallback(&a, &c).unwrap();
     assert!(!a.exists());
     assert_eq!(std::fs::read(&c).unwrap(), b"A");
-    // directories take the exists-check route
     let (x, y) = (d.path().join("x"), d.path().join("y"));
     std::fs::create_dir(&x).unwrap();
     std::fs::create_dir(&y).unwrap();
@@ -595,7 +580,6 @@ fn noreplace_fallback_behaves_like_the_syscall() {
     let z = d.path().join("z");
     rename_noreplace_fallback(&x, &z).unwrap();
     assert!(z.is_dir() && !x.exists());
-    // symlinks are moved as links
     symlink("target", d.path().join("l")).unwrap();
     rename_noreplace_fallback(&d.path().join("l"), &d.path().join("l2")).unwrap();
     assert_eq!(
@@ -609,8 +593,6 @@ fn noreplace_fallback_behaves_like_the_syscall() {
         ErrorKind::NotFound
     );
 }
-
-// ---- attributes and links -----------------------------------------------
 
 #[tokio::test]
 async fn set_attributes_changes_mode_and_mtime() {
@@ -737,8 +719,6 @@ async fn fat_has_no_links() {
     assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 1);
 }
 
-// ---- reading ------------------------------------------------------------
-
 #[tokio::test]
 async fn open_read_gives_random_access() {
     let (d, p) = setup();
@@ -769,8 +749,6 @@ async fn open_read_errors() {
         ErrorKind::NotFound
     );
 }
-
-// ---- upload / download --------------------------------------------------
 
 fn big(len: usize) -> Vec<u8> {
     (0..len).map(|i| (i % 249) as u8).collect()
@@ -855,7 +833,6 @@ async fn upload_resume_appends_after_the_partial_prefix() {
     let (d, p) = setup();
     let data = big(10_000);
     std::fs::write(d.path().join("src"), &data).unwrap();
-    // the partial file has a prefix plus junk after the resume point
     let mut partial = data[..4000].to_vec();
     partial.extend_from_slice(b"JUNKJUNK");
     std::fs::write(d.path().join("dst"), &partial).unwrap();
@@ -971,8 +948,6 @@ async fn download_into_a_full_device_reports_no_space() {
         .unwrap_err();
     assert_eq!(e.kind, ErrorKind::NoSpace);
 }
-
-// ---- server copy --------------------------------------------------------
 
 #[tokio::test]
 async fn server_copy_copies_content_mode_and_mtime() {
@@ -1096,8 +1071,6 @@ async fn server_copy_refuses_special_files() {
     assert_eq!(e.kind, ErrorKind::Unsupported);
 }
 
-// ---- checksum and space -------------------------------------------------
-
 #[tokio::test]
 async fn checksums_match_known_vectors() {
     let (d, p) = setup();
@@ -1165,9 +1138,8 @@ async fn space_reports_free_and_total() {
 
 #[tokio::test]
 async fn caller_file_offsets_are_ignored() {
-    // netvfs XB-11: regular files are read and written at explicit offsets,
-    // so an fd left at its end (as after a download into it) still uploads
-    // the whole file, and a download fills a reused fd from the start.
+    // Regular files are read and written at explicit offsets: an fd left at its end (after a
+    // download) still uploads the whole file, and a download fills a reused fd from the start.
     use std::io::{Read, Seek, SeekFrom, Write};
     let (d, p) = setup();
     let mut scratch = tempfile::tempfile().unwrap();

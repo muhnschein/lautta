@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Where the app keeps things (SPEC §3.3, DAT-1, PRV-6).
+//! Where the app keeps things.
 
 use std::path::{Path, PathBuf};
 
 pub const ORGANIZATION: &str = "org.netvfs";
 pub const APPLICATION: &str = "lautta";
 
-/// The app's folders, derived from `$HOME`. Tests point `home` at a temp dir.
+/// Tests point `home` at a temp dir.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppPaths {
     pub home: PathBuf,
@@ -25,7 +25,6 @@ impl AppPaths {
         )
     }
 
-    /// `~/.local/share/org.netvfs/lautta`
     pub fn data_dir(&self) -> PathBuf {
         self.home
             .join(".local/share")
@@ -33,7 +32,6 @@ impl AppPaths {
             .join(APPLICATION)
     }
 
-    /// `~/.cache/org.netvfs/lautta`
     pub fn cache_dir(&self) -> PathBuf {
         self.home.join(".cache").join(ORGANIZATION).join(APPLICATION)
     }
@@ -46,7 +44,7 @@ impl AppPaths {
         self.data_dir().join("trash")
     }
 
-    /// The bridge socket (NVB-1). Owned by netvfs; the app never creates it.
+    /// Owned by netvfs; the app never creates it.
     pub fn bridge_socket(&self) -> PathBuf {
         self.data_dir().join("netvfs/bridge.sock")
     }
@@ -59,12 +57,10 @@ impl AppPaths {
         self.cache_dir().join("dircache")
     }
 
-    /// Remote files opened in other apps (PRV-6).
     pub fn opened_dir(&self) -> PathBuf {
         self.home.join("Downloads/Lautta/Opened")
     }
 
-    /// Removable media mount root (LOC-3).
     pub fn media_root(&self, user: &str) -> PathBuf {
         Path::new("/run/media").join(user)
     }

@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The app in the sandbox's file system layout (SPEC §3.3): Sailjail mounts
-//! a tmpfs on `$HOME` and bind-mounts every permitted folder and the app data
-//! folder onto it, each on its own, so no folder is on `$HOME`'s device and
-//! `rename(2)` between any two of them fails with `EXDEV`. Without root,
-//! two file systems (the temp folder and `/dev/shm`) joined by symlinks
-//! stand in for the bind mounts; hosts without a separate `/dev/shm` skip
-//! those tests. Also: removable volumes that come and go while the app
-//! runs (LOC-3).
+//! Sailjail layout: every permitted folder and app data folder is its own bind mount, so
+//! `rename(2)` between them fails with `EXDEV`. Without root, two file systems (temp folder and
+//! `/dev/shm`) joined by symlinks stand in; hosts without a separate `/dev/shm` skip those tests.
 
 use lautta_core::app::Core;
 use lautta_core::app_browse::Row;
@@ -36,7 +31,6 @@ async fn open(home: &Path) -> Arc<Core> {
     Core::open_with(paths, registry).await.unwrap()
 }
 
-/// A folder on another file system than the temp folder.
 fn other_fs() -> Option<tempfile::TempDir> {
     let shm = tempfile::tempdir_in("/dev/shm").ok()?;
     let probe = tempfile::tempdir().ok()?;
@@ -51,8 +45,6 @@ struct Sandbox {
     core: Arc<Core>,
 }
 
-/// `$HOME` with the app data folder and `Downloads` on its file system and
-/// `Documents` on another one, as a bind mount would be.
 async fn sandbox() -> Option<Sandbox> {
     let shm = other_fs()?;
     let disk = tempfile::tempdir().unwrap();
@@ -84,9 +76,6 @@ async fn eventually(what: &str, cond: impl Fn() -> bool) {
     panic!("timed out waiting for {what}");
 }
 
-// ------------------------------------------------------------ the Trash
-
-/// What a delete must keep of a folder: content, modes, times, links.
 fn project(dir: &Path) -> SystemTime {
     write(&dir.join("thesis.odt"), b"draft");
     std::fs::set_permissions(dir.join("thesis.odt"), std::fs::Permissions::from_mode(0o640)).unwrap();
@@ -126,7 +115,6 @@ async fn deletes_go_to_the_app_data_trash_across_mounts() {
     assert_eq!(items[0].dir, AppPaths::new(&s.home).trash_dir());
     assert_project(&items[0].stored_path(), when);
 
-    // Nothing is left in the folder: no copy.
     assert!(s.core.list(&docs, |_| {}).await.unwrap().is_empty());
     assert_eq!(std::fs::read_dir(s.home.join("Documents")).unwrap().count(), 0);
 
@@ -145,7 +133,6 @@ async fn deletes_go_to_the_app_data_trash_across_mounts() {
 async fn deletes_are_kept_when_the_app_data_folder_is_a_mount_of_its_own() {
     let Some(shm) = other_fs() else { return };
     let disk = tempfile::tempdir().unwrap();
-    // Documents on $HOME's file system, the app data folder elsewhere.
     let home = shm.path().join("home");
     std::fs::create_dir_all(home.join("Documents")).unwrap();
     symlink(disk.path(), home.join(".local")).unwrap();
@@ -188,7 +175,6 @@ async fn restore_purge_and_empty_cover_every_item() {
     for item in ["lautta://user-documents/a.txt", "lautta://user-downloads/b.txt"] {
         assert!(s.core.delete(&[uri(item)]).await.unwrap().is_none(), "{item}");
     }
-    // Trashed by a version before schema 4, into the app data folder.
     let trash_dir = AppPaths::new(&s.home).trash_dir();
     write(&trash_dir.join("old-1"), b"ccc");
     s.core
@@ -212,14 +198,12 @@ async fn restore_purge_and_empty_cover_every_item() {
     listed.sort();
     assert_eq!(listed, ["a.txt", "b.txt", "c.txt"]);
 
-    // The old item goes back across mounts.
     let c = s.core.trash.list().unwrap();
     let c = c.iter().find(|i| i.stored_name == "old-1").unwrap();
     s.core.restore(c.id).await.unwrap();
     assert_eq!(std::fs::read(s.home.join("Documents/c.txt")).unwrap(), b"ccc");
     assert!(!trash_dir.join("old-1").exists());
 
-    // a.txt expired; b.txt is emptied away.
     let a = s.core.trash.list().unwrap();
     let a = a
         .iter()
@@ -278,8 +262,6 @@ async fn clear_app_data_removes_the_trash_and_nothing_else_in_the_folders() {
     );
 }
 
-// ------------------------------------------------------------ volumes
-
 struct Plain {
     _dir: tempfile::TempDir,
     media: PathBuf,
@@ -314,7 +296,6 @@ async fn a_volume_mounted_while_the_app_runs_appears_and_goes() {
 #[tokio::test]
 async fn browse_finds_volumes_the_watch_has_not_seen_yet() {
     let p = plain().await;
-    // Sooner than the watch's debounce: only Browse's own rescan can see it.
     std::fs::create_dir(p.media.join("SD")).unwrap();
     let rows = p.core.browse_rows().await;
     assert!(row(&rows, "volumes", "volume", "SD").is_some());
