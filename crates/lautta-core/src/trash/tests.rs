@@ -571,7 +571,7 @@ fn purge_removes_only_expired_items() {
     let old = e.trash(&e.put("old", "x"), "old").unwrap();
     let old2 = e.sandboxed().trash(&e.put("old2", "x"), &uri("old2")).unwrap();
     let borderline = e.trash(&e.put("borderline", "x"), "borderline").unwrap();
-    e.trash(&e.put("fresh", "x"), "fresh").unwrap();
+    let fresh = e.trash(&e.put("fresh", "x"), "fresh").unwrap();
     for id in [old.id, old2.id] {
         age(&e, id, 31);
     }
@@ -591,11 +591,11 @@ fn purge_removes_only_expired_items() {
     assert!(borderline.stored_path().exists());
     assert_eq!(e.trash.purge_older_than(7).unwrap(), 1);
     assert_eq!(
-        e.trash.purge_older_than(0).unwrap(),
+        e.trash.purge_before(fresh.trashed_at).unwrap(),
         0,
-        "items from this second are not older"
+        "an item from the cutoff second is not older"
     );
-    assert_eq!(e.trash.purge_before(now_secs() + 10).unwrap(), 1);
+    assert_eq!(e.trash.purge_before(fresh.trashed_at + 1).unwrap(), 1);
 }
 
 #[test]
