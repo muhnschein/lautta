@@ -147,7 +147,7 @@ async fn zip_is_readable_by_the_zip_crate() {
     assert_eq!(stats.bytes, 17 + 13 + 700_000 + 7);
     let mut z = zip::ZipArchive::new(io::Cursor::new(bytes)).unwrap();
     let names: Vec<String> = (0..z.len())
-        .map(|i| z.by_index(i).unwrap().name().to_owned())
+        .map(|i| z.by_index(i).unwrap().name().unwrap().into_owned())
         .collect();
     let mut want: Vec<String> = EXPECTED_ORDER.iter().map(|n| (*n).to_owned()).collect();
     for n in ["proj", "proj/data", "proj/empty", "proj/src"] {
@@ -296,7 +296,7 @@ async fn single_files_and_multiple_locations() {
     let mut z = zip::ZipArchive::new(io::Cursor::new(sink.bytes())).unwrap();
     // Archive order (by index); `file_names()` iterates a hash map.
     let names: Vec<String> = (0..z.len())
-        .map(|i| z.by_index(i).unwrap().name().to_owned())
+        .map(|i| z.by_index(i).unwrap().name().unwrap().into_owned())
         .collect();
     assert_eq!(names, ["single.txt", "docs/", "docs/note.md"]);
     let mut out = String::new();

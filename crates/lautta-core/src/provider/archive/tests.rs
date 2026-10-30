@@ -25,7 +25,7 @@ fn noise(len: usize, mut seed: u64) -> Vec<u8> {
 
 fn zip_bytes(files: &[(&str, &[u8])], method: zip::CompressionMethod) -> Vec<u8> {
     let mut w = zip::ZipWriter::new(Cursor::new(Vec::new()));
-    let opts = zip::write::FileOptions::default()
+    let opts = zip::write::SimpleFileOptions::default()
         .compression_method(method)
         .unix_permissions(0o640);
     for (name, data) in files {
