@@ -334,7 +334,7 @@ async fn archives_open_as_locations() {
     {
         let file = std::fs::File::create(&path).unwrap();
         let mut zip = zip::ZipWriter::new(file);
-        zip.start_file("inner/readme.txt", zip::write::FileOptions::default())
+        zip.start_file("inner/readme.txt", zip::write::SimpleFileOptions::default())
             .unwrap();
         std::io::Write::write_all(&mut zip, b"hello").unwrap();
         zip.finish().unwrap();

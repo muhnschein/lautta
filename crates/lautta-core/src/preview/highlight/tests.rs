@@ -760,17 +760,23 @@ fn the_model_of_qt_catches_unescaped_text() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_job_colours_off_the_runtime() {
-    let job = start(b"x.sh".to_vec(), BASH.to_owned());
+    // Budget that cannot run out: the coverage build on a busy runner can
+    // need more than LIMITS' 3 s, and `finish` would then race GRACE.
+    let limits = Limits {
+        budget: Duration::from_secs(600),
+        ..LIMITS
+    };
+    let job = start_with(b"x.sh".to_vec(), BASH.to_owned(), limits, GRACE);
     let doc = job.wait(Duration::from_secs(600)).await;
     let doc = doc.unwrap().unwrap();
     assert_eq!(doc.syntax(), Some("Bourne Again Shell (bash)"));
     assert_eq!(doc.coloured_lines(), doc.line_count());
     // A job that is not done yet comes back, and finishes later.
-    let job = start(b"x.md".to_vec(), MARKDOWN.repeat(200));
+    let job = start_with(b"x.md".to_vec(), MARKDOWN.repeat(20), limits, GRACE);
     let job = job.wait(Duration::ZERO).await.unwrap_err();
     let doc = job.finish().await.unwrap();
     assert_eq!(doc.syntax(), Some("Markdown"));
-    assert!(doc.coloured_lines() > 0);
+    assert_eq!(doc.coloured_lines(), doc.line_count());
 }
 
 #[test]
