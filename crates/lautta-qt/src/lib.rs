@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Qt glue (SPEC ARC-3): exposes `lautta-core` to QML through qmetaobject
-//! models and QObject facades. No business logic lives here.
-// The C++ blocks are large for the `cpp!` macro expansion.
+//! Qt glue: exposes `lautta-core` to QML through qmetaobject models and QObject facades. No
+//! business logic.
+// C++ blocks are large for the `cpp!` macro expansion.
 #![recursion_limit = "1024"]
-// QML-facing names (properties, methods, signals) follow QML's camelCase.
 #![allow(non_snake_case)]
-// The qmetaobject derive macros expand to transmutes clippy flags.
+// qmetaobject derives expand to transmutes clippy flags.
 #![allow(clippy::useless_transmute)]
 
 pub mod app;
@@ -42,10 +41,9 @@ cpp! {{
     #include <sailfishapp.h>
 #endif
 
-    // Installs the catalogues of `directory`: engineering English first, then
-    // the user's language. The translator installed last is asked first, so a
-    // language that lacks a message falls back to engineering English, which
-    // has the English plural forms (UI-7). False when that catalogue is missing.
+    // Installs `directory`'s catalogues: engineering English first, then user's language. Last
+    // installed is asked first, so a missing message falls back to English (has plural forms).
+    // False when the catalogue is missing.
     static bool lauttaInstallTranslations(QCoreApplication *app, const QString &directory)
     {
         QTranslator *english = new QTranslator(app);
@@ -58,11 +56,9 @@ cpp! {{
         return found;
     }
 
-    // QML check mode (SPEC TST-6, tests/qml): compiles and instantiates QML
-    // documents with this binary's engine, so the real Silica modules and the
-    // real Lautta types are used. Any error, and any warning or console.error
-    // naming a checked document, fails. `-T <directory>` installs the
-    // catalogues of that directory first (tests/translations); without it
+    // QML check mode: compiles and instantiates QML documents with this binary's engine (real
+    // Silica, real Lautta types). Any error, and any warning or console.error naming a checked
+    // document, fails. `-T <directory>` installs that directory's catalogues first; without it
     // qsTrId gives back the id.
     static QStringList *lauttaCheckProblems = nullptr;
     static QString lauttaCheckFile;
@@ -122,8 +118,7 @@ cpp! {{
             std::unique_ptr<QObject> object(component.isReady() ? component.create() : nullptr);
             for (int spin = 0; spin < 10; ++spin)
                 QCoreApplication::processEvents();
-            // A scenario test keeps `scenarioRunning` true until its steps
-            // are done; it fails by logging an error.
+            // `scenarioRunning` stays true until the steps are done; failure = logged error.
             if (object && object->property("scenarioRunning").isValid()) {
                 QElapsedTimer clock;
                 clock.start();
@@ -151,10 +146,8 @@ cpp! {{
     }
 }}
 
-/// Starts the application: Qt, the QML engine and the main page. `argv`
-/// comes from the exported C `main` (SPEC RS-3). Panics abort the process,
-/// apart from PDF drawing's (RS-4); tests that start the QML engine with
-/// [`qml_check`] keep the default hook.
+/// `argv` from the exported C `main`. Panics abort, apart from PDF drawing's; tests starting the
+/// QML engine via [`qml_check`] keep the default hook.
 ///
 /// # Safety
 /// `argc`/`argv` must be the process arguments as passed to `main`.
@@ -188,11 +181,9 @@ pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
         })
 }
 
-/// QML module URI of the app's types.
 pub const QML_URI: &str = "Lautta";
 
-/// Opens the core (SPEC §5) and registers the QML types. A failure to open
-/// the core is shown by the start page through `App.startError`.
+/// Failure to open core is shown by the start page via `App.startError`.
 fn start() {
     let paths = lautta_core::paths::AppPaths::from_env();
     if let Err(e) = runtime::init(paths) {
@@ -201,7 +192,6 @@ fn start() {
     register_types();
 }
 
-/// Registers every QML type under `Lautta 1.0` (doc/QML-API.md).
 pub fn register_types() {
     qmetaobject::qml_register_singleton_type::<app::App>(&qml_uri(), 1, 0, &cstr("App"));
     browse::register();
@@ -212,20 +202,17 @@ pub fn register_types() {
     search::register();
 }
 
-/// `QML_URI` as a C string for the registration functions.
 pub fn qml_uri() -> std::ffi::CString {
     cstr(QML_URI)
 }
 
-/// A C string from a type name literal (no interior NUL in our names).
+/// No interior NUL in our names.
 pub fn cstr(s: &str) -> std::ffi::CString {
     std::ffi::CString::new(s).unwrap_or_default()
 }
 
-/// Runs the QML check (see `--qml-check`) in this process with the given
-/// arguments (`-I <path>`, `-T <catalogue folder>` and files). Opens the core
-/// from `$HOME` and registers the types first, like the app does. Used by the
-/// host QML tests.
+/// `-I <path>`, `-T <catalogue folder>` and files. Opens core from `$HOME` and registers types like
+/// the app. For host QML tests.
 pub fn qml_check(args: &[String]) -> c_int {
     start();
     let mut owned: Vec<std::ffi::CString> = vec![cstr("harbour-lautta"), cstr("--qml-check")];

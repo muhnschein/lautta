@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! File operations (SPEC §10): planning, conflicts, names, bulk rename.
-//! The types here are shared by the planner and the transfer engine.
+//! File operations: planning, conflicts, names, bulk rename. Types shared by the planner and the
+//! transfer engine.
 
 pub mod conflict;
 pub mod names;
@@ -10,7 +10,6 @@ use crate::entry::Kind;
 use crate::uri::Uri;
 use serde::{Deserialize, Serialize};
 
-/// A user-level operation (SPEC §4 glossary).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum OperationKind {
     Copy,
@@ -20,7 +19,7 @@ pub enum OperationKind {
     Extract,
 }
 
-/// Conflict resolution choices (OPS-2). The default is never `Replace`.
+/// The default is never `Replace`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ConflictChoice {
     Replace,
@@ -31,7 +30,6 @@ pub enum ConflictChoice {
     Resume,
 }
 
-/// What exists at the destination when a step would write there.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Conflict {
     pub dst_is_dir: bool,
@@ -40,13 +38,10 @@ pub struct Conflict {
     pub dst_size: Option<u64>,
     pub src_mtime_ms: Option<i64>,
     pub dst_mtime_ms: Option<i64>,
-    /// True when the destination is a resumable prefix (OPS-2 *Resume*).
     pub resumable: bool,
-    /// Choices that make sense for this conflict, in display order.
     pub choices: Vec<ConflictChoice>,
 }
 
-/// One step of a plan: a file, a folder to create, a link, or a delete.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlanItem {
     #[serde(with = "uri_serde")]
@@ -58,10 +53,8 @@ pub struct PlanItem {
     pub size: Option<u64>,
     pub mtime_ms: Option<i64>,
     pub mode: Option<u32>,
-    /// Symlink target bytes when the link is copied as a link (OPS-6).
     pub link_target: Option<Vec<u8>>,
     pub conflict: Option<Conflict>,
-    /// A safe destination name proposed for names invalid there (OPS-7).
     pub proposed_name: Option<Vec<u8>>,
     pub resolution: Option<ConflictChoice>,
 }
@@ -75,7 +68,6 @@ pub struct PlanTotals {
     pub renamed: u64,
 }
 
-/// The result of planning (OPS-1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Plan {
     pub kind: OperationKind,
@@ -83,7 +75,7 @@ pub struct Plan {
     pub destination: Uri,
     pub items: Vec<PlanItem>,
     pub totals: PlanTotals,
-    /// OPS-1: over 1 000 items or 1 GB (configurable) a summary sheet is shown.
+    /// Over 1 000 items or 1 GB (configurable) a summary sheet is shown.
     pub needs_summary: bool,
 }
 

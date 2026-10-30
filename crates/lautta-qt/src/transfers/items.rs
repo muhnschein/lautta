@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `TransferItemsModel { transferId }`: the items of one transfer and its
-//! summary for the details page.
 
 use super::events;
 use crate::json::to_json;
@@ -95,8 +93,7 @@ pub struct TransferItemsModel {
     transferIdChanged: qt_signal!(),
     count: qt_property!(i32; NOTIFY countChanged),
     countChanged: qt_signal!(),
-    /// Summary of the transfer as JSON (see `summary_json`); empty when the
-    /// transfer is gone.
+    /// Empty when the transfer is gone.
     summaryJson: qt_property!(QString; NOTIFY summaryChanged),
     summaryChanged: qt_signal!(),
     refresh: qt_method!(fn(&mut self)),
@@ -217,7 +214,6 @@ impl TransferItemsModel {
     }
 }
 
-/// The header of the details page: names, counters, live rate, options.
 pub(super) fn summary_json(core: &lautta_core::app::Core, id: i64, book: &ProgressBook) -> Option<String> {
     let s = core.engine.get(id)?;
     let first = core.engine.first_item(id);

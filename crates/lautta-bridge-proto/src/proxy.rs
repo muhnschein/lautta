@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! zbus proxy for `org.netvfs.Bridge1` at `/org/netvfs/Bridge` (XB-8..XB-10).
-//! The interface text is `tests/bridge-contract/org.netvfs.Bridge1.xml`.
+//! Interface text: `tests/bridge-contract/org.netvfs.Bridge1.xml`.
 
 use crate::wire::{Opts, WireCapabilities, WireDrive, WireEntry, WireLocation, WireNearby, WireWalkItem};
 use zbus::zvariant::{Fd, OwnedValue};
@@ -8,21 +7,19 @@ use zbus::zvariant::{Fd, OwnedValue};
 #[zbus::proxy(
     interface = "org.netvfs.Bridge1",
     default_path = "/org/netvfs/Bridge",
-    // A peer-to-peer connection has no bus to route by name; zbus still wants a
-    // destination and the bridge ignores it.
+    // p2p has no bus to route by name; zbus wants a destination, bridge ignores it.
     default_service = "org.netvfs.Bridge",
     gen_blocking = false
 )]
 pub trait Bridge1 {
     // Session
-    /// `Hello(client)` → bridge version. The first call.
+    /// Returns bridge version. First call.
     fn hello(&self, client: &str) -> zbus::Result<String>;
     fn get_consent(&self) -> zbus::Result<String>;
     fn request_consent(&self) -> zbus::Result<()>;
     #[zbus(signal)]
     fn consent_changed(&self, consent: String) -> zbus::Result<()>;
-    /// The optional parts this bridge offers (XB-19, [`crate::feature`]); an
-    /// older bridge answers `UnknownMethod`.
+    /// Optional parts ([`crate::feature`]); older bridge answers `UnknownMethod`.
     fn get_features(&self) -> zbus::Result<Vec<String>>;
 
     // Locations
@@ -110,15 +107,14 @@ pub trait Bridge1 {
     // Handoff
     fn open_account_settings(&self, loc: &str) -> zbus::Result<()>;
     fn add_account(&self, provider: &str) -> zbus::Result<()>;
-    /// Opens Settings › Storage (XB-15); needs no consent.
+    /// Needs no consent.
     fn open_storage_settings(&self) -> zbus::Result<()>;
 
-    // Drives (XB-20, feature [`crate::feature::DRIVES`]); no consent needed.
-    /// The memory cards and USB drives, mounted or not.
+    // Drives (feature [`crate::feature::DRIVES`]); no consent needed.
     fn list_drives(&self) -> zbus::Result<Vec<WireDrive>>;
     #[zbus(signal)]
     fn drives_changed(&self) -> zbus::Result<()>;
-    /// Mounts a drive: where it is mounted.
+    /// Returns the mount point.
     fn mount(&self, drive: &str) -> zbus::Result<Vec<u8>>;
     fn unmount(&self, drive: &str) -> zbus::Result<()>;
 }

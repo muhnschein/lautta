@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The icons a favourite can have (ORG-1), laid out like ColourPicker. `icon`
-// is the chosen icon name; "" stands for the default icon, which
-// `defaultIcon` shows. Tapping an icon emits `picked`, the owner sets `icon`.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "../"
@@ -11,18 +8,13 @@ Flow {
     id: picker
 
     property string icon
-    // Icon names (FavouritesModel.iconChoices()).
     property var icons: []
     property string defaultIcon
-    // The favourite's colour: the icons are tinted as Browse shows them.
     property string colour
-    // Equal cells across the width, as many as fit.
     readonly property int columns: Math.max(1, Math.floor(width / (Theme.iconSizeMedium + 2 * Theme.paddingLarge)))
 
     signal picked(string icon)
 
-    // As the core's Favourite::icon_source: a file-type name is the app's
-    // own glyph (FileIcons.js), any other a theme icon.
     function sourceOf(name) {
         if (name.length === 0)
             return defaultIcon
@@ -45,7 +37,6 @@ Flow {
             height: Theme.itemSizeMedium
             onClicked: picker.picked(modelData)
 
-            // The ring sits around the icon, as around ColourPicker's dot.
             Rectangle {
                 anchors.centerIn: parent
                 visible: cell.chosen

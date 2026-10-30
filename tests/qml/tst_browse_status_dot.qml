@@ -1,19 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Status dot of Browse rows on the target (real Silica, SPEC §15.2, NVB-4,
-// LOC-3). Every state is the same glowing dot; colour and pulse tell them
-// apart: highlight colour = connected, primary colour = not connected, same
-// dot pulsing = connecting, mounting, unmounting, error colour = connecting
-// failed, orange that is none of the theme's own = sign-in or identity needs
-// user, nothing without a state. Pressed row lights a primary-colour dot
-// only. Pulse runs only while row busy, page shown and app in front; a
-// stopped pulse leaves dot at full brightness (PRF-8). A locked drive shows
-// Silica's padlock instead of a dot, at the same right edge (LOC-3).
-// Fails when a state is no dot, two states look alike, a dot differs in size
-// or place from the "on" dot, the padlock is missing, has a dot or sits
-// elsewhere, or the pulse runs when it must not.
-// Target never has app in front (Qt.application.state is Inactive): running
-// side is driven through `appActive`; "stops in background" is checked as
-// app not in front -> no pulse. Looks: device test.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "../../qml/components/browse"
@@ -25,10 +10,8 @@ ApplicationWindow {
     property int waited: 0
     property int step: 0
     property real dimmest: 1.0
-    // Every dot but the busy ones.
     readonly property var others: [on, off, failed, warning, none, locked]
 
-    // Straight in the window, as other component tests do.
     Column {
         width: 540
 
@@ -38,9 +21,7 @@ ApplicationWindow {
         RowStatusIcon { id: warning; indicator: "warning" }
         RowStatusIcon { id: none; indicator: "" }
         RowStatusIcon { id: locked; indicator: "locked" }
-        // Keeps the default `appActive`, bound to the app's state.
         RowStatusIcon { id: busy; indicator: "busy" }
-        // Busy dot on a page that is not shown.
         Item {
             id: hidden
             visible: true
@@ -77,8 +58,6 @@ ApplicationWindow {
         return null
     }
 
-    // Padlock, no dot, its right edge where the dot's core ends; primary
-    // colour, highlight colour when pressed. Back to a dot once unlocked.
     function checkLock() {
         var lock = lockOf(locked)
         if (!expect(lock !== null && lock.visible && locked.visible, "a locked drive shows no padlock"))
@@ -107,8 +86,6 @@ ApplicationWindow {
         return null
     }
 
-    // Same dot for every state: as wide, tall and far right as the "on" dot,
-    // same glow, not dimmed.
     function checkSameDot(name, slot) {
         var dot = dotOf(slot)
         var ref = dotOf(on)
@@ -119,12 +96,10 @@ ApplicationWindow {
         expect(dot.x === ref.x && dot.y === ref.y, name + "'s dot is at " + dot.x + "," + dot.y + ", the on dot at " + ref.x + "," + ref.y)
         expect(dot.radius === ref.radius && dot.falloffRadius === ref.falloffRadius, name + "'s dot glows otherwise than the on dot")
         expect(!dot.dimmed, name + "'s dot is dimmed")
-        // Core ends at right edge of item; row puts that at page margin.
         expect(Math.round(dot.x + (dot.width + slot.dotSize) / 2) === Math.round(slot.width),
                name + "'s dot ends at " + (dot.x + (dot.width + slot.dotSize) / 2) + ", not at " + slot.width)
     }
 
-    // Hue in degrees and brightness (0 to 1) of "#rrggbb".
     function channels(hex) {
         return [1, 3, 5].map(function(i) { return parseInt(hex.substr(i, 2), 16) / 255 })
     }
@@ -156,13 +131,11 @@ ApplicationWindow {
         }
         var orange = String(dotOf(warning).color)
         var hue = hueOf(orange)
-        // Orange: hue between red and yellow, strong and bright.
         expect(hue > 20 && hue < 45 && brightness(orange) > 0.8, "the warning dot is " + orange + ", not orange (hue " + hue + ")")
         var own = [Theme.highlightColor, Theme.primaryColor, Theme.errorColor, Theme.secondaryColor,
                    Theme.highlightBackgroundColor, Theme.secondaryHighlightColor]
         for (var j = 0; j < own.length; ++j)
             expect(orange !== String(own[j]), "the warning dot is the theme's " + own[j])
-        // Each state but busy and off has its own look; pulse tells those two.
         var looks = [on, off, failed, warning].map(colourOf)
         for (var a = 0; a < looks.length; ++a) {
             for (var b = a + 1; b < looks.length; ++b)
@@ -171,7 +144,6 @@ ApplicationWindow {
         expect(none.visible === false && dotOf(none).visible === false, "a row without a state shows a dot")
     }
 
-    // Pressed row lights a primary-colour dot and no other.
     function checkHighlighted() {
         var slots = [[on, Theme.highlightColor], [off, Theme.highlightColor], [busy, Theme.highlightColor],
                      [failed, Theme.errorColor], [warning, warning.warningColor]]
@@ -185,7 +157,6 @@ ApplicationWindow {
         expect(colourOf(off) === String(Theme.primaryColor), "the off dot keeps its colour once released")
     }
 
-    // Pulse is the busy dot's alone, and only with app in front.
     function checkOthersStill() {
         for (var i = 0; i < others.length; ++i) {
             expect(!others[i].pulsing && !pulseOf(others[i]).running && dotOf(others[i]).opacity === 1.0,
@@ -195,8 +166,6 @@ ApplicationWindow {
 
     function checkStill() {
         checkOthersStill()
-        // App not in front on target: busy dot does not pulse. This is the
-        // binding to app state.
         expect(Qt.application.state !== Qt.ApplicationActive && !busy.appActive,
                "the app is in front on the target: " + Qt.application.state)
         expect(!busy.pulsing && !pulseOf(busy).running && dotOf(busy).opacity === 1.0, "a busy dot pulses in the background")
@@ -220,29 +189,24 @@ ApplicationWindow {
                 win.checkHighlighted()
                 win.checkLock()
                 win.checkStill()
-                // App comes to front: busy dot pulses, no other does.
                 for (var k = 0; k < win.others.length; ++k)
                     win.others[k].appActive = true
                 busy.appActive = true
                 break
             case 1:
-                // Runs; dot dims.
                 if (!win.expect(busy.pulsing && pulseOf(busy).running, "a busy dot does not pulse with the app in front"))
                     return
                 win.dimmest = Math.min(win.dimmest, dotOf(busy).opacity)
                 if (win.dimmest > Theme.opacityLow + 0.2)
                     return
-                // Colour does not pulse; other dots do not either.
                 win.expect(colourOf(busy) === String(Theme.primaryColor), "the busy dot changed colour")
                 win.checkOthersStill()
-                // Row done connecting: pulse stops, full brightness.
                 busy.indicator = "on"
                 break
             case 2:
                 win.expect(!busy.pulsing && !pulseOf(busy).running, "the pulse runs after the row stopped being busy")
                 win.expect(dotOf(busy).opacity === 1.0, "the dot is left at " + dotOf(busy).opacity + " after the pulse")
                 win.expect(colourOf(busy) === String(Theme.highlightColor), "the connected dot is " + colourOf(busy))
-                // Connecting again: pulses again.
                 busy.indicator = "busy"
                 win.dimmest = 1.0
                 break
@@ -252,7 +216,6 @@ ApplicationWindow {
                 win.dimmest = Math.min(win.dimmest, dotOf(busy).opacity)
                 if (win.dimmest > Theme.opacityLow + 0.2)
                     return
-                // Page covered: items not visible, pulse stops.
                 win.expect(hiddenBusy.pulsing && pulseOf(hiddenBusy).running, "a busy dot on a page that is shown does not pulse")
                 hidden.visible = false
                 break
@@ -260,7 +223,6 @@ ApplicationWindow {
                 win.expect(!hiddenBusy.visible && !hiddenBusy.pulsing && !pulseOf(hiddenBusy).running,
                            "the pulse runs on a page that is not shown")
                 win.expect(dotOf(hiddenBusy).opacity === 1.0, "the dot is left at " + dotOf(hiddenBusy).opacity + " when its page is covered")
-                // App goes to background.
                 busy.appActive = false
                 break
             case 5:

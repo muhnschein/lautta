@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! browse area facades (doc/QML-API.md): the Browse page's locations, the
-//! `Bridge` singleton, favourites, recents and the Browse page's layout.
-//! Logic lives in `lautta_core::app_browse`; this layer maps it to QML.
+//! Facades over `lautta_core::app_browse`.
 
 mod bridge;
 mod favourites;
@@ -20,7 +18,6 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::sync::watch;
 
-/// A model cell; QML sees plain strings and numbers.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Cell {
     Str(String),
@@ -48,10 +45,8 @@ cpp! {{
     #include <QtCore/QEventLoop>
 }}
 
-/// Runs the Qt event loop for `ms` milliseconds. For tests that drive a
-/// scenario from a synchronous script (the host has no widgets to run an
-/// engine with `exec`). Objects a script `destroy()`ed go too, as they would
-/// in the real event loop.
+/// Runs the Qt event loop for `ms`. For tests driving a scenario from a synchronous script (host
+/// has no widgets to `exec` an engine).
 pub fn pump_events(ms: i32) {
     let until = std::time::Instant::now() + std::time::Duration::from_millis(u64::try_from(ms).unwrap_or(0));
     while std::time::Instant::now() < until {
@@ -63,11 +58,8 @@ pub fn pump_events(ms: i32) {
     }
 }
 
-/// First role id of the models of this area (`Qt::UserRole`).
 const FIRST_ROLE: i32 = 0x100;
 
-/// Role ids and names for a column list; the role of column `i` is
-/// `FIRST_ROLE + i`.
 pub(crate) fn role_names(names: &[&str]) -> HashMap<i32, QByteArray> {
     names
         .iter()
@@ -76,7 +68,6 @@ pub(crate) fn role_names(names: &[&str]) -> HashMap<i32, QByteArray> {
         .collect()
 }
 
-/// The value of `role` in row `row` of a table of cells.
 pub(crate) fn cell_data(rows: &[Vec<Cell>], row: i32, role: i32) -> QVariant {
     let Ok(row) = usize::try_from(row) else {
         return QVariant::default();
@@ -90,8 +81,7 @@ pub(crate) fn cell_data(rows: &[Vec<Cell>], row: i32, role: i32) -> QVariant {
         .unwrap_or_default()
 }
 
-/// Ends the background tasks of a facade when it is dropped: they wait on
-/// the receiver of [`Guard::subscribe`], which then reports closure.
+/// Ends a facade's background tasks on drop: they wait on [`Guard::subscribe`]'s receiver.
 pub(crate) struct Guard(watch::Sender<()>);
 
 impl Default for Guard {
@@ -112,8 +102,7 @@ fn store_channel() -> &'static watch::Sender<u64> {
     STORE.get_or_init(|| watch::channel(0).0)
 }
 
-/// Tells the models of this area that favourites or recents changed
-/// (the stores have no change notification of their own).
+/// Stores have no change notification of their own.
 pub(crate) fn store_changed() {
     store_channel().send_modify(|g| *g += 1);
 }
@@ -122,13 +111,9 @@ pub(crate) fn store_subscribe() -> watch::Receiver<u64> {
     store_channel().subscribe()
 }
 
-/// Changes that arrive together are applied together.
 const SETTLE: Duration = Duration::from_millis(80);
 
-/// Calls `on_change` on the model `me` (on the GUI thread) whenever what the
-/// Browse rows show changes: the locations, the stores ([`store_changed`])
-/// and what the bridge shows (status, nearby servers, drives). Ends with
-/// `guard` or when a source is gone.
+/// Ends with `guard` or when a source is gone.
 pub(crate) fn watch_sources<T: QObject + 'static>(
     me: QPointer<T>,
     core: &Arc<Core>,
@@ -165,9 +150,7 @@ pub(crate) fn watch_sources<T: QObject + 'static>(
     });
 }
 
-/// Waits for the next change of what the bridge shows (status, nearby
-/// servers, drives); false when the bridge is gone. Never completes without
-/// a bridge.
+/// False when the bridge is gone. Never completes without a bridge.
 async fn changed<T>(rx: &mut Option<watch::Receiver<T>>) -> bool {
     match rx {
         Some(rx) => rx.changed().await.is_ok(),
@@ -175,12 +158,10 @@ async fn changed<T>(rx: &mut Option<watch::Receiver<T>>) -> bool {
     }
 }
 
-/// `{kind, message}` as the failure signals carry it.
 pub(crate) fn error_parts(e: &lautta_core::Error) -> (QString, QString) {
     (QString::from(e.kind.name()), QString::from(e.message.as_str()))
 }
 
-/// Registers this area's QML types under `Lautta 1.0`.
 pub fn register() {
     let uri = crate::qml_uri();
     qmetaobject::qml_register_singleton_type::<bridge::Bridge>(&uri, 1, 0, &crate::cstr("Bridge"));

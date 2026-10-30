@@ -2660,5 +2660,11 @@
         <source>Grid</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-view-preview-notes-text">
+        <source>Ferry at 06:00
+Sauna wood: 2 sacks
+Cabin keys from Anni</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

@@ -1,13 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): the search page (SRC-2, design:
-// Search) has no pulley; its field and filter summary sit above the results
-// list, not in its header. Every search resets the list, which then makes its
-// first new row current and focuses it inside itself: a field in the list
-// loses the focus. Fails when the field is in the list or loses its text or
-// focus, when the summary does not open the filters, when typing after the
-// filters does not search the typed name, when a search by type alone is
-// cleared on the way back, or when rows are not under the heading, in
-// portrait and in landscape.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -71,8 +62,7 @@ ApplicationWindow {
         return false
     }
 
-    // Headless, no render loop polishes the list: it takes in new rows (and
-    // makes one current) only when laid out by hand.
+    // No render loop headless: lay out by hand.
     function rowCount() {
         list.forceLayout()
         return list.count
@@ -90,7 +80,6 @@ ApplicationWindow {
         var bottom = heading.mapToItem(page, 0, heading.height).y
         expect(heading.width === page.width, what + ": the heading is as wide as the page")
         expect(list.width === page.width, what + ": the list is as wide as the page")
-        // The check's screen is 240x320: the heading fills most of it.
         expect(Math.abs(list.mapToItem(page, 0, 0).y - bottom) < 1, what + ": the list starts at the heading's bottom")
         var rows = findAll(list.contentItem, function (x) {
             return x.openMenu !== undefined && x.contentHeight !== undefined
@@ -111,7 +100,6 @@ ApplicationWindow {
         expect(page.allowedOrientations === Orientation.All, "the page turns to landscape")
     }
 
-    // The filters dialog is up: keeps it and the page's model.
     function filtersShown() {
         if (pageStack.busy || pageStack.currentPage === page)
             return false
@@ -179,7 +167,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 1:
-                // 12 + 3 hits in two folders.
                 if (win.rowCount() !== 15)
                     break
                 win.checkFieldKept("thesis", "first search")
@@ -188,7 +175,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 2:
-                // The model was reset for the new name: thesis_1, thesis_10, thesis_11.
                 if (win.rowCount() !== 3)
                     break
                 win.checkFieldKept("thesis_1", "second search")
@@ -213,7 +199,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 5:
-                // Typing after the filters searches the typed name, not the dialog's.
                 if (win.rowCount() !== 15)
                     break
                 win.expect(win.searchModel.query === "thesis", "the query follows the field: " + win.searchModel.query)
@@ -224,14 +209,12 @@ ApplicationWindow {
             case 6:
                 if (!win.filtersShown())
                     break
-                // Folders of any name: the emptied field must not clear them.
                 win.nameField().text = ""
                 win.typeBox().currentIndex = 1
                 win.dialog.accept()
                 win.next()
                 break
             case 7:
-                // Past the typing delay, the two folders are still listed.
                 if (win.waited < 8 || !win.backOnPage() || win.rowCount() !== 2)
                     break
                 win.expect(win.field.text === "", "the field shows the empty name: " + win.field.text)

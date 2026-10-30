@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The `org.netvfs.Bridge1` interface of the fake. Checks happen in the order
-//! of the real bridge (netvfs `session.cpp`): argument validation
-//! (`InvalidArgs`, `InvalidName`), then `Hello` first, then consent, then the
-//! scripted latency and failures, then the operation.
+//! Checks in the real bridge's order (netvfs `session.cpp`): argument validation (`InvalidArgs`,
+//! `InvalidName`), `Hello` first, consent, scripted latency and failures, the operation.
 
 use super::args::{self, Dict};
 use super::fail::Fail;
@@ -25,11 +23,8 @@ use zbus::ObjectServer;
 
 const MAX_HANDLES: usize = 16;
 
-/// The contract: input signatures of every method, read from the XML that the
-/// real bridge serves.
 const CONTRACT_XML: &str = include_str!("../../../../tests/bridge-contract/org.netvfs.Bridge1.xml");
 
-/// Method name -> input signature, from the `Bridge1` interface of the contract.
 pub(super) fn contract_methods() -> &'static HashMap<String, String> {
     static TABLE: OnceLock<HashMap<String, String>> = OnceLock::new();
     TABLE.get_or_init(|| parse_methods(CONTRACT_XML))
@@ -42,7 +37,6 @@ fn attr<'a>(line: &'a str, name: &str) -> Option<&'a str> {
     Some(&line[start..start + len])
 }
 
-/// One element per line, as in the contract file.
 fn parse_methods(xml: &str) -> HashMap<String, String> {
     let mut table = HashMap::new();
     let mut current: Option<String> = None;
@@ -68,9 +62,8 @@ fn parse_methods(xml: &str) -> HashMap<String, String> {
     table
 }
 
-/// Wraps the generated interface: a call whose signature differs from the
-/// contract fails with `InvalidArgs`, as in the real bridge (zbus alone would
-/// answer with its own error name).
+/// Call whose signature differs from the contract fails with `InvalidArgs` as in the real bridge
+/// (zbus alone answers with its own error name).
 pub(super) struct Checked(Iface);
 
 impl Checked {
@@ -168,9 +161,7 @@ impl Iface {
         }
     }
 
-    /// What a bridge without the drive methods answers (XB-20). The call is
-    /// recorded all the same, so that tests see what an older bridge was
-    /// asked.
+    /// Answer of a bridge without drive methods. The call is still recorded.
     fn require_drives(&self, method: &str) -> Result<(), Fail> {
         if self.shared.with(|s| s.offers_drives()) {
             Ok(())
@@ -180,9 +171,8 @@ impl Iface {
         }
     }
 
-    /// `Mount` or `Unmount`: where the drive is mounted then. A change is
-    /// told to every client (`DrivesChanged`); with a mount root the folder
-    /// comes and goes as udisks makes and removes it.
+    /// Tells every client of a change (`DrivesChanged`); with a mount root the folder comes and
+    /// goes as with udisks.
     async fn mount_or_unmount(&self, method: &str, drive: &str, mount: bool) -> Result<Vec<u8>, Fail> {
         self.require_drives(method)?;
         let drive = args::drive(drive)?;
@@ -214,16 +204,14 @@ impl Iface {
         }
     }
 
-    /// A call that needs a connection of `loc`'s pool: the location is
-    /// connected from now on (netvfs XB-12), until `Disconnect`; a change is
-    /// told.
+    /// Call needing a connection of `loc`'s pool: location is connected until `Disconnect`; a
+    /// change is told.
     fn reach(&self, loc: &str) -> Result<(), Fail> {
         self.require_location(loc)?;
         self.set_state(loc, location_state::CONNECTED);
         Ok(())
     }
 
-    /// Sets `loc`'s state, and tells every client if it changed.
     fn set_state(&self, loc: &str, state: &str) {
         if self.shared.with(|s| s.set_state(loc, state, None)) {
             let shared = Arc::clone(&self.shared);
@@ -259,7 +247,6 @@ impl Iface {
         }
     }
 
-    /// Starts a job: validates the location, takes the id and runs `work`.
     fn start_job<F, Fut>(&self, ctxt: &SignalContext<'_>, work: F) -> u32
     where
         F: FnOnce(Env, u32, Arc<std::sync::atomic::AtomicBool>) -> Fut,
@@ -303,8 +290,6 @@ fn declined(kind: &str) -> Fail {
     }
 }
 
-/// Makes the folder of a mounted drive, or removes the one of an unmounted
-/// drive.
 fn mount_folder(before: &[u8], after: &[u8]) -> std::io::Result<()> {
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
@@ -377,7 +362,7 @@ fn parse_adhoc(url: &str, opts: &args::AdHocOpts) -> Result<AdHocUrl, Fail> {
 }
 
 fn adhoc_info(p: &AdHocUrl) -> Vec<(String, InfoValue)> {
-    // The bridge lists an ad-hoc location once it has connected (XB-12).
+    // The bridge lists an ad-hoc location once connected.
     let mut info = vec![
         ("kind".to_owned(), InfoValue::Str("adhoc".into())),
         ("host".to_owned(), InfoValue::Str(p.host.clone())),
@@ -398,8 +383,6 @@ fn adhoc_info(p: &AdHocUrl) -> Vec<(String, InfoValue)> {
 
 #[zbus::interface(name = "org.netvfs.Bridge1")]
 impl Iface {
-    // ---- Session ---------------------------------------------------------
-
     async fn hello(&self, client: String) -> Result<String, Fail> {
         if client.len() > 256 {
             return Err(Fail::args("Argument 1 is too long"));
@@ -433,8 +416,6 @@ impl Iface {
         Ok(features)
     }
 
-    // ---- Locations -------------------------------------------------------
-
     async fn list_locations(&self) -> Result<Vec<WireLocation>, Fail> {
         self.begin("ListLocations", "interactive", "", false).await?;
         Ok(self.shared.with(|s| {
@@ -446,7 +427,7 @@ impl Iface {
         }))
     }
 
-    // A one-element tuple keeps the reply a single struct argument on the wire.
+    // One-element tuple keeps the reply a single struct argument on the wire.
     async fn capabilities(&self, loc: String) -> Result<(WireCapabilities,), Fail> {
         let loc = args::location(&loc)?;
         self.begin("Capabilities", "interactive", &loc, true).await?;
@@ -467,8 +448,6 @@ impl Iface {
         self.set_state(&loc, location_state::DISCONNECTED);
         Ok(())
     }
-
-    // ---- Ad-hoc locations --------------------------------------------------
 
     async fn connect_ad_hoc(
         &self,
@@ -505,26 +484,20 @@ impl Iface {
         Ok(())
     }
 
-    // ---- Discovery -------------------------------------------------------
-
     async fn discover(&self, on: bool, #[zbus(signal_context)] ctxt: SignalContext<'_>) -> Result<(), Fail> {
         self.begin("Discover", "interactive", "", true).await?;
         self.env(&ctxt);
         self.session.with(|s| s.discovering = on);
         if on {
-            // As netvfs' NearbyService: a start signals what is known right
-            // away, after the reply, also when that is nothing yet.
+            // As netvfs' NearbyService: a start signals what is known right away, after the reply.
             let shared = self.shared.clone();
             tokio::spawn(async move { shared.broadcast_nearby().await });
         } else if !self.shared.any_discovering() {
-            // netvfs halts the discovery when its last client stops and
-            // forgets what it found (Discovery::Private::halt).
+            // netvfs halts discovery when its last client stops and forgets what it found.
             self.shared.with(|s| s.nearby.clear());
         }
         Ok(())
     }
-
-    // ---- Listing -----------------------------------------------------------
 
     async fn list(
         &self,
@@ -545,8 +518,6 @@ impl Iface {
             transfer::run_list(env, req, listing, batch, cancel)
         }))
     }
-
-    // ---- Metadata ----------------------------------------------------------
 
     async fn stat(
         &self,
@@ -594,8 +565,6 @@ impl Iface {
             t.file_data(&path).map(|d| sha2::Sha256::digest(d).to_vec())
         })
     }
-
-    // ---- Namespace ---------------------------------------------------------
 
     async fn make_dir(&self, loc: String, path: Vec<u8>, exclusive: bool) -> Result<(), Fail> {
         let loc = args::location(&loc)?;
@@ -664,8 +633,6 @@ impl Iface {
         self.tree(&loc, |t| t.server_copy(&from, &to, opts.recursive, opts.replace))
     }
 
-    // ---- Handles -----------------------------------------------------------
-
     async fn open_read(&self, loc: String, path: Vec<u8>, lane: String) -> Result<(u32, i64), Fail> {
         let loc = args::location(&loc)?;
         let path = args::path(&path)?;
@@ -711,8 +678,6 @@ impl Iface {
             None => Err(Fail::net("NotFound", "No such handle")),
         }
     }
-
-    // ---- Jobs --------------------------------------------------------------
 
     async fn upload(
         &self,
@@ -767,7 +732,7 @@ impl Iface {
         let dst = args::path(&dst)?;
         let opts = args::copy_opts(&opts)?;
         self.begin("CopyAcross", "bulk", &src_loc, true).await?;
-        // Copy jobs connect outside the pools: no state changes (XB-12).
+        // Copy jobs connect outside the pools: no state change.
         self.require_location(&src_loc)?;
         self.require_location(&dst_loc)?;
         Ok(self.start_job(&ctxt, move |env, job, cancel| {
@@ -816,8 +781,6 @@ impl Iface {
         }
     }
 
-    // ---- Questions ---------------------------------------------------------
-
     async fn answer(&self, id: String, answer: Dict) -> Result<(), Fail> {
         let id = args::location(&id)?;
         let answer = args::answer_opts(&answer)?;
@@ -831,12 +794,9 @@ impl Iface {
             answers: answer.answers,
         };
         self.shared.with(|s| s.answers.push(recorded.clone()));
-        // The asker may have given up; the answer is still recorded.
         let _ = tx.send(recorded);
         Ok(())
     }
-
-    // ---- Handoff -----------------------------------------------------------
 
     async fn open_account_settings(&self, loc: String) -> Result<(), Fail> {
         let loc = args::location(&loc)?;
@@ -870,8 +830,6 @@ impl Iface {
         Ok(())
     }
 
-    // ---- Drives (XB-20) ----------------------------------------------------
-
     async fn list_drives(&self) -> Result<Vec<WireDrive>, Fail> {
         self.require_drives("ListDrives")?;
         self.begin("ListDrives", "interactive", "", false).await?;
@@ -887,8 +845,6 @@ impl Iface {
     async fn unmount(&self, drive: String) -> Result<(), Fail> {
         self.mount_or_unmount("Unmount", &drive, false).await.map(drop)
     }
-
-    // ---- Signals -----------------------------------------------------------
 
     #[zbus(signal)]
     pub async fn drives_changed(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
@@ -940,7 +896,6 @@ impl Iface {
     }
 }
 
-/// Signal context of a session, if its connection is up.
 pub(super) fn context(session: &Session) -> Option<SignalContext<'static>> {
     let conn = session.conn()?;
     SignalContext::new(&conn, OBJECT_PATH).ok()
@@ -950,7 +905,6 @@ impl Shared {
     pub async fn broadcast_consent(&self, consent: Consent) {
         for session in self.sessions_snapshot() {
             if let Some(ctx) = context(&session) {
-                // A closed client simply misses the signal.
                 let _ = Iface::consent_changed(&ctx, consent.as_str().to_owned()).await;
             }
         }
@@ -967,7 +921,6 @@ impl Shared {
     pub async fn broadcast_drives(&self) {
         for session in self.sessions_snapshot() {
             if let Some(ctx) = context(&session) {
-                // A closed client misses the signal.
                 let _ = Iface::drives_changed(&ctx).await;
             }
         }
@@ -985,7 +938,6 @@ impl Shared {
         }
     }
 
-    /// A question to the newest client.
     pub async fn ask(&self, kind: &str, details: &[(String, InfoValue)]) -> Option<RecordedAnswer> {
         let session = self.sessions_snapshot().pop()?;
         let ctx = context(&session)?;
@@ -993,8 +945,7 @@ impl Shared {
     }
 }
 
-/// Sends a `Question` signal and waits for the matching `Answer`. `None` when
-/// the asker is gone before an answer arrives.
+/// `None` when the asker is gone before an answer arrives.
 pub(super) async fn ask_question(
     shared: &Shared,
     session: &Session,

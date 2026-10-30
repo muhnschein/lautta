@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! One forwarding task carries the engine's `TransferEvent`s to the GUI
-//! thread (queued callback); there they reach the `Transfers` singleton and
-//! every live model through a small listener registry.
+//! One forwarding task carries engine `TransferEvent`s to the GUI thread (queued callback), then to
+//! the `Transfers` singleton and live models via a listener registry.
 
 use crate::runtime::{core, handle};
 use lautta_core::transfer::TransferEvent;
@@ -9,7 +8,6 @@ use std::cell::RefCell;
 use std::sync::Once;
 use tokio::sync::broadcast::error::RecvError;
 
-/// A listener returns `false` when its object is gone.
 type Listener = Box<dyn FnMut(&TransferEvent) -> bool>;
 
 thread_local! {
@@ -18,20 +16,18 @@ thread_local! {
 
 static FORWARDER: Once = Once::new();
 
-/// The id of a synthetic "something else changed, reload" event (history
-/// cleared, start-up restore, or events were missed).
+/// Synthetic "something else changed, reload" event (history cleared, start-up restore, missed
+/// events).
 pub const RELOAD: i64 = 0;
 
 pub fn is_reload(ev: &TransferEvent) -> bool {
     matches!(ev, TransferEvent::Changed(RELOAD))
 }
 
-/// Registers a listener on the GUI thread.
 pub fn listen(f: impl FnMut(&TransferEvent) -> bool + 'static) {
     LISTENERS.with(|l| l.borrow_mut().push(Box::new(f)));
 }
 
-/// Calls every listener; those that report their object gone are dropped.
 /// Listeners added meanwhile are kept.
 pub fn dispatch(ev: &TransferEvent) {
     let mut current = LISTENERS.with(|l| std::mem::take(&mut *l.borrow_mut()));
@@ -43,15 +39,14 @@ pub fn dispatch(ev: &TransferEvent) {
     });
 }
 
-/// Asks every listener to reload, on the next event-loop turn: callers are
-/// often inside a borrow of one of the listeners.
+/// Next event-loop turn: callers are often inside a borrow of a listener.
 pub fn reload() {
     qmetaobject::single_shot(std::time::Duration::from_millis(0), || {
         dispatch(&TransferEvent::Changed(RELOAD));
     });
 }
 
-/// Starts the single forwarding task (once). Call on the GUI thread.
+/// Once. Call on the GUI thread.
 pub fn ensure_forwarder() {
     FORWARDER.call_once(|| {
         let Some(core) = core() else { return };

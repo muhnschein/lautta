@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Jobs and signals that the app does not use yet (`Walk`, `CopyAcross`,
-//! cancellation, discovery) still follow the contract (SPEC TST-2).
+//! Jobs and signals the app does not use yet (`Walk`, `CopyAcross`, cancellation, discovery) follow
+//! the contract.
 #![cfg(feature = "fake")]
 
 use futures::StreamExt;
@@ -21,7 +21,6 @@ async fn setup() -> (FakeBridge, Connection, SignalStream) {
     (fake, conn, signals)
 }
 
-/// Reads signals until the job finishes; returns the walked paths and the extras.
 async fn finish(signals: &mut SignalStream, job: u32) -> (Vec<Vec<u8>>, String, HashMap<String, i64>) {
     let mut paths = Vec::new();
     loop {
@@ -114,7 +113,6 @@ async fn copy_across_moves_a_tree_between_locations() {
     assert_eq!(extra["bytes"], 6);
     assert_eq!(fake.file("account:2", b"dst/copy/sub/b").unwrap(), b"56");
 
-    // The destination exists now: refused without `replace`, allowed with it.
     let job = conn
         .proxy()
         .copy_across("account:1", b"src", "account:2", b"dst/copy", &recursive)
@@ -185,7 +183,6 @@ async fn a_listing_can_be_canceled() {
         }
     }
     assert!(batches < 20, "stopped early after {batches} batches");
-    // A finished request can still be canceled quietly; an unknown id is refused.
     conn.proxy().cancel(req).await.unwrap();
     let e = BridgeError::from(conn.proxy().cancel(999).await.unwrap_err());
     assert_eq!(e.netvfs_name(), Some("NotFound"));

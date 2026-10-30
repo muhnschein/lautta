@@ -1,14 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `BrowseLayoutModel`: the rows of Settings › Browse page (BRW-12), hidden
-//! ones included, in Browse order. Roles: `section`, `kind`, `item`, `name`,
-//! `hidden`, `place` (the row's place in its section, -1 for the switch of
-//! *Volumes* or *Servers*, which leads its section), `movable`, `nested`
-//! (a row of a section that has such a switch, below it).
+//! Settings › Browse rows, hidden ones included, in Browse order. Roles: `section`, `kind`, `item`,
+//! `name`, `hidden`, `place` (-1 for the switch of *Volumes* or *Servers*, which leads its
+//! section), `movable`, `nested`.
 //!
-//! A change shows in place ([`steps`]): a switch changes its row, a move
-//! moves it, so the list keeps its scroll position and its delegates, and
-//! nothing is rebuilt under the user's finger. A dragged row moves at once
-//! ([`BrowseLayoutModel::moveRow`]) and is stored behind it.
+//! Changes apply in place ([`steps`]) so scroll position and delegates survive. A dragged row moves
+//! at once ([`BrowseLayoutModel::moveRow`]) and is stored behind it.
 
 use super::{cell_data, error_parts, role_names, store_changed, watch_sources, Cell, Guard};
 use crate::runtime::{core, spawn_then};
@@ -23,18 +19,15 @@ use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
-/// `place`, not `index`: a role named `index` hides the delegate's own
-/// `index` (its list row) in QML, and the page's drag code needs that.
+/// `place`, not `index`: a role named `index` hides the delegate's own `index` in QML.
 const COLUMNS: [&str; 8] = [
     "section", "kind", "item", "name", "hidden", "place", "movable", "nested",
 ];
 
-/// Sections whose rows the user can reorder; volumes come and go and nearby
-/// servers are one switch.
+/// Volumes come and go, nearby servers are one switch.
 const MOVABLE: [&str; 4] = ["favourites", "device", "android", "servers"];
 
 fn cells(rows: &[LayoutRow]) -> Vec<Vec<Cell>> {
-    // The rows of the section that take part in its order: not its switch.
     let own = |r: &LayoutRow, o: &&LayoutRow| o.section == r.section && o.kind != SECTION_KIND;
     rows.iter()
         .enumerate()
@@ -66,23 +59,15 @@ fn cell_at(rows: &[Vec<Cell>], row: i32, col: usize) -> Option<&Cell> {
     rows.get(usize::try_from(row).ok()?)?.get(col)
 }
 
-/// One change of the shown rows; the places are those at the time it is
-/// made, after the steps before it.
+/// Places are those at the time of the step, after earlier steps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Step {
     Remove(usize),
-    /// `to` is the row's place once moved.
-    Move {
-        from: usize,
-        to: usize,
-    },
-    /// The new row at this place comes.
+    Move { from: usize, to: usize },
     Insert(usize),
-    /// The row at this place takes the new row's values.
     Change(usize),
 }
 
-/// A row's identity: its section and item (what `browse_layout` stores).
 type Key<'a> = (&'a str, &'a str);
 
 fn key(row: &[Cell]) -> Key<'_> {
@@ -99,13 +84,10 @@ fn keys(rows: &[Vec<Cell>]) -> Option<Vec<Key<'_>>> {
     (distinct.len() == keys.len()).then_some(keys)
 }
 
-/// The steps that turn the rows `old` into `new` in place: rows that are
-/// gone are removed, kept rows move into the new order, new rows are
-/// inserted and kept rows whose values differ change. `None` when a row's
-/// identity repeats; the rows are then replaced as a whole.
+/// `None` when a row's identity repeats: rows are then replaced as a whole.
 fn steps(old: &[Vec<Cell>], new: &[Vec<Cell>]) -> Option<Vec<Step>> {
     let (old_keys, new_keys) = (keys(old)?, keys(new)?);
-    // From the end, so that the places of the rows before stay valid.
+    // From the end: places of earlier rows stay valid.
     let mut out: Vec<Step> = (0..old_keys.len())
         .rev()
         .filter(|i| !new_keys.contains(&old_keys[*i]))
@@ -117,7 +99,6 @@ fn steps(old: &[Vec<Cell>], new: &[Vec<Cell>]) -> Option<Vec<Step>> {
         .filter(|k| new_keys.contains(k))
         .collect();
     out.extend(moves(&mut kept, &new_keys));
-    // In order: the rows before each insertion are the new ones by then.
     for (i, k) in new_keys.iter().enumerate() {
         match old_keys.iter().position(|o| o == k) {
             None => out.push(Step::Insert(i)),
@@ -125,17 +106,15 @@ fn steps(old: &[Vec<Cell>], new: &[Vec<Cell>]) -> Option<Vec<Step>> {
             Some(_) => {}
         }
     }
-    // Changes after every insertion: their places are the final ones.
+    // After every insertion: places are final.
     out.sort_by_key(|s| matches!(s, Step::Change(_)));
     Some(out)
 }
 
-/// Moves that put the kept rows `kept` in their order in `new`. The longest
-/// run already in that order stays; every other row moves right behind the
-/// row it follows in `new` (a dragged row is one move).
+/// Longest run already in order stays; every other row moves right behind the row it follows in
+/// `new`.
 fn moves(kept: &mut Vec<Key>, new: &[Key]) -> Vec<Step> {
     let order: Vec<Key> = new.iter().copied().filter(|k| kept.contains(k)).collect();
-    // Every kept row is in `order`, so the fallback is never taken.
     let places: Vec<usize> = kept
         .iter()
         .map(|k| order.iter().position(|o| o == k).unwrap_or(0))
@@ -163,11 +142,7 @@ fn moves(kept: &mut Vec<Key>, new: &[Key]) -> Vec<Step> {
     out
 }
 
-/// Which of `places` make up the longest increasing run (one of them when
-/// there are several).
 fn in_order(places: &[usize]) -> Vec<bool> {
-    // The length of the longest run ending at each place, and the place
-    // before it in that run.
     let mut runs: Vec<(usize, Option<usize>)> = Vec::with_capacity(places.len());
     for (i, place) in places.iter().enumerate() {
         let best = (0..i)
@@ -185,9 +160,6 @@ fn in_order(places: &[usize]) -> Vec<bool> {
     stays
 }
 
-/// The section, item and new place in its section of list row `from` moved
-/// to list row `to`; `None` unless both are rows of one section whose rows
-/// move, and different ones.
 fn carried(rows: &[Vec<Cell>], from: i32, to: i32) -> Option<(String, String, usize)> {
     let text = |row: i32, col: usize| match cell_at(rows, row, col) {
         Some(Cell::Str(s)) => Some(s.clone()),
@@ -202,9 +174,7 @@ fn carried(rows: &[Vec<Cell>], from: i32, to: i32) -> Option<(String, String, us
     Some((section, item, place))
 }
 
-/// Gives list rows `first..=last` of one section the places `base`,
-/// `base + 1`, …: after a move within the section the places stay where
-/// they were and the rows changed.
+/// After a move within the section the places stay where they were, rows changed.
 fn renumber(rows: &mut [Vec<Cell>], first: usize, last: usize, base: i64) {
     for (place, row) in (base..).zip(rows[first..=last].iter_mut()) {
         if let Some(cell) = row.get_mut(5) {
@@ -213,7 +183,6 @@ fn renumber(rows: &mut [Vec<Cell>], first: usize, last: usize, base: i64) {
     }
 }
 
-/// Makes `step` on `rows`, taking the values of new rows from `new`.
 fn apply_step(rows: &mut Vec<Vec<Cell>>, new: &[Vec<Cell>], step: Step) {
     match step {
         Step::Remove(i) => {
@@ -236,39 +205,26 @@ pub struct BrowseLayoutModel {
 
     reload: qt_method!(fn(&mut self)),
     setHidden: qt_method!(fn(&mut self, section: QString, item: QString, hidden: bool)),
-    /// Moves a row to `index` within its section.
     moveTo: qt_method!(fn(&mut self, section: QString, item: QString, index: i32)),
-    /// Moves list row `from` to list row `to` of its section at once, so
-    /// the dragged row follows the finger, and stores the new order;
-    /// `false` when the rows are not of one section whose rows move.
     moveRow: qt_method!(fn(&mut self, from: i32, to: i32) -> bool),
-    /// Every row shown again, in its natural order (favourites keep theirs).
     restoreDefaults: qt_method!(fn(&mut self)),
-    /// The section of list row `row`, `""` outside the list.
     sectionAt: qt_method!(fn(&self, row: i32) -> QString),
-    /// The place of list row `row` in its section, `-1` outside the list and
-    /// for the switch of a section.
     placeAt: qt_method!(fn(&self, row: i32) -> i32),
-    /// The item of list row `row`, `""` outside the list.
     itemAt: qt_method!(fn(&self, row: i32) -> QString),
     failed: qt_signal!(kind: QString, message: QString),
 
     rows: Vec<Vec<Cell>>,
-    /// Done when the last change is stored: each change waits for the one
-    /// before, so a switch and Restore defaults apply in the order made.
+    /// Each change waits for the one before: switch and Restore defaults apply in order made.
     last: Option<oneshot::Receiver<()>>,
-    /// The last reload asked for; an older one that ends later is dropped,
-    /// it would show a switch flipping back. A change makes the reloads
-    /// under way old too.
+    /// Older reload ending later is dropped (a switch would flip back). A change makes running
+    /// reloads old too.
     generation: u64,
-    /// Changes made and not stored yet. The rows are read again only once
-    /// all are stored: rows read in between would move a dragged row back.
+    /// Rows are read again only once all are stored: reading in between moves a dragged row back.
     pending: usize,
     watching: bool,
     guard: Guard,
 }
 
-/// Runs a store write off the runtime's workers.
 async fn blocking(
     work: impl FnOnce() -> lautta_core::Result<()> + Send + 'static,
 ) -> lautta_core::Result<()> {
@@ -278,8 +234,7 @@ async fn blocking(
 }
 
 impl BrowseLayoutModel {
-    /// Reads the rows again; the first call also starts following what the
-    /// Browse page follows: a volume or server that comes shows here too.
+    /// First call also starts following what Browse follows.
     fn reload(&mut self) {
         self.generation += 1;
         let generation = self.generation;
@@ -304,8 +259,6 @@ impl BrowseLayoutModel {
         });
     }
 
-    /// Reads the rows again unless a change of the user's own is not stored
-    /// yet; the end of the last one reads again ([`Self::changed`]).
     fn reload_when_stored(&mut self) {
         if self.pending == 0 {
             self.reload();
@@ -325,7 +278,6 @@ impl BrowseLayoutModel {
         self.countChanged();
     }
 
-    /// Makes one step and tells the views.
     fn make(&mut self, step: Step, new: &[Vec<Cell>]) {
         match step {
             Step::Remove(i) => self.begin_remove_rows(i as i32, i as i32),
@@ -350,7 +302,6 @@ impl BrowseLayoutModel {
         }
     }
 
-    /// Tells the Browse page and shows the new rows, or why it failed.
     fn changed(me: &QPointer<Self>, res: lautta_core::Result<()>) {
         store_changed();
         let Some(model) = me.as_pinned() else { return };
@@ -363,7 +314,6 @@ impl BrowseLayoutModel {
         model.reload_when_stored();
     }
 
-    /// Runs `work` after the changes made before it, then shows the rows.
     fn change<F>(&mut self, work: impl FnOnce(Arc<Core>) -> F + Send + 'static)
     where
         F: Future<Output = lautta_core::Result<()>> + Send + 'static,
@@ -403,7 +353,6 @@ impl BrowseLayoutModel {
         let Some((section, item, place)) = carried(&self.rows, from, to) else {
             return false;
         };
-        // `carried` found both rows, so both are list rows.
         let (from, to) = (from as usize, to as usize);
         let (first, last) = (from.min(to), from.max(to));
         let base = match self.rows[first].get(5) {
@@ -517,7 +466,6 @@ mod tests {
         }
     }
 
-    /// (place, movable, nested) of each row.
     fn shape(rows: &[LayoutRow]) -> Vec<(Cell, Cell, Cell)> {
         cells(rows)
             .into_iter()
@@ -549,7 +497,6 @@ mod tests {
                 (Cell::Int(1), yes.clone(), yes.clone()),
             ]
         );
-        // The switch is no row to move among: one server stays put.
         assert_eq!(
             shape(&rows[4..6]),
             [(Cell::Int(-1), no.clone(), no.clone()), (Cell::Int(0), no, yes)]
@@ -607,8 +554,6 @@ mod tests {
         assert_eq!(model.generation, 1, "read once all are stored");
     }
 
-    /// Rows named by single letters, all in one section; an upper-case
-    /// letter is a hidden row.
     fn named(names: &str) -> Vec<Vec<Cell>> {
         names
             .chars()
@@ -624,7 +569,6 @@ mod tests {
             .collect()
     }
 
-    /// The rows after making the steps from `old` to `new` one by one.
     fn replayed(old: &[Vec<Cell>], new: &[Vec<Cell>]) -> Vec<Vec<Cell>> {
         let mut rows = old.to_vec();
         for step in steps(old, new).unwrap() {

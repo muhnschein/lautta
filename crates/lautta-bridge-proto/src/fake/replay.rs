@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Replays the shared golden sequences (`tests/bridge-contract/*.json`,
-//! netvfs SPEC-v2 XT-7) against the fake bridge, so that this client and the
-//! real bridge agree on the protocol (SPEC TST-2). The format and the matching
-//! rules are in the README next to the files.
+//! Replays the shared golden sequences (`tests/bridge-contract/*.json`) against the fake, so
+//! this client and the real bridge agree on the protocol.
 
 use super::{Consent, FakeBridge};
 use crate::connect::Connection;
@@ -20,10 +18,8 @@ use zbus::message::Type as MessageType;
 use zbus::zvariant::{Array, Dict, Signature, Structure, StructureBuilder, Value};
 
 const STEP_TIMEOUT: Duration = Duration::from_secs(5);
-/// The one account the sequences run against.
 pub const ACCOUNT: &str = "account:1";
 
-/// A parsed sequence file.
 #[derive(Debug)]
 pub struct Sequence {
     pub description: String,
@@ -85,7 +81,6 @@ fn parse_step(step: &Json) -> Result<Step, String> {
     })
 }
 
-/// Parses a sequence file.
 pub fn parse(source: &str) -> Result<Sequence, String> {
     let doc: Json = serde_json::from_str(source).map_err(|e| e.to_string())?;
     let consent = match text(&doc, "consent")? {
@@ -116,9 +111,6 @@ pub fn parse(source: &str) -> Result<Sequence, String> {
     })
 }
 
-// ---- value encoding ------------------------------------------------------
-
-/// Splits a signature into its complete types (`"saya{sv}"` -> `s`, `ay`, `a{sv}`).
 fn split_types(sig: &str) -> Result<Vec<&str>, String> {
     let bytes = sig.as_bytes();
     let mut out = Vec::new();
@@ -254,11 +246,8 @@ fn encode_dict(v: &Json) -> Result<Value<'static>, String> {
     Ok(Value::Dict(dict))
 }
 
-// ---- value decoding ------------------------------------------------------
-
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().fold(String::new(), |mut out, b| {
-        // Writing into a String cannot fail.
         let _ = write!(out, "{b:02x}");
         out
     })
@@ -318,8 +307,8 @@ fn body_fields(msg: &zbus::Message) -> Result<Vec<Json>, String> {
     };
     let s: Structure = body.deserialize().map_err(|e| e.to_string())?;
     let fields: Vec<Json> = s.fields().iter().map(decode).collect();
-    // zbus reads a body that is one struct as that struct's fields; on the wire
-    // it is a single argument (a reply such as `Stat`'s entry).
+    // zbus reads a one-struct body as that struct's fields; on the wire it is a single argument
+    // (`Stat`'s entry).
     let one_struct = sig.starts_with('(') && split_types(&sig).is_ok_and(|t| t.len() == 1);
     Ok(if one_struct {
         vec![Json::Array(fields)]
@@ -327,8 +316,6 @@ fn body_fields(msg: &zbus::Message) -> Result<Vec<Json>, String> {
         fields
     })
 }
-
-// ---- matching ------------------------------------------------------------
 
 /// Byte arrays may be written as `{"bytes": ...}`; both sides compare as hex.
 fn normalise(v: &Json) -> Json {
@@ -411,8 +398,6 @@ fn substitute(v: &Json, binds: &Bindings) -> Result<Json, String> {
         other => Ok(other.clone()),
     }
 }
-
-// ---- running -------------------------------------------------------------
 
 #[derive(Default)]
 struct Inbox {
@@ -534,7 +519,6 @@ async fn signal_step(
         .map_err(|m| format!("signal {signal}: {m}"))
 }
 
-/// Replays `seq` on a fresh fake bridge with the account `account:1`.
 pub async fn replay(seq: &Sequence) -> Result<(), String> {
     let fake = FakeBridge::new();
     fake.set_consent(seq.consent).await;
@@ -561,8 +545,6 @@ pub async fn replay(seq: &Sequence) -> Result<(), String> {
     Ok(())
 }
 
-/// Replays every `*.json` file of `dir` (the contract directory); returns the
-/// names of the sequences that ran.
 pub async fn replay_dir(dir: &Path) -> Result<Vec<String>, String> {
     let sources = tokio::task::spawn_blocking({
         let dir = dir.to_owned();
@@ -581,7 +563,6 @@ pub async fn replay_dir(dir: &Path) -> Result<Vec<String>, String> {
     Ok(ran)
 }
 
-/// The `*.json` files of `dir` in name order, as (file name, contents).
 fn read_sequences(dir: &Path) -> Result<Vec<(String, String)>, String> {
     let mut files: Vec<_> = std::fs::read_dir(dir)
         .map_err(|e| format!("{}: {e}", dir.display()))?

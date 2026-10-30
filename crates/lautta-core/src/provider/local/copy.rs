@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Local file copy strategy (SPEC XFR-3): `FICLONE`, then `copy_file_range`,
-//! then a buffered loop. Each step falls back to the next on any error and
-//! the last one reports the real error.
+//! Local file copy: `FICLONE`, then `copy_file_range`, then buffered loop. Each falls back to the
+//! next on any error; the last reports the real error.
 
 use crate::provider::ProgressSink;
 use crate::sys;
@@ -10,11 +9,9 @@ use std::io::{self, Read, Write};
 
 const BUF: usize = 256 * 1024;
 
-/// Copies from the current position of `src` to the current position of
-/// `dst`. `base` is the number of bytes already in `dst` (resume) and only
-/// shifts the progress numbers; `total` is the final size when known.
-/// `try_clone` allows a whole-file reflink and is only valid when both
-/// positions are 0. Returns the bytes written by this call.
+/// Copies between current positions. `base` bytes already in `dst` (resume) only shift progress;
+/// `total` is final size if known. `try_clone` allows whole-file reflink, valid only when both
+/// positions are 0. Returns bytes written.
 pub fn copy_fd(
     src: &File,
     dst: &File,
@@ -41,7 +38,6 @@ pub fn copy_fd(
     Ok(done + rest)
 }
 
-/// Plain read/write loop from the current positions until end of file.
 pub fn copy_buffered(mut src: &File, mut dst: &File, progress: &mut dyn FnMut(u64)) -> io::Result<u64> {
     let mut buf = vec![0u8; BUF];
     let mut total = 0u64;

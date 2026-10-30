@@ -11,11 +11,9 @@ publish.workspace = true
 workspace = true
 
 [features]
-# Test PDFs built in code (sample module), for other crates' tests.
+# Test PDFs built in code, for other crates' tests.
 sample = []
 
 [dependencies]
-# Pure Rust and no I/O of its own: it only sees the bytes it is given
-# (PRV-10). The standard 14 fonts and CMaps are compiled in, so nothing is
-# looked up on the device either.
+# Pure Rust, no I/O: sees only the bytes given. Standard 14 fonts and CMaps compiled in.
 hayro = { version = "0.8", default-features = false, features = ["embed-fonts", "embed-cmaps"] }

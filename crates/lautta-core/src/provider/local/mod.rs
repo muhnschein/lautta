@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The provider for local folders (SPEC §3.3, §10.1, XFR-3). A `VPath` maps
-//! under a root directory; it can never contain `..`, so it cannot leave the
-//! root lexically. Symlinks are not rewritten: one that points outside the
-//! sandbox shows up as an entry flagged `NOT_ACCESSIBLE` (BRW-10).
+//! Provider for local folders. A `VPath` maps under a root and never contains `..`, so it cannot
+//! leave the root lexically. Symlinks are not rewritten: one pointing outside the sandbox is
+//! flagged `NOT_ACCESSIBLE`.
 //!
-//! Blocking calls run on `spawn_blocking`; heavy ones (listing, copying,
-//! hashing) first take a permit from a semaphore that all local providers
-//! share (ARC-6, 4 permits).
+//! Blocking calls run on `spawn_blocking`; heavy ones (listing, copying, hashing) first take a
+//! permit from a semaphore shared by all local providers (4 permits).
 
 mod copy;
 mod entries;
@@ -38,12 +36,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
 
-/// Entries per listing batch (BRW-8).
 pub const LIST_BATCH: usize = 256;
-/// Concurrent heavy blocking tasks across all local providers (ARC-6).
+/// Concurrent heavy blocking tasks across all local providers.
 pub const IO_PERMITS: usize = 4;
 
-/// A fresh semaphore with [`IO_PERMITS`] permits, to share between providers.
 pub fn new_io_semaphore() -> Arc<Semaphore> {
     Arc::new(Semaphore::new(IO_PERMITS))
 }
@@ -58,8 +54,7 @@ pub struct LocalProvider {
 }
 
 impl LocalProvider {
-    /// Capabilities come from the filesystem under `root` (`statfs`), minus
-    /// `Write` on a read-only mount.
+    /// Minus `Write` on a read-only mount.
     pub fn new(root: PathBuf) -> LocalProvider {
         let mut caps = fs_kind(&root).capabilities();
         if sys::statvfs(&root).map(|v| v.read_only).unwrap_or(false) {
@@ -75,19 +70,17 @@ impl LocalProvider {
         }
     }
 
-    /// Shares the process-wide blocking-task semaphore (ARC-6).
     pub fn with_semaphore(mut self, sem: Arc<Semaphore>) -> LocalProvider {
         self.sem = sem;
         self
     }
 
-    /// Adds a capability flag, for example [`cap::TRASH`] on the home filesystem.
     pub fn with_capability(mut self, flag: &str) -> LocalProvider {
         self.caps.raw.insert(flag.to_owned());
         self
     }
 
-    /// Replaces the capabilities (tests, forced policies).
+    /// Tests, forced policies.
     pub fn with_capabilities(mut self, caps: Capabilities) -> LocalProvider {
         self.caps = caps;
         self
@@ -98,7 +91,7 @@ impl LocalProvider {
         self
     }
 
-    /// Listing batch size (tests).
+    /// Tests.
     pub fn with_batch(mut self, batch: usize) -> LocalProvider {
         self.batch = batch.max(1);
         self
@@ -108,7 +101,6 @@ impl LocalProvider {
         &self.root
     }
 
-    /// The real path of `path` under the root.
     pub fn real_path(&self, path: &VPath) -> PathBuf {
         if path.is_root() {
             self.root.clone()
@@ -145,7 +137,6 @@ impl LocalProvider {
     }
 }
 
-/// Runs blocking file system work off the async threads (ARC-6).
 async fn blocking<T, F>(f: F) -> Result<T>
 where
     T: Send + 'static,
@@ -191,8 +182,7 @@ fn unique_sibling(path: &Path) -> PathBuf {
     path.with_file_name(name)
 }
 
-/// Lower-cases for the case-only comparison: Unicode when valid UTF-8, ASCII
-/// otherwise.
+/// Unicode lowercase when valid UTF-8, else ASCII.
 fn fold_case(name: &OsStr) -> Vec<u8> {
     match name.to_str() {
         Some(s) => s.to_lowercase().into_bytes(),
@@ -200,7 +190,6 @@ fn fold_case(name: &OsStr) -> Vec<u8> {
     }
 }
 
-/// True when `to` is `from` in the same folder with different letter case.
 fn is_case_only_change(from: &Path, to: &Path) -> bool {
     match (from.file_name(), to.file_name()) {
         (Some(a), Some(b)) => from.parent() == to.parent() && a != b && fold_case(a) == fold_case(b),
@@ -208,8 +197,6 @@ fn is_case_only_change(from: &Path, to: &Path) -> bool {
     }
 }
 
-/// Renames without replacing: `renameat2(RENAME_NOREPLACE)` where the
-/// filesystem has it, otherwise [`rename_noreplace_fallback`].
 fn rename_noreplace_compat(from: &Path, to: &Path) -> Result<()> {
     match sys::rename_noreplace(from, to) {
         Ok(()) => Ok(()),
@@ -218,8 +205,7 @@ fn rename_noreplace_compat(from: &Path, to: &Path) -> Result<()> {
     }
 }
 
-/// For filesystems without `RENAME_NOREPLACE`: link + unlink is atomic with
-/// respect to the destination (the link fails if it exists); directories and
+/// Link + unlink is atomic w.r.t. the destination (link fails if it exists); directories and
 /// filesystems without hard links get a plain exists-check.
 fn rename_noreplace_fallback(from: &Path, to: &Path) -> Result<()> {
     if !sys::stat(from, false)?.is_dir() {
@@ -237,20 +223,18 @@ fn rename_noreplace_fallback(from: &Path, to: &Path) -> Result<()> {
 
 fn unlink_source(from: &Path, to: &Path) -> Result<()> {
     if let Err(e) = std::fs::remove_file(from) {
-        // Leave exactly one name behind.
         let _ = std::fs::remove_file(to);
         return Err(e.into());
     }
     Ok(())
 }
 
-/// OPS-3: on a case-insensitive filesystem `to` resolves to `from` itself, so
-/// the move goes through an intermediate name.
+/// On a case-insensitive filesystem `to` resolves to `from` itself, so the move goes through an
+/// intermediate name.
 fn rename_case_only(from: &Path, to: &Path, mode: RenameMode) -> Result<()> {
     if let Ok(existing) = sys::stat(to, false) {
         let me = sys::stat(from, false)?;
         if (existing.dev, existing.ino) != (me.dev, me.ino) {
-            // A different file already has the target name.
             return match mode {
                 RenameMode::NoReplace => Err(Error::kind(ErrorKind::AlreadyExists)),
                 RenameMode::Replace => std::fs::rename(from, to).map_err(Into::into),
@@ -287,8 +271,7 @@ fn open_for_upload(dst: &Path, opts: &WriteOptions) -> std::io::Result<File> {
     oo.open(dst)
 }
 
-/// Positions the destination for a resume (XFR-12): the partial file must be
-/// at least `offset` long; anything beyond is discarded.
+/// Partial file must be at least `offset` long; excess is discarded.
 fn position_for_resume(dst: &mut File, offset: u64) -> Result<()> {
     if dst.metadata()?.len() < offset {
         return Err(Error::new(
@@ -310,8 +293,8 @@ fn upload_blocking(src: OwnedFd, dst: &Path, opts: &WriteOptions, progress: &Pro
     } else {
         0
     };
-    // The caller's file offset is irrelevant (netvfs XB-11): regular files
-    // are read from `opts.offset`; pipes are read as they come.
+    // Caller's file offset is irrelevant: regular files read from `opts.offset`; pipes as they
+    // come.
     if is_regular(&srcf) || opts.offset > 0 {
         srcf.seek(SeekFrom::Start(opts.offset))?;
     }
@@ -348,8 +331,7 @@ fn download_blocking(src: &Path, dst: OwnedFd, offset: u64, progress: &ProgressS
     Ok(())
 }
 
-/// Server-side copy of one file or symlink: written to a temporary sibling
-/// and renamed into place, so a failure never leaves a partial destination.
+/// Written to a temp sibling, renamed into place: failure never leaves a partial destination.
 fn copy_blocking(from: &Path, to: &Path, opts: &CopyOptions) -> Result<()> {
     let st = sys::stat(from, false)?;
     if st.is_dir() {
@@ -419,7 +401,6 @@ fn hash_reader<D: sha2::Digest>(mut file: File) -> std::io::Result<Vec<u8>> {
     }
 }
 
-/// "SHA-256", "sha256" and "Sha256" all name the same algorithm.
 fn normalise_algorithm(name: &str) -> String {
     name.chars()
         .filter(|c| *c != '-')

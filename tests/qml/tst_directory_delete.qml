@@ -1,11 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): deleting in a folder (OPS-8). With
-// the Trash off the delete is permanent, so the long-press Delete and the
-// selection bar's Delete open the Delete permanently? dialog first: cancel
-// keeps the file (no remorse runs behind it), accept deletes it at once and
-// the Trash stays as it was. With the Trash on, Delete runs the remorse
-// timer and no dialog, and the file goes to the Trash. The settings are put
-// back at the end for the scenarios after this one.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -22,8 +15,6 @@ ApplicationWindow {
     property int step: 0
     property int waited: 0
     property int trashBefore: -1
-    // Trash loads done, and how many were done when the last reload was asked:
-    // `reload` answers later, `loaded` stays true from the load before.
     property int trashLoads: 0
     property int loadsAsked: -1
     property var row
@@ -61,7 +52,6 @@ ApplicationWindow {
         finish(what)
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)
@@ -78,7 +68,7 @@ ApplicationWindow {
     }
 
     function rowOf(uri) {
-        // Headless, no render loop polishes the list: lay it out by hand.
+        // No render loop headless: lay out by hand.
         var views = findAll(win.contentItem, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < views.length; ++i)
             views[i].forceLayout()
@@ -88,7 +78,6 @@ ApplicationWindow {
         return rows.length > 0 ? rows[0] : null
     }
 
-    // Opens the row's long-press menu and taps Delete; true once tapped.
     function tapDelete(uri) {
         if (!win.menu) {
             win.row = rowOf(uri)
@@ -108,7 +97,6 @@ ApplicationWindow {
         return true
     }
 
-    // The Delete permanently? dialog, once it is on top.
     function openDialog() {
         var page = pageStack.currentPage
         return page && page.uris !== undefined && page.status === PageStatus.Active ? page : null
@@ -123,7 +111,6 @@ ApplicationWindow {
         trash.reload()
     }
 
-    // The reload asked last has answered.
     function trashReloaded() {
         return trash.loaded && !trash.busy && trashLoads > loadsAsked
     }
@@ -175,8 +162,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 4:
-                // Longer than the remorse timer: nothing runs behind a
-                // cancelled dialog.
                 if (win.waited < 40)
                     break
                 if (win.openDialog())
@@ -189,7 +174,6 @@ ApplicationWindow {
                     break
                 if (!win.has(win.kept))
                     return win.fail("a cancelled delete deleted the file")
-                // The selection bar's Delete asks the same.
                 var views = findAll(win.contentItem, function(x) { return x.runSelectionAction !== undefined }, [])
                 if (views.length !== 1)
                     return win.fail("one folder view: " + views.length)
@@ -208,7 +192,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 7:
-                // Deleted at once: there is no timer after the dialog.
                 if (win.waited % 5 === 0)
                     docs.refresh()
                 if (win.has(win.kept))
@@ -254,8 +237,6 @@ ApplicationWindow {
                     break
                 if (trash.count === win.trashBefore + 1)
                     return win.finish("")
-                // File leaves its folder at the rename, Trash row comes
-                // after (`Trash::trash`): a reload in between misses it.
                 if (win.waited > 50)
                     return win.fail("the file is in the Trash: " + trash.count + " after " + win.trashBefore)
                 win.reloadTrash()

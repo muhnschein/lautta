@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The path menu below the folder header (SPEC BRW-9, board PathMenu): the
-// ancestors from the location down, an icon row (Copy address, Edit path,
-// Favourite) and the path editor with completion from cached listings. The
-// header does not scroll, so a menu taller than `maxHeight` scrolls itself.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -10,12 +6,10 @@ import Lautta 1.0
 Item {
     id: menu
 
-    // The PathModel of the folder.
     property var pathModel
     property string currentUri
     property bool open
     property bool editing
-    // The most the open menu is high; less than 0: as high as its content.
     property real maxHeight: -1
 
     signal navigate(string uri)

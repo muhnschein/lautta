@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Aggregate progress: smoothed rate (EWMA) and ETA (XFR-8). Pure arithmetic.
+//! Aggregate progress: smoothed rate (EWMA) and ETA. Pure arithmetic.
 
 /// Smoothing factor of the exponentially weighted moving average. 0.3 reacts
 /// within a few samples yet hides single-chunk bursts.
@@ -30,8 +30,7 @@ impl RateEstimator {
         }
     }
 
-    /// Feeds a sample: total bytes done at `now_ms`. Samples that do not move
-    /// time forward are ignored; a decrease in bytes (restart of a file)
+    /// Samples that do not move time forward are ignored; a decrease in bytes (file restart)
     /// re-bases without a negative rate.
     pub fn sample(&mut self, now_ms: i64, bytes_done: u64) {
         let Some((t0, b0)) = self.last else {
@@ -50,12 +49,11 @@ impl RateEstimator {
         });
     }
 
-    /// Smoothed bytes per second (0 before two samples).
+    /// 0 before two samples.
     pub fn rate(&self) -> u64 {
         self.rate.map_or(0, |r| r.max(0.0) as u64)
     }
 
-    /// Seconds until `remaining` bytes are done at the current rate.
     pub fn eta_secs(&self, remaining: u64) -> Option<u64> {
         let r = self.rate?;
         if r < MIN_RATE_FOR_ETA {
@@ -64,14 +62,13 @@ impl RateEstimator {
         Some((remaining as f64 / r).ceil() as u64)
     }
 
-    /// Forgets history (after a pause the old rate says nothing).
+    /// After a pause the old rate says nothing.
     pub fn reset(&mut self) {
         self.rate = None;
         self.last = None;
     }
 }
 
-/// Human text for the Transfers page: "1.2 GB of 4.0 GB".
 pub fn format_bytes(bytes: u64) -> String {
     const UNITS: [&str; 5] = ["B", "kB", "MB", "GB", "TB"];
     let mut value = bytes as f64;

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Texts of the Browse area that depend on engineering values from the models.
 .pragma library
 .import Sailfish.Silica 1.0 as Silica
 
@@ -28,8 +27,6 @@ function sectionTitle(section) {
     }
 }
 
-// The switch that shows or hides the whole of Volumes or Servers in
-// Settings › Browse page (BRW-12).
 function sectionSwitchTitle(section) {
     if (section === "volumes")
         //% "Memory cards and USB drives"
@@ -38,7 +35,6 @@ function sectionSwitchTitle(section) {
     return qsTrId("lautta-browse-layout-servers")
 }
 
-// The name of a Browse row: the app's own rows have none of their own.
 function rowName(kind, name) {
     switch (kind) {
     case "recents":
@@ -52,8 +48,6 @@ function rowName(kind, name) {
     }
 }
 
-// "58.2 GB free of 128 GB · exFAT" (LOC-3); the size alone for a drive that
-// is not mounted, the file system alone when the space is unknown.
 function volumeLine(free, total, fs) {
     var space = ""
     if (free >= 0 && total >= 0) {
@@ -67,7 +61,6 @@ function volumeLine(free, total, fs) {
     return fs.length > 0 ? space + " · " + fs : space
 }
 
-// A nearby server's line: "SFTP · raspberrypi.local".
 function nearbyLine(provider, host) {
     var parts = []
     if (provider.length > 0)
@@ -77,7 +70,6 @@ function nearbyLine(provider, host) {
     return parts.join(" · ")
 }
 
-// Colours offered for favourites.
 var colours = ["#e7a33c", "#7ec97a", "#e5604f", "#4fa3e5", "#9bd26a", "#b57edc", "#e57fb0", "#8a9aa6"]
 
 function colourName(colour) {

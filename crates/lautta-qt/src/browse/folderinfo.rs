@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `FolderInfo { uri }`: how many items the folder shown by the cover has
-//! (INT-3). Counted from the cached listing the Directory page just made,
-//! so the cover never lists a remote folder itself.
+//! Item count of the cover's folder, from the cached listing the Directory page made: cover never
+//! lists a remote folder.
 
 use crate::runtime::{blocking_then, core};
 use lautta_core::Uri;
@@ -13,7 +12,6 @@ pub struct FolderInfo {
     base: qt_base_class!(trait QObject),
     uri: qt_property!(QString; NOTIFY uriChanged WRITE set_uri),
     uriChanged: qt_signal!(),
-    /// Visible items, `-1` while unknown.
     count: qt_property!(i32; NOTIFY countChanged),
     countChanged: qt_signal!(),
     refresh: qt_method!(fn(&mut self)),
@@ -24,7 +22,6 @@ impl FolderInfo {
         if self.uri != uri {
             self.uri = uri;
             self.uriChanged();
-            // Unknown until the cached listing has been looked at.
             if self.count != -1 {
                 self.count = -1;
                 self.countChanged();

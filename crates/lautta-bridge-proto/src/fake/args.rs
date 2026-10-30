@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Argument validation as the real bridge does it (netvfs `args.cpp`): a
-//! malformed call is `InvalidArgs`, a bad path is `InvalidName`.
+//! Argument validation as the real bridge does it (netvfs `args.cpp`): malformed call is
+//! `InvalidArgs`, bad path `InvalidName`.
 
 use super::fail::Fail;
 use super::tree::normalize;
@@ -16,7 +16,7 @@ const MAX_ID: usize = 64;
 
 pub type Dict = HashMap<String, OwnedValue>;
 
-/// A drive id of `ListDrives` (XB-20): `[A-Za-z0-9_]{1,64}`, never a path.
+/// `[A-Za-z0-9_]{1,64}`, never a path.
 pub fn drive(id: &str) -> Result<String, Fail> {
     let ok =
         !id.is_empty() && id.len() <= MAX_ID && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');
@@ -120,7 +120,6 @@ fn unknown(key: &str) -> Fail {
     Fail::args(&format!("Unknown option \"{key}\""))
 }
 
-/// `SetAttributes.changes`.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Attributes {
     pub mode: Option<i32>,
@@ -147,7 +146,6 @@ pub fn attributes(changes: &Dict) -> Result<Attributes, Fail> {
     Ok(out)
 }
 
-/// `ServerCopy.opts` (and the tree options of `CopyAcross`).
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct CopyOpts {
     pub recursive: bool,
@@ -174,7 +172,6 @@ pub enum Disposition {
     Resume,
 }
 
-/// `Upload.opts` / `Download.opts`.
 #[derive(Debug, PartialEq, Eq)]
 pub struct TransferOpts {
     pub offset: i64,
@@ -236,7 +233,6 @@ pub fn transfer_opts(opts: &Dict, upload: bool) -> Result<TransferOpts, Fail> {
     Ok(out)
 }
 
-/// `Walk.opts`.
 #[derive(Debug, PartialEq, Eq)]
 pub struct WalkOpts {
     pub max_depth: i64,
@@ -261,7 +257,6 @@ pub fn walk_opts(opts: &Dict) -> Result<WalkOpts, Fail> {
     Ok(out)
 }
 
-/// `ConnectAdHoc.opts`.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct AdHocOpts {
     pub user: Option<String>,
@@ -286,7 +281,6 @@ pub fn adhoc_opts(opts: &Dict) -> Result<AdHocOpts, Fail> {
     Ok(out)
 }
 
-/// `Answer.answer`.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct AnswerOpts {
     pub accept: bool,

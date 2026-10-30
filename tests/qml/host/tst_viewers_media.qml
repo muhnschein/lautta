@@ -1,7 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of MediaSource (PRV-8, PRV-9). The host has no GStreamer
-// backend, so playback itself cannot be verified here: what is checked is the
-// wiring (the player object, state, errors) and the download fallback path.
+// SPDX-License-Identifier: LGPL-2.1-or-later Host has no GStreamer backend: wiring and download
+// fallback only, not playback.
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -11,6 +9,11 @@ Item {
     function check(cond, what) {
         if (!cond)
             console.error("FAILED: " + what)
+    }
+
+    function until(done) {
+        for (var i = 0; i < 1200 && !done(); ++i)
+            tools.pump(25)
     }
 
     ViewerTools { id: tools }
@@ -28,24 +31,21 @@ Item {
         idle.stop()
         check(!idle.playing, "controls on an idle source are harmless")
 
-        // Streaming: the player object exists at once for VideoOutput.
         streaming.uri = "lautta://user-documents/a.mp3"
         check(streaming.mediaObject !== null && streaming.mediaObject !== undefined, "mediaObject is the player")
         check(streaming.mode === "stream" && streaming.loading, "streaming starts")
         streaming.play()
-        tools.pump(900)
+        until(function() { return !streaming.loading && streaming.errorKind !== "" })
         check(!streaming.loading, "source opened")
-        // Without a multimedia backend the player reports a missing service.
         check(streaming.errorKind === "Unsupported", "no backend is reported: '" + streaming.errorKind + "'")
         check(!streaming.playing && streaming.state === "stopped", "not playing")
         streaming.uri = "lautta://user-documents/missing.mp3"
-        tools.pump(500)
+        until(function() { return !streaming.loading && streaming.errorKind !== "" })
         check(streaming.errorKind === "NotFound" || streaming.errorKind === "Unsupported", "missing file: " + streaming.errorKind)
 
-        // PRV-9: download-then-play copies the file first.
         copying.uri = "lautta://user-documents/a.mp3"
         check(copying.mode === "download" && copying.downloading, "download mode from the start")
-        tools.pump(900)
+        until(function() { return !copying.downloading })
         check(!copying.downloading && copying.downloadProgress === 1, "downloaded: " + copying.downloadProgress)
         check(copying.mode === "download", "stays in download mode")
     }

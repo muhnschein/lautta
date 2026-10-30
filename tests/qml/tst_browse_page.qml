@@ -1,19 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Every kind of Browse row, so that all delegates are instantiated, and what
-// they offer (SPEC §15.2): the pulley has no Connect to server and no
-// Recents, no menu has an entry that hides its row (Settings › Browse page
-// does that), servers' menus have Edit server and neither Disconnect nor
-// Location settings, favourites' menus have Copy address and no Move up or
-// down, a volume's has Open Storage settings only while the bridge offers it
-// (NVB-13) and Unmount only when the bridge mounted it, a drive that is not
-// mounted is dimmed, shows a dot of the primary colour where a mounted one
-// has the highlight colour's, has Mount and mounts when tapped instead of
-// opening, and is busy while the mount is under way, a locked drive is
-// dimmed, shows a padlock and no dot, has Open Storage settings only and
-// opens Settings › Storage when tapped, and without the bridge's
-// storage-settings has no menu and does nothing (LOC-3), and the Recents row
-// of On this device opens Recents.
-// Fails naming the row whose menu differs.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -25,12 +10,8 @@ ApplicationWindow {
     property bool scenarioRunning: true
     property int step: 0
     property int waited: 0
-    // Bridge calls that failed without a subject: here only Open Storage
-    // settings, which fails as no bridge answers.
     property int storageCalls: 0
 
-    // The visible entries of each row's menu, by name of the row. No
-    // translations are loaded here: the texts are the ids.
     readonly property var menus: [
         { "name": "Thesis", "items": ["edit-favourite", "copy-address", "remove-favourite"] },
         { "name": "Documents", "items": ["add-favourite", "copy-address"] },
@@ -45,7 +26,6 @@ ApplicationWindow {
         { "name": "files.kotisivu.fi", "items": ["connect-recent", "copy-address", "remove-recent"] }
     ]
 
-    // Without the bridge's storage-settings the volume's menu lacks it.
     readonly property var withoutStorage: { "name": "SD card", "items": ["add-favourite", "copy-address"] }
 
     initialPage: Component {
@@ -87,7 +67,6 @@ ApplicationWindow {
     function findAll(item, pred, out) {
         if (!item)
             return out
-        // A flickable's contentItem is one of its children too.
         if (pred(item) && out.indexOf(item) < 0)
             out.push(item)
         var kids = item.children || []
@@ -102,7 +81,7 @@ ApplicationWindow {
         return x.__silica_menuitem !== undefined
     }
 
-    // The Browse page's list, laid out (headless, no render loop polishes it).
+    // No render loop headless: lay out by hand.
     function browseList() {
         var views = findAll(pageStack.currentPage, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         if (views.length > 0)
@@ -110,7 +89,6 @@ ApplicationWindow {
         return views.length > 0 ? views[0] : null
     }
 
-    // The delegate of the row named `name` (of kind `kind` when given).
     function rowOf(list, name, kind) {
         var rows = list.model
         for (var i = 0; i < rows.count; ++i) {
@@ -148,14 +126,11 @@ ApplicationWindow {
         return findAll(row, function(x) { return x.opacity === Theme.opacityHigh }, []).length
     }
 
-    // The colours of the status dots `row` shows.
     function statusIcons(row) {
         return findAll(row, function(x) { return x.visible && x.objectName === "statusDot" }, [])
             .map(function(dot) { return String(dot.color) }).join(",")
     }
 
-    // A drive that is not mounted (LOC-3): dimmed, a dot of the primary colour, and a tap
-    // mounts it instead of opening a page for a volume that is not there.
     function checkUnmountedRow(list) {
         var row = rowOf(list, "STICK")
         if (!row || !row.unmounted)
@@ -166,7 +141,6 @@ ApplicationWindow {
         var mounted = rowOf(list, "CARD")
         if (mounted.unmounted || statusIcons(mounted) !== String(Theme.highlightColor))
             return fail("CARD is shown as not mounted: [" + statusIcons(mounted) + "]")
-        // Its icon and its labels, and nothing of the mounted one.
         if (stickDimmed < dimmed(mounted) + 2)
             return fail("STICK is not dimmed")
         row = rowOf(list, "STICK")
@@ -174,13 +148,10 @@ ApplicationWindow {
         row.clicked(null)
         if (pageStack.depth !== depth)
             fail("tapping STICK opened a page")
-        // The mount is under way until the bridge answers (here: that none is there).
         if (row.statusIndicator !== "busy" || Bridge.busyDrives.join(",") !== "sda1")
             fail("STICK, tapped, is " + row.statusIndicator + " with drives [" + Bridge.busyDrives + "] busy, not busy")
     }
 
-    // A drive Settings › Storage unlocks first (LOC-3): dimmed, a padlock and
-    // no dot; a tap opens Settings › Storage, no page and no mount.
     function checkLockedRow(list) {
         var row = rowOf(list, "VAULT")
         if (!row || !row.locked || row.unmounted)
@@ -197,7 +168,6 @@ ApplicationWindow {
             fail("tapping VAULT opened a page or mounted it")
     }
 
-    // Without the bridge's storage-settings: no menu, and a tap does nothing.
     function checkLockedRowWithoutStorage(list) {
         var row = rowOf(list, "VAULT")
         if (row.menu !== null)
@@ -224,9 +194,6 @@ ApplicationWindow {
             if (++win.waited > 100)
                 return win.fail("step " + win.step + " timed out")
             if (win.step === 1) {
-                // RecentsPage is the page that knows whether recents are on;
-                // the tap on VAULT asked the bridge once, the one without
-                // storage settings not at all.
                 if (pageStack.currentPage.recentsOn === undefined || win.storageCalls === 0)
                     return
                 if (win.storageCalls !== 1)

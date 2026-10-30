@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Executes one plan item: chooses the data path (XFR-3), moves the bytes
-//! through a scratch fd (NVB-9), names temporaries (NVB-11), resumes
-//! (XFR-12), verifies (XFR-4) and finishes moves (OPS-4).
+//! Executes one plan item: chooses the data path, moves bytes through a scratch fd, names
+//! temporaries, resumes, verifies, finishes moves.
 //!
-//! Nothing here touches queue state; the engine feeds in an [`ItemEnv`] and a
-//! [`ItemJob`] and acts on the [`Outcome`].
+//! Touches no queue state; engine feeds an [`ItemEnv`] and an [`ItemJob`] and acts on the
+//! [`Outcome`].
 
 use super::conflict::{build_conflict, decide, numbered_name, Decision, WriteMode};
 use super::model::TransferOptions;
@@ -28,7 +27,6 @@ use std::sync::Arc;
 /// to 255 bytes on most file systems and the suffix needs room.
 const MAX_TEMP_STEM: usize = 200;
 
-/// Everything an item needs from the outside.
 #[derive(Clone)]
 pub struct ItemEnv {
     pub src: Arc<dyn Provider>,
@@ -36,18 +34,16 @@ pub struct ItemEnv {
     pub same_location: bool,
     pub op: OperationKind,
     pub options: TransferOptions,
-    /// Where anonymous scratch files live.
     pub scratch_dir: PathBuf,
     pub trasher: Option<Arc<dyn Trasher>>,
-    /// Bytes of this item done so far.
     pub progress: ProgressSink,
 }
 
 #[derive(Debug, Clone)]
 pub struct ItemJob {
     pub plan: PlanItem,
-    /// Name of the destination temporary (NVB-11), fixed before the first
-    /// attempt so a later run finds the partial file.
+    /// Destination temporary name, fixed before the first attempt so a later run finds the partial
+    /// file.
     pub temp_name: Vec<u8>,
 }
 
@@ -58,14 +54,13 @@ pub enum Outcome {
     /// The item and everything below it is finished (renamed folder,
     /// trashed or recursively deleted subtree).
     Subtree,
-    /// A conflict needs an answer.
     Ask(Conflict),
     /// *Keep both*: use this destination instead and run again.
     KeepBoth(Uri),
 }
 
-/// `.<name>.lautta-<shortid>.part` (NVB-11). The short id is derived from the
-/// transfer and item so the same item always finds its partial file.
+/// `.<name>.lautta-<shortid>.part`. Short id derives from transfer and item so the same item always
+/// finds its partial file.
 pub fn temp_name_for(name: &[u8], transfer: i64, seq: u32) -> Vec<u8> {
     let t = u32::try_from(transfer & 0xffff_ffff).unwrap_or(0);
     let short = t.wrapping_mul(0x9E37_79B1) ^ seq;
@@ -76,9 +71,8 @@ pub fn temp_name_for(name: &[u8], transfer: i64, seq: u32) -> Vec<u8> {
     out
 }
 
-/// The checksum algorithm both sides can compute, if any (XFR-4). A provider
-/// that advertises `Checksums` without listing algorithms is assumed to do
-/// SHA-256.
+/// Checksum algorithm both sides can compute, if any. `Checksums` without listed algorithms is
+/// assumed SHA-256.
 pub fn common_algorithm(a: &Capabilities, b: &Capabilities) -> Option<String> {
     const PREFERRED: [&str; 3] = ["sha256", "sha1", "md5"];
     if !a.has(cap::CHECKSUMS) || !b.has(cap::CHECKSUMS) {
@@ -149,7 +143,6 @@ fn temp_path(dst: &Uri, temp_name: &[u8]) -> Result<VPath> {
         .join(temp_name)
 }
 
-/// Removes a leftover temporary (best effort).
 pub async fn cleanup_temp(dst: &dyn Provider, job: &ItemJob) {
     if let Ok(p) = temp_path(&job.plan.dst, &job.temp_name) {
         if let Err(e) = remove_if_exists(dst, &p).await {
@@ -157,8 +150,6 @@ pub async fn cleanup_temp(dst: &dyn Provider, job: &ItemJob) {
         }
     }
 }
-
-// ---------------------------------------------------------------- files
 
 async fn run_file(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     let plan = &job.plan;
@@ -242,8 +233,8 @@ async fn server_copy_to(
         .await
 }
 
-/// XFR-12: the committed offset is the size of the partial file at the
-/// destination. Providers without `ResumeUpload` restart the file.
+/// Committed offset is the size of the partial file at the destination. Providers without
+/// `ResumeUpload` restart the file.
 async fn committed_offset(
     env: &ItemEnv,
     write_path: &VPath,
@@ -279,7 +270,6 @@ fn clamp_to(done: u64, total: Option<u64>) -> u64 {
     total.map_or(done, |t| done.min(t))
 }
 
-/// Download and upload both count for half of the item's progress.
 fn phase_sinks(report: ProgressSink, base: u64, total: Option<u64>) -> (ProgressSink, ProgressSink) {
     let down = Arc::new(AtomicU64::new(base));
     let up = Arc::new(AtomicU64::new(base));
@@ -301,10 +291,9 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> std::io::Result<T> + Se
         .map_err(Error::from)
 }
 
-/// download_into(src -> scratch fd), then upload_from(scratch fd -> dst). A
-/// scratch file rather than a pipe: providers write with `pwrite` at explicit
-/// offsets (NVB-9), which a pipe cannot take, and resuming needs a seekable
-/// source.
+/// download_into(src -> scratch fd), then upload_from(scratch fd -> dst). Scratch file, not a pipe:
+/// providers write with `pwrite` at explicit offsets, which a pipe cannot take, and resuming needs
+/// a seekable source.
 async fn stream_to(
     env: &ItemEnv,
     job: &ItemJob,
@@ -372,7 +361,7 @@ fn wanted_mtime(env: &ItemEnv, plan: &PlanItem, src: &Entry) -> Option<std::time
     src.modified.or_else(|| plan.mtime_ms.map(ms_to_system_time))
 }
 
-/// OPS-5: modes only when the user enabled it and both sides support them.
+/// Modes only when the user enabled it and both sides support them.
 fn wanted_mode(env: &ItemEnv, src: &Entry) -> Option<u32> {
     let both = env.src.capabilities().has(cap::PERMISSIONS) && env.dst.capabilities().has(cap::PERMISSIONS);
     (env.options.preserve_mode && both).then_some(src.mode).flatten()
@@ -386,8 +375,8 @@ fn digests_match(a: &[u8], b: &[u8]) -> Result<()> {
     }
 }
 
-/// XFR-4: compares checksums when both sides can compute one. A provider
-/// that turns out not to support it just skips the check.
+/// Compares checksums when both sides can compute one. A provider that turns out not to support it
+/// just skips the check.
 async fn verify_checksum(env: &ItemEnv, src: &VPath, dst: &VPath) -> Result<()> {
     let Some(alg) = common_algorithm(&env.src.capabilities(), &env.dst.capabilities()) else {
         return Ok(());
@@ -484,8 +473,6 @@ async fn keep_both(env: &ItemEnv, plan: &PlanItem) -> Result<Outcome> {
     Err(Error::new(ErrorKind::AlreadyExists, "no free name for the copy"))
 }
 
-// ------------------------------------------------------ folders, links
-
 async fn run_dir(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     let plan = &job.plan;
     let can_resume = env.dst.capabilities().has(cap::RESUME_UPLOAD);
@@ -539,8 +526,6 @@ async fn run_symlink(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     }
     Ok(Outcome::Done)
 }
-
-// --------------------------------------------------------------- deletes
 
 async fn run_delete(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     let plan = &job.plan;

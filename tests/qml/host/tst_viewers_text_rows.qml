@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of the text viewer's rows (PRV-4, TextRows.js): one row per
-// line, numbered; tabs to the next multiple of four columns; a line longer
-// than 1000 characters goes on over further rows, never cut inside a
-// surrogate pair.
 import QtQuick 2.6
 import "../../../qml/components/viewers/TextRows.js" as TextRows
 
@@ -16,7 +12,6 @@ Item {
         return new Array(n + 1).join(s)
     }
 
-    // "number:text" of every row.
     function shown(layout) {
         return layout.rows.map(function(r) { return r.number + ":" + r.text }).join("|")
     }
@@ -54,7 +49,6 @@ Item {
         check(longLine.lines === 3, "lines " + longLine.lines)
         check(longLine.rows[1].text + longLine.rows[2].text + longLine.rows[3].text === repeat("c", 2500), "nothing is lost")
 
-        // A pair of surrogates (one character) across the 1000th unit stays whole.
         var pair = "\uD83D\uDE00"
         var emoji = TextRows.rows(repeat("d", 999) + pair + "e")
         check(emoji.rows.length === 2 && emoji.rows[0].text.length === 999 && emoji.rows[1].text === pair + "e",

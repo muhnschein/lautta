@@ -1,8 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// New folder in `parentUri` (board NewItem). The dialog only asks: after it
-// is accepted the caller creates the folder with
-// `DirectoryModel.createFolder(itemName)`. A name that already exists is
-// shown as an error instead of a hint, and the button stays off.
+// SPDX-License-Identifier: LGPL-2.1-or-later Only asks; caller creates the folder on accept.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -14,7 +10,6 @@ Dialog {
 
     property string parentUri
     readonly property string itemName: nameField.text
-    // "folder", "file" or "" for what already has this name here.
     readonly property string clash: parentModel.count >= 0 ? parentModel.nameKind(nameField.text) : ""
     readonly property bool badName: Names.invalid(nameField.text)
 

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! netvfs provider: forwards to the bridge (NVB-7..12). Names and paths cross
-//! as bytes (NVB-8), local data crosses as file descriptors only (NVB-9), and
-//! every request that can carry a lane hint carries one (NVB-7).
+//! netvfs provider: forwards to the bridge. Names and paths cross as bytes, local data as file
+//! descriptors only, and every request that can carry a lane hint carries one.
 
 use super::{
     no_progress, AttributeChanges, CopyOptions, Disposition, Lane, ProgressSink, Provider, ReadHandle,
@@ -21,7 +20,6 @@ use std::os::fd::OwnedFd;
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc;
 
-/// A location served by the bridge.
 pub struct NetvfsProvider {
     client: BridgeClient,
     /// The bridge's id (`account:1`).
@@ -31,10 +29,9 @@ pub struct NetvfsProvider {
 }
 
 impl NetvfsProvider {
-    /// A provider for `location` (`nv-account:1` or `account:1`). Capabilities
-    /// are fetched by [`NetvfsProvider::refresh_capabilities`], which
-    /// [`Provider::known_capabilities`] does on first use; until then only
-    /// `Write` is assumed.
+    /// A provider for `location` (`nv-account:1` or `account:1`). Capabilities come from
+    /// [`NetvfsProvider::refresh_capabilities`], which [`Provider::known_capabilities`] runs on
+    /// first use; until then only `Write` is assumed.
     pub fn new(client: BridgeClient, location: &str) -> NetvfsProvider {
         NetvfsProvider {
             client,
@@ -43,19 +40,17 @@ impl NetvfsProvider {
         }
     }
 
-    /// [`NetvfsProvider::new`] plus the capabilities of the location.
     pub async fn connect(client: BridgeClient, location: &str) -> Result<NetvfsProvider> {
         let provider = NetvfsProvider::new(client, location);
         provider.refresh_capabilities().await?;
         Ok(provider)
     }
 
-    /// The internal location id (`nv-account:1`, LOC-7).
+    /// Internal location id (`nv-account:1`).
     pub fn location(&self) -> LocationId {
         location_id(&self.loc)
     }
 
-    /// Reads `Capabilities(loc)` again, e.g. after a reconnect.
     pub async fn refresh_capabilities(&self) -> Result<()> {
         let wire = rpc(self.link()?.proxy().capabilities(&self.loc).await)?;
         *self
@@ -65,7 +60,6 @@ impl NetvfsProvider {
         Ok(())
     }
 
-    /// Whether the capabilities came from the bridge yet.
     pub fn has_capabilities(&self) -> bool {
         self.caps
             .read()
@@ -77,8 +71,8 @@ impl NetvfsProvider {
         self.client.files_link()
     }
 
-    /// Removes a folder with everything below it in one bridge job
-    /// (`RemoveTree`); progress counts the removed entries.
+    /// Removes a folder with everything below in one `RemoveTree` job; progress counts removed
+    /// entries.
     pub async fn remove_tree(&self, path: &VPath, progress: ProgressSink) -> Result<JobOutcome> {
         let link = self.link()?;
         link.run_job(link.proxy().remove_tree(&self.loc, path.as_bytes()), &progress)
@@ -87,7 +81,6 @@ impl NetvfsProvider {
 }
 
 impl BridgeClient {
-    /// The provider of a bridge location.
     pub fn provider(&self, location: &str) -> NetvfsProvider {
         NetvfsProvider::new(self.clone(), location)
     }
@@ -184,8 +177,8 @@ impl Provider for NetvfsProvider {
             .await)
     }
 
-    /// An empty upload from a pipe whose writer is already closed: the
-    /// bridge creates the file exclusively (NVB-9, XB-11).
+    /// Empty upload from a pipe whose writer is already closed: bridge creates the file
+    /// exclusively.
     async fn make_file(&self, path: &VPath) -> Result<()> {
         let (reader, writer) = rustix::pipe::pipe_with(rustix::pipe::PipeFlags::CLOEXEC)?;
         drop(writer);
@@ -334,7 +327,6 @@ impl Provider for NetvfsProvider {
     }
 }
 
-/// A bridge read handle; closed when dropped (NVB-7).
 struct NetvfsReadHandle {
     link: Arc<Link>,
     handle: u32,
@@ -347,7 +339,7 @@ impl ReadHandle for NetvfsReadHandle {
         self.size
     }
 
-    /// At most 1 MiB per call (XB-17); a larger `max` is answered shorter.
+    /// At most 1 MiB per call; a larger `max` is answered shorter.
     async fn read_at(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
         if max == 0 {
             return Ok(Vec::new());
@@ -375,7 +367,7 @@ impl Drop for NetvfsReadHandle {
             let link = self.link.clone();
             let handle = self.handle;
             rt.spawn(async move {
-                // A closed connection has closed its handles already (XB-13).
+                // Closed connection has closed its handles already.
                 let _ = link.proxy().close(handle).await;
             });
         }

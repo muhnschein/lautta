@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! User-level actions of the viewers area on [`Core`](crate::app::Core):
-//! loading text (PRV-4), Markdown and EXIF sources, the folder's images,
-//! thumbnails of remote images and PDFs, remote full images (PRV-2,
-//! PRV-3, PRV-14), media for playback (PRV-8, PRV-9) and recents (ORG-2).
-//! Everything is Qt-free; the Qt layer forwards to these functions.
+//! Viewers area on `Core`: text, Markdown and EXIF sources, folder images, remote thumbnails and
+//! images, media playback. Qt-free.
 
 use crate::app::Core;
 use crate::entry::Entry;
@@ -14,13 +11,14 @@ use crate::preview::exif::{self, ExifInfo};
 use crate::preview::highlight::{self, ColourJob, ColouredText};
 use crate::preview::markdown;
 use crate::preview::text::{self as ptext, TextDoc};
-use crate::provider::{list_all, Lane, ProgressSink, Provider, ReadHandle, ReadOptions};
+use crate::provider::{list_all, read_all, Lane, ProgressSink, Provider, ReadHandle, ReadOptions};
 use crate::settings::Settings;
 use crate::sort::sort_permutation;
 use crate::thumbs::{
     remote_thumbnail, thumb_key, thumbnail_source, ThumbJobs, ThumbSettings, ThumbSource, ThumbnailCache,
 };
 use crate::thumbs_pdf::PdfThumbs;
+use crate::thumbs_text::{thumb_text, TEXT_THUMB_BYTES};
 use crate::uri::Uri;
 use crate::vpath::VPath;
 use std::collections::HashMap;
@@ -31,29 +29,23 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 
-/// Largest remote image decoded for the viewer (memory, PRF-4).
 pub const MAX_FULL_IMAGE_BYTES: u64 = 100 * 1000 * 1000;
-/// How much of an image is read to find its EXIF block.
 pub const EXIF_HEAD_BYTES: u64 = 512 * 1024;
-/// Thumbnail edge limits for `image://lautta-thumb`.
 pub const MIN_THUMB: u32 = 16;
 pub const MAX_THUMB: u32 = 1024;
 
-/// A text file as the viewer sees it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoadedText {
     pub doc: TextDoc,
     pub size: Option<u64>,
 }
 
-/// A text file for the text viewer, with its colours (PRV-13).
 #[derive(Debug)]
 pub struct ViewedText {
     pub size: Option<u64>,
     pub truncated: bool,
     pub valid_utf8: bool,
-    /// The lines: coloured when that was quick, else plain until
-    /// `colouring` finishes.
+    /// Coloured when quick, else plain until `colouring` finishes.
     pub lines: ColouredText,
     pub colouring: Option<ColourJob>,
 }
@@ -69,11 +61,9 @@ pub struct ExifReport {
     pub name: String,
     pub size: Option<u64>,
     pub modified_ms: Option<i64>,
-    /// `None` when the file carries no EXIF block.
     pub info: Option<ExifInfo>,
 }
 
-/// One image of the folder the viewer swipes through.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImageItem {
     pub uri: Uri,
@@ -84,19 +74,17 @@ pub struct ImageItem {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FullImage {
     pub bytes: Vec<u8>,
-    /// EXIF orientation 1-8 the decoder must apply (1 = none).
+    /// 1-8; 1 = none.
     pub orientation: u8,
 }
 
-/// Splits `<uri>?size=N` of the thumbnail provider; the size is clamped.
-/// The URI may arrive percent-encoded once more (QML helpers).
+/// Size is clamped. URI may arrive percent-encoded once more (QML helpers).
 pub fn parse_thumb_id(id: &str) -> Option<(Uri, u32)> {
     let (uri_part, query) = id.rsplit_once('?')?;
     let size: u32 = query.strip_prefix("size=")?.parse().ok()?;
     Some((parse_image_uri(uri_part)?, size.clamp(MIN_THUMB, MAX_THUMB)))
 }
 
-/// The id of `image://lautta-file/<uri>`.
 pub fn parse_image_uri(id: &str) -> Option<Uri> {
     if let Ok(u) = Uri::parse(id) {
         return Some(u);
@@ -116,12 +104,10 @@ fn display(uri: &Uri) -> String {
     uri.name().map(crate::vpath::display_name).unwrap_or_default()
 }
 
-/// Window the media reader keeps ahead of the player (PRV-8).
 pub const READ_AHEAD_BYTES: usize = 2 * 1024 * 1024;
 
-/// A read handle with a 2 MiB window for the media device (PRV-8): the
-/// player asks for small pieces, the provider is asked for large ones, and
-/// the next window is announced with `read_ahead` so a bridge can prefetch.
+/// Player asks small pieces, provider large ones; next window is announced with `read_ahead` so a
+/// bridge can prefetch.
 pub struct ReadAhead {
     handle: Arc<dyn ReadHandle>,
     size: u64,
@@ -129,7 +115,7 @@ pub struct ReadAhead {
 }
 
 impl ReadAhead {
-    /// The size must be known (media streams have a length).
+    /// Size must be known (media streams have a length).
     pub fn new(handle: Arc<dyn ReadHandle>) -> Result<ReadAhead> {
         let size = handle
             .size()
@@ -145,7 +131,6 @@ impl ReadAhead {
         self.size
     }
 
-    /// Up to `max` bytes at `offset`; empty at the end of the file.
     pub async fn read(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
         if offset >= self.size || max == 0 {
             return Ok(Vec::new());
@@ -179,8 +164,6 @@ impl ReadAhead {
     }
 }
 
-/// Process-wide thumbnail state: the disk cache (PRV-2) and the job
-/// scheduler (PRV-3). Created once per cache folder.
 pub struct Previews {
     cache: ThumbnailCache,
     jobs: ThumbJobs,
@@ -192,8 +175,15 @@ pub struct Previews {
 type ThumbResult = Result<Arc<Vec<u8>>>;
 type ThumbSender = oneshot::Sender<ThumbResult>;
 
-/// A pending thumbnail: await `rx`; `cancel` (or the part kept after taking
-/// `rx`) drops the request when the delegate is gone.
+pub struct TextTicket {
+    pub rx: oneshot::Receiver<Option<String>>,
+    pub key: String,
+}
+
+/// Image sizes are 16 or more.
+const TEXT_KEY_SIZE: u32 = 1;
+
+/// `cancel` (or the part kept after taking `rx`) drops the request when the delegate is gone.
 pub struct ThumbTicket {
     pub rx: oneshot::Receiver<ThumbResult>,
     pub cancel: ThumbCancel,
@@ -205,8 +195,7 @@ impl ThumbTicket {
     }
 }
 
-/// Cancels one waiter of a thumbnail job; the job itself is cancelled when
-/// nobody else waits for the same thumbnail (PRV-3).
+/// Job is cancelled when nobody else waits for the same thumbnail.
 #[derive(Clone)]
 pub struct ThumbCancel {
     previews: Arc<Previews>,
@@ -229,8 +218,7 @@ impl Previews {
         &self.jobs
     }
 
-    /// Queues the thumbnail of a remote image or of a PDF. Several requests
-    /// for the same file and size share one job.
+    /// Requests for the same file and size share one job.
     pub fn request(self: &Arc<Self>, core: Arc<Core>, uri: Uri, size: u32) -> ThumbTicket {
         let job_key = thumb_key(&uri.to_string(), size, None, None);
         let waiter = self.next_waiter.fetch_add(1, Ordering::Relaxed);
@@ -263,6 +251,53 @@ impl Previews {
         }
     }
 
+    /// Each request its own job, so cancelling one leaves the others.
+    pub fn request_text(self: &Arc<Self>, core: Arc<Core>, uri: Uri) -> TextTicket {
+        let n = self.next_waiter.fetch_add(1, Ordering::Relaxed);
+        let key = format!("text:{n}:{uri}");
+        let (tx, rx) = oneshot::channel();
+        let me = Arc::clone(self);
+        let location = uri.location.clone();
+        self.jobs.request(&key, &location, async move {
+            let _ = tx.send(me.make_text(&core, &uri).await);
+        });
+        TextTicket { rx, key }
+    }
+
+    pub fn cancel_text(&self, key: &str) {
+        self.jobs.cancel(key);
+    }
+
+    async fn make_text(&self, core: &Core, uri: &Uri) -> Option<String> {
+        let file = ThumbFile::open(core, uri).await.ok()?;
+        let entry = &file.entry;
+        let settings = ThumbSettings::new(&core.settings());
+        if thumbnail_source(entry, file.local, true, &settings) != ThumbSource::Text {
+            return None;
+        }
+        let key = thumb_key(
+            &file.key_uri,
+            TEXT_KEY_SIZE,
+            entry.modified_ms(),
+            entry.etag.as_deref(),
+        );
+        if let Some(hit) = self.cache.get(&key).filter(|_| !file.local) {
+            return thumb_text(&hit);
+        }
+        let handle = file
+            .provider
+            .open_read(&file.path, Lane::Interactive)
+            .await
+            .ok()?;
+        let head = read_all(handle.as_ref(), TEXT_THUMB_BYTES).await.ok()?;
+        if !file.local {
+            if let Err(e) = self.cache.put(&key, &head) {
+                log::warn!("text thumbnail not cached: {e}");
+            }
+        }
+        thumb_text(&head)
+    }
+
     fn finish(&self, key: &str, result: ThumbResult) {
         let senders = lock(&self.waiters).remove(key).unwrap_or_default();
         for (_, tx) in senders {
@@ -288,19 +323,14 @@ impl Previews {
         }
     }
 
-    /// The thumbnail itself, if `thumbnail_source` says the app makes it
-    /// (a server file; local ones are the system thumbnailer's): cache
-    /// first, then for an image the first 64 KiB or the whole file (PRV-2),
-    /// for a PDF its first page (PRV-14).
+    /// App makes only server files' thumbnails; local ones are the system thumbnailer's.
     async fn make(&self, core: &Core, uri: &Uri, size: u32) -> ThumbResult {
         let file = ThumbFile::open(core, uri).await?;
         let entry = &file.entry;
         if entry.is_dir() {
             return Err(Error::kind(ErrorKind::IsADirectory));
         }
-        // The folder's own *Show thumbnails* was asked where the row was made.
-        // Read when asked, so a change in View options holds from the next
-        // thumbnail on.
+        // Read when asked: a View options change holds from the next thumbnail on.
         let settings = ThumbSettings::new(&core.settings());
         if thumbnail_source(entry, file.local, true, &settings) != ThumbSource::App {
             return Err(Error::new(
@@ -331,19 +361,15 @@ impl Previews {
     }
 }
 
-/// The file a thumbnail is made from: where to read it and what it is.
 struct ThumbFile {
     provider: Arc<dyn Provider>,
     path: VPath,
     entry: Entry,
-    /// In a folder of this device.
     local: bool,
-    /// What the cache keys name the file by.
     key_uri: String,
 }
 
 impl ThumbFile {
-    /// The file `uri` names.
     async fn open(core: &Core, uri: &Uri) -> Result<ThumbFile> {
         let provider = core.provider(&uri.location)?;
         let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
@@ -357,28 +383,24 @@ impl ThumbFile {
     }
 }
 
-/// One `Previews` per thumbnail folder.
 type PreviewsByDir = Mutex<Vec<(PathBuf, Arc<Previews>)>>;
 
 static PREVIEWS: OnceLock<PreviewsByDir> = OnceLock::new();
 
 impl Core {
-    /// A random-access reader of the file (viewers and media).
     pub async fn open_reader(&self, uri: &Uri) -> Result<Arc<dyn ReadHandle>> {
         let provider = self.provider(&uri.location)?;
         let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
         Ok(Arc::from(handle))
     }
 
-    /// Notes a viewed or opened file in Recents (ORG-2). Failures do
-    /// not matter to the viewer.
+    /// Failures do not matter to the viewer.
     pub fn note_viewed(&self, uri: &Uri, kind: RecentKind) {
         if let Err(e) = self.recents.record(uri, &display(uri), kind) {
             log::debug!("recents not updated: {e}");
         }
     }
 
-    /// Reads a text file for the viewer (PRV-4).
     pub async fn load_text(&self, uri: &Uri) -> Result<LoadedText> {
         let provider = self.provider(&uri.location)?;
         let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
@@ -393,9 +415,7 @@ impl Core {
         })
     }
 
-    /// Reads a text file for the text viewer and colours it (PRV-13). The
-    /// colours come with the text when they are ready within
-    /// [`highlight::FIRST_WAIT`]; otherwise the text comes plain and the
+    /// Colours come with the text if ready within [`highlight::FIRST_WAIT`], else text is plain and
     /// colouring goes on.
     pub async fn view_text(&self, uri: &Uri) -> Result<ViewedText> {
         let loaded = self.load_text(uri).await?;
@@ -420,7 +440,7 @@ impl Core {
         })
     }
 
-    /// Markdown as Qt rich text; only the first MiB is rendered (PRV-4).
+    /// Only the first MiB is rendered.
     pub async fn render_markdown(&self, uri: &Uri) -> Result<RenderedMarkdown> {
         let loaded = self.load_text(uri).await?;
         Ok(RenderedMarkdown {
@@ -429,7 +449,6 @@ impl Core {
         })
     }
 
-    /// EXIF fields of an image for the details panel (PRV-4).
     pub async fn exif_report(&self, uri: &Uri) -> Result<ExifReport> {
         let provider = self.provider(&uri.location)?;
         let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
@@ -446,8 +465,6 @@ impl Core {
         })
     }
 
-    /// The folder's images in the folders' sort order (PRV-4: swipe through
-    /// the folder).
     pub async fn list_images(&self, folder: &Uri) -> Result<Vec<ImageItem>> {
         let provider = self.provider(&folder.location)?;
         let all = list_all(provider.as_ref(), &folder.path, Lane::Interactive).await?;
@@ -471,7 +488,6 @@ impl Core {
             .collect()
     }
 
-    /// A file's bytes for the full image provider (remote files, PRV-4).
     pub async fn full_image(&self, uri: &Uri) -> Result<FullImage> {
         let provider = self.provider(&uri.location)?;
         let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
@@ -486,9 +502,8 @@ impl Core {
         Ok(FullImage { bytes, orientation })
     }
 
-    /// A changed thumbnail cache setting holds at once (§18): an open cache
-    /// takes the new budget, trimmed off the caller's thread (ARC-6); one
-    /// opened later reads the setting itself.
+    /// Open cache takes the new budget, trimmed off the caller's thread; one opened later reads the
+    /// setting itself.
     pub(crate) fn follow_thumbnail_budget(&self, settings: &Settings) {
         let dir = self.paths.thumbs_dir();
         let list = lock(PREVIEWS.get_or_init(Mutex::default));
@@ -502,7 +517,6 @@ impl Core {
         }
     }
 
-    /// The thumbnail state for this core's cache folder.
     pub fn previews(&self, rt: &Handle) -> Result<Arc<Previews>> {
         let dir = self.paths.thumbs_dir();
         let mut list = lock(PREVIEWS.get_or_init(Mutex::default));
@@ -521,8 +535,7 @@ impl Core {
         Ok(previews)
     }
 
-    /// PRV-9 fallback: copies a media file into the private cache so it can
-    /// be played from disk. Returns the local file.
+    /// Fallback: copies a media file into the private cache so it plays from disk.
     pub async fn download_for_playback(&self, uri: &Uri, progress: ProgressSink) -> Result<PathBuf> {
         let provider = self.provider(&uri.location)?;
         let dir = self.paths.cache_dir().join("media");
@@ -548,7 +561,6 @@ impl Core {
         done.map(|()| target)
     }
 
-    /// Removes the playback copies (cache clean-up at start).
     pub fn clear_playback_cache(&self) {
         let _ = std::fs::remove_dir_all(self.paths.cache_dir().join("media"));
     }
@@ -601,11 +613,9 @@ mod tests {
             "one 2 MiB window serves 400 KiB"
         );
         assert_eq!(h.hints.load(Ordering::Relaxed), 1, "the next window is announced");
-        // A seek far away fetches a new window.
         let at = (READ_AHEAD_BYTES + 5) as u64;
         assert_eq!(r.read(at, 10).await.unwrap(), data[at as usize..at as usize + 10]);
         assert_eq!(h.reads.load(Ordering::Relaxed), 2);
-        // A read crossing the window end is cut at it; the next call refills.
         let edge = (READ_AHEAD_BYTES * 2 + 5) as u64;
         let tail = r.read(edge, 5000).await.unwrap();
         assert_eq!(tail.len(), 995, "cut at the end of the file");
@@ -616,7 +626,6 @@ mod tests {
         );
         assert!(r.read(total as u64, 10).await.unwrap().is_empty());
         assert!(r.read(0, 0).await.unwrap().is_empty());
-        // Going back into an earlier window refetches it.
         assert_eq!(r.read(0, 3).await.unwrap(), data[..3]);
     }
 

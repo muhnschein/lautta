@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `LocationsModel`: the rows of the Browse page (SPEC §15.2).
-//!
-//! Roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`,
-//! `colour`, `itemId`, `place`, `provider`, `host`, `free`, `total`, `fs`,
-//! `connection`, `connectionError`, `isFile`, `drive` (see
-//! `lautta_core::app_browse::Row` for the values).
+//! Roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`, `colour`, `itemId`,
+//! `place`, `provider`, `host`, `free`, `total`, `fs`, `connection`, `connectionError`, `isFile`,
+//! `drive` (values: `lautta_core::app_browse::Row`).
 
 use super::{cell_data, role_names, watch_sources, Cell, Guard};
 use crate::runtime::{core, spawn_then};
@@ -68,7 +65,6 @@ fn key_of(r: &Row) -> String {
 pub struct LocationsModel {
     base: qt_base_class!(trait QAbstractListModel),
     count: qt_property!(i32; NOTIFY countChanged),
-    /// Recent ad-hoc servers and nearby servers, for the connect form.
     recentCount: qt_property!(i32; NOTIFY countChanged),
     nearbyCount: qt_property!(i32; NOTIFY countChanged),
     countChanged: qt_signal!(),
@@ -84,8 +80,6 @@ pub struct LocationsModel {
 }
 
 impl LocationsModel {
-    /// Reads the rows again; the first call also starts following changes of
-    /// the locations, the bridge and the stores.
     fn refresh(&mut self) {
         let Some(core) = core() else { return };
         if !self.watching {
@@ -110,9 +104,8 @@ impl LocationsModel {
         self.sections.iter().filter(|s| **s == section).count() as i32
     }
 
-    /// Shows `rows`. Rows that keep their identity stay (an open context
-    /// menu or a row remorse survives); only the rows in between the
-    /// unchanged start and end of the list are removed and inserted.
+    /// Rows keeping identity stay (open context menu or remorse survives); only rows between the
+    /// unchanged start and end are replaced.
     fn apply(&mut self, rows: Vec<Row>) {
         let keys: Vec<String> = rows.iter().map(key_of).collect();
         let mut cells: Vec<Vec<Cell>> = rows.iter().map(cells).collect();
@@ -132,7 +125,6 @@ impl LocationsModel {
             self.end_insert_rows();
         }
         self.keys = keys;
-        // What is left in `cells` are the rows that stayed, in order.
         let kept: Vec<usize> = (0..self.rows.len())
             .filter(|i| *i < start || *i >= start + inserted)
             .collect();
@@ -148,8 +140,6 @@ impl LocationsModel {
     }
 }
 
-/// How `old` turns into `new`: from `start`, `removed` rows go and
-/// `inserted` rows come; the rows before and after keep their identity.
 fn splice(old: &[String], new: &[String]) -> (usize, usize, usize) {
     let start = old.iter().zip(new).take_while(|(a, b)| a == b).count();
     let end = old[start..]
@@ -187,7 +177,7 @@ mod tests {
 
     #[test]
     fn no_row_shows_an_item_count() {
-        assert!(!COLUMNS.contains(&"count"), "Browse shows no counts (SPEC §15.2)");
+        assert!(!COLUMNS.contains(&"count"), "Browse shows no counts");
     }
 
     #[test]
@@ -239,7 +229,6 @@ mod tests {
         assert_eq!(splice(&old, &keys(&["fav1", "x", "docs", "nas"])), (1, 1, 1));
         assert_eq!(splice(&[], &keys(&["a", "b"])), (0, 0, 2));
         assert_eq!(splice(&keys(&["a", "b"]), &[]), (0, 2, 0));
-        // A repeated key is counted once, from the start.
         assert_eq!(splice(&keys(&["a", "a"]), &keys(&["a"])), (1, 1, 0));
     }
 

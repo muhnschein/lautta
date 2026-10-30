@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Structured values cross the QML boundary as JSON text
-//! (doc/QML-API.md); plain values become QVariants.
+//! Structured values cross the QML boundary as JSON text; plain values become QVariants.
 
 use qmetaobject::{QString, QVariant};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-/// Serialises `value`; serialisation of our own plain data cannot fail, so
-/// the fallback (`null`) is never seen in practice.
+/// Serialising our own plain data cannot fail; `null` fallback is unreachable.
 pub fn to_json<T: Serialize + ?Sized>(value: &T) -> String {
     serde_json::to_string(value).unwrap_or_else(|_| "null".to_owned())
 }
@@ -16,8 +14,7 @@ pub fn from_json<T: DeserializeOwned>(text: &str) -> Option<T> {
     serde_json::from_str(text).ok()
 }
 
-/// Plain JSON values map to QVariants QML reads natively; arrays and
-/// objects stay JSON text.
+/// Arrays and objects stay JSON text.
 pub fn json_value_to_qvariant(value: &serde_json::Value) -> QVariant {
     use serde_json::Value;
     match value {

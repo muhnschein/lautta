@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The rows of Browse, what the user hid and moved, recent ad-hoc servers and
-//! the purge of removed accounts (SPEC §15.2, BRW-12, NVB-3, NVB-6, NVB-12,
-//! SEC-5).
 
 mod bridge_support;
 
@@ -30,7 +27,6 @@ async fn env(fake: Option<&FakeBridge>, folders: &[&str]) -> Env {
     open(fake, fake.is_some(), folders).await
 }
 
-/// `bridge` gives Core a bridge client; `fake`, if any, listens on its socket.
 async fn open(fake: Option<&FakeBridge>, bridge: bool, folders: &[&str]) -> Env {
     let home = tempfile::tempdir().unwrap();
     for d in folders {
@@ -90,7 +86,6 @@ async fn standalone_shows_no_trace_of_the_bridge() {
     let deleted = device.last().unwrap();
     assert_eq!(deleted.kind, "deleted");
     assert_eq!(of(&rows, "android")[0].name, "DCIM");
-    // Folders show the app's own folder glyph, which QML sizes (UI-2).
     assert_eq!(
         (device[1].icon.as_str(), of(&rows, "android")[0].icon.as_str()),
         ("file-folder", "file-folder")
@@ -258,8 +253,6 @@ async fn recents_is_a_device_row_while_recents_are_remembered() {
     );
 }
 
-/// Recents leads *On this device* by default (§15.2); an order the user
-/// gave the section stays, Restore defaults brings Recents back to the top.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn recents_comes_first_until_the_user_orders_the_rows() {
     let e = env(None, &["Documents", "Music"]).await;
@@ -406,7 +399,6 @@ async fn recents_rows_say_where_and_when() {
             RecentKind::Transferred,
         )
         .unwrap();
-    // The sections are the Activity page's (§15.4), by calendar day.
     let day = 86_400_000;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -474,10 +466,9 @@ async fn servers_follow_the_bridge() {
         ("attention", "auth-failed", "nas.home")
     );
     assert_eq!(servers[0].uri, "lautta://nv-account:1/");
+    assert_eq!(servers[0].icon, "server");
 }
 
-/// A bridge with the drives (netvfs XB-20) that mounts them in the media
-/// folder: an unlabelled USB drive and a memory card, neither mounted.
 async fn drives_env() -> (FakeBridge, Env) {
     let fake = FakeBridge::new();
     fake.set_features(Some(&[feature::STORAGE_SETTINGS, feature::DRIVES]));
@@ -493,7 +484,6 @@ async fn drives_env() -> (FakeBridge, Env) {
     (fake, e)
 }
 
-/// The volume rows as (name, status, drive, item id).
 fn volumes(rows: &[Row]) -> Vec<(String, &'static str, String, String)> {
     of(rows, "volumes")
         .iter()
@@ -514,7 +504,6 @@ fn volume(
 async fn drives_show_as_volumes_until_they_are_mounted() {
     let (_fake, e) = drives_env().await;
     let rows = e.core.browse_rows().await;
-    // By the folder each is mounted on, among the mounted volumes (LOC-3).
     assert_eq!(
         volumes(&rows),
         [
@@ -573,7 +562,6 @@ async fn a_locked_drive_is_a_locked_volume_until_it_is_unlocked() {
     fake.set_drives(drives).await;
     eventually("the locked drive", || client.drives().len() == 3).await;
     let rows = e.core.browse_rows().await;
-    // Named and placed by the name rule of every drive (LOC-3).
     assert_eq!(
         volumes(&rows),
         [
@@ -589,7 +577,6 @@ async fn a_locked_drive_is_a_locked_volume_until_it_is_unlocked() {
         ("", 32, "image://theme/icon-m-sd-card")
     );
 
-    // Unlocked in Settings › Storage: its filesystem instead, not mounted.
     let mut drives = fake.drives();
     drives.retain(|d| d.id != "mmcblk1p2");
     drives.push(FakeDrive::new("dm_2d0", "SECRET", "sd", 31));
@@ -612,7 +599,6 @@ async fn a_locked_drive_is_a_locked_volume_until_it_is_unlocked() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_drive_mounted_out_of_sight_is_an_error() {
-    // The bridge mounts it where the sandbox does not see it.
     let (fake, e) = drives_env().await;
     fake.set_mount_root(None);
     let err = e.core.mount_drive("mmcblk1p1").await.unwrap_err();
@@ -621,7 +607,6 @@ async fn a_drive_mounted_out_of_sight_is_an_error() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn without_drives_the_volumes_are_as_before() {
-    // Standalone, and a netvfs without XB-20.
     let standalone = env(None, &["Documents"]).await;
     let (_fake, older) = ready_env().await;
     for e in [standalone, older] {
@@ -632,7 +617,6 @@ async fn without_drives_the_volumes_are_as_before() {
     }
 }
 
-/// What a server row says about its connection (§15.2, NVB-4).
 fn connection_of(rows: &[Row]) -> (&'static str, String) {
     let server = of(rows, "servers")
         .into_iter()
@@ -683,7 +667,7 @@ async fn consent_row_until_allowed_and_nothing_when_denied() {
     let rows = e.core.browse_rows().await;
     let servers = of(&rows, "servers");
     assert_eq!(servers.len(), 1);
-    assert_eq!(servers[0].kind, "consent");
+    assert_eq!((servers[0].kind, servers[0].icon.as_str()), ("consent", "server"));
 
     fake.set_consent(Consent::Denied).await;
     client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
@@ -697,8 +681,7 @@ async fn consent_row_until_allowed_and_nothing_when_denied() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn no_socket_means_no_servers_section() {
-    // Bridge client there, no socket: standalone (UI-8). Never listen: dropping
-    // a `Listener` keeps a session that already connected.
+    // No socket, never listen: dropping a `Listener` keeps a session that already connected.
     let e = open(None, true, &["Documents"]).await;
     assert_eq!(e.core.bridge.as_ref().unwrap().status(), BridgeStatus::Absent);
     let rows = e.core.browse_rows().await;
@@ -726,7 +709,6 @@ async fn reconnecting_shows_a_notice_and_busy_rows() {
         (servers[1].name.as_str(), servers[1].status),
         ("NAS", "connecting")
     );
-    // Whatever the bridge said last, it is connecting again (NVB-12).
     assert_eq!(servers[1].connection, "connecting");
 }
 
@@ -749,7 +731,6 @@ async fn nearby_servers_prefill_the_connect_form() {
     assert_eq!(nearby[0].uri, "sftp://raspberrypi.local/");
     assert_eq!(nearby[0].provider, "SFTP");
 
-    // One switch hides every nearby server (BRW-12).
     let switch = |layout: &[LayoutRow]| layout_of(layout, "nearby");
     assert_eq!(
         switch(&e.core.browse_layout_rows().await),
@@ -789,8 +770,8 @@ async fn adhoc_servers_are_remembered_and_forgotten() {
         .collect();
     assert_eq!(adhoc.len(), 1, "a connected server is not listed twice");
     assert_eq!(adhoc[0].connection, "connected");
+    assert_eq!(adhoc[0].icon, "server");
 
-    // The bridge forgets it (another session): it stays as a recent one.
     fake.remove_location(&id.replace("nv-", "")).await;
     eventually("gone", || e.core.location(&id).is_none()).await;
     let rows = e.core.browse_rows().await;
@@ -808,6 +789,7 @@ async fn adhoc_servers_are_remembered_and_forgotten() {
         ("offline", "SFTP", "sftp://pi@host.example:2222/docs")
     );
     assert_eq!(recent[0].connection, "disconnected");
+    assert_eq!(recent[0].icon, "server");
     e.core.remove_adhoc_recent(&id).unwrap();
     assert!(e.core.adhoc_recents().unwrap().is_empty());
 }
@@ -910,7 +892,6 @@ async fn accounts_removed_while_the_app_was_closed_are_purged_at_start() {
     let (_fake, e) = ready_env().await;
     remember_account(&e.core, 1);
     remember_account(&e.core, 9);
-    // Ad-hoc ids change between runs; their data is not touched at start.
     let adhoc = uri("lautta://nv-adhoc:4/x");
     e.core.favourites.add(&adhoc, "Adhoc", None, true).unwrap();
     e.core.spawn_account_purge(|| {});
@@ -934,7 +915,6 @@ async fn the_cover_counts_the_cached_listing() {
     assert_eq!(e.core.cached_folder_count(&docs), Some(2));
 }
 
-/// The settings rows of a section as (kind, item, hidden).
 fn section_of(rows: &[LayoutRow], section: &str) -> Vec<(&'static str, String, bool)> {
     rows.iter()
         .filter(|r| r.section == section)
@@ -950,7 +930,6 @@ fn row_of(kind: &'static str, item: &str, hidden: bool) -> (&'static str, String
     (kind, item.to_owned(), hidden)
 }
 
-/// Turns a section on or off, as its switch in the settings does.
 fn set_section(core: &Core, section: &str, on: bool) {
     core.browse_layout.set_hidden(section, SECTION_ITEM, !on).unwrap();
 }
@@ -986,7 +965,6 @@ async fn the_volumes_switch_hides_the_section_and_keeps_the_choices_of_its_rows(
     set_section(core, "volumes", true);
     assert_eq!(names(&core.browse_rows().await, "volumes"), ["SD"]);
 
-    // A row hidden before the section was switched off is hidden after.
     core.browse_layout.set_hidden("volumes", "vol-SD", true).unwrap();
     set_section(core, "volumes", false);
     set_section(core, "volumes", true);
@@ -1027,7 +1005,6 @@ async fn the_volumes_switch_is_there_without_volumes() {
     );
     assert!(of(&core.browse_rows().await, "volumes").is_empty());
 
-    // A volume that comes later stands below the switch.
     std::fs::create_dir_all(e.home.path().join("media/SD")).unwrap();
     core.locations.refresh_volumes();
     assert_eq!(
@@ -1135,7 +1112,6 @@ async fn the_settings_list_keeps_the_sections_in_browse_order() {
         order,
         ["favourites", "device", "android", "volumes", "servers", "nearby"]
     );
-    // Off, the sections keep their places.
     set_section(&e.core, "volumes", false);
     set_section(&e.core, "servers", false);
     let mut order: Vec<&str> = e
@@ -1201,7 +1177,6 @@ async fn standalone_has_no_servers_switch_even_when_it_was_off() {
     set_section(&e.core, "servers", false);
     assert!(section_of(&e.core.browse_layout_rows().await, "servers").is_empty());
 
-    // A client that finds no netvfs: nothing answers, standalone (UI-8).
     let home = tempfile::tempdir().unwrap();
     let paths = AppPaths::new(home.path());
     let registry = LocationRegistry::with_media_root(paths.clone(), home.path().join("media"));
@@ -1215,7 +1190,6 @@ async fn standalone_has_no_servers_switch_even_when_it_was_off() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_client_without_netvfs_has_no_nearby_switch() {
-    // Bridge client there, no socket: standalone (UI-8), no trace of nearby servers.
     let e = open(None, true, &["Documents"]).await;
     assert_eq!(e.core.bridge.as_ref().unwrap().status(), BridgeStatus::Absent);
     assert!(section_of(&e.core.browse_layout_rows().await, "nearby").is_empty());

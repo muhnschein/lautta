@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Doctests: not nextest; Makefile runs `cargo test --doc` beside.
+
+[profile.default]
+# Hung Qt test waits on a signal forever: warn at 60s, kill at 4x.
+slow-timeout = { period = "60s", terminate-after = 4 }
+retries = 0
+fail-fast = false
+failure-output = "immediate-final"
+# Tests mostly wait on Qt event loops and fake bridge: 32 at once whatever the cores.
+test-threads = 32
+
+# Slowest first.
+[[profile.default.overrides]]
+filter = "test(=host_qml_tests_pass)"
+priority = 100

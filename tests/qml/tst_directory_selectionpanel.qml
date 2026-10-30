@@ -1,21 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The bars at the bottom on the target (real Silica, UI-10, SPEC §15.3): the
-// selection panel, the paste bar, the activity bar and the search progress
-// have an opaque backdrop, not Silica's see-through panel
-// gradient alone. The selection panel shows its icons in the long-press
-// menu's order, then More actions, whatever the number of items, with no
-// push-up menu. More actions opens a page: for one item Rename (opening the
-// rename dialog), Add to favourites, Compress and Move to new folder, for
-// several Compress and Move to new folder, the header naming the item or
-// counting them; a dialog it opens takes the
-// page's place and ends selection, leaving the page keeps it. Archives show
-// the app's archive glyph (FileIcons.js) in a folder, in search, in the
-// operations pages, in Recents and on Compress. Ending selection, by Stop
-// selecting or by deselecting the last item, leaves the panel with the
-// buttons it had while it fades out, not the ones of no selection (just Stop
-// selecting); waiting for the first item it has only that one. Fails when a
-// bar lets content through, an action of the long-press menu is missing, an
-// archive shows another icon or the panel changes its buttons on its way out.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -51,8 +34,6 @@ ApplicationWindow {
         return expect(JSON.stringify(a) === JSON.stringify(b), what + ": " + JSON.stringify(a) + " != " + JSON.stringify(b))
     }
 
-    // Every item under `item` that `pred` takes; a flickable's content item
-    // is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         out = out || []
         seen = seen || []
@@ -73,9 +54,6 @@ ApplicationWindow {
         return findAll(item, function (x) { return x.objectName === name })
     }
 
-    // The bar's backdrop is opaque and covers it, and nothing between it and
-    // the bar makes it see-through (the activity bar fades as a whole when it
-    // goes).
     function expectOpaque(bar, what) {
         var grounds = named(bar, "barBackground")
         if (!expect(grounds.length === 1, what + " has the opaque backdrop: " + grounds.length))
@@ -89,15 +67,11 @@ ApplicationWindow {
             expect(item.opacity === 1, what + ": nothing over the backdrop is translucent: " + item)
     }
 
-    // Waits out the page stack's transition: Silica ignores a pop pressed
-    // while one runs, and on the emulated target an animated push can take
-    // longer than any fixed wait.
     function settle() {
         for (var i = 0; i < 100 && pageStack.busy; ++i)
             tools.pump(50)
     }
 
-    // The docked panel of the folder view with `prop`.
     function panel(prop) {
         var kids = view.children
         for (var i = 0; i < kids.length; ++i) {
@@ -107,16 +81,13 @@ ApplicationWindow {
         return null
     }
 
-    // The panel's button called `text`.
     function panelButton(sel, text) {
         var found = findAll(sel, function (x) { return x.description === text && x.icon !== undefined })
         return found.length === 1 ? found[0] : null
     }
 
-    // The rows of the More actions page `page`, top down: { text, icon }
-    // with the row to tap.
     function pageRows(page) {
-        // Headless, no render loop polishes the list: lay it out by hand.
+        // No render loop headless: lay out by hand.
         findAll(page, function (x) { return x.forceLayout !== undefined }).forEach(function (v) { v.forceLayout() })
         var rows = named(page, "moreRow").sort(function (a, b) { return a.y - b.y })
         return rows.map(function (row) {
@@ -128,7 +99,6 @@ ApplicationWindow {
         })
     }
 
-    // The app's glyph of `kind` at a medium icon's size (FileIcons.js).
     function glyph(kind) {
         return String(Qt.resolvedUrl("../../qml/icons/" + FileIcons.glyph(kind, false, Theme.iconSizeMedium) + ".svg"))
     }
@@ -138,8 +108,6 @@ ApplicationWindow {
         return headers.length === 1 ? headers[0].title : "no single header: " + headers.length
     }
 
-    // Selects `uris`, taps More actions on the panel and gives the page it
-    // opens, or null.
     function openMore(sel, uris) {
         var folderView = view
         folderView.startSelection()
@@ -158,8 +126,6 @@ ApplicationWindow {
         return page
     }
 
-    // Closes the dialog that took the More actions page's place: the folder
-    // is under it, with the page gone.
     function closeDialog(depth, what) {
         expect(pageStack.depth === depth, what + ": the dialog took the page's place: depth " + pageStack.depth)
         pageStack.pop(null, PageStackAction.Immediate)
@@ -200,14 +166,11 @@ ApplicationWindow {
         return buttons.map(function (b) { return b.id })
     }
 
-    // The texts of the buttons the panel draws.
     function drawn(sel) {
         return findAll(sel, function (x) { return x.description !== undefined && x.icon !== undefined })
             .map(function (b) { return b.description })
     }
 
-    // Ending selection zeroes the count while the panel is still on its way
-    // out: from the first moment of the fade-out to its end the buttons stay.
     function checkLeavingKeepsButtons(sel) {
         var full = ["share", "copy", "cut", "delete", "more", "done"]
         view.startSelection()
@@ -251,7 +214,6 @@ ApplicationWindow {
         if (!page)
             return
         same(pageTitle(page), "a.md", "the header names the one item")
-        // The window shows three rows: the page's own list says all four.
         same(page.actions.map(function (a) { return [a.text, a.icon] }),
              [[qsTrId("lautta-dir-act-rename"), "image://theme/icon-m-edit"],
               [qsTrId("lautta-dir-act-favourite"), "image://theme/icon-m-favorite"],
@@ -295,8 +257,6 @@ ApplicationWindow {
              [[qsTrId("lautta-dir-act-compress"), glyph("archive")],
               [qsTrId("lautta-dir-act-move-new-folder"), glyph("folder")]],
              "several items: Compress and Move to new folder, the app's glyphs")
-        // A dialog takes the page's place while selection ends: the header
-        // and the rows stay as they were.
         folderView.endSelection()
         tools.pump(300)
         same(pageTitle(page), qsTrId("lautta-dir-selected", 3), "the header keeps its count when selection ends")
@@ -336,7 +296,7 @@ ApplicationWindow {
     }
 
     function checkArchiveIcons() {
-        // Headless, no render loop polishes the list: lay it out by hand.
+        // No render loop headless: lay out by hand.
         findAll(view, function (x) { return x.forceLayout !== undefined }).forEach(function (v) { v.forceLayout() })
         var rows = findAll(view, function (x) { return x.category === "archive" && x.thumbnailReady !== undefined })
         var archive = glyph("archive")
@@ -362,7 +322,6 @@ ApplicationWindow {
             checkLeavingKeepsButtons(sel)
             checkMoreOfOne(sel)
             checkMoreOfSeveral(sel)
-            // Grid view holds to select: the same panel and page there.
             App.setSetting("view_mode", JSON.stringify("grid"))
             tools.pump(300)
             if (expect(view.gridMode, "the folder shows its files as a grid"))

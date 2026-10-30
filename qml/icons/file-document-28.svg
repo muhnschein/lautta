@@ -1,4 +1,4 @@
 <!-- SPDX-License-Identifier: LGPL-2.1-or-later -->
 <!-- 28-unit grid, stroke 1: edges on whole units, so whole pixels at any multiple of 28 px (grid 84 to 252 px, list 112 px). -->
 <!-- Line bottoms on half units: soft at odd pixels per unit (84, 252 px). -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" fill="none" stroke="#ffffff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="18" height="22" rx="1.5" fill="#ffffff" fill-opacity="0.5" stroke="none"/><path d="M9 7.75h10M9 11.75h10M9 15.75h10M9 19.75h6" stroke-width="1.5"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" fill="none" stroke="#ffffff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="3.5" width="17" height="21" rx="1.5"/><path d="M9 7.75h10M9 11.75h6M9 15.75h10M9 19.75h6" stroke-width="1.5"/></svg>

@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Document glyph</title>
+<!-- JetBrains text icon: intellij-community platform/icons/src/expui/fileTypes/text.svg, Copyright 2000-2022 JetBrains s.r.o. and contributors, Apache-2.0. -->
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600&amp;family=Source+Code+Pro:wght@400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.amb{--pri:#ffffff;--sec:rgba(255,255,255,.62);--hl:#74d4ff;--hl2:#5fb3d9;--hlbg:rgba(116,212,255,.30);--hldim:rgba(116,212,255,.13);--ov:rgba(8,14,20,.55);--line:rgba(255,255,255,.28);--btn:rgba(255,255,255,.16);--warn:#ffb067;
+ background:radial-gradient(130% 70% at 85% -5%,#2a4a63 0%,#13222f 45%,#0a1219 100%);
+ color:var(--pri);font-family:'Source Sans 3',system-ui,sans-serif;font-size:19px;font-weight:400;position:relative;overflow:hidden;box-sizing:border-box}
+.amb.light{--pri:#15191d;--sec:rgba(21,25,29,.66);--hl:#00639c;--hl2:#2a74a3;--hlbg:rgba(0,99,156,.20);--hldim:rgba(0,99,156,.09);--ov:rgba(240,244,247,.7);--line:rgba(21,25,29,.3);--btn:rgba(21,25,29,.10);--warn:#a14d00;
+ background:radial-gradient(130% 70% at 85% -5%,#ffffff 0%,#e7eef3 50%,#d6e1e9 100%)}
+.amb *{box-sizing:border-box}
+.amb button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:inherit}
+.amb a{color:inherit;text-decoration:none}
+.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.m{width:40px;height:40px;stroke-width:1.2}
+.ic.l{width:64px;height:64px;stroke-width:1}
+.hl{color:var(--hl)}.sec{color:var(--sec)}.hl2{color:var(--hl2)}.warn{color:var(--warn)}
+.small{font-size:15px}.xs{font-size:13px}.tiny{font-size:12px}.large{font-size:26px;font-weight:300}.xl{font-size:34px;font-weight:300}
+.mono{font-family:'Source Code Pro',monospace}
+/* page-stack indicators */
+.ind-back,.ind-fwd{position:absolute;top:14px;display:flex;gap:4px}
+.ind-back{left:10px}.ind-fwd{right:10px}
+.ind-back i,.ind-fwd i{display:block;width:4px;height:4px;border-radius:2px;background:var(--hl);opacity:.9}
+.ind-back i+i,.ind-fwd i+i{opacity:.45}
+/* pulley/push-up indicators (closed) */
+.pull-ind{position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--hl) 50%,transparent);opacity:.7}
+.push-ind{position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--hl) 50%,transparent);opacity:.7}
+/* open pulley / push-up menu */
+.pulley{padding:18px 18px 6px;background:linear-gradient(180deg,var(--hlbg),var(--hldim) 70%,transparent);display:flex;flex-direction:column}
+.pushup{padding:6px 18px 18px;background:linear-gradient(0deg,var(--hlbg),var(--hldim) 70%,transparent);display:flex;flex-direction:column}
+.mi{height:56px;display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--pri);width:100%;text-align:center}
+.mi.on{color:var(--hl)}
+.mi .cnt{margin-left:8px;color:var(--sec);font-size:15px}
+.mi.on .cnt{color:var(--hl2)}
+.mi.dis{color:var(--sec);opacity:.5}
+/* page header */
+.hdr{min-height:80px;padding:14px 18px 6px 60px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;text-align:right}
+.hdr-t{font-size:28px;font-weight:300;color:var(--hl);line-height:1.15}
+.hdr-d{font-size:15px;color:var(--hl2);margin-top:2px}
+/* dialog header */
+.dlg{height:80px;padding:0 18px;display:flex;align-items:center;justify-content:space-between}
+.dlg-c{font-size:19px;color:var(--pri)}
+.dlg-a{font-size:28px;font-weight:300;color:var(--hl)}
+.dlg-a.dis{opacity:.4}
+.dlg-sub{padding:0 18px 8px;text-align:right;font-size:15px;color:var(--hl2)}
+/* section header */
+.sh{padding:14px 18px 6px;text-align:right;font-size:15px;color:var(--hl)}
+/* list item */
+.li{min-height:72px;padding:6px 18px;display:flex;align-items:center;gap:14px;width:100%}
+.li.s{min-height:56px}
+.li.pressed{background:var(--hlbg)}
+.li.selected{background:var(--hldim)}
+.li-ic{width:48px;height:48px;display:flex;align-items:center;justify-content:center;flex:none;color:var(--pri);position:relative}
+.li-ic.sel::after{content:"";position:absolute;inset:2px;border:2px solid var(--hl);border-radius:3px}
+.thumb{width:48px;height:48px;flex:none;background:linear-gradient(135deg,#4b6b7f,#9bb7a0);}
+.li-b{flex:1;min-width:0}
+.li-t{font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li-s{font-size:15px;color:var(--sec);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li-r{font-size:15px;color:var(--sec);flex:none;text-align:right}
+.li.pressed .li-t{color:var(--hl)}
+/* context menu (inline, under pressed item) */
+.cm{background:var(--hldim);display:flex;flex-direction:column;padding:4px 0}
+/* badges / dots */
+.dot{width:8px;height:8px;border-radius:4px;background:var(--hl);display:inline-block;flex:none}
+.dot.off{background:transparent;border:1px solid var(--sec)}
+.badge{font-size:13px;color:var(--warn);display:inline-flex;align-items:center;gap:4px}
+.tagdot{width:12px;height:12px;border-radius:6px;display:inline-block;flex:none}
+.lossy{font-size:12px;border:1px solid var(--sec);color:var(--sec);border-radius:3px;padding:0 4px;margin-left:6px;vertical-align:middle}
+/* progress */
+.prog{height:3px;background:var(--line);position:relative;overflow:hidden}
+.prog>i{position:absolute;left:0;top:0;bottom:0;background:var(--hl);display:block}
+.slim{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--hl),transparent);opacity:.85}
+/* busy indicator */
+.busy{width:64px;height:64px;border-radius:50%;border:3px solid var(--hldim);border-top-color:var(--hl);border-right-color:var(--hl)}
+.busy.s{width:24px;height:24px;border-width:2px}
+/* placeholder */
+.ph{position:absolute;left:18px;right:18px;text-align:center}
+.ph-t{font-size:34px;font-weight:300;color:var(--hl);opacity:.85;line-height:1.2}
+.ph-h{font-size:19px;color:var(--hl2);margin-top:12px;line-height:1.35}
+/* buttons */
+.btn{min-width:150px;height:52px;padding:0 26px;border-radius:0;background:var(--btn);color:var(--pri);font-size:19px;display:inline-flex;align-items:center;justify-content:center}
+.btn.down{background:var(--hlbg);color:var(--hl)}
+.btns{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;padding:12px 18px}
+.ibtn{width:56px;height:56px;display:inline-flex;align-items:center;justify-content:center;color:var(--pri)}
+.ibtn.on{color:var(--hl)}
+/* docked panel */
+.dock{position:absolute;left:0;right:0;bottom:0;min-height:80px;background:var(--ov);backdrop-filter:blur(6px);border-top:1px solid var(--hldim);display:flex;align-items:center;justify-content:space-around;padding:0 6px}
+/* text switch */
+.sw{display:flex;gap:14px;padding:10px 18px;align-items:flex-start;width:100%}
+.sw-d{width:18px;height:18px;border-radius:9px;border:1.5px solid var(--sec);margin-top:5px;flex:none}
+.sw.on .sw-d{border-color:var(--hl);background:var(--hl);box-shadow:0 0 10px 2px var(--hlbg)}
+.sw-t{font-size:19px}.sw-x{font-size:15px;color:var(--sec);margin-top:2px;line-height:1.3}
+/* combo box */
+.cb{display:flex;flex-direction:column;padding:10px 18px;width:100%}
+.cb-r{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.cb-l{font-size:19px}.cb-v{font-size:19px;color:var(--hl)}
+.cb-x{font-size:15px;color:var(--sec);margin-top:2px}
+/* slider */
+.sl{padding:8px 18px 12px}
+.sl-v{text-align:center;font-size:26px;font-weight:300;color:var(--hl)}
+.sl-t{height:2px;background:var(--line);margin:14px 6px;position:relative}
+.sl-t>i{position:absolute;left:0;top:0;bottom:0;background:var(--hl)}
+.sl-t>b{position:absolute;top:-9px;width:20px;height:20px;border-radius:10px;background:var(--hl);box-shadow:0 0 12px 3px var(--hlbg);margin-left:-10px}
+.sl-l{text-align:center;font-size:15px;color:var(--sec)}
+/* text field */
+.tf{padding:10px 18px}
+.tf input,.tf textarea{width:100%;background:transparent;border:0;border-bottom:1px solid var(--line);color:var(--pri);font:inherit;font-size:19px;padding:6px 0;outline:none}
+.tf.focus input{border-bottom-color:var(--hl)}
+.tf label{display:block;font-size:15px;color:var(--sec);margin-top:4px}
+.tf.focus label{color:var(--hl)}
+.tf.err input{border-bottom-color:var(--warn)}
+.tf.err label{color:var(--warn)}
+/* remorse */
+.remorse{min-height:72px;background:var(--hlbg);position:relative;padding:10px 18px;display:flex;flex-direction:column;justify-content:center;overflow:hidden}
+.remorse>i{position:absolute;left:0;top:0;bottom:0;background:var(--hldim);display:block}
+.remorse b{font-weight:400;font-size:19px;position:relative}
+.remorse span{font-size:15px;color:var(--sec);position:relative}
+/* banner (in-page notice, e.g. offline) */
+.banner{margin:6px 18px;padding:12px 14px;background:var(--hldim);display:flex;gap:12px;align-items:center;font-size:15px}
+.banner .act{color:var(--hl);font-size:15px;margin-left:auto;flex:none}
+/* interaction hint label */
+.hintlabel{position:absolute;left:0;right:0;bottom:0;padding:40px 30px 30px;text-align:center;font-size:19px;color:var(--hl);background:linear-gradient(0deg,var(--ov),transparent)}
+/* key/value detail (DetailItem) */
+.di{display:flex;gap:12px;padding:5px 18px;font-size:15px}
+.di-l{flex:1;text-align:right;color:var(--sec)}
+.di-v{flex:1;color:var(--pri);word-break:break-all}
+/* notification popup (system) */
+.note{background:rgba(20,30,40,.92);color:#fff;padding:12px 16px;display:flex;gap:12px;align-items:flex-start;border-radius:6px}
+.panel{position:absolute;top:0;width:400px;bottom:0}
+.vr{display:flex;align-items:center;gap:12px;padding:6px 18px}
+.vk{width:22px;font-size:26px;font-weight:300;color:var(--hl);flex:none}
+.tile{width:117px;height:117px;flex:none;display:flex;align-items:center;justify-content:center;background:var(--hldim);color:var(--pri)}
+.tile.down{background:var(--hlbg);color:var(--hl)}
+.vd{flex:1;min-width:0}
+.vn{font-size:15px}
+.vx{font-size:12px;color:var(--sec);line-height:15px;margin-top:2px}
+.lr{display:flex;align-items:center;gap:10px;margin-top:8px;color:var(--pri)}
+.lr .th{color:var(--pri);opacity:.95}
+.jb{display:flex;gap:10px;align-items:center;color:var(--pri)}
+.cap{font-size:12px;color:var(--sec)}
+</style>
+</helmet>
+<div class="amb {{amb}}" style="width: 860px; height: 860px">
+<div class="amb dark panel" style="left:0px">
+<div class="hdr"><div class="hdr-t">Document glyph</div><div class="hdr-d">Dark ambience</div></div>
+<div class="sh">Grid tile and list, beside folder, image and theme icons</div>
+<div class="vr"><div class="vk">A</div><div class="tile"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document A" width="56" height="56" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="18" height="22" rx="1.5" fill="currentColor" fill-opacity="0.5" stroke="none"/><path d="M9 7.75h10M9 11.75h10M9 15.75h10M9 19.75h6" stroke-width="1.5"/></svg></div><div class="vd"><div class="vn">Today</div><div class="vx">Filled page, lines 10 10 10 6</div><div class="lr"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document A, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="18" height="22" rx="1.5" fill="currentColor" fill-opacity="0.5" stroke="none"/><path d="M9 7.75h10M9 11.75h10M9 15.75h10M9 19.75h6" stroke-width="1.5"/></svg><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Folder, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5V6a1 1 0 0 1 1-1h4.4c.5 0 .9.2 1.2.5l2 2h-.3c-1.3 0-1.7 2-3 2z" fill="currentColor" fill-opacity="0.6" stroke="none"/><path d="M4.5 9.5h4.8c1.3 0 1.7-2 3-2h10.2a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1z"/></svg><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Image, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="19" height="19" rx="1" stroke-opacity="0.6"/><rect x="7.5" y="7.5" width="13" height="13"/><circle cx="16.5" cy="11" r="1.5"/><path d="M8 17.5l3.5-3.5 6 6M14.5 17l2-2 3.5 3.5"/></svg><svg class="ic th" viewBox="0 0 24 24" role="img" aria-label="Theme star"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg><svg class="ic th" viewBox="0 0 24 24" role="img" aria-label="Theme history"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div></div></div>
+<div class="vr"><div class="vk">B</div><div class="tile"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document B" width="56" height="56" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="18" height="22" rx="1.5" fill="currentColor" fill-opacity="0.5" stroke="none"/><path d="M9 7.75h10M9 11.75h6M9 15.75h10M9 19.75h6" stroke-width="1.5"/></svg></div><div class="vd"><div class="vn">JetBrains rhythm</div><div class="vx">Filled page, lines long short long short, as JetBrains&#x27; text icon</div><div class="lr"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document B, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="18" height="22" rx="1.5" fill="currentColor" fill-opacity="0.5" stroke="none"/><path d="M9 7.75h10M9 11.75h6M9 15.75h10M9 19.75h6" stroke-width="1.5"/></svg><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Folder, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5V6a1 1 0 0 1 1-1h4.4c.5 0 .9.2 1.2.5l2 2h-.3c-1.3 0-1.7 2-3 2z" fill="currentColor" fill-opacity="0.6" stroke="none"/><path d="M4.5 9.5h4.8c1.3 0 1.7-2 3-2h10.2a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1z"/></svg><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Image, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="19" height="19" rx="1" stroke-opacity="0.6"/><rect x="7.5" y="7.5" width="13" height="13"/><circle cx="16.5" cy="11" r="1.5"/><path d="M8 17.5l3.5-3.5 6 6M14.5 17l2-2 3.5 3.5"/></svg><svg class="ic th" viewBox="0 0 24 24" role="img" aria-label="Theme star"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg><svg class="ic th" viewBox="0 0 24 24" role="img" aria-label="Theme history"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div></div></div>
+<div class="vr"><div class="vk">C</div><div class="tile"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document C" width="56" height="56" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="3.5" width="17" height="21" rx="1.5"/><path d="M9 7.75h10M9 11.75h6M9 15.75h10M9 19.75h6" stroke-width="1.5"/></svg></div><div class="vd"><div class="vn">Outline page</div><div class="vx">Page drawn as an outline like the folder and image glyphs, JetBrains rhythm</div><div class="lr"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document C, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="3.5" width="17" height="21" rx="1.5"/><path d="M9 7.75h10M9 11.75h6M9 15.75h10M9 19.75h6" stroke-width="1.5"/></svg><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Folder, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5V6a1 1 0 0 1 1-1h4.4c.5 0 .9.2 1.2.5l2 2h-.3c-1.3 0-1.7 2-3 2z" fill="currentColor" fill-opacity="0.6" stroke="none"/><path d="M4.5 9.5h4.8c1.3 0 1.7-2 3-2h10.2a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1z"/></svg><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Image, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="19" height="19" rx="1" stroke-opacity="0.6"/><rect x="7.5" y="7.5" width="13" height="13"/><circle cx="16.5" cy="11" r="1.5"/><path d="M8 17.5l3.5-3.5 6 6M14.5 17l2-2 3.5 3.5"/></svg><svg class="ic th" viewBox="0 0 24 24" role="img" aria-label="Theme star"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg><svg class="ic th" viewBox="0 0 24 24" role="img" aria-label="Theme history"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div></div></div>
+<div class="vr"><div class="vk">D</div><div class="tile"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document D" width="56" height="56" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4.4 6.1h19.2M4.4 11.4h11.4M4.4 16.6h19.2M4.4 21.9h11.4" stroke-width="1.75"/></svg></div><div class="vd"><div class="vn">Lines only</div><div class="vx">No page: JetBrains&#x27; text icon at the glyph&#x27;s size</div><div class="lr"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document D, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4.4 6.1h19.2M4.4 11.4h11.4M4.4 16.6h19.2M4.4 21.9h11.4" stroke-width="1.75"/></svg><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Folder, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5V6a1 1 0 0 1 1-1h4.4c.5 0 .9.2 1.2.5l2 2h-.3c-1.3 0-1.7 2-3 2z" fill="currentColor" fill-opacity="0.6" stroke="none"/><path d="M4.5 9.5h4.8c1.3 0 1.7-2 3-2h10.2a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1z"/></svg><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Image, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="19" height="19" rx="1" stroke-opacity="0.6"/><rect x="7.5" y="7.5" width="13" height="13"/><circle cx="16.5" cy="11" r="1.5"/><path d="M8 17.5l3.5-3.5 6 6M14.5 17l2-2 3.5 3.5"/></svg><svg class="ic th" viewBox="0 0 24 24" role="img" aria-label="Theme star"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg><svg class="ic th" viewBox="0 0 24 24" role="img" aria-label="Theme history"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div></div></div>
+<div class="sh" style="margin-top:6px">Type icons in the text thumbnail, 16 px</div>
+<div class="vr"><div class="jb"><svg width="16" height="16" viewBox="0 0 16 16" role="img" aria-label="JetBrains text icon" fill="currentColor"><rect x="2" y="12" width="8" height="1" rx="0.5"/><rect x="2" y="6" width="8" height="1" rx="0.5"/><rect x="2" y="9" width="12" height="1" rx="0.5"/><rect x="2" y="3" width="12" height="1" rx="0.5"/></svg><span class="cap">JetBrains text</span><svg role="img" aria-label="Rust crab" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M3.5 10.5C3.5 8.3 5.5 7 8 7s4.5 1.3 4.5 3.5c0 1.4-2 2-4.5 2s-4.5-.6-4.5-2z"/>
+<path d="M6.5 7.2V5.8M9.5 7.2V5.8"/>
+<circle cx="6.5" cy="5" r=".7" fill="currentColor" stroke="none"/>
+<circle cx="9.5" cy="5" r=".7" fill="currentColor" stroke="none"/>
+<path d="M3.8 9.2L2.6 7.4M12.2 9.2l1.2-1.8"/>
+<path d="M2.6 7.4C1.2 7 .9 4.9 2.2 4.1l.7 1.4.9-1.1c.9.9.4 2.9-1.2 3z"/>
+<path d="M13.4 7.4c1.4-.4 1.7-2.5.4-3.3l-.7 1.4-.9-1.1c-.9.9-.4 2.9 1.2 3z"/>
+<path d="M4.3 12l-1.6 1.4M6 12.5l-1 1.6M10 12.5l1 1.6M11.7 12l1.6 1.4"/>
+</svg>
+<span class="cap">Rust crab, new</span><svg stroke-width="0.6" role="img" aria-label="Rust crab" width="64" height="64" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M3.5 10.5C3.5 8.3 5.5 7 8 7s4.5 1.3 4.5 3.5c0 1.4-2 2-4.5 2s-4.5-.6-4.5-2z"/>
+<path d="M6.5 7.2V5.8M9.5 7.2V5.8"/>
+<circle cx="6.5" cy="5" r=".7" fill="currentColor" stroke="none"/>
+<circle cx="9.5" cy="5" r=".7" fill="currentColor" stroke="none"/>
+<path d="M3.8 9.2L2.6 7.4M12.2 9.2l1.2-1.8"/>
+<path d="M2.6 7.4C1.2 7 .9 4.9 2.2 4.1l.7 1.4.9-1.1c.9.9.4 2.9-1.2 3z"/>
+<path d="M13.4 7.4c1.4-.4 1.7-2.5.4-3.3l-.7 1.4-.9-1.1c-.9.9-.4 2.9 1.2 3z"/>
+<path d="M4.3 12l-1.6 1.4M6 12.5l-1 1.6M10 12.5l1 1.6M11.7 12l1.6 1.4"/>
+</svg>
+<span class="cap">crab at 4x</span></div></div>
+</div>
+<div class="amb light panel" style="left:460px">
+<div class="hdr"><div class="hdr-t">Document glyph</div><div class="hdr-d">Light ambience</div></div>
+<div class="sh">Grid tile and list, beside folder, image and theme icons</div>
+<div class="vr"><div class="vk">A</div><div class="tile"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document A" width="56" height="56" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="18" height="22" rx="1.5" fill="currentColor" fill-opacity="0.5" stroke="none"/><path d="M9 7.75h10M9 11.75h10M9 15.75h10M9 19.75h6" stroke-width="1.5"/></svg></div><div class="vd"><div class="vn">Today</div><div class="vx">Filled page, lines 10 10 10 6</div><div class="lr"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document A, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="18" height="22" rx="1.5" fill="currentColor" fill-opacity="0.5" stroke="none"/><path d="M9 7.75h10M9 11.75h10M9 15.75h10M9 19.75h6" stroke-width="1.5"/></svg><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Folder, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5V6a1 1 0 0 1 1-1h4.4c.5 0 .9.2 1.2.5l2 2h-.3c-1.3 0-1.7 2-3 2z" fill="currentColor" fill-opacity="0.6" stroke="none"/><path d="M4.5 9.5h4.8c1.3 0 1.7-2 3-2h10.2a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1z"/></svg><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Image, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="19" height="19" rx="1" stroke-opacity="0.6"/><rect x="7.5" y="7.5" width="13" height="13"/><circle cx="16.5" cy="11" r="1.5"/><path d="M8 17.5l3.5-3.5 6 6M14.5 17l2-2 3.5 3.5"/></svg><svg class="ic th" viewBox="0 0 24 24" role="img" aria-label="Theme star"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg><svg class="ic th" viewBox="0 0 24 24" role="img" aria-label="Theme history"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div></div></div>
+<div class="vr"><div class="vk">B</div><div class="tile"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document B" width="56" height="56" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="18" height="22" rx="1.5" fill="currentColor" fill-opacity="0.5" stroke="none"/><path d="M9 7.75h10M9 11.75h6M9 15.75h10M9 19.75h6" stroke-width="1.5"/></svg></div><div class="vd"><div class="vn">JetBrains rhythm</div><div class="vx">Filled page, lines long short long short, as JetBrains&#x27; text icon</div><div class="lr"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document B, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="18" height="22" rx="1.5" fill="currentColor" fill-opacity="0.5" stroke="none"/><path d="M9 7.75h10M9 11.75h6M9 15.75h10M9 19.75h6" stroke-width="1.5"/></svg><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Folder, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5V6a1 1 0 0 1 1-1h4.4c.5 0 .9.2 1.2.5l2 2h-.3c-1.3 0-1.7 2-3 2z" fill="currentColor" fill-opacity="0.6" stroke="none"/><path d="M4.5 9.5h4.8c1.3 0 1.7-2 3-2h10.2a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1z"/></svg><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Image, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="19" height="19" rx="1" stroke-opacity="0.6"/><rect x="7.5" y="7.5" width="13" height="13"/><circle cx="16.5" cy="11" r="1.5"/><path d="M8 17.5l3.5-3.5 6 6M14.5 17l2-2 3.5 3.5"/></svg><svg class="ic th" viewBox="0 0 24 24" role="img" aria-label="Theme star"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg><svg class="ic th" viewBox="0 0 24 24" role="img" aria-label="Theme history"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div></div></div>
+<div class="vr"><div class="vk">C</div><div class="tile"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document C" width="56" height="56" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="3.5" width="17" height="21" rx="1.5"/><path d="M9 7.75h10M9 11.75h6M9 15.75h10M9 19.75h6" stroke-width="1.5"/></svg></div><div class="vd"><div class="vn">Outline page</div><div class="vx">Page drawn as an outline like the folder and image glyphs, JetBrains rhythm</div><div class="lr"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document C, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="3.5" width="17" height="21" rx="1.5"/><path d="M9 7.75h10M9 11.75h6M9 15.75h10M9 19.75h6" stroke-width="1.5"/></svg><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Folder, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5V6a1 1 0 0 1 1-1h4.4c.5 0 .9.2 1.2.5l2 2h-.3c-1.3 0-1.7 2-3 2z" fill="currentColor" fill-opacity="0.6" stroke="none"/><path d="M4.5 9.5h4.8c1.3 0 1.7-2 3-2h10.2a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1z"/></svg><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Image, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="19" height="19" rx="1" stroke-opacity="0.6"/><rect x="7.5" y="7.5" width="13" height="13"/><circle cx="16.5" cy="11" r="1.5"/><path d="M8 17.5l3.5-3.5 6 6M14.5 17l2-2 3.5 3.5"/></svg><svg class="ic th" viewBox="0 0 24 24" role="img" aria-label="Theme star"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg><svg class="ic th" viewBox="0 0 24 24" role="img" aria-label="Theme history"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div></div></div>
+<div class="vr"><div class="vk">D</div><div class="tile"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document D" width="56" height="56" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4.4 6.1h19.2M4.4 11.4h11.4M4.4 16.6h19.2M4.4 21.9h11.4" stroke-width="1.75"/></svg></div><div class="vd"><div class="vn">Lines only</div><div class="vx">No page: JetBrains&#x27; text icon at the glyph&#x27;s size</div><div class="lr"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document D, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4.4 6.1h19.2M4.4 11.4h11.4M4.4 16.6h19.2M4.4 21.9h11.4" stroke-width="1.75"/></svg><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Folder, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5V6a1 1 0 0 1 1-1h4.4c.5 0 .9.2 1.2.5l2 2h-.3c-1.3 0-1.7 2-3 2z" fill="currentColor" fill-opacity="0.6" stroke="none"/><path d="M4.5 9.5h4.8c1.3 0 1.7-2 3-2h10.2a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1z"/></svg><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Image, list" width="40" height="40" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="19" height="19" rx="1" stroke-opacity="0.6"/><rect x="7.5" y="7.5" width="13" height="13"/><circle cx="16.5" cy="11" r="1.5"/><path d="M8 17.5l3.5-3.5 6 6M14.5 17l2-2 3.5 3.5"/></svg><svg class="ic th" viewBox="0 0 24 24" role="img" aria-label="Theme star"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg><svg class="ic th" viewBox="0 0 24 24" role="img" aria-label="Theme history"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div></div></div>
+<div class="sh" style="margin-top:6px">Type icons in the text thumbnail, 16 px</div>
+<div class="vr"><div class="jb"><svg width="16" height="16" viewBox="0 0 16 16" role="img" aria-label="JetBrains text icon" fill="currentColor"><rect x="2" y="12" width="8" height="1" rx="0.5"/><rect x="2" y="6" width="8" height="1" rx="0.5"/><rect x="2" y="9" width="12" height="1" rx="0.5"/><rect x="2" y="3" width="12" height="1" rx="0.5"/></svg><span class="cap">JetBrains text</span><svg role="img" aria-label="Rust crab" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M3.5 10.5C3.5 8.3 5.5 7 8 7s4.5 1.3 4.5 3.5c0 1.4-2 2-4.5 2s-4.5-.6-4.5-2z"/>
+<path d="M6.5 7.2V5.8M9.5 7.2V5.8"/>
+<circle cx="6.5" cy="5" r=".7" fill="currentColor" stroke="none"/>
+<circle cx="9.5" cy="5" r=".7" fill="currentColor" stroke="none"/>
+<path d="M3.8 9.2L2.6 7.4M12.2 9.2l1.2-1.8"/>
+<path d="M2.6 7.4C1.2 7 .9 4.9 2.2 4.1l.7 1.4.9-1.1c.9.9.4 2.9-1.2 3z"/>
+<path d="M13.4 7.4c1.4-.4 1.7-2.5.4-3.3l-.7 1.4-.9-1.1c-.9.9-.4 2.9 1.2 3z"/>
+<path d="M4.3 12l-1.6 1.4M6 12.5l-1 1.6M10 12.5l1 1.6M11.7 12l1.6 1.4"/>
+</svg>
+<span class="cap">Rust crab, new</span><svg stroke-width="0.6" role="img" aria-label="Rust crab" width="64" height="64" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M3.5 10.5C3.5 8.3 5.5 7 8 7s4.5 1.3 4.5 3.5c0 1.4-2 2-4.5 2s-4.5-.6-4.5-2z"/>
+<path d="M6.5 7.2V5.8M9.5 7.2V5.8"/>
+<circle cx="6.5" cy="5" r=".7" fill="currentColor" stroke="none"/>
+<circle cx="9.5" cy="5" r=".7" fill="currentColor" stroke="none"/>
+<path d="M3.8 9.2L2.6 7.4M12.2 9.2l1.2-1.8"/>
+<path d="M2.6 7.4C1.2 7 .9 4.9 2.2 4.1l.7 1.4.9-1.1c.9.9.4 2.9-1.2 3z"/>
+<path d="M13.4 7.4c1.4-.4 1.7-2.5.4-3.3l-.7 1.4-.9-1.1c-.9.9-.4 2.9 1.2 3z"/>
+<path d="M4.3 12l-1.6 1.4M6 12.5l-1 1.6M10 12.5l1 1.6M11.7 12l1.6 1.4"/>
+</svg>
+<span class="cap">crab at 4x</span></div></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":860,"height":860}}'>
+class Component extends DCLogic {
+renderVals() {
+return { amb: (this.props.ambience ?? 'dark') === 'light' ? 'light' : 'dark' };
+}
+}
+</script>
+</body>
+</html>

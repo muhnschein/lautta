@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The process-wide core and its tokio runtime (SPEC ARC-5, ARC-6), and the
-//! one way the Qt layer runs async work: [`spawn_then`] runs a future on the
-//! runtime and hands its result back to the GUI thread.
+//! Process-wide core and tokio runtime. [`spawn_then`] is the one way Qt layer runs async work:
+//! result returns to the GUI thread.
 
 use lautta_core::app::Core;
 use lautta_core::paths::AppPaths;
@@ -14,8 +13,8 @@ static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 static CORE: OnceLock<Arc<Core>> = OnceLock::new();
 static START_ERROR: OnceLock<String> = OnceLock::new();
 
-/// Two workers for orchestration, the bridge client and the scheduler
-/// (ARC-6); blocking file system work goes to `spawn_blocking`.
+/// Two workers for orchestration, bridge client and scheduler; blocking file system work goes to
+/// `spawn_blocking`.
 fn runtime() -> &'static Runtime {
     RUNTIME.get_or_init(|| {
         match tokio::runtime::Builder::new_multi_thread()
@@ -37,7 +36,6 @@ pub fn handle() -> Handle {
     runtime().handle().clone()
 }
 
-/// Opens the core once. Later calls return the existing instance.
 pub fn init(paths: AppPaths) -> Result<Arc<Core>> {
     if let Some(core) = CORE.get() {
         return Ok(core.clone());
@@ -51,19 +49,16 @@ pub fn init(paths: AppPaths) -> Result<Arc<Core>> {
     }
 }
 
-/// Why [`init`] failed, for the start page.
 pub fn start_error() -> String {
     START_ERROR.get().cloned().unwrap_or_default()
 }
 
-/// The core. Facades are only created after [`init`] succeeded.
+/// Facades are created only after [`init`] succeeded.
 pub fn core() -> Option<Arc<Core>> {
     CORE.get().cloned()
 }
 
-/// Runs `fut` on the runtime and calls `done` with its output on the thread
-/// that called `spawn_then` (the GUI thread). If that thread's event loop is
-/// gone, the result is dropped.
+/// `done` runs on the calling (GUI) thread. Result dropped if that thread's event loop is gone.
 pub fn spawn_then<T, F, D>(fut: F, done: D)
 where
     T: Send + 'static,
@@ -81,8 +76,6 @@ where
     });
 }
 
-/// Runs a blocking closure (database, local file system) off the GUI thread
-/// and hands its result back, like [`spawn_then`].
 pub fn blocking_then<T, F, D>(work: F, done: D)
 where
     T: Send + 'static,

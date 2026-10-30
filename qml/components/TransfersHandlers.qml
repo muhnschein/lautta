@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// App-wide reactions of the transfers area: keep the device awake while
-// transfers run (XFR-5), notifications (INT-2), conflict questions
-// (OPS-2) and the restored-transfers prompt (XFR-11).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.KeepAlive 1.2
@@ -10,11 +7,9 @@ import Lautta 1.0
 Item {
     id: root
 
-    // Conflict dialogs waiting for their turn, and the one on screen.
     property var queue: []
     property var asked: ({})
     property bool dialogOpen
-    // The restored-transfers prompt is shown once per start.
     property bool restoredShown
 
     function showTransfers() {
@@ -25,8 +20,6 @@ Item {
         pageStack.push(Qt.resolvedUrl("../pages/TransfersPage.qml"))
     }
 
-    // A conflict of a running transfer: the operations area's dialog answers
-    // it through Transfers.answer. One dialog at a time.
     function ask(transferId, item, conflict) {
         var key = transferId + ":" + item
         if (asked[key])

@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Scheduling (XFR-2): FIFO per destination location, round-robin across
-//! locations, concurrency limits per location. Pure logic: no I/O, no clock,
-//! no randomness, so every decision is reproducible in tests.
+//! Scheduling: FIFO per destination location, round-robin across locations, concurrency limits per
+//! location. Pure logic: no I/O, clock or randomness, so decisions are reproducible in tests.
 
 use super::model::TransferId;
 use std::collections::{HashMap, VecDeque};
 
-/// Concurrent items for a local destination (XFR-2).
+/// Concurrent items for a local destination.
 pub const LOCAL_LIMIT: usize = 2;
 /// Default for a remote location; the user may choose 1 to 6.
 pub const DEFAULT_REMOTE_LIMIT: usize = 2;
 pub const MIN_REMOTE_LIMIT: usize = 1;
 pub const MAX_REMOTE_LIMIT: usize = 6;
 
-/// Bridge-served locations: `nv-<bridge id>` (LOC-7).
+/// Bridge-served locations: `nv-<bridge id>`.
 pub fn is_bridge_location(location: &str) -> bool {
     location.starts_with("nv-")
 }
@@ -35,7 +34,6 @@ struct Entry {
     barrier_running: bool,
 }
 
-/// Working state while computing one batch.
 #[derive(Debug, Clone, Copy, Default)]
 struct Sim {
     taken: usize,
@@ -50,7 +48,6 @@ pub struct Scheduler {
     /// Optional cap on running items over all locations; without it the
     /// round-robin only interleaves the start order.
     global_limit: Option<usize>,
-    /// Index into the location rotation where the next batch starts.
     cursor: usize,
 }
 
@@ -59,7 +56,6 @@ impl Scheduler {
         Scheduler::default()
     }
 
-    /// Sets the concurrency of a remote location, clamped to 1..=6.
     pub fn set_remote_limit(&mut self, location: &str, limit: usize) {
         self.remote_limits.insert(
             location.to_owned(),
@@ -110,7 +106,7 @@ impl Scheduler {
         }
     }
 
-    /// Re-queues items (retry, XFR-9), keeping plan order.
+    /// Re-queues items (retry), keeping plan order.
     pub fn requeue(&mut self, id: TransferId, items: impl IntoIterator<Item = (u32, bool)>) {
         if let Some(e) = self.entry_mut(id) {
             for item in items {
@@ -152,7 +148,6 @@ impl Scheduler {
             .sum()
     }
 
-    /// Queue order, front first.
     pub fn order(&self) -> Vec<TransferId> {
         self.entries.iter().map(|e| e.id).collect()
     }
@@ -202,8 +197,7 @@ impl Scheduler {
         self.compute().0.into_iter().map(|(item, _)| item).collect()
     }
 
-    /// Picks the items to start, marks them running and advances the
-    /// round-robin cursor.
+    /// Marks the picked items running and advances the round-robin cursor.
     pub fn start_runnable(&mut self) -> Vec<ItemRef> {
         let (picked, cursor) = self.compute();
         self.cursor = cursor;

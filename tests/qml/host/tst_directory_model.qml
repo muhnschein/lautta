@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of DirectoryModel, PathModel and PickerRootsModel (no Silica):
-// listing a temp HOME's Documents, create/rename errors, sort, filter, hidden
-// files, selection, live updates, per-folder view settings, open folders
-// following the global ones, thumbnails of PDFs and the path menu.
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -37,7 +33,6 @@ Item {
 
     function wait(ms) { pump.pump(ms) }
 
-    // A file in Documents, copied from a fixture: the app makes folders only.
     function install(fixture, name) {
         check(tools.installFixture(Qt.resolvedUrl("fixtures/" + fixture), root.docs + name), "fixture " + name)
     }
@@ -148,7 +143,6 @@ Item {
         dir.clearSelection()
         check(dir.selectedCount === 0 && dir.selectedUris().length === 0, "clear")
         check(dir.indexOf(a) === 1 && dir.indexOf(root.docs + "none") === -1, "indexOf: " + dir.indexOf(a))
-        // Drag selection reads the rows by index, the selection panel the kind by uri.
         same([dir.uriAt(0), dir.uriAt(1), dir.uriAt(3)], [root.docs + "Zeta", a, root.docs + "notes.md"], "uriAt")
         check(dir.uriAt(-1) === "" && dir.uriAt(dir.count) === "", "uriAt outside the rows")
         same([dir.kindOf(root.docs + "Zeta"), dir.kindOf(a), dir.kindOf(root.docs + "none"),
@@ -204,14 +198,11 @@ Item {
         dir.setViewPrefs(JSON.stringify({ viewMode: "list", thumbnails: true }))
     }
 
-    // BRW-4: folders already open follow a change made elsewhere (Settings,
-    // or View options in another folder) without being opened again.
     function testOpenFoldersFollowSettings() {
         var open = Qt.createQmlObject('import Lautta 1.0; DirectoryModel { uri: "' + root.docs + 'Zeta" }', root)
         wait(300)
         check(!open.descending && open.viewMode === "list", "an open folder starts with the global settings")
         var before = names(rep)
-        // Set for this folder alone; the global settings do not touch it.
         dir.setViewPrefs(JSON.stringify({ thumbnails: false }))
         App.setSetting("sort_descending", JSON.stringify(true))
         App.setSetting("view_mode", JSON.stringify("grid"))
@@ -233,9 +224,6 @@ Item {
         open.destroy()
     }
 
-    // PRV-1, PRV-14: a local PDF is the system thumbnailer's, as a picture
-    // is: its file:// URL and its PDF type, which Nemo.Thumbnailer draws by.
-    // It follows Show thumbnails, not the servers' switch.
     function testPdfThumbnails() {
         install("two-pages.pdf", "Doc.pdf")
         wait(500)

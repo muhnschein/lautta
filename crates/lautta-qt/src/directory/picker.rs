@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `PickerRootsModel`: the locations the folder picker starts from (OPS-10).
-//! A plain list of `core.locations.locations()`; Browse has its own richer
-//! model.
+//! Locations the folder picker starts from; plain list of `core.locations.locations()`.
 
 use crate::runtime::core;
 use cpp::cpp;
@@ -39,10 +37,8 @@ struct Root {
 pub struct PickerRootsModel {
     base: qt_base_class!(trait QAbstractListModel),
     refresh: qt_method!(fn(&mut self)),
-    /// True when a server location exists (Upload/Download actions, UI-8).
     hasRemote: qt_method!(fn(&self) -> bool),
-    /// Test aid: runs the Qt event loop for `ms` milliseconds so queued
-    /// results of async actions arrive inside a synchronous QML test.
+    /// Test aid: pumps the Qt event loop so async results arrive inside a synchronous QML test.
     pump: qt_method!(fn(&self, ms: i32)),
     rows: RefCell<Option<Vec<Root>>>,
 }

@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of the item counts of folders in DirectoryModel (no Silica), the
-// "N items" under a folder in the grid (SPEC §15.3): asked for per folder
-// (`requestCount`), counted off the GUI thread, hidden files only when the
-// view shows them, again after the folder changed, capped for a huge
-// folder, and none for files, unreadable folders and unknown addresses.
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -33,15 +28,12 @@ Item {
     ViewerTools { id: tools }
 
     property int changes
-    // The cells ask on their own; a test that asks by hand switches that off.
     property bool asking: true
 
     DirectoryModel { id: downloads; uri: "lautta://user-downloads/" }
     DirectoryModel { id: counts }
     DirectoryModel { id: mixed }
 
-    // Asks for the count of its folder as the grid cell does: when it
-    // appears and whenever the folder's modified time changes.
     Repeater {
         id: rows
         model: counts
@@ -99,7 +91,6 @@ Item {
         root.asking = true
     }
 
-    // The count follows the hidden-files setting of the view.
     function testHiddenFiles() {
         check(counts.setViewPrefs(JSON.stringify({ showHidden: true })), "hidden files shown")
         check(row("Mixed").items === -1, "the old count does not stand: " + row("Mixed").items)
@@ -112,7 +103,6 @@ Item {
         check(row("Mixed").items === 2, "and without: " + row("Mixed").items)
     }
 
-    // Changes inside a folder change its modified time: the cell asks again.
     function testChangedFolder() {
         check(tools.installFixture(Qt.resolvedUrl("fixtures/notes-crlf.txt"), root.base + "Mixed/b.txt"), "another file")
         counts.refresh()
@@ -120,7 +110,6 @@ Item {
         check(row("Mixed").items === 3, "the folder was counted again: " + row("Mixed").items)
     }
 
-    // A folder that did not change is not counted again.
     function testAskingAgain() {
         var before = root.changes
         for (var i = 0; i < 3; ++i)
@@ -154,9 +143,6 @@ Item {
         check(row("sub").items === 0, "and counts its own: " + row("sub").items)
     }
 
-    // A count belongs to the folder it was made for: a folder of the same name
-    // and the same modified time elsewhere, as rsync -t leaves them, is counted
-    // for itself.
     function testSameStampElsewhere() {
         var when = 1700000000000
         counts.uri = root.base
@@ -190,7 +176,6 @@ Item {
         check(row("Same").items === 3, "the second folder has its own count: " + row("Same").items)
     }
 
-    // No folder, no counts.
     function testNoFolder() {
         counts.uri = ""
         wait(300)

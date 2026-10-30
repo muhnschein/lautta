@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Ad-hoc secrets live in a zeroized buffer for the duration of one call
-//! (SPEC NVB-6, SEC-1).
 
 mod bridge_support;
 
@@ -91,7 +89,6 @@ async fn the_owned_form_takes_the_secret_and_works() {
 
 #[tokio::test]
 async fn the_app_never_keeps_a_secret_in_its_state() {
-    // After the call the client holds nothing: the only copy is the bridge's.
     let rig = Rig::ready().await;
     let mut secret = Zeroizing::new(b"needle-in-a-haystack".to_vec());
     rig.client

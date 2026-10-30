@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Compression tests: archives are produced through `compress`, then read
-//! back both by independent readers (the `zip`, `tar` and `flate2` crates)
-//! and by `ArchiveProvider`.
+//! Archives are read back by independent readers (`zip`, `tar`, `flate2`) and by `ArchiveProvider`.
 
 use super::zipstream::ZipStream;
 use super::*;
@@ -18,7 +16,6 @@ fn uri(loc: &str, path: &str) -> Uri {
     Uri::new(loc, vp(path))
 }
 
-/// A `Write` sink the test can read afterwards.
 #[derive(Clone, Default)]
 struct SharedBuf(Arc<Mutex<Vec<u8>>>);
 
@@ -39,7 +36,6 @@ impl SharedBuf {
     }
 }
 
-/// Fails after `limit` bytes, like a pipe whose reader went away.
 struct BrokenPipe {
     limit: usize,
     written: usize,
@@ -147,7 +143,7 @@ async fn zip_is_readable_by_the_zip_crate() {
     assert_eq!(stats.bytes, 17 + 13 + 700_000 + 7);
     let mut z = zip::ZipArchive::new(io::Cursor::new(bytes)).unwrap();
     let names: Vec<String> = (0..z.len())
-        .map(|i| z.by_index(i).unwrap().name().to_owned())
+        .map(|i| z.by_index(i).unwrap().name().unwrap().into_owned())
         .collect();
     let mut want: Vec<String> = EXPECTED_ORDER.iter().map(|n| (*n).to_owned()).collect();
     for n in ["proj", "proj/data", "proj/empty", "proj/src"] {
@@ -296,7 +292,7 @@ async fn single_files_and_multiple_locations() {
     let mut z = zip::ZipArchive::new(io::Cursor::new(sink.bytes())).unwrap();
     // Archive order (by index); `file_names()` iterates a hash map.
     let names: Vec<String> = (0..z.len())
-        .map(|i| z.by_index(i).unwrap().name().to_owned())
+        .map(|i| z.by_index(i).unwrap().name().unwrap().into_owned())
         .collect();
     assert_eq!(names, ["single.txt", "docs/", "docs/note.md"]);
     let mut out = String::new();

@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// A row of the Settings page that opens a page of settings (SPEC §18, laid
-// out as Salama's settings): an icon, the page's name and, under it, what
-// is chosen there now.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
@@ -28,7 +25,6 @@ BackgroundItem {
         sourceSize.width: width
         sourceSize.height: height
         source: entry.iconSource
-        // Tinted like ItemIcon: an uncoloured theme glyph vanishes on a light ambience.
         color: Theme.primaryColor
         highlighted: entry.highlighted
         highlightColor: Theme.highlightColor

@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The image viewer's More › Rename on the target (PRV-4, OPS-12, real
-// Silica and Lautta types): More's Rename opens the rename dialog in the
-// More page's place; accepting it renames the file, and the viewer stays on
-// the image under its new name (in the folder's listing, the old name gone).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -23,7 +19,12 @@ ApplicationWindow {
         target: Operations
         onRemoved: window.cleaned = true
     }
-    // Makes the test's folder, then lists it to see the rename.
+    Connections {
+        target: window.viewer
+        ignoreUnknownSignals: true
+        onCurrentUriChanged: window.expect(window.viewer.currentUri !== window.folder + "a.jpg",
+                                           "showed the other image: step " + window.step)
+    }
     DirectoryModel {
         id: listing
         uri: "lautta://user-pictures/"
@@ -78,7 +79,6 @@ ApplicationWindow {
                 more.clicked(null)
                 break
             case 1:
-                // The More page, with Rename first.
                 if (pageStack.busy || top === window.viewer)
                     return
                 if (!window.expect(top.choose !== undefined, "More opened its page"))
@@ -86,7 +86,6 @@ ApplicationWindow {
                 top.choose("rename")
                 break
             case 2:
-                // The dialog in the More page's place, on the image's name.
                 if (pageStack.busy || top.newName === undefined)
                     return
                 window.expect(pageStack.depth === 2, "the dialog replaced the More page: " + pageStack.depth + " pages")
@@ -100,11 +99,10 @@ ApplicationWindow {
                 top.accept()
                 break
             case 3:
-                // Back on the viewer, which shows the image under its new name.
                 if (pageStack.busy || top !== window.viewer || window.viewer.currentUri !== window.folder + "after.jpg"
                         || !window.viewer.inFolder)
                     return
-                window.expect(window.viewer.total === 1, "one image in the folder: " + window.viewer.total)
+                window.expect(window.viewer.total === 2, "two images in the folder: " + window.viewer.total)
                 listing.uri = window.folder
                 break
             case 4:
@@ -112,7 +110,6 @@ ApplicationWindow {
                     return
                 window.expect(listing.indexOf(window.folder + "after.jpg") >= 0, "the file has its new name")
                 window.expect(listing.indexOf(window.folder + "before.jpg") < 0, "the old name is gone")
-                // Leave Pictures as it was for the scenarios after this one.
                 window.cleaned = false
                 Operations.remove(JSON.stringify([window.folder.slice(0, -1)]))
                 break
@@ -130,6 +127,7 @@ ApplicationWindow {
     Component.onCompleted: {
         listing.createFolder("ViewerRename")
         tools.pump(500)
+        tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), folder + "a.jpg")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), folder + "before.jpg")
         viewer = pageStack.push(viewerComponent, {}, PageStackAction.Immediate)
     }

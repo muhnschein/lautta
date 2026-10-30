@@ -258,6 +258,14 @@
       "x": 480,
       "y": 14440
     },
+    "DocumentGlyph.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Document glyph \u00b7 aligned with JetBrains text",
+      "w": 860,
+      "x": 6200,
+      "y": 2060
+    },
     "Extract.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -450,6 +458,14 @@
       "x": 4320,
       "y": 14440
     },
+    "ServerIcon.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Server icon \u00b7 server and globe variants",
+      "w": 860,
+      "x": 7080,
+      "y": 2060
+    },
     "ServerQuestion.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -529,6 +545,14 @@
       "w": 400,
       "x": 2880,
       "y": 3580
+    },
+    "TextThumbFullPlainIcon.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Text thumbnail \u00b7 fade and type icon",
+      "w": 400,
+      "x": 5720,
+      "y": 2060
     },
     "TextViewer.dc.html": {
       "h": 860,
@@ -695,7 +719,7 @@
     "r10": {
       "kind": "title1",
       "maxW": 5200,
-      "text": "Breadcrumbs for deep folders (path in the header)",
+      "text": "Breadcrumbs for deep folders",
       "w": 240,
       "x": 0,
       "y": 15600
@@ -723,6 +747,9 @@
     "NewItem.dc.html",
     "Rename.dc.html",
     "GridIcons.dc.html",
+    "TextThumbFullPlainIcon.dc.html",
+    "DocumentGlyph.dc.html",
+    "ServerIcon.dc.html",
     "StateEmpty.dc.html",
     "StateNoAccess.dc.html",
     "StateOffline.dc.html",

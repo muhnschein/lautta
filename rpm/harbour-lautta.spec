@@ -1,15 +1,13 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Built with `mb2 build` in the Sailfish OS SDK (tools/ci/build-rpm.sh).
-# The binary needs rustc 1.95, which no SDK target ships yet: it is
-# cross-built before mb2 with the host's cargo against the SDK's gcc, Qt and
-# sysroot (tools/ci/cross-build.sh) and installed from prebuilt/. The build
-# never touches the network (SPEC RS-6, PKG-1).
+# Binary needs rustc 1.95, not in the SDK target: cross-built before mb2 by
+# tools/ci/cross-build.sh, installed from prebuilt/. No network during build.
 
 Name:       harbour-lautta
 Summary:    A file manager for Sailfish OS
 Version:    0.1.0
 Release:    1
-License:    LGPLv2+
+License:    LGPLv2+ and ASL 2.0 and BSD
 URL:        https://github.com/muhnschein/lautta
 Source0:    %{name}-%{version}.tar.bz2
 ExclusiveArch: aarch64
@@ -29,10 +27,9 @@ Requires:   nemo-qml-plugin-configuration-qt5
 Requires:   qml(Nemo.KeepAlive)
 Requires:   qt5-qtdeclarative-import-multimedia
 Requires:   qt5-qtmultimedia
-# The app's own icons are SVG files.
+# Icons are SVG.
 Requires:   qt5-qtsvg-plugin-imageformat-svg
 
-# No debug info in the package (HBR-6).
 %define debug_package %{nil}
 %define __provides_exclude_from ^%{_datadir}/.*$
 

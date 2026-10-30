@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Questions of the bridge (identity, keyboard-interactive, insecure SMB
-//! connection) travel to the app's hub and the answers travel back (SPEC NVB-6,
-//! §5.3), and secrets are wiped (SEC-1).
 
 mod bridge_support;
 
@@ -23,7 +20,6 @@ fn question(kind: &str, details: &[(&str, InfoValue)]) -> ScriptedQuestion {
     }
 }
 
-/// SMB's `guest` profile, which the bridge asks `insecure-consent` for.
 fn guest() -> AdHocOptions {
     AdHocOptions {
         security_profile: Some("guest".into()),
@@ -50,7 +46,6 @@ fn identity() -> ScriptedQuestion {
     )
 }
 
-/// Waits for the next question of the hub.
 async fn next_question(
     rig: &Rig,
     events: &mut tokio::sync::broadcast::Receiver<QuestionEvent>,
@@ -252,7 +247,6 @@ async fn questions_vanish_with_the_connection() {
         resolved |= event == QuestionEvent::Resolved(q.id.clone());
     }
     assert!(resolved, "the UI is told to close the dialog");
-    // The answer cannot be delivered any more; the asker on the bridge side is gone too.
     assert!(asked.await.unwrap().is_none());
 }
 

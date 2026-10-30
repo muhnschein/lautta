@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The cover (INT-3): the folder's name and item count while browsing; while
-// transfers run, the transfers area's cover (progress, rate, count and its
-// actions) takes over.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -11,10 +8,8 @@ import "../components/FileIcons.js" as FileIcons
 CoverBackground {
     id: cover
 
-    // The folder of the page on top, when it is a folder page.
     readonly property var topPage: typeof pageStack !== "undefined" && pageStack ? pageStack.currentPage : null
     readonly property string folderUri: topPage && typeof topPage.uri === "string" ? topPage.uri : ""
-    // Transferring, paused or pending at close: the transfers cover shows.
     readonly property bool transferring: transferCover.active
 
     onStatusChanged: if (status === Cover.Active) info.refresh()
@@ -43,7 +38,7 @@ CoverBackground {
         AppIcon {
             visible: cover.folderUri.length > 0
             anchors.horizontalCenter: parent.horizontalCenter
-            // Large, at a multiple of 28 px: the glyph's sharp set (UI-2).
+            // Multiple of 28 px: glyph's sharp set.
             iconSize: FileIcons.snap(Theme.iconSizeLarge)
             icon: FileIcons.glyph("folder", true, iconSize)
             color: Theme.highlightColor

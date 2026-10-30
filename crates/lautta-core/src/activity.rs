@@ -1,29 +1,18 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The activity bar (SPEC §15.4, XFR-13): the strip at the bottom of Browse
-//! and the folder pages that says what runs, what waits for an answer and
-//! what just ended, so the Activity page is one tap away at any depth.
-//! Qt-free: the `Transfers` singleton feeds it the queue and the finish
-//! events and shows what [`ActivityBar::view`] returns.
+//! Activity bar state. Qt-free; `Transfers` feeds it queue and finish events.
 
 use crate::transfer::{TransferId, TransferState, TransferSummary, WaitReason};
 
-/// How long a success stays on the bar.
 pub const FLASH_MS: i64 = 4000;
 
-/// What the bar shows, most urgent first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BarMode {
     Hidden,
-    /// A conflict waits for the user.
     Question,
-    /// Queued, scanning or running.
     Running,
-    /// Waiting for the network, the bridge or a card.
     Waiting,
     Paused,
-    /// The last task ended with failures; stays until seen or swiped away.
     Failed,
-    /// The last task completed; shown for [`FLASH_MS`].
     Done,
 }
 
@@ -41,7 +30,6 @@ impl BarMode {
     }
 }
 
-/// The part of a transfer the bar looks at.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Task {
     pub id: TransferId,
@@ -59,8 +47,6 @@ impl From<&TransferSummary> for Task {
     }
 }
 
-/// What the bar shows: its mode, the task it names (and opens) and how many
-/// tasks are unfinished in all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BarView {
     pub mode: BarMode,
@@ -76,18 +62,13 @@ impl BarView {
     };
 }
 
-/// The bar's memory: the last outcome and what was swiped away.
 #[derive(Debug, Default)]
 pub struct ActivityBar {
     failed: Option<TransferId>,
     done: Option<(TransferId, i64)>,
-    /// The unfinished tasks and their states when the bar was swiped away;
-    /// it stays hidden until they change.
     hidden: Option<Vec<(TransferId, TransferState)>>,
 }
 
-/// Which unfinished task leads: an open question, then running, queued,
-/// waiting and paused ones, each in queue order.
 fn urgency(state: TransferState) -> u8 {
     match state {
         TransferState::Waiting(WaitReason::Question) => 0,
@@ -114,9 +95,6 @@ fn snapshot(unfinished: &[Task]) -> Vec<(TransferId, TransferState)> {
 }
 
 impl ActivityBar {
-    /// A task ended. Completed ones flash, failed ones stay; canceled ones
-    /// are the user's own doing and show nothing. Any end shows the bar
-    /// again after a swipe.
     pub fn finished(&mut self, id: TransferId, state: TransferState, now_ms: i64) {
         match state {
             TransferState::Completed => self.done = Some((id, now_ms)),
@@ -126,21 +104,17 @@ impl ActivityBar {
         self.hidden = None;
     }
 
-    /// The user swiped the bar away: it hides until the unfinished tasks
-    /// change, and the outcome on it counts as seen.
     pub fn dismiss(&mut self, tasks: &[Task]) {
         let unfinished: Vec<Task> = tasks.iter().copied().filter(|t| !t.state.is_finished()).collect();
         self.hidden = Some(snapshot(&unfinished));
         self.seen();
     }
 
-    /// The Activity page was opened: the outcome has been seen.
     pub fn seen(&mut self) {
         self.failed = None;
         self.done = None;
     }
 
-    /// What the bar shows now. Forgets a swipe once the tasks changed.
     pub fn view(&mut self, tasks: &[Task], now_ms: i64) -> BarView {
         let unfinished: Vec<Task> = tasks.iter().copied().filter(|t| !t.state.is_finished()).collect();
         let now = snapshot(&unfinished);
@@ -177,8 +151,6 @@ impl ActivityBar {
         }
     }
 
-    /// Milliseconds until the view changes without an event (the end of a
-    /// success flash), if it will.
     pub fn next_change_in(&self, now_ms: i64) -> Option<i64> {
         self.done
             .map(|(_, at)| at + FLASH_MS - now_ms)
@@ -268,7 +240,6 @@ mod tests {
         assert_eq!(view(&mut bar, &tasks[..5], 0), (BarMode::Running, Some(5), 5));
         assert_eq!(view(&mut bar, &tasks[..3], 0), (BarMode::Running, Some(3), 3));
         assert_eq!(view(&mut bar, &tasks[..2], 0), (BarMode::Waiting, Some(2), 2));
-        // Scanning ranks with running; ties go by position, then id.
         assert_eq!(
             view(&mut bar, &[t(8, Scanning, 4), t(4, Running, 4)], 0),
             (BarMode::Running, Some(4), 2)
@@ -359,9 +330,7 @@ mod tests {
         let running = [t(1, Running, 0), t(2, Queued, 1)];
         bar.dismiss(&running);
         assert_eq!(view(&mut bar, &running, 0), (BarMode::Hidden, None, 0));
-        // Progress alone (same states) keeps it hidden.
         assert_eq!(view(&mut bar, &running, 500), (BarMode::Hidden, None, 0));
-        // A new task brings it back, and the swipe is forgotten.
         let more = [t(1, Running, 0), t(2, Queued, 1), t(3, Queued, 2)];
         assert_eq!(view(&mut bar, &more, 0), (BarMode::Running, Some(1), 3));
         assert_eq!(view(&mut bar, &running, 0), (BarMode::Running, Some(1), 2));
@@ -384,7 +353,6 @@ mod tests {
         bar.finished(1, Failed, 0);
         bar.dismiss(&tasks);
         assert_eq!(view(&mut bar, &tasks, 0), (BarMode::Hidden, None, 0));
-        // A new task and its end show again.
         assert_eq!(
             view(&mut bar, &[t(1, Failed, 0), t(2, Running, 1)], 0),
             (BarMode::Running, Some(2), 1)
