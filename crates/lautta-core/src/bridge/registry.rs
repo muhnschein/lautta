@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Routing of signals to the request that waits for them. A signal can arrive
-//! before the method reply that names its id has been processed (`ListBatch`
-//! right behind `List`), so slots are created by whichever side comes first
-//! and the events wait in the slot until the request subscribes.
+//! Routes signals to the waiting request. A signal can arrive before the method reply naming its id
+//! is processed (`ListBatch` right behind `List`): slots are created by whichever side comes first,
+//! events wait until the request subscribes.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use tokio::sync::mpsc;
 
-/// Slots kept for ids nobody has subscribed to yet; older ones are dropped.
+/// Slots for ids nobody has subscribed to yet; older ones are dropped.
 const MAX_BUFFERED_IDS: usize = 128;
-/// Ids of requests that gave up, whose late signals are ignored.
+/// Requests that gave up: late signals are ignored.
 const MAX_IGNORED_IDS: usize = 256;
 
 enum Slot<T> {
@@ -42,11 +41,10 @@ impl<T> Default for Registry<T> {
 
 impl<T> Registry<T> {
     fn lock(&self) -> MutexGuard<'_, Inner<T>> {
-        // The data stays consistent if a holder panicked: every update is one step.
+        // Every update is one step, so data stays consistent if a holder panicked.
         self.inner.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Delivers an event for `id`.
     pub fn push(&self, id: u32, event: T) {
         let mut g = self.lock();
         if g.closed || g.ignored.contains(&id) {
@@ -76,8 +74,6 @@ impl<T> Registry<T> {
         }
     }
 
-    /// Starts receiving the events of `id`, including those that arrived early.
-    /// After [`Registry::close`] the receiver ends at once.
     pub fn subscribe(&self, id: u32) -> mpsc::UnboundedReceiver<T> {
         let (tx, rx) = mpsc::unbounded_channel();
         let mut g = self.lock();
@@ -86,7 +82,6 @@ impl<T> Registry<T> {
         }
         if let Some(Slot::Waiting(buffer)) = g.slots.remove(&id) {
             for event in buffer {
-                // The receiver is alive: it is returned below.
                 let _ = tx.send(event);
             }
         }
@@ -94,7 +89,6 @@ impl<T> Registry<T> {
         rx
     }
 
-    /// The request is over (finished or given up): late signals are dropped.
     pub fn forget(&self, id: u32) {
         let mut g = self.lock();
         g.slots.remove(&id);
@@ -104,7 +98,6 @@ impl<T> Registry<T> {
         }
     }
 
-    /// The connection is gone: every waiting receiver ends.
     pub fn close(&self) {
         let mut g = self.lock();
         g.closed = true;
@@ -180,7 +173,6 @@ mod tests {
             r.push(id, id);
         }
         assert_eq!(r.len(), MAX_BUFFERED_IDS);
-        // The oldest were dropped, the newest kept.
         let mut newest = r.subscribe(MAX_BUFFERED_IDS as u32 + 9);
         assert_eq!(newest.try_recv().unwrap(), MAX_BUFFERED_IDS as u32 + 9);
         let mut oldest = r.subscribe(0);

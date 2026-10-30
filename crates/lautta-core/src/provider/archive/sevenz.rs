@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! 7z (PRV-10): indexed and extracted from the downloaded cache file.
+//! 7z: indexed and extracted from the downloaded cache file.
 
 use super::blocks::from_io;
 use super::{Loc, RawEntry};
@@ -45,7 +45,6 @@ fn classify(attrs: Option<u32>, is_dir: bool) -> (Kind, Option<u32>) {
     }
 }
 
-/// Lists the archive.
 pub fn index(file: File) -> Result<Vec<RawEntry>> {
     let reader = open(file)?;
     let mut out = Vec::new();
@@ -71,8 +70,7 @@ pub fn index(file: File) -> Result<Vec<RawEntry>> {
     Ok(out)
 }
 
-/// Streams the entry called `name` into `out`. Solid archives decode the
-/// preceding entries of the block as well; that is inherent to 7z.
+/// Solid archives decode the preceding entries of the block too: inherent to 7z.
 pub fn copy_entry(file: File, name: &str, out: &mut dyn Write) -> Result<()> {
     let mut reader = open(file)?;
     let mut found = false;

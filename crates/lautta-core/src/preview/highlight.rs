@@ -1,21 +1,15 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Syntax colours for the text viewer (SPEC PRV-13).
+//! Syntax colours for the text viewer. Syntect's bundled grammars on its pure-Rust regex engine (no
+//! oniguruma).
 //!
-//! The grammars are the Sublime Text ones bundled with `syntect`, run by its
-//! pure-Rust regex engine (no oniguruma, SPEC RS-2). A grammar's scopes are
-//! reduced to a few [`Class`]es; the viewer picks a colour of the ambience for
-//! each, so no colour ever comes from a grammar or theme file.
+//! Scopes reduce to a few [`Class`]es; viewer picks the colour from the ambience, none from grammar
+//! or theme.
 //!
-//! The viewer shows a line in rows (TextRows.js: tabs expanded, a long line
-//! split), each as Qt StyledText: every character of the row is escaped and
-//! whitespace is kept with `&nbsp;`, so nothing in a file is read as markup
-//! (no `<img>`, no links, no entities of its own); the only tags are this
-//! module's `<font color>` with a colour checked to be `#` and hex digits.
+//! Rows are Qt StyledText: every char escaped, whitespace as `&nbsp;`; only tag is `<font color>`
+//! with checked `#hex` colour.
 //!
-//! Multi-line constructs carry the parser's state from line to line, so the
-//! document is coloured as a whole, off the GUI thread and within
-//! [`Limits`]: lines after one that is too long, or once time is up, stay
-//! plain. [`start`] runs it on the blocking pool (ARC-7).
+//! Parser state carries across lines; coloured off GUI thread within [`Limits`]. Lines after a
+//! too-long one, or once time is up, stay plain.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -24,7 +18,6 @@ use syntect::easy::ScopeRangeIterator;
 use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxReference, SyntaxSet};
 use tokio::task::JoinHandle;
 
-/// What a piece of a line is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Class {
     Plain,
@@ -47,7 +40,6 @@ pub enum Class {
     Deleted,
 }
 
-/// Every class with its name in a [`Palette`].
 pub const CLASSES: [(Class, &str); 15] = [
     (Class::Plain, "plain"),
     (Class::Comment, "comment"),
@@ -76,10 +68,8 @@ impl Class {
     }
 }
 
-/// Scope prefixes and their class. For one scope the first prefix that
-/// matches decides, so a prefix comes before the shorter ones it refines
-/// (checked by a test). A scope no prefix matches says nothing: the one
-/// enclosing it decides, and plain text is what is left.
+/// First matching prefix decides, so refinements come before shorter prefixes (test checks). No
+/// match: enclosing scope decides.
 const RULES: &[(&str, Class)] = &[
     ("comment", Class::Comment),
     ("punctuation.definition.variable", Class::Variable),
@@ -114,8 +104,7 @@ const RULES: &[(&str, Class)] = &[
     ("variable.parameter", Class::Variable),
     ("variable.language", Class::Keyword),
     ("variable.other.constant", Class::Constant),
-    // Shell variables: `x=…`, `$x`, `${x}`. Other grammars (JavaScript)
-    // mark every identifier as a variable, which would colour all of it.
+    // Shell variables only: other grammars (JavaScript) mark every identifier variable.
     ("variable.other.readwrite.assignment", Class::Variable),
     ("meta.group.expansion.parameter", Class::Variable),
     ("markup.heading", Class::Heading),
@@ -129,16 +118,15 @@ const RULES: &[(&str, Class)] = &[
     ("markup.deleted", Class::Deleted),
     ("meta.diff.header", Class::Heading),
     ("meta.diff.range", Class::Heading),
-    // Code embedded in a string or a document is code again.
+    // Embedded code is code again.
     ("source", Class::Plain),
 ];
 
-/// When colouring gives up (PRV-13).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Limits {
-    /// Wall time for the whole document; the lines after it stay plain.
+    /// Wall time for whole document.
     pub budget: Duration,
-    /// A longer line, and every line after it, stays plain.
+    /// Longer line and all after it stay plain.
     pub max_line_bytes: usize,
 }
 
@@ -147,20 +135,17 @@ pub const LIMITS: Limits = Limits {
     max_line_bytes: 4096,
 };
 
-/// How long the viewer waits for the colours before it shows the text
-/// plain and colours it when they arrive (no flash of plain text for the
-/// files that are coloured at once).
+/// Wait before showing plain text and colouring on arrival; avoids flash for files coloured at
+/// once.
 pub const FIRST_WAIT: Duration = Duration::from_millis(250);
 
-/// A colouring whose last line ran this much over the budget is dropped:
-/// one line can only be cut short between lines.
+/// Colouring overrunning budget is dropped: a line can only be cut between lines.
 const GRACE: Duration = Duration::from_millis(500);
 
-/// Columns per tab in the viewer's rows (TextRows.js).
+/// Columns per tab (TextRows.js).
 const TAB_WIDTH: usize = 4;
 
-/// Columns `c` takes at `column` in the viewer's rows, which count UTF-16
-/// units as JavaScript does and expand a tab to the next tab stop.
+/// Width of `c` at `column`; UTF-16 units as JavaScript, tab to next stop.
 fn columns(column: usize, c: char) -> usize {
     if c == '\t' {
         TAB_WIDTH - column % TAB_WIDTH
@@ -169,29 +154,24 @@ fn columns(column: usize, c: char) -> usize {
     }
 }
 
-/// A piece of a line: up to byte `end` of the line (from the previous
-/// span's end), in `class`.
+/// Up to byte `end` of line, from previous span's end.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
     pub end: u32,
     pub class: Class,
 }
 
-/// A document's lines (split at `\n`, as the viewer does) and the colours
-/// of its first [`ColouredText::coloured_lines`] lines.
+/// Lines split at `\n` as the viewer does, with colours of the first `coloured_lines`.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ColouredText {
     text: String,
-    /// Where each line starts in `text`.
     line_starts: Vec<usize>,
     syntax: Option<&'static str>,
     spans: Vec<Span>,
-    /// Where each coloured line's spans start in `spans`.
     span_starts: Vec<usize>,
 }
 
 impl ColouredText {
-    /// The text without colours.
     pub fn plain(text: String) -> ColouredText {
         let line_starts = std::iter::once(0)
             .chain(text.match_indices('\n').map(|(i, _)| i + 1))
@@ -211,12 +191,12 @@ impl ColouredText {
         self.line_starts.len()
     }
 
-    /// Lines from the first that have colours (0: none).
+    /// 0: none.
     pub fn coloured_lines(&self) -> usize {
         self.span_starts.len()
     }
 
-    /// The grammar's name, `None` for plain text.
+    /// `None` for plain text.
     pub fn syntax(&self) -> Option<&'static str> {
         self.syntax
     }
@@ -230,7 +210,6 @@ impl ColouredText {
         self.text.get(start..end)
     }
 
-    /// The spans of a coloured line.
     pub fn spans(&self, index: usize) -> Option<&[Span]> {
         let start = *self.span_starts.get(index)?;
         let end = self
@@ -241,13 +220,9 @@ impl ColouredText {
         self.spans.get(start..end)
     }
 
-    /// The viewer's row `row` of line `index` as StyledText (see the module
-    /// docs). The row starts at column `start` of the line as the viewer
-    /// lays it out (UTF-16 units, tabs expanded), and each of its
-    /// characters takes the colour in `palette` of the span it comes from.
-    /// The characters are the row's own: a row that does not match the line
-    /// could only get wrong colours, never other text. Lines without
-    /// colours, or past the end, are escaped all the same.
+    /// Viewer row `row` of line `index` as StyledText. Row starts at column `start` (UTF-16, tabs
+    /// expanded); each char takes palette colour of its span. Mismatched row gets wrong colours at
+    /// worst, never other text. Uncoloured or out-of-range lines are escaped all the same.
     pub fn styled_row(&self, index: usize, start: usize, row: &str, palette: &Palette) -> String {
         let ends = self.column_spans(index);
         let mut spans = ends.iter().peekable();
@@ -265,8 +240,6 @@ impl ColouredText {
         out.finish()
     }
 
-    /// The column at which each span of line `index` ends, with its class;
-    /// none for a line without colours.
     fn column_spans(&self, index: usize) -> Vec<(usize, Class)> {
         let (Some(line), Some(spans)) = (self.line(index), self.spans(index)) else {
             return Vec::new();
@@ -286,11 +259,8 @@ impl ColouredText {
     }
 }
 
-/// Colours of the classes, as the viewer sends them:
-/// `class=#rrggbb` (or `#aarrggbb`) separated by commas. Unknown classes
-/// and anything that is not such a colour are ignored, so nothing from it
-/// but a checked colour ends up in the markup. Plain text has no colour of
-/// its own: it is the text's.
+/// `class=#rrggbb` (or `#aarrggbb`), comma-separated. Unknown classes and non-colours ignored: only
+/// checked colours reach markup. Plain text has no colour: it is the text's.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Palette {
     colours: [Option<String>; CLASSES.len()],
@@ -321,14 +291,9 @@ fn is_hex_colour(s: &str) -> bool {
         .is_some_and(|hex| matches!(hex.len(), 6 | 8) && hex.bytes().all(|b| b.is_ascii_hexdigit()))
 }
 
-/// Builds one StyledText row.
-///
-/// Qt's StyledText parser collapses whitespace runs and drops leading
-/// whitespace, takes `&` up to the next `;` as an entity (unknown ones
-/// vanish) and stops at a NUL character. So `<`, `>`, `&` and `"` become
-/// entities, NUL becomes U+FFFD and whitespace `&nbsp;` (a row's tabs are
-/// already spaces), except a lone space between two visible characters,
-/// which stays a space so that wrapping can break there.
+/// Qt StyledText collapses whitespace runs, drops leading whitespace, reads `&` to next `;` as
+/// entity (unknown vanish), stops at NUL. `<` `>` `&` `"` become entities, NUL U+FFFD, whitespace
+/// `&nbsp;` except a lone space between visible chars (wrapping breaks there).
 struct StyledWriter<'a> {
     out: String,
     colour: Option<&'a str>,
@@ -369,7 +334,6 @@ impl<'a> StyledWriter<'a> {
         }
     }
 
-    /// `c`, followed by `next` in the row.
     fn push_char(&mut self, c: char, next: Option<char>) {
         self.open();
         let lone_space = c == ' ' && !self.after_space && next.is_some_and(|n| !n.is_whitespace());
@@ -394,14 +358,12 @@ impl<'a> StyledWriter<'a> {
 
 static SYNTAXES: OnceLock<SyntaxSet> = OnceLock::new();
 
-/// The bundled grammars, loaded on first use (a few ms; their regexes are
-/// compiled as they are first needed).
+/// Loaded on first use (few ms).
 fn syntaxes() -> &'static SyntaxSet {
     SYNTAXES.get_or_init(SyntaxSet::load_defaults_newlines)
 }
 
-/// Extensions the bundled grammars do not list, or list for another
-/// language than the one a phone's files most likely are in.
+/// Extensions bundled grammars lack, or list for another language than phone files likely are.
 const BY_EXTENSION: &[(&str, &str)] = &[
     ("h", "C"),
     ("mjs", "JavaScript"),
@@ -415,12 +377,10 @@ const BY_EXTENSION: &[(&str, &str)] = &[
     ("toml", "Java Properties"),
 ];
 
-/// Extensions a bundled grammar claims that are mostly something else
-/// (meson.build is not NAnt, `.s` is assembly, not R).
+/// Bundled claims that are mostly something else: meson.build not NAnt, `.s` assembly not R.
 const NOT_BY_EXTENSION: &[&str] = &["build", "inc", "s"];
 
-/// The grammar for a file: by its whole name (`Makefile`, `.bashrc`), its
-/// extension, then its first line (`#!/bin/sh`). `None` for plain text.
+/// By whole name (`Makefile`, `.bashrc`), extension, then first line (`#!/bin/sh`).
 pub fn syntax_for(name: &[u8], first_line: &str) -> Option<&'static SyntaxReference> {
     let set = syntaxes();
     let name = String::from_utf8_lossy(name);
@@ -438,13 +398,11 @@ pub fn syntax_for(name: &[u8], first_line: &str) -> Option<&'static SyntaxRefere
         .filter(|s| s.scope != set.find_syntax_plain_text().scope)
 }
 
-/// Colours `text` for the file `name` within `limits`; plain when no
-/// grammar fits. Blocking: run it off the GUI and runtime threads.
+/// Blocking: run off GUI and runtime threads.
 pub fn colour(name: &[u8], text: String, limits: &Limits) -> ColouredText {
     colour_until(name, text, limits.max_line_bytes, Instant::now() + limits.budget)
 }
 
-/// [`colour`] with the time running out at `deadline`.
 fn colour_until(name: &[u8], text: String, max_line_bytes: usize, deadline: Instant) -> ColouredText {
     let first_line = text.lines().next().unwrap_or_default();
     let Some(syntax) = syntax_for(name, first_line) else {
@@ -453,9 +411,8 @@ fn colour_until(name: &[u8], text: String, max_line_bytes: usize, deadline: Inst
     colour_with(text, syntax, max_line_bytes, || Instant::now() >= deadline)
 }
 
-/// Colours `text` with `syntax` line by line until a line is longer than
-/// `max_line_bytes`, the grammar fails, or `out_of_time()` (asked before
-/// each line) says so.
+/// Stops at line longer than `max_line_bytes`, grammar failure, or `out_of_time()` (asked before
+/// each line).
 fn colour_with(
     text: String,
     syntax: &'static SyntaxReference,
@@ -483,7 +440,6 @@ fn colour_with(
     doc
 }
 
-/// The parser's state from line to line.
 struct LineParser {
     state: ParseState,
     stack: ScopeStack,
@@ -501,9 +457,9 @@ impl LineParser {
         }
     }
 
-    /// Appends the spans of `line`; false when the grammar fails on it.
+    /// False when grammar fails on `line`.
     fn parse(&mut self, line: &str, spans: &mut Vec<Span>) -> bool {
-        // The bundled grammars are written for lines that end in a break.
+        // Bundled grammars expect lines ending in a break.
         self.buffer.clear();
         self.buffer.push_str(line);
         self.buffer.push('\n');
@@ -531,7 +487,6 @@ impl LineParser {
     }
 }
 
-/// [`RULES`] as scopes, and the class of each scope seen so far.
 struct Classes {
     rules: Vec<(Scope, Class)>,
     seen: HashMap<Scope, Option<Class>>,
@@ -548,7 +503,6 @@ impl Classes {
         }
     }
 
-    /// The class of the innermost scope that has one.
     fn of(&mut self, stack: &ScopeStack) -> Class {
         let Classes { rules, seen } = self;
         stack
@@ -567,21 +521,19 @@ impl Classes {
     }
 }
 
-/// A colouring at work on the blocking pool.
 #[derive(Debug)]
 pub struct ColourJob {
     handle: JoinHandle<ColouredText>,
     deadline: Instant,
 }
 
-/// Starts colouring `text` of the file `name` within [`LIMITS`]; call
-/// from the runtime.
+/// Call from the runtime.
 pub fn start(name: Vec<u8>, text: String) -> ColourJob {
     start_with(name, text, LIMITS, GRACE)
 }
 
 fn start_with(name: Vec<u8>, text: String, limits: Limits, grace: Duration) -> ColourJob {
-    // One clock for both: loading the grammars counts against the budget.
+    // One clock for both: grammar loading counts against budget.
     let out_of_time = Instant::now() + limits.budget;
     ColourJob {
         deadline: out_of_time + grace,
@@ -592,7 +544,7 @@ fn start_with(name: Vec<u8>, text: String, limits: Limits, grace: Duration) -> C
 }
 
 impl ColourJob {
-    /// The colours when they come within `at_most`, else the job back.
+    /// Colours if ready within `at_most`, else job back.
     pub async fn wait(mut self, at_most: Duration) -> Result<Option<ColouredText>, ColourJob> {
         match tokio::time::timeout(at_most, &mut self.handle).await {
             Ok(done) => Ok(done.ok()),
@@ -600,8 +552,7 @@ impl ColourJob {
         }
     }
 
-    /// The colours, `None` when the colouring failed or overran its time
-    /// (on a line that took too long, the text stays plain).
+    /// `None` when colouring failed or overran (text stays plain).
     pub async fn finish(self) -> Option<ColouredText> {
         let deadline = tokio::time::Instant::from_std(self.deadline);
         match tokio::time::timeout_at(deadline, self.handle).await {

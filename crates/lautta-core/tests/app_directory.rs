@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The directory area's core actions on a temporary home folder: streaming
-//! listings with the cache, path steps, address editing and completion.
 
 use lautta_core::app::Core;
 use lautta_core::app_directory::{ListEvent, PathStep};
@@ -74,7 +72,6 @@ async fn streams_batches_then_done_and_fills_the_cache() {
         .collect();
     assert_eq!(names(&fresh), ["Uni", "a.txt"]);
 
-    // The second listing shows the cache first, then the fresh batches.
     std::fs::write(h.root.join("Documents/b.txt"), b"b").unwrap();
     let ev = events(&h.core, &dir, true).await;
     match &ev[0] {

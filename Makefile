@@ -21,8 +21,8 @@ TARGET ?= SailfishOS-5.2.0.15-aarch64
 export SDK_IMAGE TARGET
 
 LUPDATE ?= lupdate
-# Engineering English with its plural forms (UI-7): `language="en"` makes lrelease
-# write English plural rules; tools/english-plurals.py fills the forms.
+# `language="en"` makes lrelease write English plural rules; tools/english-plurals.py fills the
+# forms.
 LUPDATE_ARGS = -silent -locations none -no-obsolete -target-language en
 
 .PHONY: translations translations-check check fmt-check clippy test coverage mutants mutants-diff mutants-paths clippy-report rpm check-rpm clean
@@ -54,10 +54,7 @@ clippy-report:
 	mkdir -p coverage
 	$(CARGO) clippy --workspace --all-targets $(HOST_FEATURES) --message-format=json > coverage/clippy.json
 
-# SPEC TST-5: planner, queue, conflict and activity-bar modules, and the PDF
-# viewer's document handling and text search (PRV-12). MUTANTS_SHARD=k/n splits
-# the run; CI runs all shards weekly (.github/workflows/mutation.yml) and
-# mutants-diff on the lines each pull request changes.
+# MUTANTS_SHARD=k/n splits the run.
 MUTANTS_SHARD ?= 0/1
 MUTANTS_DIFF ?= mutants.diff
 MUTANTS_PATHS = crates/lautta-core/src/ops/plan.rs crates/lautta-core/src/ops/conflict.rs \
@@ -73,7 +70,6 @@ mutants:
 mutants-diff:
 	$(CARGO) mutants $(MUTANTS_ARGS) --in-diff $(MUTANTS_DIFF)
 
-# The mutated files, for CI to tell whether a pull request touches them.
 mutants-paths:
 	@echo $(MUTANTS_PATHS)
 
@@ -88,8 +84,7 @@ translations:
 	python3 tools/english-plurals.py fill < translations/harbour-lautta.ts > $${TMPDIR:-/tmp}/lautta-ts-filled.ts
 	mv $${TMPDIR:-/tmp}/lautta-ts-filled.ts translations/harbour-lautta.ts
 
-# The engineering English catalogue must match the QML, plural forms included (UI-7):
-# regenerating it changes nothing.
+# Regenerating the catalogue must change nothing.
 translations-check:
 	cp translations/harbour-lautta.ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
 	$(LUPDATE) $(LUPDATE_ARGS) qml -ts $${TMPDIR:-/tmp}/lautta-ts-check.ts

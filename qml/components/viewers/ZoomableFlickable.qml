@@ -1,15 +1,6 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// Pinch zoom for the image viewer (PRV-4) with the feel of Jolla Gallery's
-// viewer. The Gallery zooms with Silica's ZoomableFlickable, a private
-// Silica type (not a Harbour import, and its drag detector is private C++),
-// so this is that behaviour written anew, rules in ZoomMath.js: the content
-// fits at first and again after the phone turns, a pinch zooms around the
-// fingers and moves with them, zoomOut() animates back to the fitted size.
-// lautta keeps its double tap: closer around the tapped spot, or back out.
-// Zoomed in, drags pan; fitted, the flickable takes none, so they go to the
-// views around it (swipes between images, the page's vertical navigation).
-// A tap is `clicked` once the double-tap time has passed without a second
-// one; taps near the edges are left to the swipes, as in the Gallery.
+// SPDX-License-Identifier: LGPL-2.1-or-later Silica's ZoomableFlickable is private (not a Harbour
+// import); behaviour written anew, rules in ZoomMath.js. Fitted: flickable takes no drags, so
+// swipes reach the views around. Taps near edges left to swipes.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "ZoomMath.js" as ZoomMath
@@ -17,16 +8,13 @@ import "ZoomMath.js" as ZoomMath
 SilicaFlickable {
     id: flickable
 
-    // Scale of the content's implicit size; the fitted zoom while not zoomed.
     property real zoom: 1
-    // Zoomed in by a pinch or a double tap, until zoomOut() or resetZoom().
     property bool zoomed
     property real maximumZoom: 2.5
     readonly property real fittedZoom: ZoomMath.fitted(implicitContentWidth, implicitContentHeight,
                                                       width, height, maximumZoom)
     property real minimumZoom: fittedZoom
     property bool zoomEnabled: true
-    // The views around are moving (a swipe): no pinching meanwhile.
     property bool viewMoving
     property alias implicitContentWidth: content.implicitWidth
     property alias implicitContentHeight: content.implicitHeight
@@ -37,7 +25,6 @@ SilicaFlickable {
     signal zoomFinished
     signal clicked
 
-    // Fitted again at once (the image was swiped away).
     function resetZoom() {
         animation.stop()
         if (zoomed) {
@@ -52,7 +39,6 @@ SilicaFlickable {
         animate(fittedZoom, 0, 0, false)
     }
 
-    // One pinch step, see ZoomMath.pinch().
     function zoomIn(factor, center, previous) {
         aboutToZoom()
         var next = ZoomMath.pinch(view(), factor, center, previous)
@@ -62,8 +48,6 @@ SilicaFlickable {
         zoomed = next.zoomed
     }
 
-    // Double tap at the view point (atX, atY): closer around it, or back
-    // to the fitted size.
     function toggleZoom(atX, atY) {
         if (zoomed) {
             zoomOut()
@@ -74,7 +58,6 @@ SilicaFlickable {
         }
     }
 
-    // What ZoomMath works on.
     function view() {
         return {
             "zoom": zoom, "zoomed": zoomed, "contentX": contentX, "contentY": contentY,
@@ -94,7 +77,7 @@ SilicaFlickable {
         animation.start()
     }
 
-    // Silica's own: a press delay would keep touches from the pinch area.
+    // No press delay: it would keep touches from pinch area.
     pressDelay: 0
     contentWidth: Math.max(width, content.width)
     contentHeight: Math.max(height, content.height)
@@ -102,7 +85,6 @@ SilicaFlickable {
     interactive: zoomed
     enabled: !animation.running
 
-    // The fitted zoom follows the view (the phone turned) while not zoomed.
     Binding {
         target: flickable
         property: "zoom"
@@ -121,7 +103,6 @@ SilicaFlickable {
         parent: flickable.contentItem
         width: flickable.contentWidth
         height: flickable.contentHeight
-        // A pinch before the content has a size would go nowhere.
         enabled: flickable.implicitContentWidth > 0 && flickable.implicitContentHeight > 0
 
         onPinchUpdated: {
@@ -145,8 +126,6 @@ SilicaFlickable {
             height: Math.ceil(implicitHeight * flickable.zoom)
         }
 
-        // Over the view wherever the content is, less a margin; inside the
-        // pinch area, which takes the second finger from it.
         MouseArea {
             id: tapArea
 
@@ -155,9 +134,8 @@ SilicaFlickable {
             y: flickable.contentY + Theme.paddingLarge
             width: flickable.width - 2 * Theme.paddingLarge
             height: flickable.height - 2 * Theme.paddingLarge
-            // A double tap zooms once the finger lifts: zooming disables the
-            // flickable, and done mid-press that leaves the area (Qt 5.6)
-            // taking the next tap for this one's end, so it would not count.
+            // Zoom on finger lift: zooming disables flickable, and mid-press it leaves area taking
+            // next tap for this one's end (Qt 5.6).
             property bool doubleTapped
             property real tappedX
             property real tappedY
@@ -188,7 +166,6 @@ SilicaFlickable {
     SequentialAnimation {
         id: animation
 
-        // Zoomed at the end (a double tap in) or fitted (zoomOut()).
         property bool staysZoomed
 
         ParallelAnimation {

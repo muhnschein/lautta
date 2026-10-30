@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The slim progress line while a folder is listed (board Directory): a thin
-// highlight bar sweeping across.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 

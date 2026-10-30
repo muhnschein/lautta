@@ -1,11 +1,8 @@
 #!/bin/bash
 # SPDX-License-Identifier: LGPL-2.1-or-later
-# Developer tool: builds harbour-lautta for the Sailfish OS target in a
-# running SDK container and runs `--qml-check` there on the given QML files
-# (real Silica, real Lautta types, Qt 5.6). Faster than a full RPM build:
-# the container keeps a shared vendor folder and one cargo target folder per
-# checkout (worktrees of one repo give identical crate hashes, so a shared
-# folder would mix their builds).
+# Builds harbour-lautta in a running SDK container and runs `--qml-check` on the given QML
+# files (real Silica, Qt 5.6). One cargo target folder per checkout: worktrees give
+# identical crate hashes and would mix builds.
 #
 #   tools/sdk-qml-check.sh [--no-build] <file.qml|dir>...
 #
@@ -25,12 +22,11 @@ fi
 
 work=/home/mersdk/w/$name
 docker exec "$container" mkdir -p "$work" /home/mersdk/shared
-# Sources (tracked and new files, no build output).
 (cd "$root" && git ls-files -z --cached --others --exclude-standard | grep -zv '^design/' | tar --null -T - -cf -) |
     docker exec -i -u 0 "$container" bash -c "rm -rf '$work/src' && mkdir -p '$work/src' && tar -C '$work/src' -xf - && chown -R mersdk '$work'"
 
 if [[ "$build" == yes ]]; then
-    # One vendor folder for every work tree (same Cargo.lock => same content).
+    # One vendor folder for all work trees.
     lock_sum=$(sha256sum "$root/Cargo.lock" | cut -c1-16)
     if ! docker exec "$container" test -f "/home/mersdk/shared/vendor-$lock_sum.ok"; then
         tmp=$(mktemp -d)

@@ -3,7 +3,6 @@ use super::nav::{MAX_LINKS, MAX_NAMED_DESTS, MAX_OUTLINE_DEPTH, MAX_OUTLINE_ITEM
 use super::sample::{link, page, page_ref, Doc, Spec};
 use super::{Link, LinkTarget, OutlineItem, PageRect, PdfDocument, PdfError};
 
-/// `n` upright pages of 256 x 128 pt.
 fn pages(n: usize) -> Doc {
     Doc::new(vec![page(256, 128, ""); n])
 }
@@ -24,7 +23,6 @@ fn item(title: &str, level: u32, page: Option<usize>) -> OutlineItem {
     }
 }
 
-/// The outline of a document whose items are `(title, target)` at level 0.
 fn flat_outline(doc: &mut Doc, items: &[(&str, &str)]) -> Vec<OutlineItem> {
     let items: Vec<(&str, u32, &str)> = items.iter().map(|&(t, d)| (t, 0, d)).collect();
     open(doc.outline(&items)).outline()
@@ -38,7 +36,6 @@ fn titles_of(outline: &[OutlineItem]) -> Vec<&str> {
     outline.iter().map(|i| i.title.as_str()).collect()
 }
 
-/// The links of page 0 carrying `annots`.
 fn links_of(mut doc: Doc, annots: &[String]) -> Vec<Link> {
     doc.page_entry(0, &format!("/Annots [{}]", annots.join(" ")));
     open(&doc).links(0).unwrap()

@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of SearchModel (SRC-2..4): streaming, grouping, filters, recent
-// searches and cancelling, on a temporary HOME tree.
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -81,8 +79,6 @@ Item {
         check(model.folderCount >= 3, "folders searched " + model.folderCount)
         check(model.depthLimit === -1, "local search is unlimited")
 
-        // Grouped by folder: hits of one folder are contiguous and carry its
-        // section label, starting with the root's name.
         var sections = []
         for (var i = 0; i < rows.count; ++i) {
             var s = rows.itemAt(i).rowSection
@@ -133,7 +129,6 @@ Item {
         run("thesis", "substring", [], "any", "any", false)
         check(names().indexOf(".thesis_hidden") < 0, "hidden files stay out by default")
 
-        // Cancel: results that would arrive later are dropped.
         model.query = "thesis"
         model.types = "[]"
         check(model.start(), "start for cancel")

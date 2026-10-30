@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! View settings (BRW-4): one global set for every folder, kept in the
-//! settings (SPEC §18). Grid suggestion for media folders (SPEC 15.3).
+//! View settings: one global set for every folder, kept in the settings. Grid suggestion for media
+//! folders.
 
 use crate::entry::Entry;
 use crate::mime::{self, FileCategory};
@@ -62,9 +62,8 @@ impl ViewPrefs {
         }
     }
 
-    /// What a folder showing `self` shows after the global settings went
-    /// from `before` to `after` (BRW-4): every setting that changed, and
-    /// only those, so what was set for this folder alone stays.
+    /// After global settings went from `before` to `after`: every setting that changed, and only
+    /// those, so what was set for this folder alone stays.
     pub fn follow(self, before: ViewPrefs, after: ViewPrefs) -> ViewPrefs {
         fn pick<T: PartialEq>(shown: T, before: T, after: T) -> T {
             if before == after {
@@ -84,8 +83,7 @@ impl ViewPrefs {
     }
 }
 
-/// Grid is suggested when more than 60 % of the entries are images or videos
-/// (SPEC 15.3).
+/// Grid is suggested when more than 60 % of the entries are images or videos.
 pub fn suggest_grid(entries: &[Entry]) -> bool {
     let media = entries
         .iter()

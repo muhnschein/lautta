@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Handshake, consent, locations, attention, discovery, drives and handoff of
-//! the bridge client against the fake bridge (SPEC NVB-1..6, LOC-3, LOC-6,
-//! LOC-7).
 
 mod bridge_support;
 
@@ -30,7 +27,6 @@ async fn standalone_until_the_socket_appears() {
     let mut rig = Rig::with_fake(fake, false, |c| c).await;
     rig.client.wait_status(|s| s == BridgeStatus::Absent).await;
     assert!(rig.client.locations().is_empty());
-    // Without the socket every call says that the bridge is not there.
     let e = rig
         .provider()
         .stat(&VPath::root(), true, Lane::Interactive)
@@ -99,7 +95,6 @@ async fn nothing_is_shown_until_the_user_allows() {
     rig.client
         .wait_status(|s| s == BridgeStatus::ConsentUnknown)
         .await;
-    // The first Hello made the bridge ask (netvfs XB-6).
     assert_eq!(rig.fake.consent_requests(), 1);
     assert!(rig.client.locations().is_empty());
     let e = rig
@@ -109,11 +104,9 @@ async fn nothing_is_shown_until_the_user_allows() {
         .unwrap_err();
     assert_eq!(e.kind, ErrorKind::PermissionDenied);
 
-    // *Ask again* (NVB-3).
     rig.client.request_consent().await.unwrap();
     assert_eq!(rig.fake.consent_requests(), 2);
 
-    // The user taps *Allow* in the notification.
     rig.fake.set_consent(Consent::Granted).await;
     rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
     eventually("the locations", || rig.client.locations().len() == 1).await;
@@ -218,7 +211,6 @@ async fn nearby_servers_come_from_discovery() {
         host: "nas.local".into(),
         port: 445,
     };
-    // Nothing is delivered before the app asks (LOC-6).
     rig.fake.set_nearby(vec![server.clone()]).await;
     tokio::time::sleep(Duration::from_millis(50)).await;
     assert!(rig.client.nearby().is_empty());
@@ -250,7 +242,6 @@ fn nearby_server(name: &str, host: &str) -> WireNearby {
     }
 }
 
-/// Every length the nearby list takes from now on.
 fn record_nearby_lengths(rig: &Rig) -> Arc<std::sync::Mutex<Vec<usize>>> {
     let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
     let mut rx = rig.client.watch_nearby();
@@ -275,8 +266,6 @@ async fn nearby_servers_stay_while_a_restarted_discovery_settles() {
     rig.fake.set_nearby(vec![nearby_server("NAS", "nas.local")]).await;
     eventually("the server", || rig.client.nearby().len() == 1).await;
 
-    // Browse is left and shown again: netvfs forgets what it found and
-    // reports its empty cache before the servers answer again.
     let seen = record_nearby_lengths(&rig);
     rig.client.discover(false).await.unwrap();
     rig.client.discover(true).await.unwrap();
@@ -312,7 +301,6 @@ async fn a_settled_discovery_drops_servers_that_did_not_answer() {
     })
     .await;
 
-    // Nothing answers at all: the list empties once the discovery settled.
     rig.client.discover(false).await.unwrap();
     rig.client.discover(true).await.unwrap();
     eventually("the empty list", || rig.client.nearby().is_empty()).await;
@@ -386,7 +374,6 @@ async fn features_that_fail_are_none_and_unknown_ones_are_ignored() {
 async fn features_are_asked_again_on_every_connection() {
     let rig = Rig::ready_with(quick_backoff).await;
     assert!(rig.client.offers(feature::STORAGE_SETTINGS));
-    // Without a connection nothing is offered.
     rig.fake.set_accepting(false);
     rig.fake.disconnect_clients().await;
     rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
@@ -402,7 +389,6 @@ async fn features_are_asked_again_on_every_connection() {
     assert!(!rig.client.offers(feature::STORAGE_SETTINGS));
 }
 
-/// A bridge with the drives (netvfs XB-20) and a memory card.
 async fn drives_fake() -> FakeBridge {
     let fake = FakeBridge::new();
     fake.set_features(Some(&[feature::STORAGE_SETTINGS, feature::DRIVES]));
@@ -427,7 +413,6 @@ async fn drives_need_no_consent_and_follow_the_bridge() {
     let mut watch = rig.client.watch_drives();
     watch.borrow_and_update();
 
-    // DrivesChanged lists them again.
     rig.fake
         .set_drives(vec![
             FakeDrive::new("mmcblk1p1", "CARD", "sd", 64),
@@ -468,7 +453,6 @@ async fn drives_go_with_the_connection() {
 
 #[tokio::test]
 async fn an_older_bridge_is_not_asked_for_drives() {
-    // A netvfs without XB-20 (no `drives` feature), or one without features.
     for features in [Some(&[feature::STORAGE_SETTINGS][..]), None] {
         let fake = FakeBridge::new();
         fake.add_account(1, "fake", "Fake 1", "fake.example").await;
@@ -518,7 +502,6 @@ async fn adhoc_servers_are_connected_and_forgotten() {
     eventually("the removal", || rig.client.location(&id).is_none()).await;
     let e = rig.client.forget_adhoc(&id).await.unwrap_err();
     assert_eq!(e.kind, ErrorKind::NotFound);
-    // Accounts are not the app's to forget.
     let e = rig.client.forget_adhoc(ACCOUNT).await.unwrap_err();
     assert_eq!(e.kind, ErrorKind::NotFound);
 }

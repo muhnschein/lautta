@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host scenario of the Operations singleton with plans that wait for their
-// summary sheet: starting while a conflict answer is still working on the
-// plan starts it once the answer is in, a plan that is gone says so, and
-// a failed plan names the item it failed on.
 import QtQuick 2.6
 import Lautta 1.0
 
@@ -58,8 +54,6 @@ Item {
                 return test.fail("step " + test.step + " timed out")
             switch (test.step) {
             case 0:
-                // Two files are a large plan once one item is the limit; the
-                // second one is already at the destination (a conflict).
                 if (!App.setSetting("large_op_items", JSON.stringify(1)))
                     return test.fail("large_op_items not set")
                 test.install("doc.md", test.docs + "plans-a.md")
@@ -75,8 +69,6 @@ Item {
                 var open = JSON.parse(Operations.conflictsJson(test.planId))
                 if (open.length !== 1)
                     return test.fail("one conflict expected: " + JSON.stringify(open))
-                // The answer works on the plan in the background; Start comes
-                // right after it, as a quick tap on the sheet does.
                 Operations.resolveConflict(test.planId, open[0].index, "KeepBoth", false)
                 Operations.startPlan(test.planId)
                 test.next()
@@ -86,8 +78,6 @@ Item {
                     return test.fail("start during a conflict answer failed: " + JSON.stringify(test.failures))
                 if (test.startedCount !== 1)
                     break
-                // A plan that is gone (started already, or never made) cannot
-                // start, and says why.
                 Operations.startPlan(test.planId)
                 Operations.startPlan(999)
                 test.next()
@@ -100,7 +90,6 @@ Item {
                     if (gone.kind !== "NotFound" || gone.message === "" || gone.subject !== "")
                         return test.fail("a plan that is gone cannot start: " + JSON.stringify(gone))
                 }
-                // Planning a missing item names it.
                 Operations.copyTo(JSON.stringify([test.docs + "plans-missing.txt"]), test.downloads)
                 test.next()
                 break

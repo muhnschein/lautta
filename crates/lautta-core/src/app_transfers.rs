@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! User-level actions of the transfers area on [`Core`](crate::app::Core):
-//! the transfer list with live progress in date sections (XFR-8, §15.4) and
-//! start-up restore (XFR-11). Everything here is Qt-free; the Qt layer turns
-//! it into models.
+//! Transfers area on `Core`: transfer list with live progress, start-up restore. Qt-free.
 
 use crate::app::Core;
 use crate::date_group::DateGroup;
@@ -14,12 +11,9 @@ use crate::transfer::{TransferId, TransferState, TransferSummary, WaitReason};
 use crate::uri::Uri;
 use std::collections::{HashMap, HashSet};
 
-/// What a transfer is doing, as its row's `group` role says; the row's
-/// menu and status line follow it. The page's sections are [`DateGroup`]s.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TransferGroup {
     Active,
-    /// Waiting for the user, the network, the bridge or a card.
     Waiting,
     Paused,
     History,
@@ -52,12 +46,10 @@ pub fn group_of(state: TransferState) -> TransferGroup {
     }
 }
 
-/// Engineering name of a transfer state for the UI (`state` role).
 pub fn state_name(state: TransferState) -> &'static str {
     state.to_db().0
 }
 
-/// Engineering name of the waiting reason, empty when not waiting.
 pub fn wait_reason_name(state: TransferState) -> &'static str {
     match state {
         TransferState::Waiting(r) => WaitReason::name(r),
@@ -65,14 +57,11 @@ pub fn wait_reason_name(state: TransferState) -> &'static str {
     }
 }
 
-/// Which way the bytes go, for the row icon.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
     Upload,
     Download,
-    /// Within the device.
     Local,
-    /// Between remote locations.
     Remote,
     Delete,
 }
@@ -102,8 +91,7 @@ pub fn direction_of(locations: &LocationRegistry, kind: OperationKind, src: &Uri
     }
 }
 
-/// Splits an item error `"Kind: message"` (as the engine stores it) into the
-/// kind name, which the UI translates, and the detail.
+/// Splits an item error `"Kind: message"` as the engine stores it; the UI translates the kind.
 pub fn split_error(text: &str) -> (String, String) {
     let (head, tail) = text.split_once(": ").unwrap_or((text, ""));
     if ErrorKind::ALL.iter().any(|k| k.name() == head) {
@@ -113,8 +101,6 @@ pub fn split_error(text: &str) -> (String, String) {
     }
 }
 
-/// Engineering names of conflict choices (`answer(id, item, choice, …)`),
-/// the same as the operations area uses (the enum names).
 pub fn choice_name(c: ConflictChoice) -> &'static str {
     match c {
         ConflictChoice::Replace => "Replace",
@@ -139,8 +125,7 @@ pub fn parse_choice(name: &str) -> Option<ConflictChoice> {
     .find(|c| choice_name(*c) == name)
 }
 
-/// A conflict question as the UI gets it: the core `Conflict` fields
-/// (snake_case, as the shared ConflictDialog reads them), `choices` by name.
+/// Fields are snake_case, as the shared ConflictDialog reads them.
 pub fn conflict_json(id: TransferId, item: u32, name: &str, c: &Conflict) -> serde_json::Value {
     serde_json::json!({
         "transferId": id,
@@ -157,8 +142,7 @@ pub fn conflict_json(id: TransferId, item: u32, name: &str, c: &Conflict) -> ser
     })
 }
 
-/// Latest known progress per running transfer, fed by `TransferEvent::Progress`
-/// (at most 4 a second), and the aggregate over the list (XFR-8, INT-3).
+/// Fed by `TransferEvent::Progress` (at most 4 a second).
 #[derive(Debug, Default)]
 pub struct ProgressBook {
     live: HashMap<TransferId, Live>,
@@ -171,15 +155,11 @@ struct Live {
     eta_secs: Option<u64>,
 }
 
-/// Totals over the transfers that are moving bytes.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Aggregate {
-    /// Queued, scanning or running.
     pub active: usize,
-    /// Waiting for the user, network, bridge or card.
     pub waiting: usize,
     pub paused: usize,
-    /// Everything not finished.
     pub unfinished: usize,
     pub bytes_done: u64,
     pub bytes_total: u64,
@@ -199,13 +179,11 @@ impl ProgressBook {
         );
     }
 
-    /// Keeps the entries of `ids` only (finished and removed transfers go).
     pub fn retain(&mut self, ids: &HashSet<TransferId>) {
         self.live.retain(|id, _| ids.contains(id));
     }
 
-    /// Bytes done (the larger of the stored and the live value), rate and
-    /// ETA of one transfer. Only running transfers have a rate.
+    /// Bytes done is the larger of stored and live value. Only running transfers have a rate.
     pub fn of(&self, s: &TransferSummary) -> (u64, u64, Option<u64>) {
         let live = self.live.get(&s.id).copied();
         let moving = group_of(s.state) == TransferGroup::Active;
@@ -238,20 +216,16 @@ impl ProgressBook {
     }
 }
 
-/// One row of the list.
 #[derive(Debug, Clone)]
 pub struct TransferRow {
     pub summary: TransferSummary,
     pub group: TransferGroup,
-    /// The section it is listed under: see [`date_group_of`].
     pub date_group: DateGroup,
     pub direction: Direction,
     pub bytes_done: u64,
     pub rate: u64,
     pub eta_secs: Option<u64>,
-    /// Open conflict questions.
     pub questions: usize,
-    /// Name of the destination location and its address (LOC-7).
     pub dest_name: String,
     pub dest_address: String,
 }
@@ -262,24 +236,18 @@ impl TransferRow {
     }
 }
 
-/// What start-up found (XFR-11).
 #[derive(Debug, Clone, Default)]
 pub struct StartReport {
-    /// Unfinished transfers that came back; paused unless auto-resumed.
+    /// Paused unless auto-resumed.
     pub restored: usize,
-    /// Of those, how many are paused now.
     pub paused: usize,
 }
 
-/// When a transfer ended: its finish time, or when it was created if the
-/// store has none.
 fn ended_ms(s: &TransferSummary) -> i64 {
     s.finished_ms.unwrap_or(s.created_ms)
 }
 
-/// The Activity section of a transfer (§15.4): every task that has not
-/// ended (running, scanning, queued, waiting or paused) is in progress; one
-/// that ended goes by the day it ended.
+/// Every unended task is in progress; ended ones go by the day they ended.
 pub fn date_group_of(s: &TransferSummary, now_ms: i64) -> DateGroup {
     if s.state.is_finished() {
         DateGroup::at(ended_ms(s), now_ms)
@@ -288,8 +256,7 @@ pub fn date_group_of(s: &TransferSummary, now_ms: i64) -> DateGroup {
     }
 }
 
-/// Orders the list for display (§15.4): what has not ended in queue order,
-/// then what ended, newest first, so each date section is one run of rows.
+/// Each date section is one run of rows.
 fn order_rows(rows: &mut [TransferRow]) {
     rows.sort_by_key(|r| {
         let s = &r.summary;
@@ -304,9 +271,8 @@ fn order_rows(rows: &mut [TransferRow]) {
 }
 
 impl Core {
-    /// Brings back the persisted queue (XFR-11) and removes expired working
-    /// copies (PRV-6). `auto_resume` is the setting AND the bridge being
-    /// reachable; otherwise transfers wait paused with *Resume*.
+    /// `auto_resume` is the setting AND the bridge being reachable; otherwise transfers wait
+    /// paused.
     pub async fn start_transfers(&self, auto_resume: bool) -> Result<StartReport> {
         let restored = self.engine.load(auto_resume).await?;
         let paused = self
@@ -319,11 +285,8 @@ impl Core {
         Ok(StartReport { restored, paused })
     }
 
-    /// Whether auto-resume may start transfers (XFR-11): false only while a
-    /// bridge is present but unusable (consent denied). Standalone
-    /// mode and a bridge that is still connecting count as reachable; the
-    /// engine parks transfers on bridge locations until it is ready
-    /// (NVB-12).
+    /// False only while a bridge is present but unusable (consent denied). Standalone and
+    /// still-connecting count as reachable; the engine parks bridge transfers until ready.
     pub fn bridge_reachable(&self) -> bool {
         use crate::bridge::BridgeStatus;
         self.bridge
@@ -331,12 +294,10 @@ impl Core {
             .is_none_or(|b| b.status() != BridgeStatus::ConsentDenied)
     }
 
-    /// Transfers still unfinished when the app closes (XFR-6).
     pub fn pending_at_close(&self) -> usize {
         self.engine.pending_summary()
     }
 
-    /// The transfer list with live progress, in display order (§15.4).
     pub fn transfer_rows(&self, book: &ProgressBook) -> Vec<TransferRow> {
         let now = crate::org::now_ms();
         let mut rows: Vec<TransferRow> = self
@@ -378,7 +339,6 @@ impl Core {
         }
     }
 
-    /// Removes finished transfers from the history; returns how many.
     pub fn clear_history(&self) -> usize {
         self.engine
             .list()
@@ -388,7 +348,6 @@ impl Core {
             .count()
     }
 
-    /// The open questions of a transfer as UI objects.
     pub fn question_list(&self, id: TransferId) -> Result<Vec<serde_json::Value>> {
         let items = self.engine.items(id)?;
         let questions = self.engine.questions(id)?;
@@ -405,7 +364,6 @@ impl Core {
             .collect())
     }
 
-    /// Answers a conflict by the choice's engineering name.
     pub fn answer_question(&self, id: TransferId, item: u32, choice: &str, apply_all: bool) -> Result<()> {
         let choice = parse_choice(choice)
             .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "unknown conflict choice"))?;
@@ -557,7 +515,6 @@ mod tests {
             mk(4, Running, 2, None),
             mk(5, Waiting(WaitReason::Bridge), 1, None),
             mk(6, Queued, 4, None),
-            // No finish time stored: it ended when it was created.
             mk(7, Canceled, 0, None),
             mk(8, Scanning, 0, None),
             mk(9, Completed, 0, Some(5000)),
@@ -571,8 +528,7 @@ mod tests {
     fn unfinished_transfers_are_in_progress_and_ended_ones_go_by_their_end() {
         use TransferState::*;
         let day = 86_400_000;
-        // 2027-01-15 08:00 UTC: no time zone puts it within an hour of
-        // midnight, so "a minute ago" is today everywhere.
+        // No time zone puts it within an hour of midnight, so "a minute ago" is today everywhere.
         let now = 1_800_000_000_000;
         let unfinished = [
             Queued,

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! tar and compressed tar (PRV-10). Plain tar is indexed through the block
-//! cache (headers only, data skipped by seeking); compressed tar is read
-//! sequentially from the downloaded cache file.
+//! tar and compressed tar. Plain tar indexed via block cache (headers, data skipped by seek);
+//! compressed tar read sequentially from the downloaded cache file.
 
 use super::blocks::{from_io, BlockReader};
 use super::{Compression, Loc, RawEntry};
@@ -11,7 +10,6 @@ use std::fs::File;
 use std::io::{self, BufReader, Read, Write};
 use std::time::{Duration, SystemTime};
 
-/// Decompressing reader over `input`.
 pub fn decoder<'a, R: Read + 'a>(comp: Compression, input: R) -> io::Result<Box<dyn Read + 'a>> {
     Ok(match comp {
         Compression::None => Box::new(input),
@@ -51,7 +49,6 @@ fn tar_err(err: io::Error) -> Error {
     from_io(err)
 }
 
-/// Indexes a plain tar through ranged reads: headers only.
 pub fn index_seek(reader: BlockReader) -> Result<Vec<RawEntry>> {
     let mut archive = tar::Archive::new(reader);
     let mut out = Vec::new();
@@ -63,8 +60,7 @@ pub fn index_seek(reader: BlockReader) -> Result<Vec<RawEntry>> {
     Ok(out)
 }
 
-/// Indexes a (decompressed) tar stream; entries are located by sequence
-/// number, which counts every entry the archive yields.
+/// Entries located by sequence number, counting every entry the archive yields.
 pub fn index_stream(input: impl Read) -> Result<Vec<RawEntry>> {
     let mut archive = tar::Archive::new(input);
     let mut out = Vec::new();
@@ -75,7 +71,6 @@ pub fn index_stream(input: impl Read) -> Result<Vec<RawEntry>> {
     Ok(out)
 }
 
-/// Copies entry number `seq` of a compressed tar into `out`.
 pub fn copy_seq(file: File, comp: Compression, seq: usize, out: &mut dyn Write) -> Result<()> {
     let input = decoder(comp, BufReader::new(file)).map_err(tar_err)?;
     let mut archive = tar::Archive::new(input);
@@ -89,8 +84,7 @@ pub fn copy_seq(file: File, comp: Compression, seq: usize, out: &mut dyn Write) 
     Err(Error::new(ErrorKind::NotFound, "entry vanished from archive"))
 }
 
-/// Reads up to `limit` decompressed bytes from the start of `head`; used to
-/// recognise compressed tar archives by their `ustar` magic.
+/// Recognises compressed tar by `ustar` magic.
 pub fn decompressed_head(comp: Compression, head: &[u8], limit: usize) -> Vec<u8> {
     let mut out = Vec::new();
     if let Ok(dec) = decoder(comp, head) {

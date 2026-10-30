@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// The password of an encrypted PDF (PRV-12, board Password dialog): swipe
-// forward or Unlock opens it, back or Cancel leaves it locked. The password
-// goes to PdfDocument.unlock and is not kept anywhere.
+// SPDX-License-Identifier: LGPL-2.1-or-later Password goes to PdfDocument.unlock; not kept.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
@@ -9,14 +6,12 @@ Dialog {
     id: dialog
 
     property string fileName
-    // The password given before did not open the PDF.
     property bool wrong
     readonly property string password: field.text
 
     allowedOrientations: Orientation.All
     canAccept: field.text.length > 0
 
-    // Called by the opener after reading `password`: nothing of it stays.
     function forget() {
         field.text = ""
     }

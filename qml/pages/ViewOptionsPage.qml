@@ -1,12 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// View options (board ViewOptions, SPEC BRW-3/BRW-4): sort and view (list or
-// grid), the same for every folder, with a live preview below them, then the
-// thumbnails: the switch for all of them, and those from servers with their
-// size limit and cache (PRV-1, PRV-2). A settings page, not a dialog: every
-// control applies at once, and folders already open follow. `model` is the
-// DirectoryModel of the folder the page was opened from (none from
-// Settings): it also takes a choice that only differed there, such as List
-// over a suggested grid.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -27,8 +19,6 @@ Page {
         return App.setting(key)
     }
 
-    // Stores one view setting for every folder; `pref` is its name for
-    // DirectoryModel.setViewPrefs.
     function choose(key, pref, value) {
         App.setSetting(key, JSON.stringify(value))
         if (model) {
@@ -155,10 +145,6 @@ Page {
                 screenHeight: page.height
             }
 
-            // Global like everything on this page (BRW-4), whichever folder
-            // it was opened from; the server ones are not view settings but
-            // belong with the switch that turns every thumbnail off (PRV-1,
-            // PRV-2).
             SectionHeader {
                 objectName: "thumbnailsSection"
                 //% "Thumbnails"

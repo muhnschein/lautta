@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Filesystem types and what they can do (SPEC §10.1: capabilities come from
-//! `statfs`; OPS-3 / OPS-7: vfat and exFAT are case-insensitive with
-//! restricted names and no symlinks, hard links or permissions).
+//! Filesystem types and capabilities from `statfs`. vfat/exFAT: case-insensitive, restricted names,
+//! no symlinks, hard links or permissions.
 
 use crate::entry::{cap, Capabilities};
 use std::path::Path;
@@ -17,7 +16,6 @@ pub enum FsKind {
     F2fs,
     Tmpfs,
     Overlay,
-    /// Anything else, with its `f_type` magic.
     Other(u64),
 }
 
@@ -46,7 +44,6 @@ impl FsKind {
         self.is_fat_like()
     }
 
-    /// Capabilities that depend on the filesystem type alone.
     pub fn capabilities(self) -> Capabilities {
         let mut flags = vec![
             cap::WRITE,
@@ -69,8 +66,7 @@ impl FsKind {
     }
 }
 
-/// The filesystem type under `path`. `Other(0)` when `statfs` fails (callers
-/// then assume POSIX behaviour).
+/// `Other(0)` when `statfs` fails (callers assume POSIX).
 pub fn fs_kind(path: &Path) -> FsKind {
     match crate::sys::fs_magic(path) {
         Ok(m) => FsKind::from_magic(m),

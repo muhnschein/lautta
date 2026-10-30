@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// App-wide reactions of the operations area: plan summaries, archives opened
-// as locations, failures, "Running in the background", the finished extract
-// that opens its folder, the share target (INT-1) and keep-alive while an
-// archive is being made.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Sailfish.Share 1.0
@@ -13,11 +9,10 @@ import "ErrorText.js" as ErrorText
 Item {
     id: handlers
 
-    // Off in the QML check (--qml-check): there is no session bus there for
-    // the share provider to register on.
+    // Off in --qml-check: no session bus for the share provider to register on.
     property bool shareEnabled: Qt.application.arguments.indexOf("--qml-check") < 0
 
-    // Resolved when used: the window publishes its instance once created.
+    // Resolved when used: window publishes its instance once created.
     function stack() {
         return __silica_applicationwindow_instance.pageStack
     }
@@ -27,7 +22,6 @@ Item {
         notice.show()
     }
 
-    // What a failure is about: the item's path, with its location.
     function context(subject) {
         if (!subject)
             return {}
@@ -43,7 +37,6 @@ Item {
         id: notice
     }
 
-    // Compress runs as a job of its own; keep the device awake meanwhile.
     KeepAlive {
         enabled: Operations.jobsActive > 0
     }
@@ -70,7 +63,6 @@ Item {
         }
     }
 
-    // "Save to Lautta" from other apps' share menus (INT-1).
     Loader {
         active: handlers.shareEnabled
         sourceComponent: ShareProvider {

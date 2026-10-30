@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// A favourite (ORG-1): label, colour and icon of a folder or file, each
-// saved as it changes, so there is nothing to accept. Opened on `uri`: an
-// item that is no favourite yet becomes one at once ("Add to favourites"),
-// with its name, no colour and the default icon, and the page then edits
-// it. Removing stays in Browse's long-press menu.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -13,22 +8,15 @@ Page {
     id: page
 
     property string uri
-    // A folder unless the caller says the item is a file; a favourite that
-    // exists already says what it is.
     property bool isDir: true
     property string colour
-    // A name of FavouritesModel.iconChoices(), "" for the default icon.
     property string icon
     property string defaultIcon
-    // The page made the item a favourite: it was none.
     property bool added
-    // The fields show the stored favourite.
     property bool filled
 
     allowedOrientations: Orientation.All
 
-    // An emptied field gives the favourite the item's name back, as when
-    // it was added: a favourite always has a label.
     function label() {
         var text = labelField.text.trim()
         return text.length > 0 ? text : App.nameOf(uri)
@@ -44,7 +32,6 @@ Page {
             return
         var id = favourites.idOf(uri)
         if (id === -1) {
-            // Added once; the model reloads with it and calls back.
             if (!added) {
                 added = true
                 favourites.save(uri, App.nameOf(uri), "", "", isDir)
@@ -60,9 +47,8 @@ Page {
         filled = true
     }
 
-    // Typing is saved once it pauses, not for every key (each save
-    // refreshes the Browse rows), and at the latest when the page is left:
-    // as it starts to go, or when it goes without a transition.
+    // Save once typing pauses (each save refreshes Browse rows), and on page leave: at start of pop
+    // or when no transition.
     function flush() {
         if (labelTimer.running)
             save()
@@ -114,7 +100,6 @@ Page {
                 }
             }
 
-            // The folder itself, or the folder a file is in.
             DetailItem {
                 //% "Folder"
                 label: qsTrId("lautta-favourite-folder")
@@ -137,8 +122,6 @@ Page {
                 //% "Icon"
                 text: qsTrId("lautta-favourite-icon")
             }
-            // A folder's default is the star, the first choice; a file's is
-            // its file's icon, offered before the others.
             IconPicker {
                 icons: page.isDir ? favourites.iconChoices() : [""].concat(favourites.iconChoices())
                 icon: page.icon.length > 0 ? page.icon : (page.isDir ? "favorite" : "")

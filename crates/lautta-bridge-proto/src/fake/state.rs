@@ -32,18 +32,14 @@ impl Consent {
     }
 }
 
-/// A scripted call failure (`org.netvfs.Error.<name>`).
 #[derive(Debug, Clone)]
 pub struct Failure {
-    /// Method name or `*`.
     pub method: String,
     pub name: String,
     pub message: String,
     pub detail: Option<String>,
     pub retry_after_ms: Option<u64>,
-    /// Calls that succeed before the failure starts.
     pub skip: u32,
-    /// How many times it fails; `None` forever.
     pub remaining: Option<u32>,
 }
 
@@ -81,10 +77,8 @@ impl Failure {
     }
 }
 
-/// A job that ends with an error in `JobFinished` once `after_bytes` moved.
 #[derive(Debug, Clone)]
 pub struct JobFailure {
-    /// `Upload`, `Download`, `RemoveTree`, `Walk` or `CopyAcross`.
     pub method: String,
     pub after_bytes: u64,
     pub name: String,
@@ -114,7 +108,6 @@ impl JobFailure {
     }
 }
 
-/// A value of the `info` dictionary or of question details.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InfoValue {
     Str(String),
@@ -133,28 +126,27 @@ impl InfoValue {
             InfoValue::Bytes(b) => Value::from(b.clone()),
             InfoValue::Strings(s) => Value::from(s.clone()),
         };
-        // Plain values never contain file descriptors, the only failing case.
+        // only fd values fail; plain values hold none
         OwnedValue::try_from(v).unwrap_or_else(|_| OwnedValue::from(0u8))
     }
 }
 
-/// A memory card or USB drive of the fake (netvfs XB-20).
+/// Memory card or USB drive of the fake.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FakeDrive {
     pub id: String,
     pub label: String,
-    /// Where it is mounted, empty when it is not.
+    /// Empty when not mounted.
     pub mount_point: Vec<u8>,
     /// `sd` or `usb`.
     pub kind: String,
     pub size: i64,
     pub uuid: String,
-    /// A LUKS device not unlocked: listed as `locked`, never mounted.
+    /// LUKS device not unlocked: listed as `locked`, never mounted.
     pub locked: bool,
 }
 
 impl FakeDrive {
-    /// An unmounted `vfat` drive.
     pub fn new(id: &str, label: &str, kind: &str, size: i64) -> FakeDrive {
         FakeDrive {
             id: id.to_owned(),
@@ -167,25 +159,21 @@ impl FakeDrive {
         }
     }
 
-    /// The same drive as a LUKS device not unlocked (netvfs XB-20).
     pub fn locked(mut self) -> FakeDrive {
         self.locked = true;
         self
     }
 
-    /// The same drive with `uuid`.
     pub fn with_uuid(mut self, uuid: &str) -> FakeDrive {
         uuid.clone_into(&mut self.uuid);
         self
     }
 
-    /// The same drive, mounted at `mount_point`.
     pub fn mounted(mut self, mount_point: &[u8]) -> FakeDrive {
         self.mount_point = mount_point.to_vec();
         self
     }
 
-    /// The drive as `ListDrives` lists it.
     pub fn wire(&self) -> WireDrive {
         let fs_type = if self.locked { "crypto_LUKS" } else { "vfat" };
         let mut info = vec![
@@ -229,9 +217,7 @@ pub struct RecordedAnswer {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallRecord {
     pub method: String,
-    /// The lane the call ran in (hint or the method's default).
     pub lane: String,
-    /// Location (and path) the call was about, for debugging.
     pub target: String,
 }
 
@@ -247,13 +233,10 @@ pub struct State {
     pub consent_requests: u32,
     pub auto_consent: Option<Consent>,
     pub bridge_version: String,
-    /// What `GetFeatures` answers (XB-19); `None`: a bridge without the
-    /// method, which answers `UnknownMethod`.
+    /// `None`: bridge without `GetFeatures`; answers `UnknownMethod`.
     pub features: Option<Vec<String>>,
-    /// What `ListDrives` lists (XB-20).
     pub drives: Vec<FakeDrive>,
-    /// Where `Mount` makes the drive's folder; `None`: below
-    /// `/run/media/user`, without making it.
+    /// Where `Mount` makes the drive's folder; `None`: below `/run/media/user`, not made.
     pub mount_root: Option<PathBuf>,
     pub locations: BTreeMap<String, LocationRec>,
     pub trees: HashMap<String, Tree>,
@@ -310,17 +293,15 @@ impl Default for State {
 }
 
 impl State {
-    /// Whether the fake has the drive methods: a bridge that does not name
-    /// them answers `UnknownMethod` (a netvfs without XB-20).
+    /// Bridges not naming the drive methods answer `UnknownMethod`.
     pub fn offers_drives(&self) -> bool {
         self.features
             .as_ref()
             .is_some_and(|f| f.iter().any(|n| n == feature::DRIVES))
     }
 
-    /// Mounts (`mount`) or unmounts `drive`: where it was mounted before
-    /// and where it is mounted then; `None` for an unknown drive. A drive is
-    /// mounted below the mount root, by label, else by UUID, else by id.
+    /// Returns (mount point before, after); `None` for an unknown drive. Mounted below the
+    /// mount root by label, else UUID, else id.
     pub fn mount(&mut self, drive: &str, mount: bool) -> Option<(Vec<u8>, Vec<u8>)> {
         let root = self
             .mount_root
@@ -341,8 +322,8 @@ impl State {
         Some((std::mem::replace(&mut d.mount_point, wanted.clone()), wanted))
     }
 
-    /// Adds a location; without a `state` in `info` it is disconnected, as
-    /// the bridge lists a location it has not connected to (netvfs XB-12).
+    /// Without a `state` in `info` the location is disconnected, as the bridge lists one it has not
+    /// connected to.
     pub fn add_location(&mut self, id: &str, provider: &str, name: &str, mut info: Vec<(String, InfoValue)>) {
         if !info.iter().any(|(k, _)| k == location_state::KEY) {
             info.push((
@@ -361,8 +342,7 @@ impl State {
         self.trees.entry(id.to_owned()).or_default();
     }
 
-    /// Sets the connection state of location `id` (`state`, and
-    /// `stateError` for `failed`); whether that changed anything.
+    /// Whether that changed anything.
     pub fn set_state(&mut self, id: &str, state: &str, error: Option<&str>) -> bool {
         let Some(rec) = self.locations.get_mut(id) else {
             return false;
@@ -409,7 +389,6 @@ impl State {
             .collect()
     }
 
-    /// Takes the first scripted failure matching `method`, if it is due.
     pub fn due_failure(&mut self, method: &str) -> Option<Failure> {
         let idx = self
             .failures
@@ -426,7 +405,6 @@ impl State {
         Some(f.clone())
     }
 
-    /// Takes a job failure for `method`.
     pub fn due_job_failure(&mut self, method: &str) -> Option<JobFailure> {
         let f = self
             .job_failures
@@ -439,11 +417,9 @@ impl State {
     }
 }
 
-/// What `Cancel` found.
 #[derive(Debug, PartialEq, Eq)]
 pub enum CancelOutcome {
     Canceled,
-    /// The id was valid once and has finished.
     Finished,
     Unknown,
 }
@@ -464,7 +440,7 @@ pub struct Session {
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    // A panic while holding the lock cannot leave the data inconsistent here.
+    // a panic while holding the lock cannot leave the data inconsistent here
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
@@ -504,7 +480,6 @@ impl Session {
         self.with(|s| s.handles.len())
     }
 
-    /// Next id of the shared request and job numbering.
     pub fn next_id(&self) -> u32 {
         self.with(|s| {
             let id = s.next_id;
@@ -543,8 +518,7 @@ impl Session {
         })
     }
 
-    /// The client is gone: its jobs are canceled, its questions unanswerable
-    /// and its handles closed, as the real bridge does (netvfs XB-13).
+    /// Client gone: jobs canceled, questions unanswerable, handles closed, as the real bridge does.
     pub fn shut(&self) {
         self.with(|s| {
             for flag in s.jobs.values() {
@@ -595,7 +569,6 @@ impl Shared {
         self.with(|s| s.sessions.clone())
     }
 
-    /// True while any client looks for servers nearby.
     pub fn any_discovering(&self) -> bool {
         self.sessions_snapshot().iter().any(|s| s.with(|s| s.discovering))
     }
@@ -678,7 +651,6 @@ mod tests {
         let w = st.wire_locations();
         assert_eq!(w.len(), 1);
         assert_eq!(crate::wire::value_str(&w[0].info["host"]).as_deref(), Some("h"));
-        // Disconnected until it is used.
         let state = |st: &State, key: &str| {
             st.wire_locations()[0]
                 .info
@@ -698,7 +670,6 @@ mod tests {
         assert!(!st.set_state("account:1", "connected", None));
         assert_eq!(state(&st, "host").as_deref(), Some("h"));
         assert!(!st.set_state("account:9", "connected", None));
-        // A state given at the start is kept.
         st.add_location(
             "adhoc:1",
             "sftp",

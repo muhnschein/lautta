@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// An in-page notice with one action (boards StateOffline, StateLarge,
-// DirectoryGrid): text on the left, the action as a highlighted word.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 

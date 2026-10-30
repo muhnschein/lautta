@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The PDF viewer (PRV-12): `PdfDocument` (page count and sizes, outline
-//! and links of a PDF, and the hits of a text search) and the requests of
-//! `image://lautta-pdf/<uri>?page=N`, which render one page at the width
-//! the `Image` asks for (`sourceSize.width`). Rendering and searching are
-//! `lautta_core::app_pdf`'s; nothing here reaches the network.
+//! `PdfDocument` and requests of `image://lautta-pdf/<uri>?page=N`, which render one page at the
+//! `Image`'s `sourceSize.width`. Rendering and searching are `lautta_core::app_pdf`'s; nothing here
+//! reaches the network.
 
 use super::images::{finished, on_cancel, Reply};
 use super::{parse_uri, qstr, run_then};
@@ -23,11 +21,8 @@ pub fn register() {
     qml_register_type::<PdfDocument>(&crate::qml_uri(), 1, 0, &crate::cstr("PdfDocument"));
 }
 
-/// Width a page is rendered at when the `Image` gives no `sourceSize`.
 pub const DEFAULT_PAGE_WIDTH: u32 = 1080;
 
-/// A PDF: how many pages, how tall each is for a given width, and where a
-/// text search found what was asked for.
 #[derive(QObject, Default)]
 pub struct PdfDocument {
     base: qt_base_class!(trait QObject),
@@ -36,63 +31,50 @@ pub struct PdfDocument {
     loading: qt_property!(bool; NOTIFY stateChanged),
     loaded: qt_property!(bool; NOTIFY stateChanged),
     pageCount: qt_property!(i32; NOTIFY stateChanged),
-    /// File size in bytes, -1 when unknown.
     size: qt_property!(f64; NOTIFY stateChanged),
-    /// Core error kind when the file could not be read (ErrorText.js).
+    /// Core error kind when the file could not be read.
     errorKind: qt_property!(QString; NOTIFY stateChanged),
     errorMessage: qt_property!(QString; NOTIFY stateChanged),
-    /// Why the file is no PDF the viewer can show: "invalid", "encrypted",
-    /// "empty" or "tooLarge"; empty otherwise.
+    /// "invalid", "encrypted", "empty" or "tooLarge"; empty otherwise.
     problem: qt_property!(QString; NOTIFY stateChanged),
-    /// The last `unlock` was given a password that does not open the PDF.
+    /// Last `unlock` password did not open the PDF.
     wrongPassword: qt_property!(bool; NOTIFY stateChanged),
-    /// Where reading stopped last time (0-based); -1 when unknown.
+    /// 0-based; -1 when unknown.
     lastPage: qt_property!(i32; NOTIFY stateChanged),
-    /// The outline as JSON: `[{title, level, page}]`, depth first; `page`
-    /// counts from 0, -1 when the item goes nowhere in this document.
+    /// `[{title, level, page}]`, depth first; `page` from 0, -1 when the item goes nowhere in this
+    /// document.
     outline: qt_property!(QString; NOTIFY stateChanged),
     stateChanged: qt_signal!(),
-    /// The links of page `linkPage` as JSON (see [`links_json`]), after
-    /// `requestLinks`; `[]` when it has none or they cannot be read.
+    /// After `requestLinks`; `[]` when none or unreadable.
     linksReady: qt_signal!(linkPage: i32, pageLinks: QString),
 
-    /// Height of page `index` shown `width` wide (0 for no such page).
     heightFor: qt_method!(fn(&self, index: i32, width: f64) -> f64),
     reload: qt_method!(fn(&mut self)),
-    /// Opens an encrypted PDF with `password`. The password is not kept.
+    /// Password is not kept.
     unlock: qt_method!(fn(&mut self, password: QString)),
-    /// Remembers that reading stopped at page `index` (0-based).
     rememberPage: qt_method!(fn(&self, index: i32)),
-    /// Reads the links of page `index` (0-based); `linksReady` follows.
     requestLinks: qt_method!(fn(&self, index: i32)),
 
-    /// A text search runs; its hits arrive page by page.
     searching: qt_property!(bool; NOTIFY searchChanged),
-    /// Pages searched so far: all of them once a search has run through.
+    /// All pages once a search has run through.
     searchedPages: qt_property!(i32; NOTIFY searchChanged),
     hitCount: qt_property!(i32; NOTIFY searchChanged),
-    /// The hit shown, counted from 1 in page order; 0 when there is none.
+    /// From 1 in page order; 0 when none.
     currentHit: qt_property!(i32; NOTIFY searchChanged),
-    /// The page of the hit shown (0-based); -1 when there is none.
+    /// 0-based; -1 when none.
     currentHitPage: qt_property!(i32; NOTIFY searchChanged),
-    /// Changes whenever hits arrive or another hit is shown, so that
-    /// bindings of `hitsJson` are evaluated again.
+    /// Changes when hits arrive or another hit is shown, so `hitsJson` bindings re-evaluate.
     hitsRevision: qt_property!(i32; NOTIFY searchChanged),
     searchChanged: qt_signal!(),
 
-    /// Searches the text for `query`, from page `fromPage` (0-based: the
-    /// page being read) to the end and then from the first page. Hits of
-    /// an earlier search are forgotten; a blank query searches nothing.
+    /// From `fromPage` (0-based, the page being read) to the end, then from the first. Earlier hits
+    /// are forgotten; blank query searches nothing.
     search: qt_method!(fn(&mut self, query: QString, fromPage: i32)),
-    /// Stops the search and forgets its hits.
     stopSearch: qt_method!(fn(&mut self)),
-    /// Shows the next hit, after the last the first.
     nextHit: qt_method!(fn(&mut self)),
-    /// Shows the previous hit, before the first the last.
     previousHit: qt_method!(fn(&mut self)),
-    /// The areas of the hits on page `index` as a JSON array of `x`, `y`,
-    /// `width`, `height` (fractions of the page from its top left corner)
-    /// and `current` (part of the hit shown).
+    /// JSON array of `x`, `y`, `width`, `height` (fractions of the page from top left) and
+    /// `current` (part of the hit shown).
     hitsJson: qt_method!(fn(&self, index: i32) -> QString),
 
     pages: Vec<PageSize>,
@@ -135,7 +117,6 @@ impl PdfDocument {
         self.open(password.to_string());
     }
 
-    /// Opens the PDF afresh; a non-empty `password` is an unlock attempt.
     fn open(&mut self, password: String) {
         self.generation += 1;
         let gen = self.generation;
@@ -240,8 +221,7 @@ impl PdfDocument {
     }
 }
 
-/// The text search (PRV-12): `lautta_core`'s, results published as they
-/// arrive. Late results of a stopped or replaced search are ignored.
+/// Results published as they arrive. Late results of a stopped or replaced search are ignored.
 impl PdfDocument {
     fn search(&mut self, query: QString, fromPage: i32) {
         self.stop();
@@ -279,7 +259,6 @@ impl PdfDocument {
         });
     }
 
-    /// A searched page (`Some`) or the end (`None`) of search `gen`.
     fn found(&mut self, gen: u64, page: Option<PageHits>) {
         if gen != self.search_generation {
             return;
@@ -316,8 +295,7 @@ impl PdfDocument {
         qstr(&to_json(&areas))
     }
 
-    /// Stops the search, so that its late results are ignored, and forgets
-    /// its hits; [`Self::publish`] shows that.
+    /// Late results are ignored; [`Self::publish`] shows the change.
     fn stop(&mut self) {
         if let Some(flag) = self.search_cancel.take() {
             flag.store(true, Ordering::Relaxed);
@@ -339,12 +317,10 @@ impl PdfDocument {
     }
 }
 
-/// A 0-based page for QML: -1 for none.
 fn page_number(page: Option<usize>) -> i64 {
     page.and_then(|p| i64::try_from(p).ok()).unwrap_or(-1)
 }
 
-/// `[{title, level, page}]` of [`PdfDocument::outline`].
 fn outline_json(items: &[OutlineItem]) -> String {
     let rows: Vec<_> = items
         .iter()
@@ -353,10 +329,8 @@ fn outline_json(items: &[OutlineItem]) -> String {
     to_json(&rows)
 }
 
-/// `[{x, y, width, height, page, top, uri}]`: the area as fractions of the
-/// shown page; a link within the document has `page` (from 0) and `top`
-/// (fraction of the target page's height, -1 when not given) and an empty
-/// `uri`; a web link has `page` -1 and its http(s) `uri`.
+/// Area as fractions of the shown page. In-document link: `page` (from 0), `top` (fraction of
+/// target page height, -1 when not given), empty `uri`. Web link: `page` -1 and http(s) `uri`.
 fn links_json(links: &[Link]) -> String {
     let rows: Vec<_> = links
         .iter()
@@ -383,8 +357,7 @@ fn failure_text(f: &PdfFailure) -> String {
     }
 }
 
-/// `image://lautta-pdf/<uri>?page=N` at `width` pixels (the request's
-/// width; [`DEFAULT_PAGE_WIDTH`] when it gives none).
+/// [`DEFAULT_PAGE_WIDTH`] when the request gives no width.
 pub(crate) fn page_request(core: Arc<Core>, id: &str, width: i32, req: u64, reply: Reply) {
     let Some((uri, page)) = parse_page_id(id) else {
         reply.fail("bad page id");

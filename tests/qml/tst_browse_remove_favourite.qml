@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): "Remove from favourites" removes
-// the favourite even when the Browse rows are rebuilt during the remorse,
-// which happens whenever a server or a nearby server changes.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -20,8 +17,6 @@ ApplicationWindow {
         id: favs
     }
 
-    // Loaded rather than declared: a page item on its own gets no size
-    // here, and its list would make no delegates.
     initialPage: Component {
         Loader {
             source: Qt.resolvedUrl("../../qml/pages/BrowsePage.qml")
@@ -48,7 +43,7 @@ ApplicationWindow {
     }
 
     function favouriteRow() {
-        // Headless, no render loop polishes the list: lay it out by hand.
+        // No render loop headless: lay out by hand.
         var views = findAll(win.contentItem, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < views.length; ++i)
             views[i].forceLayout()
@@ -85,8 +80,6 @@ ApplicationWindow {
                 if (items.length === 0)
                     break
                 items[0].clicked(null)
-                // The rows are rebuilt during the countdown: the remorse
-                // goes with its delegate and runs the removal.
                 win.browse.listModel = null
                 win.step++
                 win.waited = 0

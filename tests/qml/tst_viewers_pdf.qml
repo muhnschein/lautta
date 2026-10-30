@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Instantiates PdfViewer with realistic properties in a window (real Silica,
-// real Lautta types); the check fails on QML errors and warnings.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -11,14 +9,12 @@ ApplicationWindow {
 
     ViewerTools { id: tools }
 
-    // Runs the event loop until `done()` holds, for at most 30 s: the target
-    // is emulated and slow (unlocking AES-256 takes seconds there).
+    // Target is emulated and slow: unlocking AES-256 takes seconds.
     function waitFor(done) {
         for (var i = 0; i < 300 && !done(); ++i)
             tools.pump(100)
     }
 
-    // Waits for the page on top to be shown and its PDF to be read.
     function shown() {
         waitFor(function() {
             var p = pageStack.currentPage
@@ -27,12 +23,10 @@ ApplicationWindow {
         return pageStack.currentPage
     }
 
-    // Waits until `p` is the page on top and the page stack has settled.
     function back(p) {
         waitFor(function() { return pageStack.currentPage === p && !pageStack.busy })
     }
 
-    // Waits for a page or dialog that has `property` to be on top.
     function opened(property) {
         waitFor(function() { return pageStack.currentPage[property] !== undefined && !pageStack.busy })
         return pageStack.currentPage
@@ -54,13 +48,10 @@ ApplicationWindow {
         tools.pump(500)
         viewer.zoomTo(1, 100, 100)
 
-        // Contents without an outline, and "Go to page".
         viewer.showContents()
         opened("chosen").chosen(1)
         back(viewer)
 
-        // Contents with an outline; a link within the PDF and back again; a
-        // link to a website.
         pageStack.push(linkedComponent, {}, PageStackAction.Immediate)
         var linked = shown()
         linked.showContents()
@@ -76,8 +67,6 @@ ApplicationWindow {
         pageStack.pop(viewer, PageStackAction.Immediate)
         back(viewer)
 
-        // Search mode: hits marked on the pages, stepped through, nothing
-        // found, and closed again.
         pageStack.push(searchComponent, {}, PageStackAction.Immediate)
         var searching = shown()
         var doc = searching.document
@@ -94,7 +83,6 @@ ApplicationWindow {
         pageStack.pop(viewer, PageStackAction.Immediate)
         back(viewer)
 
-        // The password dialog opens on its own; a wrong password asks again.
         pageStack.push(lockedComponent, {}, PageStackAction.Immediate)
         var locked = pageStack.currentPage
         var dialog = opened("wrong")
@@ -109,7 +97,6 @@ ApplicationWindow {
         tools.pump(200)
         dialog.reject()
         back(locked)
-        // The Unlocking state while a password is tried.
         locked.unlocking = true
         tools.pump(200)
         locked.unlocking = false

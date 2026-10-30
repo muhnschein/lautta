@@ -1,17 +1,13 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Read-only archive provider (SPEC PRV-10, LOC-5): zip, tar, tar.gz/bz2/xz/zst
-//! and 7z presented as a location.
+//! Read-only archive provider: zip, tar, tar.gz/bz2/xz/zst, 7z as a location.
 //!
-//! * zip is read through a `Read + Seek` adapter with a 64 KiB block cache
-//!   ([`blocks`]) so a remote zip needs ranged reads only: the central
-//!   directory first, then the blocks of the entries that are opened.
-//! * plain tar is indexed the same way (headers only).
-//! * compressed tar and 7z cannot be indexed without reading everything, so
-//!   they are downloaded once to a cache file and indexed from there.
+//! * zip via `Read + Seek` adapter with 64 KiB block cache ([`blocks`]): ranged reads only, central
+//!   directory first, then opened entries.
+//! * plain tar indexed the same way (headers only).
+//! * compressed tar and 7z need a full read: downloaded once to a cache file, indexed from there.
 //!
-//! Entry names that could leave the archive (`..`, absolute, drive letters,
-//! NUL) are never indexed; their number is reported by
-//! [`ArchiveProvider::skipped_entries`].
+//! Names that could leave the archive (`..`, absolute, drive letters, NUL) are never indexed;
+//! counted by [`ArchiveProvider::skipped_entries`].
 
 mod blocks;
 mod sevenz;
@@ -42,15 +38,12 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::mpsc;
 
-/// Entries up to this size are decompressed into memory by `open_read`; larger
-/// ones go to an unlinked temporary file in the cache directory.
+/// Entries up to this size decompress into memory in `open_read`; larger go to an unlinked temp
+/// file in the cache dir.
 pub const MEMORY_LIMIT: u64 = 16 * 1024 * 1024;
-/// Entries per listing batch.
 const LIST_BATCH: usize = 256;
-/// Symlink hops followed by `stat`/`open_read`.
 const MAX_HOPS: usize = 8;
 
-/// Outer compression of a tar archive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Compression {
     None,
@@ -60,7 +53,6 @@ pub enum Compression {
     Zstd,
 }
 
-/// What kind of archive a file is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArchiveFormat {
     Zip,
@@ -68,7 +60,6 @@ pub enum ArchiveFormat {
     SevenZ,
 }
 
-/// Where an entry's bytes live; filled by the format readers.
 #[derive(Debug, Clone)]
 enum Loc {
     Implicit,
@@ -78,7 +69,6 @@ enum Loc {
     SevenZ(String),
 }
 
-/// One entry as a format reader reports it, before sanitising.
 struct RawEntry {
     name: Vec<u8>,
     kind: Kind,
@@ -112,7 +102,6 @@ impl Node {
     }
 }
 
-/// A flattened archive entry for planners (`compress::extract_plan`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArchiveEntry {
     pub path: VPath,
@@ -120,14 +109,12 @@ pub struct ArchiveEntry {
     pub size: u64,
 }
 
-/// `arc-<16 hex>`: the location id of the archive opened from `source_uri`
-/// (the display form of its [`Uri`]).
+/// `arc-<16 hex>`: location id of the archive opened from `source_uri`.
 pub fn archive_location_id_str(source_uri: &str) -> String {
     let digest = Sha256::digest(source_uri.as_bytes());
     format!("arc-{}", hex::encode(&digest[..8]))
 }
 
-/// [`archive_location_id_str`] for a typed URI.
 pub fn archive_location_id(source_uri: &Uri) -> String {
     archive_location_id_str(&source_uri.to_string())
 }
@@ -169,9 +156,8 @@ fn has_ustar(block: &[u8]) -> bool {
     block.get(257..262) == Some(b"ustar")
 }
 
-/// Recognises an archive from its first bytes (at least 512 are useful) and
-/// its file name: magic numbers first, extension only where the magic cannot
-/// tell (old-style tar, compressed tar).
+/// Magic numbers first (512+ bytes useful), extension only where magic cannot tell (old-style tar,
+/// compressed tar).
 pub fn detect_format(head: &[u8], name: &[u8]) -> Option<ArchiveFormat> {
     if let Some(comp) = compression_magic(head) {
         let is_tar = has_tar_extension(name) || has_ustar(&tarfmt::decompressed_head(comp, head, 512));
@@ -189,15 +175,11 @@ pub fn detect_format(head: &[u8], name: &[u8]) -> Option<ArchiveFormat> {
     None
 }
 
-/// True when `head`/`name` look like a supported archive (the "open as
-/// archive" menu item).
 pub fn is_archive(head: &[u8], name: &[u8]) -> bool {
     detect_format(head, name).is_some()
 }
 
-/// An entry name that stays inside the archive, or `None`. Rejected: absolute
-/// paths, `..` components (also behind a backslash, for names written on
-/// Windows), NUL and drive prefixes.
+/// Rejects absolute paths, `..` components (also behind a backslash), NUL and drive prefixes.
 fn sanitize(raw: &[u8]) -> Option<VPath> {
     if raw.first() == Some(&b'/') || raw.contains(&0) {
         return None;
@@ -215,8 +197,7 @@ fn sanitize(raw: &[u8]) -> Option<VPath> {
     VPath::parse(raw).ok()
 }
 
-/// Resolves a symlink target relative to the link's folder, staying inside
-/// the archive (absolute targets are taken from the archive root).
+/// Stays inside the archive; absolute targets resolve from the archive root.
 fn resolve_link(parent: &VPath, target: &[u8]) -> Option<VPath> {
     let mut parts: Vec<&[u8]> = if target.first() == Some(&b'/') {
         Vec::new()
@@ -235,7 +216,6 @@ fn resolve_link(parent: &VPath, target: &[u8]) -> Option<VPath> {
     VPath::parse(&parts.join(&b'/')).ok()
 }
 
-/// The sanitised, tree-shaped view of an archive.
 struct Index {
     nodes: BTreeMap<VPath, Node>,
     children: HashMap<VPath, Vec<Vec<u8>>>,
@@ -281,8 +261,7 @@ impl Index {
         }
     }
 
-    /// Inserts a node, creating implicit parents. False when an ancestor is
-    /// not a folder or a folder would be replaced by a file.
+    /// False when an ancestor is not a folder or a folder would become a file.
     fn insert(&mut self, path: VPath, node: Node) -> bool {
         for ancestor in path.ancestors().into_iter().skip(1) {
             match self.nodes.get(&ancestor) {
@@ -310,7 +289,6 @@ impl Index {
     }
 }
 
-/// Removes a cache file when the archive is closed.
 struct CacheFile(PathBuf);
 
 impl Drop for CacheFile {
@@ -362,7 +340,6 @@ impl Inner {
             .ok_or_else(|| Error::new(ErrorKind::Internal, "archive has no block source"))
     }
 
-    /// Streams the bytes of `node` into `out` (blocking).
     fn copy_node(&self, node: &Node, out: &mut dyn Write) -> Result<()> {
         match &node.loc {
             Loc::Implicit => Err(Error::kind(ErrorKind::IsADirectory)),
@@ -399,7 +376,6 @@ impl Inner {
             .ok_or_else(|| Error::kind(ErrorKind::NotFound))
     }
 
-    /// Follows symlinks that stay inside the archive.
     fn resolve(&self, path: &VPath, follow: bool) -> Result<(VPath, &Node)> {
         let mut cur = path.clone();
         for _ in 0..=MAX_HOPS {
@@ -417,7 +393,6 @@ impl Inner {
         ))
     }
 
-    /// The link target: from the header (tar) or from the entry data.
     fn link_bytes(&self, _path: &VPath, node: &Node) -> Result<Vec<u8>> {
         if let Some(l) = &node.link {
             return Ok(l.clone());
@@ -453,14 +428,12 @@ impl Inner {
     }
 }
 
-/// Read-only provider over one archive file.
 pub struct ArchiveProvider {
     inner: Arc<Inner>,
 }
 
 impl ArchiveProvider {
-    /// Opens `path` of `source` as an archive. `cache_dir` receives the
-    /// downloaded copy of non-zip archives and large extracted entries.
+    /// `cache_dir` receives the downloaded copy of non-zip archives and large extracted entries.
     pub async fn open(source: Arc<dyn Provider>, path: VPath, cache_dir: PathBuf) -> Result<ArchiveProvider> {
         let handle: Arc<dyn ReadHandle> = Arc::from(source.open_read(&path, Lane::Interactive).await?);
         let head = read_block(handle.as_ref(), 0, BLOCK as usize).await?;
@@ -493,19 +466,17 @@ impl ArchiveProvider {
         self.inner.format
     }
 
-    /// Entries refused because their names could escape the archive (or
-    /// collide with a folder); never listed, never extractable.
+    /// Never listed, never extractable (includes names colliding with a folder).
     pub fn skipped_entries(&self) -> usize {
         self.inner.index.skipped
     }
 
-    /// Ranged reads issued to the source so far (zip and plain tar; 0 for
-    /// archives that were downloaded).
+    /// Zip and plain tar; 0 for downloaded archives.
     pub fn source_reads(&self) -> u64 {
         self.inner.blocks.as_ref().map_or(0, |b| b.read_count())
     }
 
-    /// Every entry below the root, parents before children.
+    /// Parents before children.
     pub fn entries(&self) -> Vec<ArchiveEntry> {
         self.inner
             .index
@@ -584,7 +555,6 @@ async fn index_cached(format: ArchiveFormat, cache: CacheFile, cache_dir: PathBu
     })
 }
 
-/// Sequential download of the whole archive into `dir` (PRV-10).
 async fn download_to_cache(source: &dyn Provider, path: &VPath, dir: &Path) -> Result<CacheFile> {
     tokio::fs::create_dir_all(dir).await?;
     let handle = source.open_read(path, Lane::Bulk).await?;
@@ -606,8 +576,7 @@ async fn download_to_cache(source: &dyn Provider, path: &VPath, dir: &Path) -> R
     }
 }
 
-/// Forwards bytes to `inner`, dropping the first `skip` of them and reporting
-/// progress every 64 KiB.
+/// Drops the first `skip` bytes; reports progress every 64 KiB.
 struct SinkWriter<W: Write> {
     inner: W,
     skip: u64,
@@ -657,7 +626,7 @@ impl<W: Write> Write for SinkWriter<W> {
     }
 }
 
-/// Collects up to `cap` bytes; more is an error (a lying size field).
+/// More than `cap` is an error (lying size field).
 struct CapWriter {
     buf: Vec<u8>,
     cap: u64,
@@ -708,7 +677,6 @@ impl ReadHandle for MemoryHandle {
     }
 }
 
-/// A large entry extracted to an unlinked temporary file.
 struct TempFileHandle {
     file: Arc<File>,
     size: u64,

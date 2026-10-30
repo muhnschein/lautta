@@ -1,16 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Images (PRV-2, PRV-3, PRV-4, PRV-14): `ImageListModel` (the folder's
-//! images, for swiping) and the two QML image providers for remote files,
+//! `ImageListModel` (folder's images, for swiping) and QML image providers for remote files,
 //! `image://lautta-thumb/<uri>?size=N` and `image://lautta-file/<uri>`.
 //!
-//! Local images, videos and PDFs never come here for thumbnails (PRV-1:
-//! `Nemo.Thumbnailer`). The full-image provider
-//! serves any location, which is what the viewer uses for remote files. The providers are asynchronous
-//! (`QQuickAsyncImageProvider`): the request returns at once, the tokio
-//! runtime fetches, a worker decodes, and the response is finished from
-//! there.
-//!
-//! The engine must be given the providers once: see
+//! Local images, videos and PDFs never come here for thumbnails (`Nemo.Thumbnailer`). Providers are
+//! asynchronous (`QQuickAsyncImageProvider`): request returns at once, tokio runtime fetches, a
+//! worker decodes, response is finished from there. Engine must be given the providers once:
 //! [`register_image_providers`].
 
 use super::{parse_uri, qstr, run_then};
@@ -31,7 +25,6 @@ const ROLE_URI: i32 = 0x100;
 const ROLE_NAME: i32 = 0x101;
 const ROLE_SIZE: i32 = 0x102;
 
-/// The images of a folder in the folder's own sort order.
 #[derive(QObject, Default)]
 pub struct ImageListModel {
     base: qt_base_class!(trait QAbstractListModel),
@@ -42,9 +35,7 @@ pub struct ImageListModel {
     errorKind: qt_property!(QString; NOTIFY stateChanged),
     errorMessage: qt_property!(QString; NOTIFY stateChanged),
     stateChanged: qt_signal!(),
-    /// Row of an image URI, -1 when the folder has no such image.
     indexOf: qt_method!(fn(&self, uri: QString) -> i32),
-    /// Looks at the folder again (after a delete).
     reload: qt_method!(fn(&mut self)),
     items: Vec<ImageItem>,
     generation: u64,
@@ -134,8 +125,6 @@ impl QAbstractListModel for ImageListModel {
     }
 }
 
-// --- image providers ---------------------------------------------------
-
 cpp! {{
     #include <QtQuick/QQuickImageProvider>
     #include <QtQuick/QQuickTextureFactory>
@@ -148,7 +137,7 @@ cpp! {{
     #include <QtCore/QMetaObject>
     #include <memory>
 
-    // State shared by the response (GUI/reader thread) and the Rust job.
+    // Shared by the response (GUI/reader thread) and the Rust job.
     struct LauttaImageState {
         QMutex mutex;
         QImage image;
@@ -187,8 +176,8 @@ cpp! {{
         }
     };
 
-    // Called by the Rust job: decodes `data` (or records `err`) and finishes
-    // the response unless it was cancelled. Takes over `handle`.
+    // Called by the Rust job: decodes `data` (or records `err`), finishes the response unless
+    // cancelled. Takes over `handle`.
     static void lauttaImageDone(void *handle, const char *data, size_t len, int w, int h,
                                 int orientation, bool transform, const char *err, size_t errLen)
     {
@@ -207,8 +196,8 @@ cpp! {{
             reader.setAutoTransform(transform);
             QSize size = reader.size();
             if (size.isValid() && (w > 0 || h > 0)) {
-                // The request is for the displayed (rotated) size; decode
-                // scaled down, never up, keeping the aspect ratio.
+                // Request is for the displayed (rotated) size: decode scaled down, never up, keep
+                // aspect ratio.
                 QSize shown = (transform && orientation >= 5) ? size.transposed() : size;
                 qreal rw = w > 0 ? qreal(w) / shown.width() : 1e9;
                 qreal rh = h > 0 ? qreal(h) / shown.height() : 1e9;
@@ -229,8 +218,8 @@ cpp! {{
             QMetaObject::invokeMethod(s->response, "finished", Qt::QueuedConnection);
     }
 
-    // Called by the Rust job with a rendered PDF page: premultiplied RGBA,
-    // `w` x `h`, copied before the call returns. Takes over `handle`.
+    // Called by the Rust job: premultiplied RGBA `w` x `h`, copied before return. Takes over
+    // `handle`.
     static void lauttaImageDoneRgba(void *handle, const uchar *data, int w, int h)
     {
         std::unique_ptr<std::shared_ptr<LauttaImageState>> owner(
@@ -279,7 +268,6 @@ cpp! {{
         rust!(Lautta_image_cancel [id: u64 as "quint64"] { cancel(id); });
     }
 
-    // The one call the shell makes per QQmlEngine (viewers area, PRV-2).
     static void lauttaRegisterImageProviders(QQmlEngine *engine)
     {
         engine->addImageProvider(QStringLiteral("lautta-thumb"), new LauttaImageProvider(0));
@@ -288,10 +276,8 @@ cpp! {{
     }
 }}
 
-/// Adds `image://lautta-thumb/`, `image://lautta-file/` and
-/// `image://lautta-pdf/` (PRV-12, see [`super::pdf`]) to a
-/// `QQmlEngine` (the engine takes ownership). Call once per engine, e.g.
-/// `viewers::images::register_image_providers(view->engine())`.
+/// Adds `lautta-thumb`, `lautta-file` and `lautta-pdf` providers to a `QQmlEngine` (engine takes
+/// ownership). Once per engine.
 ///
 /// # Safety
 /// `engine` must point to a live `QQmlEngine`.
@@ -302,7 +288,6 @@ pub unsafe fn register_image_providers(engine: *mut c_void) {
 const KIND_THUMB: i32 = 0;
 const KIND_PDF: i32 = 2;
 
-/// What cancels a request: the thumbnail ticket or the fetch task.
 pub(crate) type Canceller = Box<dyn FnOnce() + Send>;
 
 static CANCELLERS: Mutex<Option<HashMap<u64, Canceller>>> = Mutex::new(None);
@@ -313,11 +298,9 @@ fn cancellers() -> std::sync::MutexGuard<'static, Option<HashMap<u64, Canceller>
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// The C++ side's shared state of one request; finishing it hands it back.
 pub(crate) struct Reply(*mut c_void);
 
-// SAFETY: the pointer is an owning handle only used to call
-// `lauttaImageDone` once, which locks internally.
+// SAFETY: owning handle, only used to call `lauttaImageDone` once, which locks internally.
 unsafe impl Send for Reply {}
 
 impl Reply {
@@ -325,7 +308,7 @@ impl Reply {
         let handle = self.take();
         let (data, len) = (bytes.as_ptr(), bytes.len());
         let orientation = i32::from(orientation);
-        // SAFETY: `handle` came from `requestImageResponse` and is consumed here.
+        // SAFETY: `handle` came from `requestImageResponse`, consumed here.
         unsafe {
             cpp!([handle as "void*", data as "const char*", len as "size_t", w as "int", h as "int",
                   orientation as "int", transform as "bool"] {
@@ -334,7 +317,6 @@ impl Reply {
         }
     }
 
-    /// Hands over a rendered page (premultiplied RGBA, `w * h * 4` bytes).
     pub(crate) fn done_rgba(self, rgba: &[u8], w: u32, h: u32) {
         let (Ok(w), Ok(h)) = (i32::try_from(w), i32::try_from(h)) else {
             return self.fail("page too large");
@@ -344,9 +326,8 @@ impl Reply {
         }
         let handle = self.take();
         let data = rgba.as_ptr();
-        // SAFETY: `handle` came from `requestImageResponse` and is consumed
-        // here; `data` holds `w * h * 4` bytes (checked above), which the
-        // C++ side copies before returning.
+        // SAFETY: `handle` came from `requestImageResponse`, consumed here; `data` holds `w * h *
+        // 4` bytes (checked above), C++ copies before return.
         unsafe {
             cpp!([handle as "void*", data as "const uchar*", w as "int", h as "int"] {
                 lauttaImageDoneRgba(handle, data, w, h);
@@ -373,20 +354,17 @@ impl Reply {
 }
 
 impl Drop for Reply {
-    /// A job that ended without answering (aborted) still frees the handle.
     fn drop(&mut self) {
         Reply(self.0).fail("canceled");
     }
 }
 
-/// Remembers how to cancel request `id` (the provider's `cancel`).
 pub(crate) fn on_cancel(id: u64, canceller: Canceller) {
     cancellers()
         .get_or_insert_with(HashMap::new)
         .insert(id, canceller);
 }
 
-/// Forgets request `id`'s canceller once it has finished.
 pub(crate) fn finished(id: u64) {
     cancellers().get_or_insert_with(HashMap::new).remove(&id);
 }
@@ -490,8 +468,6 @@ mod tests {
         #include <QtCore/QEventLoop>
         #include <QtCore/QTimer>
 
-        // Requests `id` from the named provider of a fresh engine and waits
-        // for the answer; returns the error text ("" when it worked).
         static QString lauttaProbe(const char *provider, const QString &id, int rw, int rh, int *w, int *h)
         {
             static int argc = 1;
@@ -552,7 +528,6 @@ mod tests {
         bytes.to_slice().to_vec()
     }
 
-    /// The JPEG with an EXIF block that has only an orientation.
     fn with_orientation(jpeg: &[u8], orientation: u16) -> Vec<u8> {
         let mut tiff = vec![b'I', b'I', 0x2a, 0, 8, 0, 0, 0, 1, 0];
         tiff.extend_from_slice(&[0x12, 0x01, 3, 0, 1, 0, 0, 0]);
@@ -566,7 +541,7 @@ mod tests {
         out
     }
 
-    /// One test: Qt allows a single application object per process.
+    /// Qt allows one application object per process.
     #[test]
     fn providers_serve_remote_images() {
         std::env::set_var("QT_QPA_PLATFORM", "offscreen");
@@ -592,7 +567,7 @@ mod tests {
         assert_eq!(
             (e.as_str(), w, h),
             ("", 64, 32),
-            "thumbnail at the requested edge (PRV-2)"
+            "thumbnail at the requested edge"
         );
 
         let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/a.jpg", (0, 0));
@@ -620,7 +595,6 @@ mod tests {
         let (e, ..) = probe("lautta-file", "garbage", (0, 0));
         assert!(e.contains("bad image id"), "{e}");
 
-        // PDF pages (PRV-12).
         nas.add_file(
             "p/two.pdf",
             &lautta_pdf::sample::build(&[
@@ -647,7 +621,6 @@ mod tests {
         let (e, ..) = probe("lautta-pdf", "lautta://nv-qt-images/p/two.pdf", (50, 0));
         assert_eq!(e, "bad page id");
 
-        // PDF thumbnails (PRV-14): the first page, a square from the top.
         let (e, w, h) = probe("lautta-thumb", "lautta://nv-qt-images/p/two.pdf?size=64", (0, 0));
         assert_eq!((e.as_str(), w, h), ("", 64, 64), "first page as wide as asked");
         let (e, ..) = probe("lautta-thumb", "lautta://nv-qt-images/p/fake.pdf?size=64", (0, 0));

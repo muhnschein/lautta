@@ -1,25 +1,21 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Item count of a local folder for the grid captions (SPEC §15.3, BRW-4).
-//! Names only, no `stat`: the number the folder view would show, hidden
-//! files left out unless they are shown.
+//! Item count of a local folder for grid captions. Names only, no `stat`; hidden files left out
+//! unless shown.
 
 use std::io;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
-/// Directory entries read at most. A bigger folder reports what was read
-/// and `capped`: the work stays bounded on a slow card (PRF-8).
+/// Bigger folder reports what was read and `capped`: bounds the work on a slow card.
 pub const COUNT_CAP: usize = 1000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FolderCount {
-    /// Items the folder view shows among the entries read.
     pub shown: usize,
-    /// The folder has more entries than were read: `shown` is a lower bound.
+    /// `shown` is a lower bound.
     pub capped: bool,
 }
 
-/// Counts the entries of `dir`, reading at most `cap` of them.
 pub fn count_entries(dir: &Path, show_hidden: bool, cap: usize) -> io::Result<FolderCount> {
     let mut shown = 0;
     for (read, item) in std::fs::read_dir(dir)?.enumerate() {
@@ -52,7 +48,7 @@ mod tests {
 
     #[test]
     fn the_cap_is_a_thousand_entries() {
-        // SPEC §15.3: "More than 1000 items" past it.
+        // "More than 1000 items" past it.
         assert_eq!(COUNT_CAP, 1000);
     }
 

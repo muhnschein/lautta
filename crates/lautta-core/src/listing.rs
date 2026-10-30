@@ -1,17 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The model behind a directory page, free of Qt (ARC-8, BRW-5, BRW-8).
+//! Model behind a directory page, Qt-free. Every mutation returns [`ListChange`]s that, applied in
+//! order to a mirror of the previous visible list, reproduce the new one; unchanged rows keep their
+//! place, so scroll position and selection survive a revalidation.
 //!
-//! `ListingState` owns the raw entries, the current sort and filter and the
-//! visible permutation. Every mutation returns [`ListChange`]s that, applied
-//! in order to a mirror of the previous visible list, reproduce the new one;
-//! rows that did not change keep their place, so scroll position and
-//! selection survive a revalidation.
-//!
-//! Change application contract (matches Qt's `begin*Rows` calls): removals
-//! come first in descending index order, then inserts and updates in
-//! ascending order of their final index. `Insert { index, count }` therefore
-//! refers to rows `index..index + count` of the new visible list, and
-//! `Update { index }` to row `index` of the new visible list.
+//! Removals come first in descending index order, then inserts and updates in ascending order of
+//! final index (matches Qt's `begin*Rows`). `Insert { index, count }` refers to rows
+//! `index..index + count` of the new visible list, `Update { index }` to row `index`.
 
 use crate::entry::Entry;
 use crate::filter::FilterOptions;
@@ -19,24 +13,14 @@ use crate::sort::{sort_indices, SortKey, SortOptions, SortRecord};
 use crate::viewprefs::ViewPrefs;
 use std::collections::{HashMap, HashSet};
 
-/// BRW-8: above this many entries the page falls back to name order, no
-/// sections and no thumbnails.
+/// Above this many entries: name order, no sections, no thumbnails.
 pub const LARGE_FOLDER_THRESHOLD: usize = 20_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ListChange {
-    Insert {
-        index: usize,
-        count: usize,
-    },
-    Remove {
-        index: usize,
-        count: usize,
-    },
-    Update {
-        index: usize,
-    },
-    /// Everything changed (for example the large-folder fallback kicked in).
+    Insert { index: usize, count: usize },
+    Remove { index: usize, count: usize },
+    Update { index: usize },
     Reset,
 }
 
@@ -73,7 +57,6 @@ impl ListingState {
         }
     }
 
-    /// Starts from a folder's view settings (BRW-4).
     pub fn from_prefs(prefs: &ViewPrefs) -> ListingState {
         ListingState::new(
             prefs.sort_options(),
@@ -81,9 +64,6 @@ impl ListingState {
         )
     }
 
-    // ---- reading ----
-
-    /// Number of visible rows.
     pub fn len(&self) -> usize {
         self.visible.len()
     }
@@ -92,7 +72,6 @@ impl ListingState {
         self.visible.is_empty()
     }
 
-    /// Entries held before filtering.
     pub fn total_len(&self) -> usize {
         self.raw.len()
     }
@@ -102,7 +81,6 @@ impl ListingState {
         self.raw.get(raw_index as usize)
     }
 
-    /// Visible row of the entry called `name`, if it is shown.
     pub fn index_of(&self, name: &[u8]) -> Option<usize> {
         let raw_index = *self.by_name.get(name)?;
         self.visible.iter().position(|&r| r == raw_index)
@@ -112,12 +90,10 @@ impl ListingState {
         self.visible.iter().map(|&r| &self.raw[r as usize])
     }
 
-    /// Raw indices of the visible rows in display order (ARC-8).
     pub fn permutation(&self) -> &[u32] {
         &self.visible
     }
 
-    /// The entry with this name regardless of filtering.
     pub fn entry_named(&self, name: &[u8]) -> Option<&Entry> {
         self.by_name.get(name).map(|&i| &self.raw[i as usize])
     }
@@ -130,7 +106,6 @@ impl ListingState {
         &self.filter
     }
 
-    /// Order actually used: the chosen one, or name order for large folders.
     pub fn effective_sort(&self) -> SortOptions {
         if self.is_large() {
             SortOptions {
@@ -147,7 +122,6 @@ impl ListingState {
         self.raw.len() > LARGE_FOLDER_THRESHOLD
     }
 
-    /// Alphabetical section headers are off for large folders (BRW-8).
     pub fn sections_enabled(&self) -> bool {
         !self.is_large()
     }
@@ -164,15 +138,11 @@ impl ListingState {
         self.stale = stale;
     }
 
-    /// True until [`finish`](Self::finish) or a revalidation completes.
     pub fn is_loading(&self) -> bool {
         self.loading
     }
 
-    // ---- loading ----
-
-    /// Entries arriving incrementally from a provider listing. An entry with
-    /// a name already present replaces it.
+    /// An entry with a name already present replaces it.
     pub fn apply_batch(&mut self, batch: Vec<Entry>) -> Vec<ListChange> {
         let was_large = self.is_large();
         let old_visible = self.visible.clone();
@@ -185,24 +155,18 @@ impl ListingState {
         self.reconcile(old_visible, was_large, &changed)
     }
 
-    /// The provider listing is complete.
     pub fn finish(&mut self) {
         self.loading = false;
         self.stale = false;
     }
 
-    /// Shows a cached listing marked stale (BRW-5); follow with
-    /// [`replace_with_fresh`](Self::replace_with_fresh) once revalidated.
     pub fn show_cached(&mut self, cached: Vec<Entry>) -> Vec<ListChange> {
         let changes = self.apply_batch(cached);
         self.stale = true;
         changes
     }
 
-    /// Replaces the contents with a freshly fetched full listing and returns
-    /// the diff against what was shown. Entries are matched by name, so rows
-    /// that survived stay where they are; selection of vanished names is
-    /// dropped.
+    /// Matched by name, so surviving rows stay put; selection of vanished names is dropped.
     pub fn replace_with_fresh(&mut self, fresh: Vec<Entry>) -> Vec<ListChange> {
         let was_large = self.is_large();
         let old_raw = std::mem::take(&mut self.raw);
@@ -240,8 +204,6 @@ impl ListingState {
         changes
     }
 
-    // ---- sort and filter ----
-
     pub fn set_sort(&mut self, sort: SortOptions) -> Vec<ListChange> {
         if sort == self.sort {
             return Vec::new();
@@ -260,8 +222,6 @@ impl ListingState {
         self.reconcile(old_visible, self.is_large(), &HashSet::new())
     }
 
-    // ---- selection (by name, so it survives refreshes) ----
-
     pub fn is_selected(&self, name: &[u8]) -> bool {
         self.selection.contains(name)
     }
@@ -270,7 +230,6 @@ impl ListingState {
         self.selection.len()
     }
 
-    /// Selects an entry of this folder; unknown names are ignored.
     pub fn select(&mut self, name: &[u8]) -> Vec<ListChange> {
         if !self.by_name.contains_key(name) || !self.selection.insert(name.to_vec()) {
             return Vec::new();
@@ -285,7 +244,6 @@ impl ListingState {
         self.select(name)
     }
 
-    /// Selects every visible row.
     pub fn select_all(&mut self) -> Vec<ListChange> {
         let mut changes = Vec::new();
         for (i, &r) in self.visible.iter().enumerate() {
@@ -308,8 +266,8 @@ impl ListingState {
         changes
     }
 
-    /// Selected names: visible ones in display order, then selected entries
-    /// currently hidden by the filter in byte order.
+    /// Visible ones in display order, then selected entries currently hidden by the filter in byte
+    /// order.
     pub fn selected_names(&self) -> Vec<Vec<u8>> {
         let mut out: Vec<Vec<u8>> = self
             .visible_entries()
@@ -328,16 +286,12 @@ impl ListingState {
         out
     }
 
-    // ---- internals ----
-
     fn row_update(&self, name: &[u8]) -> Vec<ListChange> {
         self.index_of(name)
             .map(|index| vec![ListChange::Update { index }])
             .unwrap_or_default()
     }
 
-    /// Inserts or replaces by name. Returns the raw index when an existing
-    /// entry changed content.
     fn upsert(&mut self, entry: Entry) -> Option<u32> {
         if let Some(&i) = self.by_name.get(&entry.name) {
             if self.raw[i as usize] == entry {
@@ -362,7 +316,6 @@ impl ListingState {
         idx
     }
 
-    /// Diff for changes that keep raw indices stable (batches, sort, filter).
     fn reconcile(
         &mut self,
         old_visible: Vec<u32>,
@@ -387,8 +340,7 @@ impl ListingState {
     }
 }
 
-/// Marks the positions of a longest strictly increasing subsequence of the
-/// mapped old positions; those rows stay put.
+/// Those rows stay put.
 fn lis_mask(mapping: &[Option<usize>]) -> Vec<bool> {
     let items: Vec<(usize, usize)> = mapping
         .iter()
@@ -415,7 +367,7 @@ fn lis_mask(mapping: &[Option<usize>]) -> Vec<bool> {
     mask
 }
 
-/// Removal runs of the old list, last run first so earlier indices stay valid.
+/// Last run first so earlier indices stay valid.
 fn removal_runs(kept_old: &[bool]) -> Vec<ListChange> {
     let mut runs = Vec::new();
     let mut start: Option<usize> = None;
@@ -442,8 +394,6 @@ fn removal_runs(kept_old: &[bool]) -> Vec<ListChange> {
     runs
 }
 
-/// Inserts for the new rows that are not kept and updates for kept rows whose
-/// content changed, in ascending order of final index.
 fn inserts_and_updates(
     mapping: &[Option<usize>],
     keep: &[bool],
@@ -475,9 +425,7 @@ fn inserts_and_updates(
     out
 }
 
-/// `mapping[j]` is the old visible position of new row `j` (None when the
-/// entry was not shown before). `changed(j, i)` says whether new row `j` and
-/// old row `i` differ in content.
+/// `mapping[j]` is the old visible position of new row `j` (None when not shown before).
 fn diff_from_mapping(
     old_len: usize,
     mapping: &[Option<usize>],
@@ -515,8 +463,6 @@ mod tests {
         s.visible_entries().cloned().collect()
     }
 
-    /// Applies `changes` to `mirror` the way a view model would and checks it
-    /// ends up equal to the state's visible list.
     fn apply_to_mirror(mirror: &mut Vec<Entry>, changes: &[ListChange], s: &ListingState) {
         for c in changes {
             match *c {
@@ -611,8 +557,6 @@ mod tests {
 
     #[test]
     fn replace_with_fresh_after_edits_reproduces_the_list() {
-        // Revalidation of a mostly unchanged folder: some deleted, some
-        // modified, some new.
         let mut rng = Rng(42);
         for case in 0..200 {
             let initial = random_batch(&mut rng, 40);
@@ -636,7 +580,6 @@ mod tests {
     fn unchanged_rows_keep_their_place() {
         let mut s = ListingState::default();
         s.apply_batch(vec![file("a", 1), file("b", 1), file("c", 1), file("d", 1)]);
-        // b removed, e added at the end, c modified.
         let changes = s.replace_with_fresh(vec![file("a", 1), file("c", 9), file("d", 1), file("e", 1)]);
         assert_eq!(
             changes,
@@ -805,7 +748,6 @@ mod tests {
         assert_eq!(s.selected_names(), [b"c".to_vec(), b"b".to_vec()]);
         assert!(s.is_selected(b"b"));
 
-        // Refresh: b modified and c deleted, d new.
         s.replace_with_fresh(vec![file("a", 1), file("b", 20), file("d", 1)]);
         assert!(s.is_selected(b"b"));
         assert!(!s.is_selected(b"c"), "vanished entries leave the selection");
@@ -902,10 +844,8 @@ mod tests {
         );
         assert_eq!(s.sort().key, SortKey::Size, "the chosen order is kept for later");
 
-        // Changing the chosen order does not reorder a large folder.
         assert!(s.set_sort(SortOptions::default()).is_empty());
 
-        // Shrinking back below the threshold restores the chosen order.
         let changes = s.replace_with_fresh(many(10));
         assert_eq!(changes, [ListChange::Reset]);
         apply_to_mirror(&mut mirror, &changes, &s);

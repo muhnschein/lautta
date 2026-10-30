@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! A zip writer that needs only `Write` (no `Seek`), so the archive can go
-//! straight into a pipe. Files use data descriptors (sizes and CRC follow the
-//! data), deflate, UTF-8 names, unix modes and extended timestamps; entries
-//! switch to zip64 when their size is unknown or ≥ 4 GiB.
+//! Zip writer needing only `Write` (no `Seek`), so archives go straight into a pipe. Data
+//! descriptors; zip64 when a size is unknown or ≥ 4 GiB.
 
 use super::{EntryMeta, MemberWriter};
 use crate::entry::Kind;
@@ -39,7 +37,6 @@ impl<W: Write> Write for Counting<W> {
     }
 }
 
-/// What the central directory needs about a finished member.
 struct Member {
     name: Vec<u8>,
     flags: u16,
@@ -94,7 +91,7 @@ impl<W: Write> ZipStream<W> {
     }
 }
 
-/// Seconds since the epoch to a DOS date/time (UTC, clamped to 1980..2107).
+/// UTC, clamped to 1980..2107.
 pub(crate) fn dos_datetime(t: SystemTime) -> (u16, u16) {
     let secs = t
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -111,7 +108,6 @@ pub(crate) fn dos_datetime(t: SystemTime) -> (u16, u16) {
     (date, time)
 }
 
-/// Days since 1970-01-01 to (year, month, day).
 fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
@@ -139,7 +135,6 @@ fn external_attrs(kind: Kind, mode: Option<u32>) -> u32 {
     ((type_bits | (mode.unwrap_or(default_mode) & 0o7777)) << 16) | dos
 }
 
-/// Extended timestamp extra field (modification time only).
 fn timestamp_extra(mtime: Option<u32>) -> Vec<u8> {
     let Some(secs) = mtime else {
         return Vec::new();
@@ -209,7 +204,6 @@ impl<W: Write> ZipStream<W> {
         }
     }
 
-    /// Folders and links: no deflate, sizes known up front.
     fn small_member(&mut self, meta: &EntryMeta, name: Vec<u8>, body: &[u8]) -> io::Result<()> {
         let mut m = self.new_member(meta, name, METHOD_STORED, false);
         let mut crc = flate2::Crc::new();

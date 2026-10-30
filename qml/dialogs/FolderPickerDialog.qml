@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Folder picker across all locations (SPEC OPS-10, boards FolderPicker and
-// FolderPickerPulley): the current folder on top, the locations, then the
-// sub-folders of the current folder. After accept, `selectedUri` is the
-// chosen folder. `startUri` is where to begin (a location root by default).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -15,7 +11,6 @@ Dialog {
     property string title
     property string acceptText
     property string startUri
-    // Without write access in the current folder, "accept" stays off.
     property bool requireWrite: true
     property string currentUri: startUri
     readonly property string selectedUri: currentUri
@@ -67,7 +62,6 @@ Dialog {
                 title: dialog.title
             }
 
-            // The current folder; tapping it goes one level up.
             BackgroundItem {
                 width: parent.width
                 height: Theme.itemSizeSmall

@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// One page of the PDF viewer (PRV-12): a white sheet, the page rendered at
-// the fitted width, and over it a sharper copy at the zoom once that has
-// arrived, so zooming never shows an empty page. Search hits are marked
-// over the page; its links can be tapped.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
@@ -11,14 +7,10 @@ Rectangle {
 
     property int pageIndex
     property string uri
-    // The view's width (zoom 1) and the zoom the sharp copy is made for.
     property real fitWidth
     property real zoom: 1
-    // Areas of search hits (PdfDocument.hitsJson): x, y, width and height
-    // as fractions of the page, and whether they belong to the hit shown.
     property var hits: []
 
-    // [{x, y, width, height, page, top, uri}] (PdfDocument.linksReady).
     property var links: []
 
     signal doubleTapped(real tapX, real tapY)
@@ -46,7 +38,7 @@ Rectangle {
         cache: false
         smooth: true
         visible: status === Image.Ready
-        // About 40 MB for an A4 page at most: the phone keeps two or three.
+        // About 40 MB for an A4 page at most: phone keeps two or three.
         sourceSize.width: Math.min(2560, Math.round(sheet.fitWidth * sheet.zoom))
         source: sheet.zoom > 1 && sheet.uri !== "" ? sheet.source() : ""
     }

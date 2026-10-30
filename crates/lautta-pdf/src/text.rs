@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Text search. The interpreter runs with a device that only keeps each
-//! glyph's Unicode text and an approximate box; paths, images and Type 3
-//! glyph programs are skipped, nothing is decoded or drawn.
+//! Text search. The interpreter's device keeps only each glyph's Unicode text and an approximate
+//! box; paths, images and Type 3 glyph programs are skipped.
 
 use crate::{PageRect, PageSize, PdfDocument, PdfError};
 use hayro::hayro_interpret::font::{Glyph, GlyphRun};
@@ -13,38 +12,27 @@ use hayro::hayro_interpret::{
 };
 use hayro::kurbo::{Affine, BezPath, Point, Rect};
 
-/// Most characters read from one page; text after them is not searched.
+/// Text after this is not searched.
 pub const MAX_PAGE_CHARS: usize = 200_000;
-/// Most hits reported for one page.
 pub const MAX_PAGE_HITS: usize = 1_000;
 
-// Lengths in glyph space: 1000 units per em.
-/// Bottom of a glyph's box: an approximate descender.
+// Glyph space lengths: 1000 units per em.
 const DESCENT: f64 = -200.0;
-/// Top of a glyph's box: an approximate ascender.
 const ASCENT: f64 = 800.0;
-/// Width of a glyph whose font gives none (Type 3 fonts).
 const DEFAULT_ADVANCE: f32 = 500.0;
-/// A wider gap after a glyph separates words.
 const WORD_GAP: f64 = 150.0;
-/// A baseline moved further up or down starts a new line.
 const LINE_SHIFT: f64 = 500.0;
-/// A step back further than this starts a new line too.
 const LINE_BACK: f64 = 1000.0;
 
-/// One occurrence of the query on a page: the areas of its characters, one
-/// per line it spans.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextHit {
     pub areas: Vec<PageRect>,
 }
 
 impl PdfDocument {
-    /// Finds `query` on page `index` (0-based), in content stream order.
-    /// Case-insensitive (Unicode lowercase); a whitespace run in the query
-    /// matches any whitespace run in the text, leading and trailing
-    /// whitespace is ignored. An empty query finds nothing. At most
-    /// [`MAX_PAGE_HITS`] hits in the first [`MAX_PAGE_CHARS`] characters.
+    /// Content stream order. Case-insensitive (Unicode lowercase); a whitespace run in the query
+    /// matches any whitespace run in the text, outer whitespace ignored. Empty query finds nothing.
+    /// At most [`MAX_PAGE_HITS`] hits in the first [`MAX_PAGE_CHARS`] characters.
     pub fn search_page(&self, index: usize, query: &str) -> Result<Vec<TextHit>, PdfError> {
         let size = *self.sizes.get(index).ok_or(PdfError::NoSuchPage)?;
         let page = self.pdf.pages().get(index).ok_or(PdfError::NoSuchPage)?;
@@ -57,8 +45,6 @@ impl PdfDocument {
     }
 }
 
-/// A character of a page, in shown page points. The spaces put between
-/// words and lines have no area.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct TextChar {
     ch: char,
@@ -66,7 +52,6 @@ struct TextChar {
     line: u64,
 }
 
-/// The page's characters in content stream order.
 fn page_text(page: &Page<'_>) -> Vec<TextChar> {
     let (width, height) = page.render_dimensions();
     let cache = InterpreterCache::new();
@@ -82,15 +67,12 @@ fn page_text(page: &Page<'_>) -> Vec<TextChar> {
     sink.chars
 }
 
-/// The last glyph read: the map from page back to its glyph space, and its
-/// width there.
 #[derive(Debug, Clone, Copy)]
 struct Placed {
     inverse: Affine,
     advance: f64,
 }
 
-/// What lies between two glyphs.
 #[derive(Debug, PartialEq)]
 enum Gap {
     None,
@@ -98,11 +80,10 @@ enum Gap {
     Line,
 }
 
-/// The gap between the `last` glyph and the next one, drawn at `origin`.
 fn gap(last: Placed, origin: Point) -> Gap {
     let at = last.inverse * origin;
     let along = at.x - last.advance;
-    // Written so that a degenerate transform (NaN) breaks the line.
+    // written so a degenerate transform (NaN) breaks the line
     let same_line = at.y.abs() <= LINE_SHIFT && along >= -LINE_BACK;
     if !same_line {
         Gap::Line
@@ -113,7 +94,6 @@ fn gap(last: Placed, origin: Point) -> Gap {
     }
 }
 
-/// A glyph's width in glyph space.
 fn advance(glyph: &Glyph<'_>) -> f64 {
     let width = match glyph {
         Glyph::Outline(g) => g.advance_width(),
@@ -122,7 +102,6 @@ fn advance(glyph: &Glyph<'_>) -> f64 {
     f64::from(width.unwrap_or(DEFAULT_ADVANCE))
 }
 
-/// A device that collects the text of the glyphs drawn on it.
 #[derive(Default)]
 struct TextSink {
     chars: Vec<TextChar>,
@@ -142,7 +121,6 @@ impl TextSink {
         }
     }
 
-    /// Adds a glyph drawn with `transform` from glyph space to the page.
     fn glyph(&mut self, glyph: &Glyph<'_>, transform: Affine) {
         let gap = self.last.map(|last| gap(last, transform * Point::ORIGIN));
         if gap == Some(Gap::Line) {
@@ -162,7 +140,6 @@ impl TextSink {
         });
     }
 
-    /// Adds a glyph's text; the characters of a ligature share its area.
     fn push_text(&mut self, text: &BfString, area: Rect) {
         let mut buf = [0; 4];
         let text = match text {
@@ -182,8 +159,7 @@ impl<'a> Device<'a> for TextSink {
             .iter()
             .map(|g| props.transform * g.transform())
             .collect();
-        // Fill and stroke draws a run twice; overprinted (fake bold) text
-        // repeats it too.
+        // fill and stroke draws a run twice; overprinted (fake bold) text repeats it too
         if transforms != self.last_run {
             for (glyph, transform) in run.glyphs().iter().zip(&transforms) {
                 self.glyph(glyph, *transform);
@@ -202,8 +178,8 @@ impl<'a> Device<'a> for TextSink {
     fn pop_transparency_group(&mut self) {}
 }
 
-/// Lowercases `chars` and turns each whitespace run into one space, passing
-/// on every resulting char with the index of the char it comes from.
+/// Lowercases `chars`, turns each whitespace run into one space, passes on every resulting char
+/// with the index of the char it comes from.
 fn fold(chars: impl Iterator<Item = char>, mut out: impl FnMut(char, usize)) {
     let mut after_space = false;
     for (i, c) in chars.enumerate() {
@@ -217,10 +193,9 @@ fn fold(chars: impl Iterator<Item = char>, mut out: impl FnMut(char, usize)) {
     }
 }
 
-/// The hits of `needle` (folded) in `chars` on a page of `size` points.
 fn find(chars: &[TextChar], needle: &str, size: PageSize) -> Vec<TextHit> {
     let mut text = String::new();
-    // Per folded char: where it starts in `text`, and its char in `chars`.
+    // per folded char: where it starts in `text`, and its char in `chars`
     let mut starts = Vec::new();
     let mut sources = Vec::new();
     fold(chars.iter().map(|c| c.ch), |c, i| {
@@ -241,7 +216,6 @@ fn find(chars: &[TextChar], needle: &str, size: PageSize) -> Vec<TextHit> {
         .collect()
 }
 
-/// The areas of a hit's characters, consecutive ones on a line merged.
 fn areas(hit: impl Iterator<Item = TextChar>, size: PageSize) -> Vec<PageRect> {
     let mut lines: Vec<(u64, Rect)> = Vec::new();
     for c in hit {
@@ -254,7 +228,6 @@ fn areas(hit: impl Iterator<Item = TextChar>, size: PageSize) -> Vec<PageRect> {
     lines.into_iter().map(|(_, r)| fraction(r, size)).collect()
 }
 
-/// `r`, in points, as fractions of a page of `size` points.
 fn fraction(r: Rect, size: PageSize) -> PageRect {
     PageRect {
         x: r.x0 as f32 / size.width,

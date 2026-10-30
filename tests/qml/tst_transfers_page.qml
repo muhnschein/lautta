@@ -1,10 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): Activity's sections are the rows'
-// date groups (SPEC §15.4), In progress first, then Today … Older, in the
-// shared DateSectionHeader; and its pulley says Clear activity history and
-// has no Settings entry. Fails when the sections follow anything but
-// `dateGroup` (such as the old Active / Waiting / Paused / History groups),
-// the entry is called otherwise or Settings comes back.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
@@ -14,7 +8,6 @@ ApplicationWindow {
     property bool scenarioRunning: true
     property int waited: 0
     property var page
-    // The section headers in order: [qsTrId id, engineering English].
     readonly property var expected: [
         ["lautta-date-in-progress", "In progress"],
         ["lautta-date-today", "Today"],
@@ -24,8 +17,6 @@ ApplicationWindow {
         ["lautta-date-older", "Older"]
     ]
 
-    // Every role the delegate reads; `group` says what the task does and
-    // differs from `dateGroup` on purpose.
     ListModel {
         id: rows
 
@@ -39,8 +30,6 @@ ApplicationWindow {
         ListElement { transferId: 8; group: "history"; dateGroup: "older"; kind: "copy"; title: "Copy old.csv"; name: "Copy old.csv"; state: "completed"; waitReason: ""; bytesDone: 1; bytesTotal: 1; rate: 0; eta: -1; itemsDone: 1; itemsTotal: 1; itemsFailed: 0; failed: false; direction: "local"; destination: "Documents"; destName: "Documents"; createdMs: 8; finishedMs: 5; questions: 0; progress: 1 }
     }
 
-    // Loaded rather than declared: a page item on its own gets no size
-    // here, and its list would make no delegates.
     initialPage: Component {
         Loader {
             source: Qt.resolvedUrl("../../qml/pages/TransfersPage.qml")
@@ -56,8 +45,6 @@ ApplicationWindow {
         scenarioRunning = false
     }
 
-    // Every item under `item` that `pred` accepts. A flickable's
-    // contentItem is one of its children too: each item is looked at once.
     function findAll(item, pred, out) {
         if (out === undefined) {
             out = []
@@ -80,23 +67,18 @@ ApplicationWindow {
         return findAll(win.page, function(x) { return x.text === id || x.text === english })
     }
 
-    // The section headers top to bottom, all of them made.
     function sections() {
-        // Headless, no render loop polishes the list: lay it out by hand.
+        // No render loop headless: lay out by hand.
         var views = findAll(win.page, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined })
         for (var i = 0; i < views.length; ++i) {
             views[i].cacheBuffer = 100000
             views[i].forceLayout()
         }
-        // The page is not on screen here, so `visible` is false throughout.
         var found = findAll(win.page, function(x) { return x.objectName === "dateSection" })
         found.sort(function(a, b) { return a.y - b.y })
         return found.map(function(x) { return x.text })
     }
 
-    // A title naming a server it goes to may mark it (§15.5); one going to
-    // the device never does. Here the titles are ids without the name, so
-    // only which rows go to a server shows (PlaceText.around is host-tested).
     function checkTitles() {
         var rowsOf = findAll(win.page, function(x) { return x.toServer !== undefined && x.titleParts !== undefined })
         if (rowsOf.length !== rows.count)

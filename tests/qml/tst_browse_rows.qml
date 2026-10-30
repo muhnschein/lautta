@@ -1,18 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Browse rows on the target (real Silica, SPEC §15.2, §15.5): a folder row
-// shows no item count; a server row is as tall as a folder row, its status a
-// glowing dot at the right margin and no text; a favourite on a server has the
-// server icon before its place and a local one has none; a drive that is not
-// mounted is as tall as a mounted volume, with its size below its name and
-// a dot of the primary colour on the right like a server's status that is
-// not connected, a mounted drive the highlight colour's dot and a volume the
-// bridge does not mount none, a drive with a mount under way a dot that pulses
-// (LOC-3); and nothing is attached to the page to swipe to (Activity is in
-// the pulley); a folder row draws the app's folder glyph the core names
-// (UI-2), a favourite's star stays the theme's. Fails when a count comes back,
-// server rows grow a second line again, a state is told in words, the status
-// dot leaves the right margin, the dot marks the wrong state, a row's glyph is
-// not the app's SVG or Activity is attached again.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -31,8 +17,6 @@ ApplicationWindow {
             id: browsePage
 
             Component.onCompleted: win.browse = browsePage
-            // The Documents row still has a count in the model: the page
-            // shows none.
             listModel: ListModel {
                 ListElement { section: "favourites"; uri: "lautta://nv-account:1/srv/photos"; name: "Photos"; kind: "favourite"; icon: "image://theme/icon-m-favorite"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "1"; place: "NAS › /srv/photos"; provider: ""; host: ""; free: -1; total: -1; fs: "" }
                 ListElement { section: "favourites"; uri: "lautta://user-documents/Uni"; name: "Thesis"; kind: "favourite"; icon: "image://theme/icon-m-favorite"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "2"; place: "Documents › Uni"; provider: ""; host: ""; free: -1; total: -1; fs: "" }
@@ -60,7 +44,6 @@ ApplicationWindow {
     function findAll(item, pred, out) {
         if (!item)
             return out
-        // A flickable's contentItem is one of its children too.
         if (pred(item) && out.indexOf(item) < 0)
             out.push(item)
         var kids = item.children || []
@@ -71,7 +54,6 @@ ApplicationWindow {
         return out
     }
 
-    // The delegate of the row named `name`, laid out.
     function rowOf(name) {
         var views = findAll(browse, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         if (views.length === 0)
@@ -88,18 +70,15 @@ ApplicationWindow {
         return null
     }
 
-    // The status dots `row` shows, by colour.
     function icons(row) {
         return findAll(row, function(x) { return x.visible && x.objectName === "statusDot" }, [])
             .map(function(dot) { return String(dot.color) })
     }
 
-    // The status icon item of `row`, which sits at the page margin.
     function statusSlot(row) {
         return findAll(row, function(x) { return x.indicator !== undefined && x.dotSize !== undefined }, [])[0]
     }
 
-    // The label in `row` that says `text`.
     function labelOf(row, text) {
         var found = findAll(row, function(x) { return x.font !== undefined && x.text === text && x.visible }, [])
         return found.length > 0 ? found[0] : null
@@ -114,12 +93,10 @@ ApplicationWindow {
         return found.length > 0 ? found[0] : null
     }
 
-    // Where a status ends: the page margin from the right edge of the row.
     function statusEdge(row) {
         return Math.round(row.width - Theme.horizontalPageMargin)
     }
 
-    // The texts `row` shows: its name and its line, no word about its state.
     function texts(row) {
         return findAll(row, function(x) { return x.visible && x.font !== undefined && typeof x.text === "string" && x.text.length > 0 }, [])
             .map(function(label) { return label.text })
@@ -133,7 +110,6 @@ ApplicationWindow {
     function checkHeights() {
         var folder = rowOf("Documents")
         var edge = statusEdge(folder)
-        // name: the icon of its row
         var servers = [["NAS", String(Theme.highlightColor)], ["Office", String(statusSlot(rowOf("Office")).warningColor)], ["Old", ""]]
         for (var i = 0; i < servers.length; ++i) {
             var row = rowOf(servers[i][0])
@@ -214,7 +190,6 @@ ApplicationWindow {
             win.checkVolumes()
             win.checkPlaces()
             win.checkGlyphs()
-            // Activity is reached from the pulley and the activity bar only.
             win.expect(!pageStack.nextPage(win.browse) && !win.browse._forwardDestination,
                        "Browse has a page attached: " + pageStack.nextPage(win.browse))
             win.scenarioRunning = false

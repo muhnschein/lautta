@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The `App` singleton (doc/QML-API.md): readiness, settings, clipboard,
-//! URI helpers, opening files outside the app and the sample folder of the
-//! view options preview.
 
 use crate::directory::preview;
 use crate::json::{from_json, json_value_to_qvariant, to_json};
@@ -31,8 +28,6 @@ pub struct App {
     loadSettings: qt_method!(fn(&mut self, json: QString)),
     setting: qt_method!(fn(&self, key: QString) -> QVariant),
     setSetting: qt_method!(fn(&mut self, key: QString, value_json: QString) -> bool),
-    /// The view options preview (BRW-4): the sample entries as a folder
-    /// shows them with these view settings, one map per shown entry.
     previewRows: qt_method!(
         fn(
             &self,
@@ -50,8 +45,7 @@ pub struct App {
     displayAddress: qt_method!(fn(&self, uri: QString) -> QString),
     locationName: qt_method!(fn(&self, uri: QString) -> QString),
     isLocal: qt_method!(fn(&self, uri: QString) -> bool),
-    /// Whether `uri` is on a server (LOC-7), even one that is gone: lines
-    /// that name its location mark it (§15.5).
+    /// True for a server URI, even a gone one.
     isRemote: qt_method!(fn(&self, uri: QString) -> bool),
     localUrl: qt_method!(fn(&self, uri: QString) -> QString),
     categoryOf: qt_method!(fn(&self, name_or_uri: QString) -> QString),
@@ -95,7 +89,6 @@ fn parse_uris(json: &QString) -> Option<Vec<Uri>> {
     list.iter().map(|s| Uri::parse(s).ok()).collect()
 }
 
-/// Engineering names of the viewers (doc/QML-API.md, `App.viewerFor`).
 pub fn viewer_name(v: Viewer) -> &'static str {
     match v {
         Viewer::Image => "image",
@@ -109,7 +102,6 @@ pub fn viewer_name(v: Viewer) -> &'static str {
     }
 }
 
-/// The last path component of a URI, or the text itself when it is a name.
 fn name_part(s: &str) -> Vec<u8> {
     match Uri::parse(s) {
         Ok(u) => u.name().map(<[u8]>::to_vec).unwrap_or_default(),
@@ -123,8 +115,7 @@ impl App {
         let map = from_json(&json.to_string()).unwrap_or_default();
         core.apply_settings(Settings::from_map(&map));
         self.publish_settings();
-        // The user's retention is known from here on: purge the Trash and
-        // clear its half-made copies (OPS-8).
+        // Retention known: purge Trash, clear its half-made copies.
         handle().spawn_blocking(move || {
             if let Err(e) = core.tidy_trash(now_secs()) {
                 log::warn!("tidying the Trash failed: {e}");
@@ -211,7 +202,6 @@ impl App {
         let loc = parse_uri(&uri)
             .map(|u| u.location)
             .unwrap_or_else(|| uri.to_string());
-        // A server that went away keeps its name, for the message saying so.
         core()
             .and_then(|c| c.locations.name(&loc))
             .map(|name| QString::from(name.as_str()))
@@ -305,7 +295,7 @@ impl App {
         QString::from(to_json(&items).as_str())
     }
 
-    /// The items to paste and whether they move; a cut is consumed (OPS-10).
+    /// A cut is consumed.
     fn takeClipboard(&mut self) -> QString {
         let taken = self.clipboard.take();
         self.publish_clipboard();
@@ -318,8 +308,7 @@ impl App {
         QString::from(to_json(&value).as_str())
     }
 
-    /// Makes a file readable by other apps: local files as they are, remote
-    /// ones copied to ~/Downloads/Lautta/Opened first (PRV-6).
+    /// Remote files copied to ~/Downloads/Lautta/Opened first.
     fn prepareExternal(&self, uri: QString) {
         let (Some(core), Some(u)) = (core(), parse_uri(&uri)) else {
             return;

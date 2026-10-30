@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `SearchTestSupport`: what host QML tests need to exercise models against
-//! real folders: files below `$HOME` and a way to let queued results arrive
-//! (the test runner only spins the event loop briefly). Harmless in the app;
-//! no page uses it.
+//! Host QML tests: files below `$HOME` and a way to let queued results arrive (test runner spins
+//! the event loop only briefly). No page uses it.
 
 use cpp::cpp;
 use qmetaobject::prelude::*;
@@ -17,13 +15,9 @@ cpp! {{
 #[derive(QObject, Default)]
 pub struct SearchTestSupport {
     base: qt_base_class!(trait QObject),
-    /// Lets queued results arrive for about `ms` milliseconds.
     spin: qt_method!(fn(&self, ms: i32)),
-    /// Makes sure the user folders tests refer to exist and are locations
-    /// (the SDK check runs with an empty home inside the build sandbox).
+    /// SDK check runs with an empty home inside the build sandbox.
     prepare: qt_method!(fn(&self)),
-    /// Writes `text` to `rel` below `$HOME`, creating folders; `mtimeSecs`
-    /// above zero sets the modification time.
     write: qt_method!(fn(&self, rel: QString, text: QString, mtime_secs: i64) -> bool),
     exists: qt_method!(fn(&self, rel: QString) -> bool),
 }
@@ -31,7 +25,6 @@ pub struct SearchTestSupport {
 fn path_of(rel: &QString) -> Option<PathBuf> {
     let home = PathBuf::from(std::env::var_os("HOME")?);
     let rel = rel.to_string();
-    // Tests stay below $HOME.
     if rel.split('/').any(|c| c == "..") {
         return None;
     }

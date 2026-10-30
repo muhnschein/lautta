@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host test of PlaceText.around (§15.5): a line that names a location is
-// split around the name wherever its translation puts it, so that a
-// server's name gets its icon right before it; a line that does not name
-// it is left whole.
 import QtQuick 2.6
 import "../../../qml/components/PlaceText.js" as PlaceText
 

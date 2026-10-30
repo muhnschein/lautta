@@ -1,15 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The cover while transfers run (SPEC INT-3, board Covers): count, aggregate
-// progress and rate, with the actions Pause all / Resume all and Transfers.
-// The browse area's CoverPage shows this item instead of its own content
-// while `active`, and turns its own CoverActionList off then:
-//
-//     TransferCover { anchors.fill: parent; visible: active }
-//     CoverActionList { enabled: !transferCover.active; ... }
-//
-// Three states: transferring, paused (Resume all) and, when the app is
-// closing with unfinished work, "will resume when you open Lautta again"
-// (XFR-6).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0

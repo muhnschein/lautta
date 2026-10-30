@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! One error model for every provider (SPEC RS-8): the netvfs v2 taxonomy
-//! (netvfs SPEC-v2 XC-21) plus local I/O mappings, so the UI has a single
-//! message table (SPEC §20, [`crate::messages`]).
+//! One error model for every provider: the netvfs error taxonomy plus local I/O mappings, one
+//! message table ([`crate::messages`]).
 
 use crate::uri::Uri;
 use std::fmt;
 
-/// Error kinds. The names returned by [`ErrorKind::name`] are the netvfs
-/// `errorName()` strings, so bridge errors (`org.netvfs.Error.<Name>`) map
-/// one-to-one.
+/// Names from [`ErrorKind::name`] are netvfs `errorName()` strings, so `org.netvfs.Error.<Name>`
+/// maps one-to-one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ErrorKind {
     NotFound,
@@ -34,15 +32,11 @@ pub enum ErrorKind {
     Locked,
     TooManyConnections,
     RateLimited,
-    /// The bridge socket is gone or not answering (SPEC §20 "bridge gone").
     BridgeUnavailable,
-    /// The sandbox does not let the app read the path (SPEC §20 "sandbox").
     Sandbox,
-    /// A server location that is not there any more (disconnected, or the
-    /// bridge restarted, which ends ad-hoc servers): items copied from it
-    /// cannot be reached through it again.
+    /// Disconnected, or bridge restarted (ends ad-hoc servers): items copied from it cannot be
+    /// reached through it again.
     LocationGone,
-    /// A name crosses into a location where it is not representable.
     CrossesDevice,
     Io,
     Internal,
@@ -115,9 +109,8 @@ impl ErrorKind {
         }
     }
 
-    /// Maps a netvfs error name (with or without the `org.netvfs.Error.`
-    /// prefix). Unknown names become [`ErrorKind::ProtocolError`] so an
-    /// unexpected name never makes the app misreport an error as success.
+    /// Unknown names become [`ErrorKind::ProtocolError`] so an unexpected name never reads as
+    /// success.
     pub fn from_name(name: &str) -> ErrorKind {
         let bare = name.strip_prefix("org.netvfs.Error.").unwrap_or(name);
         ErrorKind::ALL
@@ -127,7 +120,6 @@ impl ErrorKind {
             .unwrap_or(ErrorKind::ProtocolError)
     }
 
-    /// Transient errors are retried by transfers (SPEC XFR-9).
     pub fn is_transient(self) -> bool {
         matches!(
             self,
@@ -148,10 +140,8 @@ impl fmt::Display for ErrorKind {
     }
 }
 
-/// An error with its kind, a human-oriented message from the source (never
-/// secrets), an optional protocol detail for the *Details* view, an
-/// optional retry hint (netvfs XC-24) and the item it is about, so the
-/// message can name what failed (SPEC §20).
+/// Message is from the source and never holds secrets; optional protocol detail for *Details*,
+/// optional retry hint, and the item it is about.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Error {
     pub kind: ErrorKind,
@@ -172,7 +162,7 @@ impl Error {
         }
     }
 
-    /// Names the item the error is about, unless an inner step named one.
+    /// Unless an inner step named one.
     pub fn about(mut self, uri: &Uri) -> Error {
         if self.subject.is_none() {
             self.subject = Some(uri.clone());

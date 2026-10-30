@@ -1,17 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The rows of the grid on the target (real Silica, SPEC §15.3, BRW-4): a
-// row is as tall as its tallest tile and no taller, so a row of one-line
-// names with a count is shorter than a row with a two-line name; under every
-// tile its name and then its caption lines follow each other, with no line
-// kept empty between or under them, and a folder's count still to come keeps
-// its one line. 3 tiles per row in portrait, more when the view is wider
-// (landscape keeps the tile size), the same items regrouped when the width
-// changes. Dragging selects across the end of a row and across rows of
-// different heights. The View options preview follows the same rule. An item
-// that comes regroups the rows after it in place. Fails when a tile keeps
-// room for a line it does not show, a row is not as tall as its tallest
-// tile, rows hold the wrong items, a drag loses its range or a new item
-// moves the view.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -22,9 +9,6 @@ ApplicationWindow {
 
     readonly property string base: "lautta://user-documents/GridRows/"
     readonly property string longName: "abcdefghijklmnopqrstuvwxyz-abcdefghijklmnopqrstuvwxyz.txt"
-    // As the folder shows them, folders first: in portrait a row of folders
-    // (one name line, a count), a row with a two-line name and a row of
-    // one-line file names (two caption lines).
     readonly property var names: ["A", "B", "C", longName, "e", "f", "g", "h", "i"]
     property var view: pageStack.currentPage ? pageStack.currentPage.view : null
 
@@ -43,7 +27,6 @@ ApplicationWindow {
         return expect(JSON.stringify(a) === JSON.stringify(b), what + ": " + JSON.stringify(a) + " != " + JSON.stringify(b))
     }
 
-    // Pumps events until `done()` holds, ten seconds at most.
     function waitFor(done, what) {
         for (var i = 0; i < 200 && !done(); ++i)
             tools.pump(50)
@@ -81,8 +64,7 @@ ApplicationWindow {
         waitFor(function () { return folder.count === names.length }, "its files")
     }
 
-    // The rows the grid made, top to bottom. Laid out by hand: headless, no
-    // render loop polishes the view.
+    // No render loop headless: lay out by hand.
     function rowsOf(flick) {
         flick.forceLayout()
         var out = []
@@ -94,7 +76,6 @@ ApplicationWindow {
         return out.sort(function (a, b) { return a.first - b.first })
     }
 
-    // The cells of `row`, left to right.
     function cellsOf(row) {
         var out = []
         for (var i = 0; i < row.children.length; ++i) {
@@ -110,15 +91,10 @@ ApplicationWindow {
         })
     }
 
-    // The height of a cell whose name takes `nameLines` and whose captions
-    // `captionLines`.
     function cellHeight(width, nameLines, captionLines) {
         return metrics.cellHeight(width, nameLines * metrics.nameLineHeight + captionLines * metrics.captionHeight)
     }
 
-    // Under the tile of `cell` its name, then its caption lines, each right
-    // under the one before; the cell's own height ends a gap and half a
-    // padding under its last line. No line is kept that it does not show.
     function checkTight(cell, name) {
         var label = named(cell, "gridName")
         var lines = metrics.nameLines(name, cell.width - 2 * cell.gap)
@@ -139,7 +115,6 @@ ApplicationWindow {
                name + ": the cell ends a gap and half a padding under its last line: " + cell.implicitHeight + " vs " + bottom)
     }
 
-    // Every row as tall as its tallest cell, every cell as tall as its row.
     function checkRows(rows, label) {
         for (var r = 0; r < rows.length; ++r) {
             var cells = cellsOf(rows[r])
@@ -166,7 +141,6 @@ ApplicationWindow {
         same(namesIn(rows), [names.slice(0, 3), names.slice(3, 6), names.slice(6, 9)], "3 per row in reading order")
         if (rows.length !== 3)
             return
-        // A count still to come keeps its line: the row does not grow.
         var folders = cellsOf(rows[0])
         expect(folders.every(function (c) { return c.counting && find(c, function (x) { return x.minLines === 1 }) }),
                "a folder's count has its line while it comes")
@@ -178,8 +152,6 @@ ApplicationWindow {
         checkRows(rows, "portrait")
     }
 
-    // A wider view fits more tiles of the same size; narrow again, the
-    // same items regroup into rows of 3.
     function checkWidths(view) {
         var grid = view.flickable
         var narrow = view.width
@@ -208,8 +180,6 @@ ApplicationWindow {
         return null
     }
 
-    // Moves the finger to the middle of the cell of item `index`, in two
-    // steps with no event loop between: the view must not scroll on.
     function moveTo(grid, index) {
         var c = cellNamed(grid, names[index])
         if (!c)
@@ -229,7 +199,6 @@ ApplicationWindow {
         return out
     }
 
-    // From the short row into the tall one and the one under it, and back.
     function checkDrag(grid) {
         var held = cellNamed(grid, "B")
         if (!held)
@@ -255,7 +224,6 @@ ApplicationWindow {
         view.endSelection()
     }
 
-    // The preview of View options lays its rows out alike.
     function checkPreview(width) {
         var preview = previewComponent.createObject(win.contentItem, { "screenWidth": width, "screenHeight": 960 })
         tools.pump(300)
@@ -273,8 +241,6 @@ ApplicationWindow {
         preview.destroy()
     }
 
-    // An item that comes regroups the rows after it, the one it joins
-    // first; the rows before keep their items and the view its position.
     function checkInsert(view) {
         var grid = view.flickable
         var tall = view.height
@@ -329,8 +295,6 @@ ApplicationWindow {
         Page {
             property alias view: grid
 
-            // Taller than the page: the checks' small screen leaves no room
-            // for three rows of tiles with captions under the header.
             DirectoryView {
                 id: grid
 

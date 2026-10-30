@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The search area's core actions on a temporary home folder: streaming
-//! search with recents and depth, cache and app-data clearing, per-location
-//! preferences.
 
 use lautta_core::app::Core;
 use lautta_core::app_search::SearchRequest;
@@ -175,7 +172,10 @@ async fn clear_app_data_removes_everything_the_app_keeps() {
     h.core.clear_app_data().unwrap();
     assert!(h.core.favourites.list().unwrap().is_empty());
     assert!(h.core.recent_searches.list("user-documents").unwrap().is_empty());
-    assert!(!paths.data_dir().join("netvfs").exists(), "DAT-3");
+    assert!(
+        !paths.data_dir().join("netvfs").exists(),
+        "netvfs data dir is cleared"
+    );
     assert!(!paths.thumbs_dir().join("k.thumb").exists());
     assert!(h.root.join("Documents/mine.txt").is_file(), "user files stay");
     h.core

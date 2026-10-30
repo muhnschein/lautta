@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Search filters (SRC-2, SRC-3, SRC-4; design: SearchFilters): name, match
-// mode, type, size, modified, depth on servers and recent searches. Accepting
-// applies them to the SearchModel and starts the search.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -11,7 +8,6 @@ import "../components/search"
 Dialog {
     id: dialog
 
-    // The SearchModel of the search page.
     property var searchModel
 
     readonly property var typeIds: ["", "folder", "image", "video", "audio", "document", "archive", "text"]

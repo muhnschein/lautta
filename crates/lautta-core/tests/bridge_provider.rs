@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The netvfs provider against the fake bridge: listing, metadata, namespace
-//! operations, read handles, lanes, capabilities and error mapping
-//! (SPEC NVB-7, NVB-8, LOC-7, §20).
 
 mod bridge_support;
 
@@ -63,10 +60,8 @@ async fn known_capabilities_are_fetched_on_first_use() {
     let caps = provider.known_capabilities().await;
     assert!(caps.has(cap::RESTRICTED_NAMES) && caps.writable());
     assert!(provider.has_capabilities());
-    // Asked once: what the bridge says later is not fetched again.
     rig.fake.set_capabilities("account:1", &["Symlinks"], &[], 255);
     assert!(!provider.known_capabilities().await.has(cap::SYMLINKS));
-    // A location the bridge cannot answer for keeps the assumed ones.
     let unknown = rig.client.provider("nv-account:9");
     assert!(unknown.known_capabilities().await.writable());
     assert!(!unknown.has_capabilities());
@@ -147,7 +142,6 @@ async fn listing_errors_come_with_the_done_signal() {
     assert_eq!(e.kind, ErrorKind::NotFound);
     let e = list_all(&provider, &p("f"), Lane::Interactive).await.unwrap_err();
     assert_eq!(e.kind, ErrorKind::NotADirectory);
-    // An empty folder is a complete listing, not an error.
     rig.fake.put_dir("account:1", b"empty");
     assert!(list_all(&provider, &p("empty"), Lane::Interactive)
         .await
@@ -320,7 +314,6 @@ async fn links_attributes_copies_checksums_and_space() {
     let e = provider.stat(&p("a"), true, Lane::Interactive).await.unwrap();
     assert_eq!(e.mode, Some(0o600), "only the permission bits travel");
     assert_eq!(e.modified, Some(UNIX_EPOCH + Duration::from_millis(42_000)));
-    // Nothing to change is not a round trip.
     rig.fake.clear_calls();
     provider
         .set_attributes(&p("a"), AttributeChanges::default())
@@ -396,7 +389,6 @@ async fn reads_are_capped_at_one_mebibyte() {
         "a larger request is answered with at most 1 MiB"
     );
     assert_eq!(first, data[..1 << 20]);
-    // `read_all` still reads everything in pieces.
     assert_eq!(read_all(handle.as_ref(), 8 << 20).await.unwrap(), data);
 }
 
@@ -463,11 +455,9 @@ async fn bridge_errors_keep_their_name_message_detail_and_retry_hint() {
     assert_eq!(e.detail.as_deref(), Some("sharing violation"));
     assert_eq!(e.retry_after_ms, Some(2500));
 
-    // A name the app does not know is a protocol error, never a success.
     rig.fake.fail_next("Stat", "Brandnew", "?");
     let e = provider.stat(&p("f"), true, Lane::Interactive).await.unwrap_err();
     assert_eq!(e.kind, ErrorKind::ProtocolError);
-    // A path that climbs out cannot even be formed (SEC-2).
     assert_eq!(VPath::parse(b"a/../b").unwrap_err().kind, ErrorKind::InvalidName);
 }
 

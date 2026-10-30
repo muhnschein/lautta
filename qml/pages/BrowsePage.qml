@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Browse: favourites, the device, volumes, servers and nearby servers
-// (SPEC §15.2). Standalone it shows no trace of the bridge (UI-8): the
-// Servers and Nearby sections and the bridge's pulley entries only exist
-// while the bridge is usable.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -18,10 +14,8 @@ import "../components/browse/RowStatus.js" as RowStatus
 Page {
     id: page
 
-    // The rows; tests give the page a ListModel with every kind of row.
     property var listModel: locations
-    // netvfs opens Settings › Storage, which the sandbox cannot (LOC-3,
-    // NVB-13); tests set it.
+    // Sandbox cannot open Settings › Storage; netvfs can. Tests set it.
     property bool storageSettings: Bridge.storageSettings
     readonly property bool discovering: status === PageStatus.Active
                                         && Qt.application.state === Qt.ApplicationActive && Bridge.ready
@@ -29,8 +23,7 @@ Page {
     allowedOrientations: Orientation.All
 
     onDiscoveringChanged: Bridge.setDiscover(discovering)
-    // Back in the foreground: refresh, which rescans the volumes (LOC-3) in
-    // case the media watch missed a mount inside the sandbox.
+    // Rescans volumes: media watch can miss a mount inside sandbox.
     readonly property bool foreground: Qt.application.state === Qt.ApplicationActive
     onForegroundChanged: if (foreground && status === PageStatus.Active) locations.refresh()
     onStatusChanged: {
@@ -52,7 +45,6 @@ Page {
     function openRow(row) {
         switch (row.kind) {
         case "favourite":
-            // A file favourite opens like a file in its folder (ORG-1).
             if (row.isFile)
                 Open.open(pageStack, App, Operations, row.uri, false, "", "")
             else
@@ -69,9 +61,6 @@ Page {
             connectTo(row.uri)
             break
         case "volume":
-            // A locked drive: Settings › Storage unlocks it, when the bridge
-            // can open it; otherwise nothing. A drive that is not mounted is
-            // mounted, then opens (LOC-3).
             if (row.status === "locked") {
                 if (storageSettings)
                     Bridge.openStorageSettings()
@@ -106,9 +95,8 @@ Page {
         pageStack.push(Qt.resolvedUrl("FavouritePage.qml"), { "uri": uri })
     }
 
-    // Row remorses start here, not in the delegate: the Browse rows can be
-    // rebuilt during the countdown, and a callback made in a delegate that
-    // is gone can no longer reach the page's models.
+    // Row remorses start here: rows can be rebuilt during countdown, and a callback from a gone
+    // delegate cannot reach page models.
     function remorseRow(item, text, action) {
         item.remorseAction(text, action, Number(App.setting("remorse_seconds")) * 1000)
     }
@@ -184,9 +172,6 @@ Page {
 
             readonly property string kind: model.kind
             readonly property bool banner: kind === "consent" || kind === "unavailable"
-            // A drive the bridge can mount, one Settings › Storage unlocks
-            // first, and the bridge's id of a volume's drive (LOC-3). Neither
-            // of the first two has an address yet; both are dimmed.
             readonly property bool unmounted: kind === "volume" && model.status === "unmounted"
             readonly property bool locked: kind === "volume" && model.status === "locked"
             readonly property bool notMounted: unmounted || locked
@@ -203,18 +188,13 @@ Page {
                     return ""
                 }
             }
-            // Only how the connection or mount stands, as a dot, no
-            // protocol or host (NVB-4, LOC-3).
             readonly property string statusIndicator: RowStatus.indicator(kind, model.status, model.connection,
                                                                           model.connectionError, drive,
                                                                           Bridge.busyDrives)
-            // A locked drive's menu has Open Storage settings only.
             readonly property bool hasMenu: kind === "favourite" || kind === "folder"
                                             || (kind === "volume" && (!locked || page.storageSettings))
                                             || kind === "account" || kind === "adhoc" || kind === "adhocRecent"
 
-            // The status icon sits on the right, so a server row is as
-            // tall as a folder row (§15.2).
             contentHeight: banner ? bannerContent.height + 2 * Theme.paddingMedium
                                   : (subtitle.length > 0 ? Theme.itemSizeMedium : Theme.itemSizeSmall)
             menu: hasMenu ? contextMenu : null
@@ -222,8 +202,6 @@ Page {
 
             onClicked: if (!banner) page.openRow(model)
 
-            // A theme icon, or the core's glyph token of a folder or file
-            // (FileIcons.js).
             AppIcon {
                 visible: !row.banner
                 opacity: row.notMounted ? Theme.opacityHigh : 1.0
@@ -254,7 +232,6 @@ Page {
                     color: row.highlighted ? Theme.highlightColor : Theme.primaryColor
                     truncationMode: TruncationMode.Fade
                 }
-                // A remote favourite's place has the server icon (§15.5).
                 PlaceLabel {
                     visible: row.subtitle.length > 0
                     width: parent.width
@@ -264,8 +241,6 @@ Page {
                 }
             }
 
-            // How a server's connection or a drive's mount stands; the name
-            // gives way first.
             RowStatusIcon {
                 id: statusIcon
 
@@ -278,7 +253,6 @@ Page {
                 }
             }
 
-            // The consent row (NVB-3) and the reconnecting notice (NVB-12).
             Row {
                 id: bannerContent
                 visible: row.banner
@@ -332,7 +306,6 @@ Page {
                 id: contextMenu
 
                 ContextMenu {
-                    // Favourites
                     MenuItem {
                         visible: row.kind === "favourite"
                         //% "Edit favourite"
@@ -340,7 +313,6 @@ Page {
                         onClicked: page.openFavourite(model.uri)
                     }
 
-                    // Servers (NVB-5)
                     MenuItem {
                         visible: row.kind === "adhocRecent"
                         //% "Connect"
@@ -366,7 +338,6 @@ Page {
                         onClicked: Bridge.editAccount(model.uri)
                     }
 
-                    // Folders and volumes (ORG-1, LOC-3)
                     MenuItem {
                         visible: row.unmounted
                         //% "Mount"
@@ -379,8 +350,6 @@ Page {
                         text: qsTrId("lautta-browse-add-favourite")
                         onClicked: page.openFavourite(model.uri)
                     }
-                    // Every row with a menu, favourites too, but a drive
-                    // that is not mounted has no address yet.
                     MenuItem {
                         visible: !row.notMounted
                         //% "Copy address"

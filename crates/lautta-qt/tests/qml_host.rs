@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Runs the host QML tests (tests/qml/host/tst_*.qml) against the real
-//! Lautta types with a temporary home folder. Silica is not available on the
-//! host; pages are checked on the target (tools/ci/check-rpm.sh).
+//! Runs host QML tests (tests/qml/host/tst_*.qml) against the real Lautta types with a temporary
+//! home. No Silica on host.
 
 use std::path::PathBuf;
 use std::process::Command;
 
-// Set in a child: the one QML file it checks, and the file it creates once
-// that passed (a child whose libtest filter matched nothing exits 0 too).
+// Child: the one QML file it checks, and the file it creates once that passed (a child whose
+// libtest filter matched nothing exits 0 too).
 const FILE_VAR: &str = "LAUTTA_QML_HOST_FILE";
 const PASSED_VAR: &str = "LAUTTA_QML_HOST_PASSED";
 
-/// Each file in own child process of this test, all at once: one Qt app per
-/// process, files mostly wait on timers (~33s in series, slowest file ~12s).
+/// Each file in its own child process, all at once: one Qt app per process, files mostly wait on
+/// timers.
 #[test]
 fn host_qml_tests_pass() {
     if let (Ok(file), Ok(passed)) = (std::env::var(FILE_VAR), std::env::var(PASSED_VAR)) {

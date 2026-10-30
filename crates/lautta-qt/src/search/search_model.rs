@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `SearchModel { rootUri }` (SRC-2..4): recursive name search below a
-//! folder, results streamed in per folder and grouped by it.
+//! Recursive name search below a folder; results stream in per folder and are grouped by it.
 
 use crate::json::{from_json, to_json};
 use crate::runtime::{core, handle};
@@ -53,14 +52,13 @@ pub struct SearchModel {
 
     rootUri: qt_property!(QString; NOTIFY rootUriChanged WRITE set_root_uri),
     rootUriChanged: qt_signal!(),
-    /// Display name of the search root ("Documents").
     rootName: qt_property!(QString; NOTIFY rootUriChanged),
-    /// Typed text; blank with filters lists everything that passes them.
+    /// Blank with filters lists everything that passes them.
     query: qt_property!(QString; NOTIFY filtersChanged),
     /// `substring` or `glob`.
     matchMode: qt_property!(QString; NOTIFY filtersChanged),
-    /// JSON array of `folder`, `image`, `video`, `audio`, `document`,
-    /// `archive`, `text`; empty means any.
+    /// JSON array of `folder`, `image`, `video`, `audio`, `document`, `archive`, `text`; empty =
+    /// any.
     types: qt_property!(QString; NOTIFY filtersChanged),
     /// `any`, `gt1m`, `gt10m`, `gt100m`, `lt100k`, `lt1m`.
     sizePreset: qt_property!(QString; NOTIFY filtersChanged),
@@ -74,11 +72,11 @@ pub struct SearchModel {
     hitCount: qt_property!(i32; NOTIFY progressChanged),
     folderCount: qt_property!(i32; NOTIFY progressChanged),
     errorCount: qt_property!(i32; NOTIFY progressChanged),
-    /// Why the whole search failed (`ErrorKind` name), empty when it did not.
+    /// `ErrorKind` name; empty when the search did not fail.
     errorKind: qt_property!(QString; NOTIFY progressChanged),
     errorMessage: qt_property!(QString; NOTIFY progressChanged),
     progressChanged: qt_signal!(),
-    /// Depth limit of the last search; -1 is unlimited (SRC-3).
+    /// -1 = unlimited.
     depthLimit: qt_property!(i32; NOTIFY progressChanged),
     recentSearchesJson: qt_property!(QString; NOTIFY recentChanged),
     recentChanged: qt_signal!(),
@@ -88,7 +86,6 @@ pub struct SearchModel {
     clear: qt_method!(fn(&mut self)),
     refreshRecent: qt_method!(fn(&mut self)),
     clearRecent: qt_method!(fn(&mut self)),
-    /// Whether the typed text or a filter narrows the search.
     canSearch: qt_method!(fn(&self) -> bool),
 
     rows: Vec<Row>,
@@ -239,8 +236,7 @@ impl SearchModel {
         }
     }
 
-    /// Starts (or restarts) the search; false when there is nothing to
-    /// search for or no root.
+    /// False when nothing to search for or no root.
     fn start(&mut self) -> bool {
         let (Some(core), Some(root)) = (core(), self.root()) else {
             return false;

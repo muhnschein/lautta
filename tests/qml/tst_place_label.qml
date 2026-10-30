@@ -1,13 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// PlaceLabel on the target (real Silica, §15.5): a line naming a server's
-// place has the small server icon right before the name, in the line's
-// colour, and a local place has none; text before the name stays before
-// the icon; a right-aligned line (a section header) ends at its right edge
-// with the icon against the name; too long a line keeps the icon and the
-// name inside the line. The search page marks its folder headers on a
-// server only. Fails naming the line that is laid out otherwise. Headless,
-// nothing is on screen: the lines are checked by their layout, not by
-// `visible`.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -20,7 +11,6 @@ ApplicationWindow {
     property bool scenarioRunning: true
     property int waited: 0
 
-    // Straight in the window: ids inside a page component are not seen here.
     Column {
         width: 540
 
@@ -89,7 +79,6 @@ ApplicationWindow {
             else if (kids[i].text !== undefined)
                 found.labels.push(kids[i])
         }
-        // Left to right: the text before the name, then the name.
         found.lead = found.labels[0]
         found.name = found.labels[1]
         return found

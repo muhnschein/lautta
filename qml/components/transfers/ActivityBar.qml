@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The activity bar (XFR-13, boards ActivityBar*): at the bottom of Browse and
-// every folder, what runs, what waits for an answer and what just ended. Tap
-// opens Activity (or the conflict waiting for an answer); a sideways swipe
-// hides it until something changes. The pages leave `space` free at the
-// end of their lists.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -13,20 +8,16 @@ import "TransferText.js" as TransferText
 Item {
     id: bar
 
-    // False while the page selects or is not on top.
     property bool allowed: true
     readonly property string mode: Transfers.barMode
     readonly property bool shown: allowed && mode !== "hidden" && mode.length > 0
-    // What the page keeps free under its list.
     readonly property real space: shown ? height : 0
-    // The lead transfer's summary (Transfers.summaryJson), re-read as it moves.
     property var summary: null
     readonly property bool problem: mode === "failed"
     readonly property bool asking: mode === "question"
-    // Open conflicts of the lead transfer.
     property int questions
 
-    // Hidden keeps the last summary so the bar fades out with its text.
+    // Hidden keeps last summary so bar fades out with its text.
     function reload() {
         if (Transfers.barMode === "hidden")
             return
@@ -94,7 +85,6 @@ Item {
 
         transform: Translate { x: handle.x }
 
-        // Opaque (UI-10); under the press highlight.
         BarBackground {
             anchors.fill: parent
             z: -1

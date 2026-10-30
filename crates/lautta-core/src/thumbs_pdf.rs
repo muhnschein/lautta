@@ -1,14 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Thumbnails of server PDFs (SPEC PRV-14; local ones are the system
-//! thumbnailer's, PRV-1): the first page, drawn by `lautta-pdf` as wide as
-//! the thumbnail and cut to a square from the top, as JPEG.
+//! Thumbnails of server PDFs (local ones are the system thumbnailer's): first page, drawn by
+//! `lautta-pdf` as wide as the thumbnail, cut to a square from the top, as JPEG.
 //!
-//! A phone has the CPU for one page at a time: [`PdfThumbs`] lets a render
-//! wait for the one before it, also when the delegate that asked has gone
-//! (a render cannot be stopped). A PDF that cannot be drawn, a render that
-//! panicked included (RS-4), is remembered, so scrolling back to it costs
-//! nothing, and one whose render took the process down (stack overflow,
-//! out of memory) is marked on disk, so the next start does not try it again.
+//! One page at a time on a phone CPU: [`PdfThumbs`] lets a render wait for the one before it, also
+//! when the asking delegate has gone (a render cannot be stopped). A PDF that cannot be drawn,
+//! panicking render included, is remembered, so scrolling back costs nothing; one whose render took
+//! the process down (stack overflow, OOM) is marked on disk, so the next start skips it.
 
 use crate::error::{Error, ErrorKind, Result};
 use crate::panics::catch;
@@ -21,7 +18,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, PoisonError};
 use tokio::sync::Semaphore;
 
-/// PDFs remembered as not drawable: the oldest are forgotten first.
+/// Oldest forgotten first.
 const MAX_REFUSED: usize = 256;
 
 fn unsupported(msg: &str) -> Error {
@@ -40,18 +37,15 @@ fn pdf_problem(e: PdfError) -> Error {
     unsupported(&e.to_string())
 }
 
-/// The first page of a PDF as a JPEG thumbnail: `size` pixels wide (less
-/// when the page is very tall, see `lautta_pdf::MAX_EDGE`) and, when the
-/// page is taller than wide, cut to a square from the top. Pure CPU work:
-/// call from a blocking context.
+/// `size` pixels wide (less when the page is very tall, see `lautta_pdf::MAX_EDGE`); cut to a
+/// square from the top when taller than wide. Pure CPU: call from a blocking context.
 pub fn first_page(bytes: Vec<u8>, size: u32) -> Result<Vec<u8>> {
     let doc = PdfDocument::open(bytes).map_err(pdf_problem)?;
     let page = doc.render(0, size).map_err(pdf_problem)?;
     let side = page.height.min(page.width);
     let width = page.width as usize;
-    // Pages are drawn on white, so every pixel is opaque and the alpha
-    // channel can go. `RenderedPage` has 4 bytes per pixel, rows top to
-    // bottom, no padding: the indices stay within `rgba`.
+    // Pages are drawn on white, so every pixel is opaque and alpha can go. `RenderedPage` is 4
+    // bytes per pixel, rows top to bottom, no padding: indices stay within `rgba`.
     let rgb = RgbImage::from_fn(page.width, side, |x, y| {
         let at = (y as usize * width + x as usize) * 4;
         Rgb([page.rgba[at], page.rgba[at + 1], page.rgba[at + 2]])
@@ -59,17 +53,15 @@ pub fn first_page(bytes: Vec<u8>, size: u32) -> Result<Vec<u8>> {
     encode(&DynamicImage::ImageRgb8(rgb))
 }
 
-/// `draw(bytes, size)`, with a panic in it (a PDF that trips hayro or the
-/// code around it) as a refusal of the PDF, not the end of the app (RS-4).
+/// A panic in `draw(bytes, size)` (a PDF tripping hayro or the code around it) refuses the PDF, not
+/// the app.
 fn drawn(draw: Draw, bytes: Vec<u8>, size: u32) -> Result<Vec<u8>> {
     catch(|| draw(bytes, size)).unwrap_or_else(|_| Err(unsupported("drawing the PDF failed")))
 }
 
-/// What draws a thumbnail: [`first_page`]; tests give one that panics.
 type Draw = fn(Vec<u8>, u32) -> Result<Vec<u8>>;
 
-/// Runs `work` between a marker file and its removal. A marker that is
-/// there already means an earlier run did not end, and `work` does not run.
+/// A marker already there means an earlier run did not end, and `work` does not run.
 fn guarded<T>(marker: &Path, work: impl FnOnce() -> Result<T>) -> Result<T> {
     if marker.exists() {
         return Err(unsupported("an earlier try at this PDF did not end"));
@@ -81,11 +73,8 @@ fn guarded<T>(marker: &Path, work: impl FnOnce() -> Result<T>) -> Result<T> {
     made
 }
 
-/// Turns, memory and a record of failures for PDF thumbnails.
 pub struct PdfThumbs {
-    /// The one render at a time.
     gate: Arc<Semaphore>,
-    /// File versions that cannot be drawn, oldest first.
     refused: Mutex<VecDeque<String>>,
 }
 
@@ -99,8 +88,8 @@ impl Default for PdfThumbs {
 }
 
 impl PdfThumbs {
-    /// Whether `version` (a file's URI, mtime and etag, see
-    /// `thumbs::thumb_key` with size 0) was found not drawable.
+    /// Whether `version` (URI, mtime and etag, see `thumbs::thumb_key` with size 0) was found not
+    /// drawable.
     pub fn is_refused(&self, version: &str) -> bool {
         self.refused
             .lock()
@@ -109,7 +98,6 @@ impl PdfThumbs {
             .any(|v| v == version)
     }
 
-    /// Remembers `version` as not drawable; true when that is new.
     fn refuse(&self, version: &str) -> bool {
         let mut list = self.refused.lock().unwrap_or_else(PoisonError::into_inner);
         if list.iter().any(|v| v == version) {
@@ -122,10 +110,9 @@ impl PdfThumbs {
         true
     }
 
-    /// The thumbnail of the PDF behind `handle`, `size` pixels wide. A file
-    /// larger than `max_bytes` is not read. `dir` holds the marker files and
-    /// `version` names the file's version (see [`PdfThumbs::is_refused`]);
-    /// a PDF that cannot be drawn is refused from then on.
+    /// `dir` holds the marker files; `version` names the file's version (see
+    /// [`PdfThumbs::is_refused`]). A file over `max_bytes` is not read; a PDF that cannot be drawn
+    /// is refused from then on.
     pub async fn make(
         &self,
         dir: &Path,
@@ -138,7 +125,6 @@ impl PdfThumbs {
             .await
     }
 
-    /// [`PdfThumbs::make`], drawn by `draw`.
     async fn make_with(
         &self,
         draw: Draw,
@@ -154,8 +140,8 @@ impl PdfThumbs {
         if handle.size().is_some_and(|s| s > max_bytes) {
             return Err(too_large());
         }
-        // A file that grew or lied about its size is cut one byte past the
-        // limit, so nothing larger is held in memory.
+        // A file that grew or lied about its size is cut one byte past the limit: nothing larger is
+        // held in memory.
         let bytes = read_all(handle, max_bytes.saturating_add(1)).await?;
         if bytes.len() as u64 > max_bytes {
             return Err(too_large());
@@ -173,9 +159,8 @@ impl PdfThumbs {
         made
     }
 
-    /// Runs `work` on the blocking pool when no other render runs. Dropping
-    /// the future before then cancels it; once it runs it goes on to its end
-    /// and holds its turn until then.
+    /// Dropping the future before it runs cancels it; once running it goes to its end and holds its
+    /// turn.
     async fn exclusive<T: Send + 'static>(&self, work: impl FnOnce() -> T + Send + 'static) -> Result<T> {
         let turn = Arc::clone(&self.gate).acquire_owned().await.map_err(internal)?;
         tokio::task::spawn_blocking(move || {
@@ -194,7 +179,6 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
-    /// A4 with a red square (50 pt) in the top left corner.
     const RED_TOP_LEFT: &str = "1 0 0 rg 0 792 50 50 re f";
     const BLUE_PAGE: &str = "0 0 1 rg 0 0 595 842 re f";
 
@@ -319,7 +303,6 @@ mod tests {
         assert_eq!(ran.load(Ordering::Relaxed), 0, "nothing renders unmarked");
     }
 
-    /// A handle over `data` that counts reads and may claim another size.
     struct Counting {
         data: Vec<u8>,
         size: Option<u64>,
@@ -495,7 +478,6 @@ mod tests {
         );
     }
 
-    /// A draw that trips over the PDF as hayro might.
     fn boom(_: Vec<u8>, _: u32) -> Result<Vec<u8>> {
         panic!("hayro tripped")
     }
@@ -565,8 +547,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 
-    /// Jobs for `exclusive` that count how many run at once and wait for
-    /// `release`.
+    /// Jobs for `exclusive` that count how many run at once and wait for `release`.
     struct Probe {
         running: AtomicUsize,
         peak: AtomicUsize,

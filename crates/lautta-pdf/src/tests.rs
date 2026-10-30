@@ -38,7 +38,6 @@ fn a_page_renders_at_the_asked_width_on_white() {
     let r = doc.render(0, 200).unwrap();
     assert_eq!((r.width, r.height), (200, 400), "twice the points, aspect kept");
     assert_eq!(r.rgba.len(), 200 * 400 * 4);
-    // PDF y grows upwards: the square sits in the bottom left corner.
     assert_eq!(pixel(&r, 20, 380), RED);
     assert_eq!(pixel(&r, 180, 20), WHITE_PX, "the background is white");
     assert_eq!(pixel(&r, 120, 380), WHITE_PX, "the square ends at 50 pt");
@@ -46,7 +45,6 @@ fn a_page_renders_at_the_asked_width_on_white() {
 
 #[test]
 fn annotations_are_drawn_like_the_page() {
-    // A square annotation whose appearance fills it red, over a blank page.
     let mut doc = super::sample::Doc::new(vec![page(100, 100, "")]);
     let appearance = doc.ahead(1);
     let annot = doc.object(&format!(
@@ -80,7 +78,6 @@ fn rotated_pages_are_shown_upright() {
     );
     let r = doc.render(0, 200).unwrap();
     assert_eq!((r.width, r.height), (200, 100));
-    // Turned clockwise: the bottom left corner moves to the top left.
     assert_eq!(pixel(&r, 10, 10), RED);
     assert_eq!(pixel(&r, 10, 90), WHITE_PX);
 }
@@ -114,8 +111,7 @@ fn a_damaged_cross_reference_table_is_repaired() {
 
 #[test]
 fn password_protected_documents_are_named_as_such() {
-    // Standard security handler, revision 3, with an /O and /U that match
-    // no password; the empty password does not open it.
+    // standard security handler rev 3, /O and /U matching no password
     let mut bytes = build(&[page(100, 100, RED_SQUARE)]);
     let at = bytes.windows(7).position(|w| w == b"trailer").unwrap();
     let tail = String::from_utf8(bytes.split_off(at)).unwrap();
@@ -149,15 +145,12 @@ fn renders_stay_within_the_edge_limit() {
         (render_scale(a4, 0) - 1.0 / 595.0).abs() < 1e-9,
         "at least one pixel"
     );
-    // Wider than the edge limit: clamped to it.
     assert!((render_scale(a4, 100_000) * 842.0 - MAX_EDGE as f32).abs() < 0.01);
-    // A long strip: the height, not the asked width, decides.
     let strip = PageSize {
         width: 100.0,
         height: 10_000.0,
     };
     assert!((render_scale(strip, 1000) * 10_000.0 - MAX_EDGE as f32).abs() < 0.01);
-    // Degenerate sizes do not divide by zero.
     let zero = PageSize {
         width: 0.0,
         height: 0.0,

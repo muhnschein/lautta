@@ -1,10 +1,6 @@
 name: Mutation
-# The full mutation check (SPEC TST-5): every mutant in the mutated files, in
-# 8 parallel shards of about 30 minutes each. Pull requests only check the
-# lines they change (ci.yml); this runs the whole set weekly on main, from the
-# Actions tab before a release (Run workflow, any branch), and on pull
-# requests that change the mutation setup itself, since a diff cannot tell
-# what a new file in the list or a new exclusion lets through.
+# Full mutation check, 8 shards. Weekly on main, by hand before a release, and on PRs
+# changing the mutation setup (a diff can't show what a new file or exclusion lets through).
 on:
   schedule:
     - cron: '17 2 * * 1'  # Mondays 02:17 UTC
@@ -25,8 +21,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 jobs:
-  # A scheduled run is skipped when main has not moved since the last
-  # successful one.
+  # Scheduled run skipped when main unchanged since last success.
   changed:
     name: Main changed since the last run
     runs-on: ubuntu-24.04
@@ -79,8 +74,7 @@ jobs:
           name: mutants-${{ matrix.shard }}
           path: mutants.out/*.txt
 
-  # Nobody watches a scheduled run, so a failure opens an issue (or comments on
-  # the one still open) instead of only turning the Actions tab red.
+  # Nobody watches scheduled runs: failure opens or updates an issue.
   report:
     name: Report a failed weekly run
     needs: mutation

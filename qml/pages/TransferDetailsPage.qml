@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// One transfer: progress, where it goes, and its items (SPEC §11, board
-// TransferDetails). Item failures show the translated error (SPEC §20).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -12,7 +10,6 @@ Page {
     id: page
 
     property int transferId
-    // The header numbers; null when the transfer no longer exists.
     readonly property var s: items.summaryJson.length > 0 ? JSON.parse(items.summaryJson) : null
     readonly property bool running: s !== null && (s.state === "running" || s.state === "scanning" || s.state === "queued")
     readonly property bool finished: s !== null && (s.state === "completed" || s.state === "failed" || s.state === "canceled")

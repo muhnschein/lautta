@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Connection loss and reconnecting with backoff (SPEC NVB-12).
-//!
-//! The exact 1, 2, 4, 8, 15 s schedule is checked on a paused clock while no
-//! I/O is in flight (an idle runtime jumps a paused clock to the next timer,
-//! which would fire timeouts around I/O at once). Everything that needs a live
-//! connection runs in real time on the same schedule at a twentieth of it.
+//! Backoff schedule is checked on a paused clock while no I/O is in flight (idle runtime jumps a
+//! paused clock to the next timer, firing timeouts around I/O at once). Live-connection tests run
+//! real time at 1/20 of it.
 
 mod bridge_support;
 
@@ -27,7 +24,6 @@ fn secs(n: u64) -> Duration {
     Duration::from_secs(n)
 }
 
-/// Gaps between the connections the bridge saw, from the second on.
 fn gaps(rig: &Rig) -> Vec<Duration> {
     let times = rig.fake.accept_times();
     times.windows(2).map(|w| w[1].duration_since(w[0])).collect()
@@ -43,14 +39,13 @@ async fn a_lost_connection_is_re_established() {
     rig.fake.set_accepting(false);
     rig.fake.disconnect_clients().await;
     rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
-    // The locations stay on screen as "Reconnecting…" (NVB-12).
     assert_eq!(rig.client.locations().len(), 1);
     let e = provider
         .stat(&VPath::root(), true, Lane::Interactive)
         .await
         .unwrap_err();
     assert_eq!(e.kind, ErrorKind::ConnectionLost);
-    assert!(e.kind.is_transient(), "transfers wait and resume (XFR-12)");
+    assert!(e.kind.is_transient(), "transfers wait and resume");
 
     rig.fake.set_accepting(true);
     rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
@@ -60,7 +55,6 @@ async fn a_lost_connection_is_re_established() {
         .await
         .unwrap();
 
-    // A discovery the user asked for is asked for again.
     rig.fake
         .set_nearby(vec![WireNearby {
             name: "NAS".into(),
@@ -77,10 +71,9 @@ async fn attempts_back_off_in_doubling_steps_and_start_over() {
     let rig = Rig::ready_with(quick_backoff).await;
     rig.fake.set_accepting(false);
     rig.fake.disconnect_clients().await;
-    // The initial connection, then six attempts that the bridge turns away.
     eventually("six attempts", || rig.fake.accept_times().len() >= 7).await;
     let g = gaps(&rig);
-    // Lower bounds are exact (a timer never fires early); upper ones leave room for a loaded machine.
+    // Lower bounds exact (timer never fires early); upper bounds leave room for a loaded machine.
     for (got, want) in g
         .iter()
         .zip([ms(50), ms(100), ms(200), ms(400), ms(750), ms(750)])
@@ -96,7 +89,6 @@ async fn attempts_back_off_in_doubling_steps_and_start_over() {
     }
     assert_eq!(rig.client.status(), BridgeStatus::Reconnecting);
 
-    // The bridge comes back, and the next loss starts at the first step again.
     rig.fake.set_accepting(true);
     rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
     rig.fake.set_accepting(false);
@@ -115,7 +107,7 @@ async fn the_background_does_not_reconnect_and_coming_back_does_at_once() {
     rig.fake.disconnect_clients().await;
     rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
     let accepted = rig.fake.accept_times().len();
-    sleep(ms(600)).await; // twelve first steps
+    sleep(ms(600)).await;
     assert_eq!(
         rig.fake.accept_times().len(),
         accepted,
@@ -173,20 +165,17 @@ async fn a_missing_socket_is_polled_while_in_the_foreground() {
     .await;
     rig.client.wait_status(|s| s == BridgeStatus::Absent).await;
     rig.listen();
-    // No poke: the poll finds it.
     rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
 }
 
 #[tokio::test]
 async fn a_socket_without_a_bridge_behind_it_is_standalone_not_an_error() {
     let rig = Rig::ready_with(quick_backoff).await;
-    // The socket file remains but nothing answers (stale after a crash).
     rig.fake.set_accepting(false);
     rig.fake.disconnect_clients().await;
     rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
     assert!(rig.paths.bridge_socket().exists());
 
-    // A fresh start against such a socket shows no network locations and no message.
     let fresh = BridgeClient::start(bridge_support::config(&rig.paths), Questions::new()).unwrap();
     fresh.wait_status(|s| s == BridgeStatus::Absent).await;
     assert!(fresh.locations().is_empty());
@@ -201,7 +190,6 @@ async fn a_socket_without_a_bridge_behind_it_is_standalone_not_an_error() {
 
 #[tokio::test]
 async fn a_silent_bridge_is_given_up_on_after_the_handshake_timeout() {
-    // A server that accepts the socket but never speaks the protocol.
     let home = tempfile::tempdir().unwrap();
     let paths = lautta_core::paths::AppPaths::new(home.path());
     std::fs::create_dir_all(paths.bridge_socket().parent().unwrap()).unwrap();
@@ -224,8 +212,6 @@ async fn a_silent_bridge_is_given_up_on_after_the_handshake_timeout() {
     hold.abort();
 }
 
-/// The default schedule, exactly: 1, 2, 4, 8 s, then every 15 s (NVB-12). No
-/// socket is left, so an attempt fails at once and only timers are in play.
 #[tokio::test(start_paused = true)]
 async fn the_default_schedule_is_1_2_4_8_then_every_15_seconds() {
     let mut rig = Rig::ready().await;
@@ -235,7 +221,6 @@ async fn the_default_schedule_is_1_2_4_8_then_every_15_seconds() {
     let t0 = Instant::now();
     let before = rig.client.connection_attempts();
 
-    // Attempts are due 1, 3, 7, 15, 30, 45 and 60 s after the loss.
     for (k, due) in [1u64, 3, 7, 15, 30, 45, 60].into_iter().enumerate() {
         tokio::time::sleep_until(t0 + secs(due) - ms(100)).await;
         assert_eq!(
@@ -253,7 +238,6 @@ async fn the_default_schedule_is_1_2_4_8_then_every_15_seconds() {
     assert_eq!(rig.client.status(), BridgeStatus::Reconnecting);
 }
 
-/// While in the background nothing is attempted, however long it takes.
 #[tokio::test(start_paused = true)]
 async fn the_background_holds_every_attempt_on_a_paused_clock() {
     let mut rig = Rig::ready().await;

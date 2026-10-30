@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The transfer engine: owns the queue, starts items the scheduler picks,
-//! reacts to their results, persists every change (XFR-11) and publishes
-//! events. All queue state lives behind one `std::sync::Mutex` that is never
-//! held across an `.await`; item tasks are plain tokio tasks that can be
-//! aborted (pause, cancel, waiting) because every state change they make is
-//! one synchronous function (so an abort never lands halfway through).
+//! Transfer engine: owns the queue, starts items the scheduler picks, reacts to results, persists
+//! every change and publishes events. Queue state lives behind one `std::sync::Mutex` never held
+//! across `.await`; item tasks are plain tokio tasks, abortable (pause, cancel, waiting) because
+//! each state change they make is one synchronous function, so an abort never lands halfway.
 
 use super::clock::{Clock, SystemClock};
 use super::exec::{self, ItemEnv, ItemJob, Outcome};
@@ -29,15 +27,14 @@ use tokio::task::AbortHandle;
 
 #[derive(Debug, Clone)]
 pub struct EngineConfig {
-    /// First retry delay; doubled for each further retry (XFR-9: 1 s, 2 s, 4 s).
+    /// First retry delay; doubled per retry (1 s, 2 s, 4 s).
     pub backoff_base: Duration,
     /// Retries of a transient error before the item fails or the transfer waits.
     pub max_retries: u32,
     /// Where anonymous scratch files go (the app's cache folder).
     pub scratch_dir: PathBuf,
-    /// History retention (XFR-10).
     pub retention_days: u32,
-    /// Minimum spacing of `Progress` events per transfer (NVB-10: 4 Hz).
+    /// Minimum spacing of `Progress` events per transfer (4 Hz).
     pub progress_event_interval_ms: i64,
 }
 
@@ -53,7 +50,6 @@ impl Default for EngineConfig {
     }
 }
 
-/// What the engine needs from the rest of the app.
 #[derive(Clone)]
 pub struct EngineDeps {
     pub db: Db,
@@ -154,13 +150,11 @@ struct Inner {
     rt: tokio::runtime::Handle,
 }
 
-/// The public handle; cheap to clone.
 #[derive(Clone)]
 pub struct Engine {
     inner: Arc<Inner>,
 }
 
-/// What an item task does after a result was recorded.
 enum Next {
     Stop,
     Rerun,
@@ -228,8 +222,8 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T> + Send + 'sta
 }
 
 impl Engine {
-    /// Creates the engine. Must be called inside a tokio runtime. Call
-    /// [`Engine::load`] afterwards to bring back the persisted queue.
+    /// Must be called inside a tokio runtime; call [`Engine::load`] afterwards to restore the
+    /// queue.
     pub fn new(deps: EngineDeps, cfg: EngineConfig) -> Engine {
         let store = Store::new(deps.db.clone());
         let (events, _) = broadcast::channel(1024);
@@ -255,9 +249,8 @@ impl Engine {
         self.inner.events.subscribe()
     }
 
-    /// Loads the persisted queue (XFR-11): unfinished transfers come back
-    /// paused, resumed at once when `auto_resume`. Also purges old history
-    /// (XFR-10). Returns the number of unfinished transfers.
+    /// Unfinished transfers come back paused, resumed at once when `auto_resume`. Also purges old
+    /// history. Returns the number of unfinished transfers.
     pub async fn load(&self, auto_resume: bool) -> Result<usize> {
         let store = self.inner.store.clone();
         let (now, days) = (self.inner.deps.clock.now_ms(), self.inner.cfg.retention_days);
@@ -286,7 +279,6 @@ impl Engine {
         Ok(resumable.len())
     }
 
-    /// Queues a plan as a transfer and returns its id (XFR-1).
     pub async fn add(&self, plan: Plan, title: &str, options: TransferOptions) -> Result<TransferId> {
         let mut t = Transfer::from_plan(0, plan, title, options, self.inner.deps.clock.now_ms());
         let store = self.inner.store.clone();
@@ -306,7 +298,6 @@ impl Engine {
         Ok(id)
     }
 
-    /// All transfers in queue order.
     pub fn list(&self) -> Vec<TransferSummary> {
         let st = self.inner.lock();
         let mut all: Vec<TransferSummary> = st.live.values().map(Live::summary).collect();
@@ -326,8 +317,7 @@ impl Engine {
             .ok_or_else(|| not_found(id))
     }
 
-    /// The first item's plan, for the list's direction icon (XFR-8) without
-    /// cloning a 100 000 item plan.
+    /// First item's plan for the list's direction icon, without cloning a 100 000 item plan.
     pub fn first_item(&self, id: TransferId) -> Option<PlanItem> {
         let st = self.inner.lock();
         st.live.get(&id)?.t.items.first().map(|i| i.plan.clone())
@@ -413,7 +403,7 @@ impl Engine {
         self.inner.cancel_locked(&mut st, id)
     }
 
-    /// *Retry failed* (XFR-9): only the failed items run again.
+    /// *Retry failed*: only failed items run again.
     pub fn retry_failed(&self, id: TransferId) -> Result<()> {
         let mut st = self.inner.lock();
         self.inner.retry_locked(&mut st, id)
@@ -441,8 +431,8 @@ impl Engine {
         true
     }
 
-    /// Answers a conflict (OPS-2). `apply_to_all` also settles the other open
-    /// questions that allow the choice and answers future ones the same way.
+    /// `apply_to_all` also settles other open questions that allow the choice and answers future
+    /// ones the same way.
     pub fn answer(
         &self,
         id: TransferId,
@@ -454,8 +444,7 @@ impl Engine {
         self.inner.answer_locked(&mut st, id, item, choice, apply_to_all)
     }
 
-    /// The bridge came or went (NVB-12). Transfers on bridge locations wait
-    /// and resume by themselves.
+    /// Transfers on bridge locations wait and resume by themselves.
     pub fn bridge_available(&self, up: bool) {
         let mut st = self.inner.lock();
         st.bridge_up = up;
@@ -463,7 +452,6 @@ impl Engine {
         self.inner.pump(&mut st);
     }
 
-    /// Network reachability as reported by the bridge (XFR-7).
     pub fn network_available(&self, up: bool) {
         let mut st = self.inner.lock();
         st.network_up = up;
@@ -484,20 +472,19 @@ impl Engine {
         self.inner.pump(&mut st);
     }
 
-    /// Concurrency of a remote location, 1 to 6 (XFR-2).
+    /// 1 to 6.
     pub fn set_remote_limit(&self, location: &str, limit: usize) {
         let mut st = self.inner.lock();
         st.sched.set_remote_limit(location, limit);
         self.inner.pump(&mut st);
     }
 
-    /// True while any transfer is queued or running: hold `KeepAlive` (XFR-5).
+    /// Hold `KeepAlive` while true.
     pub fn is_busy(&self) -> bool {
         self.inner.lock().busy
     }
 
-    /// Transfers still unfinished, for the "will resume when you open Lautta
-    /// again" notification (XFR-6).
+    /// Unfinished transfers, for the "will resume when you open Lautta again" notification.
     pub fn pending_summary(&self) -> usize {
         self.inner
             .lock()
@@ -507,7 +494,6 @@ impl Engine {
             .count()
     }
 
-    /// Removes a finished transfer from the history.
     pub fn forget(&self, id: TransferId) -> Result<()> {
         let mut st = self.inner.lock();
         let state = st.live.get(&id).ok_or_else(|| not_found(id))?.t.state;
@@ -520,7 +506,6 @@ impl Engine {
         Ok(())
     }
 
-    /// Removes finished transfers older than the retention (XFR-10).
     pub async fn purge_history(&self) -> Result<usize> {
         let store = self.inner.store.clone();
         let (now, days) = (self.inner.deps.clock.now_ms(), self.inner.cfg.retention_days);
@@ -533,7 +518,6 @@ impl Engine {
         Ok(n)
     }
 
-    /// Waits until everything queued so far is written to the database.
     pub async fn flush(&self) {
         let (tx, rx) = oneshot::channel();
         if self.inner.writer.send(Cmd::Flush(tx)).is_ok() {
@@ -541,8 +525,6 @@ impl Engine {
         }
     }
 }
-
-// ------------------------------------------------------------ internals
 
 impl Inner {
     fn lock(&self) -> MutexGuard<'_, State> {
@@ -587,7 +569,6 @@ impl Inner {
         st.live.get_mut(&id).ok_or_else(|| not_found(id))
     }
 
-    /// Registers a freshly inserted transfer.
     fn register(&self, st: &mut State, t: Transfer) {
         let live = Live::new(t);
         let op = live.t.kind;
@@ -596,7 +577,6 @@ impl Inner {
         st.live.insert(live.t.id, live);
     }
 
-    /// Takes a transfer loaded from the database into the queue (XFR-11).
     fn adopt(&self, st: &mut State, mut t: Transfer) {
         let id = t.id;
         if t.state.is_finished() {
@@ -627,7 +607,6 @@ impl Inner {
         self.emit(TransferEvent::Added(id));
     }
 
-    /// Changes state through the transition table and tells everyone.
     fn set_state(&self, st: &mut State, id: TransferId, to: TransferState) -> Result<()> {
         let now = self.deps.clock.now_ms();
         let live = self.live_mut(st, id)?;
@@ -647,8 +626,7 @@ impl Inner {
         Ok(())
     }
 
-    /// Stops the running items of a transfer (their partial files stay for
-    /// resume, XFR-12), puts them back in line and moves to `to`.
+    /// Partial files stay for resume; items go back in line and state moves to `to`.
     fn suspend(&self, st: &mut State, id: TransferId, to: TransferState) -> Result<()> {
         let live = st.live.get_mut(&id).ok_or_else(|| not_found(id))?;
         let op = live.t.kind;
@@ -784,7 +762,6 @@ impl Inner {
         Ok(())
     }
 
-    /// The reason this transfer cannot run right now, if any.
     fn blocked_reason(st: &State, live: &Live) -> Option<WaitReason> {
         let remote = live.locations.iter().any(|l| is_bridge_location(l));
         if remote && !st.bridge_up {
@@ -799,7 +776,6 @@ impl Inner {
             .then_some(WaitReason::Volume)
     }
 
-    /// Puts transfers into or out of the bridge, network and volume waits.
     fn apply_gates(self: &Arc<Self>, st: &mut State) {
         let decisions: Vec<(TransferId, TransferState, Option<WaitReason>)> = st
             .live
@@ -840,7 +816,6 @@ impl Inner {
         }
     }
 
-    /// Starts whatever the scheduler allows.
     fn pump(self: &Arc<Self>, st: &mut State) {
         for pick in st.sched.start_runnable() {
             if st.live.get(&pick.transfer).map(|l| l.t.state) == Some(TransferState::Queued) {
@@ -859,7 +834,6 @@ impl Inner {
         }
     }
 
-    /// Completes the transfer once every item is settled (XFR-9).
     fn maybe_finish(self: &Arc<Self>, st: &mut State, id: TransferId) {
         let Some(live) = st.live.get_mut(&id) else {
             return;
@@ -897,8 +871,8 @@ impl Inner {
         self.complete(st, id);
     }
 
-    /// OPS-4: after the files are verified and gone, empty source folders go
-    /// too, deepest first. A folder that still holds something stays.
+    /// After files are verified and gone, empty source folders go too, deepest first; a folder
+    /// still holding something stays.
     async fn remove_moved_dirs(&self, mut dirs: Vec<Uri>) {
         dirs.sort_by_key(|d| std::cmp::Reverse(d.path.depth()));
         for dir in dirs {
@@ -937,8 +911,6 @@ impl Inner {
         self.emit(TransferEvent::Finished(id));
     }
 
-    // --------------------------------------------------- item results
-
     fn on_progress(&self, id: TransferId, seq: u32, done: u64) {
         let now = self.deps.clock.now_ms();
         let mut st = self.lock();
@@ -965,7 +937,6 @@ impl Inner {
         }
     }
 
-    /// Detaches a finished item from its transfer's running set.
     fn release(&self, st: &mut State, pick: ItemRef) {
         if let Some(live) = st.live.get_mut(&pick.transfer) {
             live.running.remove(&pick.seq);
@@ -1092,7 +1063,6 @@ impl Inner {
         }
     }
 
-    /// Decides what an item task does after `run_item` returned.
     fn on_result(
         self: &Arc<Self>,
         pick: ItemRef,
@@ -1222,7 +1192,6 @@ impl Inner {
         st.sched.requeue(id, [(seq, barrier)]);
     }
 
-    /// Reads what an item task needs and resolves its providers.
     fn prepare(self: &Arc<Self>, pick: ItemRef) -> Option<Prepared> {
         let (plan, temp_name, op, options) = {
             let mut st = self.lock();
@@ -1272,8 +1241,7 @@ impl Inner {
     }
 }
 
-/// One item from start to settled: retries transient errors with backoff
-/// (XFR-9), keeps the partial file for resume (XFR-12).
+/// Retries transient errors with backoff, keeps partial file for resume.
 async fn run_item_task(inner: Arc<Inner>, pick: ItemRef) {
     let Some(Prepared { env, mut job }) = inner.prepare(pick) else {
         return;

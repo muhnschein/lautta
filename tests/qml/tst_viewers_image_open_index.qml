@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// The image viewer opened on an image past the folder's first (PRV-4, real
-// Silica and Lautta types): it shows that image from the start and stays on
-// it when the folder's listing comes in: no other image shown, no slide.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -14,7 +11,6 @@ ApplicationWindow {
     property int step: 0
     property int waited: 0
     property var viewer
-    // The view shown: the viewer makes a new one for the listing.
     readonly property var view: viewer ? viewer.slideshow : null
     onViewChanged: {
         if (step === 0 && view && view.moving)
@@ -29,7 +25,6 @@ ApplicationWindow {
         target: Operations
         onRemoved: window.cleaned = true
     }
-    // Makes the test's folder.
     DirectoryModel {
         id: pictures
         uri: "lautta://user-pictures/"
@@ -46,7 +41,6 @@ ApplicationWindow {
         return ok
     }
 
-    // Every change while opening, not just what a poll sees.
     Connections {
         target: window.viewer
         ignoreUnknownSignals: true
@@ -81,7 +75,6 @@ ApplicationWindow {
                 window.expect(window.view.currentIndex === 2 && window.viewer.currentUri === window.opened,
                               "on the opened image: " + window.view.currentIndex + " " + window.viewer.currentUri)
                 window.expect(!window.view.moving, "settled")
-                // Leave Pictures as it was for the scenarios after this one.
                 window.cleaned = false
                 Operations.remove(JSON.stringify([window.folder.slice(0, -1)]))
                 break
@@ -102,7 +95,6 @@ ApplicationWindow {
         tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), folder + "a.jpg")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), folder + "b.jpg")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), opened)
-        // Animated, as from a folder: the listing comes in while the page slides in.
         viewer = pageStack.push(viewerComponent)
     }
 

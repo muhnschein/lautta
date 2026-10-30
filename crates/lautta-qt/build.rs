@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Compiles the C++ glue in `cpp!` blocks. Qt is located through
-//! QT_INCLUDE_PATH/QT_LIBRARY_PATH (set by the rpm build, where build scripts
-//! cannot run the target's qmake under scratchbox2) or `qmake -query` on the
-//! host. With the `sailfish` feature the glue uses libsailfishapp
-//! (SAILFISHAPP_INCLUDE_PATH, default /usr/include/sailfishapp).
+//! Compiles C++ glue in `cpp!` blocks. Qt via QT_INCLUDE_PATH/QT_LIBRARY_PATH (rpm build: no target
+//! qmake under scratchbox2) or `qmake -query`. `sailfish` feature: libsailfishapp via
+//! SAILFISHAPP_INCLUDE_PATH (default /usr/include/sailfishapp).
 
 use std::process::Command;
 
@@ -38,8 +36,6 @@ fn main() {
         });
     }
     if sailfish {
-        // The cross build (tools/ci/cross-build.sh) points into the target's
-        // sysroot.
         let sailfishapp = std::env::var("SAILFISHAPP_INCLUDE_PATH")
             .ok()
             .filter(|v| !v.is_empty())

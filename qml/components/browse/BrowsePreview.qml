@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// A half-size picture of the Browse page for Settings › Browse page (BRW-12),
-// as Salama's start page preview: the real rows, drawn small, with their
-// status icons, following every change. Takes no input.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -13,7 +10,6 @@ import "RowStatus.js" as RowStatus
 Item {
     id: preview
 
-    // The settings page's size, which is the Browse page's size.
     property real screenWidth
     property real screenHeight
     readonly property real miniature: 0.5
@@ -40,7 +36,6 @@ Item {
             color: Theme.rgba(Theme.primaryColor, Theme.opacityLow)
         }
 
-        // Full size scaled down, so the layout matches the real page.
         ListView {
             width: preview.screenWidth
             height: preview.screenHeight

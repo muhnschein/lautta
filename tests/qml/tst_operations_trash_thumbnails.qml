@@ -1,11 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Scenario on the target (real Silica): the Trash page draws a trashed image
-// with the thumbnail of its stored copy and its type from the original name
-// (OPS-8, PRV-1), a trashed PDF the same way, asking the system thumbnailer
-// with the PDF type (PRV-14), a trashed text file with its glyph, and no
-// thumbnail at all once the Thumbnails setting is off (BRW-4). Whether the
-// system thumbnailer draws the picture, and how it looks, only a phone shows:
-// here it draws nothing (no scene graph: a `Thumbnail` stays `Null`).
 import QtQuick 2.6
 import QtQml 2.2
 import Sailfish.Silica 1.0
@@ -26,7 +19,6 @@ ApplicationWindow {
 
     ViewerTools { id: tools }
 
-    // The ids of the rows, to clean up with.
     TrashModel { id: ids }
 
     Instantiator {
@@ -64,7 +56,6 @@ ApplicationWindow {
         scenarioRunning = false
     }
 
-    // A flickable's content item is one of its children too: each item once.
     function findAll(item, pred, out, seen) {
         seen = seen || []
         if (!item || seen.indexOf(item) >= 0)
@@ -80,7 +71,6 @@ ApplicationWindow {
         return out
     }
 
-    // The delegate showing `title`, undefined while it is not there.
     function rowOf(title) {
         var names = findAll(page, function(x) { return x.text === title && x.truncationMode !== undefined }, [])
         var row = names.length === 1 ? names[0] : undefined
@@ -89,7 +79,6 @@ ApplicationWindow {
         return row
     }
 
-    // What the row's icon is made of: the thumbnail icon and the glyph.
     function iconsOf(row) {
         return {
             "thumbnail": findAll(row, function(x) { return x.thumbnailSource !== undefined && x.thumbnailReady !== undefined }, [])[0],
@@ -146,7 +135,6 @@ ApplicationWindow {
                 var text = win.iconsOf(noteRow)
                 if (text.thumbnail.visible || !text.glyph.visible)
                     return win.fail("a text file keeps its glyph")
-                // The system thumbnailer draws a PDF only when told its type.
                 var sheet = win.iconsOf(paperRow)
                 if (!sheet.thumbnail || !sheet.thumbnail.visible || sheet.glyph.visible)
                     return win.fail("the PDF shows its thumbnail icon, not the glyph")
@@ -157,7 +145,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 3:
-                // The system thumbnailer is asked for the stored copy as a PDF.
                 var asked = win.iconsOf(win.rowOf(win.paper)).thumbnail
                 var system = win.findAll(asked, function(x) { return x.priority !== undefined && x.mimeType !== undefined }, [])[0]
                 if (!system || String(system.source) !== asked.thumbnailSource || system.mimeType !== "application/pdf")
@@ -171,7 +158,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 4:
-                // The reload replaces the rows: wait for the new rows.
                 var again = win.rowOf(win.photo)
                 var paperAgain = win.rowOf(win.paper)
                 if (!again || !paperAgain)

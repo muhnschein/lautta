@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! uid/gid to name resolution by parsing `/etc/passwd` and `/etc/group`
-//! (BRW-1 owner/group). No NSS: the sandbox only sees the plain files, and
-//! unknown ids fall back to their number.
+//! uid/gid to name by parsing `/etc/passwd` and `/etc/group`. No NSS: sandbox sees only the plain
+//! files; unknown ids fall back to the number.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -13,7 +12,6 @@ struct Tables {
     groups: HashMap<u32, String>,
 }
 
-/// Lazily loaded, cached id to name tables.
 pub struct Names {
     passwd: PathBuf,
     group: PathBuf,
