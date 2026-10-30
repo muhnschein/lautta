@@ -537,6 +537,14 @@
       "w": 860,
       "x": 6200,
       "y": 2060
+    },
+    "ServerIcon.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Server icon \u00b7 server and globe variants",
+      "w": 860,
+      "x": 7080,
+      "y": 2060
     }
   },
   "createdOnFiles": {
@@ -653,6 +661,7 @@
     "GridIcons.dc.html",
     "TextThumbFullPlainIcon.dc.html",
     "DocumentGlyph.dc.html",
+    "ServerIcon.dc.html",
     "StateEmpty.dc.html",
     "StateNoAccess.dc.html",
     "StateOffline.dc.html",

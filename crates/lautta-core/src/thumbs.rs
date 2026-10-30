@@ -383,7 +383,7 @@ struct Pending {
 
 #[derive(Default)]
 struct LocationJobs {
-    running: HashMap<String, tokio::task::AbortHandle>,
+    running: HashMap<String, futures::future::AbortHandle>,
     /// Newest first: the most recent request is the visible one.
     pending: VecDeque<Pending>,
 }
@@ -409,10 +409,15 @@ struct SlotGuard {
     rt: tokio::runtime::Handle,
     location: String,
     key: String,
+    started: bool,
 }
 
 impl Drop for SlotGuard {
     fn drop(&mut self) {
+        // Never polled: runtime shut down, maybe dropped it inside `pump` under the lock.
+        if !self.started {
+            return;
+        }
         let mut st = lock_jobs(&self.state);
         st.keys.remove(&self.key);
         if let Some(loc) = st.locations.get_mut(&self.location) {
@@ -430,18 +435,21 @@ fn pump(st: &mut JobState, shared: &SharedJobs, rt: &tokio::runtime::Handle, loc
         let Some(next) = loc.pending.pop_front() else {
             break;
         };
-        let guard = SlotGuard {
+        let mut guard = SlotGuard {
             state: Arc::clone(shared),
             rt: rt.clone(),
             location: location.to_owned(),
             key: next.key.clone(),
+            started: false,
         };
-        let job = next.job;
-        let handle = rt.spawn(async move {
+        // Not tokio's abort: that drops a task unpolled, skipping its guard.
+        let (job, abort) = futures::future::abortable(next.job);
+        rt.spawn(async move {
+            guard.started = true;
             let _slot = guard;
-            job.await;
+            let _ = job.await;
         });
-        loc.running.insert(next.key, handle.abort_handle());
+        loc.running.insert(next.key, abort);
     }
     if loc.running.is_empty() && loc.pending.is_empty() {
         st.locations.remove(location);
@@ -1246,6 +1254,39 @@ mod tests {
         gate.notify_waiters();
         settle().await;
         assert_eq!(jobs.running("loc"), 0);
+    }
+
+    #[tokio::test]
+    async fn cancelling_a_job_before_it_first_runs_frees_its_slot() {
+        let jobs = ThumbJobs::new(tokio::runtime::Handle::current());
+        let p = probe();
+        let gate = Arc::new(Notify::new());
+        jobs.request("a", "loc", gated(&p, "a", Arc::clone(&gate)));
+        assert_eq!(jobs.running("loc"), 1, "started, not yet run");
+        assert!(jobs.cancel("a"));
+        settle().await;
+        assert_eq!(jobs.running("loc"), 0);
+        assert!(started(&p).is_empty(), "a never ran");
+    }
+
+    #[test]
+    fn a_runtime_dropped_with_jobs_running_and_queued_shuts_down() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let jobs = ThumbJobs::new(rt.handle().clone());
+        let p = probe();
+        let gate = Arc::new(Notify::new());
+        rt.block_on(async {
+            for name in ["a", "b", "c"] {
+                jobs.request(name, "loc", gated(&p, name, Arc::clone(&gate)));
+            }
+            settle().await;
+        });
+        // Freed slots start "c" on a runtime that is shutting down.
+        drop(rt);
+        assert_eq!(started(&p), ["a", "b"], "c never ran");
     }
 
     #[tokio::test]

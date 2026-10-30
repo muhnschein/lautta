@@ -466,6 +466,7 @@ async fn servers_follow_the_bridge() {
         ("attention", "auth-failed", "nas.home")
     );
     assert_eq!(servers[0].uri, "lautta://nv-account:1/");
+    assert_eq!(servers[0].icon, "server");
 }
 
 async fn drives_env() -> (FakeBridge, Env) {
@@ -666,7 +667,7 @@ async fn consent_row_until_allowed_and_nothing_when_denied() {
     let rows = e.core.browse_rows().await;
     let servers = of(&rows, "servers");
     assert_eq!(servers.len(), 1);
-    assert_eq!(servers[0].kind, "consent");
+    assert_eq!((servers[0].kind, servers[0].icon.as_str()), ("consent", "server"));
 
     fake.set_consent(Consent::Denied).await;
     client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
@@ -769,6 +770,7 @@ async fn adhoc_servers_are_remembered_and_forgotten() {
         .collect();
     assert_eq!(adhoc.len(), 1, "a connected server is not listed twice");
     assert_eq!(adhoc[0].connection, "connected");
+    assert_eq!(adhoc[0].icon, "server");
 
     fake.remove_location(&id.replace("nv-", "")).await;
     eventually("gone", || e.core.location(&id).is_none()).await;
@@ -787,6 +789,7 @@ async fn adhoc_servers_are_remembered_and_forgotten() {
         ("offline", "SFTP", "sftp://pi@host.example:2222/docs")
     );
     assert_eq!(recent[0].connection, "disconnected");
+    assert_eq!(recent[0].icon, "server");
     e.core.remove_adhoc_recent(&id).unwrap();
     assert!(e.core.adhoc_recents().unwrap().is_empty());
 }

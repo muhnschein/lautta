@@ -47,7 +47,7 @@ Item {
         visible: line.iconShown
         x: line.start + line.leadWidth
         anchors.verticalCenter: parent.verticalCenter
-        source: "image://theme/icon-m-computer"
+        source: Qt.resolvedUrl("../icons/server.svg")
         width: Math.round(line.fontSize * 1.25)
         height: width
         sourceSize.width: width

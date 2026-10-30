@@ -24,9 +24,9 @@ ApplicationWindow {
                 ListElement { section: "volumes"; uri: "lautta://vol-SD/"; name: "SD card"; kind: "volume"; icon: "image://theme/icon-m-sd-card"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "vol-SD"; place: ""; provider: ""; host: ""; free: 62500000000; total: 128000000000; fs: "exFAT"; drive: "mmcblk1p1" }
                 ListElement { section: "volumes"; uri: ""; name: "STICK"; kind: "volume"; icon: "image://theme/icon-m-usb"; status: "unmounted"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "vol-STICK"; place: ""; provider: ""; host: ""; free: -1; total: 8000000000; fs: ""; drive: "sda1" }
                 ListElement { section: "volumes"; uri: "lautta://vol-CARD/"; name: "CARD"; kind: "volume"; icon: "image://theme/icon-m-sd-card"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "vol-CARD"; place: ""; provider: ""; host: ""; free: 1000; total: 2000; fs: "vfat"; drive: "" }
-                ListElement { section: "servers"; uri: "lautta://nv-account:1/"; name: "NAS"; kind: "account"; icon: "image://theme/icon-m-computer"; status: "ready"; attention: ""; connection: "connected"; connectionError: ""; colour: ""; itemId: "nv-account:1"; place: "sftp://nas.home/"; provider: "SFTP"; host: "nas.home"; free: -1; total: -1; fs: "" }
-                ListElement { section: "servers"; uri: "lautta://nv-account:2/"; name: "Office"; kind: "account"; icon: "image://theme/icon-m-computer"; status: "attention"; attention: "auth-failed"; connection: "failed"; connectionError: "AuthFailed"; colour: ""; itemId: "nv-account:2"; place: ""; provider: "SMB"; host: ""; free: -1; total: -1; fs: "" }
-                ListElement { section: "servers"; uri: "lautta://nv-account:3/"; name: "Old"; kind: "account"; icon: "image://theme/icon-m-computer"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "nv-account:3"; place: ""; provider: "SFTP"; host: ""; free: -1; total: -1; fs: "" }
+                ListElement { section: "servers"; uri: "lautta://nv-account:1/"; name: "NAS"; kind: "account"; icon: "server"; status: "ready"; attention: ""; connection: "connected"; connectionError: ""; colour: ""; itemId: "nv-account:1"; place: "sftp://nas.home/"; provider: "SFTP"; host: "nas.home"; free: -1; total: -1; fs: "" }
+                ListElement { section: "servers"; uri: "lautta://nv-account:2/"; name: "Office"; kind: "account"; icon: "server"; status: "attention"; attention: "auth-failed"; connection: "failed"; connectionError: "AuthFailed"; colour: ""; itemId: "nv-account:2"; place: ""; provider: "SMB"; host: ""; free: -1; total: -1; fs: "" }
+                ListElement { section: "servers"; uri: "lautta://nv-account:3/"; name: "Old"; kind: "account"; icon: "server"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "nv-account:3"; place: ""; provider: "SFTP"; host: ""; free: -1; total: -1; fs: "" }
             }
         }
     }
@@ -161,6 +161,9 @@ ApplicationWindow {
                "a folder row draws the app's folder glyph: " + (folder ? folder.source : "none"))
         var star = image(rowOf("Thesis"))
         expect(star && String(star.source) === "image://theme/icon-m-favorite", "a favourite's star is the theme's")
+        var server = image(rowOf("NAS"))
+        expect(server && String(server.source) === String(Qt.resolvedUrl("../../qml/icons/server.svg"))
+               && server.status === Image.Ready, "a server row draws the app's server glyph: " + (server ? server.source : "none"))
     }
 
     function checkPlaces() {
@@ -169,7 +172,7 @@ ApplicationWindow {
         expect(remote && remote.text === "NAS › /srv/photos" && remote.iconShown,
                "a favourite on a server has the server icon before its place")
         var icons = findAll(remote, function(x) { return x.objectName === "remoteIcon" }, [])
-        expect(icons.length === 1 && String(icons[0].source).indexOf("icon-m-computer") >= 0, "the icon is the server icon")
+        expect(icons.length === 1 && /\/icons\/server\.svg$/.test(String(icons[0].source)), "the icon is the server icon")
         expect(local && local.text === "Documents › Uni" && !local.iconShown, "a local favourite's place has no icon")
     }
 
