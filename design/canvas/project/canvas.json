@@ -50,22 +50,6 @@
       "x": 2880,
       "y": 8200
     },
-    "BreadcrumbsEdit.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Edit path A \u00b7 as opened",
-      "w": 400,
-      "x": 1440,
-      "y": 15900
-    },
-    "BreadcrumbsEditTyping.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Edit path A \u00b7 typing",
-      "w": 400,
-      "x": 1920,
-      "y": 15900
-    },
     "BreadcrumbsHeader.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -74,28 +58,92 @@
       "x": 0,
       "y": 15900
     },
+    "BreadcrumbsLandColumns.dc.html": {
+      "h": 400,
+      "is_interactive": true,
+      "title": "Landscape \u00b7 path menu B, two columns",
+      "w": 860,
+      "x": 940,
+      "y": 18020
+    },
+    "BreadcrumbsLandOmni.dc.html": {
+      "h": 400,
+      "is_interactive": true,
+      "title": "Landscape \u00b7 go to folder, keyboard up",
+      "w": 860,
+      "x": 1880,
+      "y": 18020
+    },
+    "BreadcrumbsLandOmniHits.dc.html": {
+      "h": 400,
+      "is_interactive": true,
+      "title": "Landscape \u00b7 go to folder, hits dragged",
+      "w": 860,
+      "x": 2820,
+      "y": 18020
+    },
+    "BreadcrumbsLandScroll.dc.html": {
+      "h": 400,
+      "is_interactive": true,
+      "title": "Landscape \u00b7 path menu A, scrolls",
+      "w": 860,
+      "x": 0,
+      "y": 18020
+    },
+    "BreadcrumbsLongProblem.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Long words (de) \u00b7 the problem",
+      "w": 400,
+      "x": 0,
+      "y": 16960
+    },
+    "BreadcrumbsLongRows.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Long words \u00b7 A actions fall back to rows",
+      "w": 400,
+      "x": 480,
+      "y": 16960
+    },
+    "BreadcrumbsLongStacked.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Long words \u00b7 C label under icon",
+      "w": 400,
+      "x": 1440,
+      "y": 16960
+    },
+    "BreadcrumbsLongTwoLine.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Long words \u00b7 B labels on two lines",
+      "w": 400,
+      "x": 960,
+      "y": 16960
+    },
     "BreadcrumbsOmni.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Edit path B (omnibar) \u00b7 as opened",
+      "title": "Go to folder \u00b7 as opened",
       "w": 400,
-      "x": 2400,
+      "x": 1440,
       "y": 15900
     },
     "BreadcrumbsOmniPath.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Edit path B (omnibar) \u00b7 a path typed",
+      "title": "Go to folder \u00b7 a path typed",
       "w": 400,
-      "x": 3360,
+      "x": 2400,
       "y": 15900
     },
     "BreadcrumbsOmniTyping.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Edit path B (omnibar) \u00b7 a name typed",
+      "title": "Go to folder \u00b7 a name typed",
       "w": 400,
-      "x": 2880,
+      "x": 1920,
       "y": 15900
     },
     "BreadcrumbsOpen.dc.html": {
@@ -754,11 +802,17 @@
     "BreadcrumbsHeader.dc.html",
     "BreadcrumbsOpening.dc.html",
     "BreadcrumbsOpen.dc.html",
-    "BreadcrumbsEdit.dc.html",
-    "BreadcrumbsEditTyping.dc.html",
     "BreadcrumbsOmni.dc.html",
     "BreadcrumbsOmniTyping.dc.html",
-    "BreadcrumbsOmniPath.dc.html"
+    "BreadcrumbsOmniPath.dc.html",
+    "BreadcrumbsLongProblem.dc.html",
+    "BreadcrumbsLongRows.dc.html",
+    "BreadcrumbsLongTwoLine.dc.html",
+    "BreadcrumbsLongStacked.dc.html",
+    "BreadcrumbsLandScroll.dc.html",
+    "BreadcrumbsLandColumns.dc.html",
+    "BreadcrumbsLandOmni.dc.html",
+    "BreadcrumbsLandOmniHits.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"
