@@ -29,14 +29,15 @@ Item {
         return { "item": Operations.displayPath(subject), "location": App.locationName(subject) }
     }
 
-    // PageStack ignores a push during a transition, e.g. the extract dialog closing.
     function openFolder(uri) {
         pendingFolder = uri
-        if (!stack().busy)
-            openPending()
+        openPending()
     }
 
+    // PageStack drops a push during a transition, e.g. the extract dialog closing.
     function openPending() {
+        if (stack().busy)
+            return
         var uri = pendingFolder
         pendingFolder = ""
         stack().push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": uri })
