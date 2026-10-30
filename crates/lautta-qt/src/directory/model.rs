@@ -851,6 +851,7 @@ impl DirectoryModel {
             previews.cancel_text(old);
         }
         let ticket = previews.request_text(core, file);
+        let key = ticket.key.clone();
         self.previews.insert(
             name.clone(),
             PreviewSlot {
@@ -860,20 +861,20 @@ impl DirectoryModel {
             },
         );
         let me = QPointer::from(&*self);
-        let generation = self.generation;
         spawn_then(async move { ticket.rx.await.ok().flatten() }, move |text| {
             if let Some(m) = me.as_pinned() {
-                m.borrow_mut().previewed(generation, &name, stamp, text);
+                m.borrow_mut().previewed(&key, &name, text);
             }
         });
     }
 
-    /// One for an older state of the file is dropped.
-    fn previewed(&mut self, generation: u64, name: &[u8], stamp: PreviewStamp, text: Option<String>) {
-        if generation != self.generation {
-            return;
-        }
-        let Some(slot) = self.previews.get_mut(name).filter(|slot| slot.stamp == stamp) else {
+    /// Only the slot's pending request counts: keys are never reused.
+    fn previewed(&mut self, key: &str, name: &[u8], text: Option<String>) {
+        let Some(slot) = self
+            .previews
+            .get_mut(name)
+            .filter(|slot| slot.key.as_deref() == Some(key))
+        else {
             return;
         };
         slot.key = None;
@@ -998,5 +999,45 @@ impl QAbstractListModel for DirectoryModel {
             .enumerate()
             .map(|(i, n)| (ROLE_BASE + i as i32, QByteArray::from(*n)))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn text_of<'a>(m: &'a DirectoryModel, name: &[u8]) -> Option<(Option<&'a str>, Option<&'a str>)> {
+        m.previews
+            .get(name)
+            .map(|slot| (slot.key.as_deref(), slot.text.as_deref()))
+    }
+
+    #[test]
+    fn a_text_thumbnail_counts_only_for_the_request_still_pending() {
+        let mut m = DirectoryModel::default();
+        let stamp = PreviewStamp {
+            modified: Some(1),
+            size: Some(3),
+        };
+        m.previews.insert(
+            b"a.txt".to_vec(),
+            PreviewSlot {
+                stamp,
+                key: Some("text:2:a".into()),
+                text: None,
+            },
+        );
+        m.previewed("text:1:a", b"a.txt", Some("old".into()));
+        assert_eq!(
+            text_of(&m, b"a.txt"),
+            Some((Some("text:2:a"), None)),
+            "a cancelled request's answer is dropped"
+        );
+        m.previewed("text:2:a", b"a.txt", Some("hei".into()));
+        assert_eq!(text_of(&m, b"a.txt"), Some((None, Some("hei"))));
+        m.previewed("text:2:a", b"a.txt", None);
+        assert_eq!(text_of(&m, b"a.txt"), Some((None, Some("hei"))), "answered once");
+        m.previewed("text:3:b", b"b.txt", Some("b".into()));
+        assert_eq!(text_of(&m, b"b.txt"), None, "never asked for");
     }
 }
