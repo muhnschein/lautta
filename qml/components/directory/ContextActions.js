@@ -54,7 +54,8 @@ function applicable(id, ctx) {
     case "delete": return ctx.writable
     case "more": return more(ctx).length > 0
     case "favourite": return true
-    case "compress": return true
+    // Viewers pass no `writable`; there a read-only folder fails with its message.
+    case "compress": return ctx.writable !== false
     case "moveToNewFolder": return ctx.writable === true
     }
     return false

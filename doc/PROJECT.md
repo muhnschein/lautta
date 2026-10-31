@@ -94,7 +94,6 @@ File system seen (firejail `whitelist`): tmpfs on `$HOME`, each granted folder a
 ```
 Browse ─┬─ Directory ─┬─ Directory …
         │             ├─ Viewers
-        │             ├─ Folder picker
         │             └─ Search results
         ├─ Recents
         ├─ Trash
@@ -125,7 +124,7 @@ Remote throughput is netvfs's budget; app must not be bottleneck (fd passing, no
 | Milestone | Scope | Exit criteria |
 |---|---|---|
 | M0 skeleton | workspace, SailfishApp bootstrap from Rust, rpmvalidator in CI, Browse with user folders | validator clean; launches on device |
-| M1 local MVP | directory page, sort/filter, cache, file operations, clipboard, folder picker, Trash, image/text viewers, local thumbnails, local transfers, cover | Harbour submission of standalone 1.0 candidate; folder, scroll, launch budgets met |
+| M1 local MVP | directory page, sort/filter, cache, file operations, clipboard, Trash, image/text viewers, local thumbnails, local transfers, cover | Harbour submission of standalone 1.0 candidate; folder, scroll, launch budgets met |
 | M2 bridge | netvfs provider, consent, accounts and ad-hoc servers, remote browse and operations, local↔remote transfers with resume, remote thumbnails | contract tests with netvfs green; device test with SFTP and SMB |
 | M3 depth | streaming, share target, search, archives, Nearby | parity list below done |
 | M4 power | server copy wherever available | — |

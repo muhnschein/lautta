@@ -23,6 +23,8 @@ ApplicationWindow {
 
     FavouritesModel { id: favs }
 
+    DirectoryModel { id: docs; uri: win.folder }
+
     initialPage: Component {
         DirectoryPage {
             uri: win.folder
@@ -263,21 +265,18 @@ ApplicationWindow {
                     win.next()
                 break
             case 12:
-                var compress = win.dialogInPlace(function(d) { return d.uris !== undefined && d.formats !== undefined })
-                if (!compress)
+                // No dialog: report.zip lands next to the file.
+                if (win.waited % 10 === 0)
+                    docs.refresh()
+                if (docs.indexOf(win.folder + "report.zip") < 0)
                     break
-                if (JSON.stringify(compress.uris) !== JSON.stringify([win.file]))
-                    return win.fail("Compress gets the file: " + JSON.stringify(compress.uris))
-                if (!compress.canAccept)
-                    return win.fail("the compress dialog can be accepted: into " + compress.destUri)
-                compress.reject()
                 win.next()
                 break
             case 13:
                 if (pageStack.busy || pageStack.currentPage !== win.folderPage)
                     break
                 if (pageStack.depth !== 1)
-                    return win.fail("leaving the dialog goes back to the folder: depth " + pageStack.depth)
+                    return win.fail("Compress goes back to the folder: depth " + pageStack.depth)
                 win.next()
                 break
             case 14:

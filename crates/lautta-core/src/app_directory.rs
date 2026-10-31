@@ -6,14 +6,16 @@ use crate::entry::Entry;
 use crate::error::Result;
 use crate::filter::fold_text;
 use crate::foldercount::{count_entries, FolderCount, COUNT_CAP};
-use crate::locations::Location;
+use crate::locations::{Location, LocationKind};
+use crate::org::RecentsFilter;
 use crate::provider::Lane;
 use crate::uri::Uri;
 use crate::vpath::{display_name, VPath};
 use percent_encoding::percent_decode_str;
+use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 #[derive(Debug)]
@@ -27,7 +29,52 @@ pub enum ListEvent {
 pub struct PathStep {
     pub uri: Uri,
     pub name: String,
+    /// `AppIcon` name: the location's for its root, a folder's otherwise.
+    pub icon: &'static str,
 }
+
+/// Where a Go to folder hit came from; also its rank among hits that match equally well.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum HitSource {
+    Here,
+    Recent,
+    Favourite,
+    Cached,
+}
+
+impl HitSource {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            HitSource::Here => "here",
+            HitSource::Recent => "recent",
+            HitSource::Favourite => "favourite",
+            HitSource::Cached => "cached",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GotoHit {
+    pub uri: Uri,
+    pub name: String,
+    pub source: HitSource,
+    /// Folder holding it, as Recents show it; empty for a location.
+    pub place: String,
+}
+
+/// A typed path: the folder it names when known to exist, and folders to drill into: that
+/// folder's, or the parent's whose names start with the text after the last slash.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GotoPath {
+    pub target: Option<Uri>,
+    pub folders: Vec<Uri>,
+}
+
+const MAX_HITS: usize = 30;
+const CACHED_FOLDERS: usize = 2000;
+/// Archive inside archive inside …: path steps follow this many archives out.
+const MAX_NESTING: usize = 8;
+const FOLDER_ICON: &str = "file-folder";
 
 const BATCH_QUEUE: usize = 8;
 
@@ -75,20 +122,21 @@ impl Core {
         }
     }
 
+    /// From the location's root; inside an archive, first the folders holding the archive.
     pub fn path_steps(&self, uri: &Uri) -> Vec<PathStep> {
-        let root_name = self.location(&uri.location).map(|l| l.name).unwrap_or_default();
-        let mut steps = vec![PathStep {
-            uri: Uri::root(uri.location.clone()),
-            name: root_name,
-        }];
-        let mut current = Uri::root(uri.location.clone());
-        for comp in uri.path.components() {
-            let Ok(next) = current.join(comp) else { break };
-            steps.push(PathStep {
-                uri: next.clone(),
-                name: display_name(comp),
-            });
-            current = next;
+        let mut steps = Vec::new();
+        let mut at = Some(uri.clone());
+        for _ in 0..MAX_NESTING {
+            let Some(uri) = at.take() else { break };
+            let location = self.location(&uri.location);
+            let mut here = location_steps(&uri, location.as_ref());
+            here.append(&mut steps);
+            steps = here;
+            at = location
+                .filter(|l| l.kind == LocationKind::Archive)
+                .and_then(|l| l.url)
+                .and_then(|u| Uri::parse(&u).ok())
+                .and_then(|archive| archive.parent());
         }
         steps
     }
@@ -108,26 +156,47 @@ impl Core {
         if text.starts_with("lautta://") {
             return Uri::parse(text).ok();
         }
-        if let Some(rest) = text.strip_prefix("file://") {
-            let bytes: Vec<u8> = percent_decode_str(rest).collect();
-            return self.local_uri(Path::new(OsStr::from_bytes(&bytes)));
-        }
-        if text == "~" || text.starts_with("~/") {
-            let rest = text.trim_start_matches('~').trim_start_matches('/');
-            return self.local_uri(&self.paths.home.join(rest));
+        if let Some(path) = self.local_dir_of(text, base) {
+            return self.local_uri(&path);
         }
         if !text.starts_with('/') {
-            return None;
-        }
-        if self
-            .locations
-            .to_local_path(&Uri::root(base.location.clone()))
-            .is_some()
-        {
-            return self.local_uri(Path::new(text));
+            return self.location_address(text);
         }
         let path = VPath::parse(text.as_bytes()).ok()?;
         Some(Uri::new(base.location.clone(), path))
+    }
+
+    /// Local path `text` names, also outside every location (home itself).
+    fn local_dir_of(&self, text: &str, base: &Uri) -> Option<PathBuf> {
+        let text = text.trim();
+        if let Some(rest) = text.strip_prefix("file://") {
+            let bytes: Vec<u8> = percent_decode_str(rest).collect();
+            return Some(PathBuf::from(OsStr::from_bytes(&bytes)));
+        }
+        if text == "~" || text.starts_with("~/") {
+            let rest = text.trim_start_matches('~').trim_start_matches('/');
+            return Some(self.paths.home.join(rest));
+        }
+        let local_base = self
+            .locations
+            .to_local_path(&Uri::root(base.location.clone()))
+            .is_some();
+        (text.starts_with('/') && local_base).then(|| PathBuf::from(text))
+    }
+
+    /// `Documents/Uni`: a location's name, then a path inside it.
+    fn location_address(&self, text: &str) -> Option<Uri> {
+        let (head, rest) = text.split_once('/')?;
+        let head = fold_text(head);
+        let location = self
+            .locations
+            .locations()
+            .into_iter()
+            .find(|l| fold_text(&l.name) == head)?;
+        match &location.local_root {
+            Some(root) => self.local_uri(&root.join(rest)),
+            None => Some(Uri::new(location.id, VPath::parse(rest.as_bytes()).ok()?)),
+        }
     }
 
     fn local_uri(&self, path: &Path) -> Option<Uri> {
@@ -139,23 +208,132 @@ impl Core {
             return Vec::new();
         };
         let (parent_text, partial) = (&prefix[..=cut], &prefix[cut + 1..]);
-        let Some(parent) = self.resolve_address(parent_text, base) else {
-            return Vec::new();
-        };
-        let Ok(Some(hit)) = self.dircache.get(&parent) else {
-            return Vec::new();
-        };
         let needle = fold_text(partial);
-        let mut names: Vec<&Entry> = hit
-            .entries
-            .iter()
-            .filter(|e| e.is_dir() && fold_text(&e.display_name()).starts_with(&needle))
-            .collect();
-        names.sort_by_key(|e| fold_text(&e.display_name()));
-        names
-            .into_iter()
-            .filter_map(|e| parent.join(&e.name).ok())
-            .collect()
+        let mut found: Vec<(String, Uri)> = Vec::new();
+        if let Some(parent) = self.resolve_address(parent_text, base) {
+            if let Ok(Some(hit)) = self.dircache.get(&parent) {
+                found.extend(hit.entries.iter().filter(|e| e.is_dir()).filter_map(|e| {
+                    let key = fold_text(&e.display_name());
+                    Some((key, parent.join(&e.name).ok()?))
+                }));
+            }
+        }
+        // Sandbox lists no home: user folders in it are known all the same.
+        if let Some(dir) = self.local_dir_of(parent_text, base) {
+            for l in self.locations.locations() {
+                let Some(root) = l.local_root.filter(|r| r.parent() == Some(dir.as_path())) else {
+                    continue;
+                };
+                let key = fold_text(&root.file_name().unwrap_or_default().to_string_lossy());
+                let uri = Uri::root(l.id);
+                if !found.iter().any(|(_, u)| *u == uri) {
+                    found.push((key, uri));
+                }
+            }
+        }
+        found.retain(|(key, _)| key.starts_with(&needle));
+        found.sort_by(|a, b| a.0.cmp(&b.0));
+        found.into_iter().map(|(_, u)| u).collect()
+    }
+
+    /// Folders whose name matches `text`: name starts with it, then a word in it does, then it
+    /// is anywhere; equal matches by [`HitSource`]. Cache and database only, no listing.
+    pub fn goto_hits(&self, text: &str, base: &Uri) -> Vec<GotoHit> {
+        let needle = fold_text(text.trim());
+        if needle.is_empty() {
+            return Vec::new();
+        }
+        let mut seen = HashSet::from([base.clone()]);
+        let mut hits: Vec<(Tier, GotoHit)> = Vec::new();
+        for (source, uri) in self.goto_candidates(base) {
+            if self.location(&uri.location).is_none() || !seen.insert(uri.clone()) {
+                continue;
+            }
+            let name = self.folder_name(&uri);
+            let Some(tier) = match_tier(&needle, &fold_text(&name)) else {
+                continue;
+            };
+            let place = uri.parent().map(|p| self.place_of(&p)).unwrap_or_default();
+            hits.push((
+                tier,
+                GotoHit {
+                    uri,
+                    name,
+                    source,
+                    place,
+                },
+            ));
+        }
+        hits.sort_by_key(|(tier, _)| *tier);
+        hits.into_iter().take(MAX_HITS).map(|(_, h)| h).collect()
+    }
+
+    fn goto_candidates(&self, base: &Uri) -> Vec<(HitSource, Uri)> {
+        let mut out: Vec<(HitSource, Uri)> = Vec::new();
+        if let Ok(Some(hit)) = self.dircache.get(base) {
+            out.extend(
+                hit.entries
+                    .iter()
+                    .filter(|e| e.is_dir())
+                    .filter_map(|e| base.join(&e.name).ok())
+                    .map(|u| (HitSource::Here, u)),
+            );
+        }
+        if self.recents.is_enabled() {
+            let recents = self.recents.list(&RecentsFilter::default()).unwrap_or_default();
+            out.extend(
+                recents
+                    .into_iter()
+                    .filter_map(|r| r.uri.parent())
+                    .map(|u| (HitSource::Recent, u)),
+            );
+        }
+        let favourites = self.favourites.list().unwrap_or_default();
+        out.extend(
+            favourites
+                .into_iter()
+                .filter(|f| f.is_dir)
+                .map(|f| (HitSource::Favourite, f.uri)),
+        );
+        let cached = self.dircache.folders(CACHED_FOLDERS).unwrap_or_default();
+        out.extend(cached.into_iter().map(|u| (HitSource::Cached, u)));
+        out
+    }
+
+    fn folder_name(&self, uri: &Uri) -> String {
+        match uri.name() {
+            Some(n) => display_name(n),
+            None => self.location(&uri.location).map(|l| l.name).unwrap_or_default(),
+        }
+    }
+
+    /// Blocking: may look at the local file system.
+    pub fn goto_path(&self, text: &str, base: &Uri) -> GotoPath {
+        let target = self
+            .resolve_address(text, base)
+            .filter(|u| self.is_known_folder(u));
+        let folders = match &target {
+            Some(_) => self.complete_address(&format!("{}/", text.trim_end()), base),
+            None => self.complete_address(text.trim_end(), base),
+        };
+        GotoPath { target, folders }
+    }
+
+    fn is_known_folder(&self, uri: &Uri) -> bool {
+        if self.location(&uri.location).is_none() {
+            return false;
+        }
+        if uri.path.is_root() || matches!(self.dircache.get(uri), Ok(Some(_))) {
+            return true;
+        }
+        if let Some(path) = self.locations.to_local_path(uri) {
+            return path.is_dir();
+        }
+        let (Some(parent), Some(name)) = (uri.parent(), uri.name()) else {
+            return false;
+        };
+        matches!(self.dircache.get(&parent), Ok(Some(hit))
+            if hit.entries.iter().any(|e| e.is_dir() && e.name == name))
     }
 
     /// Local folders only: `None` for servers and archives (counting would list over the network)
@@ -177,6 +355,62 @@ impl Core {
     pub fn picker_locations(&self) -> Vec<Location> {
         self.locations.locations()
     }
+}
+
+/// Text Go to folder treats as a path, not a folder name: `~…`, or anything with a slash.
+pub fn looks_like_address(text: &str) -> bool {
+    let text = text.trim_start();
+    text.starts_with('~') || text.contains('/')
+}
+
+fn location_steps(uri: &Uri, location: Option<&Location>) -> Vec<PathStep> {
+    let mut steps = vec![PathStep {
+        uri: Uri::root(uri.location.clone()),
+        name: location.map(|l| l.name.clone()).unwrap_or_default(),
+        icon: location.map_or(FOLDER_ICON, |l| location_icon(&l.kind)),
+    }];
+    let mut current = Uri::root(uri.location.clone());
+    for comp in uri.path.components() {
+        let Ok(next) = current.join(comp) else { break };
+        steps.push(PathStep {
+            uri: next.clone(),
+            name: display_name(comp),
+            icon: FOLDER_ICON,
+        });
+        current = next;
+    }
+    steps
+}
+
+fn location_icon(kind: &LocationKind) -> &'static str {
+    match kind {
+        LocationKind::UserFolder | LocationKind::Android => FOLDER_ICON,
+        LocationKind::Volume => "image://theme/icon-m-sd-card",
+        LocationKind::Server { .. } | LocationKind::AdHoc => "server",
+        LocationKind::Archive => "file-archive",
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Tier {
+    Prefix,
+    WordPrefix,
+    Inside,
+}
+
+/// Both folded. A word starts after any character that is not a letter or digit.
+fn match_tier(needle: &str, name: &str) -> Option<Tier> {
+    if name.starts_with(needle) {
+        return Some(Tier::Prefix);
+    }
+    let mut word_start = false;
+    for (i, c) in name.char_indices() {
+        if word_start && name[i..].starts_with(needle) {
+            return Some(Tier::WordPrefix);
+        }
+        word_start = !c.is_alphanumeric();
+    }
+    name.contains(needle).then_some(Tier::Inside)
 }
 
 fn home_relative(home: &Path, path: &Path) -> String {

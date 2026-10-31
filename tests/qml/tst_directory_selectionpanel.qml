@@ -270,10 +270,18 @@ ApplicationWindow {
         pageRows(page)[0].row.clicked(null)
         tools.pump(500)
         settle()
-        var dialog = pageStack.currentPage
-        expect(dialog.formats !== undefined, "Compress opens the compress dialog")
-        same(dialog.uris.slice().sort(), [base + "a.md", base + "b.md", base + "c.tar.gz"], "for every selected item")
-        closeDialog(2, "Compress")
+        expect(pageStack.depth === 1, "Compress asks nothing, More closes: depth " + pageStack.depth)
+        expect(view !== null && !view.selecting, "Compress ends selection")
+        var archive = base + qsTrId("lautta-compress-default-name") + ".zip"
+        var listing = Qt.createQmlObject('import Lautta 1.0; DirectoryModel { }', win)
+        listing.uri = base
+        for (var i = 0; i < 100 && listing.indexOf(archive) < 0; ++i) {
+            if (i % 10 === 0)
+                listing.refresh()
+            tools.pump(50)
+        }
+        expect(listing.indexOf(archive) >= 0, "several items make one archive beside them: " + archive)
+        listing.destroy()
     }
 
     function checkClipboardPanel() {

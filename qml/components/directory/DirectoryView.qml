@@ -10,13 +10,20 @@ import "../Open.js" as Open
 import "../ErrorText.js" as ErrorText
 import "DirFormat.js" as DirFormat
 import "GridRows.js" as GridRows
+import "PathFold.js" as PathFold
 import "Selection.js" as Selection
+import "../operations/Compress.js" as Compress
 
 Item {
     id: view
 
     property string uri
     property bool selectionMode
+    // Share dialog body: folders open, files dimmed, no item actions; pulley offers New folder.
+    property bool picking
+    property string pickAcceptText
+    property string pickNote
+    property bool pickNoteWarns
     property bool selectionWaiting
     property bool detailsShown
     property alias model: dir
@@ -32,6 +39,14 @@ Item {
     property var toMove: []
 
     signal openFolder(string uri)
+    // A folder elsewhere in the path or picked in Go to folder: the page goes back where it can.
+    signal goTo(string uri)
+    signal browse
+
+    onSelectionModeChanged: {
+        if (selectionMode)
+            pathMenu.close()
+    }
 
     function setSelection(state) {
         selectionMode = state.selecting
@@ -197,6 +212,23 @@ Item {
             Operations.moveTo(JSON.stringify(items), folderUri)
     }
 
+    function trail(ancestorsJson, room) {
+        var names = []
+        try {
+            names = JSON.parse(ancestorsJson).map(function (a) { return a.name }).reverse()
+        } catch (e) {
+            return ""
+        }
+        return PathFold.fold(names, function (text) { return trailMetrics.advanceWidth(text) <= room })
+    }
+
+    function goToFolder() {
+        var dialog = openDialog("../../dialogs/GoToFolderDialog.qml", {
+            "folderUri": uri, "folderName": dir.title, "startText": path.address, "searchable": !picking
+        })
+        dialog.accepted.connect(function () { view.goTo(dialog.chosenUri) })
+    }
+
     function searchHere() {
         pageStack.push(Qt.resolvedUrl("../../pages/SearchPage.qml"), { "rootUri": uri })
     }
@@ -280,8 +312,7 @@ Item {
         case "delete": remove(uris, listItem); break
         case "more": moreActions(info); break
         case "moveToNewFolder": newFolder(uris); break
-        // CompressDialog takes the list itself, not its JSON text.
-        case "compress": openDialog("../../dialogs/CompressDialog.qml", { "uris": uris }); break
+        case "compress": Compress.start(App, Operations, uris, info.isDir === true); break
         case "favourite":
             openDialog("../../pages/FavouritePage.qml", { "uri": uris[0], "isDir": info.isDir !== false })
             break
@@ -348,6 +379,9 @@ Item {
                    //% "You don't have permission to open this folder."
                    : qsTrId("lautta-dir-noaccess-permission")
         case "empty":
+            if (picking && dir.writable)
+                //% "You can use this folder or pull down to make one"
+                return qsTrId("lautta-dir-picker-empty-hint")
             return dir.writable
                    //% "Pull down to create a folder or paste"
                    ? qsTrId("lautta-dir-empty-hint")
@@ -491,9 +525,9 @@ Item {
             }
 
             contentHeight: Theme.itemSizeMedium
-            menu: view.selecting || model.inaccessible ? null : contextMenu
-            enabled: !model.inaccessible
-            opacity: model.inaccessible ? Theme.opacityLow : 1
+            menu: view.selecting || view.picking || model.inaccessible ? null : contextMenu
+            enabled: !model.inaccessible && (model.isDir || !view.picking)
+            opacity: enabled ? 1 : Theme.opacityLow
             onClicked: {
                 if (view.selecting)
                     dir.toggle(model.uri)
@@ -634,6 +668,8 @@ Item {
 
             x: (index % grid.columns) * width
             width: grid.cellWidth
+            enabled: model.isDir || !view.picking
+            opacity: enabled ? 1 : Theme.opacityLow
             height: parent ? parent.height : implicitHeight
             implicitHeight: gridMetrics.cellHeight(width, caption.implicitHeight)
             onCountKeyChanged: cell.countItems()
@@ -652,7 +688,7 @@ Item {
                 else
                     view.openItem(model.uri, model.isDir, model.mimeType)
             }
-            onPressAndHold: dragSelect.begin(cell, index, mouse.x, mouse.y)
+            onPressAndHold: if (!view.picking) dragSelect.begin(cell, index, mouse.x, mouse.y)
             onPositionChanged: if (dragSelect.holder === cell) dragSelect.move(mouse.x, mouse.y)
             onReleased: cell.letGo()
             onCanceled: cell.letGo()
@@ -809,6 +845,7 @@ Item {
 
         objectName: "folderPulleyHost"
         anchors.fill: parent
+        interactive: !pathMenu.open
         // A flickable's content is 0x0 until told; anchors to parent go to it.
         contentWidth: width
         contentHeight: height
@@ -835,21 +872,115 @@ Item {
                 id: headerBar
 
                 width: parent.width
-                height: pageHeader.height
+                height: titleArea.y + titleArea.height + (pickNote.visible ? pickNote.height + Theme.paddingSmall : 0)
 
-                PageHeader {
-                    id: pageHeader
+                Loader {
+                    id: dialogBar
 
-                    objectName: "folderPageHeader"
-                    title: view.selecting
-                           //% "%n selected"
-                           ? qsTrId("lautta-dir-selected", dir.selectedCount)
-                           : dir.title
+                    width: parent.width
+                    active: view.picking
+                    sourceComponent: DialogHeader {
+                        acceptText: view.pickAcceptText
+                    }
                 }
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: !view.selecting
-                    onClicked: pathMenu.open = !pathMenu.open
+
+                Item {
+                    id: titleArea
+
+                    y: dialogBar.height
+                    width: parent.width
+                    height: Math.max(pageHeader.height, pathSubtitle.visible
+                                     ? pathSubtitle.y + pathSubtitle.height + Theme.paddingMedium : 0)
+
+                    PageHeader {
+                        id: pageHeader
+
+                        objectName: "folderPageHeader"
+                        title: view.selecting
+                               //% "%n selected"
+                               ? qsTrId("lautta-dir-selected", dir.selectedCount)
+                               : dir.title
+                    }
+                    // Placed as PageHeader places its description; own Label so it can fade.
+                    Label {
+                        id: pathSubtitle
+
+                        objectName: "folderPathSubtitle"
+                        y: pageHeader.topMargin + pageHeader.titleHeight
+                        anchors {
+                            right: parent.right
+                            rightMargin: pageHeader.rightMargin
+                        }
+                        width: Math.min(implicitWidth, parent.width - pageHeader.leftMargin - pageHeader.rightMargin)
+                        visible: text.length > 0
+                        text: view.trail(path.ancestorsJson, parent.width - pageHeader.leftMargin - pageHeader.rightMargin)
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.secondaryHighlightColor
+                        horizontalAlignment: implicitWidth > width ? Text.AlignLeft : Text.AlignRight
+                        truncationMode: TruncationMode.Fade
+                        opacity: pathMenu.open ? 0 : (view.selecting ? Theme.opacityLow : 1)
+
+                        Behavior on opacity { FadeAnimation { } }
+
+                        FontMetrics {
+                            id: trailMetrics
+
+                            font: pathSubtitle.font
+                        }
+                    }
+                    MouseArea {
+                        id: headerPress
+
+                        property bool tracking
+
+                        function stopTracking() {
+                            tracking = false
+                            preventStealing = false
+                        }
+
+                        objectName: "folderHeaderPress"
+                        anchors.fill: parent
+                        enabled: !view.selecting
+                        onClicked: pathMenu.open = !pathMenu.open
+                        onPressAndHold: {
+                            tracking = true
+                            preventStealing = true
+                            pathMenu.open = true
+                        }
+                        onPositionChanged: {
+                            if (tracking)
+                                pathMenu.track(headerPress, mouse.x, mouse.y)
+                        }
+                        onReleased: {
+                            if (!tracking)
+                                return
+                            stopTracking()
+                            pathMenu.release()
+                        }
+                        onCanceled: {
+                            stopTracking()
+                            pathMenu.cancelTrack()
+                        }
+                    }
+                }
+
+                Label {
+                    id: pickNote
+
+                    objectName: "pickNote"
+                    anchors {
+                        top: titleArea.bottom
+                        left: parent.left
+                        right: parent.right
+                        leftMargin: Theme.horizontalPageMargin
+                        rightMargin: Theme.horizontalPageMargin
+                    }
+                    visible: view.picking && text.length > 0
+                    horizontalAlignment: Text.AlignRight
+                    wrapMode: Text.Wrap
+                    text: view.pickNote
+                    color: view.pickNoteWarns ? Theme.errorColor : Theme.secondaryHighlightColor
+                    font.pixelSize: Theme.fontSizeExtraSmall
                 }
             }
 
@@ -868,7 +999,11 @@ Item {
                 maxHeight: Math.max(0, view.height - y - Theme.itemSizeLarge)
                 pathModel: path
                 currentUri: view.uri
-                onNavigate: view.openFolder(uri)
+                picking: view.picking
+                wide: view.width > view.height
+                onNavigate: view.goTo(uri)
+                onBrowse: view.browse()
+                onGoToRequested: view.goToFolder()
                 onFavouriteRequested: view.runAction("favourite", [view.uri], {}, null)
             }
 
@@ -993,7 +1128,7 @@ Item {
         id: panelSpace
 
         width: 1
-        height: (view.selecting || App.clipboardCount > 0 ? Theme.itemSizeLarge : 0) + activityBar.space
+        height: (view.selecting || clipboardPanel.open ? Theme.itemSizeLarge : 0) + activityBar.space
     }
 
     // States sit in content of list or grid, as Silica's ViewPlaceholder: pulley moves them with
@@ -1053,7 +1188,32 @@ Item {
     ActivityBar {
         id: activityBar
 
-        allowed: !view.selecting
+        allowed: !view.selecting && !view.picking
         anchors.bottomMargin: clipboardPanel.visibleSize
+    }
+
+    // Under the open path menu: rest of view dims, a press there only closes the menu.
+    Item {
+        objectName: "pathMenuShade"
+        y: top.y + pathMenu.y + pathMenu.height - pulleyHost.contentY
+        width: view.width
+        height: Math.max(0, view.height - y)
+        visible: pathMenu.open || opacity > 0
+        opacity: pathMenu.open ? 1 : 0
+
+        Behavior on opacity { FadeAnimation { } }
+
+        Rectangle {
+            anchors.fill: parent
+            color: Theme.highlightDimmerColor
+            opacity: Theme.opacityHigh
+        }
+
+        // Also while fading out: a press meant to close never lands on the list.
+        MouseArea {
+            objectName: "pathMenuShadePress"
+            anchors.fill: parent
+            onPressed: pathMenu.close()
+        }
     }
 }

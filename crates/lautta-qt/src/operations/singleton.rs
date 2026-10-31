@@ -51,10 +51,8 @@ pub struct Operations {
     deletesPermanently: qt_method!(fn(&self, uris_json: QString) -> bool),
     compress: qt_method!(fn(&self, uris_json: QString, dest_uri: QString, name: QString, kind: QString)),
     cancelJob: qt_method!(fn(&self, job_id: i32)),
-    measure: qt_method!(fn(&self, uris_json: QString)),
-    extract: qt_method!(fn(&self, archive_uri: QString, dest_uri: QString)),
-    extractAndOpen: qt_method!(fn(&self, archive_uri: QString, dest_uri: QString)),
-    inspectArchive: qt_method!(fn(&self, archive_uri: QString)),
+    /// Opens the new folder when done.
+    extractHere: qt_method!(fn(&self, archive_uri: QString)),
     openArchive: qt_method!(fn(&self, uri: QString)),
     isArchive: qt_method!(fn(&self, uri: QString) -> bool),
     archiveSource: qt_method!(fn(&self, uri: QString) -> QString),
@@ -71,8 +69,6 @@ pub struct Operations {
     jobStarted: qt_signal!(jobId: i32),
     jobProgress: qt_signal!(jobId: i32, done: i64, total: i64),
     jobFinished: qt_signal!(jobId: i32, ok: bool, resultUri: QString),
-    measured: qt_signal!(infoJson: QString),
-    archiveInspected: qt_signal!(uri: QString, infoJson: QString),
     archiveOpened: qt_signal!(uri: QString, rootUri: QString),
     extractFinished: qt_signal!(transferId: i64, ok: bool, destUri: QString),
 
@@ -393,41 +389,22 @@ impl Operations {
         }
     }
 
-    fn measure(&self, uris_json: QString) {
-        let (Some(core), Some(sources)) = (core(), parse_uris(&uris_json)) else {
+    fn extractHere(&self, archive_uri: QString) {
+        let (Some(core), Some(archive)) = (core(), parse_uri(&archive_uri)) else {
             return self.emit_failed(&bad_arguments());
         };
-        let me = QPointer::from(self);
-        spawn_then(async move { core.measure(&sources).await }, move |res| {
-            let Some(p) = me.as_pinned() else { return };
-            let this = p.borrow();
-            match res {
-                Ok(m) => this.measured(QString::from(to_json(&m).as_str())),
-                Err(e) => this.emit_failed(&e),
-            }
-        });
-    }
-
-    fn extract(&self, archive_uri: QString, dest_uri: QString) {
-        self.extract_op(&archive_uri, &dest_uri, false);
-    }
-
-    fn extractAndOpen(&self, archive_uri: QString, dest_uri: QString) {
-        self.extract_op(&archive_uri, &dest_uri, true);
-    }
-
-    fn extract_op(&self, archive_uri: &QString, dest_uri: &QString, open: bool) {
-        let (Some(core), Some(archive), Some(dest)) = (core(), parse_uri(archive_uri), parse_uri(dest_uri))
-        else {
-            return self.emit_failed(&bad_arguments());
-        };
-        let open_after = open.then(|| dest.to_string());
         let me = QPointer::from(self);
         spawn_then(
-            async move { launch(&core, core.extract(&archive, &dest).await).await },
-            move |res| {
+            async move {
+                let (dest, started) = core.extract_here(&archive).await?;
+                Ok((launch(&core, Ok(started)).await?, dest.to_string()))
+            },
+            move |res: Result<(Launched, String)>| {
                 if let Some(p) = me.as_pinned() {
-                    p.borrow().arrived(res, open_after);
+                    match res {
+                        Ok((launched, dest)) => p.borrow().arrived(Ok(launched), Some(dest)),
+                        Err(e) => p.borrow().emit_failed(&e),
+                    }
                 }
             },
         );
@@ -468,21 +445,6 @@ impl Operations {
         if let Some(dest) = dest {
             self.extractFinished(id, ok, QString::from(dest.as_str()));
         }
-    }
-
-    fn inspectArchive(&self, archive_uri: QString) {
-        let (Some(core), Some(uri)) = (core(), parse_uri(&archive_uri)) else {
-            return self.emit_failed(&bad_arguments());
-        };
-        let me = QPointer::from(self);
-        spawn_then(async move { core.archive_info(&uri).await }, move |res| {
-            let Some(p) = me.as_pinned() else { return };
-            let this = p.borrow();
-            match res {
-                Ok(info) => this.archiveInspected(archive_uri, QString::from(to_json(&info).as_str())),
-                Err(e) => this.emit_failed(&e),
-            }
-        });
     }
 
     fn openArchive(&self, uri: QString) {
