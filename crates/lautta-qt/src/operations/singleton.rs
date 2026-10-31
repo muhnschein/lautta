@@ -185,6 +185,13 @@ impl Operations {
                     self.listen();
                 }
                 self.started(id);
+                // Ended before listen() subscribed: its Finished event never comes.
+                if let Some(t) = core()
+                    .and_then(|c| c.engine.get(id))
+                    .filter(|t| t.state.is_finished())
+                {
+                    self.transfer_finished(id, t.state == TransferState::Completed);
+                }
             }
             Ok(Launched::Summary(plan, summary)) => {
                 let id = self.pending.insert(*plan);
