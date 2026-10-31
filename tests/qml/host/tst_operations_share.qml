@@ -20,15 +20,9 @@ Item {
 
         var places = [{ "uri": "lautta://user-documents/" }, { "uri": "lautta://user-downloads/" },
                       { "uri": "lautta://nas/" }]
-        // A throw in Share.js only logs a note against Share.js: catch it here.
-        var kept
-        try {
-            kept = Share.usable(["lautta://user-documents/Uni", "lautta://gone/x", 3, "lautta://nas2/y",
-                                 "lautta://gone/lautta://nas/", "lautta://nas/"], places)
-        } catch (e) {
-            kept = String(e)
-        }
-        same(kept, ["lautta://user-documents/Uni", "lautta://nas/"], "folders of gone or read-only places and junk drop out")
+        same(Share.usable(["lautta://user-documents/Uni", "lautta://gone/x", 3, "lautta://nas2/y",
+                           "lautta://gone/lautta://nas/", "lautta://nas/"], places),
+             ["lautta://user-documents/Uni", "lautta://nas/"], "folders of gone or read-only places and junk drop out")
         same(Share.start(["lautta://nas/a", "lautta://user-documents/"], places), "lautta://nas/a",
              "starts in the last folder saved to")
         same(Share.start([], places), "lautta://user-downloads/", "first time: Downloads")
