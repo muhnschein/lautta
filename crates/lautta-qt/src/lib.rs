@@ -35,6 +35,8 @@ cpp! {{
     #include <QtQml/QQmlComponent>
     #include <QtCore/QTranslator>
     #include <QtCore/QLocale>
+    #include <QtCore/QLibraryInfo>
+    #include <QtCore/QRegularExpression>
     #include <cstdio>
     #include <memory>
 #ifdef LAUTTA_SAILFISH
@@ -57,9 +59,9 @@ cpp! {{
     }
 
     // QML check mode: compiles and instantiates QML documents with this binary's engine (real
-    // Silica, real Lautta types). Any error, and any warning or console.error naming a checked
-    // document, fails. `-T <directory>` installs that directory's catalogues first; without it
-    // qsTrId gives back the id.
+    // Silica, real Lautta types). Any error, any warning or console.error naming a checked
+    // document, and any uncaught JS exception outside Qt's modules, fails. `-T <directory>`
+    // installs that directory's catalogues first; without it qsTrId gives back the id.
     static QStringList *lauttaCheckProblems = nullptr;
     static QString lauttaCheckFile;
 
@@ -71,6 +73,16 @@ cpp! {{
             *lauttaCheckProblems << (where + QStringLiteral(": ") + msg);
         else
             std::fprintf(stderr, "note    %s\n", qPrintable(msg));
+    }
+
+    // Uncaught JS exception outside Qt's QML modules, e.g. from a `.js` library a checked document
+    // uses. Engine names throw site, not caller: file name alone misses it. Silica (a Qt module)
+    // throws on pages loaded without ApplicationWindow: not ours.
+    static bool lauttaThrown(const QQmlError &e)
+    {
+        static const QRegularExpression thrown(QStringLiteral("^[A-Za-z]*Error: "));
+        static const QString qt = QLibraryInfo::location(QLibraryInfo::Qml2ImportsPath) + QLatin1Char('/');
+        return thrown.match(e.description()).hasMatch() && !e.url().toLocalFile().startsWith(qt);
     }
 
     static int lauttaQmlCheck(int argc, char **argv)
@@ -103,7 +115,7 @@ cpp! {{
             QStringList problems;
             QObject::connect(&engine, &QQmlEngine::warnings, [&problems, &file](const QList<QQmlError> &list) {
                 for (const QQmlError &e : list) {
-                    if (e.url().toLocalFile() == file || e.toString().contains(file))
+                    if (e.url().toLocalFile() == file || e.toString().contains(file) || lauttaThrown(e))
                         problems << e.toString();
                     else
                         std::printf("note    %s\n", qPrintable(e.toString()));
