@@ -1130,7 +1130,8 @@ where
     F::Output: Send,
 {
     let task = tokio::spawn(call);
-    g.reached.await.unwrap();
+    let reached = tokio::time::timeout(Duration::from_secs(10), g.reached).await;
+    reached.expect("copy reported progress").unwrap();
     task.abort();
     assert!(task.await.is_err_and(|e| e.is_cancelled()));
     g.release.send(()).unwrap();
