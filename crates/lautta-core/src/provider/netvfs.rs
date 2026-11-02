@@ -299,7 +299,13 @@ impl Provider for NetvfsProvider {
 
     /// Single entries; folders are copied by the planner entry by entry (the
     /// bridge's `recursive` option is not used).
-    async fn server_copy(&self, from: &VPath, to: &VPath, opts: CopyOptions) -> Result<()> {
+    async fn server_copy(
+        &self,
+        from: &VPath,
+        to: &VPath,
+        opts: CopyOptions,
+        _progress: ProgressSink,
+    ) -> Result<()> {
         let wire = OptsBuilder::new().bool("replace", opts.replace).build();
         rpc(self
             .link()?

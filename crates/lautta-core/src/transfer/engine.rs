@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc, oneshot};
-use tokio::task::AbortHandle;
+use tokio::task::{AbortHandle, JoinHandle};
 
 #[derive(Debug, Clone)]
 pub struct EngineConfig {
@@ -71,7 +71,7 @@ impl EngineDeps {
 
 struct Live {
     t: Transfer,
-    running: HashMap<u32, AbortHandle>,
+    running: HashMap<u32, JoinHandle<()>>,
     item_bytes: HashMap<u32, u64>,
     rate: RateEstimator,
     last_event_ms: i64,
@@ -633,7 +633,7 @@ impl Inner {
         if let Some(h) = live.finalizer.take() {
             h.abort();
         }
-        let running: Vec<(u32, AbortHandle)> = live.running.drain().collect();
+        let running: Vec<(u32, JoinHandle<()>)> = live.running.drain().collect();
         let mut requeue = Vec::new();
         for (seq, handle) in running {
             handle.abort();
@@ -687,9 +687,11 @@ impl Inner {
         if let Some(h) = live.finalizer.take() {
             h.abort();
         }
-        let running: Vec<(u32, AbortHandle)> = live.running.drain().collect();
+        let running: Vec<(u32, JoinHandle<()>)> = live.running.drain().collect();
+        let mut stopped = Vec::with_capacity(running.len());
         for (seq, handle) in running {
             handle.abort();
+            stopped.push(handle);
             live.item_bytes.remove(&seq);
             st.sched.item_finished(ItemRef { transfer: id, seq });
         }
@@ -706,11 +708,20 @@ impl Inner {
         self.pump(st);
         let inner = self.clone();
         self.rt
-            .spawn(async move { inner.remove_leftovers(op, leftovers).await });
+            .spawn(async move { inner.remove_leftovers(op, stopped, leftovers).await });
         Ok(())
     }
 
-    async fn remove_leftovers(&self, op: OperationKind, items: Vec<TransferItem>) {
+    /// Runs once `stopped` item tasks are gone: a provider writes no new file after its call is dropped.
+    async fn remove_leftovers(
+        &self,
+        op: OperationKind,
+        stopped: Vec<JoinHandle<()>>,
+        items: Vec<TransferItem>,
+    ) {
+        for task in stopped {
+            let _ = task.await;
+        }
         if op == OperationKind::Delete {
             return;
         }
@@ -830,7 +841,7 @@ impl Inner {
             live.t.set_item_state(pick.seq, ItemState::Running);
             self.write_item(live, pick.seq);
             let handle = self.rt.spawn(run_item_task(self.clone(), pick));
-            live.running.insert(pick.seq, handle.abort_handle());
+            live.running.insert(pick.seq, handle);
         }
     }
 

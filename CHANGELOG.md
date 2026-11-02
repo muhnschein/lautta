@@ -28,6 +28,7 @@
 - Pasting cut items moves them after a remorse timer: tap it to cancel. The undo banner is gone.
 - More actions can move the selected items into a new folder made where they are.
 - Folders inside an archive show a banner on top: tap Extract all to extract the archive.
+- Cancelling a copy stops it at once and leaves no hidden partial file behind. Copying a file to another folder in the same place, such as within Documents, shows its progress.
 - The text viewer always wraps lines, colours code by its language, and puts the text on a backdrop for contrast. Markdown previews wrap code blocks.
 - The image viewer works like Jolla Gallery's. Its More button is a circle with three dots, and More › Rename renames.
 - PDFs open at the top with the whole header in view.

@@ -6,8 +6,54 @@ use crate::provider::ProgressSink;
 use crate::sys;
 use std::fs::File;
 use std::io::{self, Read, Write};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 const BUF: usize = 256 * 1024;
+
+/// Set once the caller stopped waiting (its future dropped: task aborted). Loops end at next chunk;
+/// [`Stop::commit`] steps never start after it, so cleanup that runs later sees every file made.
+#[derive(Default)]
+pub struct Stop(Mutex<bool>);
+
+impl Stop {
+    fn lock(&self) -> MutexGuard<'_, bool> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    pub fn is_set(&self) -> bool {
+        *self.lock()
+    }
+
+    pub fn check(&self) -> io::Result<()> {
+        if self.is_set() {
+            Err(io::ErrorKind::Interrupted.into())
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Runs `f` unless stopped; stopping waits for a running `f`.
+    pub fn commit<T, E: From<io::Error>>(&self, f: impl FnOnce() -> Result<T, E>) -> Result<T, E> {
+        let stopped = self.lock();
+        if *stopped {
+            return Err(io::Error::from(io::ErrorKind::Interrupted).into());
+        }
+        f()
+    }
+
+    fn set(&self) {
+        *self.lock() = true;
+    }
+}
+
+/// Sets its [`Stop`] when dropped.
+pub struct StopOnDrop(pub Arc<Stop>);
+
+impl Drop for StopOnDrop {
+    fn drop(&mut self) {
+        self.0.set();
+    }
+}
 
 /// Copies between current positions. `base` bytes already in `dst` (resume) only shift progress;
 /// `total` is final size if known. `try_clone` allows whole-file reflink, valid only when both
@@ -19,7 +65,9 @@ pub fn copy_fd(
     total: Option<u64>,
     try_clone: bool,
     progress: &ProgressSink,
+    stop: &Stop,
 ) -> io::Result<u64> {
+    stop.check()?;
     if try_clone && sys::clone_file(dst, src).is_ok() {
         let size = src.metadata()?.len();
         progress(size, Some(size));
@@ -29,16 +77,27 @@ pub fn copy_fd(
     let kernel = sys::copy_range_all(src, dst, &mut |t| {
         copied = t;
         progress(base + t, total);
+        stop.check()
     });
-    if kernel.is_ok() {
-        return Ok(copied);
+    match kernel {
+        Ok(_) => return Ok(copied),
+        Err(e) if stop.is_set() => return Err(e),
+        Err(_) => {}
     }
     let done = copied;
-    let rest = copy_buffered(src, dst, &mut |t| progress(base + done + t, total))?;
+    let rest = copy_buffered(src, dst, &mut |t| {
+        progress(base + done + t, total);
+        stop.check()
+    })?;
     Ok(done + rest)
 }
 
-pub fn copy_buffered(mut src: &File, mut dst: &File, progress: &mut dyn FnMut(u64)) -> io::Result<u64> {
+/// `progress` gets bytes so far; its error ends the copy.
+pub fn copy_buffered(
+    mut src: &File,
+    mut dst: &File,
+    progress: &mut dyn FnMut(u64) -> io::Result<()>,
+) -> io::Result<u64> {
     let mut buf = vec![0u8; BUF];
     let mut total = 0u64;
     loop {
@@ -50,7 +109,7 @@ pub fn copy_buffered(mut src: &File, mut dst: &File, progress: &mut dyn FnMut(u6
         };
         dst.write_all(&buf[..n])?;
         total += n as u64;
-        progress(total);
+        progress(total)?;
     }
 }
 
@@ -81,7 +140,7 @@ mod tests {
         let src = File::open(d.path().join("s")).unwrap();
         let dst = File::create(d.path().join("d")).unwrap();
         let (sink, log) = recorder();
-        let n = copy_fd(&src, &dst, 0, Some(1_000_000), true, &sink).unwrap();
+        let n = copy_fd(&src, &dst, 0, Some(1_000_000), true, &sink, &Stop::default()).unwrap();
         assert_eq!(n, 1_000_000);
         assert_eq!(std::fs::read(d.path().join("d")).unwrap(), data);
         let log = log.lock().unwrap();
@@ -95,7 +154,10 @@ mod tests {
         std::fs::write(d.path().join("s"), "").unwrap();
         let src = File::open(d.path().join("s")).unwrap();
         let dst = File::create(d.path().join("d")).unwrap();
-        assert_eq!(copy_fd(&src, &dst, 0, Some(0), true, &no_progress()).unwrap(), 0);
+        assert_eq!(
+            copy_fd(&src, &dst, 0, Some(0), true, &no_progress(), &Stop::default()).unwrap(),
+            0
+        );
         assert_eq!(std::fs::metadata(d.path().join("d")).unwrap().len(), 0);
     }
 
@@ -113,7 +175,7 @@ mod tests {
             .unwrap();
         dst.seek(SeekFrom::Start(2000)).unwrap();
         let (sink, log) = recorder();
-        let n = copy_fd(&src, &dst, 2000, Some(5000), false, &sink).unwrap();
+        let n = copy_fd(&src, &dst, 2000, Some(5000), false, &sink, &Stop::default()).unwrap();
         assert_eq!(n, 3000);
         assert_eq!(std::fs::read(d.path().join("d")).unwrap(), data);
         assert_eq!(log.lock().unwrap().last(), Some(&(5000, Some(5000))));
@@ -127,7 +189,14 @@ mod tests {
         let src = File::open(d.path().join("s")).unwrap();
         let dst = File::create(d.path().join("d")).unwrap();
         let mut last = 0;
-        assert_eq!(copy_buffered(&src, &dst, &mut |t| last = t).unwrap(), 600_000);
+        assert_eq!(
+            copy_buffered(&src, &dst, &mut |t| {
+                last = t;
+                Ok(())
+            })
+            .unwrap(),
+            600_000
+        );
         assert_eq!(last, 600_000);
         assert_eq!(std::fs::read(d.path().join("d")).unwrap(), data);
     }
@@ -143,7 +212,7 @@ mod tests {
         let src = File::from(r);
         let dst = File::create(d.path().join("d")).unwrap();
         let (sink, log) = recorder();
-        let n = copy_fd(&src, &dst, 0, None, true, &sink).unwrap();
+        let n = copy_fd(&src, &dst, 0, None, true, &sink, &Stop::default()).unwrap();
         assert_eq!(n, 40_000);
         assert_eq!(std::fs::read(d.path().join("d")).unwrap(), data);
         assert_eq!(log.lock().unwrap().last(), Some(&(40_000, None)));
@@ -154,6 +223,6 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let src = File::open(d.path()).unwrap();
         let dst = File::create(d.path().join("d")).unwrap();
-        assert!(copy_fd(&src, &dst, 0, None, true, &no_progress()).is_err());
+        assert!(copy_fd(&src, &dst, 0, None, true, &no_progress(), &Stop::default()).is_err());
     }
 }

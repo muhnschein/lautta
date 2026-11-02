@@ -1,17 +1,24 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 use lautta_core::db::Db;
+use lautta_core::entry::Entry;
 use lautta_core::entry::{cap, Capabilities, Kind};
 use lautta_core::error::{Error, ErrorKind};
 use lautta_core::ops::{ConflictChoice, OperationKind, Plan, PlanItem, PlanTotals};
+use lautta_core::provider::local::{new_io_semaphore, LocalProvider, IO_PERMITS};
 use lautta_core::provider::memory::MemoryProvider;
-use lautta_core::provider::StaticResolver;
+use lautta_core::provider::{
+    AttributeChanges, CopyOptions, Lane, ProgressSink, Provider, ReadHandle, ReadOptions, RenameMode,
+    SpaceInfo, StaticResolver, WriteOptions,
+};
 use lautta_core::transfer::exec::temp_name_for;
 use lautta_core::transfer::{
     Engine, EngineConfig, EngineDeps, ItemState, ManualClock, TransferEvent, TransferId, TransferOptions,
     TransferState, TransferSummary, Trasher, WaitReason,
 };
+use lautta_core::Result;
 use lautta_core::{Uri, VPath};
+use std::os::fd::OwnedFd;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -1214,4 +1221,136 @@ async fn persisted_rows_follow_the_state_changes() {
             )
             .unwrap();
     assert_eq!(item_state, "done");
+}
+
+/// Local folder whose `server_copy` parks its copying thread on the first progress report until
+/// `release`, and which signals each `remove_file`.
+struct Parking {
+    inner: LocalProvider,
+    park: Mutex<Option<(tokio::sync::oneshot::Sender<()>, std::sync::mpsc::Receiver<()>)>>,
+    removed: tokio::sync::mpsc::UnboundedSender<VPath>,
+}
+
+#[async_trait::async_trait]
+impl Provider for Parking {
+    fn capabilities(&self) -> Capabilities {
+        self.inner.capabilities()
+    }
+    async fn list(&self, dir: &VPath, lane: Lane, out: tokio::sync::mpsc::Sender<Vec<Entry>>) -> Result<()> {
+        self.inner.list(dir, lane, out).await
+    }
+    async fn stat(&self, path: &VPath, follow: bool, lane: Lane) -> Result<Entry> {
+        self.inner.stat(path, follow, lane).await
+    }
+    async fn read_link(&self, path: &VPath) -> Result<Vec<u8>> {
+        self.inner.read_link(path).await
+    }
+    async fn make_dir(&self, path: &VPath, exclusive: bool) -> Result<()> {
+        self.inner.make_dir(path, exclusive).await
+    }
+    async fn make_file(&self, path: &VPath) -> Result<()> {
+        self.inner.make_file(path).await
+    }
+    async fn remove_file(&self, path: &VPath) -> Result<()> {
+        let res = self.inner.remove_file(path).await;
+        let _ = self.removed.send(path.clone());
+        res
+    }
+    async fn remove_dir(&self, path: &VPath) -> Result<()> {
+        self.inner.remove_dir(path).await
+    }
+    async fn rename(&self, from: &VPath, to: &VPath, mode: RenameMode) -> Result<()> {
+        self.inner.rename(from, to, mode).await
+    }
+    async fn set_attributes(&self, path: &VPath, changes: AttributeChanges) -> Result<()> {
+        self.inner.set_attributes(path, changes).await
+    }
+    async fn make_symlink(&self, target: &[u8], link: &VPath) -> Result<()> {
+        self.inner.make_symlink(target, link).await
+    }
+    async fn make_hardlink(&self, existing: &VPath, new_path: &VPath) -> Result<()> {
+        self.inner.make_hardlink(existing, new_path).await
+    }
+    async fn open_read(&self, path: &VPath, lane: Lane) -> Result<Box<dyn ReadHandle>> {
+        self.inner.open_read(path, lane).await
+    }
+    async fn upload_from(
+        &self,
+        src: OwnedFd,
+        dst: &VPath,
+        opts: WriteOptions,
+        progress: ProgressSink,
+    ) -> Result<()> {
+        self.inner.upload_from(src, dst, opts, progress).await
+    }
+    async fn download_into(
+        &self,
+        src: &VPath,
+        dst: OwnedFd,
+        opts: ReadOptions,
+        progress: ProgressSink,
+    ) -> Result<()> {
+        self.inner.download_into(src, dst, opts, progress).await
+    }
+    async fn server_copy(
+        &self,
+        from: &VPath,
+        to: &VPath,
+        opts: CopyOptions,
+        progress: ProgressSink,
+    ) -> Result<()> {
+        let park = Mutex::new(self.park.lock().unwrap().take());
+        let parked: ProgressSink = Arc::new(move |done, total| {
+            if let Some((reached, release)) = park.lock().unwrap().take() {
+                let _ = reached.send(());
+                let _ = release.recv();
+            }
+            progress(done, total);
+        });
+        self.inner.server_copy(from, to, opts, parked).await
+    }
+    async fn checksum(&self, path: &VPath, algorithm: &str) -> Result<Vec<u8>> {
+        self.inner.checksum(path, algorithm).await
+    }
+    async fn space(&self, dir: &VPath) -> Result<SpaceInfo> {
+        self.inner.space(dir).await
+    }
+}
+
+#[tokio::test]
+async fn cancel_mid_copy_stops_the_copy_and_leaves_no_temporary() {
+    let d = tempfile::tempdir().unwrap();
+    std::fs::write(d.path().join("big"), vec![7u8; 24 << 20]).unwrap();
+    std::fs::create_dir(d.path().join("out")).unwrap();
+    let sem = new_io_semaphore();
+    let (reached_tx, reached) = tokio::sync::oneshot::channel();
+    let (release, release_rx) = std::sync::mpsc::channel();
+    let (removed_tx, mut removed) = tokio::sync::mpsc::unbounded_channel();
+    let folder = Parking {
+        inner: LocalProvider::new(d.path().to_path_buf()).with_semaphore(sem.clone()),
+        park: Mutex::new(Some((reached_tx, release_rx))),
+        removed: removed_tx,
+    };
+    let resolver = StaticResolver::default().with(LOCAL, Arc::new(folder));
+    let engine = Engine::new(
+        EngineDeps::new(Db::open_in_memory().unwrap(), Arc::new(resolver)),
+        config(),
+    );
+    let copy = plan(
+        OperationKind::Copy,
+        LOCAL,
+        vec![item(LOCAL, "big", LOCAL, "out/big", Kind::File, 24 << 20)],
+    );
+    let id = engine.add(copy, "", TransferOptions::default()).await.unwrap();
+    let wait = Duration::from_secs(10);
+    tokio::time::timeout(wait, reached).await.unwrap().unwrap();
+    engine.cancel(id).unwrap();
+    let temp = vp("out").join(&temp_name_for(b"big", id, 0)).unwrap();
+    while tokio::time::timeout(wait, removed.recv()).await.unwrap().unwrap() != temp {}
+    release.send(()).unwrap();
+    let all = sem.acquire_many(IO_PERMITS as u32);
+    drop(tokio::time::timeout(wait, all).await.unwrap());
+    let left: Vec<_> = std::fs::read_dir(d.path().join("out")).unwrap().collect();
+    assert!(left.is_empty(), "left behind: {left:?}");
+    assert_eq!(engine.get(id).unwrap().state, TransferState::Canceled);
 }

@@ -852,7 +852,13 @@ impl Provider for ArchiveProvider {
         .await
     }
 
-    async fn server_copy(&self, _from: &VPath, _to: &VPath, _opts: CopyOptions) -> Result<()> {
+    async fn server_copy(
+        &self,
+        _from: &VPath,
+        _to: &VPath,
+        _opts: CopyOptions,
+        _progress: ProgressSink,
+    ) -> Result<()> {
         read_only()
     }
 

@@ -162,7 +162,13 @@ pub trait Provider: Send + Sync {
         opts: ReadOptions,
         progress: ProgressSink,
     ) -> Result<()>;
-    async fn server_copy(&self, from: &VPath, to: &VPath, opts: CopyOptions) -> Result<()>;
+    async fn server_copy(
+        &self,
+        from: &VPath,
+        to: &VPath,
+        opts: CopyOptions,
+        progress: ProgressSink,
+    ) -> Result<()>;
     async fn checksum(&self, path: &VPath, algorithm: &str) -> Result<Vec<u8>>;
     async fn space(&self, dir: &VPath) -> Result<SpaceInfo>;
 }

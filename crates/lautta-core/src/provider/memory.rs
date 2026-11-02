@@ -638,7 +638,13 @@ impl Provider for MemoryProvider {
         Ok(())
     }
 
-    async fn server_copy(&self, from: &VPath, to: &VPath, opts: CopyOptions) -> Result<()> {
+    async fn server_copy(
+        &self,
+        from: &VPath,
+        to: &VPath,
+        opts: CopyOptions,
+        _progress: ProgressSink,
+    ) -> Result<()> {
         self.enter("server_copy", from)?;
         self.require_write()?;
         if !self.caps.has(cap::SERVER_COPY) {
@@ -906,12 +912,12 @@ mod tests {
     async fn server_copy_checksum_space() {
         let m = MemoryProvider::default();
         m.add_file("a", b"abc", 0);
-        m.server_copy(&vp("a"), &vp("b"), CopyOptions::default())
+        m.server_copy(&vp("a"), &vp("b"), CopyOptions::default(), no_progress())
             .await
             .unwrap();
         assert_eq!(m.read_file("b").unwrap(), b"abc");
         assert!(m
-            .server_copy(&vp("a"), &vp("b"), CopyOptions::default())
+            .server_copy(&vp("a"), &vp("b"), CopyOptions::default(), no_progress())
             .await
             .is_err());
         let sum = m.checksum(&vp("a"), "sha256").await.unwrap();
@@ -924,7 +930,7 @@ mod tests {
         noserver.add_file("a", b"abc", 0);
         assert_eq!(
             noserver
-                .server_copy(&vp("a"), &vp("b"), CopyOptions::default())
+                .server_copy(&vp("a"), &vp("b"), CopyOptions::default(), no_progress())
                 .await
                 .unwrap_err()
                 .kind,
