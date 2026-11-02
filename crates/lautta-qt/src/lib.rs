@@ -17,19 +17,6 @@ pub mod search;
 pub mod transfers;
 pub mod viewers;
 
-/// PROBE (temporary, never merged): `LAUTTA_PROBE=1` prints CLOCK_MONOTONIC stamps to stderr.
-pub fn probe(what: &str) {
-    if std::env::var_os("LAUTTA_PROBE").is_none() {
-        return;
-    }
-    let t = cpp!(unsafe [] -> f64 as "double" {
-        struct timespec ts;
-        clock_gettime(CLOCK_MONOTONIC, &ts);
-        return ts.tv_sec + ts.tv_nsec / 1e9;
-    });
-    eprintln!("{t:.3} probe {what}");
-}
-
 use cpp::cpp;
 use std::os::raw::{c_char, c_int};
 
@@ -52,7 +39,6 @@ cpp! {{
     #include <QtCore/QRegularExpression>
     #include <cstdio>
     #include <memory>
-    #include <time.h>
 #ifdef LAUTTA_SAILFISH
     #include <sailfishapp.h>
 #endif
@@ -179,7 +165,6 @@ cpp! {{
 /// `argc`/`argv` must be the process arguments as passed to `main`.
 pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
     lautta_core::panics::abort_outside_catch();
-    probe("main");
     // Core (database, locations, bridge) opens while Qt starts; QML waits for it, not Qt.
     *lock_opening() = Some(std::thread::spawn(open_core));
     register_types();
@@ -192,15 +177,11 @@ pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
             count = argc;
     #ifdef LAUTTA_SAILFISH
             QGuiApplication *app = SailfishApp::application(count, argv);
-            rust!(Probe1 [] { probe("app") });
             lauttaInstallTranslations(app, SailfishApp::pathTo(QStringLiteral("translations")).toLocalFile());
             QQuickView *view = SailfishApp::createView();
             lauttaRegisterImageProviders(view->engine());
-            rust!(Probe2 [] { probe("view") });
             rust!(LauttaWaitCore [] { wait_core() });
-            rust!(Probe4 [] { probe("core-ready") });
             view->setSource(SailfishApp::pathToMainQml());
-            rust!(Probe3 [] { probe("qml-created") });
             view->show();
     #else
             QGuiApplication *app = new QGuiApplication(count, argv);
@@ -239,7 +220,6 @@ fn open_core() {
     if let Err(e) = runtime::init(paths) {
         log::error!("cannot open the app data: {e}");
     }
-    probe("core-opened");
 }
 
 pub fn register_types() {

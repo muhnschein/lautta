@@ -631,10 +631,6 @@ Item {
             readonly property var captions: DirFormat.gridCaptions(model.isDir, model.size, model.modified,
                                                                    dir.folderCounts, items, model.itemCountCapped)
             readonly property real gap: gridMetrics.gap
-            // Made in a fast fling: caption text waits until grid stops. Set before creation ends:
-            // Text lays out at componentComplete, before Component.onCompleted.
-            property bool textHeld: grid.captionsHeld
-            readonly property bool captionText: !(textHeld && grid.captionsHeld)
 
             x: (index % grid.columns) * width
             width: grid.cellWidth
@@ -642,11 +638,7 @@ Item {
             implicitHeight: gridMetrics.cellHeight(width, caption.implicitHeight)
             onCountKeyChanged: cell.countItems()
             onPreviewKeyChanged: cell.askPreview()
-            onCaptionTextChanged: if (captionText) textHeld = false
             Component.onCompleted: {
-                textHeld = textHeld // Value at creation, not a binding.
-                grid.probeMade++
-                if (textHeld) grid.probeHeld++
                 cell.countItems()
                 cell.askPreview()
             }
@@ -734,7 +726,6 @@ Item {
                 metrics: gridMetrics
                 name: cell.itemName
                 captions: cell.captions
-                textShown: cell.captionText
                 minLines: cell.counting && !model.inaccessible ? 1 : 0
                 emphasised: cell.highlighted || model.selected
                 pressed: cell.highlighted
@@ -973,17 +964,9 @@ Item {
             readonly property real tileWidth: Math.min(Screen.width, Screen.height) / gridMetrics.portraitColumns
             readonly property int columns: GridRows.columns(width, tileWidth, gridMetrics.portraitColumns)
             readonly property real cellWidth: width / columns
-            // Caption text of a row costs about a frame on phone: rows made faster than a screen a
-            // second get theirs once grid stops.
-            property bool captionsHeld
 
             function itemIndexAt(x, y) {
                 return GridRows.indexAt(indexAt(x, y), x, cellWidth, columns, dir.count)
-            }
-
-            function holdCaptions(velocity) {
-                if (Math.abs(velocity) > Screen.height)
-                    captionsHeld = true
             }
 
             anchors {
@@ -997,11 +980,6 @@ Item {
             model: gridRows
             delegate: gridRowDelegate
             onColumnsChanged: view.fitGridRows()
-            onVerticalVelocityChanged: holdCaptions(verticalVelocity)
-            onMovingChanged: { console.log("probe grid-moving " + moving + " made " + probeMade + " held " + probeHeld); probeMade = 0; probeHeld = 0; if (!moving) captionsHeld = false }
-            property int probeMade
-            property int probeHeld
-            onCaptionsHeldChanged: console.log("probe grid-held " + captionsHeld + " v " + Math.round(verticalVelocity))
             footer: Item {
                 width: grid.width
                 height: panelSpace.height
