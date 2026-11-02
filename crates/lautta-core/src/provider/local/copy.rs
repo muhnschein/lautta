@@ -219,6 +219,29 @@ mod tests {
     }
 
     #[test]
+    fn buffered_progress_is_shifted_by_the_resume_base() {
+        let d = tempfile::tempdir().unwrap();
+        let (r, w) = rustix::pipe::pipe().unwrap();
+        let mut wf = File::from(w);
+        wf.write_all(&pattern(3000)).unwrap();
+        drop(wf);
+        let dst = File::create(d.path().join("d")).unwrap();
+        let (sink, log) = recorder();
+        let n = copy_fd(
+            &File::from(r),
+            &dst,
+            2000,
+            Some(5000),
+            false,
+            &sink,
+            &Stop::default(),
+        )
+        .unwrap();
+        assert_eq!(n, 3000);
+        assert_eq!(log.lock().unwrap().last(), Some(&(5000, Some(5000))));
+    }
+
+    #[test]
     fn read_errors_are_reported() {
         let d = tempfile::tempdir().unwrap();
         let src = File::open(d.path()).unwrap();
