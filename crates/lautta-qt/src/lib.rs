@@ -17,6 +17,19 @@ pub mod search;
 pub mod transfers;
 pub mod viewers;
 
+/// PROBE (temporary, never merged): `LAUTTA_PROBE=1` prints CLOCK_MONOTONIC stamps to stderr.
+pub fn probe(what: &str) {
+    if std::env::var_os("LAUTTA_PROBE").is_none() {
+        return;
+    }
+    let t = cpp!(unsafe [] -> f64 as "double" {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return ts.tv_sec + ts.tv_nsec / 1e9;
+    });
+    eprintln!("{t:.3} probe {what}");
+}
+
 use cpp::cpp;
 use std::os::raw::{c_char, c_int};
 
@@ -39,6 +52,7 @@ cpp! {{
     #include <QtCore/QRegularExpression>
     #include <cstdio>
     #include <memory>
+    #include <time.h>
 #ifdef LAUTTA_SAILFISH
     #include <sailfishapp.h>
 #endif
@@ -165,7 +179,9 @@ cpp! {{
 /// `argc`/`argv` must be the process arguments as passed to `main`.
 pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
     lautta_core::panics::abort_outside_catch();
+    probe("main");
     start();
+    probe("core-ready");
     cpp!([argc as "int", argv as "char**"] -> c_int as "int" {
             if (argc > 1 && qstrcmp(argv[1], "--qml-check") == 0)
                 return lauttaQmlCheck(argc, argv);
@@ -173,10 +189,13 @@ pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
             count = argc;
     #ifdef LAUTTA_SAILFISH
             QGuiApplication *app = SailfishApp::application(count, argv);
+            rust!(Probe1 [] { probe("app") });
             lauttaInstallTranslations(app, SailfishApp::pathTo(QStringLiteral("translations")).toLocalFile());
             QQuickView *view = SailfishApp::createView();
             lauttaRegisterImageProviders(view->engine());
+            rust!(Probe2 [] { probe("view") });
             view->setSource(SailfishApp::pathToMainQml());
+            rust!(Probe3 [] { probe("qml-created") });
             view->show();
     #else
             QGuiApplication *app = new QGuiApplication(count, argv);

@@ -202,6 +202,7 @@ impl DirectoryModel {
     }
 
     fn load(&mut self) {
+        crate::probe(&format!("dir-load {}", self.uri));
         self.generation += 1;
         self.stop_tasks();
         self.reset_state();
@@ -383,6 +384,21 @@ impl DirectoryModel {
         if generation != self.generation {
             return;
         }
+        let what = match &ev {
+            ListEvent::Cached { entries, .. } => format!("cached {}", entries.len()),
+            ListEvent::Batch(b) => format!("batch {}", b.len()),
+            ListEvent::Done(_) => "done".to_owned(),
+        };
+        let started = std::time::Instant::now();
+        self.on_event_probed(ev);
+        crate::probe(&format!(
+            "dir-event {what} gui_ms={:.1} rows={}",
+            started.elapsed().as_secs_f64() * 1000.0,
+            self.state.len()
+        ));
+    }
+
+    fn on_event_probed(&mut self, ev: ListEvent) {
         match ev {
             ListEvent::Cached { entries, fetched_ms } => {
                 let changes = self.state.show_cached(entries);

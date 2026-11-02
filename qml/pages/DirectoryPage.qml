@@ -12,6 +12,7 @@ Page {
     allowedOrientations: Orientation.All
 
     onStatusChanged: {
+        console.log("probe page-status " + status + " " + uri)
         if (status !== PageStatus.Active)
             return
         if (shown)

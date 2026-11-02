@@ -14,7 +14,8 @@ Page {
     property string uri
 
     readonly property string fileName: App.nameOf(uri)
-    readonly property var layout: doc.loaded ? TextRows.rows(doc.text) : TextRows.empty
+    readonly property var layout: doc.loaded ? probed(TextRows.rows(doc.text)) : TextRows.empty
+    function probed(l) { console.log("probe text-rows " + l.rows.length); return l }
     readonly property real charWidth: metrics.advanceWidth
     readonly property real gutter: Math.max(2, String(layout.lines).length) * charWidth + Theme.paddingLarge
     readonly property string colours: SyntaxColours.palette(Theme)

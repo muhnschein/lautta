@@ -64,6 +64,7 @@ ZoomableFlickable {
         cache: false
 
         onStatusChanged: {
+            console.log("probe photo-status " + status + " " + source)
             if (status == Image.Error) {
                 errorLabel = errorLabelComponent.createObject(flickable)
             }

@@ -101,6 +101,7 @@ impl TextDocument {
 
     fn apply(&mut self, v: ViewedText) -> Option<ColourJob> {
         self.loaded = true;
+        crate::probe("text-loaded");
         self.size = v.size.map_or(-1.0, |s| s as f64);
         self.text = QString::from(v.lines.text());
         self.truncated = v.truncated;
