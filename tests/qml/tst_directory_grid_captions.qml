@@ -282,6 +282,10 @@ ApplicationWindow {
     }
 
     // No finger headless: fling speed handed to the grid's check, stop by moving's handler.
+    function nameOf(cell) {
+        return metrics.nameLines(cell.itemName, cell.width - 2 * cell.gap).join("\n")
+    }
+
     function checkHeldCaptions(view) {
         var grid = view.flickable
         var shown = cellNamed(view, "notes.txt")
@@ -290,7 +294,7 @@ ApplicationWindow {
         expect(!grid.captionsHeld, "a slow scroll holds no text")
         grid.holdCaptions(-2 * Screen.height)
         expect(grid.captionsHeld, "a fast fling holds it")
-        same(textOf(shown, "gridName"), "notes.txt", "a cell made before keeps its name")
+        same(textOf(shown, "gridName"), nameOf(shown), "a cell made before keeps its name")
         install("late.txt")
         view.model.refresh()
         waitFor(function () { return view.model.count === 5 }, "a file made in the fling")
@@ -299,10 +303,10 @@ ApplicationWindow {
              "a cell made in a fast fling has no text yet")
         same(late.implicitHeight, height, "but the room for it")
         grid.movingChanged()
-        same(textOf(late, "gridName"), "late.txt", "the grid stopped: its name")
+        same(textOf(late, "gridName"), nameOf(late), "the grid stopped: its name")
         same(textOf(late, "gridCaption1"), Format.formatFileSize(20), "and its lines")
         grid.holdCaptions(2 * Screen.height)
-        same(textOf(late, "gridName"), "late.txt", "a later fling leaves it be")
+        same(textOf(late, "gridName"), nameOf(late), "a later fling leaves it be")
         grid.movingChanged()
         expect(!grid.captionsHeld, "and ends with the grid")
     }
