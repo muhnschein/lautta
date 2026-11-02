@@ -1,0 +1,8 @@
+battery: 59% (gauge 67%) 4078mV ocv 4007mV 25C Charging Good charging_enabled=1
+screen: 1080x2280
+rpm: harbour-lautta-0.1.0-1.aarch64.rpm sha256 0a1a80749d7c9e44f80b1f01d6d5ca55dd30ba00968f3354e35d0f2537e262b2
+source: muhnschein/lautta run 41174925595 artifact 13032750672
+state: clean, standalone (before build)
+rpm: harbour-lautta-0.1.0-1.aarch64.rpm sha256 592db31814cc2e4592476f271c3bd4fa11b0ead7f57d0093c5e598552afb953f
+source: muhnschein/lautta run 41410441081 artifact 13125547228
+state: clean, standalone (after build)

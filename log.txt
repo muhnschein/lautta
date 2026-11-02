@@ -1,0 +1,19 @@
+location: off
+baseline: Home
+before: Pictures holds: Default lautta-test 
+before: dconf settings: '{"sort_key":"modified","show_hidden":true}'
+Running as unit: harness-harbour-lautta-1793608579402.service
+shot: out/before-1-browse.png
+shot: out/before-2-pictures.png
+shot: out/before-3-folder.png
+after: Pictures holds: Default lautta-test 
+after: dconf settings: '{"sort_key":"modified","show_hidden":true}'
+netns: app with own network namespace ran since boot; rebooting phone (netns_wedged)
+reboot_phone: up after 141 s
+location: off
+close: jolla-messages (5764)
+baseline: Home
+Running as unit: harness-harbour-lautta-1793608815227.service
+shot: out/after-1-browse.png
+shot: out/after-2-pictures.png
+shot: out/after-3-folder.png
