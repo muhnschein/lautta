@@ -88,7 +88,7 @@ Item {
         objectName: "fileGlyph"
 
         anchors.centerIn: parent
-        icon: icon.iconFor(icon.category, icon.isDir)
+        icon: typeof lauttaExp === "string" && lauttaExp.indexOf("noglyph") >= 0 ? "" : icon.iconFor(icon.category, icon.isDir)
         iconSize: icon.glyphSize
         color: icon.videoShown ? Theme.lightPrimaryColor : Theme.primaryColor
         highlightColor: icon.videoShown ? Theme.highlightFromColor(Theme.highlightColor, Theme.LightOnDark)

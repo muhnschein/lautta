@@ -622,13 +622,14 @@ Item {
         BackgroundItem {
             id: cell
 
+            readonly property string exp: typeof lauttaExp === "string" ? lauttaExp : ""
             readonly property string itemName: model.name
             readonly property int items: model.itemCount
             readonly property bool counting: model.isDir && dir.folderCounts
             readonly property string countKey: counting + "/" + model.modified + "/" + dir.showHidden
             readonly property string previewKey: model.textThumb ? model.uri + "/" + model.modified + "/" + model.size : ""
             property string previewAsked
-            readonly property var captions: DirFormat.gridCaptions(model.isDir, model.size, model.modified,
+            readonly property var captions: exp.indexOf("nocap") >= 0 ? [] : DirFormat.gridCaptions(model.isDir, model.size, model.modified,
                                                                    dir.folderCounts, items, model.itemCountCapped)
             readonly property real gap: gridMetrics.gap
 
@@ -639,6 +640,8 @@ Item {
             onCountKeyChanged: cell.countItems()
             onPreviewKeyChanged: cell.askPreview()
             Component.onCompleted: {
+                if (exp.indexOf("nocount") >= 0)
+                    return
                 cell.countItems()
                 cell.askPreview()
             }
@@ -675,10 +678,15 @@ Item {
                     dragSelect.end()
             }
 
-            RenameRemorse {
-                owner: view
-                row: cell
-                uri: model.uri
+            Loader {
+                active: cell.exp.indexOf("noremorse") < 0
+                sourceComponent: Component {
+                    RenameRemorse {
+                        owner: view
+                        row: cell
+                        uri: model.uri
+                    }
+                }
             }
 
             Item {
@@ -704,7 +712,7 @@ Item {
                     category: model.category
                     isDir: model.isDir
                     isSymlink: model.isSymlink
-                    thumbnailSource: model.thumbnailSource
+                    thumbnailSource: cell.exp.indexOf("nothumb") >= 0 ? "" : model.thumbnailSource
                     mimeType: model.mimeType
                     selected: model.selected
                     previewText: model.textPreview
@@ -723,6 +731,7 @@ Item {
                     left: tile.left
                     right: tile.right
                 }
+                visible: cell.exp.indexOf("nocap") < 0
                 metrics: gridMetrics
                 name: cell.itemName
                 captions: cell.captions
@@ -768,7 +777,11 @@ Item {
             height: GridRows.tallest(children)
             onEndChanged: regroup()
             onHoldingChanged: DelegateModel.inPersistedItems = holding
-            Component.onCompleted: regroup()
+            Component.onCompleted: {
+                var t = Date.now()
+                regroup()
+                console.log("probe gridrow " + index + " ms=" + (Date.now() - t))
+            }
 
             DelegateModel {
                 id: rowCells
