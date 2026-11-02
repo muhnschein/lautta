@@ -6,7 +6,6 @@ import "../components"
 import "../components/viewers"
 import "../components/ErrorText.js" as ErrorText
 import "../components/viewers/SyntaxColours.js" as SyntaxColours
-import "../components/viewers/TextRows.js" as TextRows
 
 Page {
     id: page
@@ -14,10 +13,8 @@ Page {
     property string uri
 
     readonly property string fileName: App.nameOf(uri)
-    readonly property var layout: doc.loaded ? probed(TextRows.rows(doc.text)) : TextRows.empty
-    function probed(l) { console.log("probe text-rows " + l.rows.length); return l }
     readonly property real charWidth: metrics.advanceWidth
-    readonly property real gutter: Math.max(2, String(layout.lines).length) * charWidth + Theme.paddingLarge
+    readonly property real gutter: Math.max(2, String(doc.lineCount).length) * charWidth + Theme.paddingLarge
     readonly property string colours: SyntaxColours.palette(Theme)
 
     allowedOrientations: Orientation.All
@@ -58,7 +55,7 @@ Page {
         id: view
 
         anchors.fill: parent
-        model: page.layout.rows
+        model: doc.rowCount
         clip: true
         // Never sideways: sideways-flickable list keeps swipe-back from page stack.
         flickableDirection: Flickable.VerticalFlick
@@ -88,6 +85,8 @@ Page {
         }
 
         delegate: Item {
+            readonly property var row: doc.row(index)
+
             width: view.width
             height: Math.max(line.implicitHeight, Theme.fontSizeExtraSmall * 1.4)
 
@@ -95,7 +94,7 @@ Page {
                 x: Theme.paddingSmall
                 width: page.gutter - Theme.paddingLarge
                 horizontalAlignment: Text.AlignRight
-                text: modelData.number > 0 ? modelData.number : ""
+                text: row.number > 0 ? row.number : ""
                 font.family: "monospace"
                 font.pixelSize: Theme.fontSizeExtraSmall
                 color: Theme.secondaryColor
@@ -108,7 +107,7 @@ Page {
                 width: parent.width - page.gutter - Theme.horizontalPageMargin
                 // Row characters come back escaped from core with colours: file never read as
                 // markup.
-                text: doc.styledRow(modelData.text, modelData.line, modelData.start, doc.highlighted ? page.colours : "")
+                text: doc.styledRow(row.text, row.line, row.start, doc.highlighted ? page.colours : "")
                 font.family: "monospace"
                 font.pixelSize: Theme.fontSizeExtraSmall
                 wrapMode: Text.WrapAtWordBoundaryOrAnywhere

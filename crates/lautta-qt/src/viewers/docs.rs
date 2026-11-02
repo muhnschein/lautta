@@ -5,9 +5,10 @@ use crate::runtime::core;
 use lautta_core::app_viewers::ViewedText;
 use lautta_core::org::recents::RecentKind;
 use lautta_core::preview::highlight::{ColourJob, ColouredText, Palette};
+use lautta_core::preview::rows::TextRows;
 use lautta_core::Error;
 use qmetaobject::prelude::*;
-use qmetaobject::qml_register_type;
+use qmetaobject::{qml_register_type, QVariantMap};
 
 pub fn register() {
     qml_register_type::<TextDocument>(&crate::qml_uri(), 1, 0, &crate::cstr("TextDocument"));
@@ -30,6 +31,9 @@ pub struct TextDocument {
     size: qt_property!(f64; NOTIFY stateChanged),
     errorKind: qt_property!(QString; NOTIFY stateChanged),
     errorMessage: qt_property!(QString; NOTIFY stateChanged),
+    /// Viewer rows of `text` (`row`); 0 until loaded.
+    rowCount: qt_property!(i32; NOTIFY stateChanged),
+    lineCount: qt_property!(i32; NOTIFY stateChanged),
     /// Colour grammar, "" without.
     syntax: qt_property!(QString; NOTIFY colouredChanged),
     /// First lines (or all) have colours; may come after the text.
@@ -39,13 +43,16 @@ pub struct TextDocument {
     colouredChanged: qt_signal!(),
 
     reload: qt_method!(fn(&mut self)),
+    /// Viewer row `index`: `number` (from 1 on a line's first row, else 0), `text` (tabs expanded),
+    /// `line` (from 0), `start` (its column in the line). Empty map past the rows.
+    row: qt_method!(fn(&self, index: i32) -> QVariantMap),
     /// Row as StyledText: every character escaped, whitespace kept, coloured per `colours`
-    /// (`class=#rrggbb,…`, SyntaxColours.js). `row` text, its line from 0 and its start in the line
-    /// with tabs expanded (components/viewers/TextRows.js).
+    /// (`class=#rrggbb,…`, SyntaxColours.js). `row` text, its line and start as `row` gives them.
     styledRow: qt_method!(fn(&self, row: QString, line: i32, start: i32, colours: QString) -> QString),
 
     generation: u64,
     lines: ColouredText,
+    rows: TextRows,
 }
 
 impl TextDocument {
@@ -108,6 +115,7 @@ impl TextDocument {
         self.text = QString::from(v.lines.text());
         self.truncated = v.truncated;
         self.validUtf8 = v.valid_utf8;
+        self.set_rows(TextRows::new(v.lines.text()));
         self.set_lines(v.lines);
         v.colouring
     }
@@ -131,6 +139,25 @@ impl TextDocument {
         self.colouredChanged();
     }
 
+    fn set_rows(&mut self, rows: TextRows) {
+        self.rowCount = i32::try_from(rows.len()).unwrap_or(i32::MAX);
+        self.lineCount = i32::try_from(rows.lines()).unwrap_or(i32::MAX);
+        self.rows = rows;
+    }
+
+    fn row(&self, index: i32) -> QVariantMap {
+        let mut map = QVariantMap::default();
+        let Some(row) = usize::try_from(index).ok().and_then(|i| self.rows.row(i)) else {
+            return map;
+        };
+        let int = |n: usize| QVariant::from(i32::try_from(n).unwrap_or(i32::MAX));
+        map.insert(QString::from("number"), int(row.number));
+        map.insert(QString::from("text"), QString::from(row.text).into());
+        map.insert(QString::from("line"), int(row.line));
+        map.insert(QString::from("start"), int(row.start));
+        map
+    }
+
     fn styledRow(&self, row: QString, line: i32, start: i32, colours: QString) -> QString {
         let palette = Palette::parse(&colours.to_string());
         // Negative line is past every line: escaped, no colours.
@@ -146,6 +173,7 @@ impl TextDocument {
         self.validUtf8 = false;
         self.size = -1.0;
         self.text = QString::default();
+        self.set_rows(TextRows::default());
         self.set_lines(ColouredText::default());
     }
 

@@ -76,7 +76,7 @@ QtQuick.Window {
     }
 
     function showsItsLine(row, number) {
-        var line = page.layout.rows[number - 1].text
+        var line = row.parent.row.text
         plain.width = row.width
         plain.text = line
         expect(row.contentWidth > 0 && row.lineCount === plain.lineCount
@@ -126,7 +126,7 @@ QtQuick.Window {
         var row = shown["1"]
         expect(row.text.indexOf("<font") < 0 && row.text.indexOf("<img") < 0 && row.text.indexOf("<b>") < 0,
                "an unknown type has plain rows: " + row.text)
-        var line = page.layout.rows[0].text
+        var line = row.parent.row.text
         expect(line.indexOf("<img") === 0, "the fixture is markup: " + line)
         showsItsLine(row, 1)
     }
@@ -138,9 +138,7 @@ QtQuick.Window {
         onTriggered: {
             var shown = window.page ? window.rows() : {}
             if (++window.waited > 300)
-                return window.fail("step " + window.step + " timed out: rows "
-                                   + JSON.stringify(window.page.layout.rows.map(function(r) { return r.text.slice(0, 80) }))
-                                   + ", rows " + JSON.stringify(Object.keys(shown).map(function(n) { return n + ": " + shown[n].text })))
+                return window.fail("step " + window.step + " timed out: rows " + JSON.stringify(Object.keys(shown).map(function(n) { return n + ": " + shown[n].text })))
             switch (window.step) {
             case 0:
                 if (!shown["2"] || shown["2"].text.indexOf("<font") < 0)

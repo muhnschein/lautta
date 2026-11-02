@@ -515,7 +515,7 @@ impl QtParser {
     }
 }
 
-/// Rows as TextRows.js makes them, with starts: tabs to next multiple of four, row ends after 1000
+/// Rows as `preview::rows` makes them, with starts: tabs to next multiple of four, row ends after 1000
 /// columns or before (never inside a surrogate pair), UTF-16 units.
 fn rows_of(line: &str) -> Vec<(usize, String)> {
     let mut expanded = String::new();
