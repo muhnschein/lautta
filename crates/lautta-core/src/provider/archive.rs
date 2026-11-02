@@ -362,7 +362,10 @@ impl Inner {
             }
             Loc::TarStream(offset) => {
                 let (file, at) = {
-                    let mut spill = self.spill.lock().unwrap_or_else(|e| e.into_inner());
+                    let mut spill = self
+                        .spill
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
                     if spill.is_none() {
                         let comp = match self.format {
                             ArchiveFormat::Tar(c) => c,
