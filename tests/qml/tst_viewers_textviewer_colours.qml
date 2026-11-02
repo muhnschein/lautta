@@ -78,8 +78,6 @@ QtQuick.Window {
     }
 
     function lineOf(number) {
-        for (var waited = 0; waited < 100 && (shownFile.loading || !shownFile.loaded); ++waited)
-            tools.pump(50)
         return shownFile.text.split("\n")[number - 1]
     }
 
@@ -145,23 +143,24 @@ QtQuick.Window {
         running: window.scenarioRunning
         onTriggered: {
             var shown = window.page ? window.rows() : {}
+            var plainReady = window.page && shownFile.loaded && !shownFile.loading && shownFile.uri === window.page.uri
             if (++window.waited > 300)
                 return window.fail("step " + window.step + " timed out: rows " + JSON.stringify(Object.keys(shown).map(function(n) { return n + ": " + shown[n].text })))
             switch (window.step) {
             case 0:
-                if (!shown["2"] || shown["2"].text.indexOf("<font") < 0)
+                if (!plainReady || !shown["2"] || shown["2"].text.indexOf("<font") < 0)
                     return
                 window.checkWrapped(shown)
                 window.scrollTo(2)
                 break
             case 1:
-                if (!shown["4"] || shown["3"].text.indexOf("<font") < 0)
+                if (!plainReady || !shown["4"] || shown["3"].text.indexOf("<font") < 0)
                     return
                 window.checkScript(shown)
                 window.page = app.pageStack.replace(markupPage, {}, PageStackAction.Immediate)
                 break
             case 2:
-                if (!shown["1"])
+                if (!plainReady || !shown["1"])
                     return
                 if (window.waited < 10)
                     return
