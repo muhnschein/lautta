@@ -12,7 +12,9 @@ Item {
     property int minLines
     property bool emphasised
     property bool pressed
-    readonly property var nameLines: visible && metrics ? metrics.nameLines(name, width) : []
+    readonly property string exp: typeof lauttaExp === "string" ? lauttaExp : ""
+    readonly property bool oneCap: exp.indexOf("onecap") >= 0
+    readonly property var nameLines: visible && metrics && (exp.indexOf("wguard") < 0 || width > 0) ? metrics.nameLines(name, width) : []
     readonly property int captionLines: Math.max(captions.length, minLines)
 
     implicitHeight: metrics ? nameLines.length * metrics.nameLineHeight + captionLines * metrics.captionHeight : 0
@@ -32,8 +34,21 @@ Item {
         font.pixelSize: Theme.fontSizeExtraSmall
         color: caption.emphasised ? Theme.highlightColor : Theme.primaryColor
     }
+    Label {
+        visible: caption.oneCap
+        y: nameLabel.height
+        width: caption.width
+        height: caption.metrics ? caption.captionLines * caption.metrics.captionHeight : 0
+        horizontalAlignment: Text.AlignHCenter
+        text: caption.oneCap ? caption.captions.join("\n") : ""
+        lineHeightMode: Text.FixedHeight
+        lineHeight: caption.metrics ? caption.metrics.captionHeight : 0
+        truncationMode: TruncationMode.Elide
+        font.pixelSize: Theme.fontSizeTiny
+        color: caption.pressed ? Theme.secondaryHighlightColor : Theme.secondaryColor
+    }
     Repeater {
-        model: caption.captionLines
+        model: caption.oneCap ? 0 : caption.captionLines
 
         Label {
             objectName: "gridCaption" + index

@@ -629,7 +629,7 @@ Item {
             readonly property string countKey: counting + "/" + model.modified + "/" + dir.showHidden
             readonly property string previewKey: model.textThumb ? model.uri + "/" + model.modified + "/" + model.size : ""
             property string previewAsked
-            readonly property var captions: exp.indexOf("nocap") >= 0 ? [] : DirFormat.gridCaptions(model.isDir, model.size, model.modified,
+            readonly property var captions: exp.indexOf("nocap") >= 0 ? [] : (exp.indexOf("fastcap") >= 0 ? DirFormat.gridCaptionsFast : DirFormat.gridCaptions)(model.isDir, model.size, model.modified,
                                                                    dir.folderCounts, items, model.itemCountCapped)
             readonly property real gap: gridMetrics.gap
 
