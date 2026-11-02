@@ -25,10 +25,13 @@ use crate::trash::Trash;
 use crate::uri::Uri;
 use crate::viewprefs::{ViewMode, ViewPrefs};
 use crate::volumes::VolumeWatcher;
+use crate::watch::{DirWatch, DirWatcher, WatchEvent, DIR_DEBOUNCE};
 use crate::workcopy::WorkingCopies;
 use async_trait::async_trait;
+use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, MutexGuard};
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::watch;
 
 const DIRCACHE_ENTRIES: usize = 64;
@@ -59,6 +62,8 @@ pub struct Core {
     settings_changed: watch::Sender<u64>,
     /// Follows removable-media root; `None` without inotify, Browse then rescans on refresh.
     _volume_watch: Option<VolumeWatcher>,
+    /// Made on first use, again after a failed start.
+    dir_watcher: Mutex<Option<DirWatcher>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -148,6 +153,7 @@ impl Core {
             settings: Mutex::new(settings),
             settings_changed: watch::channel(0).0,
             _volume_watch: volume_watch,
+            dir_watcher: Mutex::default(),
             paths,
             db,
             locations,
@@ -179,6 +185,19 @@ impl Core {
 
     pub fn watch_settings(&self) -> watch::Receiver<u64> {
         self.settings_changed.subscribe()
+    }
+
+    /// Changes of local folder `dir` after [`DIR_DEBOUNCE`] of quiet; every folder shares one
+    /// watcher.
+    pub fn watch_dir(&self, dir: &Path) -> Result<(DirWatch, UnboundedReceiver<WatchEvent>)> {
+        let watcher = {
+            let mut slot = lock(&self.dir_watcher);
+            match &*slot {
+                Some(w) => w.clone(),
+                None => slot.insert(DirWatcher::new(DIR_DEBOUNCE)?).clone(),
+            }
+        };
+        watcher.watch(dir)
     }
 
     pub fn view_prefs(&self) -> ViewPrefs {

@@ -1,27 +1,26 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! inotify watching with debouncing.
 //!
-//! [`DirWatcher`] watches a set of local folders (not recursively) while open in the browser and
-//! sends one [`WatchEvent::Changed`] per folder after changes were quiet for the debounce time.
+//! [`DirWatcher`] watches local folders (not recursively) while open in the browser and sends one
+//! [`WatchEvent::Changed`] per folder to each of its [`DirWatch`]es after changes were quiet for
+//! the debounce time.
 //!
 //! Raw `notify` events are handled on a small worker thread owning the debounce state; consumers
-//! get events through an unbounded tokio channel. The thread stops when the watcher is dropped.
+//! get events through unbounded tokio channels. The thread stops when the watcher is dropped.
 
 use crate::error::{Error, ErrorKind, Result};
 use notify::event::{AccessKind, AccessMode};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 pub const DIR_DEBOUNCE: Duration = Duration::from_millis(250);
-/// How often the worker checks whether it should stop.
-const STOP_POLL: Duration = Duration::from_millis(100);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WatchEvent {
@@ -63,16 +62,9 @@ impl<K: Eq + Hash + Clone> Debouncer<K> {
         self.pending.values().map(|last| *last + self.delay).min()
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    #[cfg(test)]
+    fn is_empty(&self) -> bool {
         self.pending.is_empty()
-    }
-}
-
-pub(crate) struct StopOnDrop(pub(crate) Arc<AtomicBool>);
-
-impl Drop for StopOnDrop {
-    fn drop(&mut self) {
-        self.0.store(true, Ordering::Relaxed);
     }
 }
 
@@ -102,12 +94,12 @@ pub(crate) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     }
 }
 
-/// Stops when `stop` is set, the raw channel closes, or `emit` returns false (consumer gone).
-/// `classify` maps a raw event to the keys it touches; `emit` delivers a due key.
+/// Stops when the raw channel closes (its watcher dropped) or `emit` returns false (consumer
+/// gone). Blocks while nothing is pending: no wakeups when idle. `classify` maps a raw event to
+/// the keys it touches; `emit` delivers a due key.
 pub(crate) fn spawn_worker<K, C, E>(
     raw: mpsc::Receiver<notify::Result<Event>>,
     delay: Duration,
-    stop: Arc<AtomicBool>,
     classify: C,
     mut emit: E,
 ) where
@@ -119,11 +111,12 @@ pub(crate) fn spawn_worker<K, C, E>(
         .name("lautta-watch".into())
         .spawn(move || {
             let mut debounce = Debouncer::new(delay);
-            while !stop.load(Ordering::Relaxed) {
-                let wait = debounce.next_deadline().map_or(STOP_POLL, |d| {
-                    d.saturating_duration_since(Instant::now()).min(STOP_POLL)
-                });
-                match raw.recv_timeout(wait) {
+            loop {
+                let got = match debounce.next_deadline() {
+                    None => raw.recv().map_err(|_| RecvTimeoutError::Disconnected),
+                    Some(d) => raw.recv_timeout(d.saturating_duration_since(Instant::now())),
+                };
+                match got {
                     Ok(Ok(event)) => {
                         let now = Instant::now();
                         for key in classify(&event) {
@@ -134,11 +127,9 @@ pub(crate) fn spawn_worker<K, C, E>(
                     Err(RecvTimeoutError::Timeout) => {}
                     Err(RecvTimeoutError::Disconnected) => break,
                 }
-                if !debounce.is_empty() {
-                    for key in debounce.take_due(Instant::now()) {
-                        if !emit(key) {
-                            return;
-                        }
+                for key in debounce.take_due(Instant::now()) {
+                    if !emit(key) {
+                        return;
                     }
                 }
             }
@@ -156,73 +147,108 @@ fn changes_listing(kind: &EventKind) -> bool {
     }
 }
 
+type Subscribers = HashMap<PathBuf, Vec<(u64, UnboundedSender<WatchEvent>)>>;
+
+/// One inotify instance and one thread for all folders of the process: the kernel allows few
+/// instances per user (128 by default), shared by every app.
+#[derive(Clone)]
 pub struct DirWatcher {
+    shared: Arc<Shared>,
+}
+
+struct Shared {
     watcher: Mutex<RecommendedWatcher>,
-    watched: Arc<Mutex<HashSet<PathBuf>>>,
-    _stop: StopOnDrop,
+    subs: Arc<Mutex<Subscribers>>,
+    next_id: AtomicU64,
+}
+
+/// Follows one folder until dropped.
+pub struct DirWatch {
+    shared: Arc<Shared>,
+    dir: PathBuf,
+    id: u64,
 }
 
 impl DirWatcher {
-    /// Changes arrive on the returned receiver after `debounce` of quiet.
-    pub fn new(debounce: Duration) -> Result<(DirWatcher, UnboundedReceiver<WatchEvent>)> {
+    /// Changes arrive after `debounce` of quiet.
+    pub fn new(debounce: Duration) -> Result<DirWatcher> {
         let (watcher, raw) = raw_watcher()?;
-        let (tx, rx) = unbounded_channel();
-        let watched: Arc<Mutex<HashSet<PathBuf>>> = Arc::default();
-        let stop = Arc::new(AtomicBool::new(false));
-        let shared = watched.clone();
+        let subs: Arc<Mutex<Subscribers>> = Arc::default();
+        let classify_subs = subs.clone();
+        let emit_subs = subs.clone();
         spawn_worker(
             raw,
             debounce,
-            stop.clone(),
-            move |ev| dirs_touched(&lock(&shared), ev),
-            move |dir: PathBuf| tx.send(WatchEvent::Changed(dir)).is_ok(),
-        );
-        Ok((
-            DirWatcher {
-                watcher: Mutex::new(watcher),
-                watched,
-                _stop: StopOnDrop(stop),
+            move |ev| dirs_touched(&lock(&classify_subs), ev),
+            move |dir: PathBuf| {
+                if let Some(list) = lock(&emit_subs).get(&dir) {
+                    for (_, tx) in list {
+                        let _ = tx.send(WatchEvent::Changed(dir.clone()));
+                    }
+                }
+                true
             },
-            rx,
-        ))
+        );
+        Ok(DirWatcher {
+            shared: Arc::new(Shared {
+                watcher: Mutex::new(watcher),
+                subs,
+                next_id: AtomicU64::new(0),
+            }),
+        })
     }
 
-    /// Starts watching `dir` (no-op when already watched). `NotFound` if it
+    /// Changes of `dir` arrive on the receiver while the [`DirWatch`] lives. `NotFound` if it
     /// does not exist.
-    pub fn watch(&self, dir: &Path) -> Result<()> {
-        let mut set = lock(&self.watched);
-        if set.contains(dir) {
-            return Ok(());
+    pub fn watch(&self, dir: &Path) -> Result<(DirWatch, UnboundedReceiver<WatchEvent>)> {
+        let mut subs = lock(&self.shared.subs);
+        if !subs.contains_key(dir) {
+            lock(&self.shared.watcher)
+                .watch(dir, RecursiveMode::NonRecursive)
+                .map_err(map_notify_error)?;
         }
-        lock(&self.watcher)
-            .watch(dir, RecursiveMode::NonRecursive)
-            .map_err(map_notify_error)?;
-        set.insert(dir.to_path_buf());
-        Ok(())
-    }
-
-    pub fn unwatch(&self, dir: &Path) -> Result<()> {
-        if !lock(&self.watched).remove(dir) {
-            return Ok(());
-        }
-        match lock(&self.watcher).unwatch(dir) {
-            // The folder (and with it the kernel watch) may be gone already.
-            Err(e) if matches!(e.kind, notify::ErrorKind::WatchNotFound) => Ok(()),
-            other => other.map_err(map_notify_error),
-        }
+        let id = self.shared.next_id.fetch_add(1, Ordering::Relaxed);
+        let (tx, rx) = unbounded_channel();
+        subs.entry(dir.to_path_buf()).or_default().push((id, tx));
+        let watch = DirWatch {
+            shared: self.shared.clone(),
+            dir: dir.to_path_buf(),
+            id,
+        };
+        Ok((watch, rx))
     }
 
     pub fn watched(&self) -> Vec<PathBuf> {
-        let mut v: Vec<PathBuf> = lock(&self.watched).iter().cloned().collect();
+        let mut v: Vec<PathBuf> = lock(&self.shared.subs).keys().cloned().collect();
         v.sort();
         v
     }
 }
 
-fn dirs_touched(watched: &HashSet<PathBuf>, ev: &Event) -> Vec<PathBuf> {
+impl Drop for DirWatch {
+    fn drop(&mut self) {
+        let mut subs = lock(&self.shared.subs);
+        let Some(list) = subs.get_mut(&self.dir) else {
+            return;
+        };
+        list.retain(|(id, _)| *id != self.id);
+        if !list.is_empty() {
+            return;
+        }
+        subs.remove(&self.dir);
+        match lock(&self.shared.watcher).unwatch(&self.dir) {
+            // The folder (and with it the kernel watch) may be gone already.
+            Err(e) if matches!(e.kind, notify::ErrorKind::WatchNotFound) => {}
+            Err(e) => log::warn!("cannot stop watching a folder: {}", map_notify_error(e)),
+            Ok(()) => {}
+        }
+    }
+}
+
+fn dirs_touched<V>(watched: &HashMap<PathBuf, V>, ev: &Event) -> Vec<PathBuf> {
     if ev.need_rescan() {
         // The kernel queue overflowed: assume everything changed.
-        return watched.iter().cloned().collect();
+        return watched.keys().cloned().collect();
     }
     if !changes_listing(&ev.kind) {
         return Vec::new();
@@ -231,8 +257,8 @@ fn dirs_touched(watched: &HashSet<PathBuf>, ev: &Event) -> Vec<PathBuf> {
     for path in &ev.paths {
         let dir = path
             .parent()
-            .filter(|p| watched.contains(*p))
-            .or_else(|| watched.get(path).map(PathBuf::as_path));
+            .filter(|p| watched.contains_key(*p))
+            .or_else(|| watched.get_key_value(path).map(|(k, _)| k.as_path()));
         if let Some(dir) = dir {
             if !out.iter().any(|d| d == dir) {
                 out.push(dir.to_path_buf());
@@ -305,7 +331,7 @@ mod tests {
 
     #[test]
     fn dir_events_map_to_the_watched_parent() {
-        let watched: HashSet<PathBuf> = [PathBuf::from("/w/a"), PathBuf::from("/w/b")].into();
+        let watched: HashMap<PathBuf, ()> = [(PathBuf::from("/w/a"), ()), (PathBuf::from("/w/b"), ())].into();
         let touched = |e: Event| dirs_touched(&watched, &e);
         assert_eq!(
             touched(ev(EventKind::Create(CreateKind::File), &["/w/a/x"])),
@@ -350,24 +376,27 @@ mod tests {
 
     #[test]
     fn overflow_marks_every_folder_changed() {
-        let watched: HashSet<PathBuf> = [PathBuf::from("/w/a"), PathBuf::from("/w/b")].into();
+        let watched: HashMap<PathBuf, ()> = [(PathBuf::from("/w/a"), ()), (PathBuf::from("/w/b"), ())].into();
         let e = Event::new(EventKind::Other).set_flag(notify::event::Flag::Rescan);
         let mut got = dirs_touched(&watched, &e);
         got.sort();
         assert_eq!(got, [PathBuf::from("/w/a"), PathBuf::from("/w/b")]);
     }
 
+    fn changed(dir: &tempfile::TempDir) -> Option<WatchEvent> {
+        Some(WatchEvent::Changed(dir.path().to_path_buf()))
+    }
+
     #[tokio::test]
     async fn dir_watcher_reports_a_burst_once() {
         let d = tempfile::tempdir().unwrap();
         // Long quiet time: a stalled writer on a loaded runner must not split the burst.
-        let (w, mut rx) = DirWatcher::new(Duration::from_secs(2)).unwrap();
-        w.watch(d.path()).unwrap();
+        let w = DirWatcher::new(Duration::from_secs(2)).unwrap();
+        let (_watch, mut rx) = w.watch(d.path()).unwrap();
         for i in 0..10 {
             std::fs::write(d.path().join(format!("f{i}")), "x").unwrap();
         }
-        let first = next(&mut rx, 30).await.unwrap();
-        assert_eq!(first, WatchEvent::Changed(d.path().to_path_buf()));
+        assert_eq!(next(&mut rx, 30).await, changed(&d));
         assert!(silent(&mut rx, 500).await, "the burst must collapse to one event");
     }
 
@@ -375,14 +404,10 @@ mod tests {
     async fn sees(act: impl FnOnce(&Path)) {
         let d = tempfile::tempdir().unwrap();
         std::fs::write(d.path().join("old"), "x").unwrap();
-        let (w, mut rx) = DirWatcher::new(SHORT).unwrap();
-        w.watch(d.path()).unwrap();
-        w.watch(d.path()).unwrap();
+        let w = DirWatcher::new(SHORT).unwrap();
+        let (_watch, mut rx) = w.watch(d.path()).unwrap();
         act(d.path());
-        assert_eq!(
-            next(&mut rx, 30).await,
-            Some(WatchEvent::Changed(d.path().to_path_buf()))
-        );
+        assert_eq!(next(&mut rx, 30).await, changed(&d));
     }
 
     #[tokio::test]
@@ -405,37 +430,90 @@ mod tests {
         let a = tempfile::tempdir().unwrap();
         let b = tempfile::tempdir().unwrap();
         std::fs::create_dir(a.path().join("sub")).unwrap();
-        let (w, mut rx) = DirWatcher::new(SHORT).unwrap();
-        w.watch(a.path()).unwrap();
-        w.watch(b.path()).unwrap();
-        assert_eq!(w.watched().len(), 2);
+        let w = DirWatcher::new(SHORT).unwrap();
+        let (_wa, mut rx_a) = w.watch(a.path()).unwrap();
+        let (_wb, mut rx_b) = w.watch(b.path()).unwrap();
+        let mut both = vec![a.path().to_path_buf(), b.path().to_path_buf()];
+        both.sort();
+        assert_eq!(w.watched(), both);
         std::fs::write(b.path().join("x"), "x").unwrap();
-        assert_eq!(
-            next(&mut rx, 30).await,
-            Some(WatchEvent::Changed(b.path().to_path_buf()))
-        );
-        assert!(silent(&mut rx, 300).await);
+        assert_eq!(next(&mut rx_b, 30).await, changed(&b));
+        assert!(silent(&mut rx_a, 300).await, "only the changed folder hears it");
         std::fs::write(a.path().join("sub/deep"), "x").unwrap();
-        assert!(silent(&mut rx, 400).await, "grandchildren are not watched");
+        assert!(silent(&mut rx_a, 400).await, "grandchildren are not watched");
     }
 
     #[tokio::test]
-    async fn unwatch_stops_events() {
+    async fn watches_of_one_folder_share_it_until_the_last_is_dropped() {
         let d = tempfile::tempdir().unwrap();
-        let (w, mut rx) = DirWatcher::new(SHORT).unwrap();
-        w.watch(d.path()).unwrap();
-        w.unwatch(d.path()).unwrap();
-        w.unwatch(d.path()).unwrap();
-        assert!(w.watched().is_empty());
+        let w = DirWatcher::new(SHORT).unwrap();
+        let (first, mut rx1) = w.watch(d.path()).unwrap();
+        let (second, mut rx2) = w.watch(d.path()).unwrap();
+        assert_eq!(w.watched(), [d.path().to_path_buf()]);
         std::fs::write(d.path().join("x"), "x").unwrap();
-        assert!(silent(&mut rx, 400).await);
+        assert_eq!(next(&mut rx1, 30).await, changed(&d));
+        assert_eq!(next(&mut rx2, 30).await, changed(&d));
+        drop(first);
+        assert_eq!(next(&mut rx1, 30).await, None, "dropped watch closes its channel");
+        assert_eq!(w.watched(), [d.path().to_path_buf()]);
+        std::fs::write(d.path().join("y"), "x").unwrap();
+        assert_eq!(next(&mut rx2, 30).await, changed(&d));
+        drop(second);
+        assert!(w.watched().is_empty());
+        assert_eq!(next(&mut rx2, 30).await, None);
+    }
+
+    #[tokio::test]
+    async fn folder_can_be_watched_again_after_its_last_watch_is_dropped() {
+        let d = tempfile::tempdir().unwrap();
+        let w = DirWatcher::new(SHORT).unwrap();
+        drop(w.watch(d.path()).unwrap());
+        let (_watch, mut rx) = w.watch(d.path()).unwrap();
+        std::fs::write(d.path().join("x"), "x").unwrap();
+        assert_eq!(next(&mut rx, 30).await, changed(&d));
+    }
+
+    #[tokio::test]
+    async fn dropped_receiver_does_not_stop_other_watches() {
+        let a = tempfile::tempdir().unwrap();
+        let w = DirWatcher::new(SHORT).unwrap();
+        let (_gone, rx_gone) = w.watch(a.path()).unwrap();
+        drop(rx_gone);
+        let (_kept, mut rx) = w.watch(a.path()).unwrap();
+        std::fs::write(a.path().join("x"), "x").unwrap();
+        assert_eq!(next(&mut rx, 30).await, changed(&a));
+        std::fs::write(a.path().join("y"), "x").unwrap();
+        assert_eq!(next(&mut rx, 30).await, changed(&a));
+    }
+
+    #[tokio::test]
+    async fn watch_outlives_its_watcher_handle() {
+        let d = tempfile::tempdir().unwrap();
+        let w = DirWatcher::new(SHORT).unwrap();
+        let (_watch, mut rx) = w.watch(d.path()).unwrap();
+        drop(w);
+        std::fs::write(d.path().join("x"), "x").unwrap();
+        assert_eq!(next(&mut rx, 30).await, changed(&d));
+    }
+
+    #[tokio::test]
+    async fn removed_folder_reports_and_drops_cleanly() {
+        let parent = tempfile::tempdir().unwrap();
+        let dir = parent.path().join("gone");
+        std::fs::create_dir(&dir).unwrap();
+        let w = DirWatcher::new(SHORT).unwrap();
+        let (watch, mut rx) = w.watch(&dir).unwrap();
+        std::fs::remove_dir(&dir).unwrap();
+        assert_eq!(next(&mut rx, 30).await, Some(WatchEvent::Changed(dir.clone())));
+        drop(watch);
+        assert!(w.watched().is_empty());
     }
 
     #[tokio::test]
     async fn watching_a_missing_folder_is_not_found() {
         let d = tempfile::tempdir().unwrap();
-        let (w, _rx) = DirWatcher::new(SHORT).unwrap();
-        let err = w.watch(&d.path().join("missing")).unwrap_err();
+        let w = DirWatcher::new(SHORT).unwrap();
+        let err = w.watch(&d.path().join("missing")).err().unwrap();
         assert_eq!(err.kind, ErrorKind::NotFound);
         assert!(w.watched().is_empty());
     }
@@ -444,8 +522,8 @@ mod tests {
     async fn dir_watcher_handles_non_utf8_names() {
         use std::os::unix::ffi::OsStrExt;
         let d = tempfile::tempdir().unwrap();
-        let (w, mut rx) = DirWatcher::new(SHORT).unwrap();
-        w.watch(d.path()).unwrap();
+        let w = DirWatcher::new(SHORT).unwrap();
+        let (_watch, mut rx) = w.watch(d.path()).unwrap();
         std::fs::write(d.path().join(std::ffi::OsStr::from_bytes(b"\xff\xfe")), "x").unwrap();
         assert!(next(&mut rx, 30).await.is_some());
     }
@@ -461,11 +539,9 @@ mod tests {
         let (raw_tx, raw) = mpsc::channel();
         let (ended_tx, ended) = mpsc::channel();
         let guard = Ended(ended_tx);
-        let stop = Arc::new(AtomicBool::new(false));
         spawn_worker(
             raw,
             Duration::ZERO,
-            stop,
             |_: &Event| vec![()],
             move |()| {
                 let _ = &guard;
@@ -477,5 +553,26 @@ mod tests {
             .recv_timeout(Duration::from_secs(30))
             .expect("worker thread returns once emit reports no consumer");
         drop(raw_tx);
+    }
+
+    #[test]
+    fn the_worker_ends_once_its_watcher_is_gone() {
+        let (ended_tx, ended) = mpsc::channel::<()>();
+        let (raw_tx, raw) = mpsc::channel::<notify::Result<Event>>();
+        spawn_worker(
+            raw,
+            Duration::ZERO,
+            |_: &Event| Vec::<()>::new(),
+            move |()| {
+                let _ = &ended_tx;
+                true
+            },
+        );
+        drop(raw_tx);
+        assert_eq!(
+            ended.recv_timeout(Duration::from_secs(30)),
+            Err(mpsc::RecvTimeoutError::Disconnected),
+            "worker thread returns once the raw channel closes"
+        );
     }
 }
