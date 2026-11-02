@@ -556,6 +556,28 @@ async fn an_existing_destination_asks_and_replace_answers_it() {
 }
 
 #[tokio::test]
+async fn a_cancelled_transfer_has_no_questions_and_refuses_answers() {
+    let r = rig();
+    r.local.add_file("f", b"new!!", 1);
+    r.remote.add_file("f", b"old", 1);
+    let id = r
+        .engine
+        .add(copy_one("f"), "", TransferOptions::default())
+        .await
+        .unwrap();
+    in_state(&r.engine, id, TransferState::Waiting(WaitReason::Question)).await;
+    r.engine.cancel(id).unwrap();
+
+    assert!(r.engine.questions(id).unwrap().is_empty());
+    let refused = r.engine.answer(id, 0, ConflictChoice::Replace, true).unwrap_err();
+    assert_eq!(refused.kind, ErrorKind::InvalidArgument);
+    assert_eq!(r.engine.items(id).unwrap()[0].state, ItemState::NeedsAnswer);
+    assert!(!r.engine.is_busy(), "nothing requeued");
+    assert_eq!(r.engine.get(id).unwrap().state, TransferState::Canceled);
+    assert_eq!(r.remote.read_file("f").unwrap(), b"old");
+}
+
+#[tokio::test]
 async fn keep_both_and_skip() {
     let r = rig();
     r.local.add_file("f", b"new!!", 1);

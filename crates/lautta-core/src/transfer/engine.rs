@@ -327,6 +327,9 @@ impl Engine {
     pub fn questions(&self, id: TransferId) -> Result<Vec<(u32, Conflict)>> {
         let st = self.inner.lock();
         let live = st.live.get(&id).ok_or_else(|| not_found(id))?;
+        if live.t.state.is_finished() {
+            return Ok(Vec::new());
+        }
         Ok(live
             .t
             .questions()
@@ -1126,6 +1129,9 @@ impl Inner {
         apply_to_all: bool,
     ) -> Result<()> {
         let live = self.live_mut(st, id)?;
+        if live.t.state.is_finished() {
+            return Err(bad_state("answer", live.t.state));
+        }
         let item = live
             .t
             .items
