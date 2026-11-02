@@ -257,6 +257,24 @@ Item {
         open.destroy()
     }
 
+    function testFirstListingFollowsSettings() {
+        dir.setViewPrefs(JSON.stringify({ descending: true, showHidden: true }))
+        var want = names(rep)
+        dir.setViewPrefs(JSON.stringify({ descending: false, showHidden: false }))
+        check(want.indexOf(".hidden") >= 0 && want.length > 2, "a hidden file to show: " + want)
+        App.setSetting("sort_descending", JSON.stringify(true))
+        App.setSetting("show_hidden", JSON.stringify(true))
+        var opened = Qt.createQmlObject('import QtQuick 2.6; import Lautta 1.0; Repeater { property alias dir: m; '
+            + 'model: DirectoryModel { id: m; uri: "' + root.docs + '" } delegate: Item { property string nm: name } }', root)
+        until(function () { return !opened.dir.loading && opened.count === want.length }, "first listing")
+        check(opened.dir.descending && opened.dir.showHidden, "settings shown")
+        same(names(opened), want, "first listing in the set order, hidden files shown")
+        App.setSetting("sort_descending", JSON.stringify(false))
+        App.setSetting("show_hidden", JSON.stringify(false))
+        until(function () { return !opened.dir.descending && !opened.dir.showHidden }, "settings back")
+        opened.destroy()
+    }
+
     function testPdfThumbnails() {
         install("two-pages.pdf", "Doc.pdf")
         until(function () { return row(rep, "Doc.pdf") !== null }, "Doc.pdf listed")
@@ -293,6 +311,7 @@ Item {
         testStates()
         testPrefsAreGlobal()
         testOpenFoldersFollowSettings()
+        testFirstListingFollowsSettings()
         testPdfThumbnails()
         testPicker()
         reachedEnd = true
