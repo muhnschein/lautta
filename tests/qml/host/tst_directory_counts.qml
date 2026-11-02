@@ -44,6 +44,14 @@ Item {
 
     property int changes
     property bool asking: true
+    // Name bindings evaluated: a count must not make a row re-read its other roles.
+    // Object, not int: a counter property the binding reads would loop.
+    readonly property var nameReads: ({ "n": 0 })
+
+    function read(value) {
+        root.nameReads.n++
+        return value
+    }
 
     DirectoryModel { id: downloads; uri: "lautta://user-downloads/" }
     DirectoryModel { id: counts }
@@ -53,7 +61,7 @@ Item {
         id: rows
         model: counts
         delegate: Item {
-            readonly property string nm: name
+            readonly property string nm: root.read(name)
             readonly property int items: itemCount
             readonly property bool capped: itemCountCapped
             readonly property real stamp: modified
@@ -110,8 +118,10 @@ Item {
     function testHiddenFiles() {
         check(counts.setViewPrefs(JSON.stringify({ showHidden: true })), "hidden files shown")
         check(row("Mixed").items === -1, "the old count does not stand: " + row("Mixed").items)
+        var reads = root.nameReads.n
         counts.requestCount(root.base + "Mixed")
         until(counted("Mixed", 3), "Mixed counted with hidden files")
+        check(root.nameReads.n === reads, "a count leaves names unread: " + (root.nameReads.n - reads))
         check(row("Mixed").items === 3, "with the hidden file: " + row("Mixed").items)
         counts.setViewPrefs(JSON.stringify({ showHidden: false }))
         counts.requestCount(root.base + "Mixed")

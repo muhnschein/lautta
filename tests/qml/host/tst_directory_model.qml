@@ -6,6 +6,14 @@ Item {
     id: root
 
     property var events: []
+    // Name bindings evaluated: selecting or a transfer must not make a row re-read its other roles.
+    // Object, not int: a counter property the binding reads would loop.
+    readonly property var nameReads: ({ "n": 0 })
+
+    function read(value) {
+        root.nameReads.n++
+        return value
+    }
     readonly property string docs: "lautta://user-documents/"
 
     function check(cond, what) {
@@ -52,7 +60,8 @@ Item {
         id: rep
         model: dir
         delegate: Item {
-            property string nm: name
+            property string nm: root.read(name)
+            property string transfer: transferState
             property bool dirRow: isDir
             property string thumb: thumbnailSource
             property string mime: mimeType
@@ -128,6 +137,7 @@ Item {
 
     function testSelection() {
         var a = root.docs + "alpha.txt"
+        var reads = root.nameReads.n
         dir.toggle(a)
         check(dir.selectedCount === 1 && row(rep, "alpha.txt").sel, "toggle selects")
         same(dir.selectedUris(), [a], "selectedUris")
@@ -142,6 +152,12 @@ Item {
         check(dir.selectedCount === 4 && dir.selectedUris().length === 4, "select all")
         dir.clearSelection()
         check(dir.selectedCount === 0 && dir.selectedUris().length === 0, "clear")
+        check(root.nameReads.n === reads, "selecting leaves names unread: " + (root.nameReads.n - reads))
+        dir.setTransferState(a, "copying")
+        check(row(rep, "alpha.txt").transfer === "copying", "transfer state shown")
+        dir.setTransferState(a, "")
+        check(row(rep, "alpha.txt").transfer === "", "transfer state gone")
+        check(root.nameReads.n === reads, "a transfer leaves names unread: " + (root.nameReads.n - reads))
         check(dir.indexOf(a) === 1 && dir.indexOf(root.docs + "none") === -1, "indexOf: " + dir.indexOf(a))
         same([dir.uriAt(0), dir.uriAt(1), dir.uriAt(3)], [root.docs + "Zeta", a, root.docs + "notes.md"], "uriAt")
         check(dir.uriAt(-1) === "" && dir.uriAt(dir.count) === "", "uriAt outside the rows")

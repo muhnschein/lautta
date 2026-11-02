@@ -6,6 +6,7 @@
 use crate::browse::Guard;
 use crate::json::from_json;
 use crate::runtime::{self, core, spawn_then};
+use cpp::cpp;
 use lautta_core::app::Core;
 use lautta_core::app_directory::{file_url, forward_coalesced, ListEvent};
 use lautta_core::entry::{cap, Entry, EntryFlags};
@@ -28,6 +29,10 @@ use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use tokio::sync::mpsc::unbounded_channel;
+
+cpp! {{
+    #include <QtCore/QAbstractItemModel>
+}}
 use tokio::task::AbortHandle;
 
 /// Streamed rows reach the view at most this often after the first batch.
@@ -468,6 +473,11 @@ impl DirectoryModel {
     }
 
     fn apply(&mut self, changes: Vec<ListChange>) {
+        self.apply_roles(changes, &[]);
+    }
+
+    /// Updated rows told as changed in `roles` only (empty: all).
+    fn apply_roles(&mut self, changes: Vec<ListChange>, roles: &[&str]) {
         // Neighbouring row updates go out as one range (select all: one signal, not one per row).
         let mut updated: Option<(usize, usize)> = None;
         for change in changes {
@@ -475,13 +485,13 @@ impl DirectoryModel {
                 match updated {
                     Some((first, last)) if last + 1 == index => updated = Some((first, index)),
                     _ => {
-                        self.rows_changed(updated.take());
+                        self.rows_changed(updated.take(), roles);
                         updated = Some((index, index));
                     }
                 }
                 continue;
             }
-            self.rows_changed(updated.take());
+            self.rows_changed(updated.take(), roles);
             match change {
                 ListChange::Insert { index, count } => {
                     self.begin_insert_rows(index as i32, (index + count - 1) as i32);
@@ -497,17 +507,32 @@ impl DirectoryModel {
                 ListChange::Reset => self.reset_rows(),
             }
         }
-        self.rows_changed(updated);
+        self.rows_changed(updated, roles);
         if self.shown != self.state.len() {
             self.reset_rows();
         }
     }
 
-    fn rows_changed(&mut self, range: Option<(usize, usize)>) {
-        if let Some((first, last)) = range {
-            let (a, b) = (self.row_index(first as i32), self.row_index(last as i32));
-            self.data_changed(a, b);
-        }
+    /// Delegates re-read only bindings on named `roles`: a full re-read lays out a grid caption
+    /// anew, about a frame each on phone.
+    fn rows_changed(&mut self, range: Option<(usize, usize)>, roles: &[&str]) {
+        let Some((first, last)) = range else { return };
+        let (a, b) = (self.row_index(first as i32), self.row_index(last as i32));
+        let ids: Vec<i32> = roles
+            .iter()
+            .filter_map(|name| ROLES.iter().position(|r| r == name))
+            .map(|i| ROLE_BASE + i as i32)
+            .collect();
+        let (ids, len, obj) = (ids.as_ptr(), ids.len(), self.get_cpp_object());
+        // SAFETY: `obj` is this model's live C++ object; `ids` holds `len` ints for the call.
+        cpp!(unsafe [obj as "QAbstractItemModel*", a as "QModelIndex", b as "QModelIndex",
+                     ids as "const int*", len as "size_t"] {
+            QVector<int> roles;
+            for (size_t i = 0; i < len; ++i)
+                roles << ids[i];
+            if (obj)
+                emit obj->dataChanged(a, b, roles);
+        });
     }
 
     fn reset_rows(&mut self) {
@@ -756,7 +781,7 @@ impl DirectoryModel {
     fn select(&mut self, uri: QString) {
         if let Some(name) = self.name_of(&uri) {
             let changes = self.state.select(&name);
-            self.apply(changes);
+            self.apply_roles(changes, &["selected"]);
             self.publish();
         }
     }
@@ -764,20 +789,20 @@ impl DirectoryModel {
     fn toggle(&mut self, uri: QString) {
         if let Some(name) = self.name_of(&uri) {
             let changes = self.state.toggle(&name);
-            self.apply(changes);
+            self.apply_roles(changes, &["selected"]);
             self.publish();
         }
     }
 
     fn selectAll(&mut self) {
         let changes = self.state.select_all();
-        self.apply(changes);
+        self.apply_roles(changes, &["selected"]);
         self.publish();
     }
 
     fn clearSelection(&mut self) {
         let changes = self.state.clear_selection();
-        self.apply(changes);
+        self.apply_roles(changes, &["selected"]);
         self.publish();
     }
 
@@ -863,8 +888,7 @@ impl DirectoryModel {
         };
         slot.result = result;
         if let Some(i) = self.state.index_of(name) {
-            let idx = self.row_index(i as i32);
-            self.data_changed(idx, idx);
+            self.rows_changed(Some((i, i)), &["itemCount", "itemCountCapped"]);
         }
     }
 
@@ -918,8 +942,7 @@ impl DirectoryModel {
         slot.key = None;
         slot.text = text;
         if let Some(i) = self.state.index_of(name) {
-            let idx = self.row_index(i as i32);
-            self.data_changed(idx, idx);
+            self.rows_changed(Some((i, i)), &["textPreview"]);
         }
     }
 
@@ -948,8 +971,7 @@ impl DirectoryModel {
             self.transfer_states.insert(name.clone(), state);
         }
         if let Some(i) = self.state.index_of(&name) {
-            let idx = self.row_index(i as i32);
-            self.data_changed(idx, idx);
+            self.rows_changed(Some((i, i)), &["transferState"]);
         }
     }
 
