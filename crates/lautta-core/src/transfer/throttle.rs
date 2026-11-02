@@ -31,10 +31,7 @@ pub async fn forward_throttled(
             .min()
             .map(|t| *t + every);
         let next = match due {
-            Some(at) => match tokio::time::timeout_at(at, rx.recv()).await {
-                Ok(r) => Some(r),
-                Err(_) => None,
-            },
+            Some(at) => tokio::time::timeout_at(at, rx.recv()).await.ok(),
             None => Some(rx.recv().await),
         };
         let now = Instant::now();
