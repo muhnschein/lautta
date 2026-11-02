@@ -85,8 +85,6 @@ Page {
         }
 
         delegate: Item {
-            readonly property var row: doc.row(index)
-
             width: view.width
             height: Math.max(line.implicitHeight, Theme.fontSizeExtraSmall * 1.4)
 
@@ -94,7 +92,7 @@ Page {
                 x: Theme.paddingSmall
                 width: page.gutter - Theme.paddingLarge
                 horizontalAlignment: Text.AlignRight
-                text: row.number > 0 ? row.number : ""
+                text: doc.rowNumber(index) || ""
                 font.family: "monospace"
                 font.pixelSize: Theme.fontSizeExtraSmall
                 color: Theme.secondaryColor
@@ -107,7 +105,7 @@ Page {
                 width: parent.width - page.gutter - Theme.horizontalPageMargin
                 // Row characters come back escaped from core with colours: file never read as
                 // markup.
-                text: doc.styledRow(row.text, row.line, row.start, doc.highlighted ? page.colours : "")
+                text: doc.styledRow(index, doc.highlighted ? page.colours : "")
                 font.family: "monospace"
                 font.pixelSize: Theme.fontSizeExtraSmall
                 wrapMode: Text.WrapAtWordBoundaryOrAnywhere

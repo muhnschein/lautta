@@ -26,8 +26,7 @@ Item {
     MarkdownDocument { id: md }
 
     function styled(document, i, colours) {
-        var row = document.row(i)
-        return document.styledRow(row.text, row.line, row.start, colours)
+        return document.styledRow(i, colours)
     }
 
     function waitForColours(document, uri) {
@@ -52,8 +51,8 @@ Item {
         check(!doc.loading && doc.loaded, "loaded")
         check(doc.text === "line one\nline two", "text normalised: " + JSON.stringify(doc.text))
         check(doc.validUtf8 && !doc.truncated, "flags")
-        check(doc.rowCount === 2 && doc.lineCount === 2 && doc.row(1).text === "line two" && doc.row(1).number === 2,
-              "rows: " + doc.rowCount + " " + JSON.stringify(doc.row(1)))
+        check(doc.rowCount === 2 && doc.lineCount === 2 && doc.rowNumber(0) === 1 && doc.rowNumber(1) === 2,
+              "rows: " + doc.rowCount + " " + doc.rowNumber(1))
         check(doc.size === 20, "size " + doc.size)
         check(!doc.highlighted && doc.syntax === "", "plain text has no colours: " + doc.syntax)
         check(styled(doc, 1, "keyword=#ff0000") === "line two", "a plain line: " + styled(doc, 1, ""))
@@ -68,21 +67,17 @@ Item {
         check(echo.indexOf("<") < 0 && echo.indexOf("&lt;b&gt;bold?&lt;/b&gt; &amp;amp;") > 0, "no colours, still escaped: " + echo)
         var indented = styled(coloured, 3, "")
         check(indented === '&nbsp;&nbsp;if [ &quot;$x&quot; ]; then&nbsp;&nbsp;echo &quot;a&nbsp;&nbsp;b&quot;; fi', "whitespace is kept: " + indented)
-        var past = [coloured.styledRow("<b>", 9, 0, "comment=#123456"), coloured.styledRow("<b>", -1, -5, "comment=#123456")]
-        check(past[0] === "&lt;b&gt;" && past[1] === "&lt;b&gt;", "past either end: escaped, no colours: " + past)
+        var past = [coloured.styledRow(9, "comment=#123456"), coloured.styledRow(-1, "comment=#123456"),
+                    coloured.rowNumber(9), coloured.rowNumber(-1)]
+        check(JSON.stringify(past) === JSON.stringify(["", "", 0, 0]), "past either end: none: " + past)
 
         waitForColours(coloured, "lautta://user-documents/rows.sh")
         var palette = "comment=#123456,function=#654321,string=#abcdef"
         var tabbed = styled(coloured, 1, palette)
         check(tabbed === '&nbsp;&nbsp;&nbsp;&nbsp;<font color="#654321">echo</font> <font color="#abcdef">&quot;\uD83D\uDE00&quot;</font> '
               + '<font color="#123456"># tab</font>', "a row with a tab and an emoji: " + tabbed)
-        var last = coloured.row(3)
-        check(coloured.rowCount === 4 && coloured.lineCount === 3 && last.line === 2 && last.start === 1000
-              && last.number === 0, "a long line in two rows: " + coloured.rowCount + " " + JSON.stringify(last))
-        var tab = coloured.row(1)
-        check(tab.number === 2 && tab.text === "    echo \"\uD83D\uDE00\" # tab" && tab.line === 1 && tab.start === 0,
-              "a row with its tab expanded: " + JSON.stringify(coloured.row(1)))
-        check(Object.keys(coloured.row(4)).length === 0 && Object.keys(coloured.row(-1)).length === 0, "past the rows: none")
+        check(coloured.rowCount === 4 && coloured.lineCount === 3 && coloured.rowNumber(2) === 3
+              && coloured.rowNumber(3) === 0, "a long line in two rows: " + coloured.rowCount + " " + coloured.rowNumber(3))
         var rest = styled(coloured, 3, palette)
         check(rest === '<font color="#abcdef">' + new Array(107).join("x") + '&quot;</font> <font color="#123456"># long</font>',
               "the long line's second row: " + rest)
@@ -110,7 +105,7 @@ Item {
         check(missing.errorKind === "NotFound" && !missing.loaded, "missing file: " + missing.errorKind)
         doc.uri = "lautta://user-documents/nope.txt"
         settle(doc)
-        check(doc.rowCount === 0 && doc.lineCount === 0 && Object.keys(doc.row(0)).length === 0,
+        check(doc.rowCount === 0 && doc.lineCount === 0 && doc.styledRow(0, "") === "",
               "a failed load leaves no rows: " + doc.rowCount)
         var invalid = Qt.createQmlObject('import Lautta 1.0; TextDocument { uri: "garbage" }', root)
         check(!invalid.loading && !invalid.loaded, "bad uri is ignored")

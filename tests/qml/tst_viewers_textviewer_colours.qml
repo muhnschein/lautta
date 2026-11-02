@@ -20,6 +20,8 @@ QtQuick.Window {
 
     ViewerTools { id: tools }
     TextDocument { id: warmUp }
+    // Same file as the page: plain lines to lay out beside its rows (fixtures here have no tabs).
+    TextDocument { id: shownFile; uri: window.page ? window.page.uri : "" }
 
     Label {
         id: plain
@@ -75,8 +77,14 @@ QtQuick.Window {
         return match ? match[2] : "none"
     }
 
+    function lineOf(number) {
+        for (var waited = 0; waited < 100 && (shownFile.loading || !shownFile.loaded); ++waited)
+            tools.pump(50)
+        return shownFile.text.split("\n")[number - 1]
+    }
+
     function showsItsLine(row, number) {
-        var line = row.parent.row.text
+        var line = lineOf(number)
         plain.width = row.width
         plain.text = line
         expect(row.contentWidth > 0 && row.lineCount === plain.lineCount
@@ -126,7 +134,7 @@ QtQuick.Window {
         var row = shown["1"]
         expect(row.text.indexOf("<font") < 0 && row.text.indexOf("<img") < 0 && row.text.indexOf("<b>") < 0,
                "an unknown type has plain rows: " + row.text)
-        var line = row.parent.row.text
+        var line = lineOf(1)
         expect(line.indexOf("<img") === 0, "the fixture is markup: " + line)
         showsItsLine(row, 1)
     }
