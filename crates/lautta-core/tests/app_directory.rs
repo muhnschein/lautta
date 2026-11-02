@@ -347,3 +347,63 @@ fn file_urls_escape_what_breaks_urls() {
     let u = lautta_core::app_directory::file_url(std::path::Path::new("/home/a b/c#d%e?.png"));
     assert_eq!(u, "file:///home/a%20b/c%23d%25e%3F.png");
 }
+
+fn batch(names: &[&str]) -> ListEvent {
+    ListEvent::Batch(
+        names
+            .iter()
+            .map(|n| lautta_core::entry::Entry::new(n.as_bytes(), lautta_core::entry::Kind::File))
+            .collect(),
+    )
+}
+
+fn shape(ev: &ListEvent) -> String {
+    match ev {
+        ListEvent::Cached { entries, .. } => format!("cached {}", entries.len()),
+        ListEvent::Batch(b) => format!("batch {}", names(b).join(",")),
+        ListEvent::Done(r) => format!("done {}", r.is_ok()),
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn coalesced_batches_reach_the_view_at_most_once_per_window() {
+    use lautta_core::app_directory::forward_coalesced;
+    use std::time::Duration;
+    let (tx, rx) = unbounded_channel();
+    let (out_tx, mut out) = unbounded_channel();
+    let every = Duration::from_millis(100);
+    let forward = tokio::spawn(forward_coalesced(rx, every, move |ev| {
+        let _ = out_tx.send((tokio::time::Instant::now(), shape(&ev)));
+    }));
+    let start = tokio::time::Instant::now();
+    tx.send(ListEvent::Cached {
+        entries: Vec::new(),
+        fetched_ms: 0,
+    })
+    .unwrap();
+    tx.send(batch(&["a"])).unwrap();
+    tx.send(batch(&["b"])).unwrap();
+    tx.send(batch(&["c"])).unwrap();
+    tokio::time::sleep(Duration::from_millis(250)).await;
+    tx.send(batch(&["d"])).unwrap();
+    tx.send(batch(&["e"])).unwrap();
+    tx.send(ListEvent::Done(Ok(()))).unwrap();
+    drop(tx);
+    forward.await.unwrap();
+    let mut got = Vec::new();
+    while let Some((at, s)) = out.recv().await {
+        got.push(((at - start).as_millis(), s));
+    }
+    assert_eq!(
+        got,
+        [
+            (0, "cached 0".to_owned()),
+            (0, "batch a".to_owned()),
+            (100, "batch b,c".to_owned()),
+            (250, "batch d".to_owned()),
+            (250, "batch e".to_owned()),
+            (250, "done true".to_owned()),
+        ],
+        "first batch at once, then one per window; Done flushes what is held"
+    );
+}

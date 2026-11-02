@@ -17,6 +17,7 @@ pub mod model;
 pub mod progress;
 pub mod scheduler;
 pub mod store;
+pub mod throttle;
 
 use crate::error::Result;
 use crate::uri::Uri;

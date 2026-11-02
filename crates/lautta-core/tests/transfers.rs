@@ -1215,3 +1215,49 @@ async fn persisted_rows_follow_the_state_changes() {
             .unwrap();
     assert_eq!(item_state, "done");
 }
+
+#[tokio::test]
+async fn phone_files_go_to_another_location_without_a_scratch_copy() {
+    use lautta_core::provider::local::LocalProvider;
+    let (a, b, cache) = (
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+    );
+    let scratch = cache.path().join("scratch");
+    let data: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
+    std::fs::write(a.path().join("big.bin"), &data).unwrap();
+    std::fs::write(a.path().join("moved.bin"), b"moved").unwrap();
+    let resolver = StaticResolver::default()
+        .with(LOCAL, Arc::new(LocalProvider::new(a.path().to_path_buf())))
+        .with(
+            "user-pictures",
+            Arc::new(LocalProvider::new(b.path().to_path_buf())),
+        );
+    let deps = EngineDeps::new(Db::open_in_memory().unwrap(), Arc::new(resolver));
+    let engine = Engine::new(
+        deps,
+        EngineConfig {
+            scratch_dir: scratch.clone(),
+            ..config()
+        },
+    );
+    for (kind, name, size) in [
+        (OperationKind::Copy, "big.bin", data.len() as u64),
+        (OperationKind::Move, "moved.bin", 5),
+    ] {
+        let p = plan(
+            kind,
+            "user-pictures",
+            vec![item(LOCAL, name, "user-pictures", name, Kind::File, size)],
+        );
+        let id = engine.add(p, "t", TransferOptions::default()).await.unwrap();
+        let s = settled(&engine, id).await;
+        assert_eq!(s.state, TransferState::Completed, "{name}: {s:?}");
+    }
+    assert_eq!(std::fs::read(b.path().join("big.bin")).unwrap(), data);
+    assert_eq!(std::fs::read(b.path().join("moved.bin")).unwrap(), b"moved");
+    assert!(!a.path().join("moved.bin").exists(), "a move removes its source");
+    assert!(a.path().join("big.bin").exists());
+    assert!(!scratch.exists(), "no scratch file was needed");
+}

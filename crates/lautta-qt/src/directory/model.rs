@@ -7,7 +7,7 @@ use crate::browse::Guard;
 use crate::json::from_json;
 use crate::runtime::{self, core, spawn_then};
 use lautta_core::app::Core;
-use lautta_core::app_directory::{file_url, ListEvent};
+use lautta_core::app_directory::{file_url, forward_coalesced, ListEvent};
 use lautta_core::entry::{cap, Entry, EntryFlags};
 use lautta_core::error::ErrorKind;
 use lautta_core::filter::FilterOptions;
@@ -30,6 +30,10 @@ use std::path::PathBuf;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::task::AbortHandle;
 
+/// Streamed rows reach the view at most this often after the first batch.
+const BATCH_EVERY: std::time::Duration = std::time::Duration::from_millis(120);
+/// Streamed rows in directory order are a fair sample: this many decide grid before the end.
+const SUGGEST_SAMPLE: usize = 64;
 const ROLE_BASE: i32 = 0x0100;
 const ROLES: [&str; 26] = [
     "name",
@@ -279,12 +283,8 @@ impl DirectoryModel {
             }
         });
         let task = runtime::handle().spawn(async move {
-            let (tx, mut rx) = unbounded_channel();
-            let forward = async {
-                while let Some(ev) = rx.recv().await {
-                    cb(ev);
-                }
-            };
+            let (tx, rx) = unbounded_channel();
+            let forward = forward_coalesced(rx, BATCH_EVERY, cb);
             tokio::join!(core.list_stream(&dir, use_cache, tx), forward);
         });
         self.task = Some(task.abort_handle());
@@ -405,12 +405,17 @@ impl DirectoryModel {
                 self.apply(changes);
                 self.cachedAt = fetched_ms as f64;
                 self.pending = Some(Vec::new());
+                // Grid from the start: a switch once fresh rows came rebuilt every delegate.
+                self.maybe_suggest_grid();
             }
             ListEvent::Batch(batch) => match self.pending.as_mut() {
                 Some(p) => p.extend(batch),
                 None => {
                     let changes = self.state.apply_batch(batch);
                     self.apply(changes);
+                    if self.state.len() >= SUGGEST_SAMPLE {
+                        self.maybe_suggest_grid();
+                    }
                 }
             },
             ListEvent::Done(Ok(())) => self.finish_ok(),
@@ -442,8 +447,7 @@ impl DirectoryModel {
         if self.prefs_set || self.prefs.view_mode != ViewMode::List || self.state.is_large() {
             return;
         }
-        let entries: Vec<Entry> = self.state.visible_entries().cloned().collect();
-        if suggest_grid(&entries) {
+        if suggest_grid(self.state.visible_entries()) {
             self.suggestGrid = true;
             self.viewMode = qs(ViewMode::Grid.as_str());
             self.prefsChanged();
@@ -464,7 +468,20 @@ impl DirectoryModel {
     }
 
     fn apply(&mut self, changes: Vec<ListChange>) {
+        // Neighbouring row updates go out as one range (select all: one signal, not one per row).
+        let mut updated: Option<(usize, usize)> = None;
         for change in changes {
+            if let ListChange::Update { index } = change {
+                match updated {
+                    Some((first, last)) if last + 1 == index => updated = Some((first, index)),
+                    _ => {
+                        self.rows_changed(updated.take());
+                        updated = Some((index, index));
+                    }
+                }
+                continue;
+            }
+            self.rows_changed(updated.take());
             match change {
                 ListChange::Insert { index, count } => {
                     self.begin_insert_rows(index as i32, (index + count - 1) as i32);
@@ -476,15 +493,20 @@ impl DirectoryModel {
                     self.shown = self.shown.saturating_sub(count);
                     self.end_remove_rows();
                 }
-                ListChange::Update { index } => {
-                    let i = self.row_index(index as i32);
-                    self.data_changed(i, i);
-                }
+                ListChange::Update { .. } => {}
                 ListChange::Reset => self.reset_rows(),
             }
         }
+        self.rows_changed(updated);
         if self.shown != self.state.len() {
             self.reset_rows();
+        }
+    }
+
+    fn rows_changed(&mut self, range: Option<(usize, usize)>) {
+        if let Some((first, last)) = range {
+            let (a, b) = (self.row_index(first as i32), self.row_index(last as i32));
+            self.data_changed(a, b);
         }
     }
 
