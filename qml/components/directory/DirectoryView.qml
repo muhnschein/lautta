@@ -645,6 +645,8 @@ Item {
             onCaptionTextChanged: if (captionText) textHeld = false
             Component.onCompleted: {
                 textHeld = textHeld // Value at creation, not a binding.
+                grid.probeMade++
+                if (textHeld) grid.probeHeld++
                 cell.countItems()
                 cell.askPreview()
             }
@@ -996,7 +998,10 @@ Item {
             delegate: gridRowDelegate
             onColumnsChanged: view.fitGridRows()
             onVerticalVelocityChanged: holdCaptions(verticalVelocity)
-            onMovingChanged: if (!moving) captionsHeld = false
+            onMovingChanged: { console.log("probe grid-moving " + moving + " made " + probeMade + " held " + probeHeld); probeMade = 0; probeHeld = 0; if (!moving) captionsHeld = false }
+            property int probeMade
+            property int probeHeld
+            onCaptionsHeldChanged: console.log("probe grid-held " + captionsHeld + " v " + Math.round(verticalVelocity))
             footer: Item {
                 width: grid.width
                 height: panelSpace.height
