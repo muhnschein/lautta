@@ -21,6 +21,9 @@ Item {
     TextDocument { id: doc }
     TextDocument { id: missing }
     TextDocument { id: coloured }
+    property int bigStates
+    readonly property bool bigColoured: big.highlighted && big.syntax.length > 0
+    TextDocument { id: big; onStateChanged: root.bigStates++ }
     MarkdownDocument { id: md }
 
     function styled(document, i, colours) {
@@ -84,6 +87,17 @@ Item {
         var markup = styled(coloured, 0, "keyword=#ff0000")
         check(markup === "&lt;img src=&quot;image://lautta-thumb/x&quot;&gt; &amp;lt;b&amp;gt; &amp; &lt;b&gt;bold&lt;/b&gt; &amp;nbsp;&lt;a href=&quot;x&quot;&gt;link&lt;/a&gt;",
               "markup in a file is text: " + markup)
+
+        // Past FIRST_WAIT of colouring: text comes plain, colours after.
+        check(tools.installRepeated(Qt.resolvedUrl("fixtures/rows.sh"), "lautta://user-documents/big.sh", 1000), "big script")
+        big.uri = "lautta://user-documents/big.sh"
+        settle(big)
+        check(big.loaded && !big.highlighted, "a big script comes plain first")
+        var states = root.bigStates
+        for (var late = 0; late < 600 && !big.highlighted; ++late)
+            tools.pump(50)
+        check(root.bigColoured, "then coloured, bindings told")
+        check(root.bigStates === states, "late colours leave text and rows be: " + (root.bigStates - states) + " changes")
 
         missing.uri = "lautta://user-documents/nope.txt"
         settle(missing)

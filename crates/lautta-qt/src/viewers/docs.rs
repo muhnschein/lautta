@@ -31,10 +31,12 @@ pub struct TextDocument {
     errorKind: qt_property!(QString; NOTIFY stateChanged),
     errorMessage: qt_property!(QString; NOTIFY stateChanged),
     /// Colour grammar, "" without.
-    syntax: qt_property!(QString; NOTIFY stateChanged),
+    syntax: qt_property!(QString; NOTIFY colouredChanged),
     /// First lines (or all) have colours; may come after the text.
-    highlighted: qt_property!(bool; NOTIFY stateChanged),
+    highlighted: qt_property!(bool; NOTIFY colouredChanged),
     stateChanged: qt_signal!(),
+    /// Own signal: colours coming late must not make the text's rows anew (TextViewer.qml).
+    colouredChanged: qt_signal!(),
 
     reload: qt_method!(fn(&mut self)),
     /// Row as StyledText: every character escaped, whitespace kept, coloured per `colours`
@@ -116,7 +118,6 @@ impl TextDocument {
             if let (true, Ok(Some(lines))) = (me.generation == gen, res) {
                 if lines.coloured_lines() > 0 {
                     me.set_lines(lines);
-                    me.stateChanged();
                 }
             }
         });
@@ -127,6 +128,7 @@ impl TextDocument {
         let syntax = lines.syntax().filter(|_| self.highlighted);
         self.syntax = qstr(syntax.unwrap_or_default());
         self.lines = lines;
+        self.colouredChanged();
     }
 
     fn styledRow(&self, row: QString, line: i32, start: i32, colours: QString) -> QString {
