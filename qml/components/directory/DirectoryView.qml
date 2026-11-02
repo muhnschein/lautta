@@ -967,6 +967,8 @@ Item {
                 height: panelSpace.height
             }
 
+            Component.onCompleted: if (typeof lauttaExp === "string" && lauttaExp.indexOf("noquick") >= 0 && list.quickScroll !== undefined) list.quickScroll = false
+
             VerticalScrollDecorator { }
         }
 
@@ -997,6 +999,8 @@ Item {
                 width: grid.width
                 height: panelSpace.height
             }
+
+            Component.onCompleted: if (typeof lauttaExp === "string" && lauttaExp.indexOf("noquick") >= 0 && grid.quickScroll !== undefined) grid.quickScroll = false
 
             VerticalScrollDecorator { }
         }
