@@ -69,11 +69,12 @@ impl TextRows {
         for (at, c) in self.shown[begin..].char_indices() {
             // A char past the row's end (a surrogate pair across it too) starts the next row.
             if column + c.len_utf16() - row.start > ROW_LENGTH {
-                row.bytes.end = begin + at;
+                let cut = begin + at;
+                row.bytes.end = cut;
                 let next = Span {
                     line,
                     start: column,
-                    bytes: begin + at..begin + at,
+                    bytes: cut..cut,
                 };
                 self.rows.push(std::mem::replace(&mut row, next));
             }
@@ -136,6 +137,7 @@ mod tests {
             "empty text: one empty line"
         );
         assert_eq!(TextRows::new("a\n\nb").len(), 3, "an empty line is a row");
+        assert!(!two.is_empty());
         let none = TextRows::default();
         assert!(none.is_empty() && none.lines() == 0 && none.row(0).is_none());
         assert_eq!(two.row(1).map(|r| (r.line, r.start)), Some((1, 0)));
