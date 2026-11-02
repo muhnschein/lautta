@@ -631,8 +631,9 @@ Item {
             readonly property var captions: DirFormat.gridCaptions(model.isDir, model.size, model.modified,
                                                                    dir.folderCounts, items, model.itemCountCapped)
             readonly property real gap: gridMetrics.gap
-            // Made in a fast fling: caption text waits until grid stops.
-            property bool textHeld
+            // Made in a fast fling: caption text waits until grid stops. Set before creation ends:
+            // Text lays out at componentComplete, before Component.onCompleted.
+            property bool textHeld: grid.captionsHeld
             readonly property bool captionText: !(textHeld && grid.captionsHeld)
 
             x: (index % grid.columns) * width
@@ -643,7 +644,7 @@ Item {
             onPreviewKeyChanged: cell.askPreview()
             onCaptionTextChanged: if (captionText) textHeld = false
             Component.onCompleted: {
-                textHeld = grid.captionsHeld
+                textHeld = textHeld // Value at creation, not a binding.
                 cell.countItems()
                 cell.askPreview()
             }
