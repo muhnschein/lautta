@@ -1154,7 +1154,7 @@ async fn a_dropped_server_copy_stops_and_leaves_no_file() {
     let sem = new_io_semaphore();
     let d = tempfile::tempdir().unwrap();
     let p = LocalProvider::new(d.path().to_path_buf()).with_semaphore(sem.clone());
-    std::fs::write(d.path().join("a"), vec![7u8; 24 << 20]).unwrap();
+    std::fs::write(d.path().join("a"), vec![7u8; 9 << 20]).unwrap();
     let g = gate();
     let sink = g.sink.clone();
     let call = async move {
@@ -1168,7 +1168,7 @@ async fn a_dropped_server_copy_stops_and_leaves_no_file() {
 
 #[tokio::test]
 async fn a_dropped_upload_stops_reading_and_writing() {
-    const SENT: u64 = 64 << 20;
+    const SENT: u64 = 16 << 20;
     let sem = new_io_semaphore();
     let d = tempfile::tempdir().unwrap();
     let p = LocalProvider::new(d.path().to_path_buf()).with_semaphore(sem.clone());
@@ -1196,21 +1196,21 @@ async fn a_dropped_download_stops_writing() {
     let sem = new_io_semaphore();
     let d = tempfile::tempdir().unwrap();
     let p = LocalProvider::new(d.path().to_path_buf()).with_semaphore(sem.clone());
-    std::fs::write(d.path().join("a"), vec![7u8; 24 << 20]).unwrap();
+    std::fs::write(d.path().join("a"), vec![7u8; 9 << 20]).unwrap();
     let (r, w) = rustix::pipe::pipe().unwrap();
     let reader = std::thread::spawn(move || std::io::copy(&mut File::from(r), &mut std::io::sink()).unwrap());
     let g = gate();
     let sink = g.sink.clone();
     let call = async move { p.download_into(&vp("a"), w, ReadOptions::default(), sink).await };
     let later = drop_while_parked(&sem, call, g).await;
-    assert!(reader.join().unwrap() < 24 << 20, "download ran to the end");
+    assert!(reader.join().unwrap() < 9 << 20, "download ran to the end");
     assert_eq!(later.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
 async fn server_copy_reports_progress_to_the_end() {
     let (d, p) = setup();
-    std::fs::write(d.path().join("a"), vec![7u8; 20 << 20]).unwrap();
+    std::fs::write(d.path().join("a"), vec![7u8; 9 << 20]).unwrap();
     let log = Arc::new(Mutex::new(Vec::new()));
     let l2 = log.clone();
     let sink: ProgressSink = Arc::new(move |done, total| l2.lock().unwrap().push((done, total)));
@@ -1218,7 +1218,7 @@ async fn server_copy_reports_progress_to_the_end() {
         .await
         .unwrap();
     let log = log.lock().unwrap();
-    assert_eq!(log.last(), Some(&(20 << 20, Some(20 << 20))));
+    assert_eq!(log.last(), Some(&(9 << 20, Some(9 << 20))));
     assert!(log.windows(2).all(|w| w[0].0 <= w[1].0));
 }
 

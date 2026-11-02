@@ -739,7 +739,7 @@ mod tests {
     #[tokio::test]
     async fn same_location_local_copy_reports_progress() {
         let d = tempfile::tempdir().unwrap();
-        std::fs::write(d.path().join("a"), vec![7u8; 20 << 20]).unwrap();
+        std::fs::write(d.path().join("a"), vec![7u8; 9 << 20]).unwrap();
         let local: Arc<dyn Provider> = Arc::new(crate::provider::local::LocalProvider::new(d.path().into()));
         let seen = Arc::new(AtomicU64::new(0));
         let s2 = seen.clone();
@@ -753,9 +753,9 @@ mod tests {
             trasher: None,
             progress: Arc::new(move |done, _| s2.store(done, Ordering::SeqCst)),
         };
-        let out = run_item(&e, &job(item("a", "b", Kind::File, 20 << 20))).await;
+        let out = run_item(&e, &job(item("a", "b", Kind::File, 9 << 20))).await;
         assert_eq!(out.unwrap(), Outcome::Done);
-        assert_eq!(seen.load(Ordering::SeqCst), 20 << 20);
+        assert_eq!(seen.load(Ordering::SeqCst), 9 << 20);
         assert!(!d.path().join("scratch").exists(), "no streaming through scratch");
     }
 

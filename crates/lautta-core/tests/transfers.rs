@@ -1320,7 +1320,7 @@ impl Provider for Parking {
 #[tokio::test]
 async fn cancel_mid_copy_stops_the_copy_and_leaves_no_temporary() {
     let d = tempfile::tempdir().unwrap();
-    std::fs::write(d.path().join("big"), vec![7u8; 24 << 20]).unwrap();
+    std::fs::write(d.path().join("big"), vec![7u8; 9 << 20]).unwrap();
     std::fs::create_dir(d.path().join("out")).unwrap();
     let sem = new_io_semaphore();
     let (reached_tx, reached) = tokio::sync::oneshot::channel();
@@ -1339,7 +1339,7 @@ async fn cancel_mid_copy_stops_the_copy_and_leaves_no_temporary() {
     let copy = plan(
         OperationKind::Copy,
         LOCAL,
-        vec![item(LOCAL, "big", LOCAL, "out/big", Kind::File, 24 << 20)],
+        vec![item(LOCAL, "big", LOCAL, "out/big", Kind::File, 9 << 20)],
     );
     let id = engine.add(copy, "", TransferOptions::default()).await.unwrap();
     let wait = Duration::from_secs(10);
