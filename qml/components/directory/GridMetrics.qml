@@ -23,8 +23,6 @@ Item {
     }
 
     function nameLines(name, tileWidth) {
-        if (typeof lauttaExp === "string" && lauttaExp.indexOf("logw") >= 0)
-            console.log("probe namew " + tileWidth)
         return GridName.lines(name, tileWidth - nameMargin, function (text) { return nameFont.advanceWidth(text) })
     }
 

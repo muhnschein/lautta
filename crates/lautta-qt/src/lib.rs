@@ -195,7 +195,6 @@ pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
             rust!(Probe1 [] { probe("app") });
             lauttaInstallTranslations(app, SailfishApp::pathTo(QStringLiteral("translations")).toLocalFile());
             QQuickView *view = SailfishApp::createView();
-            view->rootContext()->setContextProperty(QStringLiteral("lauttaExp"), QString::fromLocal8Bit(qgetenv("LAUTTA_EXP")));
             lauttaRegisterImageProviders(view->engine());
             rust!(Probe2 [] { probe("view") });
             rust!(LauttaWaitCore [] { wait_core() });

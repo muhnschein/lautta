@@ -42,51 +42,6 @@ function items(count, capped) {
     return qsTrId("lautta-dir-grid-items", count)
 }
 
-var _days = { "until": 0 }
-
-function _dayBounds() {
-    var now = Date.now()
-    if (now < _days.until && now >= _days.today)
-        return _days
-    var d = new Date(now)
-    var y = d.getFullYear(), m = d.getMonth(), day = d.getDate()
-    _days = {
-        "today": new Date(y, m, day).getTime(),
-        "until": new Date(y, m, day + 1).getTime(),
-        "yesterday": new Date(y, m, day - 1).getTime(),
-        "yearStart": new Date(y, 0, 1).getTime(),
-        "yearEnd": new Date(y + 1, 0, 1).getTime()
-    }
-    return _days
-}
-
-function _modifiedFast(ms, withTime) {
-    if (ms === undefined || ms < 0)
-        return ""
-    var b = _dayBounds()
-    var date = new Date(ms)
-    if (ms >= b.today && ms < b.until)
-        return Silica.Format.formatDate(date, Silica.Formatter.TimepointRelative)
-    var day
-    if (ms >= b.yesterday && ms < b.today)
-        day = qsTrId("lautta-dir-yesterday")
-    else if (ms >= b.yearStart && ms < b.yearEnd)
-        day = Silica.Format.formatDate(date, Silica.Formatter.DateMediumWithoutYear)
-    else
-        day = Silica.Format.formatDate(date, Silica.Formatter.DateMedium)
-    if (!withTime)
-        return day
-    return qsTrId("lautta-dir-date-time").arg(day).arg(Silica.Format.formatDate(date, Silica.Formatter.TimeValue))
-}
-
-function gridCaptionsFast(isDir, size, modifiedMs, counted, count, capped) {
-    if (isDir)
-        return counted ? [items(count, capped)] : [_modifiedFast(modifiedMs, true)]
-    var when = _modifiedFast(modifiedMs, true)
-    return size >= 0 ? (when.length > 0 ? [when, Silica.Format.formatFileSize(size)] : [Silica.Format.formatFileSize(size)])
-                     : (when.length > 0 ? [when] : [])
-}
-
 function gridCaptions(isDir, size, modifiedMs, counted, count, capped) {
     var lines = isDir ? [counted ? items(count, capped) : modifiedWithTime(modifiedMs)]
                       : [modifiedWithTime(modifiedMs), size >= 0 ? Silica.Format.formatFileSize(size) : ""]
