@@ -589,7 +589,8 @@ impl Provider for LocalProvider {
         let real = self.real_path(path);
         blocking(move || {
             let file = File::open(real)?; // NOSONAR: runs on the blocking pool
-            if !file.metadata()?.is_file() {
+            let meta = file.metadata()?; // NOSONAR: runs on the blocking pool
+            if !meta.is_file() {
                 return Err(Error::kind(ErrorKind::IsADirectory));
             }
             Ok(Some(OwnedFd::from(file)))
