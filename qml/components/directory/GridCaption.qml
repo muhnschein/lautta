@@ -12,6 +12,8 @@ Item {
     property int minLines
     property bool emphasised
     property bool pressed
+    // False: lines keep their room, no text laid out.
+    property bool textShown: true
     readonly property var nameLines: visible && metrics ? metrics.nameLines(name, width) : []
     readonly property int captionLines: Math.max(captions.length, minLines)
 
@@ -28,7 +30,7 @@ Item {
         verticalAlignment: Text.AlignTop
         wrapMode: Text.NoWrap
         textFormat: Text.PlainText
-        text: caption.nameLines.join("\n")
+        text: caption.textShown ? caption.nameLines.join("\n") : ""
         font.pixelSize: Theme.fontSizeExtraSmall
         color: caption.emphasised ? Theme.highlightColor : Theme.primaryColor
     }
@@ -42,7 +44,7 @@ Item {
             width: caption.width
             height: caption.metrics ? caption.metrics.captionHeight : 0
             horizontalAlignment: Text.AlignHCenter
-            text: index < caption.captions.length ? caption.captions[index] : ""
+            text: caption.textShown && index < caption.captions.length ? caption.captions[index] : ""
             truncationMode: TruncationMode.Elide
             font.pixelSize: Theme.fontSizeTiny
             color: caption.pressed ? Theme.secondaryHighlightColor : Theme.secondaryColor

@@ -281,6 +281,32 @@ ApplicationWindow {
         }
     }
 
+    // No finger headless: fling speed handed to the grid's check, stop by moving's handler.
+    function checkHeldCaptions(view) {
+        var grid = view.flickable
+        var shown = cellNamed(view, "notes.txt")
+        var height = shown.implicitHeight
+        grid.holdCaptions(Screen.height / 2)
+        expect(!grid.captionsHeld, "a slow scroll holds no text")
+        grid.holdCaptions(-2 * Screen.height)
+        expect(grid.captionsHeld, "a fast fling holds it")
+        same(textOf(shown, "gridName"), "notes.txt", "a cell made before keeps its name")
+        install("late.txt")
+        view.model.refresh()
+        waitFor(function () { return view.model.count === 5 }, "a file made in the fling")
+        var late = cellNamed(view, "late.txt")
+        same([textOf(late, "gridName"), textOf(late, "gridCaption0"), textOf(late, "gridCaption1")], ["", "", ""],
+             "a cell made in a fast fling has no text yet")
+        same(late.implicitHeight, height, "but the room for it")
+        grid.movingChanged()
+        same(textOf(late, "gridName"), "late.txt", "the grid stopped: its name")
+        same(textOf(late, "gridCaption1"), Format.formatFileSize(20), "and its lines")
+        grid.holdCaptions(2 * Screen.height)
+        same(textOf(late, "gridName"), "late.txt", "a later fling leaves it be")
+        grid.movingChanged()
+        expect(!grid.captionsHeld, "and ends with the grid")
+    }
+
     function checkArchive() {
         Operations.compress(JSON.stringify([base + "Inner"]), "lautta://user-downloads/", "grid-captions", "zip")
         waitFor(function () { return window.archiveRoot.length > 0 }, "the archive")
@@ -369,6 +395,7 @@ ApplicationWindow {
         checkNames()
         checkCells(view)
         checkPreview(view)
+        checkHeldCaptions(view)
         checkArchive()
         checkCaptionText()
         var restore = { "view_mode": "list", "thumbnails_local": true }
