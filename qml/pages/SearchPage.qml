@@ -11,6 +11,7 @@ Page {
     id: page
 
     property string rootUri
+    property string query
     property bool searched
     readonly property bool remote: App.isRemote(rootUri)
 
@@ -106,7 +107,15 @@ Page {
                 focus = false
             }
             onTextChanged: page.edited(text)
-            Component.onCompleted: forceActiveFocus()
+            Component.onCompleted: {
+                if (page.query.length === 0) {
+                    forceActiveFocus()
+                    return
+                }
+                text = page.query
+                typing.stop()
+                page.start()
+            }
         }
 
         BackgroundItem {

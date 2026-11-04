@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
+use crate::json::to_json;
 use crate::runtime::core;
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
-use qmetaobject::{QByteArray, QVariantList};
+use qmetaobject::QByteArray;
 use std::collections::HashMap;
 
 const ROLE_URI: i32 = 0x0100;
@@ -17,8 +18,9 @@ pub struct PathModel {
     address: qt_property!(QString; NOTIFY uriChanged),
     count: qt_property!(i32; NOTIFY uriChanged),
     fullPath: qt_property!(QString; NOTIFY uriChanged),
+    /// Folders above this one, parent first: `[{uri, name, icon}]`.
+    ancestorsJson: qt_property!(QString; NOTIFY uriChanged),
 
-    complete: qt_method!(fn(&self, prefix: QString) -> QVariantList),
     resolve: qt_method!(fn(&self, text: QString) -> QString),
 
     steps: Vec<(String, String)>,
@@ -33,30 +35,24 @@ impl PathModel {
         self.uri = value;
         self.steps.clear();
         self.address = QString::default();
+        let mut ancestors: Vec<serde_json::Value> = Vec::new();
         if let (Some(core), Ok(u)) = (core(), Uri::parse(&self.uri.to_string())) {
-            self.steps = core
-                .path_steps(&u)
-                .into_iter()
-                .map(|s| (s.uri.to_string(), s.name))
+            let steps = core.path_steps(&u);
+            ancestors = steps
+                .iter()
+                .rev()
+                .skip(1)
+                .map(|s| serde_json::json!({ "uri": s.uri.to_string(), "name": s.name, "icon": s.icon }))
                 .collect();
+            self.steps = steps.into_iter().map(|s| (s.uri.to_string(), s.name)).collect();
             self.address = QString::from(core.edit_address(&u).as_str());
         }
+        self.ancestorsJson = QString::from(to_json(&ancestors).as_str());
         self.count = self.steps.len() as i32;
         let names: Vec<&str> = self.steps.iter().map(|(_, n)| n.as_str()).collect();
         self.fullPath = QString::from(names.join(" \u{203a} ").as_str());
         self.end_reset_model();
         self.uriChanged();
-    }
-
-    fn complete(&self, prefix: QString) -> QVariantList {
-        let mut out = QVariantList::default();
-        let (Some(core), Ok(base)) = (core(), Uri::parse(&self.uri.to_string())) else {
-            return out;
-        };
-        for u in core.complete_address(&prefix.to_string(), &base) {
-            out.push(QVariant::from(QString::from(u.to_string().as_str())));
-        }
-        out
     }
 
     fn resolve(&self, text: QString) -> QString {

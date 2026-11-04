@@ -45,6 +45,8 @@ pub struct App {
     displayAddress: qt_method!(fn(&self, uri: QString) -> QString),
     locationName: qt_method!(fn(&self, uri: QString) -> QString),
     isLocal: qt_method!(fn(&self, uri: QString) -> bool),
+    /// True for the folder itself too.
+    isInside: qt_method!(fn(&self, uri: QString, folder: QString) -> bool),
     /// True for a server URI, even a gone one.
     isRemote: qt_method!(fn(&self, uri: QString) -> bool),
     localUrl: qt_method!(fn(&self, uri: QString) -> QString),
@@ -210,6 +212,10 @@ impl App {
 
     fn isLocal(&self, uri: QString) -> bool {
         matches!((core(), parse_uri(&uri)), (Some(c), Some(u)) if c.locations.to_local_path(&u).is_some())
+    }
+
+    fn isInside(&self, uri: QString, folder: QString) -> bool {
+        matches!((parse_uri(&uri), parse_uri(&folder)), (Some(u), Some(f)) if u.is_inside(&f))
     }
 
     fn isRemote(&self, uri: QString) -> bool {

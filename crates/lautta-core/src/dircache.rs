@@ -187,6 +187,27 @@ impl DirCache {
         Ok(())
     }
 
+    /// Folders with a listing young enough for [`DirCache::get`], newest first, at most `limit`.
+    pub fn folders(&self, limit: usize) -> Result<Vec<Uri>> {
+        let inner = self.lock();
+        let cutoff = (self.clock)() - MAX_AGE_MS;
+        let conn = self.db.lock();
+        let mut stmt = conn.prepare(
+            "SELECT uri, location_id FROM dircache WHERE fetched_ms >= ?1 \
+             ORDER BY fetched_ms DESC, uri LIMIT ?2",
+        )?;
+        let rows = stmt
+            .query_map(params![cutoff, i64::try_from(limit).unwrap_or(i64::MAX)], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows
+            .into_iter()
+            .filter(|(_, location)| !inner.disabled.contains(location))
+            .filter_map(|(uri, _)| Uri::parse(&uri).ok())
+            .collect())
+    }
+
     pub fn invalidate(&self, uri: &Uri) -> Result<()> {
         let mut inner = self.lock();
         self.remove_key(&mut inner, &uri.to_string())
@@ -634,5 +655,44 @@ mod tests {
         let hit = cache.get(&u).unwrap().unwrap();
         assert!(hit.fetched_ms > 1_600_000_000_000);
         assert!(!hit.stale);
+    }
+
+    #[test]
+    fn folders_are_the_young_listings_newest_first() {
+        let f = fixture(8);
+        let (old, a, b, off) = (
+            uri("lautta://l/old"),
+            uri("lautta://l/a"),
+            uri("lautta://m/b"),
+            uri("lautta://n/c"),
+        );
+        f.cache.put(&old, &[]).unwrap();
+        f.now.fetch_add(DAY, Ordering::SeqCst);
+        f.cache.put(&a, &[]).unwrap();
+        f.cache.put(&off, &[]).unwrap();
+        f.now.fetch_add(1, Ordering::SeqCst);
+        f.cache.put(&b, &[]).unwrap();
+        f.db.lock()
+            .execute(
+                "INSERT INTO location_prefs(location_id, no_listing_cache) VALUES ('n', 1)",
+                [],
+            )
+            .unwrap();
+        let f = Fixture {
+            cache: DirCache::with_clock(f.db.clone(), 8, {
+                let n = f.now.clone();
+                Arc::new(move || n.load(Ordering::SeqCst))
+            })
+            .unwrap(),
+            ..f
+        };
+        assert_eq!(f.cache.folders(10).unwrap(), [b.clone(), a.clone(), old.clone()]);
+        assert_eq!(f.cache.folders(2).unwrap(), [b.clone(), a.clone()]);
+        f.now.fetch_add(MAX_AGE_MS - DAY, Ordering::SeqCst);
+        assert_eq!(
+            f.cache.folders(10).unwrap(),
+            [b, a],
+            "a listing older than a week is gone"
+        );
     }
 }
