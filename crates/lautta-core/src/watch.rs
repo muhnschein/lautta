@@ -236,12 +236,8 @@ impl Drop for DirWatch {
             return;
         }
         subs.remove(&self.dir);
-        match lock(&self.shared.watcher).unwatch(&self.dir) {
-            // The folder (and with it the kernel watch) may be gone already.
-            Err(e) if matches!(e.kind, notify::ErrorKind::WatchNotFound) => {}
-            Err(e) => log::warn!("cannot stop watching a folder: {}", map_notify_error(e)),
-            Ok(()) => {}
-        }
+        // Fails once the folder, and with it the kernel watch, is gone: nothing left to undo.
+        let _ = lock(&self.shared.watcher).unwatch(&self.dir);
     }
 }
 
