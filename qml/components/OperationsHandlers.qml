@@ -11,7 +11,7 @@ Item {
 
     // Off in --qml-check: no session bus for the share provider to register on.
     property bool shareEnabled: Qt.application.arguments.indexOf("--qml-check") < 0
-    property string pendingFolder
+    property var pending: []
 
     // Resolved when used: window publishes its instance once created.
     function stack() {
@@ -29,18 +29,18 @@ Item {
         return { "item": Operations.displayPath(subject), "location": App.locationName(subject) }
     }
 
-    function openFolder(uri) {
-        pendingFolder = uri
+    // PageStack drops a push during a transition, e.g. the extract dialog closing.
+    function pushWhenIdle(url, props) {
+        pending = pending.concat([{ "url": url, "props": props }])
         openPending()
     }
 
-    // PageStack drops a push during a transition, e.g. the extract dialog closing.
     function openPending() {
         if (stack().busy)
             return
-        var uri = pendingFolder
-        pendingFolder = ""
-        stack().push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": uri })
+        var next = pending[0]
+        pending = pending.slice(1)
+        stack().push(next.url, next.props)
     }
 
     function background() {
@@ -59,7 +59,7 @@ Item {
     Connections {
         target: Operations
 
-        onNeedsSummary: handlers.stack().push(Qt.resolvedUrl("../dialogs/PlanSummaryDialog.qml"), {
+        onNeedsSummary: handlers.pushWhenIdle(Qt.resolvedUrl("../dialogs/PlanSummaryDialog.qml"), {
             "planId": planId,
             "summary": JSON.parse(summaryJson)
         })
@@ -74,12 +74,12 @@ Item {
         }
         onExtractFinished: {
             if (ok)
-                handlers.openFolder(destUri)
+                handlers.pushWhenIdle(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": destUri })
         }
     }
 
     Connections {
-        target: handlers.pendingFolder.length > 0 ? handlers.stack() : null
+        target: handlers.pending.length > 0 ? handlers.stack() : null
         onBusyChanged: handlers.openPending()
     }
 
