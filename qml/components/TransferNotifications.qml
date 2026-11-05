@@ -97,12 +97,31 @@ Item {
         note.publish()
     }
 
+    // Ended transfer keeps its unanswered items listed.
+    function waitsForAnswer(id) {
+        var s = summaryOf(id)
+        return s !== null && s.finishedMs === null && JSON.parse(Transfers.questionsJson(id)).length > 0
+    }
+
+    // Own close() emits no `closed`: destroy here.
+    function closeAnswered() {
+        for (var key in questionNotes) {
+            var note = questionNotes[key]
+            if (!waitsForAnswer(note.transferId)) {
+                delete questionNotes[key]
+                note.close()
+                note.destroy()
+            }
+        }
+    }
+
     Component.onCompleted: closeStale()
 
     Connections {
         target: Transfers
         onFinished: root.noteFinished(id, ok, failures)
         onNeedsAnswer: root.noteQuestion(id)
+        onChanged: root.closeAnswered()
     }
 
     Timer {
@@ -177,6 +196,10 @@ Item {
             summary: qsTrId("lautta-xfr-note-question")
             remoteActions: root.remoteAction("conflict")
             onClicked: root.openRequested("conflict", transferId)
+            onClosed: {
+                delete root.questionNotes[transferId]
+                destroy()
+            }
         }
     }
 }
