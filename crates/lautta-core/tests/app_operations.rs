@@ -685,3 +685,74 @@ async fn extract_runs_as_extract_titled_by_its_archive() {
         b"beta"
     );
 }
+
+#[tokio::test]
+async fn extract_summary_left_unstarted_leaves_no_folder() {
+    let h = home().await;
+    write(&h.root.join("Documents/src/a.txt"), b"alpha");
+    write(&h.root.join("Documents/src/b.txt"), b"beta");
+    std::fs::create_dir_all(h.root.join("Documents/kept")).unwrap();
+    let zip = h
+        .core
+        .compress_to(
+            &[uri("lautta://user-documents/src")],
+            &uri("lautta://user-downloads/"),
+            "bundle",
+            ArchiveKind::Zip,
+            no_progress(),
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await
+        .unwrap();
+    h.core.apply_settings(Settings {
+        large_op_items: 1,
+        ..Settings::default()
+    });
+    let summary = |into: &'static str| {
+        let (core, zip) = (h.core.clone(), zip.clone());
+        async move {
+            match core.extract(&zip, &uri(into)).await.unwrap() {
+                Started::NeedsSummary(plan) => *plan,
+                Started::Transfer(_) => panic!("a large extract needs the summary"),
+            }
+        }
+    };
+
+    let new_folder = summary("lautta://user-documents/bundle").await;
+    summary("lautta://user-documents/kept").await;
+    assert!(
+        !h.root.join("Documents/bundle").exists(),
+        "no folder while the summary is open, none after Cancel"
+    );
+    assert!(
+        h.root.join("Documents/kept").is_dir(),
+        "a folder that was there stays"
+    );
+    assert!(
+        h.core.plan_summary(&new_folder).await.free_bytes.is_some(),
+        "free space of the folder the new one goes in"
+    );
+
+    let documents = uri("lautta://user-documents/");
+    h.core.list(&documents, |_| {}).await.unwrap();
+    let id = h.core.start_plan(new_folder).await.unwrap();
+    let s = h
+        .core
+        .engine
+        .wait_for(id, |s| s.state.is_finished())
+        .await
+        .unwrap();
+    assert_eq!(s.state, TransferState::Completed, "{s:?}");
+    assert_eq!(
+        std::fs::read(h.root.join("Documents/bundle/src/a.txt")).unwrap(),
+        b"alpha"
+    );
+    let mut stale = false;
+    h.core
+        .list(&documents, |cached| {
+            stale = !cached.iter().any(|e| e.name == b"bundle");
+        })
+        .await
+        .unwrap();
+    assert!(!stale, "cached listing of the parent shows the made folder");
+}

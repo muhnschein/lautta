@@ -295,6 +295,13 @@ impl Core {
 
     pub async fn start_plan(&self, plan: Plan) -> Result<TransferId> {
         let settings = self.settings();
+        if plan.kind == OperationKind::Extract {
+            let dest = &plan.destination;
+            self.provider(&dest.location)?.make_dir(&dest.path, false).await?;
+            if let Some(parent) = dest.parent() {
+                self.invalidate(&parent);
+            }
+        }
         if plan.kind == OperationKind::Move {
             for item in &plan.items {
                 if item.src.location == item.dst.location && item.src.parent() != item.dst.parent() {
