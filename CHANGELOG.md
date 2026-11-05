@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A video or song that can't be played says "Can't play" with its name, instead of blaming the folder or server it is in.
 - Extract all on a compressed tar archive (.tar.gz, .tar.bz2, .tar.xz) is many times faster: the archive is unpacked once, not once per file. A 1,000-file backup went from over 30 seconds to under 2 on a OnePlus 6.
 - Large text files open and close with shorter stalls, and long folders open sooner.
 - Select all and clearing a selection in a large folder respond faster.
