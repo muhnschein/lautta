@@ -125,7 +125,7 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.highlightColor
                 font.pixelSize: Theme.fontSizeSmall
-                //% "Showing the first 1 MiB of %1"
+                //% "Showing the first 1 MB of %1"
                 text: qsTrId("lautta-viewers-truncated").arg(Format.formatFileSize(doc.size))
             }
             Label {
@@ -148,7 +148,7 @@ Page {
 
         ViewPlaceholder {
             enabled: doc.errorKind !== ""
-            text: ErrorText.message(doc.errorKind, { "item": page.fileName, "location": App.locationName(page.uri) })
+            text: ErrorText.message(doc.errorKind, { "item": page.fileName, "location": App.locationName(page.uri), "open": true })
         }
 
         VerticalScrollDecorator { }

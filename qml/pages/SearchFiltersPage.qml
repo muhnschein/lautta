@@ -106,7 +106,7 @@ Dialog {
                         text: qsTrId("lautta-filters-match-substring")
                     }
                     MenuItem {
-                        //% "Glob"
+                        //% "Pattern"
                         text: qsTrId("lautta-filters-match-glob")
                     }
                 }

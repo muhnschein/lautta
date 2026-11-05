@@ -167,7 +167,7 @@ Page {
                 enabled: page.thumbnails
                 //% "Thumbnails from servers"
                 text: qsTrId("lautta-settings-thumbs-remote")
-                //% "Downloads pictures and PDFs from servers to make them, which uses more data and battery and can slow down browsing"
+                //% "Downloads pictures and PDFs from servers to make thumbnails, which uses more data and battery and can slow down browsing"
                 description: qsTrId("lautta-settings-thumbs-remote-hint")
                 settingKey: "thumbnails_remote"
             }
