@@ -48,3 +48,4 @@
 - Settings › Storage opens from Lautta where the system allows it.
 - Names and server messages that contain tags, such as `<b>x</b>`, show exactly as typed instead of changing how the text looks or loading images.
 - The image viewer opens straight on the tapped image, instead of sliding to it from another one.
+- A transfer paused, or held up by a lost connection or a removed card, just as a file finishes no longer asks on resume whether to replace the file it has just written.

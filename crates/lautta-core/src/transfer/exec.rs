@@ -37,6 +37,9 @@ pub struct ItemEnv {
     pub scratch_dir: PathBuf,
     pub trasher: Option<Arc<dyn Trasher>>,
     pub progress: ProgressSink,
+    /// `true` right before a step an abort could not undo, `false` when abortable again; returns
+    /// false when the item was taken away: stop.
+    pub commit: Arc<dyn Fn(bool) -> bool + Send + Sync>,
 }
 
 #[derive(Debug, Clone)]
@@ -136,6 +139,14 @@ fn rename_unavailable(e: &Error) -> bool {
     matches!(e.kind, ErrorKind::CrossesDevice | ErrorKind::Unsupported)
 }
 
+fn commit(env: &ItemEnv, on: bool) -> Result<()> {
+    if (env.commit)(on) {
+        Ok(())
+    } else {
+        Err(Error::kind(ErrorKind::Canceled))
+    }
+}
+
 fn temp_path(dst: &Uri, temp_name: &[u8]) -> Result<VPath> {
     dst.path
         .parent()
@@ -179,13 +190,14 @@ async fn place_file(env: &ItemEnv, job: &ItemJob, mode: WriteMode) -> Result<()>
         return Err(Error::kind(ErrorKind::IsADirectory));
     }
     if env.same_location && is_move(env) && !mode.resume {
+        commit(env, true)?;
         match env
             .dst
             .rename(&plan.src.path, &plan.dst.path, rename_mode(mode))
             .await
         {
             Ok(()) => return Ok(()),
-            Err(e) if rename_unavailable(&e) => {}
+            Err(e) if rename_unavailable(&e) => commit(env, false)?,
             Err(e) => return Err(e),
         }
     }
@@ -471,6 +483,7 @@ async fn finish_placement(
     }
     apply_attributes(env, write_path, &got, plan, src_entry).await?;
     if temp_used {
+        commit(env, true)?;
         env.dst
             .rename(write_path, &plan.dst.path, rename_mode(mode))
             .await?;
@@ -521,6 +534,7 @@ async fn run_dir(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
         Decision::KeepBoth => return keep_both(env, plan).await,
         Decision::Ask(c) => return Ok(Outcome::Ask(c)),
     };
+    commit(env, true)?;
     if env.same_location && is_move(env) && !mode.merge {
         match env
             .dst
@@ -555,6 +569,7 @@ async fn run_symlink(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
         Some(t) => t.clone(),
         None => env.src.read_link(&plan.src.path).await?,
     };
+    commit(env, true)?;
     if mode.replace {
         env.dst.remove_file(&plan.dst.path).await?;
     }
@@ -568,11 +583,13 @@ async fn run_symlink(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
 async fn run_delete(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     let plan = &job.plan;
     if env.options.trash {
+        commit(env, true)?;
         let trashed = match &env.trasher {
             Some(t) => t.trash(&plan.src).await?,
             None => false,
         };
         if !trashed {
+            commit(env, false)?;
             remove_tree(&*env.src, &plan.src.path, plan.kind == Kind::Dir).await?;
         }
         return Ok(Outcome::Subtree);
@@ -661,6 +678,7 @@ mod tests {
             scratch_dir: std::env::temp_dir(),
             trasher: None,
             progress: no_progress(),
+            commit: Arc::new(|_| true),
         }
     }
 
