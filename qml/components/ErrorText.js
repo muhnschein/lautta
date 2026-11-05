@@ -74,6 +74,12 @@ function message(kind, context) {
                      qsTrId("lautta-err-unsupported"),
                      //% "This location can't do this."
                      qsTrId("lautta-err-unsupported-unnamed"))
+    case "NotPlayable":
+        return _pick(item,
+                     //% "Can't play %1."
+                     qsTrId("lautta-err-not-playable"),
+                     //% "Can't play this file."
+                     qsTrId("lautta-err-not-playable-unnamed"))
     case "BridgeUnavailable":
         //% "Network locations are unavailable right now."
         return qsTrId("lautta-err-bridge-gone")

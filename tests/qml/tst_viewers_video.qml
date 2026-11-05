@@ -11,8 +11,11 @@ ApplicationWindow {
 
     Component.onCompleted: {
         tools.installFixture(Qt.resolvedUrl("host/fixtures/data.bin"), "lautta://user-documents/clip.mp4")
-        pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        tools.pump(500)
+        var page = pageStack.push(pageComponent, {}, PageStackAction.Immediate)
+        for (var i = 0; i < 400 && page.statusText === ""; ++i)
+            tools.pump(25)
+        if (page.statusText !== "lautta-err-not-playable" && page.statusText !== "Can't play clip.mp4.")
+            console.error("FAILED: a file that isn't a video: '" + page.statusText + "'")
     }
 
     Component {

@@ -2666,5 +2666,13 @@ Sauna wood: 2 sacks
 Cabin keys from Anni</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-err-not-playable">
+        <source>Can&apos;t play %1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-not-playable-unnamed">
+        <source>Can&apos;t play this file.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>
