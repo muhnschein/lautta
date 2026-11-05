@@ -110,9 +110,9 @@ for file in $qml_files; do
     i=$((i + 1))
 done
 qml_check() {
-    mkdir -p "$1/Documents" "$1/Downloads" "$1/Pictures"
     h=$1
     shift
+    mkdir -p "$h/Documents" "$h/Downloads" "$h/Pictures"
     sb2 -t "$TARGET" env HOME="$h" QT_QPA_PLATFORM=minimal \
         /usr/bin/harbour-lautta --qml-check -I /usr/share/harbour-lautta/qml "$@"
 }
