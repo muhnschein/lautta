@@ -10,6 +10,7 @@ use lautta_core::paths::AppPaths;
 use lautta_core::provider::local::LocalProvider;
 use lautta_core::provider::memory::MemoryProvider;
 use lautta_core::provider::no_progress;
+use lautta_core::settings::Settings;
 use lautta_core::transfer::TransferState;
 use lautta_core::{ErrorKind, Uri};
 use std::path::Path;
@@ -608,4 +609,79 @@ async fn empty_archives_are_refused_and_display_paths() {
         )
         .await;
     assert!(err.is_err());
+}
+
+#[tokio::test]
+async fn extract_runs_as_extract_titled_by_its_archive() {
+    let h = home().await;
+    write(&h.root.join("Documents/src/a.txt"), b"alpha");
+    write(&h.root.join("Documents/src/b.txt"), b"beta");
+    let zip = h
+        .core
+        .compress_to(
+            &[uri("lautta://user-documents/src")],
+            &uri("lautta://user-downloads/"),
+            "bundle",
+            ArchiveKind::Zip,
+            no_progress(),
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await
+        .unwrap();
+    let done = |id| {
+        let core = h.core.clone();
+        async move { core.engine.wait_for(id, |s| s.state.is_finished()).await.unwrap() }
+    };
+
+    let Started::Transfer(id) = h
+        .core
+        .extract(&zip, &uri("lautta://user-documents/small"))
+        .await
+        .unwrap()
+    else {
+        panic!("a small extract starts at once");
+    };
+    let s = done(id).await;
+    assert_eq!(
+        (s.state, s.kind, s.title.as_str()),
+        (TransferState::Completed, OperationKind::Extract, "bundle.zip")
+    );
+
+    let Started::Transfer(id) = h
+        .core
+        .copy_or_move(
+            OperationKind::Copy,
+            vec![uri("lautta://user-documents/src")],
+            uri("lautta://user-downloads/"),
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("a small copy starts at once");
+    };
+    assert_eq!(done(id).await.title, "src", "a copy is titled by its first item");
+
+    h.core.apply_settings(Settings {
+        large_op_items: 1,
+        ..Settings::default()
+    });
+    let Started::NeedsSummary(plan) = h
+        .core
+        .extract(&zip, &uri("lautta://user-documents/large"))
+        .await
+        .unwrap()
+    else {
+        panic!("a large extract needs the summary");
+    };
+    assert_eq!(plan.kind, OperationKind::Extract);
+    assert_eq!(h.core.plan_summary(&plan).await.kind, "extract");
+    let s = done(h.core.start_plan(*plan).await.unwrap()).await;
+    assert_eq!(
+        (s.state, s.kind, s.title.as_str()),
+        (TransferState::Completed, OperationKind::Extract, "bundle.zip")
+    );
+    assert_eq!(
+        std::fs::read(h.root.join("Documents/large/src/b.txt")).unwrap(),
+        b"beta"
+    );
 }
