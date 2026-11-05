@@ -106,10 +106,10 @@ Dialog {
                 color: Theme.highlightColor
                 text: {
                     if (dialog.identity)
-                        //% "%1 hasn’t been seen before. Check that this fingerprint matches the server."
+                        //% "%1 hasn't been seen before. Check that this fingerprint matches the server."
                         return qsTrId("lautta-question-identity-text").arg(dialog.host)
                     if (dialog.insecure)
-                        //% "%1 doesn’t encrypt the connection. What you send can be read on the network."
+                        //% "%1 doesn't encrypt the connection. What you send can be read on the network."
                         return qsTrId("lautta-question-insecure-text").arg(dialog.host)
                     if (dialog.signIn)
                         return dialog.details.instruction || ""

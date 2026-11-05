@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Messages and labels say what really happened. A file or folder you may not read says "You don't have permission to open", not "to change". The folder picker shows "Sign-in failed" or "Server identity changed" instead of an internal code, and no longer calls a connecting server unreachable. A failed search explains why. Items in a running move, delete, compress or extract task no longer read "Copying". When Lautta closes with unfinished tasks and "Resume unfinished tasks at start" is off, it no longer promises they will resume. Smaller wording fixes across the app.
 - Extract all on a compressed tar archive (.tar.gz, .tar.bz2, .tar.xz) is many times faster: the archive is unpacked once, not once per file. A 1,000-file backup went from over 30 seconds to under 2 on a OnePlus 6.
 - Large text files open and close with shorter stalls, and long folders open sooner.
 - Select all and clearing a selection in a large folder respond faster.

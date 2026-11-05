@@ -52,8 +52,9 @@ Item {
     function publishPending() {
         progressNote.close()
         if (Transfers.pendingCount > 0) {
-            //% "%n tasks will resume"
+            //% "%n tasks stopped"
             pendingNote.summary = qsTrId("lautta-xfr-note-pending", Transfers.pendingCount)
+            pendingNote.body = TransferText.pendingBody(App.setting("auto_resume") !== false)
             pendingNote.publish()
         }
     }
@@ -76,7 +77,7 @@ Item {
             "transferId": id,
             //% "%1 failed"
             "summary": qsTrId("lautta-xfr-note-failed").arg(titleOf(id)),
-            //% "%n files couldn't be transferred. Tap to retry."
+            //% "%n items failed. Tap to retry."
             "body": qsTrId("lautta-xfr-note-failed-body", Math.max(1, failures))
         })
         failedNote.publish()
@@ -147,8 +148,6 @@ Item {
 
         appName: "Lautta"
         category: "x-lautta.transfer.pending"
-        //% "when you open Lautta again"
-        body: qsTrId("lautta-xfr-note-pending-body")
         remoteActions: root.remoteAction("transfers")
     }
 

@@ -74,14 +74,14 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.highlightColor
                 font.pixelSize: Theme.fontSizeSmall
-                //% "Showing the first 1 MiB"
+                //% "Showing the first 1 MB"
                 text: qsTrId("lautta-viewers-truncated-short")
             }
         }
 
         ViewPlaceholder {
             enabled: doc.errorKind !== ""
-            text: ErrorText.message(doc.errorKind, { "item": page.fileName, "location": App.locationName(page.uri) })
+            text: ErrorText.message(doc.errorKind, { "item": page.fileName, "location": App.locationName(page.uri), "open": true })
         }
 
         BusyIndicator {

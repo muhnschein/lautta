@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later context: { location, item, needed, free }; sizes in
-// bytes, any may be absent.
+// SPDX-License-Identifier: LGPL-2.1-or-later context: { location, item, needed, free, open }; sizes
+// in bytes, any may be absent. `open`: failure came from reading (listing, viewing, playing), not change.
 .pragma library
 .import Sailfish.Silica 1.0 as Silica
 
@@ -44,6 +44,12 @@ function message(kind, context) {
     case "NoSpace":
         return _noSpace(loc, c)
     case "PermissionDenied":
+        if (c.open)
+            return _pick(item || loc,
+                         //% "You don't have permission to open %1."
+                         qsTrId("lautta-err-permission-open"),
+                         //% "You don't have permission to open this."
+                         qsTrId("lautta-err-permission-open-unnamed"))
         return _pick(item || loc,
                      //% "You don't have permission to change %1."
                      qsTrId("lautta-err-permission"),
@@ -118,7 +124,7 @@ function message(kind, context) {
                      //% "The server is busy. Try again in a moment."
                      qsTrId("lautta-err-busy-unnamed"))
     case "Canceled":
-        //% "Canceled"
+        //% "Cancelled"
         return qsTrId("lautta-err-canceled")
     default:
         //% "Something went wrong."

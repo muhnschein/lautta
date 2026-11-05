@@ -143,7 +143,7 @@ Page {
                         width: parent.width
                         visible: model.state !== "failed"
                         height: visible ? implicitHeight : 0
-                        text: TransferText.itemStatus(model.state, kind, size, page.s ? page.s.direction : "")
+                        text: TransferText.itemStatus(model.state, kind, size, page.s ? page.s.direction : "", page.s ? page.s.kind : "")
                         color: Theme.secondaryColor
                         font.pixelSize: Theme.fontSizeSmall
                         truncationMode: TruncationMode.Fade
@@ -186,7 +186,7 @@ Page {
                     App.setting("remorse_seconds") * 1000)
             }
             MenuItem {
-                //% "Move up in queue"
+                //% "Move up in the queue"
                 text: qsTrId("lautta-xfr-menu-move-up")
                 visible: page.s !== null && !page.finished
                 onClicked: Transfers.moveUp(page.transferId)

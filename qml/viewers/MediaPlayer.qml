@@ -92,7 +92,7 @@ Page {
 
     readonly property string statusText: {
         if (errorKind !== "")
-            return ErrorText.message(errorKind, { "item": fileName, "location": App.locationName(uri) })
+            return ErrorText.message(errorKind, { "item": fileName, "location": App.locationName(uri), "open": true })
         if (remote.downloading)
             //% "Downloading from %1"
             return qsTrId("lautta-viewers-media-downloading").arg(App.locationName(uri))
