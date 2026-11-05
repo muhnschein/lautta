@@ -1,0 +1,29 @@
+location: off
+baseline: Home
+Running as unit: harness-harbour-lautta-1793884670092.service
+before: folder while summary open: present
+shot: out/before-1-summary.png
+before: folder after Cancel: present
+shot: out/before-2-archive-folder.png
+shot: out/before-3-summary-again.png
+before: after Start: files 1100; .part left 0; folders backup|backup.tar.gz|
+shot: out/before-4-done.png
+footprint: 15 files changed; naming harbour-lautta:
+  none
+location: off
+baseline: Home
+netns: app with own network namespace ran since boot; rebooting phone (netns_wedged)
+reboot_phone: up after 136 s
+location: off
+close: jolla-messages (6872)
+baseline: Home
+Running as unit: harness-harbour-lautta-1793885006189.service
+after: folder while summary open: none
+shot: out/after-1-summary.png
+after: folder after Cancel: none
+shot: out/after-2-archive-folder.png
+shot: out/after-3-summary-again.png
+after: after Start: files 1100; .part left 0; folders backup|backup.tar.gz|
+shot: out/after-4-done.png
+footprint: 68 files changed; naming harbour-lautta:
+  none
