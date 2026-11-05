@@ -11,6 +11,7 @@ QtQuick.Window {
     id: window
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property var __silica_applicationwindow_instance: app
     property int step: 0
     property int waited: 0
@@ -192,6 +193,12 @@ QtQuick.Window {
         expect(shownRows(layout) === rows, "a hidden row stays in the settings")
     }
 
+    property var stored: null
+    Component {
+        id: storedModel
+        BrowseLayoutModel { Component.onCompleted: reload() }
+    }
+
     function carry() {
         var layout = page.layoutModel
         page.listView.positionViewAtIndex(rowOf(layout, folder), ListView.Beginning)
@@ -220,7 +227,8 @@ QtQuick.Window {
                 return
             if (++window.waited > 150)
                 return window.fail("step " + window.step + " timed out: " + window.describe(window.page.layoutModel)
-                                   + ", preview " + window.page.previewCount)
+                                   + ", preview " + window.page.previewCount
+                                   + (window.stored ? ", stored " + window.describe(window.stored) : ""))
             var layout = window.page.layoutModel
             switch (window.step) {
             case 0:
@@ -237,8 +245,12 @@ QtQuick.Window {
                     window.carry()
                 break
             case 2:
-                if (window.waited < 10)
+                // A second model reads the store, and again on each write: the move is stored once it shows there.
+                if (!window.stored)
+                    window.stored = storedModel.createObject(window)
+                if (window.stored.count === 0 || window.rowOf(window.stored, window.folder) !== window.fromRow + 1)
                     return
+                window.stored.destroy()
                 window.expect(window.rowOf(layout, window.folder) === window.fromRow + 1,
                               "the moved row stays once stored: " + window.describe(layout))
                 window.expect(window.delegateOf(window.folder) === window.folderRow, "the moved row is the same row")
@@ -296,6 +308,7 @@ QtQuick.Window {
                 if (!window.switchOf("volumes") || window.switchOf("volumes").layoutHidden)
                     return
                 window.expect(layout.count === window.listed, "Restore defaults changed the rows: " + window.describe(layout))
+                window.reachedEnd = true
                 window.scenarioRunning = false
                 break
             }
@@ -306,7 +319,10 @@ QtQuick.Window {
 
     Component.onCompleted: {
         favourites.add("lautta://user-documents/", "Docs", "")
-        tools.pump(300)
+        for (var i = 0; i < 200 && favourites.idOf("lautta://user-documents/") === -1; ++i)
+            tools.pump(50)
+        if (favourites.idOf("lautta://user-documents/") === -1)
+            console.error("FAILED: the favourite is stored")
         page = app.pageStack.push(pageComponent, {}, PageStackAction.Immediate)
     }
 

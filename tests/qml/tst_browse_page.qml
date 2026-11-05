@@ -8,6 +8,7 @@ ApplicationWindow {
     id: win
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property int storageCalls: 0
@@ -198,6 +199,7 @@ ApplicationWindow {
                     return
                 if (win.storageCalls !== 1)
                     win.fail("Open Storage settings was asked " + win.storageCalls + " times")
+                win.reachedEnd = true
                 win.scenarioRunning = false
                 return
             }

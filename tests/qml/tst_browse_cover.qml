@@ -3,9 +3,19 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../../qml/cover"
-import "../../qml/pages"
 
 ApplicationWindow {
-    cover: Component { CoverPage { } }
-    initialPage: Component { BrowsePage { } }
+    id: test
+    property bool reachedEnd
+
+    initialPage: Component {
+        Page {
+            property string uri: "lautta://user-documents/"
+
+            CoverPage {
+                anchors.fill: parent
+                Component.onCompleted: test.reachedEnd = true
+            }
+        }
+    }
 }

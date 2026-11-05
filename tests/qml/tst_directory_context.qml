@@ -12,6 +12,7 @@ ApplicationWindow {
     readonly property string folder: "lautta://user-documents/"
     readonly property string file: folder + "report.md"
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property var row
@@ -281,9 +282,10 @@ ApplicationWindow {
                 win.next()
                 break
             case 14:
-                if (favs.idOf(win.file) === -1)
+                if (favs.idOf(win.file) === -1) {
+                    win.reachedEnd = true
                     win.scenarioRunning = false
-                else if (win.waited % 10 === 0)
+                } else if (win.waited % 10 === 0)
                     favs.reload()
                 break
             }

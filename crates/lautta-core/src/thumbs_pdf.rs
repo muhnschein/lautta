@@ -509,15 +509,20 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let pdfs = Arc::new(PdfThumbs::default());
         let turn = Arc::clone(&pdfs.gate).acquire_owned().await.unwrap();
-        let made = {
+        let mut made = {
             let (pdfs, path) = (Arc::clone(&pdfs), dir.path().to_path_buf());
             tokio::spawn(async move {
                 let h = Counting::new(pdf_bytes());
                 pdfs.make(&path, "v", &h, 32, 1_000_000).await
             })
         };
-        settle().await;
-        assert!(!made.is_finished(), "another render has the turn");
+        // No event says "waiting for the turn": a second is far longer than a render without it.
+        assert!(
+            tokio::time::timeout(Duration::from_secs(1), &mut made)
+                .await
+                .is_err(),
+            "another render has the turn"
+        );
         drop(turn);
         assert!(made.await.unwrap().is_ok(), "then it is made");
     }
@@ -568,6 +573,17 @@ mod tests {
         }
     }
 
+    async fn spin_until(cond: impl Fn() -> bool) {
+        let spin = async {
+            while !cond() {
+                tokio::task::yield_now().await;
+            }
+        };
+        tokio::time::timeout(Duration::from_secs(30), spin)
+            .await
+            .expect("condition within 30 s");
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn only_one_render_runs_at_a_time() {
         let (release, wait) = std::sync::mpsc::channel();
@@ -584,9 +600,7 @@ mod tests {
                 tokio::spawn(async move { pdfs.exclusive(job).await })
             })
             .collect();
-        while probe.started.load(Ordering::SeqCst) == 0 {
-            tokio::task::yield_now().await;
-        }
+        spin_until(|| probe.started.load(Ordering::SeqCst) > 0).await;
         settle().await;
         assert_eq!(
             probe.started.load(Ordering::SeqCst),
@@ -595,11 +609,11 @@ mod tests {
         );
         for done in 1..=4 {
             release.send(()).unwrap();
-            while probe.started.load(Ordering::SeqCst) < (done + 1).min(4)
-                || probe.running.load(Ordering::SeqCst) > 1
-            {
-                tokio::task::yield_now().await;
-            }
+            spin_until(|| {
+                probe.started.load(Ordering::SeqCst) >= (done + 1).min(4)
+                    && probe.running.load(Ordering::SeqCst) <= 1
+            })
+            .await;
         }
         for j in jobs {
             j.await.unwrap().unwrap();

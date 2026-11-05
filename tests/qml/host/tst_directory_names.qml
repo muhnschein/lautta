@@ -3,6 +3,7 @@ import QtQuick 2.6
 import "../../../qml/components/directory/Names.js" as Names
 
 Item {
+    property bool reachedEnd
     function check(cond, what) {
         if (!cond)
             console.error("FAILED: " + what)
@@ -15,5 +16,6 @@ Item {
         var good = ["lautta-trash", ".trash", "Plans", ".hidden", "..."]
         for (var j = 0; j < good.length; ++j)
             check(!Names.invalid(good[j]), "a free name: " + good[j])
+        reachedEnd = true
     }
 }

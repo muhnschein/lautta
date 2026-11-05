@@ -7,6 +7,7 @@ import Lautta 1.0
 
 ApplicationWindow {
     id: win
+    property bool reachedEnd
 
     ViewerTools { id: tools }
 
@@ -48,5 +49,6 @@ ApplicationWindow {
     Component.onCompleted: {
         drag(1, 24)
         drag(-1, 12)
+        reachedEnd = true
     }
 }

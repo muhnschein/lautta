@@ -6,7 +6,12 @@ import "../../qml/components"
 import "../../qml/pages"
 
 ApplicationWindow {
+    id: test
+    property bool reachedEnd
+
     initialPage: Component { BrowsePage { } }
 
-    BrowseHandlers { }
+    BrowseHandlers {
+        Component.onCompleted: test.reachedEnd = true
+    }
 }

@@ -51,5 +51,6 @@ tempfile = "3"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 sevenz-rust2 = { version = "0.24", default-features = false, features = ["compress"] }
 tokio = { version = "1", features = ["test-util"] }
+rustix = { version = "0.38", features = ["time"] }
 lautta-bridge-proto = { path = "../lautta-bridge-proto", features = ["fake"] }
 lautta-pdf = { path = "../lautta-pdf", features = ["sample"] }

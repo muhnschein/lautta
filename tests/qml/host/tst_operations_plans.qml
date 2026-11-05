@@ -8,6 +8,7 @@ Item {
     readonly property string docs: "lautta://user-documents/"
     readonly property string downloads: "lautta://user-downloads/"
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property int planId: -1
@@ -99,6 +100,7 @@ Item {
                 var missing = test.failures[2]
                 if (missing.kind !== "NotFound" || missing.subject !== test.docs + "plans-missing.txt")
                     return test.fail("the missing item is named: " + JSON.stringify(missing))
+                test.reachedEnd = true
                 test.finish()
                 break
             }

@@ -360,37 +360,44 @@ mod tests {
     #[tokio::test]
     async fn dir_watcher_reports_a_burst_once() {
         let d = tempfile::tempdir().unwrap();
-        let (w, mut rx) = DirWatcher::new(Duration::from_millis(200)).unwrap();
+        // Long quiet time: a stalled writer on a loaded runner must not split the burst.
+        let (w, mut rx) = DirWatcher::new(Duration::from_secs(2)).unwrap();
         w.watch(d.path()).unwrap();
         for i in 0..10 {
             std::fs::write(d.path().join(format!("f{i}")), "x").unwrap();
         }
-        let first = next(&mut rx, 5).await.unwrap();
+        let first = next(&mut rx, 30).await.unwrap();
         assert_eq!(first, WatchEvent::Changed(d.path().to_path_buf()));
         assert!(silent(&mut rx, 500).await, "the burst must collapse to one event");
     }
 
-    #[tokio::test]
-    async fn dir_watcher_sees_create_remove_rename_and_write() {
+    /// Fresh folder and watcher per change: a late event of one change can't stand in for another.
+    async fn sees(act: impl FnOnce(&Path)) {
         let d = tempfile::tempdir().unwrap();
         std::fs::write(d.path().join("old"), "x").unwrap();
         let (w, mut rx) = DirWatcher::new(SHORT).unwrap();
         w.watch(d.path()).unwrap();
         w.watch(d.path()).unwrap();
-        let expect = WatchEvent::Changed(d.path().to_path_buf());
-        std::fs::write(d.path().join("new"), "x").unwrap();
-        assert_eq!(next(&mut rx, 5).await, Some(expect.clone()));
-        std::fs::rename(d.path().join("old"), d.path().join("renamed")).unwrap();
-        assert_eq!(next(&mut rx, 5).await, Some(expect.clone()));
-        std::fs::remove_file(d.path().join("new")).unwrap();
-        assert_eq!(next(&mut rx, 5).await, Some(expect.clone()));
-        let mut f = std::fs::OpenOptions::new()
-            .append(true)
-            .open(d.path().join("renamed"))
-            .unwrap();
-        f.write_all(b"more").unwrap();
-        drop(f);
-        assert_eq!(next(&mut rx, 5).await, Some(expect));
+        act(d.path());
+        assert_eq!(
+            next(&mut rx, 30).await,
+            Some(WatchEvent::Changed(d.path().to_path_buf()))
+        );
+    }
+
+    #[tokio::test]
+    async fn dir_watcher_sees_create_remove_rename_and_write() {
+        sees(|d| std::fs::write(d.join("new"), "x").unwrap()).await;
+        sees(|d| std::fs::rename(d.join("old"), d.join("renamed")).unwrap()).await;
+        sees(|d| std::fs::remove_file(d.join("old")).unwrap()).await;
+        sees(|d| {
+            let mut f = std::fs::OpenOptions::new()
+                .append(true)
+                .open(d.join("old"))
+                .unwrap();
+            f.write_all(b"more").unwrap();
+        })
+        .await;
     }
 
     #[tokio::test]
@@ -404,7 +411,7 @@ mod tests {
         assert_eq!(w.watched().len(), 2);
         std::fs::write(b.path().join("x"), "x").unwrap();
         assert_eq!(
-            next(&mut rx, 5).await,
+            next(&mut rx, 30).await,
             Some(WatchEvent::Changed(b.path().to_path_buf()))
         );
         assert!(silent(&mut rx, 300).await);
@@ -440,17 +447,35 @@ mod tests {
         let (w, mut rx) = DirWatcher::new(SHORT).unwrap();
         w.watch(d.path()).unwrap();
         std::fs::write(d.path().join(std::ffi::OsStr::from_bytes(b"\xff\xfe")), "x").unwrap();
-        assert!(next(&mut rx, 5).await.is_some());
+        assert!(next(&mut rx, 30).await.is_some());
     }
 
-    #[tokio::test]
-    async fn dropping_the_receiver_ends_the_worker_quietly() {
-        let d = tempfile::tempdir().unwrap();
-        let (w, rx) = DirWatcher::new(SHORT).unwrap();
-        w.watch(d.path()).unwrap();
-        drop(rx);
-        std::fs::write(d.path().join("x"), "x").unwrap();
-        tokio::time::sleep(Duration::from_millis(300)).await;
-        std::fs::write(d.path().join("y"), "x").unwrap();
+    #[test]
+    fn the_worker_ends_once_its_consumer_is_gone() {
+        struct Ended(mpsc::Sender<()>);
+        impl Drop for Ended {
+            fn drop(&mut self) {
+                let _ = self.0.send(());
+            }
+        }
+        let (raw_tx, raw) = mpsc::channel();
+        let (ended_tx, ended) = mpsc::channel();
+        let guard = Ended(ended_tx);
+        let stop = Arc::new(AtomicBool::new(false));
+        spawn_worker(
+            raw,
+            Duration::ZERO,
+            stop,
+            |_: &Event| vec![()],
+            move |()| {
+                let _ = &guard;
+                false
+            },
+        );
+        raw_tx.send(Ok(Event::new(EventKind::Any))).unwrap();
+        ended
+            .recv_timeout(Duration::from_secs(30))
+            .expect("worker thread returns once emit reports no consumer");
+        drop(raw_tx);
     }
 }

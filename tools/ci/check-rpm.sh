@@ -5,8 +5,9 @@
 #     warnings must be listed in doc/harbour-warnings.md;
 #   - binary exports `main`, links __libc_start_main@GLIBC_2.34, no RPATH, only Harbour libraries;
 #   - package installs into the target, every library resolves;
-#   - every shipped QML file and tests/qml/tst_*.qml loads in the target;
-#     a test with a `scenarioRunning` property runs until it clears it;
+#   - every shipped QML file and tests/qml/tst_*.qml loads in the target, each test in its own
+#     process and home; a test with a `scenarioRunning` property runs until it clears it;
+#     the canary test must fail;
 #   - shipped catalogue gives the English plural forms.
 # Env: SDK_IMAGE (container image), TARGET (sb2 target name), DOCKER_ARGS.
 set -eu
@@ -87,37 +88,63 @@ mkdir -p "$HOME/Documents"
 
 # Tests import "../../qml/…": point that at the installed QML.
 # tests/qml/host runs in `make test`.
-qml_files=$(find "$PWD/tests/qml" -path '*/host' -prune -o -name 'tst_*.qml' -print | sort)
+qml_files=$(find "$PWD/tests/qml" \( -path '*/host' -o -path '*/canary' \) -prune -o -name 'tst_*.qml' -print | sort)
 rm -rf "$PWD/qml"
 cp -r "/srv/mer/targets/$TARGET/usr/share/harbour-lautta/qml" "$PWD/qml"
 shipped=$(cd "/srv/mer/targets/$TARGET" && find usr/share/harbour-lautta/qml -name '*.qml' | sort | sed 's|^|/|')
-# Own home per job: no shared files or database. Homes in the tree: mktemp under /tmp
-# does not reach the app under scratchbox.
+# Own home per test: settings, favourites, clipboard and files one test leaves behind reach no
+# other. Shipped files change nothing: one process per share. Homes in the tree: mktemp under
+# /tmp does not reach the app under scratchbox.
 jobs=${QML_JOBS:-$(nproc)}
 share="$PWD/.qml-share"
 rm -rf "$share"
 mkdir -p "$share"
 i=0
-for file in $shipped $qml_files; do
-    echo "$file" >> "$share/$((i % jobs)).list"
+for file in $shipped; do
+    echo "$file" >> "$share/$((i % jobs)).shipped"
     i=$((i + 1))
 done
+i=0
+for file in $qml_files; do
+    echo "$file" >> "$share/$((i % jobs)).tests"
+    i=$((i + 1))
+done
+qml_check() {
+    h=$1
+    shift
+    mkdir -p "$h/Documents" "$h/Downloads" "$h/Pictures"
+    sb2 -t "$TARGET" env HOME="$h" QT_QPA_PLATFORM=minimal \
+        /usr/bin/harbour-lautta --qml-check -I /usr/share/harbour-lautta/qml "$@"
+}
 k=0
-while [ "$k" -lt "$jobs" ] && [ -f "$share/$k.list" ]; do
-    mkdir -p "$share/$k.home/Documents" "$share/$k.home/Downloads" "$share/$k.home/Pictures"
-    # shellcheck disable=SC2046 # one word per file
-    (sb2 -t "$TARGET" env HOME="$share/$k.home" QT_QPA_PLATFORM=minimal \
-        /usr/bin/harbour-lautta --qml-check -I /usr/share/harbour-lautta/qml $(cat "$share/$k.list") \
-        > "$share/$k.log" 2>&1 || touch "$share/$k.failed") &
+while [ "$k" -lt "$jobs" ]; do
+    (
+        : > "$share/$k.log"
+        if [ -f "$share/$k.shipped" ]; then
+            # shellcheck disable=SC2046 # one word per file
+            qml_check "$share/$k.home" $(cat "$share/$k.shipped") >> "$share/$k.log" 2>&1 || touch "$share/$k.failed"
+        fi
+        n=0
+        if [ -f "$share/$k.tests" ]; then
+            while read -r file; do
+                n=$((n + 1))
+                qml_check "$share/$k.$n.home" "$file" >> "$share/$k.log" 2>&1 || touch "$share/$k.failed"
+            done < "$share/$k.tests"
+        fi
+    ) &
     k=$((k + 1))
 done
 wait
 k=0
-while [ -f "$share/$k.list" ]; do
+while [ "$k" -lt "$jobs" ]; do
     cat "$share/$k.log"
     [ ! -f "$share/$k.failed" ] || fail "QML check on the target (share $k, log above)"
     k=$((k + 1))
 done
+if qml_check "$share/canary.home" "$PWD/tests/qml/canary/tst_must_fail.qml" > "$share/canary.log" 2>&1; then
+    cat "$share/canary.log"
+    fail "QML check passed the canary test that reports a failure"
+fi
 home="$PWD/.qml-home"
 rm -rf "$home"
 mkdir -p "$home"

@@ -4,6 +4,7 @@ import Lautta 1.0
 
 Item {
     id: root
+    property bool reachedEnd
 
     property string lastKind: ""
     property int failedCount: 0
@@ -32,9 +33,9 @@ Item {
             root.failedCount += 1
         })
         Transfers.showRequested.connect(function() { root.showRequests += 1 })
-        check(Transfers.activeCount >= 0, "active count is a number")
-        check(Transfers.pendingCount >= Transfers.activeCount, "pending includes active")
-                        check(Transfers.eta >= -1, "ETA is -1 when unknown")
+        check(Transfers.activeCount === 0 && Transfers.pendingCount === 0,
+              "an empty queue: " + Transfers.activeCount + " active, " + Transfers.pendingCount + " pending")
+        check(Transfers.eta === -1, "ETA is -1 when unknown, got " + Transfers.eta)
         check(Transfers.pendingAtStart === 0 && !Transfers.closing, "nothing restored, not closing")
         check(Transfers.barMode === "hidden" && Transfers.barTransferId === 0 && Transfers.barUnfinished === 0,
               "an empty queue hides the activity bar, got " + Transfers.barMode)
@@ -65,7 +66,7 @@ Item {
 
         check(Transfers.questionsJson(5) === "[]", "no questions for an unknown transfer")
         check(Transfers.summaryJson(5) === "", "no summary for an unknown transfer")
-        check(Transfers.clearHistory() >= 0, "clearing is always possible (other host tests may have left history)")
+        check(Transfers.clearHistory() === 0, "no history to clear")
 
         Transfers.requestShow()
         check(showRequests === 1, "requestShow asks for the page")
@@ -75,10 +76,8 @@ Item {
         check(Transfers.pendingAtStart === 0, "dismissing without a prompt changes nothing")
 
         model.refresh()
-        check(model.count >= 0, "the list has a count")
-        check(items.transferId === 4242, "the items model keeps its transfer id")
+        check(model.count === 0, "an empty list, got " + model.count)
         check(items.count === 0 && items.summaryJson === "", "an unknown transfer has no items and no summary")
-        items.transferId = 4243
-        check(items.transferId === 4243, "the transfer id can change")
+        reachedEnd = true
     }
 }

@@ -3,6 +3,7 @@ import QtQuick 2.6
 import "../../../qml/components/directory/ContextActions.js" as Actions
 
 Item {
+    property bool reachedEnd
     function check(cond, what) {
         if (!cond)
             console.error("FAILED: " + what)
@@ -82,5 +83,6 @@ Item {
         testIcons()
         testText()
         testGone()
+        reachedEnd = true
     }
 }

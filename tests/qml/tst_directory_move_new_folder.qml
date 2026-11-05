@@ -7,6 +7,7 @@ import "../../qml/components/directory/ContextActions.js" as Actions
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-documents/MoveNew/"
     property string archiveRoot
@@ -240,5 +241,6 @@ ApplicationWindow {
         checkItem()
         checkFailure()
         checkArchive()
+        reachedEnd = true
     }
 }

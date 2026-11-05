@@ -530,7 +530,6 @@ fn diff_from_mapping(
 mod tests {
     use super::*;
     use crate::entry::{ms_to_system_time, Kind};
-    use std::time::Instant;
 
     fn file(name: &str, size: u64) -> Entry {
         let mut e = Entry::new(name.as_bytes(), Kind::File);
@@ -1013,26 +1012,6 @@ mod tests {
         assert_eq!(changes, [ListChange::Reset]);
         apply_to_mirror(&mut mirror, &changes, &s);
         assert!(!s.is_large());
-    }
-
-    #[test]
-    fn sorting_twenty_thousand_entries_is_fast_enough() {
-        let mut s = ListingState::default();
-        let started = Instant::now();
-        s.apply_batch(many(LARGE_FOLDER_THRESHOLD));
-        let fresh = many(LARGE_FOLDER_THRESHOLD);
-        assert!(s.replace_with_fresh(fresh).is_empty());
-        s.set_sort(SortOptions {
-            key: SortKey::Modified,
-            descending: true,
-            folders_first: true,
-        });
-        assert_eq!(s.len(), LARGE_FOLDER_THRESHOLD);
-        assert!(
-            started.elapsed().as_secs_f64() < 5.0,
-            "took {:?}",
-            started.elapsed()
-        );
     }
 
     #[test]

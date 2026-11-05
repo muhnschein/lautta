@@ -4,6 +4,7 @@ import "../../../qml/components/directory/GridRows.js" as GridRows
 
 Item {
     id: root
+    property bool reachedEnd
 
     readonly property real tile: 180
 
@@ -85,5 +86,6 @@ Item {
         testIndexAt()
         testRegroup()
         testTallest()
+        reachedEnd = true
     }
 }

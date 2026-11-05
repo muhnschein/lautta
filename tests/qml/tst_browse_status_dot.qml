@@ -7,6 +7,7 @@ ApplicationWindow {
     id: win
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int waited: 0
     property int step: 0
     property real dimmest: 1.0
@@ -228,6 +229,7 @@ ApplicationWindow {
             case 5:
                 win.expect(!busy.pulsing && !pulseOf(busy).running && dotOf(busy).opacity === 1.0,
                            "the pulse runs with the app in the background")
+                win.reachedEnd = true
                 win.scenarioRunning = false
                 break
             }

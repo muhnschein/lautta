@@ -3,6 +3,7 @@ import QtQuick 2.6
 import Lautta 1.0
 
 QtObject {
+    property bool reachedEnd
     function check(cond, what) {
         if (!cond)
             console.error("FAILED: " + what)
@@ -41,5 +42,6 @@ QtObject {
         check(taken.cut && taken.items[0] === child, "take returns the items")
         check(App.clipboardCount === 0, "a cut is consumed by paste")
         check(!App.cut("not json"), "bad input is refused")
+        reachedEnd = true
     }
 }

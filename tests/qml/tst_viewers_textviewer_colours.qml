@@ -10,6 +10,7 @@ QtQuick.Window {
     id: window
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property var __silica_applicationwindow_instance: app
     property int step: 0
     property int waited: 0
@@ -177,6 +178,7 @@ QtQuick.Window {
                 if (!shown[""] || shown[""].text.indexOf("<font") < 0)
                     return
                 window.checkLong(shown)
+                window.reachedEnd = true
                 window.scenarioRunning = false
                 break
             }

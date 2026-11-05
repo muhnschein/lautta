@@ -4,6 +4,7 @@ import Lautta 1.0
 
 Item {
     id: root
+    property bool reachedEnd
 
     function check(cond, what) {
         if (!cond)
@@ -33,7 +34,7 @@ Item {
         check(tools.installFixture(Qt.resolvedUrl("fixtures/" + fixture), uri), fixture + " installed")
         md.uri = uri
         settle(md)
-        check(md.html.length > 0, fixture + " rendered")
+        check(md.errorKind === "" && md.html.length > 0, fixture + " rendered: " + md.errorKind)
         preview.text = md.html
         return preview.contentWidth
     }
@@ -58,5 +59,6 @@ Item {
         keepsLines()
         preview.text = "<pre>" + new Array(40).join("word ") + "</pre>"
         check(preview.contentWidth > preview.width, "unbreakable text is measured: " + preview.contentWidth)
+        reachedEnd = true
     }
 }

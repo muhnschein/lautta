@@ -3,6 +3,7 @@ import QtQuick 2.6
 import Lautta 1.0
 
 QtObject {
+    property bool reachedEnd
     function check(cond, what) {
         if (!cond)
             console.error("FAILED: " + what)
@@ -14,8 +15,6 @@ QtObject {
     property var folder: FolderInfo { }
 
     Component.onCompleted: {
-        Bridge.failed.connect(function(kind) { console.error("FAILED: unexpected failure " + kind) })
-        Bridge.question.connect(function() { console.error("FAILED: unexpected question") })
         check(Bridge.status === "absent", "status absent: " + Bridge.status)
         check(!Bridge.ready, "bridge not ready")
         check(Bridge.version === "", "no bridge version")
@@ -27,6 +26,8 @@ QtObject {
         Bridge.setForeground(true)
         Bridge.setDiscover(false)
         Bridge.answer("q404", JSON.stringify({ "accept": true }))
+        check(Bridge.status === "absent" && Bridge.pending() === "[]",
+              "nothing to wake, ask or answer without the bridge: " + Bridge.status + " " + Bridge.pending())
 
         check(favourites.count === 0 && !favourites.loaded, "favourites start empty")
         check(favourites.get(7) === "{}", "no such favourite: " + favourites.get(7))
@@ -47,5 +48,6 @@ QtObject {
         folder.uri = "lautta://user-documents/"
         check(folder.uri === "lautta://user-documents/", "folder uri is set")
         check(folder.count === -1, "folder count is unknown until looked up")
+        reachedEnd = true
     }
 }

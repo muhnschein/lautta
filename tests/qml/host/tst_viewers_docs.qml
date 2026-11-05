@@ -4,6 +4,7 @@ import Lautta 1.0
 
 Item {
     id: root
+    property bool reachedEnd
 
     function check(cond, what) {
         if (!cond)
@@ -120,5 +121,6 @@ Item {
         md.uri = "lautta://user-documents/nope.md"
         settle(md)
         check(md.errorKind === "NotFound", "markdown error " + md.errorKind)
+        reachedEnd = true
     }
 }

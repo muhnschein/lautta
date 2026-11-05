@@ -10,6 +10,7 @@ ApplicationWindow {
     readonly property string empty: "lautta://user-documents/EmptyPulley/"
     readonly property string missing: "lautta://user-documents/NoSuchFolder/"
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property bool made
@@ -168,8 +169,10 @@ ApplicationWindow {
                 view = win.folderView()
                 if (!view || view.model.loading || view.model.errorKind.length === 0)
                     break
-                if (win.checkPull(view, "error", 150))
+                if (win.checkPull(view, "error", 150)) {
+                    win.reachedEnd = true
                     win.scenarioRunning = false
+                }
                 break
             }
         }

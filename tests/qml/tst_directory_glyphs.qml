@@ -8,6 +8,7 @@ import "../../qml/components/FileIcons.js" as FileIcons
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-documents/GlyphsCheck/"
     property string archiveRoot
@@ -113,14 +114,12 @@ ApplicationWindow {
         expect(!glyph.highlighted, what + ": not highlighted at rest")
         view.startSelection()
         view.model.toggle(base + name)
-        tools.pump(200)
-        glyph = named(icons(view)[name], "fileGlyph")
-        expect(glyph.highlighted && String(glyph.highlightColor) === String(Theme.highlightColor),
-               what + ": a selected item's glyph is highlighted, as its name")
+        waitFor(function () { glyph = named(icons(view)[name], "fileGlyph"); return glyph.highlighted },
+                what + ": a selected item's glyph highlighted")
+        expect(String(glyph.highlightColor) === String(Theme.highlightColor), what + ": in the highlight colour, as its name")
         view.endSelection()
-        tools.pump(200)
-        glyph = named(icons(view)[name], "fileGlyph")
-        expect(!glyph.highlighted, what + ": not highlighted once deselected")
+        waitFor(function () { glyph = named(icons(view)[name], "fileGlyph"); return !glyph.highlighted },
+                what + ": no highlight once deselected")
         press(glyph)
         expect(glyph.highlighted, what + ": a pressed item's glyph is highlighted")
     }
@@ -259,6 +258,7 @@ ApplicationWindow {
         }
         App.setSetting("view_mode", JSON.stringify("list"))
         App.setSetting("thumbnails_local", JSON.stringify(true))
+        reachedEnd = true
     }
 
     Component {
