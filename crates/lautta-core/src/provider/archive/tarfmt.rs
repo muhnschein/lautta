@@ -277,6 +277,9 @@ mod tests {
         let reopened = AtomicUsize::new(0);
         for i in [0, 1, 3, 2, 5, 4] {
             assert_eq!(read(&mut spill, locs[i], &path, &reopened), data[i], "entry {i}");
+            if i < 2 {
+                assert_eq!(spill.pos, locs[i].0 + locs[i].1, "entry {i}: no read past it");
+            }
         }
         assert_eq!(reopened.load(Ordering::SeqCst), 0, "stream decompressed once");
     }
@@ -285,12 +288,14 @@ mod tests {
     fn spill_past_cap_keeps_later_entries_only_and_rereads_earlier() {
         let data = entries();
         let (_d, path, locs, mut spill) = spill_of(&data);
-        spill.cap = 2048;
+        // Entries 4 and 5 fit together, 0 to 4 do not.
+        spill.cap = locs[5].0 + locs[5].1 - locs[4].0;
         let reopened = AtomicUsize::new(0);
         assert_eq!(read(&mut spill, locs[0], &path, &reopened), data[0]);
         assert_eq!(read(&mut spill, locs[4], &path, &reopened), data[4]);
         assert_eq!(spill.base, locs[4].0, "file starts at entry past the cap");
         assert_eq!(read(&mut spill, locs[5], &path, &reopened), data[5]);
+        assert_eq!(spill.base, locs[4].0, "entry fitting the cap keeps the file");
         assert_eq!(reopened.load(Ordering::SeqCst), 0);
         assert_eq!(read(&mut spill, locs[1], &path, &reopened), data[1]);
         assert_eq!(
@@ -300,6 +305,11 @@ mod tests {
         );
         assert_eq!(read(&mut spill, locs[2], &path, &reopened), data[2]);
         assert_eq!(reopened.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn spill_keeps_256_mib() {
+        assert_eq!(SPILL_CAP, 256 << 20);
     }
 
     #[test]

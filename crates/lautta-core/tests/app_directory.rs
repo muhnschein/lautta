@@ -384,7 +384,9 @@ async fn coalesced_batches_reach_the_view_at_most_once_per_window() {
     tx.send(batch(&["a"])).unwrap();
     tx.send(batch(&["b"])).unwrap();
     tx.send(batch(&["c"])).unwrap();
-    tokio::time::sleep(Duration::from_millis(250)).await;
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    tx.send(batch(&["x"])).unwrap();
+    tokio::time::sleep(Duration::from_millis(150)).await;
     tx.send(batch(&["d"])).unwrap();
     tx.send(batch(&["e"])).unwrap();
     tx.send(ListEvent::Done(Ok(()))).unwrap();
@@ -400,9 +402,10 @@ async fn coalesced_batches_reach_the_view_at_most_once_per_window() {
             (0, "cached 0".to_owned()),
             (0, "batch a".to_owned()),
             (100, "batch b,c".to_owned()),
-            (250, "batch d".to_owned()),
-            (250, "batch e".to_owned()),
-            (250, "done true".to_owned()),
+            (200, "batch x".to_owned()),
+            (300, "batch d".to_owned()),
+            (300, "batch e".to_owned()),
+            (300, "done true".to_owned()),
         ],
         "first batch at once, then one per window; Done flushes what is held"
     );

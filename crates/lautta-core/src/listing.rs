@@ -746,6 +746,41 @@ mod tests {
     }
 
     #[test]
+    fn refresh_rebuilds_records_of_changed_entries() {
+        let mut s = ListingState::default();
+        s.apply_batch(vec![file("a.png", 1), file("b", 1)]);
+        s.replace_with_fresh(vec![Entry::new(b"a.png", Kind::Dir), file("b", 1), file("c", 1)]);
+        for (record, entry) in s.records.iter().zip(&s.raw) {
+            assert_eq!(
+                *record,
+                crate::sort::SortRecord::for_entry(entry),
+                "{}",
+                entry.display_name()
+            );
+        }
+    }
+
+    #[test]
+    fn refresh_listing_a_name_twice_keeps_one_row() {
+        let mut s = ListingState::default();
+        s.apply_batch(vec![file("a", 1), file("b", 1)]);
+        s.replace_with_fresh(vec![file("a", 1), file("a", 1), file("b", 1)]);
+        assert_eq!(names(&s), ["a", "b"]);
+        assert_eq!(s.raw.len(), 2);
+    }
+
+    #[test]
+    fn refresh_with_same_names_but_new_details_updates_rows() {
+        let mut s = ListingState::default();
+        s.apply_batch(vec![file("a", 1), file("b", 2)]);
+        let mut mirror = visible(&s);
+        let changes = s.replace_with_fresh(vec![file("b", 6), file("a", 5)]);
+        assert!(!changes.is_empty());
+        apply_to_mirror(&mut mirror, &changes, &s);
+        assert_eq!(visible(&s), [file("a", 5), file("b", 6)]);
+    }
+
+    #[test]
     fn batch_replacing_an_entry_updates_that_row() {
         let mut s = ListingState::default();
         s.apply_batch(vec![file("a", 1), file("b", 1), file("c", 1)]);

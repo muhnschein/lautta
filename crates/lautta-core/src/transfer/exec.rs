@@ -1165,4 +1165,22 @@ mod tests {
         assert_eq!(err.kind, ErrorKind::PermissionDenied);
         assert!(dst.paths().is_empty(), "{:?}", dst.paths());
     }
+
+    #[test]
+    fn disposition_truncates_only_a_replaced_target_written_in_place() {
+        let j = job(item("f", "out/f", Kind::File, 5));
+        let temp = vp("out").join(&j.temp_name).unwrap();
+        let replace = WriteMode {
+            replace: true,
+            ..WriteMode::default()
+        };
+        let target = vp("out/f");
+        assert_eq!(disposition(&j, &target, 3, replace), Disposition::Resume);
+        assert_eq!(disposition(&j, &target, 0, replace), Disposition::Truncate);
+        assert_eq!(disposition(&j, &temp, 0, replace), Disposition::Create);
+        assert_eq!(
+            disposition(&j, &target, 0, WriteMode::default()),
+            Disposition::Create
+        );
+    }
 }

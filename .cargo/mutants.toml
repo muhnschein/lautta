@@ -12,4 +12,12 @@ exclude_re = [
     # folder itself, but `mark_children` skips items with a resolution and `apply_one`
     # has set the folder's own, so no effect.
     'ops/conflict\.rs:\d+:49: replace \+ with \* in apply_one',
+    # replace_with_fresh keeps a sort record only for an unchanged entry, and that record
+    # equals `SortRecord::for_entry` of it: never keeping one rebuilds identical records.
+    'listing\.rs:\d+:29: replace match guard with false',
+    # same_entries is a shortcut: false runs full refresh, which on identical entries ends
+    # in same state and no changes (identical_refresh_yields_no_changes).
+    'listing\.rs:\d+:9: replace ListingState::same_entries -> bool with false',
+    'listing\.rs:\d+:25: replace match guard with false',
+    'listing\.rs:\d+:25: delete ! in ListingState::same_entries',
 ]

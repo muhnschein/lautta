@@ -113,6 +113,37 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn each_held_change_waits_for_its_own_window() {
+        let (tx, rx) = broadcast::channel(64);
+        let (out_tx, mut out) = tokio::sync::mpsc::unbounded_channel();
+        let start = Instant::now();
+        let fwd = tokio::spawn(forward_throttled(rx, Duration::from_millis(200), move |f| {
+            let _ = out_tx.send(((Instant::now() - start).as_millis(), f));
+        }));
+        let changed = |id| Forwarded::Event(TransferEvent::Changed(id));
+        for (at, id) in [(0, 1), (50, 1), (100, 2), (150, 2)] {
+            tokio::time::sleep_until(start + Duration::from_millis(at)).await;
+            tx.send(TransferEvent::Changed(id)).unwrap();
+        }
+        tokio::time::sleep_until(start + Duration::from_millis(400)).await;
+        drop(tx);
+        fwd.await.unwrap();
+        let mut got = Vec::new();
+        while let Some(x) = out.recv().await {
+            got.push(x);
+        }
+        assert_eq!(
+            got,
+            [
+                (0, changed(1)),
+                (100, changed(2)),
+                (200, changed(1)),
+                (300, changed(2))
+            ]
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn a_lagging_receiver_says_so() {
         let (tx, rx) = broadcast::channel(2);
         for i in 0..5 {

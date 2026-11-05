@@ -580,3 +580,20 @@ async fn unsupported_zip_method_and_encryption_are_refused() {
     let err = p.open_read(&vp("f"), Lane::Bulk).await.err();
     assert_eq!(err.map(|e| e.kind), Some(ErrorKind::Unsupported));
 }
+
+#[test]
+fn file_range_reads_its_span_in_small_steps() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("f");
+    std::fs::write(&path, b"0123456789abcdef").unwrap();
+    let mut range = FileRange::new(Arc::new(File::open(&path).unwrap()), 4, 9);
+    let (mut out, mut buf) = (Vec::new(), [0u8; 2]);
+    loop {
+        let n = range.read(&mut buf).unwrap();
+        if n == 0 {
+            break;
+        }
+        out.extend_from_slice(&buf[..n]);
+    }
+    assert_eq!(out, b"456789abc");
+}
