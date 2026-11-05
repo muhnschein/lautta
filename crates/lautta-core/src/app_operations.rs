@@ -530,8 +530,12 @@ impl Core {
         if let Some(parent) = dest.parent() {
             self.invalidate(&parent);
         }
-        self.copy_or_move(OperationKind::Copy, sources, dest.clone())
-            .await
+        let mut plan = self.plan(OperationKind::Copy, sources, dest.clone()).await?;
+        plan.kind = OperationKind::Extract;
+        if plan.needs_summary {
+            return Ok(Started::NeedsSummary(Box::new(plan)));
+        }
+        self.start_plan(plan).await.map(Started::Transfer)
     }
 
     /// Failed or canceled run leaves no partial file.

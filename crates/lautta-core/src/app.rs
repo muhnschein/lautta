@@ -265,7 +265,7 @@ impl Core {
         }
         let dest = permanent[0].parent().unwrap_or_else(|| permanent[0].clone());
         let plan = self.plan(OperationKind::Delete, permanent, dest).await?;
-        let title = plan_title(&plan);
+        let title = self.plan_title(&plan);
         self.engine
             .add(plan, &title, TransferOptions::default())
             .await
@@ -309,7 +309,7 @@ impl Core {
             trash: settings.recently_deleted,
             ..TransferOptions::default()
         };
-        let title = plan_title(&plan);
+        let title = self.plan_title(&plan);
         self.invalidate(&plan.destination);
         self.engine.add(plan, &title, options).await
     }
@@ -348,6 +348,19 @@ impl Core {
         let location = Location::remote(id.clone(), LocationKind::Archive, name, Some(uri.to_string()));
         self.locations.register(location, Arc::new(provider));
         Ok(id)
+    }
+
+    /// Extract is titled by its archive, the name of the archive's location.
+    fn plan_title(&self, plan: &Plan) -> String {
+        let first = plan.items.first();
+        if plan.kind == OperationKind::Extract {
+            if let Some(archive) = first.and_then(|i| self.locations.get(&i.src.location)) {
+                return archive.name;
+            }
+        }
+        first
+            .and_then(|i| i.src.name().map(crate::vpath::display_name))
+            .unwrap_or_default()
     }
 
     pub fn invalidate(&self, dir: &Uri) {
@@ -444,11 +457,4 @@ fn view_defaults(s: &Settings) -> ViewPrefs {
         view_mode: ViewMode::parse(&s.view_mode).unwrap_or(base.view_mode),
         thumbnails: s.thumbnails_local,
     }
-}
-
-fn plan_title(plan: &Plan) -> String {
-    plan.items
-        .first()
-        .and_then(|i| i.src.name().map(crate::vpath::display_name))
-        .unwrap_or_default()
 }
