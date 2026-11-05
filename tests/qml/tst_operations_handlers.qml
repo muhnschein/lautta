@@ -6,6 +6,7 @@ import "../../qml/components"
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     ViewerTools { id: tools }
 
@@ -84,5 +85,6 @@ ApplicationWindow {
         checkFolderAfterTransition()
         checkSummaryWhileDialogCloses()
         checkSummaryWhenIdle()
+        reachedEnd = true
     }
 }

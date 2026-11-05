@@ -66,14 +66,14 @@ async fn a_lost_connection_is_re_established() {
     eventually("nearby after the reconnect", || rig.client.nearby().len() == 1).await;
 }
 
+/// Real sockets and clock: no attempt comes early. The exact schedule is proven on the paused clock.
 #[tokio::test]
-async fn attempts_back_off_in_doubling_steps_and_start_over() {
+async fn attempts_over_real_sockets_never_come_before_their_backoff() {
     let rig = Rig::ready_with(quick_backoff).await;
     rig.fake.set_accepting(false);
     rig.fake.disconnect_clients().await;
     eventually("six attempts", || rig.fake.accept_times().len() >= 7).await;
     let g = gaps(&rig);
-    // Lower bounds exact (timer never fires early); upper bounds leave room for a loaded machine.
     for (got, want) in g
         .iter()
         .zip([ms(50), ms(100), ms(200), ms(400), ms(750), ms(750)])
@@ -82,41 +82,8 @@ async fn attempts_back_off_in_doubling_steps_and_start_over() {
             *got + ms(5) >= want,
             "attempt after {got:?}, wanted at least {want:?} ({g:?})"
         );
-        assert!(
-            *got < want + ms(900),
-            "attempt after {got:?}, wanted about {want:?} ({g:?})"
-        );
     }
     assert_eq!(rig.client.status(), BridgeStatus::Reconnecting);
-
-    rig.fake.set_accepting(true);
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
-    rig.fake.set_accepting(false);
-    rig.fake.disconnect_clients().await;
-    let seen = rig.fake.accept_times().len();
-    eventually("the first attempt", || rig.fake.accept_times().len() > seen).await;
-    let g = gaps(&rig);
-    let first = *g.last().unwrap();
-    assert!(first + ms(5) >= ms(50) && first < ms(900), "{first:?}");
-}
-
-#[tokio::test]
-async fn the_background_does_not_reconnect_and_coming_back_does_at_once() {
-    let rig = Rig::ready_with(quick_backoff).await;
-    rig.client.set_foreground(false);
-    rig.fake.disconnect_clients().await;
-    rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
-    let accepted = rig.fake.accept_times().len();
-    sleep(ms(600)).await;
-    assert_eq!(
-        rig.fake.accept_times().len(),
-        accepted,
-        "no attempts in the background"
-    );
-    assert_eq!(rig.client.status(), BridgeStatus::Reconnecting);
-
-    rig.client.set_foreground(true);
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
 }
 
 #[tokio::test]
@@ -177,6 +144,8 @@ async fn a_socket_without_a_bridge_behind_it_is_standalone_not_an_error() {
     assert!(rig.paths.bridge_socket().exists());
 
     let fresh = BridgeClient::start(bridge_support::config(&rig.paths), Questions::new()).unwrap();
+    // Absent is also the status before the first look at the socket.
+    eventually("an attempt", || fresh.connection_attempts() >= 1).await;
     fresh.wait_status(|s| s == BridgeStatus::Absent).await;
     assert!(fresh.locations().is_empty());
     let e = fresh
@@ -236,6 +205,37 @@ async fn the_default_schedule_is_1_2_4_8_then_every_15_seconds() {
         );
     }
     assert_eq!(rig.client.status(), BridgeStatus::Reconnecting);
+}
+
+#[tokio::test(start_paused = true)]
+async fn after_a_reconnect_the_backoff_starts_over() {
+    let mut rig = Rig::ready().await;
+    drop(rig.listener.take());
+    rig.fake.disconnect_clients().await;
+    rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
+    let lost = rig.client.connection_attempts();
+    sleep(secs(16)).await;
+    assert_eq!(
+        rig.client.connection_attempts() - lost,
+        4,
+        "backoff grown to 15 s"
+    );
+    rig.listen();
+    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+
+    drop(rig.listener.take());
+    rig.fake.disconnect_clients().await;
+    rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
+    let t0 = Instant::now();
+    let before = rig.client.connection_attempts();
+    tokio::time::sleep_until(t0 + secs(1) - ms(100)).await;
+    assert_eq!(rig.client.connection_attempts(), before);
+    tokio::time::sleep_until(t0 + secs(1) + ms(100)).await;
+    assert_eq!(rig.client.connection_attempts(), before + 1, "first after 1 s");
+    tokio::time::sleep_until(t0 + secs(3) - ms(100)).await;
+    assert_eq!(rig.client.connection_attempts(), before + 1);
+    tokio::time::sleep_until(t0 + secs(3) + ms(100)).await;
+    assert_eq!(rig.client.connection_attempts(), before + 2, "then 2 s, not 15 s");
 }
 
 #[tokio::test(start_paused = true)]

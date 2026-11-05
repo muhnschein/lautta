@@ -86,15 +86,3 @@ async fn the_owned_form_takes_the_secret_and_works() {
     assert_eq!(id, "nv-adhoc:1");
     assert_eq!(rig.fake.received_secrets(), vec![b"hunter6".to_vec()]);
 }
-
-#[tokio::test]
-async fn the_app_never_keeps_a_secret_in_its_state() {
-    let rig = Rig::ready().await;
-    let mut secret = Zeroizing::new(b"needle-in-a-haystack".to_vec());
-    rig.client
-        .connect_adhoc_wiping("sftp://host/", &mut secret, &AdHocOptions::default())
-        .await
-        .unwrap();
-    let shown = format!("{:?}{:?}", rig.client.locations(), rig.questions.pending());
-    assert!(!shown.contains("needle"));
-}

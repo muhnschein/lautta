@@ -4,6 +4,7 @@ import Lautta 1.0
 
 Item {
     id: root
+    property bool reachedEnd
 
     property var events: []
 
@@ -61,5 +62,6 @@ Item {
         tools.mouse(left, "press", 5, 5)
         tools.mouse(left, "release", 5, 5)
         same(events, ["press 5,5", "release", "click"], "a tap clicks")
+        reachedEnd = true
     }
 }

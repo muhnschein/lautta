@@ -4,6 +4,7 @@ import Lautta 1.0
 
 Item {
     id: root
+    property bool reachedEnd
 
     readonly property string samples: JSON.stringify([
         { "name": "Work", "dir": true, "modified": 5000 },
@@ -45,5 +46,6 @@ Item {
              "an unknown key sorts by name")
         check(App.previewRows("not a list", "name", false, true, false).length === 0,
               "bad entries make an empty folder")
+        reachedEnd = true
     }
 }

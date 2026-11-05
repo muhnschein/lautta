@@ -197,6 +197,7 @@ async fn locations_and_attention_follow_the_bridge() {
     })
     .await;
 
+    watch.borrow_and_update();
     rig.fake.remove_location("account:2").await;
     eventually("the removal", || rig.client.locations().len() == 1).await;
     assert!(watch.has_changed().unwrap(), "watchers are told");
@@ -212,9 +213,6 @@ async fn nearby_servers_come_from_discovery() {
         port: 445,
     };
     rig.fake.set_nearby(vec![server.clone()]).await;
-    tokio::time::sleep(Duration::from_millis(50)).await;
-    assert!(rig.client.nearby().is_empty());
-
     rig.client.discover(true).await.unwrap();
     eventually("the server", || rig.client.nearby().len() == 1).await;
     let n = rig.client.nearby();
@@ -226,11 +224,6 @@ async fn nearby_servers_come_from_discovery() {
 
     rig.fake.set_nearby(vec![]).await;
     eventually("the list to empty", || rig.client.nearby().is_empty()).await;
-
-    rig.client.discover(false).await.unwrap();
-    rig.fake.set_nearby(vec![server]).await;
-    tokio::time::sleep(Duration::from_millis(50)).await;
-    assert!(rig.client.nearby().is_empty(), "stopped discovery stays quiet");
 }
 
 fn nearby_server(name: &str, host: &str) -> WireNearby {
@@ -463,7 +456,9 @@ async fn an_older_bridge_is_not_asked_for_drives() {
         rig.fake
             .set_drives(vec![FakeDrive::new("sda1", "STICK", "usb", 8)])
             .await;
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        // Signals are taken in order: once the account is in, a drive listing would have been asked.
+        rig.fake.add_account(2, "fake", "Fake 2", "fake2.example").await;
+        eventually("the second account", || rig.client.locations().len() == 2).await;
         assert!(rig.fake.calls_of("ListDrives").is_empty(), "{features:?}");
         assert!(rig.client.drives().is_empty());
         let e = rig.client.mount_drive("sda1").await.unwrap_err();

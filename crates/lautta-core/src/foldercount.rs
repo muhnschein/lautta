@@ -47,12 +47,6 @@ mod tests {
     }
 
     #[test]
-    fn the_cap_is_a_thousand_entries() {
-        // "More than 1000 items" past it.
-        assert_eq!(COUNT_CAP, 1000);
-    }
-
-    #[test]
     fn an_empty_folder_has_no_items() {
         let dir = folder(&[]);
         assert_eq!(

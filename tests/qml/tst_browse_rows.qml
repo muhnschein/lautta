@@ -9,6 +9,7 @@ ApplicationWindow {
     id: win
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int waited: 0
     property var browse
 
@@ -192,6 +193,7 @@ ApplicationWindow {
             win.checkGlyphs()
             win.expect(!pageStack.nextPage(win.browse) && !win.browse._forwardDestination,
                        "Browse has a page attached: " + pageStack.nextPage(win.browse))
+            win.reachedEnd = true
             win.scenarioRunning = false
         }
     }

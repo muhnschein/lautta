@@ -4,9 +4,14 @@ import Sailfish.Silica 1.0
 import "../../qml/components/transfers"
 
 ApplicationWindow {
+    id: test
+    property bool reachedEnd
+
     initialPage: Component {
         Page {
-            ActivityBar { }
+            ActivityBar {
+                Component.onCompleted: test.reachedEnd = true
+            }
         }
     }
 }

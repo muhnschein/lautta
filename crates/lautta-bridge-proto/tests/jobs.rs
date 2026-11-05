@@ -21,6 +21,14 @@ async fn setup() -> (FakeBridge, Connection, SignalStream) {
     (fake, conn, signals)
 }
 
+async fn next(signals: &mut SignalStream) -> Signal {
+    tokio::time::timeout(Duration::from_secs(5), signals.next())
+        .await
+        .expect("a signal within 5 s")
+        .expect("the stream ended")
+        .unwrap()
+}
+
 async fn finish(signals: &mut SignalStream, job: u32) -> (Vec<Vec<u8>>, String, HashMap<String, i64>) {
     let mut paths = Vec::new();
     loop {
@@ -173,7 +181,7 @@ async fn a_listing_can_be_canceled() {
     conn.proxy().cancel(req).await.unwrap();
     let mut batches = 0;
     loop {
-        match signals.next().await.unwrap().unwrap() {
+        match next(&mut signals).await {
             Signal::ListBatch { .. } => batches += 1,
             Signal::ListDone { error, .. } => {
                 assert_eq!(error, "Canceled");
@@ -200,7 +208,7 @@ async fn discovery_results_arrive_as_signals() {
     fake.set_nearby(vec![server.clone()]).await;
     conn.proxy().discover(true).await.unwrap();
     loop {
-        if let Signal::NearbyChanged(list) = signals.next().await.unwrap().unwrap() {
+        if let Signal::NearbyChanged(list) = next(&mut signals).await {
             assert_eq!(list, vec![server]);
             break;
         }
@@ -214,7 +222,7 @@ async fn consent_and_location_changes_are_signalled() {
     fake.add_account(3, "fake", "Fake 3", "third.example").await;
     let mut seen = (false, false);
     while seen != (true, true) {
-        match signals.next().await.unwrap().unwrap() {
+        match next(&mut signals).await {
             Signal::ConsentChanged(c) => {
                 assert_eq!(c, "denied");
                 seen.0 = true;

@@ -4,6 +4,9 @@ import Sailfish.Silica 1.0
 import "../../qml/dialogs"
 
 ApplicationWindow {
+    id: test
+    property bool reachedEnd
+
     initialPage: Component {
         ConflictDialog {
             planId: 1
@@ -23,6 +26,7 @@ ApplicationWindow {
                     console.error("the preselected choice must be Keep both, not " + choice)
                 if (!canAccept)
                     console.error("a preselected choice can be accepted")
+                test.reachedEnd = true
             }
         }
     }

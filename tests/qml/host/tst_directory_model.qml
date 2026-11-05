@@ -4,6 +4,7 @@ import Lautta 1.0
 
 Item {
     id: root
+    property bool reachedEnd
 
     property var events: []
     // Name bindings evaluated: selecting or a transfer must not make a row re-read its other roles.
@@ -294,5 +295,6 @@ Item {
         testOpenFoldersFollowSettings()
         testPdfThumbnails()
         testPicker()
+        reachedEnd = true
     }
 }

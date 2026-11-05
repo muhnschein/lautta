@@ -30,6 +30,7 @@ cpp! {{
     #include <QtCore/QUrl>
     #include <QtCore/QCoreApplication>
     #include <QtCore/QElapsedTimer>
+    #include <QtCore/QFileInfo>
     #include <QtCore/QEvent>
     #include <QtCore/QEventLoop>
     #include <QtQml/QQmlComponent>
@@ -60,8 +61,9 @@ cpp! {{
 
     // QML check mode: compiles and instantiates QML documents with this binary's engine (real
     // Silica, real Lautta types). Any error, any warning or console.error naming a checked
-    // document, and any uncaught JS exception outside Qt's modules, fails. `-T <directory>`
-    // installs that directory's catalogues first; without it qsTrId gives back the id.
+    // document, and any uncaught JS exception outside Qt's modules, fails. A `tst_*` document
+    // fails unless its root `reachedEnd` is true at the end. `-T <directory>` installs that
+    // directory's catalogues first; without it qsTrId gives back the id.
     static QStringList *lauttaCheckProblems = nullptr;
     static QString lauttaCheckFile;
 
@@ -141,6 +143,9 @@ cpp! {{
                 if (object->property("scenarioRunning").toBool())
                     problems << QStringLiteral("scenario still running after 60 s");
             }
+            if (object && QFileInfo(file).fileName().startsWith(QLatin1String("tst_"))
+                && !object->property("reachedEnd").toBool())
+                problems << QStringLiteral("checks unproven: root reachedEnd is not true");
             for (const QQmlError &e : component.errors())
                 problems << e.toString();
             if (!object && problems.isEmpty())

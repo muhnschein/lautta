@@ -6,12 +6,22 @@ import "../../qml/dialogs"
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     ViewerTools { id: tools }
 
+    function waitFor(done, what) {
+        for (var i = 0; i < 200 && !done(); ++i)
+            tools.pump(50)
+        if (!done())
+            console.error("FAILED: timed out waiting for " + what)
+        return done()
+    }
+
     Component.onCompleted: {
-        pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        tools.pump(500)
+        var page = pageStack.push(pageComponent, {}, PageStackAction.Immediate)
+        waitFor(function () { return !page.working && page.errorKind !== "" }, "an unknown server's error")
+        reachedEnd = true
     }
 
     Component {

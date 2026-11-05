@@ -332,6 +332,16 @@ impl FakeBridge {
         self.shared.with(|s| s.calls.clone())
     }
 
+    /// `Cancel` calls that stopped a running job.
+    pub fn jobs_canceled(&self) -> usize {
+        self.shared.with(|s| s.jobs_canceled)
+    }
+
+    /// `ListLocations` answers sent so far.
+    pub fn location_replies(&self) -> usize {
+        self.shared.with(|s| s.location_replies)
+    }
+
     pub fn calls_of(&self, method: &str) -> Vec<CallRecord> {
         self.calls().into_iter().filter(|c| c.method == method).collect()
     }

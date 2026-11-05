@@ -3,6 +3,7 @@ import QtQuick 2.6
 import "../../../qml/components/viewers/SyntaxColours.js" as SyntaxColours
 
 Item {
+    property bool reachedEnd
     function check(cond, what) {
         if (!cond)
             console.error("FAILED: " + what)
@@ -83,5 +84,6 @@ Item {
         var grey = parse(SyntaxColours.palette(theme(Qt.rgba(0.5, 0.5, 0.5, 1), 0)))
         var g = parseInt(grey.string.slice(1), 16)
         check((g >> 16) !== (g & 255) || ((g >> 8) & 255) !== (g & 255), "strings are coloured: " + grey.string)
+        reachedEnd = true
     }
 }

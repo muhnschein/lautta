@@ -3,6 +3,7 @@ import QtQuick 2.6
 import "../../../qml/components/viewers/ZoomMath.js" as ZoomMath
 
 Item {
+    property bool reachedEnd
     function check(cond, what) {
         if (!cond)
             console.error("FAILED: " + what)
@@ -109,5 +110,6 @@ Item {
 
         check(ZoomMath.spot(100, 1080, 0, 3000, 540, 1080) === 960, "no size yet: middle")
         check(ZoomMath.follow(10, 500, 500, 0, 3000, 1080) === 10, "no old size: no growth")
+        reachedEnd = true
     }
 }

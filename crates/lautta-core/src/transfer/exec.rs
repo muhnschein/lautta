@@ -964,11 +964,13 @@ mod tests {
         src.add_file("f", b"new", 1);
         let j = job(item("f", "f", Kind::File, 3));
         let temp = String::from_utf8(j.temp_name.clone()).unwrap();
+        // "f" appears between the stat before writing and the final rename.
+        dst.fail_next("stat", "f", Error::kind(ErrorKind::NotFound));
         dst.fail_next("rename", &temp, Error::kind(ErrorKind::AlreadyExists));
         dst.add_file("f", b"appeared", 1);
         let e = env(&src, &dst, false, OperationKind::Copy);
-        // The stat before writing already sees the file, so the question comes first.
         assert!(matches!(run_item(&e, &j).await.unwrap(), Outcome::Ask(_)));
+        assert_eq!(dst.read_file("f").unwrap(), b"appeared");
     }
 
     #[tokio::test]

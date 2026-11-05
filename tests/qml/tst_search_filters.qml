@@ -5,6 +5,9 @@ import Lautta 1.0
 import "../../qml/pages"
 
 ApplicationWindow {
+    id: test
+    property bool reachedEnd
+
     SearchModel {
         id: filterModel
         rootUri: "lautta://user-documents/"
@@ -14,6 +17,7 @@ ApplicationWindow {
 
     initialPage: Component {
         SearchFiltersPage {
+            Component.onCompleted: test.reachedEnd = true
             searchModel: filterModel
         }
     }

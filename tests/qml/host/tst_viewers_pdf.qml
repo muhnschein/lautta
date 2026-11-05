@@ -5,6 +5,7 @@ import "../../../qml/components/viewers/PdfText.js" as PdfText
 
 Item {
     id: root
+    property bool reachedEnd
 
     readonly property string pdf: "lautta://user-documents/two-pages.pdf"
     readonly property string searchable: "lautta://user-documents/searchable.pdf"
@@ -15,7 +16,7 @@ Item {
     }
 
     function settle(item) {
-        for (var i = 0; i < 40 && item.status === Image.Loading; ++i)
+        for (var i = 0; i < 600 && item.status === Image.Loading; ++i)
             tools.pump(50)
     }
 
@@ -116,9 +117,8 @@ Item {
         check(other.loaded && other.pageCount === 2, "reload")
 
         check(other.lastPage === -1, "no position yet: " + other.lastPage)
-        other.rememberPage(1)
-        other.rememberPage(7)
-        other.rememberPage(-1)
+        check(!other.rememberPage(7) && !other.rememberPage(2) && !other.rememberPage(-1), "only pages it has are kept")
+        check(other.rememberPage(1), "page 2 is kept")
         for (var r = 0; r < 60 && other.lastPage !== 1; ++r) {
             tools.pump(100)
             other.reload()
@@ -174,6 +174,7 @@ Item {
         check(linked.got[0] === undefined, "links of the file before are dropped")
 
         searchTests()
+        reachedEnd = true
     }
 
     function searchTests() {

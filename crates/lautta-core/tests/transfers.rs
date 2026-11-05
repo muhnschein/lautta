@@ -701,7 +701,7 @@ async fn merge_answer_for_folders() {
     assert_eq!(r.remote.read_file("d/keep").unwrap(), b"k");
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn cancel_during_backoff_stops_the_transfer_and_removes_the_partial_file() {
     let cfg = EngineConfig {
         backoff_base: Duration::from_millis(300),
@@ -743,7 +743,7 @@ async fn cancel_during_backoff_stops_the_transfer_and_removes_the_partial_file()
     assert_eq!(r.engine.pending_summary(), 0);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn pause_during_backoff_and_resume_completes() {
     let cfg = EngineConfig {
         backoff_base: Duration::from_millis(100),
@@ -1051,8 +1051,18 @@ async fn forgetting_history_rows() {
 }
 
 #[tokio::test]
-async fn progress_events_carry_bytes_rate_and_eta() {
-    let r = rig();
+async fn progress_events_count_bytes_up_to_the_file_size() {
+    let cfg = EngineConfig {
+        progress_event_interval_ms: 0,
+        ..EngineConfig::default()
+    };
+    let r = rig_with(
+        Db::open_in_memory().unwrap(),
+        MemoryProvider::default(),
+        MemoryProvider::default(),
+        cfg,
+        None,
+    );
     r.local.add_file("f", b"hello", 1);
     let mut rx = r.engine.subscribe();
     let id = r
@@ -1061,20 +1071,17 @@ async fn progress_events_carry_bytes_rate_and_eta() {
         .await
         .unwrap();
     settled(&r.engine, id).await;
-    let progress: Vec<(u64, u64)> = drain(&mut rx)
+    let bytes: Vec<u64> = drain(&mut rx)
         .into_iter()
         .filter_map(|e| match e {
             TransferEvent::Progress {
-                id: i,
-                bytes_done,
-                rate,
-                ..
-            } if i == id => Some((bytes_done, rate)),
+                id: i, bytes_done, ..
+            } if i == id => Some(bytes_done),
             _ => None,
         })
         .collect();
-    assert!(!progress.is_empty());
-    assert!(progress.iter().all(|(b, _)| *b <= 5));
+    assert_eq!(bytes.last(), Some(&5), "{bytes:?}");
+    assert!(bytes.windows(2).all(|w| w[0] <= w[1]), "{bytes:?}");
 }
 
 #[tokio::test]

@@ -4,6 +4,7 @@ import Lautta 1.0
 
 Item {
     id: root
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-downloads/Counts/"
 
@@ -219,5 +220,6 @@ Item {
         testOtherFolder()
         testSameStampElsewhere()
         testNoFolder()
+        reachedEnd = true
     }
 }

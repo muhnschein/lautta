@@ -5,8 +5,12 @@ import Lautta 1.0
 import "../../qml/dialogs"
 
 ApplicationWindow {
+    id: test
+    property bool reachedEnd
+
     initialPage: Component {
         ServerQuestionDialog {
+            Component.onCompleted: test.reachedEnd = true
             questionId: "q3"
             kind: "insecure-consent"
             details: ({ "host": "old.example", "url": "smb://old.example/share", "provider": "smb" })

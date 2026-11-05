@@ -7,6 +7,7 @@ import "../../qml/components/directory/DirFormat.js" as DirFormat
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-downloads/GridCaptions/"
     readonly property string longName: "Minutes of the department meeting 2026-10-14 final.pdf"
@@ -100,8 +101,8 @@ ApplicationWindow {
     function push(uri) {
         pageStack.push(pageComponent, { "folderUri": uri }, PageStackAction.Immediate)
         var view = pageStack.currentPage.view
-        waitFor(function () { return !view.model.loading && view.model.count > 0 }, "the folder " + uri)
-        tools.pump(100)
+        waitFor(function () { return !view.model.loading && view.model.count > 0 && cells(view).length === view.model.count },
+                "the folder " + uri)
         return view
     }
 
@@ -326,7 +327,7 @@ ApplicationWindow {
     function checkPreview(view) {
         var preview = previewComponent.createObject(window.contentItem,
                                                     { "screenWidth": view.width, "screenHeight": view.height })
-        tools.pump(300)
+        waitFor(function () { return preview.tiles().length === preview.count }, "the preview's tiles")
         expect(preview.gridMode, "the preview is a grid")
         same(preview.cellWidth, view.flickable.cellWidth, "its cell is as wide")
         var notes = cellNamed(view, "notes.txt")
@@ -374,6 +375,7 @@ ApplicationWindow {
         var restore = { "view_mode": "list", "thumbnails_local": true }
         for (var again in restore)
             App.setSetting(again, JSON.stringify(restore[again]))
+        reachedEnd = true
     }
 
     Component {

@@ -12,6 +12,7 @@ ApplicationWindow {
     readonly property string kept: folder + "delete-keep.md"
     readonly property string trashed: folder + "delete-trash.md"
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property int trashBefore: -1
@@ -102,6 +103,16 @@ ApplicationWindow {
         return page && page.uris !== undefined && page.status === PageStatus.Active ? page : null
     }
 
+    function remorseOn(uri) {
+        var row = rowOf(uri)
+        var kids = row ? row.data : []
+        for (var i = 0; i < kids.length; ++i) {
+            if (kids[i]._countdown !== undefined && kids[i].state === "active")
+                return true
+        }
+        return false
+    }
+
     function has(uri) {
         return docs.nameKind(App.nameOf(uri)) === "file"
     }
@@ -136,7 +147,8 @@ ApplicationWindow {
                         || !tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), win.trashed))
                     return win.fail("fixtures")
                 App.setSetting("recently_deleted", JSON.stringify(false))
-                App.setSetting("remorse_seconds", JSON.stringify(3))
+                // Longer than a step may take: a wrong remorse leaves the file there.
+                App.setSetting("remorse_seconds", JSON.stringify(60))
                 win.reloadTrash()
                 win.next()
                 break
@@ -194,10 +206,10 @@ ApplicationWindow {
             case 7:
                 if (win.waited % 5 === 0)
                     docs.refresh()
+                if (win.remorseOn(win.kept))
+                    return win.fail("a permanent delete runs no remorse")
                 if (win.has(win.kept))
                     break
-                if (win.waited > 25)
-                    return win.fail("deleted only after a delay")
                 win.reloadTrash()
                 win.next()
                 break
@@ -209,6 +221,7 @@ ApplicationWindow {
                 if (win.view.selecting)
                     return win.fail("the delete ends selection mode")
                 App.setSetting("recently_deleted", JSON.stringify(true))
+                App.setSetting("remorse_seconds", JSON.stringify(5))
                 win.next()
                 break
             case 9:
@@ -218,10 +231,11 @@ ApplicationWindow {
             case 10:
                 if (win.openDialog())
                     return win.fail("a delete to the Trash asks nothing")
-                if (win.waited < 10)
+                if (!win.remorseOn(win.trashed)) {
+                    if (!win.has(win.trashed))
+                        return win.fail("the remorse timer comes first")
                     break
-                if (!win.has(win.trashed))
-                    return win.fail("the remorse timer comes first")
+                }
                 win.next()
                 break
             case 11:
@@ -235,8 +249,10 @@ ApplicationWindow {
             case 12:
                 if (!win.trashReloaded())
                     break
-                if (trash.count === win.trashBefore + 1)
+                if (trash.count === win.trashBefore + 1) {
+                    win.reachedEnd = true
                     return win.finish("")
+                }
                 if (win.waited > 50)
                     return win.fail("the file is in the Trash: " + trash.count + " after " + win.trashBefore)
                 win.reloadTrash()

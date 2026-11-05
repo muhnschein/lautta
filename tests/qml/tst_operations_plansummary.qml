@@ -4,8 +4,12 @@ import Sailfish.Silica 1.0
 import "../../qml/dialogs"
 
 ApplicationWindow {
+    id: test
+    property bool reachedEnd
+
     initialPage: Component {
         PlanSummaryDialog {
+            Component.onCompleted: test.reachedEnd = true
             planId: 1
             summary: ({
                 "kind": "copy", "files": 1284, "dirs": 37, "bytes": 4500000000, "conflicts": 12, "renamed": 3,

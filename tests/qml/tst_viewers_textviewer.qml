@@ -6,13 +6,41 @@ import "../../qml/viewers"
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     ViewerTools { id: tools }
 
+    function waitFor(done, what) {
+        for (var i = 0; i < 200 && !done(); ++i)
+            tools.pump(50)
+        if (!done())
+            console.error("FAILED: timed out waiting for " + what)
+        return done()
+    }
+
+    function texts(item, out) {
+        if (!item)
+            return out
+        if (typeof item.text === "string" && item.visible)
+            out.push(item.text)
+        var kids = item.children || []
+        for (var i = 0; i < kids.length; ++i)
+            texts(kids[i], out)
+        if (item.contentItem)
+            texts(item.contentItem, out)
+        return out
+    }
+
+    function shows(page, part) {
+        return texts(page, []).some(function (t) { return t.indexOf(part) >= 0 })
+    }
+
     Component.onCompleted: {
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/notes-crlf.txt"), "lautta://user-documents/notes.txt")
-        pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        tools.pump(500)
+        if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/notes-crlf.txt"), "lautta://user-documents/notes.txt"))
+            console.error("FAILED: fixture")
+        var page = pageStack.push(pageComponent, {}, PageStackAction.Immediate)
+        waitFor(function () { return shows(page, "line one") && shows(page, "line two") }, "the file's lines")
+        reachedEnd = true
     }
 
     Component {

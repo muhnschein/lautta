@@ -228,6 +228,29 @@ fn open_reads(nas: &MemoryProvider) -> usize {
     nas.calls().iter().filter(|c| c.starts_with("open_read")).count()
 }
 
+/// Two jobs that hold the location's queue until `gate` gets permits. Semaphore, not Notify:
+/// the jobs may not have run yet when released.
+fn block_queue(jobs: &lautta_core::thumbs::ThumbJobs) -> Arc<tokio::sync::Semaphore> {
+    let gate = Arc::new(tokio::sync::Semaphore::new(0));
+    for i in 0..2 {
+        let g = gate.clone();
+        jobs.request(&format!("block{i}"), "nv-nas", async move {
+            let _ = g.acquire().await;
+        });
+    }
+    gate
+}
+
+async fn queue_drained(jobs: &lautta_core::thumbs::ThumbJobs) {
+    tokio::time::timeout(std::time::Duration::from_secs(30), async {
+        while jobs.queued("nv-nas") + jobs.running("nv-nas") > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("queue drained within 30 s");
+}
+
 #[tokio::test]
 async fn remote_thumbnails_are_cached_and_shared() {
     let h = home().await;
@@ -459,13 +482,7 @@ async fn a_pdf_request_that_is_cancelled_while_queued_never_runs() {
     let h = home().await;
     h.nas.add_file("a.pdf", &pdf(), 0);
     let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
-    let gate = Arc::new(tokio::sync::Notify::new());
-    for i in 0..2 {
-        let g = gate.clone();
-        previews
-            .jobs()
-            .request(&format!("block{i}"), "nv-nas", async move { g.notified().await });
-    }
+    let gate = block_queue(previews.jobs());
     let t = previews.request(h.core.clone(), uri("lautta://nv-nas/a.pdf"), 32);
     assert_eq!(previews.jobs().queued("nv-nas"), 1, "PDFs wait in the same queue");
     t.cancel();
@@ -474,7 +491,8 @@ async fn a_pdf_request_that_is_cancelled_while_queued_never_runs() {
         0,
         "a delegate that left takes its request along"
     );
-    gate.notify_waiters();
+    gate.add_permits(2);
+    queue_drained(previews.jobs()).await;
     assert_eq!(open_reads(&h.nas), 0);
 }
 
@@ -490,7 +508,7 @@ async fn a_smaller_thumbnail_cache_is_trimmed_at_once() {
     let mut s = h.core.settings();
     s.thumbnail_cache_mb = 10;
     h.core.apply_settings(s);
-    for _ in 0..300 {
+    for _ in 0..3000 {
         if cache.total_bytes() <= 10_000_000 {
             break;
         }
@@ -510,18 +528,14 @@ async fn cancelling_the_last_waiter_cancels_the_job() {
     let h = home().await;
     h.nas.add_file("x.jpg", &jpeg(8, 8), 0);
     let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
-    let gate = Arc::new(tokio::sync::Notify::new());
-    for i in 0..2 {
-        let g = gate.clone();
-        previews
-            .jobs()
-            .request(&format!("block{i}"), "nv-nas", async move { g.notified().await });
-    }
+    let gate = block_queue(previews.jobs());
     let t = previews.request(h.core.clone(), uri("lautta://nv-nas/x.jpg"), 32);
     assert_eq!(previews.jobs().queued("nv-nas"), 1);
     t.cancel();
     assert_eq!(previews.jobs().queued("nv-nas"), 0, "canceled on scroll");
-    gate.notify_waiters();
+    gate.add_permits(2);
+    queue_drained(previews.jobs()).await;
+    assert_eq!(open_reads(&h.nas), 0, "never read");
 }
 
 #[tokio::test]

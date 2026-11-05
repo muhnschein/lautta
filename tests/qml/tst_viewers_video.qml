@@ -6,13 +6,26 @@ import "../../qml/viewers"
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     ViewerTools { id: tools }
 
+    function waitFor(done, what) {
+        for (var i = 0; i < 200 && !done(); ++i)
+            tools.pump(50)
+        if (!done())
+            console.error("FAILED: timed out waiting for " + what)
+        return done()
+    }
+
     Component.onCompleted: {
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/data.bin"), "lautta://user-documents/clip.mp4")
-        pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        tools.pump(500)
+        if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/data.bin"), "lautta://user-documents/clip.mp4"))
+            console.error("FAILED: fixture")
+        var page = pageStack.push(pageComponent, {}, PageStackAction.Immediate)
+        waitFor(function () { return page.errorKind !== "" }, "no video in the file")
+        if (page.statusText.length === 0 || page.playing)
+            console.error("FAILED: the error is said, nothing plays: '" + page.statusText + "'")
+        reachedEnd = true
     }
 
     Component {

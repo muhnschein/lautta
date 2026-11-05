@@ -266,10 +266,7 @@ mod tests {
             );
             assert!(html.contains(&format!("{long}\n  next\n</pre>")), "{html}");
         }
-        assert!(
-            !render("> ```\n> a\n> ```").contains("<pre>"),
-            "quoted code wraps too"
-        );
+        assert!(render("> ```\n> a\n> ```").contains(PRE), "quoted code wraps too");
     }
 
     #[test]
