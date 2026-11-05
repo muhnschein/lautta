@@ -14,8 +14,8 @@ use lautta_core::org::{RecentKind, RecentsFilter};
 use lautta_core::paths::AppPaths;
 use lautta_core::settings::{LocationPrefs, Settings};
 use lautta_core::{ErrorKind, Uri};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 
 struct Env {
     home: tempfile::TempDir,
@@ -844,6 +844,22 @@ fn remembered(core: &Core, n: i32) -> bool {
             .is_hidden("servers", &format!("nv-account:{n}"))
 }
 
+/// Purge task counting its purges. Account 9 is remembered but gone: its purge marks the first
+/// step done.
+fn counted_purge(core: &Arc<Core>) -> Arc<AtomicUsize> {
+    remember_account(core, 9);
+    let purges = Arc::new(AtomicUsize::new(0));
+    let p = purges.clone();
+    core.spawn_account_purge(move || {
+        p.fetch_add(1, Ordering::SeqCst);
+    });
+    purges
+}
+
+async fn purged(purges: &AtomicUsize, n: usize) {
+    eventually(&format!("purge {n}"), || purges.load(Ordering::SeqCst) >= n).await;
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_removed_account_is_forgotten() {
     let (fake, e) = ready_env().await;
@@ -853,15 +869,17 @@ async fn a_removed_account_is_forgotten() {
     remember_account(&e.core, 2);
     let local = uri("lautta://user-documents/");
     e.core.favourites.add(&local, "Docs", None, true).unwrap();
-    e.core.spawn_account_purge(|| {});
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    let purges = counted_purge(&e.core);
+    purged(&purges, 1).await;
+    assert!(!remembered(&e.core, 9));
     assert!(
         remembered(&e.core, 1) && remembered(&e.core, 2),
         "present accounts stay"
     );
 
     fake.remove_location("account:2").await;
-    eventually("purge", || !remembered(&e.core, 2)).await;
+    purged(&purges, 2).await;
+    assert!(!remembered(&e.core, 2));
     assert!(remembered(&e.core, 1));
     assert!(e.core.favourites.is_favourite(&local).unwrap());
 }
@@ -870,21 +888,26 @@ async fn a_removed_account_is_forgotten() {
 async fn withdrawn_consent_and_lost_connection_purge_nothing() {
     let (fake, e) = ready_env().await;
     remember_account(&e.core, 1);
-    e.core.spawn_account_purge(|| {});
+    let purges = counted_purge(&e.core);
     let client = e.core.bridge.clone().unwrap();
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    purged(&purges, 1).await;
     fake.set_consent(Consent::Unknown).await;
     client.wait_status(|s| s == BridgeStatus::ConsentUnknown).await;
     eventually("the list is cleared", || client.locations().is_empty()).await;
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    fake.set_consent(Consent::Granted).await;
+    client.wait_status(|s| s == BridgeStatus::Ready).await;
+    // The task takes changes in order: once account 3's removal is purged, so would be 1.
+    fake.add_account(3, "sftp", "Office", "office.home").await;
+    eventually("third account", || e.core.location("nv-account:3").is_some()).await;
+    remember_account(&e.core, 3);
+    fake.remove_location("account:3").await;
+    purged(&purges, 2).await;
+    assert!(!remembered(&e.core, 3));
     assert!(
         remembered(&e.core, 1),
         "an empty list without consent is not a removal"
     );
-    fake.set_consent(Consent::Granted).await;
-    client.wait_status(|s| s == BridgeStatus::Ready).await;
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    assert!(remembered(&e.core, 1));
+    assert_eq!(purges.load(Ordering::SeqCst), 2, "nothing else purged");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

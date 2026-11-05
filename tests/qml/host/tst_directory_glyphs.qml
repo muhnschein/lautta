@@ -3,6 +3,7 @@ import QtQuick 2.6
 import "../../../qml/components/FileIcons.js" as FileIcons
 
 Item {
+    property bool reachedEnd
     function check(cond, what) {
         if (!cond)
             console.error("FAILED: " + what)
@@ -59,5 +60,6 @@ Item {
         testSnap()
         testKinds()
         testTokens()
+        reachedEnd = true
     }
 }

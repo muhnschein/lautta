@@ -4,6 +4,7 @@ import Lautta 1.0
 
 Item {
     id: root
+    property bool reachedEnd
 
     function check(cond, what) {
         if (!cond)
@@ -61,5 +62,6 @@ Item {
         images.folderUri = "lautta://user-pictures/nope/"
         settle(images)
         check(images.errorKind === "NotFound", "image list error " + images.errorKind)
+        reachedEnd = true
     }
 }

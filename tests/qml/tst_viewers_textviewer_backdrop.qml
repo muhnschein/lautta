@@ -10,6 +10,7 @@ ApplicationWindow {
     readonly property real readable: 4.5
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int waited: 0
     property int step: 0
     property var page
@@ -97,8 +98,10 @@ ApplicationWindow {
                 return
             if (window.step++ === 0)
                 window.page.palette.colorScheme = dark ? Theme.DarkOnLight : Theme.LightOnDark
-            else
+            else {
+                window.reachedEnd = true
                 window.scenarioRunning = false
+            }
         }
     }
 

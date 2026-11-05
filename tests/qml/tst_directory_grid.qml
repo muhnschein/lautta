@@ -6,12 +6,14 @@ import "../../qml/components/directory"
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     ViewerTools { id: tools }
 
     function expect(ok, what) {
         if (!ok)
             console.error("FAILED: " + what)
+        return ok
     }
 
     // No render loop headless: lay out by hand.
@@ -29,6 +31,12 @@ ApplicationWindow {
         return out
     }
 
+    function waitFor(done, what) {
+        for (var i = 0; i < 200 && !done(); ++i)
+            tools.pump(50)
+        return expect(done(), "timed out waiting for " + what)
+    }
+
     function check(view, what) {
         var grid = view.flickable
         expect(view.gridMode, what + ": the folder is a grid")
@@ -37,18 +45,18 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), "lautta://user-downloads/grid-photo.jpg")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"),
-                             "lautta://user-downloads/harbour-salama-0.8.0-1.20261015.aarch64.txt")
+        expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), "lautta://user-downloads/grid-photo.jpg")
+               && tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"),
+                                      "lautta://user-downloads/harbour-salama-0.8.0-1.20261015.aarch64.txt"),
+               "fixtures installed")
         App.setSetting("view_mode", JSON.stringify("grid"))
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        tools.pump(500)
         var view = pageStack.currentPage.view
+        waitFor(function () { return !view.model.loading && view.model.count >= 2 && tiles(view.flickable).length > 0 }, "the folder")
         check(view, "grid")
         expect(!App.setSetting("grid_columns", JSON.stringify(4)), "the number of tiles per row is no setting")
-        tools.pump(200)
-        check(view, "after a stored size")
         App.setSetting("view_mode", JSON.stringify("list"))
+        reachedEnd = true
     }
 
     Component {

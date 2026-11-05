@@ -4,6 +4,9 @@ import Sailfish.Silica 1.0
 import "../../qml/pages"
 
 ApplicationWindow {
+    id: test
+    property bool reachedEnd
+
     initialPage: Component {
         ShareTargetPage {
             resources: [ "file:///home/user/Downloads/IMG_2041.jpg", { "filePath": "/home/user/Documents/b.txt" } ]
@@ -12,6 +15,7 @@ ApplicationWindow {
                     console.error("unreadable files are skipped: " + readableCount + "/" + skippedCount)
                 if (canAccept)
                     console.error("nothing readable, nothing to save")
+                test.reachedEnd = true
             }
         }
     }

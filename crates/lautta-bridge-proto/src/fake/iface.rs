@@ -416,15 +416,18 @@ impl Iface {
         Ok(features)
     }
 
+    /// List as of the call: with latency the consent may change before the answer arrives.
     async fn list_locations(&self) -> Result<Vec<WireLocation>, Fail> {
-        self.begin("ListLocations", "interactive", "", false).await?;
-        Ok(self.shared.with(|s| {
+        let list = self.shared.with(|s| {
             if s.consent == Consent::Granted {
                 s.wire_locations()
             } else {
                 Vec::new()
             }
-        }))
+        });
+        self.begin("ListLocations", "interactive", "", false).await?;
+        self.shared.with(|s| s.location_replies += 1);
+        Ok(list)
     }
 
     // One-element tuple keeps the reply a single struct argument on the wire.
@@ -777,7 +780,11 @@ impl Iface {
             .await?;
         match self.session.cancel(id) {
             CancelOutcome::Unknown => Err(Fail::net("NotFound", "No such request or job")),
-            CancelOutcome::Canceled | CancelOutcome::Finished => Ok(()),
+            CancelOutcome::Canceled => {
+                self.shared.with(|s| s.jobs_canceled += 1);
+                Ok(())
+            }
+            CancelOutcome::Finished => Ok(()),
         }
     }
 

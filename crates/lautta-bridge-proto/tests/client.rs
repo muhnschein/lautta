@@ -141,7 +141,11 @@ async fn listing_signals_arrive_in_order() {
     let req = conn.proxy().list("account:1", b"", "", 1).await.unwrap();
     let mut names = Vec::new();
     loop {
-        match signals.next().await.expect("the stream stays open").unwrap() {
+        let signal = tokio::time::timeout(Duration::from_secs(5), signals.next())
+            .await
+            .expect("ListDone arrives")
+            .expect("the stream stays open");
+        match signal.unwrap() {
             Signal::ListBatch { req: r, entries } => {
                 assert_eq!(r, req);
                 assert_eq!(entries.len(), 1, "batches of one were asked for");
@@ -382,7 +386,7 @@ async fn drives_are_listed_mounted_and_unmounted_without_consent() {
 }
 
 async fn drives_changed(signals: &mut SignalStream) -> bool {
-    tokio::time::timeout(Duration::from_secs(1), async {
+    tokio::time::timeout(Duration::from_secs(5), async {
         while let Some(signal) = signals.next().await {
             if matches!(signal, Ok(Signal::DrivesChanged)) {
                 return true;

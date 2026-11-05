@@ -13,6 +13,7 @@ ApplicationWindow {
     readonly property string sub: base + "Sub"
     readonly property string kept: base + "Kept"
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property int made: 0
@@ -285,6 +286,7 @@ ApplicationWindow {
                     break
                 if (win.anyRemorse() || !win.rowOf(win.kept))
                     return win.fail("the remorse comes back after running out")
+                win.reachedEnd = true
                 win.finish()
                 break
             }

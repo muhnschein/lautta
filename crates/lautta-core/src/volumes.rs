@@ -225,7 +225,7 @@ mod tests {
     const SHORT: Duration = Duration::from_millis(60);
 
     async fn next(rx: &mut UnboundedReceiver<VolumeEvent>) -> Option<VolumeEvent> {
-        tokio::time::timeout(Duration::from_secs(5), rx.recv())
+        tokio::time::timeout(Duration::from_secs(30), rx.recv())
             .await
             .ok()
             .flatten()

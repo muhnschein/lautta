@@ -1,10 +1,12 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Run with `--qml-check -T <folder>` by
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Run with `--qml-check -T <folder>` by
 // crates/lautta-qt/tests/translations.rs (host) and tools/ci/check-rpm.sh (target).
 import QtQuick 2.6
 
 QtObject {
     // Only the first difference is reported: a wrong catalogue is wrong in many places.
     property bool failed: false
+    property bool reachedEnd
 
     function same(got, want, what) {
         if (got === want || failed)
@@ -38,5 +40,6 @@ QtObject {
         same(qsTrId("lautta-xfr-title-moved-many", 1).arg("NAS"), "Moved 1 item to NAS", "a plural string with an argument")
         same(qsTrId("lautta-xfr-title-moved-many", 3).arg("NAS"), "Moved 3 items to NAS", "and its plural")
         same(qsTrId("lautta-dir-grid-items-more", 10000), "More than 10000 items", "a capped count")
+        reachedEnd = true
     }
 }

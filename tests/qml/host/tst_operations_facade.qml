@@ -4,6 +4,7 @@ import Lautta 1.0
 
 QtObject {
     id: test
+    property bool reachedEnd
 
     property var failures: []
 
@@ -51,17 +52,14 @@ QtObject {
 
         check(!Operations.isArchive("lautta://user-documents/"), "a user folder is not an archive")
         check(Operations.archiveSource("lautta://user-documents/") === "", "no archive source for a folder")
-        // Registry knows user folders only if test home is visible (not under SDK sb2).
-        var known = App.locationName("lautta://user-documents/") === "Documents"
         var shown = Operations.displayPath("lautta://user-documents/Uni/x.txt")
-        check(shown.indexOf(" \u203a Uni \u203a x.txt") > 0, "display path: " + shown)
-        check(!known || shown === "Documents \u203a Uni \u203a x.txt", "display path with a known location: " + shown)
+        check(shown === "Documents \u203a Uni \u203a x.txt", "display path: " + shown)
         check(Operations.displayPath("junk") === "", "display path of junk")
 
         var dest = JSON.parse(Operations.destinationsJson())
         var names = dest.map(function(d) { return d.name })
-        check(!known || (names.indexOf("Documents") >= 0 && names.indexOf("Downloads") >= 0), "destinations: " + names)
-        check(!known || (dest[0].kind === "device" && dest[0].uri.indexOf("lautta://") === 0), "destination shape")
+        check((names.indexOf("Documents") >= 0 && names.indexOf("Downloads") >= 0), "destinations: " + names)
+        check((dest[0].kind === "device" && dest[0].uri.indexOf("lautta://") === 0), "destination shape")
 
         var probed = JSON.parse(Operations.probeShared(JSON.stringify([
             "file:///nonexistent/shared%20file.jpg", "/also/missing.txt"])))
@@ -70,5 +68,6 @@ QtObject {
         check(JSON.parse(Operations.probeShared("junk")).length === 0, "junk paths probe to nothing")
 
         check(trash.count === 0 && trash.totalSize === 0 && !trash.loaded && !trash.busy, "empty trash model")
+        reachedEnd = true
     }
 }

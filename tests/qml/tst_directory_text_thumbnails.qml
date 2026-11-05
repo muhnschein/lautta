@@ -6,6 +6,7 @@ import "../../qml/components/directory"
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-documents/TextThumbnails/"
 
@@ -56,6 +57,13 @@ ApplicationWindow {
         return findAll(view, function (x) { return x.previewShown === true }, [])
     }
 
+    // Cells asking for a text preview, by name: the request, not the async answer.
+    function asking(view) {
+        layOut(view)
+        return findAll(view, function (x) { return x.previewAsked !== undefined && x.previewAsked !== "" }, [])
+            .map(function (x) { return x.itemName }).sort()
+    }
+
     function until(done) {
         for (var i = 0; i < 200 && !done(); ++i)
             tools.pump(50)
@@ -85,26 +93,28 @@ ApplicationWindow {
 
     Component.onCompleted: {
         documents.createFolder("TextThumbnails")
-        tools.pump(500)
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/notes-crlf.txt"), base + "notes.txt")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/script.sh"), base + "run.sh")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + "README.md")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/empty.txt"), base + "empty.txt")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), base + "a.jpg")
+        expect(until(function () { return documents.indexOf(base.replace(/\/$/, "")) >= 0 }), "the folder is made")
+        expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/notes-crlf.txt"), base + "notes.txt")
+               && tools.installFixture(Qt.resolvedUrl("host/fixtures/script.sh"), base + "run.sh")
+               && tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + "README.md")
+               && tools.installFixture(Qt.resolvedUrl("host/fixtures/empty.txt"), base + "empty.txt")
+               && tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), base + "a.jpg"), "fixtures installed")
         App.setSetting("view_mode", JSON.stringify("grid"))
         App.setSetting("thumbnails_local", JSON.stringify(false))
         pageStack.push(pageComponent, { "folderUri": base }, PageStackAction.Immediate)
-        tools.pump(500)
+        expect(until(function () { var v = pageStack.currentPage.view; return v && !v.model.loading && v.model.count === 5 }),
+               "the folder lists its files")
         var view = pageStack.currentPage.view
         expect(view.gridMode, "a grid")
-        expect(until(function () { return iconsOf(view, "code").length === 1 }) && shownIcons(view).length === 0,
-               "thumbnails off: glyphs")
+        expect(until(function () { return iconsOf(view, "code").length === 1 }), "the cells")
+        expect(asking(view).length === 0 && shownIcons(view).length === 0, "thumbnails off: nothing asks for text: " + asking(view))
         App.setSetting("thumbnails_local", JSON.stringify(true))
 
         checkTile(view, "text", function (t) { return t === "line one\nline two" }, false, "types/text")
         checkTile(view, "code", function (t) { return t.indexOf("#!/bin/sh\n") === 0 }, true, "types/shell")
         checkTile(view, "markdown", function (t) { return t.length > 0 }, false, "types/markdown")
         expect(shownIcons(view).length === 3, "only those three: " + shownIcons(view).length)
+        expect(String(asking(view)) === "README.md,notes.txt,run.sh", "and only they ask: " + asking(view))
 
         App.setSetting("view_mode", JSON.stringify("list"))
         expect(until(function () { return !view.gridMode }), "a list")
@@ -117,6 +127,7 @@ ApplicationWindow {
 
         App.setSetting("thumbnails_local", JSON.stringify(true))
         App.setSetting("view_mode", JSON.stringify("list"))
+        reachedEnd = true
     }
 
     Component {

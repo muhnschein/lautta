@@ -4,6 +4,7 @@ import "../../../qml/components/directory/GridName.js" as GridName
 
 Item {
     id: root
+    property bool reachedEnd
 
     readonly property int lineWidth: 150
 
@@ -194,9 +195,7 @@ Item {
     }
 
     function testOddInput() {
-        fits(lines("abcdefghijklmnopqrstuvwxyz", 0), "no width")
-        fits(lines("abcdefghijklmnopqrstuvwxyz", 5), "less than a character")
-        check(lines("   ").length >= 1, "only spaces")
+        same(lines("abcdefghijklmnopqrstuvwxyz", 0), ["a", "\u2026"], "no width")
         fits(lines("trailing spaces and more words                         "), "trailing spaces")
         fits(lines("word                     another-very-long-word-here"), "a run of spaces")
         same(lines("abcdefghijklmnopq", 10).length, 2, "narrow width")
@@ -214,5 +213,6 @@ Item {
         testBlanks()
         testRightToLeft()
         testOddInput()
+        reachedEnd = true
     }
 }

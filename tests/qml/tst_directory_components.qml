@@ -5,6 +5,9 @@ import Lautta 1.0
 import "../../qml/components"
 
 ApplicationWindow {
+    id: test
+    property bool reachedEnd
+
     PathModel {
         id: path
         uri: "lautta://user-documents/Uni"
@@ -33,6 +36,7 @@ ApplicationWindow {
                     editing: true
                     pathModel: path
                     currentUri: "lautta://user-documents/Uni"
+                    Component.onCompleted: test.reachedEnd = true
                 }
             }
         }

@@ -12,6 +12,7 @@ ApplicationWindow {
     readonly property string paper: "trash-thumb.pdf"
     readonly property string note: "trash-thumb.md"
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property bool removed
@@ -172,6 +173,7 @@ ApplicationWindow {
                 }
                 if (shown.thumbnail.visible || !shown.glyph.visible || shownPaper.thumbnail.visible || !shownPaper.glyph.visible)
                     return win.fail("with thumbnails off the image and the PDF keep their glyph")
+                win.reachedEnd = true
                 win.finish()
                 break
             }

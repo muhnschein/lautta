@@ -7,6 +7,7 @@ import "../../qml/pages"
 
 ApplicationWindow {
     id: win
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-documents/FolderHeader/"
     readonly property int files: 72
@@ -228,11 +229,10 @@ ApplicationWindow {
                label + ": the header comes down with it: " + header.mapToItem(view, 0, 0).y + " vs " + pulled)
         expect(host.pullDownMenu && host.pullDownMenu.active, label + ": the pulley is out")
         letGo(f, x, f.height * 0.2)
-        tools.pump(100)
+        waitFor(function () { return !host.moving }, label + ": the host to settle")
         expect(pageStack.currentPage === page && !pageStack.busy, label + ": letting go where it started runs no entry")
         host.pullDownMenu.close(true)
-        tools.pump(100)
-        expect(!host.pullDownMenu.active && host.contentY === 0, label + ": the pulley closes and stays closed: " + host.contentY)
+        waitFor(function () { return !host.pullDownMenu.active && host.contentY === 0 }, label + ": the pulley to close")
     }
 
     function checkPathMenu(view, label) {
@@ -262,12 +262,10 @@ ApplicationWindow {
         App.setSetting("view_mode", JSON.stringify(mode))
         var page = push(base, true)
         waitFor(function () { return listed(viewOf(page), files + 3) }, "the folder")
-        tools.pump(100)
         expect(viewOf(page).gridMode === (mode === "grid"), mode + " is shown")
         checkLayout(page, mode + " portrait")
         win.deviceOrientation = Orientation.Landscape
         waitFor(function () { return page.isLandscape && !page.orientationTransitionRunning }, "landscape")
-        tools.pump(100)
         checkLayout(page, mode + " landscape")
         win.deviceOrientation = Orientation.Portrait
         waitFor(function () { return !page.isLandscape && !page.orientationTransitionRunning }, "portrait again")
@@ -303,7 +301,6 @@ ApplicationWindow {
             tools.pump(10)
         }
         waitFor(settled, "the page to settle")
-        tools.pump(100)
         expect(listed(view, count), label + ": listed")
         expect(f.contentY === f.originY && f.originY === 0, label + ": at the top once listed: " + f.contentY + " vs " + f.originY)
         return page
@@ -317,7 +314,6 @@ ApplicationWindow {
         var f = parentView.flickable
         f.forceLayout()
         f.contentY = f.originY + f.height * 3
-        tools.pump(100)
         f.forceLayout()
         var left = f.contentY
         var topItem = f.itemIndexAt(f.width / 2, left + 1)
@@ -328,9 +324,8 @@ ApplicationWindow {
         pageStack.pop()
         waitFor(settled, "going back")
         waitFor(function () { return pageStack.currentPage === parentPage && !parentView.model.loading }, "the parent again")
-        tools.pump(200)
-        f.forceLayout()
-        expect(Math.abs(f.contentY - left) < 1, mode + ": back at the old position: " + f.contentY + " vs " + left)
+        waitFor(function () { f.forceLayout(); return Math.abs(f.contentY - left) < 1 },
+                mode + ": the old position: " + f.contentY + " vs " + left)
         var again = f.itemIndexAt(f.width / 2, f.contentY + 1)
         expect(again === topItem, mode + ": the same item at the top: " + again + " vs " + topItem)
         openAtTop(parentView, base + "Child/", files, mode + " child again")
@@ -368,6 +363,7 @@ ApplicationWindow {
         checkNavigation("grid")
         checkPhotos()
         App.setSetting("view_mode", JSON.stringify("list"))
+        reachedEnd = true
     }
 
     Component {

@@ -6,6 +6,7 @@ import "../../qml/components/directory"
 
 ApplicationWindow {
     id: win
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-documents/DragSelect/"
     readonly property int files: 200
@@ -24,15 +25,23 @@ ApplicationWindow {
         return ok
     }
 
+    function waitFor(done, what) {
+        for (var i = 0; i < 200 && !done(); ++i)
+            tools.pump(50)
+        return expect(done(), "timed out waiting for " + what)
+    }
+
     function nameOf(i) {
         return "f" + (i < 10 ? "00" : (i < 100 ? "0" : "")) + i + ".md"
     }
 
     function makeFolder() {
         documents.createFolder("DragSelect")
-        tools.pump(500)
+        waitFor(function () { return documents.indexOf(base.replace(/\/$/, "")) >= 0 }, "the folder")
+        var installed = 0
         for (var i = 0; i < files; ++i)
-            tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + nameOf(i))
+            installed += tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + nameOf(i)) ? 1 : 0
+        expect(installed === files, "fixtures installed: " + installed)
     }
 
     function child(pred) {
@@ -111,7 +120,12 @@ ApplicationWindow {
 
     function release() {
         tools.mouse(flick(), "release", 0, 0)
-        tools.pump(50)
+    }
+
+    // Grid only: the row of the held cell says so.
+    function hold(index) {
+        press(index)
+        return waitFor(function () { var c = cell(index); return c && c.parent.holding === true }, "item " + index + " held")
     }
 
     function checkHoldAndDrag() {
@@ -119,8 +133,7 @@ ApplicationWindow {
         expect(view.gridMode && grid.columns === 3, "a grid of 3 per row")
         expect(!view.selecting, "not selecting at first")
         press(2)
-        tools.pump(1200)
-        expect(view.selecting, "holding an item starts selection")
+        waitFor(function () { return view.selecting }, "holding an item to start selection")
         same(selected(), [2], "holding an item selects it")
         moveTo(3)
         same(selected(), [2, 3], "moving on selects the next item")
@@ -133,13 +146,11 @@ ApplicationWindow {
         release()
         same(selected(), [0, 1, 2], "letting go keeps the range")
         expect(view.selecting, "still selecting")
-        press(9)
-        tools.pump(1200)
+        hold(9)
         moveTo(10)
         release()
         same(selected(), [0, 1, 2, 9, 10], "a second range adds to the selection")
-        press(1)
-        tools.pump(1200)
+        hold(1)
         moveTo(0)
         release()
         same(selected(), [2, 9, 10], "a drag started on a selected item deselects")
@@ -150,8 +161,7 @@ ApplicationWindow {
         var grid = flick()
         grid.contentY = grid.originY
         var held = 4
-        press(held)
-        tools.pump(1200)
+        hold(held)
         var anchor = cell(held)
         var y = grid.height - panelHeight() - 4
         tools.mouse(anchor, "move", anchor.width / 2, anchor.height / 2 + 10)
@@ -170,8 +180,8 @@ ApplicationWindow {
         var middle = grid.itemIndexAt(grid.width / 2, grid.contentY + grid.height / 3)
         p = anchor.mapFromItem(grid, grid.width / 2, grid.height / 3)
         tools.mouse(anchor, "move", p.x, p.y)
-        tools.pump(100)
-        same(selected(), range(held, middle), "the held item still follows the finger")
+        waitFor(function () { return String(selected()) === String(range(held, middle)) },
+                "the held item to follow the finger: " + JSON.stringify(selected()) + " for " + held + "-" + middle)
         release()
         view.endSelection()
         grid.contentY = grid.originY
@@ -192,19 +202,17 @@ ApplicationWindow {
 
     function checkList() {
         App.setSetting("view_mode", JSON.stringify("list"))
-        tools.pump(300)
-        expect(!view.gridMode, "list view")
+        waitFor(function () { return !view.gridMode }, "list view")
         press(1)
-        tools.pump(1200)
+        waitFor(function () { return cell(1).menuOpen }, "holding a row to open its menu")
         release()
         expect(!view.selecting && selected().length === 0, "outside selection holding a row selects nothing")
         expect(cell(1).menuOpen, "it opens the row's menu")
         cell(1).closeMenu()
-        tools.pump(500)
+        waitFor(function () { return !cell(1).menuOpen }, "the menu to close")
         view.startSelection()
         press(1)
-        tools.pump(1200)
-        same(selected(), [1], "while selecting, holding a row selects it")
+        waitFor(function () { return String(selected()) === "1" }, "while selecting, holding a row to select it")
         moveTo(3)
         same(selected(), [1, 2, 3], "and a drag selects the rows on")
         release()
@@ -215,14 +223,14 @@ ApplicationWindow {
         makeFolder()
         App.setSetting("view_mode", JSON.stringify("grid"))
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        tools.pump(800)
-        if (expect(view.model.count === files, "the folder lists its files: " + view.model.count)) {
+        if (waitFor(function () { return view && !view.model.loading && view.model.count === files }, "the folder's files")) {
             checkHoldAndDrag()
             checkEdgeScroll()
             checkReveal()
             checkList()
         }
         App.setSetting("view_mode", JSON.stringify("list"))
+        reachedEnd = true
     }
 
     Component {

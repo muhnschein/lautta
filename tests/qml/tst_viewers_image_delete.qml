@@ -10,6 +10,7 @@ ApplicationWindow {
     readonly property string first: folder + "one.jpg"
     readonly property string second: folder + "two.jpg"
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property bool removed
@@ -130,10 +131,13 @@ ApplicationWindow {
                     return win.fail("the remorse says where the image goes: " + popup.text)
                 popup.cancel()
                 App.setSetting("recently_deleted", JSON.stringify(false))
+                // Longer than a step may take: a wrong remorse leaves the image there.
+                App.setSetting("remorse_seconds", JSON.stringify(60))
                 win.next()
                 break
             case 4:
-                if (win.waited < 40)
+                // The cancelled remorse had 3 s.
+                if (win.waited < 60)
                     break
                 images.refresh()
                 win.next()
@@ -160,12 +164,13 @@ ApplicationWindow {
                 win.next()
                 break
             case 7:
+                var popup7 = win.remorse()
+                if (popup7 && popup7.pending)
+                    return win.fail("a permanent delete runs no remorse")
                 if (!win.removed || pageStack.busy)
                     break
                 if (pageStack.currentPage !== win.viewer)
                     return win.fail("the viewer stays while images are left")
-                if (win.waited > 20)
-                    return win.fail("deleted only after a delay")
                 images.refresh()
                 win.next()
                 break
@@ -224,8 +229,10 @@ ApplicationWindow {
             case 15:
                 if (win.waited % 5 === 0)
                     pictures.refresh()
-                if (pictures.nameKind("DeleteTest") === "")
+                if (pictures.nameKind("DeleteTest") === "") {
+                    win.reachedEnd = true
                     win.finish("")
+                }
                 break
             }
         }

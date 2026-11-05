@@ -7,6 +7,7 @@ ApplicationWindow {
     id: win
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property int planId: -1
@@ -41,9 +42,10 @@ ApplicationWindow {
             win.summary = JSON.parse(summaryJson)
         }
         onStarted: {
-            if (win.step === 3)
+            if (win.step === 3) {
+                win.reachedEnd = true
                 win.finish()
-            else
+            } else
                 win.fail("started in step " + win.step)
         }
         onFailed: win.fail("the plan did not start: " + kind + " " + message)

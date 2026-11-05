@@ -5,8 +5,12 @@ import Lautta 1.0
 import "../../qml/components/browse"
 
 ApplicationWindow {
+    id: test
+    property bool reachedEnd
+
     initialPage: Component {
         ServerAttentionPage {
+            Component.onCompleted: test.reachedEnd = true
             locationId: "nv-account:1"
             serverName: "NAS"
             attention: "server-identity-changed"

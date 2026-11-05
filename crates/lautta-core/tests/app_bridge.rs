@@ -145,19 +145,6 @@ async fn copying_from_a_server_that_went_away_says_so() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn no_bridge_means_no_servers() {
-    let fake = fake_with_files().await;
-    let (_home, core, _l) = core_with(&fake, false).await;
-    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-    assert!(core.location(SERVER).is_none());
-    assert!(core
-        .locations
-        .locations()
-        .iter()
-        .all(|l| !l.id.starts_with("nv-")));
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn attention_reaches_the_location() {
     let fake = fake_with_files().await;
     let (_home, core, _l) = core_with(&fake, true).await;

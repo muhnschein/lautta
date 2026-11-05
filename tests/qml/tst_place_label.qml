@@ -9,6 +9,7 @@ ApplicationWindow {
     id: win
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int waited: 0
 
     Column {
@@ -122,6 +123,7 @@ ApplicationWindow {
             if (++win.waited < 3)
                 return
             win.check()
+            win.reachedEnd = true
             win.scenarioRunning = false
         }
     }

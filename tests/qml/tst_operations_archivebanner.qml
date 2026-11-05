@@ -4,6 +4,9 @@ import Sailfish.Silica 1.0
 import "../../qml/components"
 
 ApplicationWindow {
+    id: test
+    property bool reachedEnd
+
     initialPage: Component {
         Page {
             ArchiveBanner {
@@ -11,6 +14,7 @@ ApplicationWindow {
                 Component.onCompleted: {
                     if (visible)
                         console.error("the banner must be hidden outside archives")
+                    test.reachedEnd = true
                 }
             }
         }

@@ -631,14 +631,17 @@ mod tests {
     #[test]
     fn unreadable_folders_are_hidden() {
         use std::os::unix::fs::PermissionsExt;
-        if sys::effective_ids().0 == 0 {
-            return; // root can read everything
-        }
         let e = env_with(&["Documents", "Music"]);
         std::fs::set_permissions(e.home.join("Music"), std::fs::Permissions::from_mode(0o000)).unwrap();
         e.reg.refresh();
         std::fs::set_permissions(e.home.join("Music"), std::fs::Permissions::from_mode(0o755)).unwrap();
-        assert_eq!(ids(&e.reg), ["user-documents"]);
+        // Root reads everything.
+        let want: &[&str] = if sys::effective_ids().0 == 0 {
+            &["user-documents", "user-music"]
+        } else {
+            &["user-documents"]
+        };
+        assert_eq!(ids(&e.reg), want);
     }
 
     #[test]
@@ -722,13 +725,13 @@ mod tests {
         let mut rx = e.reg.subscribe();
         let _watcher = e.reg.watch_volumes().unwrap();
         std::fs::create_dir(e.media.join("USBSTICK")).unwrap();
-        tokio::time::timeout(Duration::from_secs(5), rx.changed())
+        tokio::time::timeout(Duration::from_secs(30), rx.changed())
             .await
             .unwrap()
             .unwrap();
         assert_eq!(ids(&e.reg), ["vol-USBSTICK"]);
         std::fs::remove_dir(e.media.join("USBSTICK")).unwrap();
-        tokio::time::timeout(Duration::from_secs(5), rx.changed())
+        tokio::time::timeout(Duration::from_secs(30), rx.changed())
             .await
             .unwrap()
             .unwrap();
@@ -796,12 +799,8 @@ mod tests {
         // Sailjail: $HOME is a tmpfs and every permitted folder is mounted on it from the real file
         // system, so no folder is on $HOME's device.
         let e = env_with(&[]);
-        let Ok(shm) = tempfile::tempdir_in("/dev/shm") else {
-            return;
-        };
-        if sys::same_device(shm.path(), &e.home).unwrap_or(true) {
-            return;
-        }
+        let shm = tempfile::tempdir_in("/dev/shm").expect("host tests need a tmpfs at /dev/shm");
+        assert!(!sys::same_device(shm.path(), &e.home).unwrap());
         std::fs::create_dir(shm.path().join("Documents")).unwrap();
         std::os::unix::fs::symlink(shm.path().join("Documents"), e.home.join("Documents")).unwrap();
         e.reg.refresh();

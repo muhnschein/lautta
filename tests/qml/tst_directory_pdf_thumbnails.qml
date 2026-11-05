@@ -6,6 +6,7 @@ import "../../qml/components/directory"
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-documents/PdfThumbnails/"
     property string archiveRoot
@@ -68,7 +69,8 @@ ApplicationWindow {
 
     function push(uri) {
         pageStack.push(pageComponent, { "folderUri": uri }, PageStackAction.Immediate)
-        tools.pump(500)
+        expect(until(function () { var v = pageStack.currentPage.view; return v && !v.model.loading && v.model.count > 0 }),
+               "the folder lists " + uri)
         return pageStack.currentPage.view
     }
 
@@ -110,9 +112,9 @@ ApplicationWindow {
 
     Component.onCompleted: {
         documents.createFolder("PdfThumbnails")
-        tools.pump(500)
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/two-pages.pdf"), base + "readable.pdf")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/secret.pdf"), base + "secret.pdf")
+        expect(until(function () { return documents.indexOf(base.replace(/\/$/, "")) >= 0 }), "the folder is made")
+        expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/two-pages.pdf"), base + "readable.pdf")
+               && tools.installFixture(Qt.resolvedUrl("host/fixtures/secret.pdf"), base + "secret.pdf"), "fixtures installed")
         App.setSetting("view_mode", JSON.stringify("grid"))
         App.setSetting("thumbnails_remote", JSON.stringify(true))
         var view = push(base)
@@ -127,12 +129,12 @@ ApplicationWindow {
         checkArchive()
 
         App.setSetting("thumbnails_local", JSON.stringify(false))
-        tools.pump(300)
-        expect(findAll(view, function (x) { return x.thumbnailFailed !== undefined && x.category === "pdf" && x.thumbnailSource.length > 0 }, []).length === 0,
+        expect(until(function () { return findAll(view, function (x) { return x.thumbnailFailed !== undefined && x.category === "pdf" && x.thumbnailSource.length > 0 }, []).length === 0 }),
                "without thumbnails no PDF asks for one")
 
         App.setSetting("thumbnails_local", JSON.stringify(true))
         App.setSetting("view_mode", JSON.stringify("list"))
+        reachedEnd = true
     }
 
     Component {

@@ -480,7 +480,9 @@ async fn large_entries_go_to_an_unlinked_temp_file() {
     assert_eq!(h.read_at(size as u64 - 1, 10).await.unwrap(), [9]);
     assert!(h.read_at(size as u64, 10).await.unwrap().is_empty());
     assert_eq!(
-        std::fs::read_dir(&cache).map(|d| d.count()).unwrap_or(0),
+        std::fs::read_dir(&cache)
+            .expect("the entry went through the cache")
+            .count(),
         0,
         "no file left behind"
     );
