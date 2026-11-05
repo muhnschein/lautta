@@ -275,7 +275,8 @@ impl MediaSource {
         self.duration = duration;
         self.state = qstr(state);
         self.playing = state == "playing";
-        if code != 0 {
+        // Until this source's media is attached, the player's error is the previous source's.
+        if code != 0 && self.opened {
             changed |= self.player_failed(code);
         }
         if self.downloading {
