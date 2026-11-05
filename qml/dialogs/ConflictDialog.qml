@@ -60,7 +60,7 @@ Dialog {
         //% "Replace"
         list.push({ "id": "Replace", "title": qsTrId("lautta-conflict-replace"), "hint": "" })
         var newer = c.src_mtime_ms > c.dst_mtime_ms
-                    //% "Copying is newer"
+                    //% "The incoming item is newer"
                     ? qsTrId("lautta-conflict-src-newer")
                     //% "The existing item is newer"
                     : qsTrId("lautta-conflict-dst-newer")
@@ -198,7 +198,7 @@ Dialog {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeExtraSmall
-                //% "Merge is offered for folders."
+                //% "Merge is only offered for folders."
                 text: qsTrId("lautta-conflict-merge-folders")
             }
             TextSwitch {

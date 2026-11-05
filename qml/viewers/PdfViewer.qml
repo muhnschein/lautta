@@ -362,7 +362,7 @@ Page {
                 enabled: doc.problem !== "" || doc.errorKind !== ""
                 text: doc.problem !== ""
                       ? PdfText.problem(doc.problem)
-                      : ErrorText.message(doc.errorKind, { "item": page.fileName, "location": App.locationName(page.uri) })
+                      : ErrorText.message(doc.errorKind, { "item": page.fileName, "location": App.locationName(page.uri), "open": true })
                 //% "Pull down to open it in another app."
                 hintText: doc.problem !== "" ? qsTrId("lautta-viewers-pdf-pull-hint") : ""
             }

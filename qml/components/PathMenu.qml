@@ -91,7 +91,7 @@ Item {
                     { "id": "copy", "icon": "image://theme/icon-m-link", "text": qsTrId("lautta-dir-path-copy-address") },
                     //% "Edit path"
                     { "id": "edit", "icon": "image://theme/icon-m-edit", "text": qsTrId("lautta-dir-path-edit") },
-                    //% "Favourite"
+                    //% "Add to favourites"
                     { "id": "favourite", "icon": "image://theme/icon-m-favorite", "text": qsTrId("lautta-dir-path-favourite") }
                 ]
                 onTriggered: {

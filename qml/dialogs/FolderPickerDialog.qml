@@ -15,6 +15,14 @@ Dialog {
     property string currentUri: startUri
     readonly property string selectedUri: currentUri
 
+    function rootStatus(status, attention, name) {
+        if (attention === "auth-failed")
+            return qsTrId("lautta-attention-auth-title")
+        if (attention === "server-identity-changed")
+            return qsTrId("lautta-attention-identity-title")
+        return status === "offline" ? ErrorText.message("NetworkUnreachable", { "location": name }) : ""
+    }
+
     allowedOrientations: Orientation.All
     canAccept: currentUri.length > 0 && !folders.loading && folders.errorKind === ""
                && (!requireWrite || folders.writable)
@@ -123,9 +131,9 @@ Dialog {
                                 color: highlighted ? Theme.highlightColor : Theme.primaryColor
                             }
                             Label {
-                                visible: model.status !== "ready"
+                                visible: text.length > 0
                                 width: parent.width
-                                text: model.attention.length > 0 ? model.attention : ErrorText.message("NetworkUnreachable", { "location": model.name })
+                                text: dialog.rootStatus(model.status, model.attention, model.name)
                                 font.pixelSize: Theme.fontSizeExtraSmall
                                 color: Theme.secondaryColor
                                 truncationMode: TruncationMode.Fade
@@ -183,7 +191,7 @@ Dialog {
                      && folders.errorKind === ""
             //% "No folders"
             text: qsTrId("lautta-dir-picker-empty")
-            //% "You can use this folder or pull down to make one"
+            //% "Use this folder, or pull down to create one"
             hintText: qsTrId("lautta-dir-picker-empty-hint")
         }
 

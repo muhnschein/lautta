@@ -69,7 +69,7 @@ Dialog {
             PasswordField {
                 id: field
                 errorHighlight: dialog.wrong && text.length === 0
-                //% "Wrong password, try again"
+                //% "Wrong password. Try again."
                 label: dialog.wrong ? qsTrId("lautta-viewers-pdf-wrong-password")
                                     //% "Password"
                                     : qsTrId("lautta-viewers-pdf-password")
