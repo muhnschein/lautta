@@ -308,6 +308,9 @@ async fn stream_to(
         return Ok(());
     }
     let plan = &job.plan;
+    if let Some(fd) = env.src.open_local(&plan.src.path).await? {
+        return upload_direct(env, job, write_path, offset, total, mode, src_entry, fd).await;
+    }
     let dir = env.scratch_dir.clone();
     let scratch = blocking(move || {
         std::fs::create_dir_all(&dir)?; // NOSONAR: runs on the blocking pool
@@ -326,15 +329,8 @@ async fn stream_to(
             "the source changed or ended early while reading",
         ));
     }
-    let disposition = if offset > 0 {
-        Disposition::Resume
-    } else if mode.replace && !write_path_is_temp(job, write_path) {
-        Disposition::Truncate
-    } else {
-        Disposition::Create
-    };
     let opts = WriteOptions {
-        disposition,
+        disposition: disposition(job, write_path, offset, mode),
         offset,
         size: Some(len),
         modified: wanted_mtime(env, plan, src_entry),
@@ -343,6 +339,48 @@ async fn stream_to(
     env.dst
         .upload_from(OwnedFd::from(scratch), write_path, opts, up)
         .await
+}
+
+/// Local source: its own fd goes to the destination, no scratch copy.
+#[allow(clippy::too_many_arguments)]
+async fn upload_direct(
+    env: &ItemEnv,
+    job: &ItemJob,
+    write_path: &VPath,
+    offset: u64,
+    total: Option<u64>,
+    mode: WriteMode,
+    src_entry: &Entry,
+    fd: OwnedFd,
+) -> Result<()> {
+    let file = File::from(fd);
+    let len = file_len(&file).await?;
+    if total.is_some_and(|t| t != len) {
+        return Err(Error::new(
+            ErrorKind::Io,
+            "the source changed or ended early while reading",
+        ));
+    }
+    let opts = WriteOptions {
+        disposition: disposition(job, write_path, offset, mode),
+        offset,
+        size: Some(len),
+        modified: wanted_mtime(env, &job.plan, src_entry),
+        mode: wanted_mode(env, src_entry),
+    };
+    env.dst
+        .upload_from(OwnedFd::from(file), write_path, opts, env.progress.clone())
+        .await
+}
+
+fn disposition(job: &ItemJob, write_path: &VPath, offset: u64, mode: WriteMode) -> Disposition {
+    if offset > 0 {
+        Disposition::Resume
+    } else if mode.replace && !write_path_is_temp(job, write_path) {
+        Disposition::Truncate
+    } else {
+        Disposition::Create
+    }
 }
 
 fn write_path_is_temp(job: &ItemJob, write_path: &VPath) -> bool {
@@ -1126,5 +1164,23 @@ mod tests {
         let err = run_item(&e, &j).await.unwrap_err();
         assert_eq!(err.kind, ErrorKind::PermissionDenied);
         assert!(dst.paths().is_empty(), "{:?}", dst.paths());
+    }
+
+    #[test]
+    fn disposition_truncates_only_a_replaced_target_written_in_place() {
+        let j = job(item("f", "out/f", Kind::File, 5));
+        let temp = vp("out").join(&j.temp_name).unwrap();
+        let replace = WriteMode {
+            replace: true,
+            ..WriteMode::default()
+        };
+        let target = vp("out/f");
+        assert_eq!(disposition(&j, &target, 3, replace), Disposition::Resume);
+        assert_eq!(disposition(&j, &target, 0, replace), Disposition::Truncate);
+        assert_eq!(disposition(&j, &temp, 0, replace), Disposition::Create);
+        assert_eq!(
+            disposition(&j, &target, 0, WriteMode::default()),
+            Disposition::Create
+        );
     }
 }

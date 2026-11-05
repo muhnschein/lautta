@@ -35,6 +35,14 @@ Item {
     ViewerTools { id: tools }
 
     property int changes
+    // Name bindings evaluated: a preview must not make a row re-read its other roles.
+    // Object, not int: a counter property the binding reads would loop.
+    readonly property var nameReads: ({ "n": 0 })
+
+    function read(value) {
+        root.nameReads.n++
+        return value
+    }
 
     DirectoryModel { id: downloads; uri: "lautta://user-downloads/" }
     DirectoryModel { id: thumbs }
@@ -43,7 +51,7 @@ Item {
         id: rows
         model: thumbs
         delegate: Item {
-            readonly property string nm: name
+            readonly property string nm: root.read(name)
             readonly property bool has: textThumb
             readonly property string text: textPreview
             readonly property bool mono: textPreviewMono
@@ -80,6 +88,7 @@ Item {
 
     function testMade() {
         var before = root.changes
+        var reads = root.nameReads.n
         ask("notes.txt")
         ask("run.sh")
         ask("blob.txt")
@@ -87,6 +96,7 @@ Item {
         ask("Sub")
         waitFor(function () { return root.changes - before >= 3 }, 3000)
         check(root.changes - before === 3, "three made: " + (root.changes - before))
+        check(root.nameReads.n === reads, "a preview leaves names unread: " + (root.nameReads.n - reads))
         check(row("notes.txt").text === "line one\nline two", "first lines, CRLF tidied: " + JSON.stringify(row("notes.txt").text))
         check(row("run.sh").text.indexOf("#!/bin/sh\n") === 0, "a script's first line: " + row("run.sh").text)
         check(row("blob.txt").text === "", "binary data has none")

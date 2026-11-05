@@ -96,12 +96,12 @@ fn digit_run(s: &[u8], start: usize) -> (&[u8], usize) {
 }
 
 fn cmp_digit_runs(a: &[u8], b: &[u8]) -> Ordering {
-    let strip = |s: &[u8]| {
+    fn strip(s: &[u8]) -> &[u8] {
         let zeros = s.iter().take_while(|b| **b == b'0').count();
-        s[zeros..].to_vec()
-    };
+        &s[zeros..]
+    }
     let (a, b) = (strip(a), strip(b));
-    a.len().cmp(&b.len()).then_with(|| a.cmp(&b))
+    a.len().cmp(&b.len()).then_with(|| a.cmp(b))
 }
 
 /// Per-entry data derived once and reused across re-sorts (keeps 20 000-entry
@@ -114,6 +114,15 @@ pub struct SortRecord {
 }
 
 impl SortRecord {
+    /// Placeholder left behind when a record moves to a new listing.
+    pub fn empty() -> SortRecord {
+        SortRecord {
+            name_key: String::new(),
+            category: FileCategory::Other,
+            extension: String::new(),
+        }
+    }
+
     pub fn for_entry(e: &Entry) -> SortRecord {
         SortRecord {
             name_key: fold_name(&e.name),

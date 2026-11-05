@@ -14,7 +14,9 @@ use percent_encoding::percent_decode_str;
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
-use tokio::sync::mpsc::{self, UnboundedSender};
+use std::time::Duration;
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::time::Instant;
 
 #[derive(Debug)]
 pub enum ListEvent {
@@ -30,6 +32,46 @@ pub struct PathStep {
 }
 
 const BATCH_QUEUE: usize = 8;
+
+/// Hands `rx`'s events to `emit`: first batch at once, later batches joined so at most one
+/// reaches `emit` per `every`. Each batch costs the GUI a merge and a row insert signal.
+pub async fn forward_coalesced(
+    mut rx: UnboundedReceiver<ListEvent>,
+    every: Duration,
+    mut emit: impl FnMut(ListEvent),
+) {
+    let mut next_flush = Instant::now();
+    let mut held: Option<Vec<Entry>> = None;
+    loop {
+        let ev = match held {
+            None => rx.recv().await,
+            Some(_) => match tokio::time::timeout_at(next_flush, rx.recv()).await {
+                Ok(ev) => ev,
+                Err(_) => {
+                    emit(ListEvent::Batch(held.take().unwrap_or_default()));
+                    next_flush = Instant::now() + every;
+                    continue;
+                }
+            },
+        };
+        match ev {
+            Some(ListEvent::Batch(batch)) if held.is_none() && Instant::now() >= next_flush => {
+                emit(ListEvent::Batch(batch));
+                next_flush = Instant::now() + every;
+            }
+            Some(ListEvent::Batch(batch)) => held.get_or_insert_with(Vec::new).extend(batch),
+            other => {
+                if let Some(batch) = held.take() {
+                    emit(ListEvent::Batch(batch));
+                }
+                match other {
+                    Some(ev) => emit(ev),
+                    None => return,
+                }
+            }
+        }
+    }
+}
 
 impl Core {
     pub async fn list_stream(&self, dir: &Uri, use_cache: bool, out: UnboundedSender<ListEvent>) {

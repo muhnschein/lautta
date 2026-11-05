@@ -6,7 +6,6 @@ import "../components"
 import "../components/viewers"
 import "../components/ErrorText.js" as ErrorText
 import "../components/viewers/SyntaxColours.js" as SyntaxColours
-import "../components/viewers/TextRows.js" as TextRows
 
 Page {
     id: page
@@ -14,9 +13,8 @@ Page {
     property string uri
 
     readonly property string fileName: App.nameOf(uri)
-    readonly property var layout: doc.loaded ? TextRows.rows(doc.text) : TextRows.empty
     readonly property real charWidth: metrics.advanceWidth
-    readonly property real gutter: Math.max(2, String(layout.lines).length) * charWidth + Theme.paddingLarge
+    readonly property real gutter: Math.max(2, String(doc.lineCount).length) * charWidth + Theme.paddingLarge
     readonly property string colours: SyntaxColours.palette(Theme)
 
     allowedOrientations: Orientation.All
@@ -57,7 +55,7 @@ Page {
         id: view
 
         anchors.fill: parent
-        model: page.layout.rows
+        model: doc.rowCount
         clip: true
         // Never sideways: sideways-flickable list keeps swipe-back from page stack.
         flickableDirection: Flickable.VerticalFlick
@@ -94,7 +92,7 @@ Page {
                 x: Theme.paddingSmall
                 width: page.gutter - Theme.paddingLarge
                 horizontalAlignment: Text.AlignRight
-                text: modelData.number > 0 ? modelData.number : ""
+                text: doc.rowNumber(index) || ""
                 font.family: "monospace"
                 font.pixelSize: Theme.fontSizeExtraSmall
                 color: Theme.secondaryColor
@@ -107,7 +105,7 @@ Page {
                 width: parent.width - page.gutter - Theme.horizontalPageMargin
                 // Row characters come back escaped from core with colours: file never read as
                 // markup.
-                text: doc.styledRow(modelData.text, modelData.line, modelData.start, doc.highlighted ? page.colours : "")
+                text: doc.styledRow(index, doc.highlighted ? page.colours : "")
                 font.family: "monospace"
                 font.pixelSize: Theme.fontSizeExtraSmall
                 wrapMode: Text.WrapAtWordBoundaryOrAnywhere

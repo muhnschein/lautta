@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Extract all on a compressed tar archive (.tar.gz, .tar.bz2, .tar.xz) is many times faster: the archive is unpacked once, not once per file. A 1,000-file backup went from over 30 seconds to under 2 on a OnePlus 6.
+- Large text files open and close with shorter stalls, and long folders open sooner.
+- Select all and clearing a selection in a large folder respond faster.
+- The app starts a little sooner.
+- Pages that show transfers refresh four times a second instead of on every file, which saves battery during long copies.
 - Servers show a server icon instead of a laptop.
 - Browse rows have even heights. Servers, memory cards and USB drives show their state as a glowing dot. It pulses while a server connects or a drive mounts or unmounts, and turns red or orange on failure or warning.
 - Browse shows no item counts any more.

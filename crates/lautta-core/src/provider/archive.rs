@@ -34,7 +34,7 @@ use std::os::fd::OwnedFd;
 use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use tokio::sync::mpsc;
 
@@ -65,7 +65,8 @@ enum Loc {
     Implicit,
     Zip(zipdir::ZipLoc),
     TarAt(u64),
-    TarSeq(usize),
+    /// Data offset in the decompressed stream of a compressed tar.
+    TarStream(u64),
     SevenZ(String),
 }
 
@@ -303,6 +304,7 @@ struct Inner {
     blocks: Option<Arc<BlockSource>>,
     cache: Option<CacheFile>,
     cache_dir: PathBuf,
+    spill: Mutex<Option<tarfmt::Spill>>,
 }
 
 fn join_err(err: tokio::task::JoinError) -> Error {
@@ -358,12 +360,28 @@ impl Inner {
                     Err(Error::new(ErrorKind::ProtocolError, "tar entry is truncated"))
                 }
             }
-            Loc::TarSeq(seq) => {
-                let comp = match self.format {
-                    ArchiveFormat::Tar(c) => c,
-                    _ => Compression::None,
+            Loc::TarStream(offset) => {
+                let (file, at) = {
+                    let mut spill = self
+                        .spill
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if spill.is_none() {
+                        let comp = match self.format {
+                            ArchiveFormat::Tar(c) => c,
+                            _ => Compression::None,
+                        };
+                        *spill = Some(tarfmt::Spill::new(self.cache_file()?, comp, &self.cache_dir)?);
+                    }
+                    let spill = spill.as_mut().expect("spill just set");
+                    spill.fetch(*offset, node.size, || self.cache_file())?
                 };
-                tarfmt::copy_seq(self.cache_file()?, comp, *seq, out)
+                let copied = io::copy(&mut FileRange::new(file, at, node.size), out).map_err(from_io)?;
+                if copied == node.size {
+                    Ok(())
+                } else {
+                    Err(Error::new(ErrorKind::ProtocolError, "tar entry is truncated"))
+                }
             }
             Loc::SevenZ(name) => sevenz::copy_entry(self.cache_file()?, name, out),
         }
@@ -530,6 +548,7 @@ async fn index_ranged(format: ArchiveFormat, src: Arc<BlockSource>, cache_dir: P
         blocks: Some(src),
         cache: None,
         cache_dir,
+        spill: Mutex::new(None),
     })
 }
 
@@ -552,6 +571,7 @@ async fn index_cached(format: ArchiveFormat, cache: CacheFile, cache_dir: PathBu
         blocks: None,
         cache: Some(cache),
         cache_dir,
+        spill: Mutex::new(None),
     })
 }
 
@@ -699,6 +719,32 @@ impl ReadHandle for TempFileHandle {
         })
         .await
         .map_err(join_err)?
+    }
+}
+
+/// `len` bytes of `file` from `at`, by positioned reads.
+struct FileRange {
+    file: Arc<File>,
+    at: u64,
+    left: u64,
+}
+
+impl FileRange {
+    fn new(file: Arc<File>, at: u64, len: u64) -> FileRange {
+        FileRange { file, at, left: len }
+    }
+}
+
+impl Read for FileRange {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let want = usize::try_from(self.left).unwrap_or(usize::MAX).min(buf.len());
+        if want == 0 {
+            return Ok(0);
+        }
+        let n = self.file.read_at(&mut buf[..want], self.at)?;
+        self.at += n as u64;
+        self.left -= n as u64;
+        Ok(n)
     }
 }
 

@@ -585,6 +585,19 @@ impl Provider for LocalProvider {
         .await
     }
 
+    async fn open_local(&self, path: &VPath) -> Result<Option<OwnedFd>> {
+        let real = self.real_path(path);
+        blocking(move || {
+            let file = File::open(real)?; // NOSONAR: runs on the blocking pool
+            let meta = file.metadata()?; // NOSONAR: runs on the blocking pool
+            if !meta.is_file() {
+                return Err(Error::kind(ErrorKind::IsADirectory));
+            }
+            Ok(Some(OwnedFd::from(file)))
+        })
+        .await
+    }
+
     async fn upload_from(
         &self,
         src: OwnedFd,
