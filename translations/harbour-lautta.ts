@@ -2686,6 +2686,14 @@ Sauna wood: 2 sacks
 Cabin keys from Anni</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-err-not-playable">
+        <source>Can&apos;t play %1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-not-playable-unnamed">
+        <source>Can&apos;t play this file.</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message id="lautta-err-permission-open">
         <source>You don&apos;t have permission to open %1.</source>
         <translation type="unfinished"></translation>
@@ -2697,6 +2705,13 @@ Cabin keys from Anni</source>
     <message id="lautta-xfr-note-pending-manual-body">
         <source>Resume them in Activity when you open Lautta.</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-cover-stopped" numerus="yes">
+        <source>%n tasks stopped</source>
+        <translation>
+            <numerusform>%n task stopped</numerusform>
+            <numerusform>%n tasks stopped</numerusform>
+        </translation>
     </message>
     <message id="lautta-xfr-item-moving">
         <source>Moving</source>
@@ -2713,13 +2728,6 @@ Cabin keys from Anni</source>
     <message id="lautta-xfr-item-extracting">
         <source>Extracting</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-xfr-cover-stopped" numerus="yes">
-        <source>%n tasks stopped</source>
-        <translation>
-            <numerusform>%n task stopped</numerusform>
-            <numerusform>%n tasks stopped</numerusform>
-        </translation>
     </message>
 </context>
 </TS>

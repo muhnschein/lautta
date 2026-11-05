@@ -23,8 +23,8 @@ ApplicationWindow {
             console.error("FAILED: fixture")
         var page = pageStack.push(pageComponent, {}, PageStackAction.Immediate)
         waitFor(function () { return page.errorKind !== "" }, "no video in the file")
-        if (page.statusText.length === 0 || page.playing)
-            console.error("FAILED: the error is said, nothing plays: '" + page.statusText + "'")
+        if ((page.statusText !== "lautta-err-not-playable" && page.statusText !== "Can't play clip.mp4.") || page.playing)
+            console.error("FAILED: the file is named as unplayable, nothing plays: '" + page.statusText + "'")
         reachedEnd = true
     }
 

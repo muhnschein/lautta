@@ -32,6 +32,9 @@ Item {
         idle.pause()
         idle.stop()
         check(!idle.playing, "controls on an idle source are harmless")
+        check(idle.playerErrorKind(0) === "", "no error, no kind")
+        check(idle.playerErrorKind(2) === "NotPlayable", "unplayable file: " + idle.playerErrorKind(2))
+        check(idle.playerErrorKind(4) === "PermissionDenied", "access denied: " + idle.playerErrorKind(4))
 
         streaming.uri = "lautta://user-documents/a.mp3"
         check(streaming.mediaObject !== null && streaming.mediaObject !== undefined, "mediaObject is the player")
@@ -39,7 +42,7 @@ Item {
         streaming.play()
         until(function() { return !streaming.loading && streaming.errorKind !== "" })
         check(!streaming.loading, "source opened")
-        check(streaming.errorKind === "Unsupported", "no backend is reported: '" + streaming.errorKind + "'")
+        check(streaming.errorKind === "NotPlayable", "no backend is reported: '" + streaming.errorKind + "'")
         check(!streaming.playing && streaming.state === "stopped", "not playing")
         streaming.uri = "lautta://user-documents/missing.mp3"
         until(function() { return !streaming.loading && streaming.errorKind !== "" })
