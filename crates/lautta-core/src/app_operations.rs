@@ -379,7 +379,14 @@ impl Core {
     pub async fn plan_summary(&self, plan: &Plan) -> PlanSummary {
         let dest = &plan.destination;
         let free_bytes = match self.provider(&dest.location) {
-            Ok(p) => p.space(&dest.path).await.ok().map(|s| s.free),
+            // Extract's new folder is made on start: until then, its parent's space.
+            Ok(p) => match p.space(&dest.path).await {
+                Ok(s) => Some(s.free),
+                Err(_) => match dest.path.parent() {
+                    Some(up) => p.space(&up).await.ok().map(|s| s.free),
+                    None => None,
+                },
+            },
             Err(_) => None,
         };
         let has_modes = |location: &str| {
@@ -526,11 +533,21 @@ impl Core {
             .map(|e| root.join(&e.name))
             .collect::<Result<Vec<_>>>()?;
         let target = self.provider(&dest.location)?;
-        target.make_dir(&dest.path, false).await?;
+        let made = match target.make_dir(&dest.path, true).await {
+            Ok(()) => true,
+            Err(e) if e.kind == ErrorKind::AlreadyExists => false,
+            Err(e) => return Err(e),
+        };
+        let planned = self.plan(OperationKind::Copy, sources, dest.clone()).await;
+        // Planner needs the folder; start_plan makes it again, so an unstarted summary leaves none.
+        // Best effort: nothing is in it yet.
+        if made {
+            let _ = target.remove_dir(&dest.path).await;
+        }
         if let Some(parent) = dest.parent() {
             self.invalidate(&parent);
         }
-        let mut plan = self.plan(OperationKind::Copy, sources, dest.clone()).await?;
+        let mut plan = planned?;
         plan.kind = OperationKind::Extract;
         if plan.needs_summary {
             return Ok(Started::NeedsSummary(Box::new(plan)));
