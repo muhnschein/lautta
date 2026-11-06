@@ -4,17 +4,21 @@
 
 use crate::app::Core;
 use futures::StreamExt;
+use std::future::Future;
 use std::sync::{Arc, Weak};
 use zbus::message::Type;
 use zbus::{Connection, MatchRule, MessageStream};
 
 const MCE: &str = "com.nokia.mce";
 
-/// Off when the system bus or mce is missing (host, SDK).
-pub(crate) fn spawn(core: &Arc<Core>) {
+/// `connect` gives the system bus. Off when it or mce is missing (host, SDK).
+pub fn spawn<F>(core: &Arc<Core>, connect: F)
+where
+    F: Future<Output = zbus::Result<Connection>> + Send + 'static,
+{
     let core = Arc::downgrade(core);
     tokio::spawn(async move {
-        let result = match Connection::system().await {
+        let result = match connect.await {
             Ok(conn) => follow_owned(conn, core).await,
             Err(e) => Err(e),
         };

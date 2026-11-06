@@ -1168,3 +1168,23 @@ async fn only_the_last_few_shown_images_are_kept() {
         "newest kept"
     );
 }
+
+#[tokio::test]
+async fn sizes_and_cache_only_requests_are_jobs_of_their_own() {
+    let h = home().await;
+    h.nas.add_file("p/a.jpg", &jpeg(1200, 600), 9_000);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let u = uri("lautta://nv-nas/p/a.jpg");
+    let gate = block_queue(previews.jobs());
+    let small = previews.request(h.core.clone(), u.clone(), 128);
+    let large = previews.request(h.core.clone(), u.clone(), 512);
+    let cached = previews.request_cached(h.core.clone(), u, 128);
+    gate.add_permits(2);
+    assert_eq!(
+        cached.rx.await.unwrap().unwrap_err().kind,
+        ErrorKind::NotFound,
+        "cache-only request does not wait for the one that reads"
+    );
+    assert_eq!(sized(&small.rx.await.unwrap().unwrap()), (128, 64));
+    assert_eq!(sized(&large.rx.await.unwrap().unwrap()), (512, 256));
+}

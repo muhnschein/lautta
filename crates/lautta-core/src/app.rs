@@ -168,7 +168,7 @@ impl Core {
         let core = Arc::new(core);
         if let Some(client) = client {
             spawn_bridge_sync(&core, client);
-            crate::powersave::spawn(&core);
+            crate::powersave::spawn(&core, zbus::Connection::system());
         }
         Ok(core)
     }

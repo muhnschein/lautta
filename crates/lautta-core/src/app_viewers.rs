@@ -31,6 +31,10 @@ use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 
 pub const MAX_FULL_IMAGE_BYTES: u64 = 100 * 1000 * 1000;
+
+fn too_large_to_show(bytes: u64) -> bool {
+    bytes > MAX_FULL_IMAGE_BYTES
+}
 pub const EXIF_HEAD_BYTES: u64 = 512 * 1024;
 pub const MIN_THUMB: u32 = 16;
 pub const MAX_THUMB: u32 = 1024;
@@ -287,8 +291,10 @@ impl Previews {
 
     fn request_as(self: &Arc<Self>, core: Arc<Core>, uri: Uri, size: u32, cached: bool) -> ThumbTicket {
         let size = thumb_bucket(size);
-        // Sizes are even: odd key is the cache-only job.
-        let job_key = thumb_key(&uri.to_string(), size + u32::from(cached), None, None);
+        let mut job_key = thumb_key(&uri.to_string(), size, None, None);
+        if cached {
+            job_key.push_str(":cached");
+        }
         let waiter = self.next_waiter.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
         lock(&self.waiters)
@@ -588,14 +594,14 @@ impl Core {
         let provider = self.provider(&uri.location)?;
         let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
         let size = handle.size();
-        if size.is_some_and(|s| s > MAX_FULL_IMAGE_BYTES) {
+        if size.is_some_and(too_large_to_show) {
             return Err(Error::new(ErrorKind::Unsupported, "image too large to show"));
         }
         if let Some(hit) = self.shown_images.get(uri, size) {
             return Ok(hit);
         }
         let bytes = crate::provider::read_all(handle.as_ref(), MAX_FULL_IMAGE_BYTES + 1).await?;
-        if bytes.len() as u64 > MAX_FULL_IMAGE_BYTES {
+        if too_large_to_show(bytes.len() as u64) {
             return Err(Error::new(ErrorKind::Unsupported, "image too large to show"));
         }
         let orientation = exif::orientation(&bytes);
@@ -777,6 +783,12 @@ mod tests {
         assert!(parse_thumb_id("lautta://nv-a/x.jpg").is_none());
         assert!(parse_thumb_id("lautta://nv-a/x.jpg?size=big").is_none());
         assert!(parse_thumb_id("http://x/y?size=3").is_none());
+    }
+
+    #[test]
+    fn images_up_to_the_limit_are_shown() {
+        assert!(!too_large_to_show(MAX_FULL_IMAGE_BYTES));
+        assert!(too_large_to_show(MAX_FULL_IMAGE_BYTES + 1));
     }
 
     #[test]

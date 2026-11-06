@@ -100,3 +100,15 @@ async fn without_mce_battery_saving_stays_off() {
     assert!(err.is_err());
     assert!(!core.power_save());
 }
+
+#[tokio::test]
+async fn the_app_follows_battery_saving_on_the_bus_it_is_given() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = AppPaths::new(dir.path());
+    let core = Core::open_with(paths.clone(), LocationRegistry::new(paths))
+        .await
+        .unwrap();
+    let (_mce, conn) = fake_mce(true).await;
+    lautta_core::powersave::spawn(&core, async { Ok(conn) });
+    until(&core, true).await;
+}
