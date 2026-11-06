@@ -26,6 +26,11 @@ PagedView {
         return App.isLocal(uri) ? App.localUrl(uri) : "image://lautta-file/" + uri
     }
 
+    // Server image's cached grid thumbnail while the file loads; local files decode fast.
+    function placeholderOf(uri) {
+        return App.isLocal(uri) ? "" : "image://lautta-thumb/" + uri + "?size=1024&cached=1"
+    }
+
     interactive: count > 1 && !zoomed && !held
 
     delegate: Loader {
@@ -56,6 +61,7 @@ PagedView {
                 }
 
                 source: slot.source
+                placeholder: slot.imageUri.length > 0 ? root.placeholderOf(slot.imageUri) : ""
                 active: slot.isCurrentItem
                 viewMoving: root.moving
             }

@@ -3,6 +3,7 @@
 ## Unreleased
 
 - A cancelled task no longer shows the bytes of the file it was copying when you cancelled it, since that partial file is deleted.
+- Server pictures: changing the grid size or turning the phone no longer downloads every picture again for its thumbnail. A server picture opens on its thumbnail at once and sharpens when the full picture arrives, and zooming in no longer downloads it a second time. Making a thumbnail of a large server photo takes about a sixth of the processor time it did. With battery saving on, thumbnails are made only from what a picture carries inside it, never by downloading the whole file.
 - Cancel in an Activity task's menu cancels the task again. Before, the countdown ran but the copy went on.
 - After you cancel a task, its unfinished files say "Cancelled" on the task page instead of "Copying" or "Queued".
 - A conflict notification goes away once its question is answered, or its task is canceled or ends.

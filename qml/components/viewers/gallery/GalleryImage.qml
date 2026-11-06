@@ -17,6 +17,7 @@ ZoomableFlickable {
     id: flickable
 
     property alias source: photo.source
+    property alias placeholder: placeholderImage.source
 
     property bool active: true
     readonly property bool _active: active || viewMoving
@@ -47,6 +48,20 @@ ZoomableFlickable {
 
     implicitContentWidth: photo.implicitWidth
     implicitContentHeight: photo.implicitHeight
+
+    Image {
+        id: placeholderImage
+
+        objectName: "placeholderImage"
+        // Content is the photo's size, none until it loads: the view's size instead, under it.
+        parent: flickable
+        z: -1
+        anchors.fill: parent
+        fillMode: Image.PreserveAspectFit
+        asynchronous: true
+        cache: false
+        visible: status === Image.Ready && photo.opacity < 1 && photo.status !== Image.Error
+    }
 
     Image {
         id: photo
@@ -97,6 +112,7 @@ ZoomableFlickable {
 
     BusyIndicator {
         running: photo.status === Image.Loading && !delayBusyIndicator.running
+                 && placeholderImage.status !== Image.Ready
         size: BusyIndicatorSize.Large
         anchors.centerIn: parent
         parent: flickable
