@@ -27,6 +27,23 @@ fn watch_threads() -> Vec<String> {
         .collect()
 }
 
+/// Polls up to 30 s: loaded runners are slow.
+async fn eventually(what: &str, cond: impl Fn() -> bool) {
+    for _ in 0..3000 {
+        if cond() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("timed out waiting for {what}");
+}
+
+fn asleep(task: &str) -> bool {
+    let stat = std::fs::read_to_string(Path::new(task).join("stat")).unwrap();
+    stat.rsplit_once(") ")
+        .is_some_and(|(_, rest)| rest.starts_with('S'))
+}
+
 fn context_switches(task: &str) -> u64 {
     let status = std::fs::read_to_string(Path::new(task).join("status")).unwrap();
     status
@@ -53,18 +70,24 @@ async fn open_folders_share_one_inotify_instance_and_an_idle_thread() {
         .collect();
     let (_again, _rx) = core.watch_dir(folders[0].path()).unwrap();
     assert_eq!(inotify_instances(), before + 1, "one instance for all folders");
-    // Volume watcher plus folder watcher.
+    // Volume watcher plus folder watcher. std names a thread from inside it: until first
+    // scheduled, it carries the spawner's name.
+    eventually("watch threads named", || watch_threads().len() >= 2).await;
     let threads = watch_threads();
     assert_eq!(threads.len(), 2, "{threads:?}");
 
-    std::fs::write(folders[7].path().join("x"), "x").unwrap();
+    // One inotify event: a file write is several, and a stall between them wakes the worker late.
+    std::fs::create_dir(folders[7].path().join("x")).unwrap();
     let got = tokio::time::timeout(Duration::from_secs(30), watches[7].1.recv())
         .await
         .unwrap();
     assert_eq!(got, Some(WatchEvent::Changed(folders[7].path().to_path_buf())));
 
+    // Thread that sent the event may not have blocked again yet.
+    eventually("watch threads asleep", || threads.iter().all(|t| asleep(t))).await;
     let switches: Vec<u64> = threads.iter().map(|t| context_switches(t)).collect();
     tokio::time::sleep(Duration::from_millis(600)).await;
     let after: Vec<u64> = threads.iter().map(|t| context_switches(t)).collect();
     assert_eq!(switches, after, "idle watch threads must not wake");
+    assert_eq!(watch_threads(), threads, "no watch thread started late");
 }
