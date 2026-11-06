@@ -291,6 +291,21 @@ async fn remote_thumbnails_are_cached_and_shared() {
 }
 
 #[tokio::test]
+async fn a_thumbnail_asked_again_right_after_a_cancel_is_still_made() {
+    let h = home().await;
+    h.nas.add_file("p/a.jpg", &jpeg(1000, 500), 9_000);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let u = uri("lautta://nv-nas/p/a.jpg");
+    // Rotation: delegate's old request goes, new one of another size in the same bucket comes,
+    // before the aborted job has let go of its slot.
+    previews.request(h.core.clone(), u.clone(), 300).cancel();
+    let again = previews.request(h.core.clone(), u, 400);
+    let bytes = again.rx.await.unwrap().expect("made, not canceled");
+    let img = image::load_from_memory(&bytes).unwrap();
+    assert_eq!((img.width(), img.height()), (512, 256));
+}
+
+#[tokio::test]
 async fn local_files_and_switched_off_thumbnails_are_refused() {
     let h = home().await;
     std::fs::write(h.root.join("Pictures/l.jpg"), jpeg(8, 8)).unwrap();

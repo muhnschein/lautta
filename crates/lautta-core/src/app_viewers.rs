@@ -229,8 +229,15 @@ pub struct Previews {
     cache: ThumbnailCache,
     jobs: ThumbJobs,
     pdf: PdfThumbs,
-    waiters: Mutex<HashMap<String, Vec<(u64, ThumbSender)>>>,
+    waiters: Mutex<HashMap<String, Waiting>>,
     next_waiter: AtomicU64,
+}
+
+/// `job`: [`ThumbJobs`] key, new per start: a cancelled job keeps its slot until its task wakes,
+/// maybe after the same thumbnail is asked for again.
+struct Waiting {
+    job: String,
+    waiters: Vec<(u64, ThumbSender)>,
 }
 
 type ThumbResult = Result<Arc<Vec<u8>>>;
@@ -297,24 +304,26 @@ impl Previews {
         }
         let waiter = self.next_waiter.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
-        lock(&self.waiters)
-            .entry(job_key.clone())
-            .or_default()
-            .push((waiter, tx));
-        let me = Arc::clone(self);
-        let key = job_key.clone();
-        let location = uri.location.clone();
-        let started = self.jobs.request(&job_key, &location, async move {
-            let result = me.make(&core, &uri, size, cached).await;
-            me.finish(&key, result);
-        });
-        if !started && lock(&self.waiters).get(&job_key).map_or(0, Vec::len) == 1 {
-            // The earlier job ended between our check and now.
-            self.finish(
-                &job_key,
-                Err(Error::new(ErrorKind::Canceled, "thumbnail job vanished")),
+        let mut waiting = lock(&self.waiters);
+        if let Some(w) = waiting.get_mut(&job_key) {
+            w.waiters.push((waiter, tx));
+        } else {
+            let job = format!("{job_key}#{waiter}");
+            waiting.insert(
+                job_key.clone(),
+                Waiting {
+                    job: job.clone(),
+                    waiters: vec![(waiter, tx)],
+                },
             );
+            let me = Arc::clone(self);
+            let key = job_key.clone();
+            self.jobs.request(&job, &uri.location.clone(), async move {
+                let result = me.make(&core, &uri, size, cached).await;
+                me.finish(&key, result);
+            });
         }
+        drop(waiting);
         ThumbTicket {
             rx,
             cancel: ThumbCancel {
@@ -372,28 +381,31 @@ impl Previews {
         thumb_text(&head)
     }
 
+    /// A cancelled job that still ended serves those waiting on its successor: same thumbnail.
     fn finish(&self, key: &str, result: ThumbResult) {
-        let senders = lock(&self.waiters).remove(key).unwrap_or_default();
+        let senders = lock(&self.waiters)
+            .remove(key)
+            .map(|w| w.waiters)
+            .unwrap_or_default();
         for (_, tx) in senders {
             let _ = tx.send(result.clone());
         }
     }
 
     fn cancel(&self, key: &str, waiter: u64) {
-        let empty = {
-            let mut w = lock(&self.waiters);
-            let Some(list) = w.get_mut(key) else {
+        let job = {
+            let mut waiting = lock(&self.waiters);
+            let Some(w) = waiting.get_mut(key) else {
                 return;
             };
-            list.retain(|(id, _)| *id != waiter);
-            let empty = list.is_empty();
-            if empty {
-                w.remove(key);
+            w.waiters.retain(|(id, _)| *id != waiter);
+            if !w.waiters.is_empty() {
+                return;
             }
-            empty
+            waiting.remove(key).map(|w| w.job)
         };
-        if empty {
-            self.jobs.cancel(key);
+        if let Some(job) = job {
+            self.jobs.cancel(&job);
         }
     }
 
