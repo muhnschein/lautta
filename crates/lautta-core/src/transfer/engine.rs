@@ -25,7 +25,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc, oneshot};
-use tokio::task::AbortHandle;
+use tokio::task::{AbortHandle, JoinHandle};
 
 #[derive(Debug, Clone)]
 pub struct EngineConfig {
@@ -127,7 +127,7 @@ impl Live {
 }
 
 struct Running {
-    task: AbortHandle,
+    task: JoinHandle<()>,
     /// Past its point of no return.
     committed: bool,
 }
@@ -650,7 +650,7 @@ impl Inner {
         let mut running: Vec<(u32, AbortHandle)> = Vec::new();
         live.running.retain(|seq, r| {
             r.committed || {
-                running.push((*seq, r.task.clone()));
+                running.push((*seq, r.task.abort_handle()));
                 false
             }
         });
@@ -708,8 +708,10 @@ impl Inner {
             h.abort();
         }
         let running: Vec<(u32, Running)> = live.running.drain().collect();
+        let mut stopped = Vec::with_capacity(running.len());
         for (seq, r) in running {
             r.task.abort();
+            stopped.push(r.task);
             live.item_bytes.remove(&seq);
             st.sched.item_finished(ItemRef { transfer: id, seq });
         }
@@ -726,11 +728,20 @@ impl Inner {
         self.pump(st);
         let inner = self.clone();
         self.rt
-            .spawn(async move { inner.remove_leftovers(op, leftovers).await });
+            .spawn(async move { inner.remove_leftovers(op, stopped, leftovers).await });
         Ok(())
     }
 
-    async fn remove_leftovers(&self, op: OperationKind, items: Vec<TransferItem>) {
+    /// Runs once `stopped` item tasks are gone: a provider writes no new file after its call is dropped.
+    async fn remove_leftovers(
+        &self,
+        op: OperationKind,
+        stopped: Vec<JoinHandle<()>>,
+        items: Vec<TransferItem>,
+    ) {
+        for task in stopped {
+            let _ = task.await;
+        }
         if op == OperationKind::Delete {
             return;
         }
@@ -850,11 +861,10 @@ impl Inner {
             live.t.set_item_state(pick.seq, ItemState::Running);
             self.write_item(live, pick.seq);
             let handle = self.rt.spawn(run_item_task(self.clone(), pick));
-            let task = handle.abort_handle();
             live.running.insert(
                 pick.seq,
                 Running {
-                    task,
+                    task: handle,
                     committed: false,
                 },
             );
@@ -1384,13 +1394,14 @@ mod tests {
         let id = engine.add(plan, "", TransferOptions::default()).await.unwrap();
         let before = engine.get(id).unwrap().state;
         assert_eq!(before, TransferState::Waiting(WaitReason::Volume));
-        let other = tokio::spawn(std::future::pending::<()>());
+        let mut other = None;
         let pick = ItemRef { transfer: id, seq: 0 };
         for registered in [false, true] {
             if registered {
                 let mut st = engine.inner.lock();
                 let live = st.live.get_mut(&id).unwrap();
-                let task = other.abort_handle();
+                let task = tokio::spawn(std::future::pending::<()>());
+                other = Some(task.abort_handle());
                 live.running.insert(
                     0,
                     Running {
@@ -1428,6 +1439,6 @@ mod tests {
             assert_eq!(st.live[&id].running.len(), usize::from(registered));
             assert!(st.live[&id].running.values().all(|r| r.committed));
         }
-        other.abort();
+        other.unwrap().abort();
     }
 }

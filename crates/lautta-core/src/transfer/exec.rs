@@ -241,6 +241,7 @@ async fn server_copy_to(
                 replace: !temp_used && mode.replace,
                 preserve_mtime: env.options.preserve_mtime,
             },
+            env.progress.clone(),
         )
         .await
 }
@@ -789,6 +790,30 @@ mod tests {
         run_item(&e, &job(item("a", "b", Kind::File, 4))).await.unwrap();
         assert_eq!(q.read_file("b").unwrap(), b"data");
         assert!(q.calls().join("|").contains("upload_from"));
+    }
+
+    #[tokio::test]
+    async fn same_location_local_copy_reports_progress() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("a"), vec![7u8; 9 << 20]).unwrap();
+        let local: Arc<dyn Provider> = Arc::new(crate::provider::local::LocalProvider::new(d.path().into()));
+        let seen = Arc::new(AtomicU64::new(0));
+        let s2 = seen.clone();
+        let e = ItemEnv {
+            src: local.clone(),
+            dst: local,
+            same_location: true,
+            op: OperationKind::Copy,
+            options: TransferOptions::default(),
+            scratch_dir: d.path().join("scratch"),
+            trasher: None,
+            progress: Arc::new(move |done, _| s2.store(done, Ordering::SeqCst)),
+            commit: Arc::new(|_| true),
+        };
+        let out = run_item(&e, &job(item("a", "b", Kind::File, 9 << 20))).await;
+        assert_eq!(out.unwrap(), Outcome::Done);
+        assert_eq!(seen.load(Ordering::SeqCst), 9 << 20);
+        assert!(!d.path().join("scratch").exists(), "no streaming through scratch");
     }
 
     #[tokio::test]

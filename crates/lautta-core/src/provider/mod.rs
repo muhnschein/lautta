@@ -162,7 +162,13 @@ pub trait Provider: Send + Sync {
         opts: ReadOptions,
         progress: ProgressSink,
     ) -> Result<()>;
-    async fn server_copy(&self, from: &VPath, to: &VPath, opts: CopyOptions) -> Result<()>;
+    async fn server_copy(
+        &self,
+        from: &VPath,
+        to: &VPath,
+        opts: CopyOptions,
+        progress: ProgressSink,
+    ) -> Result<()>;
     /// Read-only fd of a regular file on this phone, `None` where files are not local: a
     /// transfer hands it to the destination as is, no scratch copy.
     async fn open_local(&self, _path: &VPath) -> Result<Option<OwnedFd>> {

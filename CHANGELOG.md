@@ -38,6 +38,7 @@
 - Pasting cut items moves them after a remorse timer: tap it to cancel. The undo banner is gone.
 - More actions can move the selected items into a new folder made where they are.
 - Folders inside an archive show a banner on top: tap Extract all to extract the archive.
+- Cancelling a copy stops it at once and leaves no hidden partial file behind. Copying a file to another folder in the same place, such as within Documents, shows its progress.
 - Extract all on more than 1000 items or over 1 GB opens its summary instead of doing nothing. So does sharing that much into Lautta.
 - Extracting says so: the summary reads "Extract to" and Activity names the archive, not "Copy".
 - Cancelling a large extract at its summary no longer leaves an empty folder behind.
