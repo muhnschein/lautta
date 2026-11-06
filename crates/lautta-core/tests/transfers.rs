@@ -1364,7 +1364,9 @@ async fn cancel_mid_copy_stops_the_copy_and_leaves_no_temporary() {
     drop(tokio::time::timeout(wait, all).await.unwrap());
     let left: Vec<_> = std::fs::read_dir(d.path().join("out")).unwrap().collect();
     assert!(left.is_empty(), "left behind: {left:?}");
-    assert_eq!(engine.get(id).unwrap().state, TransferState::Canceled);
+    let s = engine.get(id).unwrap();
+    assert_eq!(s.state, TransferState::Canceled);
+    assert_eq!(s.bytes_done, 0, "progress after cancel counts no dropped bytes");
     assert_eq!(engine.items(id).unwrap()[0].state, ItemState::Pending);
 }
 
