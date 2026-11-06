@@ -33,6 +33,7 @@
 - Video thumbnails show the video icon on a see-through dark disc, at the size and place the icon has without a thumbnail, so they stand apart from photos.
 - A folder's header stays in place while its contents scroll, and the pulley opens above it. A folder opens at its top, and going back returns to where you were. Starting or ending selection no longer makes the header jump.
 - Closing the selection bar no longer flashes its empty state as it slides away.
+- A folder opens in the sort order and with the hidden-files choice set in View options, instead of name order with hidden files left out.
 - Counts read correctly in English: 1 item, 1 day, 1 task, not 1 items, 1 days, 1 tasks.
 - Search puts the field and filters above the results.
 - Pasting cut items moves them after a remorse timer: tap it to cancel. The undo banner is gone.
