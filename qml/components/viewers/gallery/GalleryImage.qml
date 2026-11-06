@@ -53,6 +53,9 @@ ZoomableFlickable {
         id: placeholderImage
 
         objectName: "placeholderImage"
+        // Content is the photo's size, none until it loads: the view's size instead, under it.
+        parent: flickable
+        z: -1
         anchors.fill: parent
         fillMode: Image.PreserveAspectFit
         asynchronous: true
