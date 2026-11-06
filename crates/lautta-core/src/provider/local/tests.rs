@@ -2,6 +2,7 @@
 use super::*;
 use crate::entry::{EntryFlags, Kind};
 use crate::provider::{list_all, no_progress};
+use std::io::Write;
 use std::os::unix::fs::symlink;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
@@ -398,7 +399,10 @@ async fn read_only_provider_refuses_every_write() {
         no_progress(),
     )
     .await);
-    ro(p.server_copy(&vp("f"), &vp("c"), CopyOptions::default()).await);
+    ro(
+        p.server_copy(&vp("f"), &vp("c"), CopyOptions::default(), no_progress())
+            .await,
+    );
     assert!(d.path().join("f").exists());
     assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 1);
     assert_eq!(
@@ -972,6 +976,7 @@ async fn server_copy_copies_content_mode_and_mtime() {
             replace: false,
             preserve_mtime: true,
         },
+        no_progress(),
     )
     .await
     .unwrap();
@@ -980,7 +985,7 @@ async fn server_copy_copies_content_mode_and_mtime() {
     let e = p.stat(&vp("b"), false, Lane::Interactive).await.unwrap();
     assert_eq!(e.modified, Some(when));
     assert_eq!(e.mode.map(|m| m & 0o750), Some(0o640 & 0o750));
-    p.server_copy(&vp("a"), &vp("c"), CopyOptions::default())
+    p.server_copy(&vp("a"), &vp("c"), CopyOptions::default(), no_progress())
         .await
         .unwrap();
     let c = p.stat(&vp("c"), false, Lane::Interactive).await.unwrap();
@@ -993,7 +998,7 @@ async fn server_copy_collisions_and_replace() {
     std::fs::write(d.path().join("a"), "A").unwrap();
     std::fs::write(d.path().join("b"), "B").unwrap();
     let e = p
-        .server_copy(&vp("a"), &vp("b"), CopyOptions::default())
+        .server_copy(&vp("a"), &vp("b"), CopyOptions::default(), no_progress())
         .await
         .unwrap_err();
     assert_eq!(e.kind, ErrorKind::AlreadyExists);
@@ -1005,6 +1010,7 @@ async fn server_copy_collisions_and_replace() {
             replace: true,
             preserve_mtime: false,
         },
+        no_progress(),
     )
     .await
     .unwrap();
@@ -1020,21 +1026,31 @@ async fn server_copy_errors_leave_nothing_behind() {
     std::fs::write(d.path().join("f"), "x").unwrap();
     let k = |r: Result<()>| r.unwrap_err().kind;
     assert_eq!(
-        k(p.server_copy(&vp("dir"), &vp("d2"), CopyOptions::default()).await),
+        k(
+            p.server_copy(&vp("dir"), &vp("d2"), CopyOptions::default(), no_progress())
+                .await
+        ),
         ErrorKind::IsADirectory
     );
     assert_eq!(
-        k(p.server_copy(&vp("none"), &vp("n2"), CopyOptions::default())
-            .await),
+        k(
+            p.server_copy(&vp("none"), &vp("n2"), CopyOptions::default(), no_progress())
+                .await
+        ),
         ErrorKind::NotFound
     );
     assert_eq!(
-        k(p.server_copy(&vp("f"), &vp("nodir/f"), CopyOptions::default())
-            .await),
+        k(
+            p.server_copy(&vp("f"), &vp("nodir/f"), CopyOptions::default(), no_progress())
+                .await
+        ),
         ErrorKind::NotFound
     );
     assert_eq!(
-        k(p.server_copy(&vp("f"), &vp("f"), CopyOptions::default()).await),
+        k(
+            p.server_copy(&vp("f"), &vp("f"), CopyOptions::default(), no_progress())
+                .await
+        ),
         ErrorKind::InvalidArgument
     );
     assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 2);
@@ -1044,7 +1060,7 @@ async fn server_copy_errors_leave_nothing_behind() {
 async fn server_copy_of_a_symlink_makes_a_symlink() {
     let (d, p) = setup();
     symlink("target", d.path().join("l")).unwrap();
-    p.server_copy(&vp("l"), &vp("l2"), CopyOptions::default())
+    p.server_copy(&vp("l"), &vp("l2"), CopyOptions::default(), no_progress())
         .await
         .unwrap();
     assert_eq!(
@@ -1066,10 +1082,156 @@ async fn server_copy_refuses_special_files() {
     )
     .unwrap();
     let e = p
-        .server_copy(&vp("fifo"), &vp("copy"), CopyOptions::default())
+        .server_copy(&vp("fifo"), &vp("copy"), CopyOptions::default(), no_progress())
         .await
         .unwrap_err();
     assert_eq!(e.kind, ErrorKind::Unsupported);
+}
+
+/// Progress sink that parks the copying thread on its first report until `release`; counts the
+/// reports after it.
+struct Gate {
+    sink: ProgressSink,
+    reached: tokio::sync::oneshot::Receiver<()>,
+    release: std::sync::mpsc::Sender<()>,
+    later: Arc<AtomicU64>,
+}
+
+fn gate() -> Gate {
+    let (reached_tx, reached) = tokio::sync::oneshot::channel();
+    let (release, release_rx) = std::sync::mpsc::channel::<()>();
+    let first = Mutex::new(Some((reached_tx, release_rx)));
+    let later = Arc::new(AtomicU64::new(0));
+    let count = later.clone();
+    let sink: ProgressSink = Arc::new(move |_, _| {
+        let parked = first.lock().unwrap().take();
+        match parked {
+            Some((tx, rx)) => {
+                let _ = tx.send(());
+                let _ = rx.recv();
+            }
+            None => {
+                count.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+    });
+    Gate {
+        sink,
+        reached,
+        release,
+        later,
+    }
+}
+
+/// Drops `call` while its thread is parked in `g`, then lets the thread go and waits until it let
+/// go of its permit.
+async fn drop_while_parked<F>(sem: &Semaphore, call: F, g: Gate) -> Arc<AtomicU64>
+where
+    F: std::future::Future + Send + 'static,
+    F::Output: Send,
+{
+    let task = tokio::spawn(call);
+    let reached = tokio::time::timeout(Duration::from_secs(10), g.reached).await;
+    reached.expect("copy reported progress").unwrap();
+    task.abort();
+    assert!(task.await.is_err_and(|e| e.is_cancelled()));
+    g.release.send(()).unwrap();
+    let all = sem.acquire_many(IO_PERMITS as u32);
+    drop(tokio::time::timeout(Duration::from_secs(10), all).await.unwrap());
+    g.later
+}
+
+fn names_in(dir: &Path) -> Vec<String> {
+    let mut v: Vec<String> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    v.sort();
+    v
+}
+
+#[tokio::test]
+async fn a_dropped_server_copy_stops_and_leaves_no_file() {
+    let sem = new_io_semaphore();
+    let d = tempfile::tempdir().unwrap();
+    let p = LocalProvider::new(d.path().to_path_buf()).with_semaphore(sem.clone());
+    std::fs::write(d.path().join("a"), vec![7u8; 9 << 20]).unwrap();
+    let g = gate();
+    let sink = g.sink.clone();
+    let call = async move {
+        p.server_copy(&vp("a"), &vp("b"), CopyOptions::default(), sink)
+            .await
+    };
+    let later = drop_while_parked(&sem, call, g).await;
+    assert_eq!(names_in(d.path()), ["a"], "no copy, no temporary");
+    assert_eq!(later.load(Ordering::SeqCst), 0, "copying ended at the stop");
+}
+
+#[tokio::test]
+async fn a_dropped_upload_stops_reading_and_writing() {
+    const SENT: u64 = 16 << 20;
+    let sem = new_io_semaphore();
+    let d = tempfile::tempdir().unwrap();
+    let p = LocalProvider::new(d.path().to_path_buf()).with_semaphore(sem.clone());
+    let (r, w) = rustix::pipe::pipe().unwrap();
+    let writer = std::thread::spawn(move || {
+        let mut f = File::from(w);
+        let chunk = vec![1u8; 1 << 20];
+        let mut sent = 0u64;
+        while sent < SENT && f.write_all(&chunk).is_ok() {
+            sent += chunk.len() as u64;
+        }
+    });
+    let g = gate();
+    let sink = g.sink.clone();
+    let call = async move { p.upload_from(r, &vp("u"), WriteOptions::default(), sink).await };
+    let later = drop_while_parked(&sem, call, g).await;
+    writer.join().unwrap();
+    let len = std::fs::metadata(d.path().join("u")).unwrap().len();
+    assert!(len < SENT, "upload ran on to {len} bytes");
+    assert_eq!(later.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_dropped_download_stops_writing() {
+    let sem = new_io_semaphore();
+    let d = tempfile::tempdir().unwrap();
+    let p = LocalProvider::new(d.path().to_path_buf()).with_semaphore(sem.clone());
+    std::fs::write(d.path().join("a"), vec![7u8; 9 << 20]).unwrap();
+    let (r, w) = rustix::pipe::pipe().unwrap();
+    let reader = std::thread::spawn(move || std::io::copy(&mut File::from(r), &mut std::io::sink()).unwrap());
+    let g = gate();
+    let sink = g.sink.clone();
+    let call = async move { p.download_into(&vp("a"), w, ReadOptions::default(), sink).await };
+    let later = drop_while_parked(&sem, call, g).await;
+    assert!(reader.join().unwrap() < 9 << 20, "download ran to the end");
+    assert_eq!(later.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn server_copy_reports_progress_to_the_end() {
+    let (d, p) = setup();
+    std::fs::write(d.path().join("a"), vec![7u8; 9 << 20]).unwrap();
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let l2 = log.clone();
+    let sink: ProgressSink = Arc::new(move |done, total| l2.lock().unwrap().push((done, total)));
+    p.server_copy(&vp("a"), &vp("b"), CopyOptions::default(), sink)
+        .await
+        .unwrap();
+    let log = log.lock().unwrap();
+    assert_eq!(log.last(), Some(&(9 << 20, Some(9 << 20))));
+    assert!(log.windows(2).all(|w| w[0].0 <= w[1].0));
+}
+
+#[test]
+fn a_stopped_checksum_ends() {
+    let d = tempfile::tempdir().unwrap();
+    std::fs::write(d.path().join("a"), "abc").unwrap();
+    let stop = Arc::new(Stop::default());
+    assert!(hash_file(&d.path().join("a"), "sha256", &stop).is_ok());
+    drop(StopOnDrop(stop.clone()));
+    let e = hash_file(&d.path().join("a"), "sha256", &stop).unwrap_err();
+    assert_eq!(e.kind, ErrorKind::Canceled);
 }
 
 #[tokio::test]

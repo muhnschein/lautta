@@ -252,6 +252,11 @@ function directionIcon(direction) {
     }
 }
 
+// Unfinished item of a cancelled task never runs.
+function itemState(state, transferState) {
+    return transferState === "canceled" && state === "pending" ? "canceled" : state
+}
+
 function itemIcon(state) {
     switch (state) {
     case "done":
@@ -259,6 +264,7 @@ function itemIcon(state) {
     case "failed":
         return "image://theme/icon-m-warning"
     case "skipped":
+    case "canceled":
         return "image://theme/icon-m-dismiss"
     case "needs-answer":
         return "image://theme/icon-m-question"
@@ -330,6 +336,10 @@ function itemStatus(state, kind, sizeBytes, direction, op) {
     case "needs-answer":
         //% "Needs an answer"
         label = qsTrId("lautta-xfr-item-needs-answer")
+        break
+    case "canceled":
+        //% "Cancelled"
+        label = qsTrId("lautta-xfr-canceled")
         break
     default:
         //% "Queued"

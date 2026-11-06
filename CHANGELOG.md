@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Cancel in an Activity task's menu cancels the task again. Before, the countdown ran but the copy went on.
+- After you cancel a task, its unfinished files say "Cancelled" on the task page instead of "Copying" or "Queued".
 - A conflict notification goes away once its question is answered, or its task is canceled or ends.
 - A video or song that can't be played says "Can't play" with its name, instead of blaming the folder or server it is in.
 - Messages and labels say what really happened. A file or folder you may not read says "You don't have permission to open", not "to change". The folder picker shows "Sign-in failed" or "Server identity changed" instead of an internal code, and no longer calls a connecting server unreachable. A failed search explains why. Items in a running move, delete, compress or extract task no longer read "Copying". When Lautta closes with unfinished tasks and "Resume unfinished tasks at start" is off, it no longer promises they will resume. Smaller wording fixes across the app.
@@ -39,6 +40,7 @@
 - Pasting cut items moves them after a remorse timer: tap it to cancel. The undo banner is gone.
 - More actions can move the selected items into a new folder made where they are.
 - Folders inside an archive show a banner on top: tap Extract all to extract the archive.
+- Cancelling a copy stops it at once and leaves no hidden partial file behind. Copying a file to another folder in the same place, such as within Documents, shows its progress.
 - Extract all on more than 1000 items or over 1 GB opens its summary instead of doing nothing. So does sharing that much into Lautta.
 - Extracting says so: the summary reads "Extract to" and Activity names the archive, not "Copy".
 - Cancelling a large extract at its summary no longer leaves an empty folder behind.
