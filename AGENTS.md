@@ -56,8 +56,17 @@ User tests RPM on phone; that test judges feel, lag, transitions. Say exactly wh
 - Iterating → run only what change touches: `cargo test -p lautta-core <filter>`, host QML `cargo test -p lautta-qt --features lautta-bridge-proto/fake --test qml_host`, page tests `tools/sdk-qml-check.sh tests/qml/tst_<page>.qml`. Before every push: full `make check`. CI runs everything (docs-only PR: no build or test jobs, `tools/ci/changes.sh`).
 - Gates catch device-only breakage (Qt 5.6 QML, Harbour rules of `doc/PROJECT.md` "Platform", linked libs, validator). Gate red → fix code, never loosen gate. New validator warning only if unavoidable, listed with reason in `doc/harbour-warnings.md`.
 - Mutant exclusion (`.cargo/mutants.toml`) only with proof it changes no observable behaviour, written beside it.
-- Tests wait on signals or conditions, not fixed sleeps or wall-clock asserts (those flake on loaded runners).
 - New dependency must earn its keep: well maintained, widely used, more than someone's pet project, builds at Rust 1.95, pure Rust preferred, native links only to Harbour's allowed libraries (`doc/PROJECT.md`). Say why in PR. `Cargo.lock` via `cargo +stable update -p <crate>` (CONTRIBUTING-CODE.md "Toolchain").
+
+## New tests
+
+Every added or changed test, before push:
+
+- Honest: fails when behaviour its name claims breaks; "Done means" step 3 proves it. No assert that cannot fail: tautology, check of own setup, assert in branch or loop that may not run, discarded result, timeout read as answer (`timeout(recv) → None` ≠ channel closed).
+- Waits on signal or condition only. No sleep, `pump(N)`, wall-clock assert. Timeout = hang guard: seconds for work of milliseconds. Fixed wait only for "nothing happens", where no event exists; test says so.
+- Waits for event only step under test makes. Not one an earlier step also makes (stale `.part` delete before copy), not one that may come twice (file write = several inotify events; `mkdir` = one), not thread name set after spawn.
+- Parallel-safe: passes alone and among 32 others (`make test`). Own tempdir; no fixed port or path, shared HOME/XDG, env or cwd change shared with other tests, global state across tests. Few inotify instances and threads (128 per user).
+- Runner stalls any thread any time for hundreds of ms: test still passes. Async or timing-sensitive test → `cargo nextest run -j 32 --stress-count 20 <filter>` on loaded host, or stall injected at race point; say which.
 
 ## UI and words
 

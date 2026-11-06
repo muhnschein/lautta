@@ -279,6 +279,12 @@ mod tests {
             .flatten()
     }
 
+    /// Channel ends; a channel that stays open but quiet is not closed.
+    async fn closed<T>(rx: &mut UnboundedReceiver<T>) -> bool {
+        let got = tokio::time::timeout(Duration::from_secs(30), rx.recv()).await;
+        matches!(got, Ok(None))
+    }
+
     async fn silent<T>(rx: &mut UnboundedReceiver<T>, ms: u64) -> bool {
         tokio::time::timeout(Duration::from_millis(ms), rx.recv())
             .await
@@ -379,6 +385,12 @@ mod tests {
         assert_eq!(got, [PathBuf::from("/w/a"), PathBuf::from("/w/b")]);
     }
 
+    /// One inotify event (`mkdir`): unlike a file write (create, modify, close), a stalled
+    /// runner cannot split it into two debounced reports.
+    fn one_change(path: &Path) {
+        std::fs::create_dir(path).unwrap();
+    }
+
     fn changed(dir: &tempfile::TempDir) -> Option<WatchEvent> {
         Some(WatchEvent::Changed(dir.path().to_path_buf()))
     }
@@ -446,17 +458,17 @@ mod tests {
         let (first, mut rx1) = w.watch(d.path()).unwrap();
         let (second, mut rx2) = w.watch(d.path()).unwrap();
         assert_eq!(w.watched(), [d.path().to_path_buf()]);
-        std::fs::write(d.path().join("x"), "x").unwrap();
+        one_change(&d.path().join("x"));
         assert_eq!(next(&mut rx1, 30).await, changed(&d));
         assert_eq!(next(&mut rx2, 30).await, changed(&d));
         drop(first);
-        assert_eq!(next(&mut rx1, 30).await, None, "dropped watch closes its channel");
+        assert!(closed(&mut rx1).await, "dropped watch closes its channel");
         assert_eq!(w.watched(), [d.path().to_path_buf()]);
-        std::fs::write(d.path().join("y"), "x").unwrap();
+        one_change(&d.path().join("y"));
         assert_eq!(next(&mut rx2, 30).await, changed(&d));
         drop(second);
         assert!(w.watched().is_empty());
-        assert_eq!(next(&mut rx2, 30).await, None);
+        assert!(closed(&mut rx2).await);
     }
 
     #[tokio::test]
@@ -476,9 +488,9 @@ mod tests {
         let (_gone, rx_gone) = w.watch(a.path()).unwrap();
         drop(rx_gone);
         let (_kept, mut rx) = w.watch(a.path()).unwrap();
-        std::fs::write(a.path().join("x"), "x").unwrap();
+        one_change(&a.path().join("x"));
         assert_eq!(next(&mut rx, 30).await, changed(&a));
-        std::fs::write(a.path().join("y"), "x").unwrap();
+        one_change(&a.path().join("y"));
         assert_eq!(next(&mut rx, 30).await, changed(&a));
     }
 
