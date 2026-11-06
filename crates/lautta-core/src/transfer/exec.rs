@@ -37,6 +37,9 @@ pub struct ItemEnv {
     pub scratch_dir: PathBuf,
     pub trasher: Option<Arc<dyn Trasher>>,
     pub progress: ProgressSink,
+    /// `true` right before a step an abort could not undo, `false` when abortable again; returns
+    /// false when the item was taken away: stop.
+    pub commit: Arc<dyn Fn(bool) -> bool + Send + Sync>,
 }
 
 #[derive(Debug, Clone)]
@@ -136,6 +139,14 @@ fn rename_unavailable(e: &Error) -> bool {
     matches!(e.kind, ErrorKind::CrossesDevice | ErrorKind::Unsupported)
 }
 
+fn commit(env: &ItemEnv, on: bool) -> Result<()> {
+    if (env.commit)(on) {
+        Ok(())
+    } else {
+        Err(Error::kind(ErrorKind::Canceled))
+    }
+}
+
 fn temp_path(dst: &Uri, temp_name: &[u8]) -> Result<VPath> {
     dst.path
         .parent()
@@ -179,13 +190,14 @@ async fn place_file(env: &ItemEnv, job: &ItemJob, mode: WriteMode) -> Result<()>
         return Err(Error::kind(ErrorKind::IsADirectory));
     }
     if env.same_location && is_move(env) && !mode.resume {
+        commit(env, true)?;
         match env
             .dst
             .rename(&plan.src.path, &plan.dst.path, rename_mode(mode))
             .await
         {
             Ok(()) => return Ok(()),
-            Err(e) if rename_unavailable(&e) => {}
+            Err(e) if rename_unavailable(&e) => commit(env, false)?,
             Err(e) => return Err(e),
         }
     }
@@ -309,6 +321,9 @@ async fn stream_to(
         return Ok(());
     }
     let plan = &job.plan;
+    if let Some(fd) = env.src.open_local(&plan.src.path).await? {
+        return upload_direct(env, job, write_path, offset, total, mode, src_entry, fd).await;
+    }
     let dir = env.scratch_dir.clone();
     let scratch = blocking(move || {
         std::fs::create_dir_all(&dir)?; // NOSONAR: runs on the blocking pool
@@ -327,15 +342,8 @@ async fn stream_to(
             "the source changed or ended early while reading",
         ));
     }
-    let disposition = if offset > 0 {
-        Disposition::Resume
-    } else if mode.replace && !write_path_is_temp(job, write_path) {
-        Disposition::Truncate
-    } else {
-        Disposition::Create
-    };
     let opts = WriteOptions {
-        disposition,
+        disposition: disposition(job, write_path, offset, mode),
         offset,
         size: Some(len),
         modified: wanted_mtime(env, plan, src_entry),
@@ -344,6 +352,48 @@ async fn stream_to(
     env.dst
         .upload_from(OwnedFd::from(scratch), write_path, opts, up)
         .await
+}
+
+/// Local source: its own fd goes to the destination, no scratch copy.
+#[allow(clippy::too_many_arguments)]
+async fn upload_direct(
+    env: &ItemEnv,
+    job: &ItemJob,
+    write_path: &VPath,
+    offset: u64,
+    total: Option<u64>,
+    mode: WriteMode,
+    src_entry: &Entry,
+    fd: OwnedFd,
+) -> Result<()> {
+    let file = File::from(fd);
+    let len = file_len(&file).await?;
+    if total.is_some_and(|t| t != len) {
+        return Err(Error::new(
+            ErrorKind::Io,
+            "the source changed or ended early while reading",
+        ));
+    }
+    let opts = WriteOptions {
+        disposition: disposition(job, write_path, offset, mode),
+        offset,
+        size: Some(len),
+        modified: wanted_mtime(env, &job.plan, src_entry),
+        mode: wanted_mode(env, src_entry),
+    };
+    env.dst
+        .upload_from(OwnedFd::from(file), write_path, opts, env.progress.clone())
+        .await
+}
+
+fn disposition(job: &ItemJob, write_path: &VPath, offset: u64, mode: WriteMode) -> Disposition {
+    if offset > 0 {
+        Disposition::Resume
+    } else if mode.replace && !write_path_is_temp(job, write_path) {
+        Disposition::Truncate
+    } else {
+        Disposition::Create
+    }
 }
 
 fn write_path_is_temp(job: &ItemJob, write_path: &VPath) -> bool {
@@ -434,6 +484,7 @@ async fn finish_placement(
     }
     apply_attributes(env, write_path, &got, plan, src_entry).await?;
     if temp_used {
+        commit(env, true)?;
         env.dst
             .rename(write_path, &plan.dst.path, rename_mode(mode))
             .await?;
@@ -484,6 +535,7 @@ async fn run_dir(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
         Decision::KeepBoth => return keep_both(env, plan).await,
         Decision::Ask(c) => return Ok(Outcome::Ask(c)),
     };
+    commit(env, true)?;
     if env.same_location && is_move(env) && !mode.merge {
         match env
             .dst
@@ -518,6 +570,7 @@ async fn run_symlink(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
         Some(t) => t.clone(),
         None => env.src.read_link(&plan.src.path).await?,
     };
+    commit(env, true)?;
     if mode.replace {
         env.dst.remove_file(&plan.dst.path).await?;
     }
@@ -531,11 +584,13 @@ async fn run_symlink(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
 async fn run_delete(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     let plan = &job.plan;
     if env.options.trash {
+        commit(env, true)?;
         let trashed = match &env.trasher {
             Some(t) => t.trash(&plan.src).await?,
             None => false,
         };
         if !trashed {
+            commit(env, false)?;
             remove_tree(&*env.src, &plan.src.path, plan.kind == Kind::Dir).await?;
         }
         return Ok(Outcome::Subtree);
@@ -624,6 +679,7 @@ mod tests {
             scratch_dir: std::env::temp_dir(),
             trasher: None,
             progress: no_progress(),
+            commit: Arc::new(|_| true),
         }
     }
 
@@ -752,6 +808,7 @@ mod tests {
             scratch_dir: d.path().join("scratch"),
             trasher: None,
             progress: Arc::new(move |done, _| s2.store(done, Ordering::SeqCst)),
+            commit: Arc::new(|_| true),
         };
         let out = run_item(&e, &job(item("a", "b", Kind::File, 9 << 20))).await;
         assert_eq!(out.unwrap(), Outcome::Done);
@@ -950,11 +1007,13 @@ mod tests {
         src.add_file("f", b"new", 1);
         let j = job(item("f", "f", Kind::File, 3));
         let temp = String::from_utf8(j.temp_name.clone()).unwrap();
+        // "f" appears between the stat before writing and the final rename.
+        dst.fail_next("stat", "f", Error::kind(ErrorKind::NotFound));
         dst.fail_next("rename", &temp, Error::kind(ErrorKind::AlreadyExists));
         dst.add_file("f", b"appeared", 1);
         let e = env(&src, &dst, false, OperationKind::Copy);
-        // The stat before writing already sees the file, so the question comes first.
         assert!(matches!(run_item(&e, &j).await.unwrap(), Outcome::Ask(_)));
+        assert_eq!(dst.read_file("f").unwrap(), b"appeared");
     }
 
     #[tokio::test]
@@ -1150,5 +1209,23 @@ mod tests {
         let err = run_item(&e, &j).await.unwrap_err();
         assert_eq!(err.kind, ErrorKind::PermissionDenied);
         assert!(dst.paths().is_empty(), "{:?}", dst.paths());
+    }
+
+    #[test]
+    fn disposition_truncates_only_a_replaced_target_written_in_place() {
+        let j = job(item("f", "out/f", Kind::File, 5));
+        let temp = vp("out").join(&j.temp_name).unwrap();
+        let replace = WriteMode {
+            replace: true,
+            ..WriteMode::default()
+        };
+        let target = vp("out/f");
+        assert_eq!(disposition(&j, &target, 3, replace), Disposition::Resume);
+        assert_eq!(disposition(&j, &target, 0, replace), Disposition::Truncate);
+        assert_eq!(disposition(&j, &temp, 0, replace), Disposition::Create);
+        assert_eq!(
+            disposition(&j, &target, 0, WriteMode::default()),
+            Disposition::Create
+        );
     }
 }

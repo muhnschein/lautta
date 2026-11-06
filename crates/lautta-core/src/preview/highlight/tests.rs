@@ -249,14 +249,20 @@ fn colours_stop_when_time_is_up() {
     assert_eq!(doc.syntax(), Some("Bourne Again Shell (bash)"));
 }
 
+fn thread_cpu_time() -> Duration {
+    let t = rustix::time::clock_gettime(rustix::time::ClockId::ThreadCPUTime);
+    Duration::new(t.tv_sec as u64, t.tv_nsec as u32)
+}
+
+/// Bound on this thread's CPU time: other tests stealing cores can't push it over.
 fn colour_against_the_clock(name: &str, text: String) -> ColouredText {
     let limits = Limits {
-        budget: Duration::from_millis(200),
+        budget: Duration::from_secs(2),
         max_line_bytes: 4096,
     };
-    let started = std::time::Instant::now();
+    let started = thread_cpu_time();
     let doc = colour(name.as_bytes(), text, &limits);
-    let took = started.elapsed();
+    let took = thread_cpu_time() - started;
     assert!(
         took < limits.budget + Duration::from_secs(5),
         "{name} took {took:?}"
@@ -515,7 +521,7 @@ impl QtParser {
     }
 }
 
-/// Rows as TextRows.js makes them, with starts: tabs to next multiple of four, row ends after 1000
+/// Rows as `preview::rows` makes them, with starts: tabs to next multiple of four, row ends after 1000
 /// columns or before (never inside a surrogate pair), UTF-16 units.
 fn rows_of(line: &str) -> Vec<(usize, String)> {
     let mut expanded = String::new();
@@ -739,26 +745,55 @@ async fn a_job_colours_off_the_runtime() {
     let doc = doc.unwrap().unwrap();
     assert_eq!(doc.syntax(), Some("Bourne Again Shell (bash)"));
     assert_eq!(doc.coloured_lines(), doc.line_count());
-    let job = start_with(b"x.md".to_vec(), MARKDOWN.repeat(20), limits, GRACE);
+}
+
+/// Job that colours `text` as markdown only once `go` is sent: "not ready yet" is certain. Budget
+/// cannot run out on a busy runner.
+fn gated_job(deadline: Instant) -> (ColourJob, std::sync::mpsc::Sender<()>) {
+    let (go, gate) = std::sync::mpsc::channel::<()>();
+    let limits = Limits {
+        budget: Duration::from_secs(600),
+        ..LIMITS
+    };
+    let handle = tokio::task::spawn_blocking(move || {
+        let _ = gate.recv();
+        colour(b"x.md", MARKDOWN.to_owned(), &limits)
+    });
+    (ColourJob { handle, deadline }, go)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_job_not_ready_comes_back_and_finishes_later() {
+    let (job, go) = gated_job(Instant::now() + Duration::from_secs(600));
     let job = job.wait(Duration::ZERO).await.unwrap_err();
+    go.send(()).unwrap();
     let doc = job.finish().await.unwrap();
     assert_eq!(doc.syntax(), Some("Markdown"));
     assert_eq!(doc.coloured_lines(), doc.line_count());
 }
 
-#[test]
-fn a_job_that_overruns_its_time_is_dropped() {
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let limits = Limits {
-        budget: Duration::from_millis(200),
-        max_line_bytes: usize::MAX,
-    };
-    let line = "echo \"$x\" 'y' ${z} # c ".repeat(80_000);
-    let finished = rt.block_on(async {
-        start_with(b"x.sh".to_vec(), line, limits, Duration::ZERO)
-            .finish()
-            .await
+#[tokio::test(flavor = "multi_thread")]
+async fn a_job_that_overruns_its_time_is_dropped() {
+    let (job, go) = gated_job(Instant::now() + Duration::from_millis(50));
+    // Only if `finish` ignores the deadline: frees the job so the test fails instead of hanging.
+    let late = go.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(30));
+        let _ = late.send(());
     });
-    assert!(finished.is_none());
-    rt.shutdown_background();
+    assert!(job.finish().await.is_none());
+    go.send(()).unwrap();
+}
+
+#[tokio::test]
+async fn a_job_may_run_for_its_budget_and_grace() {
+    let limits = Limits {
+        budget: Duration::from_secs(7),
+        ..LIMITS
+    };
+    let before = Instant::now();
+    let job = start_with(b"x.sh".to_vec(), BASH.to_owned(), limits, GRACE);
+    let after = Instant::now();
+    let room = limits.budget + GRACE;
+    assert!(job.deadline >= before + room && job.deadline <= after + room);
 }

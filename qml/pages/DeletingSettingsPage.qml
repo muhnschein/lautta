@@ -42,7 +42,7 @@ Page {
                 labels: SettingsText.days(values)
             }
             SettingSlider {
-                //% "Undo time (remorse)"
+                //% "Time to undo"
                 label: qsTrId("lautta-settings-remorse")
                 settingKey: "remorse_seconds"
                 minimumValue: 3

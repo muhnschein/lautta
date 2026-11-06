@@ -84,7 +84,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-err-canceled">
-        <source>Canceled</source>
+        <source>Cancelled</source>
+        <oldsource>Canceled</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-err-generic">
@@ -204,7 +205,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-filters-match-glob">
-        <source>Glob</source>
+        <source>Pattern</source>
+        <oldsource>Glob</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-filters-type">
@@ -315,7 +317,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-search-mode-glob">
-        <source>glob</source>
+        <source>pattern</source>
+        <oldsource>glob</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-search-mode-substring">
@@ -335,7 +338,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-search-failed">
-        <source>Search stopped</source>
+        <source>Search failed</source>
+        <oldsource>Search stopped</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-search-idle">
@@ -433,7 +437,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-remorse">
-        <source>Undo time (remorse)</source>
+        <source>Time to undo</source>
+        <oldsource>Undo time (remorse)</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-seconds">
@@ -629,7 +634,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-conflict-src-newer">
-        <source>Copying is newer</source>
+        <source>The incoming item is newer</source>
+        <oldsource>Copying is newer</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-conflict-dst-newer">
@@ -676,7 +682,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-conflict-merge-folders">
-        <source>Merge is offered for folders.</source>
+        <source>Merge is only offered for folders.</source>
+        <oldsource>Merge is offered for folders.</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-conflict-apply-all" numerus="yes">
@@ -729,7 +736,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-extract-new-folder">
-        <source>New folder &apos;%1&apos;</source>
+        <source>New folder “%1”</source>
+        <oldsource>New folder &apos;%1&apos;</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-extract-here">
@@ -881,10 +889,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-trash-days-left" numerus="yes">
-        <source>%n days</source>
+        <source>%n days left</source>
         <translation>
-            <numerusform>%n day</numerusform>
-            <numerusform>%n days</numerusform>
+            <numerusform>%n day left</numerusform>
+            <numerusform>%n days left</numerusform>
         </translation>
     </message>
     <message id="lautta-trash-placeholder">
@@ -935,10 +943,10 @@
         </translation>
     </message>
     <message id="lautta-share-skipped" numerus="yes">
-        <source>%n files are skipped.</source>
+        <source>%n files will be skipped.</source>
         <translation>
-            <numerusform>%n file is skipped.</numerusform>
-            <numerusform>%n files are skipped.</numerusform>
+            <numerusform>%n file will be skipped.</numerusform>
+            <numerusform>%n files will be skipped.</numerusform>
         </translation>
     </message>
     <message id="lautta-viewers-details">
@@ -1031,7 +1039,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-truncated-short">
-        <source>Showing the first 1 MiB</source>
+        <source>Showing the first 1 MB</source>
+        <oldsource>Showing the first 1 MiB</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-media-downloading">
@@ -1051,7 +1060,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-truncated">
-        <source>Showing the first 1 MiB of %1</source>
+        <source>Showing the first 1 MB of %1</source>
+        <oldsource>Showing the first 1 MiB of %1</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-not-utf8">
@@ -1066,10 +1076,10 @@
         </translation>
     </message>
     <message id="lautta-xfr-note-pending" numerus="yes">
-        <source>%n tasks will resume</source>
+        <source>%n tasks stopped</source>
         <translation>
-            <numerusform>%n task will resume</numerusform>
-            <numerusform>%n tasks will resume</numerusform>
+            <numerusform>%n task stopped</numerusform>
+            <numerusform>%n tasks stopped</numerusform>
         </translation>
     </message>
     <message id="lautta-xfr-note-failed">
@@ -1077,10 +1087,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-note-failed-body" numerus="yes">
-        <source>%n files couldn&apos;t be transferred. Tap to retry.</source>
+        <source>%n items failed. Tap to retry.</source>
         <translation>
-            <numerusform>%n file couldn&apos;t be transferred. Tap to retry.</numerusform>
-            <numerusform>%n files couldn&apos;t be transferred. Tap to retry.</numerusform>
+            <numerusform>%n item failed. Tap to retry.</numerusform>
+            <numerusform>%n items failed. Tap to retry.</numerusform>
         </translation>
     </message>
     <message id="lautta-xfr-note-question-body" numerus="yes">
@@ -1103,7 +1113,8 @@
         </translation>
     </message>
     <message id="lautta-xfr-note-pending-body">
-        <source>when you open Lautta again</source>
+        <source>They resume when you open Lautta again.</source>
+        <oldsource>when you open Lautta again</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-note-question">
@@ -1119,7 +1130,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-menu-top">
-        <source>Move to top of the queue</source>
+        <source>Move to the top of the queue</source>
+        <oldsource>Move to top of the queue</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-menu-retry">
@@ -1132,8 +1144,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-remorse-cancel">
-        <source>Canceling</source>
-        <oldsource>Canceling transfer</oldsource>
+        <source>Cancelling</source>
+        <oldsource>Canceling</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-title-upload-one">
@@ -1231,7 +1243,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-wait-volume">
-        <source>Insert the card to continue</source>
+        <source>Waiting for the memory card or USB drive</source>
+        <oldsource>Insert the card to continue</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-wait-bridge">
@@ -1269,7 +1282,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-canceled">
-        <source>Canceled</source>
+        <source>Cancelled</source>
+        <oldsource>Canceled</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-completed-failures" numerus="yes">
@@ -1361,7 +1375,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-menu-move-up">
-        <source>Move up in queue</source>
+        <source>Move up in the queue</source>
+        <oldsource>Move up in queue</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-gone">
@@ -1593,11 +1608,13 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-question-identity-text">
-        <source>%1 hasn’t been seen before. Check that this fingerprint matches the server.</source>
+        <source>%1 hasn&apos;t been seen before. Check that this fingerprint matches the server.</source>
+        <oldsource>%1 hasn’t been seen before. Check that this fingerprint matches the server.</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-question-insecure-text">
-        <source>%1 doesn’t encrypt the connection. What you send can be read on the network.</source>
+        <source>%1 doesn&apos;t encrypt the connection. What you send can be read on the network.</source>
+        <oldsource>%1 doesn’t encrypt the connection. What you send can be read on the network.</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-question-host">
@@ -1925,7 +1942,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-path-favourite">
-        <source>Favourite</source>
+        <source>Add to favourites</source>
+        <oldsource>Favourite</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-path-label">
@@ -1953,7 +1971,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-picker-empty-hint">
-        <source>You can use this folder or pull down to make one</source>
+        <source>Use this folder, or pull down to create one</source>
+        <oldsource>You can use this folder or pull down to make one</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-new-exists-folder">
@@ -2192,7 +2211,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-pdf-wrong-password">
-        <source>Wrong password, try again</source>
+        <source>Wrong password. Try again.</source>
+        <oldsource>Wrong password, try again</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-pdf-password">
@@ -2591,8 +2611,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-thumbs-remote-hint">
-        <source>Downloads pictures and PDFs from servers to make them, which uses more data and battery and can slow down browsing</source>
-        <oldsource>Downloads pictures from servers to make them, which uses more data and battery and can slow down browsing</oldsource>
+        <source>Downloads pictures and PDFs from servers to make thumbnails, which uses more data and battery and can slow down browsing</source>
+        <oldsource>Downloads pictures and PDFs from servers to make them, which uses more data and battery and can slow down browsing</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-browse-mount">
@@ -2664,6 +2684,49 @@
         <source>Ferry at 06:00
 Sauna wood: 2 sacks
 Cabin keys from Anni</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-not-playable">
+        <source>Can&apos;t play %1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-not-playable-unnamed">
+        <source>Can&apos;t play this file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-permission-open">
+        <source>You don&apos;t have permission to open %1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-permission-open-unnamed">
+        <source>You don&apos;t have permission to open this.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-note-pending-manual-body">
+        <source>Resume them in Activity when you open Lautta.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-cover-stopped" numerus="yes">
+        <source>%n tasks stopped</source>
+        <translation>
+            <numerusform>%n task stopped</numerusform>
+            <numerusform>%n tasks stopped</numerusform>
+        </translation>
+    </message>
+    <message id="lautta-xfr-item-moving">
+        <source>Moving</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-item-deleting">
+        <source>Deleting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-item-compressing">
+        <source>Compressing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-item-extracting">
+        <source>Extracting</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

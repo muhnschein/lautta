@@ -8,6 +8,7 @@ ApplicationWindow {
 
     readonly property string file: "lautta://user-documents/ImageMore/photo.jpg"
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property bool made
@@ -68,6 +69,7 @@ ApplicationWindow {
                     return win.fail("the compress dialog can be accepted: into " + page.destUri)
                 if (pageStack.depth !== 2)
                     return win.fail("the dialog takes More's place: depth " + pageStack.depth)
+                win.reachedEnd = true
                 win.scenarioRunning = false
                 break
             }

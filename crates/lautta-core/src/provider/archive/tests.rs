@@ -480,7 +480,9 @@ async fn large_entries_go_to_an_unlinked_temp_file() {
     assert_eq!(h.read_at(size as u64 - 1, 10).await.unwrap(), [9]);
     assert!(h.read_at(size as u64, 10).await.unwrap().is_empty());
     assert_eq!(
-        std::fs::read_dir(&cache).map(|d| d.count()).unwrap_or(0),
+        std::fs::read_dir(&cache)
+            .expect("the entry went through the cache")
+            .count(),
         0,
         "no file left behind"
     );
@@ -579,4 +581,21 @@ async fn unsupported_zip_method_and_encryption_are_refused() {
     let p = open_named("m.zip", &data, tmp.path()).await.unwrap();
     let err = p.open_read(&vp("f"), Lane::Bulk).await.err();
     assert_eq!(err.map(|e| e.kind), Some(ErrorKind::Unsupported));
+}
+
+#[test]
+fn file_range_reads_its_span_in_small_steps() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("f");
+    std::fs::write(&path, b"0123456789abcdef").unwrap();
+    let mut range = FileRange::new(Arc::new(File::open(&path).unwrap()), 4, 9);
+    let (mut out, mut buf) = (Vec::new(), [0u8; 2]);
+    loop {
+        let n = range.read(&mut buf).unwrap();
+        if n == 0 {
+            break;
+        }
+        out.extend_from_slice(&buf[..n]);
+    }
+    assert_eq!(out, b"456789abc");
 }

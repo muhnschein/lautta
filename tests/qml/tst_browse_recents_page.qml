@@ -7,6 +7,7 @@ ApplicationWindow {
     id: win
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property var page
@@ -150,6 +151,7 @@ ApplicationWindow {
                 var h = win.hint()
                 if (h === "lautta-recents-off-settings-hint" || h === "Turn them on in Settings") {
                     App.setSetting("recents_enabled", JSON.stringify(true))
+                    win.reachedEnd = true
                     win.scenarioRunning = false
                 } else if (win.waited > 50) {
                     win.fail("with recents off the hint points to Settings, got " + h)

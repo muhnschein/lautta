@@ -84,12 +84,15 @@ impl ViewPrefs {
 }
 
 /// Grid is suggested when more than 60 % of the entries are images or videos.
-pub fn suggest_grid(entries: &[Entry]) -> bool {
-    let media = entries
-        .iter()
-        .filter(|e| matches!(mime::category_of(e), FileCategory::Image | FileCategory::Video))
-        .count();
-    media * 10 > entries.len() * 6
+pub fn suggest_grid<'a>(entries: impl IntoIterator<Item = &'a Entry>) -> bool {
+    let (mut media, mut all) = (0usize, 0usize);
+    for e in entries {
+        all += 1;
+        if matches!(mime::category_of(e), FileCategory::Image | FileCategory::Video) {
+            media += 1;
+        }
+    }
+    media * 10 > all * 6
 }
 
 #[cfg(test)]

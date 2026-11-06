@@ -79,7 +79,7 @@ Page {
             wrapMode: Text.Wrap
             color: page.errorKind !== "" ? Theme.highlightColor : Theme.secondaryHighlightColor
             text: page.errorKind !== ""
-                  ? ErrorText.message(page.errorKind, { "item": page.fileName, "location": App.locationName(page.uri) })
+                  ? ErrorText.message(page.errorKind, { "item": page.fileName, "location": App.locationName(page.uri), "open": true })
                   //% "Getting %1"
                   : qsTrId("lautta-viewers-getting").arg(page.fileName)
         }

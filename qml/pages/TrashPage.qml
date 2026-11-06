@@ -166,7 +166,7 @@ Page {
                 }
                 color: item.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                //% "%n days"
+                //% "%n days left"
                 text: qsTrId("lautta-trash-days-left", model.daysLeft)
             }
         }

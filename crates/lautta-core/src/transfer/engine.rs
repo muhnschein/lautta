@@ -3,6 +3,8 @@
 //! every change and publishes events. Queue state lives behind one `std::sync::Mutex` never held
 //! across `.await`; item tasks are plain tokio tasks, abortable (pause, cancel, waiting) because
 //! each state change they make is one synchronous function, so an abort never lands halfway.
+//! Pause and waiting spare an item past its point of no return (`commit`): an abort cannot undo
+//! a step already running. Results count only from the task registered for the item.
 
 use super::clock::{Clock, SystemClock};
 use super::exec::{self, ItemEnv, ItemJob, Outcome};
@@ -71,7 +73,7 @@ impl EngineDeps {
 
 struct Live {
     t: Transfer,
-    running: HashMap<u32, JoinHandle<()>>,
+    running: HashMap<u32, Running>,
     item_bytes: HashMap<u32, u64>,
     rate: RateEstimator,
     last_event_ms: i64,
@@ -98,6 +100,12 @@ impl Live {
         }
     }
 
+    /// Whether the calling task is the one running `seq`.
+    fn is_current(&self, seq: u32) -> bool {
+        let me = tokio::task::try_id();
+        me.is_some() && self.running.get(&seq).map(|r| r.task.id()) == me
+    }
+
     fn live_bytes(&self) -> u64 {
         self.item_bytes.values().sum()
     }
@@ -116,6 +124,12 @@ impl Live {
             .map(|i| (i.seq, is_barrier(op, i.plan.kind)))
             .collect()
     }
+}
+
+struct Running {
+    task: JoinHandle<()>,
+    /// Past its point of no return.
+    committed: bool,
 }
 
 /// Folders, links and deletes run alone and in order; files run in parallel.
@@ -633,7 +647,13 @@ impl Inner {
         if let Some(h) = live.finalizer.take() {
             h.abort();
         }
-        let running: Vec<(u32, JoinHandle<()>)> = live.running.drain().collect();
+        let mut running: Vec<(u32, AbortHandle)> = Vec::new();
+        live.running.retain(|seq, r| {
+            r.committed || {
+                running.push((*seq, r.task.abort_handle()));
+                false
+            }
+        });
         let mut requeue = Vec::new();
         for (seq, handle) in running {
             handle.abort();
@@ -687,11 +707,11 @@ impl Inner {
         if let Some(h) = live.finalizer.take() {
             h.abort();
         }
-        let running: Vec<(u32, JoinHandle<()>)> = live.running.drain().collect();
+        let running: Vec<(u32, Running)> = live.running.drain().collect();
         let mut stopped = Vec::with_capacity(running.len());
-        for (seq, handle) in running {
-            handle.abort();
-            stopped.push(handle);
+        for (seq, r) in running {
+            r.task.abort();
+            stopped.push(r.task);
             live.item_bytes.remove(&seq);
             st.sched.item_finished(ItemRef { transfer: id, seq });
         }
@@ -841,7 +861,13 @@ impl Inner {
             live.t.set_item_state(pick.seq, ItemState::Running);
             self.write_item(live, pick.seq);
             let handle = self.rt.spawn(run_item_task(self.clone(), pick));
-            live.running.insert(pick.seq, handle);
+            live.running.insert(
+                pick.seq,
+                Running {
+                    task: handle,
+                    committed: false,
+                },
+            );
         }
     }
 
@@ -948,17 +974,41 @@ impl Inner {
         }
     }
 
-    fn release(&self, st: &mut State, pick: ItemRef) {
-        if let Some(live) = st.live.get_mut(&pick.transfer) {
-            live.running.remove(&pick.seq);
-            live.item_bytes.remove(&pick.seq);
+    /// False for a task no longer running its item (paused, canceled): its result is dropped.
+    fn release(&self, st: &mut State, pick: ItemRef) -> bool {
+        let Some(live) = st.live.get_mut(&pick.transfer) else {
+            return false;
+        };
+        if !live.is_current(pick.seq) {
+            return false;
         }
+        live.running.remove(&pick.seq);
+        live.item_bytes.remove(&pick.seq);
         st.sched.item_finished(pick);
+        true
+    }
+
+    /// Point of no return: from here pause and waiting let the item finish. False when the item
+    /// was already taken from this task.
+    fn commit(&self, pick: ItemRef, on: bool) -> bool {
+        let mut st = self.lock();
+        let Some(live) = st.live.get_mut(&pick.transfer) else {
+            return false;
+        };
+        if !live.is_current(pick.seq) {
+            return false;
+        }
+        if let Some(r) = live.running.get_mut(&pick.seq) {
+            r.committed = on;
+        }
+        true
     }
 
     fn settle(self: &Arc<Self>, pick: ItemRef, state: ItemState, error: Option<String>) {
         let mut st = self.lock();
-        self.release(&mut st, pick);
+        if !self.release(&mut st, pick) {
+            return;
+        }
         let Some(live) = st.live.get_mut(&pick.transfer) else {
             return;
         };
@@ -1014,7 +1064,9 @@ impl Inner {
 
     fn subtree_done(self: &Arc<Self>, pick: ItemRef) {
         let mut st = self.lock();
-        self.release(&mut st, pick);
+        if !self.release(&mut st, pick) {
+            return;
+        }
         let Some(live) = st.live.get_mut(&pick.transfer) else {
             return;
         };
@@ -1026,7 +1078,9 @@ impl Inner {
 
     fn ask(self: &Arc<Self>, pick: ItemRef, conflict: Conflict) {
         let mut st = self.lock();
-        self.release(&mut st, pick);
+        if !self.release(&mut st, pick) {
+            return;
+        }
         let id = pick.transfer;
         let Some(live) = st.live.get_mut(&id) else {
             return;
@@ -1044,10 +1098,10 @@ impl Inner {
         self.pump(&mut st);
     }
 
-    fn rebase(&self, pick: ItemRef, job: &mut ItemJob, new_dst: Uri) {
+    fn rebase(&self, pick: ItemRef, job: &mut ItemJob, new_dst: Uri) -> bool {
         let mut st = self.lock();
-        let Some(live) = st.live.get_mut(&pick.transfer) else {
-            return;
+        let Some(live) = st.live.get_mut(&pick.transfer).filter(|l| l.is_current(pick.seq)) else {
+            return false;
         };
         let old = live.t.items[pick.seq as usize].plan.dst.clone();
         let mut touched = vec![pick.seq];
@@ -1072,6 +1126,7 @@ impl Inner {
         for seq in touched {
             self.write_item(live, seq);
         }
+        true
     }
 
     fn on_result(
@@ -1087,10 +1142,13 @@ impl Inner {
             Ok(Outcome::Subtree) => self.subtree_done(pick),
             Ok(Outcome::Ask(c)) => self.ask(pick, c),
             Ok(Outcome::KeepBoth(uri)) => {
-                self.rebase(pick, job, uri);
-                return Next::Rerun;
+                if self.rebase(pick, job, uri) {
+                    return Next::Rerun;
+                }
             }
-            Err(e) => return self.on_error(pick, e, attempt),
+            // A rerun starts over: abortable again until its own point of no return.
+            Err(e) if self.commit(pick, false) => return self.on_error(pick, e, attempt),
+            Err(_) => {}
         }
         Next::Stop
     }
@@ -1108,6 +1166,13 @@ impl Inner {
         match wait_reason_for(e.kind) {
             Some(reason) => {
                 let mut st = self.lock();
+                if !st
+                    .live
+                    .get(&pick.transfer)
+                    .is_some_and(|l| l.is_current(pick.seq))
+                {
+                    return Next::Stop;
+                }
                 if let Err(err) = self.suspend(&mut st, pick.transfer, TransferState::Waiting(reason)) {
                     log::debug!("cannot wait: {err}");
                 }
@@ -1235,6 +1300,8 @@ impl Inner {
         let inner = self.clone();
         let progress: ProgressSink =
             Arc::new(move |done, _| inner.on_progress(pick.transfer, pick.seq, done));
+        let inner = self.clone();
+        let commit = Arc::new(move |on| inner.commit(pick, on));
         let env = ItemEnv {
             same_location: plan.src.location == plan.dst.location,
             src,
@@ -1244,6 +1311,7 @@ impl Inner {
             scratch_dir: self.cfg.scratch_dir.clone(),
             trasher: self.deps.trasher.clone(),
             progress,
+            commit,
         };
         Some(Prepared {
             env,
@@ -1278,5 +1346,99 @@ async fn run_item_task(inner: Arc<Inner>, pick: ItemRef) {
                 return;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ops::PlanTotals;
+    use crate::provider::memory::MemoryProvider;
+    use crate::provider::StaticResolver;
+    use crate::vpath::VPath;
+
+    fn file_item(src: &str, dst: &str) -> PlanItem {
+        PlanItem {
+            src: Uri::new("a", VPath::parse(src.as_bytes()).unwrap()),
+            dst: Uri::new("b", VPath::parse(dst.as_bytes()).unwrap()),
+            kind: Kind::File,
+            size: Some(1),
+            mtime_ms: None,
+            mode: None,
+            link_target: None,
+            conflict: None,
+            proposed_name: None,
+            resolution: None,
+        }
+    }
+
+    /// A task that no longer runs its item (paused, then the item went to another task) changes
+    /// nothing with what it reports.
+    #[tokio::test]
+    async fn results_from_a_task_no_longer_running_the_item_are_dropped() {
+        let resolver = StaticResolver::default()
+            .with("a", Arc::new(MemoryProvider::default()))
+            .with("b", Arc::new(MemoryProvider::default()));
+        let engine = Engine::new(
+            EngineDeps::new(Db::open_in_memory().unwrap(), Arc::new(resolver)),
+            EngineConfig::default(),
+        );
+        engine.volume_present("a", false);
+        let plan = Plan {
+            kind: OperationKind::Copy,
+            destination: Uri::root("b"),
+            items: vec![file_item("f", "f")],
+            totals: PlanTotals::default(),
+            needs_summary: false,
+        };
+        let id = engine.add(plan, "", TransferOptions::default()).await.unwrap();
+        let before = engine.get(id).unwrap().state;
+        assert_eq!(before, TransferState::Waiting(WaitReason::Volume));
+        let mut other = None;
+        let pick = ItemRef { transfer: id, seq: 0 };
+        for registered in [false, true] {
+            if registered {
+                let mut st = engine.inner.lock();
+                let live = st.live.get_mut(&id).unwrap();
+                let task = tokio::spawn(std::future::pending::<()>());
+                other = Some(task.abort_handle());
+                live.running.insert(
+                    0,
+                    Running {
+                        task,
+                        committed: true,
+                    },
+                );
+            }
+            let inner = engine.inner.clone();
+            let mut job = ItemJob {
+                plan: file_item("f", "f"),
+                temp_name: Vec::new(),
+            };
+            tokio::spawn(async move {
+                assert!(!inner.commit(pick, true), "commit");
+                assert!(!inner.rebase(pick, &mut job, Uri::root("b")), "rebase");
+                let err = Error::kind(ErrorKind::ConnectionLost);
+                assert!(matches!(inner.on_error(pick, err, u32::MAX), Next::Stop), "waits");
+                inner.settle(pick, ItemState::Done, None);
+                inner.subtree_done(pick);
+                let conflict = crate::transfer::conflict::build_conflict(
+                    &job.plan,
+                    &crate::entry::Entry::new(b"f", Kind::File),
+                    false,
+                );
+                inner.ask(pick, conflict);
+            })
+            .await
+            .unwrap();
+            let items = engine.items(id).unwrap();
+            assert_eq!(items[0].state, ItemState::Pending);
+            assert!(items[0].plan.conflict.is_none());
+            assert_eq!(engine.get(id).unwrap().state, before);
+            let st = engine.inner.lock();
+            assert_eq!(st.live[&id].running.len(), usize::from(registered));
+            assert!(st.live[&id].running.values().all(|r| r.committed));
+        }
+        other.unwrap().abort();
     }
 }

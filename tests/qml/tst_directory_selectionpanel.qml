@@ -13,6 +13,7 @@ import "../../qml/pages"
 
 ApplicationWindow {
     id: win
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-documents/SelectionPanel/"
     property var view: pageStack.depth > 0 && pageStack.currentPage.view ? pageStack.currentPage.view : null
@@ -67,9 +68,22 @@ ApplicationWindow {
             expect(item.opacity === 1, what + ": nothing over the backdrop is translucent: " + item)
     }
 
-    function settle() {
-        for (var i = 0; i < 100 && pageStack.busy; ++i)
+    function waitFor(done, what) {
+        for (var i = 0; i < 200 && !done(); ++i)
             tools.pump(50)
+        return expect(done(), "timed out waiting for " + what)
+    }
+
+    function shown(bar) {
+        return bar.open && Math.abs(bar.visibleSize - bar.height) < 1
+    }
+
+    function gone(bar) {
+        return !bar.open && bar.visibleSize === 0
+    }
+
+    function onPage(pred) {
+        return !pageStack.busy && pred(pageStack.currentPage)
     }
 
     function panel(prop) {
@@ -112,16 +126,14 @@ ApplicationWindow {
         var folderView = view
         folderView.startSelection()
         uris.forEach(function (uri) { folderView.model.toggle(uri) })
-        tools.pump(500)
-        var more = panelButton(sel, qsTrId("lautta-dir-act-more"))
-        if (!expect(more !== null, "the panel has its More actions button"))
+        if (!waitFor(function () { return shown(sel) && panelButton(sel, qsTrId("lautta-dir-act-more")) !== null },
+                     "the panel's More actions button"))
             return null
-        more.clicked(null)
-        tools.pump(300)
-        settle()
+        panelButton(sel, qsTrId("lautta-dir-act-more")).clicked(null)
+        if (!waitFor(function () { return onPage(function (p) { return p.selection === true && p.actions !== undefined }) },
+                     "More actions to open the selection's page"))
+            return null
         var page = pageStack.currentPage
-        if (!expect(page.selection === true && page.actions !== undefined, "More actions opens the selection's page"))
-            return null
         expect(folderView.selecting, "opening the page keeps the selection")
         return page
     }
@@ -129,17 +141,14 @@ ApplicationWindow {
     function closeDialog(depth, what) {
         expect(pageStack.depth === depth, what + ": the dialog took the page's place: depth " + pageStack.depth)
         pageStack.pop(null, PageStackAction.Immediate)
-        tools.pump(300)
-        settle()
-        expect(view !== null && !view.selecting, what + " ends selection")
+        waitFor(function () { return !pageStack.busy && view !== null && !view.selecting }, what + " to end selection")
     }
 
     function checkSelectionPanel() {
         var sel = panel("buttons")
         view.startSelection()
         view.model.toggle(base + "a.md")
-        tools.pump(700)
-        expect(sel.open && sel.visibleSize > 0, "the selection panel is open")
+        waitFor(function () { return shown(sel) && sel.buttons.length === 6 }, "the selection panel")
         expectOpaque(sel, "selection panel")
         same(sel.buttons.map(function (b) { return b.id }), ["share", "copy", "cut", "delete", "more", "done"],
              "the long-press menu's order, More actions, then leaving")
@@ -159,7 +168,7 @@ ApplicationWindow {
         var menus = findAll(sel, function (x) { return x._activationPermitted !== undefined || x.hasOwnProperty("__silica_menuitem") })
         expect(menus.length === 0, "one item: no push-up menu on the panel: " + menus.length)
         view.endSelection()
-        tools.pump(300)
+        waitFor(function () { return gone(sel) }, "the panel to leave")
     }
 
     function ids(buttons) {
@@ -174,11 +183,10 @@ ApplicationWindow {
     function checkLeavingKeepsButtons(sel) {
         var full = ["share", "copy", "cut", "delete", "more", "done"]
         view.startSelection()
-        tools.pump(300)
+        waitFor(function () { return shown(sel) }, "the panel")
         same(ids(sel.buttons), ["done"], "waiting for the first item: just Stop selecting")
         view.model.toggle(base + "a.md")
-        tools.pump(700)
-        same(ids(sel.buttons), full, "one item selected")
+        waitFor(function () { return String(ids(sel.buttons)) === String(full) }, "the buttons for one item")
         var before = drawn(sel)
         panelButton(sel, qsTrId("lautta-dir-sel-done")).clicked(null)
         expect(!view.selecting && view.model.selectedCount === 0, "Stop selecting ends it")
@@ -189,24 +197,22 @@ ApplicationWindow {
             same(drawn(sel), before, "and it draws them, step " + i)
             tools.pump(20)
         }
-        tools.pump(500)
-        expect(!sel.open, "the panel is gone")
+        waitFor(function () { return gone(sel) }, "the panel to leave")
 
         view.startSelection()
         view.model.toggle(base + "a.md")
-        tools.pump(700)
-        same(ids(sel.buttons), full, "selecting again")
+        waitFor(function () { return shown(sel) && String(ids(sel.buttons)) === String(full) }, "the buttons when selecting again")
         view.model.toggle(base + "a.md")
         expect(!view.selecting, "deselecting the last item ends selection")
         same(ids(sel.buttons), full, "the buttons stay as the panel leaves after the last item")
         same(drawn(sel), before, "and it draws them")
-        tools.pump(700)
+        waitFor(function () { return gone(sel) }, "the panel to leave")
 
         view.startSelection()
-        tools.pump(300)
+        waitFor(function () { return shown(sel) }, "the panel")
         same(ids(sel.buttons), ["done"], "waiting again: just Stop selecting")
         view.endSelection()
-        tools.pump(500)
+        waitFor(function () { return gone(sel) }, "the panel to leave")
     }
 
     function checkMoreOfOne(sel) {
@@ -221,23 +227,24 @@ ApplicationWindow {
               [qsTrId("lautta-dir-act-move-new-folder"), "file-folder"]],
              "one item: Rename, Add to favourites, Compress, Move to new folder, each with its icon")
         pageStack.pop(null, PageStackAction.Immediate)
-        tools.pump(300)
-        settle()
-        expect(view !== null && view.selecting && view.model.selectedCount === 1, "leaving the page keeps the selection")
+        waitFor(function () { return !pageStack.busy && view !== null }, "the folder again")
+        expect(view.selecting && view.model.selectedCount === 1, "leaving the page keeps the selection")
 
         page = openMore(sel, [])
+        if (!page)
+            return
         pageRows(page)[0].row.clicked(null)
-        tools.pump(500)
-        settle()
+        waitFor(function () { return onPage(function (p) { return p.newName !== undefined }) }, "the rename dialog")
         var dialog = pageStack.currentPage
         expect(dialog.newName !== undefined && dialog.uri === base + "a.md" && dialog.isDir === false,
                "Rename opens the rename dialog for the selected file")
         closeDialog(2, "Rename")
 
         page = openMore(sel, [base + "a.md"])
+        if (!page)
+            return
         pageRows(page)[1].row.clicked(null)
-        tools.pump(500)
-        settle()
+        waitFor(function () { return onPage(function (p) { return p.added !== undefined }) }, "the favourite page")
         var favourite = pageStack.currentPage
         expect(favourite.added !== undefined && favourite.uri === base + "a.md" && favourite.isDir === false,
                "Add to favourites opens the favourite page for the selected file")
@@ -248,7 +255,6 @@ ApplicationWindow {
         var folderView = view
         folderView.startSelection()
         folderView.model.selectAll()
-        tools.pump(500)
         var page = openMore(sel, [])
         if (!page)
             return
@@ -258,18 +264,18 @@ ApplicationWindow {
               [qsTrId("lautta-dir-act-move-new-folder"), glyph("folder")]],
              "several items: Compress and Move to new folder, the app's glyphs")
         folderView.endSelection()
-        tools.pump(300)
+        waitFor(function () { return gone(sel) }, "the panel to leave")
         same(pageTitle(page), qsTrId("lautta-dir-selected", 3), "the header keeps its count when selection ends")
         same(pageRows(page).length, 2, "the rows stay when selection ends")
         pageStack.pop(null, PageStackAction.Immediate)
-        tools.pump(300)
-        settle()
+        waitFor(function () { return !pageStack.busy && view !== null }, "the folder again")
 
         folderView.model.selectAll()
         page = openMore(sel, [])
+        if (!page)
+            return
         pageRows(page)[0].row.clicked(null)
-        tools.pump(500)
-        settle()
+        waitFor(function () { return onPage(function (p) { return p.formats !== undefined }) }, "the compress dialog")
         var dialog = pageStack.currentPage
         expect(dialog.formats !== undefined, "Compress opens the compress dialog")
         same(dialog.uris.slice().sort(), [base + "a.md", base + "b.md", base + "c.tar.gz"], "for every selected item")
@@ -277,19 +283,17 @@ ApplicationWindow {
     }
 
     function checkClipboardPanel() {
-        App.copy(JSON.stringify([base + "a.md"]))
-        tools.pump(700)
         var clip = panel("fromText")
-        expect(clip.open, "the paste bar is open")
+        App.copy(JSON.stringify([base + "a.md"]))
+        waitFor(function () { return shown(clip) }, "the paste bar")
         expectOpaque(clip, "paste bar")
         App.clearClipboard()
-        tools.pump(300)
+        waitFor(function () { return gone(clip) }, "the paste bar to leave")
     }
 
     function checkOtherBars() {
         expectOpaque(activityBar, "activity bar")
         pageStack.push(Qt.resolvedUrl("../../qml/pages/SearchPage.qml"), {}, PageStackAction.Immediate)
-        tools.pump(300)
         var searchPanels = findAll(pageStack.currentPage, function (x) { return x.dock !== undefined })
         if (expect(searchPanels.length === 1, "the search page has its progress panel"))
             expectOpaque(searchPanels[0], "search progress")
@@ -310,28 +314,27 @@ ApplicationWindow {
 
     Component.onCompleted: {
         documents.createFolder("SelectionPanel")
-        tools.pump(500)
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + "a.md")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + "b.md")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/data.bin"), base + "c.tar.gz")
+        waitFor(function () { return documents.indexOf(base.replace(/\/$/, "")) >= 0 }, "the folder")
+        expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + "a.md"), "a.md")
+        expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + "b.md"), "b.md")
+        expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/data.bin"), base + "c.tar.gz"), "c.tar.gz")
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        tools.pump(800)
-        if (expect(view && view.model.count === 3, "the folder lists its files")) {
+        if (waitFor(function () { return view && !view.model.loading && view.model.count === 3 }, "the folder's files")) {
             checkSelectionPanel()
             var sel = panel("buttons")
             checkLeavingKeepsButtons(sel)
             checkMoreOfOne(sel)
             checkMoreOfSeveral(sel)
             App.setSetting("view_mode", JSON.stringify("grid"))
-            tools.pump(300)
-            if (expect(view.gridMode, "the folder shows its files as a grid"))
+            if (waitFor(function () { return view.gridMode }, "the folder as a grid"))
                 checkMoreOfOne(sel)
             App.setSetting("view_mode", JSON.stringify("list"))
-            tools.pump(300)
+            waitFor(function () { return !view.gridMode }, "the folder as a list")
             checkClipboardPanel()
             checkArchiveIcons()
         }
         checkOtherBars()
+        reachedEnd = true
     }
 
     Item {

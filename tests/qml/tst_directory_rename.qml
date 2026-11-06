@@ -6,6 +6,7 @@ import "../../qml/dialogs"
 
 ApplicationWindow {
     id: win
+    property bool reachedEnd
 
     ViewerTools { id: tools }
 
@@ -30,9 +31,8 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), "lautta://user-documents/taken.md")
+        expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), "lautta://user-documents/taken.md"), "fixture installed")
         pageStack.push(dialogComponent, {}, PageStackAction.Immediate)
-        tools.pump(800)
         var dialog = pageStack.currentPage
         var header = findAll(dialog, function(x) { return x.defaultAcceptText !== undefined }, [])
         var field = findAll(dialog, function(x) { return x.errorHighlight !== undefined && x.visible }, [])
@@ -50,10 +50,14 @@ ApplicationWindow {
         expect(field[0].selectedText === "draft-v7", "selected without the extension: " + field[0].selectedText)
         expect(!field[0].errorHighlight && dialog.canAccept === false, "the old name is no error, nor a rename")
         field[0].text = "taken.md"
+        // Taken once the dialog has listed the folder.
+        for (var i = 0; i < 200 && !dialog.taken; ++i)
+            tools.pump(50)
         expect(field[0].errorHighlight && field[0].label !== field[0].placeholderText && !dialog.canAccept,
                "a taken name is an error in the label: " + field[0].label)
         field[0].text = "fresh.odt"
         expect(!field[0].errorHighlight && dialog.canAccept && dialog.newName === "fresh.odt", "a free name")
+        reachedEnd = true
     }
 
     Component {

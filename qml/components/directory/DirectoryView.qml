@@ -354,7 +354,7 @@ Item {
                    //% "This folder is empty"
                    : qsTrId("lautta-dir-empty-hint-readonly")
         }
-        var text = ErrorText.message(dir.errorKind, { "location": dir.locationName, "item": dir.title })
+        var text = ErrorText.message(dir.errorKind, { "location": dir.locationName, "item": dir.title, "open": true })
         return detailsShown ? text + "\n\n" + dir.errorMessage : text
     }
 
@@ -926,7 +926,7 @@ Item {
                 anchors.top: archiveNotice.bottom
                 visible: dir.errorKind.length > 0 && dir.count > 0 && !dir.offline
                 height: visible ? implicitHeight : 0
-                text: ErrorText.message(dir.errorKind, { "location": dir.locationName, "item": dir.title })
+                text: ErrorText.message(dir.errorKind, { "location": dir.locationName, "item": dir.title, "open": true })
                 actionText: qsTrId("lautta-dir-retry")
                 onAction: dir.refresh()
             }

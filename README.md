@@ -14,10 +14,10 @@
 
 Lautta (Finnish: ferry) is a file manager for Sailfish OS. It is two things:
 
-- **A Jolla Store app you can use today.** Sandboxed, within the store's
-  rules, no network access of its own.
+- **A Harbour-compliant app you can use today.** Sandboxed, within the store's
+  rules, no network access of its own. (The goal is to make this available via the Jolla Store.)
 - **A showcase** of what Sailfish apps could do if the platform offered
-  network locations, the way iOS Files does. [netvfs](https://github.com/muhnschein/netvfs)
+  network locations, the way e.g. iOS does. [netvfs](https://github.com/muhnschein/netvfs)
   is a sketch of such a platform service. With it installed, Lautta browses
   servers as if they were folders on the phone.
 
@@ -34,7 +34,7 @@ network protocol: everything remote goes through netvfs.
 | Search | ✓ | ✓ |
 | Image, video, PDF, text viewers | ✓ | ✓ |
 | Thumbnails | ✓ | ✓ |
-| *Save to Lautta* | ✓ | ✓ |
+| Share sheet target | ✓ | ✓ |
 | SFTP and SMB servers | ✗ | ✓ |
 | Servers nearby | ✗ | ✓ |
 | Phone ⇄ server transfers | ✗ | ✓ |
@@ -87,6 +87,6 @@ $ make check
 ## License
 
 Licensed LGPL-2.1-or-later. The image viewer files adapted from Jolla are
-BSD-3-Clause, the JetBrains icons Apache-2.0; each file says which.
+BSD-3-Clause, the JetBrains icons Apache-2.0.
 
 Copyright © Lautta contributors.

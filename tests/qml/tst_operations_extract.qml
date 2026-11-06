@@ -4,12 +4,16 @@ import Sailfish.Silica 1.0
 import "../../qml/dialogs"
 
 ApplicationWindow {
+    id: test
+    property bool reachedEnd
+
     initialPage: Component {
         ExtractDialog {
             archiveUri: "lautta://user-documents/dataset.tar.gz"
             Component.onCompleted: {
                 if (destUri !== "lautta://user-documents/")
                     console.error("extracting goes next to the archive by default: " + destUri)
+                test.reachedEnd = true
             }
         }
     }

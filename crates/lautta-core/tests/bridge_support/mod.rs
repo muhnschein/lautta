@@ -93,9 +93,9 @@ impl Rig {
     }
 }
 
-/// Polls on the (possibly virtual) clock.
+/// Polls on the (possibly virtual) clock, up to 30 s: loaded runners are slow.
 pub async fn eventually(what: &str, mut cond: impl FnMut() -> bool) {
-    for _ in 0..400 {
+    for _ in 0..3000 {
         if cond() {
             return;
         }

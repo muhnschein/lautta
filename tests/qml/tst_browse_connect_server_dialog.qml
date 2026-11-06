@@ -5,8 +5,12 @@ import Lautta 1.0
 import "../../qml/dialogs"
 
 ApplicationWindow {
+    id: test
+    property bool reachedEnd
+
     initialPage: Component {
         ConnectServerDialog {
+            Component.onCompleted: test.reachedEnd = true
             url: "sftp://raspberrypi.local"
         }
     }

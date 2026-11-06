@@ -4,6 +4,7 @@ import Lautta 1.0
 
 Item {
     id: root
+    property bool reachedEnd
 
     SearchTestSupport { id: support }
     SearchModel {
@@ -30,10 +31,9 @@ Item {
     }
 
     function waitIdle() {
-        for (var n = 0; n < 200 && !model.running && n < 3; ++n)
+        for (var i = 0; i < 3000 && model.running; ++i)
             support.spin(10)
-        for (var i = 0; i < 400 && model.running; ++i)
-            support.spin(10)
+        check(!model.running, "search finished")
     }
 
     function names() {
@@ -72,7 +72,6 @@ Item {
         check(!model.running, "refused start does not run")
 
         check(run("thesis", "substring", [], "any", "any", false), "substring search starts")
-        check(!model.running, "search finished")
         check(names() === "Thesis,Thesis_notes.md,big_thesis.zip,old_thesis.txt,thesis_draft.odt",
               "substring hits: " + names())
         check(model.hitCount === 5, "hit count " + model.hitCount)
@@ -147,5 +146,6 @@ Item {
         model.rootUri = "lautta://user-documents/nonexistent_dir"
         run("x", "substring", [], "any", "any", false)
         check(model.errorKind.length > 0, "a missing root reports an error: " + model.errorKind)
+        reachedEnd = true
     }
 }

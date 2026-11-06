@@ -8,6 +8,7 @@ ApplicationWindow {
     id: window
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property var viewer
@@ -116,6 +117,7 @@ ApplicationWindow {
             case 5:
                 if (!window.cleaned)
                     return
+                window.reachedEnd = true
                 window.scenarioRunning = false
                 break
             }
@@ -126,9 +128,13 @@ ApplicationWindow {
 
     Component.onCompleted: {
         listing.createFolder("ViewerRename")
-        tools.pump(500)
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), folder + "a.jpg")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), folder + "before.jpg")
+        for (var i = 0; i < 200 && listing.indexOf(listing.uri + "ViewerRename") < 0; ++i)
+            tools.pump(50)
+        if (listing.indexOf(listing.uri + "ViewerRename") < 0)
+            console.error("FAILED: folder ViewerRename not made")
+        if (!(tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), folder + "a.jpg")
+              && tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), folder + "before.jpg")))
+            console.error("FAILED: fixtures not installed")
         viewer = pageStack.push(viewerComponent, {}, PageStackAction.Immediate)
     }
 

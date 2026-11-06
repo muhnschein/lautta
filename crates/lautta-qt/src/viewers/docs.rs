@@ -5,6 +5,7 @@ use crate::runtime::core;
 use lautta_core::app_viewers::ViewedText;
 use lautta_core::org::recents::RecentKind;
 use lautta_core::preview::highlight::{ColourJob, ColouredText, Palette};
+use lautta_core::preview::rows::TextRows;
 use lautta_core::Error;
 use qmetaobject::prelude::*;
 use qmetaobject::qml_register_type;
@@ -30,20 +31,27 @@ pub struct TextDocument {
     size: qt_property!(f64; NOTIFY stateChanged),
     errorKind: qt_property!(QString; NOTIFY stateChanged),
     errorMessage: qt_property!(QString; NOTIFY stateChanged),
+    /// Viewer rows of `text`; 0 until loaded.
+    rowCount: qt_property!(i32; NOTIFY stateChanged),
+    lineCount: qt_property!(i32; NOTIFY stateChanged),
     /// Colour grammar, "" without.
-    syntax: qt_property!(QString; NOTIFY stateChanged),
+    syntax: qt_property!(QString; NOTIFY colouredChanged),
     /// First lines (or all) have colours; may come after the text.
-    highlighted: qt_property!(bool; NOTIFY stateChanged),
+    highlighted: qt_property!(bool; NOTIFY colouredChanged),
     stateChanged: qt_signal!(),
+    /// Own signal: colours coming late must not make the text's rows anew (TextViewer.qml).
+    colouredChanged: qt_signal!(),
 
     reload: qt_method!(fn(&mut self)),
-    /// Row as StyledText: every character escaped, whitespace kept, coloured per `colours`
-    /// (`class=#rrggbb,…`, SyntaxColours.js). `row` text, its line from 0 and its start in the line
-    /// with tabs expanded (components/viewers/TextRows.js).
-    styledRow: qt_method!(fn(&self, row: QString, line: i32, start: i32, colours: QString) -> QString),
+    /// Line number from 1 on a line's first row, 0 on rows a long line goes on over or past them.
+    rowNumber: qt_method!(fn(&self, index: i32) -> i32),
+    /// Row `index` as StyledText: every character escaped, whitespace kept, tabs expanded, coloured
+    /// per `colours` (`class=#rrggbb,…`, SyntaxColours.js). Empty past the rows.
+    styledRow: qt_method!(fn(&self, index: i32, colours: QString) -> QString),
 
     generation: u64,
     lines: ColouredText,
+    rows: TextRows,
 }
 
 impl TextDocument {
@@ -105,6 +113,7 @@ impl TextDocument {
         self.text = QString::from(v.lines.text());
         self.truncated = v.truncated;
         self.validUtf8 = v.valid_utf8;
+        self.set_rows(TextRows::new(v.lines.text()));
         self.set_lines(v.lines);
         v.colouring
     }
@@ -115,7 +124,6 @@ impl TextDocument {
             if let (true, Ok(Some(lines))) = (me.generation == gen, res) {
                 if lines.coloured_lines() > 0 {
                     me.set_lines(lines);
-                    me.stateChanged();
                 }
             }
         });
@@ -126,15 +134,33 @@ impl TextDocument {
         let syntax = lines.syntax().filter(|_| self.highlighted);
         self.syntax = qstr(syntax.unwrap_or_default());
         self.lines = lines;
+        self.colouredChanged();
     }
 
-    fn styledRow(&self, row: QString, line: i32, start: i32, colours: QString) -> QString {
+    fn set_rows(&mut self, rows: TextRows) {
+        self.rowCount = i32::try_from(rows.len()).unwrap_or(i32::MAX);
+        self.lineCount = i32::try_from(rows.lines()).unwrap_or(i32::MAX);
+        self.rows = rows;
+    }
+
+    fn rowNumber(&self, index: i32) -> i32 {
+        let number = usize::try_from(index)
+            .ok()
+            .and_then(|i| self.rows.row(i))
+            .map_or(0, |r| r.number);
+        i32::try_from(number).unwrap_or(i32::MAX)
+    }
+
+    fn styledRow(&self, index: i32, colours: QString) -> QString {
+        let Some(row) = usize::try_from(index).ok().and_then(|i| self.rows.row(i)) else {
+            return QString::default();
+        };
         let palette = Palette::parse(&colours.to_string());
-        // Negative line is past every line: escaped, no colours.
-        let line = usize::try_from(line).unwrap_or(usize::MAX);
-        let start = usize::try_from(start).unwrap_or_default();
-        let styled = self.lines.styled_row(line, start, &row.to_string(), &palette);
-        QString::from(styled.as_str())
+        QString::from(
+            self.lines
+                .styled_row(row.line, row.start, row.text, &palette)
+                .as_str(),
+        )
     }
 
     fn clear_content(&mut self) {
@@ -143,6 +169,7 @@ impl TextDocument {
         self.validUtf8 = false;
         self.size = -1.0;
         self.text = QString::default();
+        self.set_rows(TextRows::default());
         self.set_lines(ColouredText::default());
     }
 

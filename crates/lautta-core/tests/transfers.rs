@@ -708,7 +708,7 @@ async fn merge_answer_for_folders() {
     assert_eq!(r.remote.read_file("d/keep").unwrap(), b"k");
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn cancel_during_backoff_stops_the_transfer_and_removes_the_partial_file() {
     let cfg = EngineConfig {
         backoff_base: Duration::from_millis(300),
@@ -750,7 +750,7 @@ async fn cancel_during_backoff_stops_the_transfer_and_removes_the_partial_file()
     assert_eq!(r.engine.pending_summary(), 0);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn pause_during_backoff_and_resume_completes() {
     let cfg = EngineConfig {
         backoff_base: Duration::from_millis(100),
@@ -1058,8 +1058,18 @@ async fn forgetting_history_rows() {
 }
 
 #[tokio::test]
-async fn progress_events_carry_bytes_rate_and_eta() {
-    let r = rig();
+async fn progress_events_count_bytes_up_to_the_file_size() {
+    let cfg = EngineConfig {
+        progress_event_interval_ms: 0,
+        ..EngineConfig::default()
+    };
+    let r = rig_with(
+        Db::open_in_memory().unwrap(),
+        MemoryProvider::default(),
+        MemoryProvider::default(),
+        cfg,
+        None,
+    );
     r.local.add_file("f", b"hello", 1);
     let mut rx = r.engine.subscribe();
     let id = r
@@ -1068,20 +1078,17 @@ async fn progress_events_carry_bytes_rate_and_eta() {
         .await
         .unwrap();
     settled(&r.engine, id).await;
-    let progress: Vec<(u64, u64)> = drain(&mut rx)
+    let bytes: Vec<u64> = drain(&mut rx)
         .into_iter()
         .filter_map(|e| match e {
             TransferEvent::Progress {
-                id: i,
-                bytes_done,
-                rate,
-                ..
-            } if i == id => Some((bytes_done, rate)),
+                id: i, bytes_done, ..
+            } if i == id => Some(bytes_done),
             _ => None,
         })
         .collect();
-    assert!(!progress.is_empty());
-    assert!(progress.iter().all(|(b, _)| *b <= 5));
+    assert_eq!(bytes.last(), Some(&5), "{bytes:?}");
+    assert!(bytes.windows(2).all(|w| w[0] <= w[1]), "{bytes:?}");
 }
 
 #[tokio::test]
@@ -1353,4 +1360,253 @@ async fn cancel_mid_copy_stops_the_copy_and_leaves_no_temporary() {
     let left: Vec<_> = std::fs::read_dir(d.path().join("out")).unwrap().collect();
     assert!(left.is_empty(), "left behind: {left:?}");
     assert_eq!(engine.get(id).unwrap().state, TransferState::Canceled);
+}
+
+#[tokio::test]
+async fn phone_files_go_to_another_location_without_a_scratch_copy() {
+    use lautta_core::provider::local::LocalProvider;
+    let (a, b, cache) = (
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+    );
+    let scratch = cache.path().join("scratch");
+    let data: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
+    std::fs::write(a.path().join("big.bin"), &data).unwrap();
+    std::fs::write(a.path().join("moved.bin"), b"moved").unwrap();
+    let resolver = StaticResolver::default()
+        .with(LOCAL, Arc::new(LocalProvider::new(a.path().to_path_buf())))
+        .with(
+            "user-pictures",
+            Arc::new(LocalProvider::new(b.path().to_path_buf())),
+        );
+    let deps = EngineDeps::new(Db::open_in_memory().unwrap(), Arc::new(resolver));
+    let engine = Engine::new(
+        deps,
+        EngineConfig {
+            scratch_dir: scratch.clone(),
+            ..config()
+        },
+    );
+    for (kind, name, size) in [
+        (OperationKind::Copy, "big.bin", data.len() as u64),
+        (OperationKind::Move, "moved.bin", 5),
+    ] {
+        let p = plan(
+            kind,
+            "user-pictures",
+            vec![item(LOCAL, name, "user-pictures", name, Kind::File, size)],
+        );
+        let id = engine.add(p, "t", TransferOptions::default()).await.unwrap();
+        let s = settled(&engine, id).await;
+        assert_eq!(s.state, TransferState::Completed, "{name}: {s:?}");
+    }
+    assert_eq!(std::fs::read(b.path().join("big.bin")).unwrap(), data);
+    assert_eq!(std::fs::read(b.path().join("moved.bin")).unwrap(), b"moved");
+    assert!(!a.path().join("moved.bin").exists(), "a move removes its source");
+    assert!(a.path().join("big.bin").exists());
+    assert!(!scratch.exists(), "no scratch file was needed");
+}
+
+async fn settled_or_asking(e: &Engine, id: TransferId) -> TransferSummary {
+    let end = |s: &TransferSummary| {
+        s.state.is_finished() || s.state == TransferState::Waiting(WaitReason::Question)
+    };
+    tokio::time::timeout(Duration::from_secs(10), e.wait_for(id, end))
+        .await
+        .expect("transfer settles")
+        .unwrap()
+}
+
+/// Pause lands while the item's last step (here: rename out of the temporary name) already runs
+/// and cannot be taken back.
+async fn pause_during_last_step(op: &str, path: &str, p: Plan) {
+    let r = rig();
+    r.local.add_file("f", b"hello", 1);
+    let hold = r.remote.hold_next(op, path);
+    let id = r.engine.add(p, "", TransferOptions::default()).await.unwrap();
+    hold.reached.await.unwrap();
+    r.engine.pause(id).unwrap();
+    assert_eq!(r.engine.get(id).unwrap().state, TransferState::Paused);
+    drop(hold.release);
+    r.engine.resume(id).unwrap();
+    let s = settled_or_asking(&r.engine, id).await;
+    assert_eq!(s.state, TransferState::Completed, "{:?}", r.engine.items(id));
+    assert_eq!(s.items_done, s.items_total);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pause_during_the_final_rename_does_not_ask_about_its_own_file() {
+    let temp = String::from_utf8(temp_name_for(b"f", 1, 0)).unwrap();
+    pause_during_last_step("rename", &temp, copy_one("f")).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pause_while_a_folder_is_made_does_not_ask_about_it() {
+    let p = plan(
+        OperationKind::Copy,
+        REMOTE,
+        vec![
+            item(LOCAL, "d", REMOTE, "d", Kind::Dir, 0),
+            item(LOCAL, "f", REMOTE, "d/f", Kind::File, 5),
+        ],
+    );
+    pause_during_last_step("make_dir", "d", p).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pause_while_an_item_goes_to_the_trash_trashes_it_once() {
+    /// Pauses its transfer from inside the trash call: the pause lands mid-step.
+    struct PausingTrash(std::sync::OnceLock<Engine>, Mutex<u32>);
+    #[async_trait::async_trait]
+    impl Trasher for PausingTrash {
+        async fn trash(&self, _uri: &Uri) -> lautta_core::Result<bool> {
+            *self.1.lock().unwrap() += 1;
+            self.0.get().unwrap().pause(1).unwrap();
+            Ok(true)
+        }
+    }
+    let trash = Arc::new(PausingTrash(std::sync::OnceLock::new(), Mutex::default()));
+    let r = rig_with(
+        Db::open_in_memory().unwrap(),
+        MemoryProvider::default(),
+        MemoryProvider::default(),
+        config(),
+        Some(trash.clone()),
+    );
+    let _ = trash.0.set(r.engine.clone());
+    r.local.add_file("f", b"hello", 1);
+    let opts = TransferOptions {
+        trash: true,
+        ..TransferOptions::default()
+    };
+    let items = vec![item(LOCAL, "f", LOCAL, "f", Kind::File, 5)];
+    let id = r
+        .engine
+        .add(plan(OperationKind::Delete, LOCAL, items), "", opts)
+        .await
+        .unwrap();
+    in_state(&r.engine, id, TransferState::Paused).await;
+    r.engine.resume(id).unwrap();
+    assert_eq!(settled(&r.engine, id).await.state, TransferState::Completed);
+    assert_eq!(*trash.1.lock().unwrap(), 1);
+}
+
+#[tokio::test]
+async fn a_final_rename_that_fails_and_retries_can_be_paused_again() {
+    let cfg = EngineConfig {
+        backoff_base: Duration::from_millis(100),
+        ..EngineConfig::default()
+    };
+    let r = rig_with(
+        Db::open_in_memory().unwrap(),
+        MemoryProvider::default(),
+        MemoryProvider::default(),
+        cfg,
+        None,
+    );
+    r.local.add_file("f", b"hello", 1);
+    let temp = String::from_utf8(temp_name_for(b"f", 1, 0)).unwrap();
+    r.remote
+        .fail_next("rename", &temp, Error::kind(ErrorKind::TimedOut));
+    let id = r
+        .engine
+        .add(copy_one("f"), "", TransferOptions::default())
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while r.engine.items(id).unwrap()[0].attempts == 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    r.engine.pause(id).unwrap();
+    assert_eq!(
+        r.engine.items(id).unwrap()[0].state,
+        ItemState::Pending,
+        "abortable again"
+    );
+    r.engine.resume(id).unwrap();
+    assert_eq!(settled(&r.engine, id).await.state, TransferState::Completed);
+}
+
+/// Pause lands in a step that is still abortable after a point of no return fell through.
+async fn pause_after_fallback(
+    r: Rig,
+    hold: lautta_core::provider::memory::Hold,
+    p: Plan,
+    opts: TransferOptions,
+) {
+    let id = r.engine.add(p, "", opts).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(10), hold.reached)
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "held step not reached: {:?} {:?}",
+                r.engine.items(id),
+                r.local.calls()
+            )
+        })
+        .unwrap();
+    r.engine.pause(id).unwrap();
+    assert_eq!(
+        r.engine.items(id).unwrap()[0].state,
+        ItemState::Pending,
+        "abortable again"
+    );
+    drop(hold.release);
+    r.engine.resume(id).unwrap();
+    assert_eq!(settled(&r.engine, id).await.state, TransferState::Completed);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_move_that_falls_back_to_copying_can_be_paused() {
+    let streams = MemoryProvider::new(Capabilities::with(&[cap::WRITE]));
+    let r = rig_on(Db::open_in_memory().unwrap(), streams, MemoryProvider::default());
+    r.local.add_file("f", b"hello", 1);
+    r.local
+        .fail_next("rename", "f", Error::kind(ErrorKind::CrossesDevice));
+    let temp = String::from_utf8(temp_name_for(b"g", 1, 0)).unwrap();
+    let hold = r.local.hold_next("stat", &temp);
+    let p = plan(
+        OperationKind::Move,
+        LOCAL,
+        vec![item(LOCAL, "f", LOCAL, "g", Kind::File, 5)],
+    );
+    let local = r.local.clone();
+    pause_after_fallback(r, hold, p, TransferOptions::default()).await;
+    assert!(local.exists("g") && !local.exists("f"));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_delete_the_trash_declines_can_be_paused() {
+    struct Declines;
+    #[async_trait::async_trait]
+    impl Trasher for Declines {
+        async fn trash(&self, _uri: &Uri) -> lautta_core::Result<bool> {
+            Ok(false)
+        }
+    }
+    let r = rig_with(
+        Db::open_in_memory().unwrap(),
+        MemoryProvider::default(),
+        MemoryProvider::default(),
+        config(),
+        Some(Arc::new(Declines)),
+    );
+    r.local.add_file("f", b"hello", 1);
+    let hold = r.local.hold_next("remove_file", "f");
+    let opts = TransferOptions {
+        trash: true,
+        ..TransferOptions::default()
+    };
+    let p = plan(
+        OperationKind::Delete,
+        LOCAL,
+        vec![item(LOCAL, "f", LOCAL, "f", Kind::File, 5)],
+    );
+    let local = r.local.clone();
+    pause_after_fallback(r, hold, p, opts).await;
+    assert!(!local.exists("f"));
 }

@@ -6,6 +6,7 @@ import "../../qml/pages"
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     readonly property var subPages: [
         { "entry": "deletingEntry", "page": "deletingSettingsPage",
@@ -97,12 +98,18 @@ ApplicationWindow {
         App.setSetting(key, JSON.stringify(before))
     }
 
+    function waitFor(done, what) {
+        for (var i = 0; i < 200 && !done(); ++i)
+            tools.pump(50)
+        return expect(done(), "timed out waiting for " + what)
+    }
+
     function open(settings, entry) {
         var row = find(settings, entry)
         if (!expect(row !== null, "Settings has the entry " + entry))
             return null
         row.clicked(null)
-        tools.pump(1000)
+        waitFor(function () { return !pageStack.busy && pageStack.currentPage !== settings }, entry + "'s page")
         return pageStack.currentPage
     }
 
@@ -116,7 +123,6 @@ ApplicationWindow {
         controls(page).forEach(exercise)
         reached = reached.concat(keys)
         pageStack.pop(settings, PageStackAction.Immediate)
-        tools.pump(200)
     }
 
     function checkLargeOps(settings) {
@@ -131,7 +137,6 @@ ApplicationWindow {
             reached = reached.concat(largeOpKeys)
         }
         pageStack.pop(settings, PageStackAction.Immediate)
-        tools.pump(200)
     }
 
     function checkViewOptions(settings) {
@@ -145,7 +150,6 @@ ApplicationWindow {
         controls(options).forEach(exercise)
         reached = reached.concat(keys).concat(viewKeys)
         pageStack.pop(settings, PageStackAction.Immediate)
-        tools.pump(200)
     }
 
     function checkValues(settings) {
@@ -163,7 +167,6 @@ ApplicationWindow {
 
     Component.onCompleted: {
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        tools.pump(300)
         var settings = pageStack.currentPage
         var keys = keysOf(settings)
         expect(keys.length === 0, "Settings is a list of entries, with no setting of its own: " + keys)
@@ -178,6 +181,7 @@ ApplicationWindow {
         expect(lost.length === 0, "every setting has its control: none for " + lost)
         expect(all.indexOf("date_format") < 0 && reached.indexOf("date_format") < 0, "there is no date format")
         expect(all.indexOf("grid_columns") < 0, "there is no grid size")
+        reachedEnd = true
     }
 
     Component {

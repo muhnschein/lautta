@@ -85,8 +85,7 @@ Item {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
-            //% "%n tasks will resume when you open Lautta again"
-            text: qsTrId("lautta-xfr-cover-pending", Transfers.pendingCount)
+            text: TransferText.pendingCover(Transfers.pendingCount, App.setting("auto_resume") !== false)
         }
     }
 

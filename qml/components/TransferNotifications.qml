@@ -52,8 +52,9 @@ Item {
     function publishPending() {
         progressNote.close()
         if (Transfers.pendingCount > 0) {
-            //% "%n tasks will resume"
+            //% "%n tasks stopped"
             pendingNote.summary = qsTrId("lautta-xfr-note-pending", Transfers.pendingCount)
+            pendingNote.body = TransferText.pendingBody(App.setting("auto_resume") !== false)
             pendingNote.publish()
         }
     }
@@ -76,7 +77,7 @@ Item {
             "transferId": id,
             //% "%1 failed"
             "summary": qsTrId("lautta-xfr-note-failed").arg(titleOf(id)),
-            //% "%n files couldn't be transferred. Tap to retry."
+            //% "%n items failed. Tap to retry."
             "body": qsTrId("lautta-xfr-note-failed-body", Math.max(1, failures))
         })
         failedNote.publish()
@@ -96,12 +97,31 @@ Item {
         note.publish()
     }
 
+    // Ended transfer keeps its unanswered items listed.
+    function waitsForAnswer(id) {
+        var s = summaryOf(id)
+        return s !== null && s.finishedMs === null && JSON.parse(Transfers.questionsJson(id)).length > 0
+    }
+
+    // Own close() emits no `closed`: destroy here.
+    function closeAnswered() {
+        for (var key in questionNotes) {
+            var note = questionNotes[key]
+            if (!waitsForAnswer(note.transferId)) {
+                delete questionNotes[key]
+                note.close()
+                note.destroy()
+            }
+        }
+    }
+
     Component.onCompleted: closeStale()
 
     Connections {
         target: Transfers
         onFinished: root.noteFinished(id, ok, failures)
         onNeedsAnswer: root.noteQuestion(id)
+        onChanged: root.closeAnswered()
     }
 
     Timer {
@@ -147,8 +167,6 @@ Item {
 
         appName: "Lautta"
         category: "x-lautta.transfer.pending"
-        //% "when you open Lautta again"
-        body: qsTrId("lautta-xfr-note-pending-body")
         remoteActions: root.remoteAction("transfers")
     }
 
@@ -178,6 +196,10 @@ Item {
             summary: qsTrId("lautta-xfr-note-question")
             remoteActions: root.remoteAction("conflict")
             onClicked: root.openRequested("conflict", transferId)
+            onClosed: {
+                delete root.questionNotes[transferId]
+                destroy()
+            }
         }
     }
 }

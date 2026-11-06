@@ -6,6 +6,7 @@ ApplicationWindow {
     id: win
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int waited: 0
     property var page
     readonly property var expected: [
@@ -120,6 +121,7 @@ ApplicationWindow {
             if (win.texts("lautta-xfr-menu-settings", "Settings").length !== 0)
                 return win.fail("the pulley has no Settings entry")
             win.checkTitles()
+            win.reachedEnd = true
             win.scenarioRunning = false
         }
     }

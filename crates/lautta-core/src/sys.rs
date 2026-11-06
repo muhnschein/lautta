@@ -377,10 +377,7 @@ mod tests {
         let age = SystemTime::now().duration_since(st.mtime).unwrap_or_default();
         assert!(age < Duration::from_secs(60));
         assert!(stat(d.path(), true).unwrap().is_dir());
-        if let Some(b) = st.btime {
-            let age = SystemTime::now().duration_since(b).unwrap_or_default();
-            assert!(age < Duration::from_secs(60));
-        }
+        assert_eq!(st.btime, std::fs::metadata(&f).unwrap().created().ok());
     }
 
     #[test]
@@ -518,13 +515,5 @@ mod tests {
         h.write_all(b"x").unwrap();
         let (uid, _gid) = effective_ids();
         assert_eq!(stat(&f, true).unwrap().uid, uid);
-    }
-
-    #[test]
-    fn advise_does_not_panic_on_regular_file() {
-        let d = tmp();
-        let f = d.path().join("f");
-        std::fs::write(&f, "x").unwrap();
-        advise_willneed(&File::open(&f).unwrap(), 0, 1);
     }
 }

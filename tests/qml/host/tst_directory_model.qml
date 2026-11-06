@@ -4,8 +4,17 @@ import Lautta 1.0
 
 Item {
     id: root
+    property bool reachedEnd
 
     property var events: []
+    // Name bindings evaluated: selecting or a transfer must not make a row re-read its other roles.
+    // Object, not int: a counter property the binding reads would loop.
+    readonly property var nameReads: ({ "n": 0 })
+
+    function read(value) {
+        root.nameReads.n++
+        return value
+    }
     readonly property string docs: "lautta://user-documents/"
 
     function check(cond, what) {
@@ -31,7 +40,22 @@ Item {
         return null
     }
 
+    // Bounded: a test of "nothing happened" waits the whole time.
     function wait(ms) { pump.pump(ms) }
+
+    function until(cond, what) {
+        for (var i = 0; i < 400 && !cond(); ++i)
+            pump.pump(25)
+        check(cond(), "timed out waiting for " + what)
+    }
+
+    function has(event) {
+        return function () { return root.events.indexOf(event) >= 0 }
+    }
+
+    function shows(want) {
+        return function () { return !dir.loading && JSON.stringify(names(rep)) === JSON.stringify(want) }
+    }
 
     function install(fixture, name) {
         check(tools.installFixture(Qt.resolvedUrl("fixtures/" + fixture), root.docs + name), "fixture " + name)
@@ -52,7 +76,8 @@ Item {
         id: rep
         model: dir
         delegate: Item {
-            property string nm: name
+            property string nm: root.read(name)
+            property string transfer: transferState
             property bool dirRow: isDir
             property string thumb: thumbnailSource
             property string mime: mimeType
@@ -68,8 +93,7 @@ Item {
     PathModel { id: rootPath; uri: root.docs }
 
     function testBasics() {
-        wait(300)
-        check(!dir.loading, "listing finished")
+        until(function () { return !dir.loading }, "listing finished")
         check(dir.count === 0 && rep.count === 0, "empty Documents")
         check(dir.errorKind === "", "no error")
         check(dir.title === "Documents" && dir.locationName === "Documents", "title at the root is the location: " + dir.title)
@@ -85,9 +109,9 @@ Item {
         install("photo.jpg", "Beta.png")
         install("doc.md", "notes.md")
         install("data.bin", ".hidden")
-        wait(500)
+        until(has("created:" + root.docs + "Zeta"), "Zeta made")
         dir.refresh()
-        wait(500)
+        until(shows(["Zeta", "alpha.txt", "Beta.png", "notes.md"]), "new rows listed")
         same(names(rep), ["Zeta", "alpha.txt", "Beta.png", "notes.md"], "folders first, hidden files off")
         same(root.events, ["created:" + root.docs + "Zeta"], "created signal for the folder")
         check(dir.createFile === undefined, "no empty files: the app makes folders only")
@@ -100,7 +124,7 @@ Item {
         dir.createFolder("Zeta")
         dir.createFolder("alpha.txt")
         dir.createFolder("bad/name")
-        wait(300)
+        until(function () { return root.events.length === 4 }, "three failures reported")
         check(root.events.filter(function (e) { return e === "createFailed:AlreadyExists" }).length === 2, "name clashes are reported: " + root.events)
         check(root.events.indexOf("createFailed:InvalidName") >= 0, "invalid names are reported")
         check(dir.nameKind("Zeta") === "folder" && dir.nameKind("alpha.txt") === "file" && dir.nameKind("zzz") === "", "nameKind")
@@ -128,6 +152,7 @@ Item {
 
     function testSelection() {
         var a = root.docs + "alpha.txt"
+        var reads = root.nameReads.n
         dir.toggle(a)
         check(dir.selectedCount === 1 && row(rep, "alpha.txt").sel, "toggle selects")
         same(dir.selectedUris(), [a], "selectedUris")
@@ -142,6 +167,12 @@ Item {
         check(dir.selectedCount === 4 && dir.selectedUris().length === 4, "select all")
         dir.clearSelection()
         check(dir.selectedCount === 0 && dir.selectedUris().length === 0, "clear")
+        check(root.nameReads.n === reads, "selecting leaves names unread: " + (root.nameReads.n - reads))
+        dir.setTransferState(a, "copying")
+        check(row(rep, "alpha.txt").transfer === "copying", "transfer state shown")
+        dir.setTransferState(a, "")
+        check(row(rep, "alpha.txt").transfer === "", "transfer state gone")
+        check(root.nameReads.n === reads, "a transfer leaves names unread: " + (root.nameReads.n - reads))
         check(dir.indexOf(a) === 1 && dir.indexOf(root.docs + "none") === -1, "indexOf: " + dir.indexOf(a))
         same([dir.uriAt(0), dir.uriAt(1), dir.uriAt(3)], [root.docs + "Zeta", a, root.docs + "notes.md"], "uriAt")
         check(dir.uriAt(-1) === "" && dir.uriAt(dir.count) === "", "uriAt outside the rows")
@@ -152,27 +183,28 @@ Item {
     function testRename() {
         var a = root.docs + "alpha.txt"
         dir.rename(a, "gamma.txt")
-        wait(400)
+        until(function () { return has("renamed:" + a + ">" + root.docs + "gamma.txt")()
+                                   && shows(["Zeta", "Beta.png", "gamma.txt", "notes.md"])() }, "alpha.txt renamed")
         check(root.events.indexOf("renamed:" + a + ">" + root.docs + "gamma.txt") >= 0, "renamed signal: " + root.events)
         same(names(rep), ["Zeta", "Beta.png", "gamma.txt", "notes.md"], "list follows the rename")
         dir.rename(root.docs + "gamma.txt", "notes.md")
         dir.rename(root.docs + "gamma.txt", "a/b")
-        wait(300)
+        until(function () { return has("renameFailed:AlreadyExists")() && has("renameFailed:InvalidName")() }, "renames refused")
         check(root.events.indexOf("renameFailed:AlreadyExists") >= 0, "rename onto an existing name fails")
         check(root.events.indexOf("renameFailed:InvalidName") >= 0, "invalid new name fails")
     }
 
     function testLiveUpdate() {
         install("notes-crlf.txt", "watched.txt")
-        wait(1200)
+        until(function () { return names(rep).indexOf("watched.txt") >= 0 }, "watched.txt listed")
         check(names(rep).indexOf("watched.txt") >= 0, "changes by others appear without refresh: " + names(rep))
         install("notes-crlf.txt", "watched2.txt")
-        wait(1200)
+        until(function () { return dir.count === 6 }, "watched2.txt listed")
         check(dir.count === 6, "second live update")
     }
 
     function testStates() {
-        wait(200)
+        until(function () { return !missing.loading && !broken.loading }, "missing and broken listed")
         check(missing.errorKind === "NotFound" && missing.count === 0 && !missing.loading, "missing folder: " + missing.errorKind)
         check(broken.errorKind === "InvalidArgument" && !broken.loading, "bad URI")
         var zeta = root.docs + "Zeta"
@@ -200,13 +232,14 @@ Item {
 
     function testOpenFoldersFollowSettings() {
         var open = Qt.createQmlObject('import Lautta 1.0; DirectoryModel { uri: "' + root.docs + 'Zeta" }', root)
-        wait(300)
+        until(function () { return !open.loading }, "Zeta listed")
         check(!open.descending && open.viewMode === "list", "an open folder starts with the global settings")
         var before = names(rep)
         dir.setViewPrefs(JSON.stringify({ thumbnails: false }))
         App.setSetting("sort_descending", JSON.stringify(true))
         App.setSetting("view_mode", JSON.stringify("grid"))
-        wait(300)
+        until(function () { return open.descending && open.viewMode === "grid" && dir.descending && dir.viewMode === "grid" },
+              "settings reach open folders")
         check(open.descending && open.viewMode === "grid", "an open folder follows: " + open.descending + " " + open.viewMode)
         check(dir.descending && dir.viewMode === "grid", "so does the folder on screen")
         same(names(rep), [before[0]].concat(before.slice(1).reverse()), "its rows are in the new order")
@@ -217,7 +250,7 @@ Item {
         App.setSetting("sort_descending", JSON.stringify(false))
         App.setSetting("view_mode", JSON.stringify("list"))
         App.setSetting("remorse_seconds", JSON.stringify(5))
-        wait(300)
+        until(function () { return !open.descending && open.viewMode === "list" && shows(before)() }, "settings back")
         check(!open.descending && open.viewMode === "list", "and back: " + open.viewMode)
         same(names(rep), before, "the rows are back in name order")
         dir.setViewPrefs(JSON.stringify({ thumbnails: true }))
@@ -226,9 +259,9 @@ Item {
 
     function testPdfThumbnails() {
         install("two-pages.pdf", "Doc.pdf")
-        wait(500)
+        until(function () { return row(rep, "Doc.pdf") !== null }, "Doc.pdf listed")
         dir.refresh()
-        wait(500)
+        until(function () { return !dir.loading && row(rep, "Doc.pdf") !== null }, "Doc.pdf listed again")
         var want = row(rep, "Doc.pdf").thumb
         var path = "/Documents/Doc.pdf"
         check(want.indexOf("file://") === 0 && want.slice(-path.length) === path,
@@ -262,5 +295,6 @@ Item {
         testOpenFoldersFollowSettings()
         testPdfThumbnails()
         testPicker()
+        reachedEnd = true
     }
 }

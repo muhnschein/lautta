@@ -93,7 +93,7 @@ Dialog {
                 label: qsTrId("lautta-extract-into")
                 menu: ContextMenu {
                     MenuItem {
-                        //% "New folder '%1'"
+                        //% "New folder “%1”"
                         text: qsTrId("lautta-extract-new-folder").arg(dialog.folderName())
                     }
                     MenuItem {

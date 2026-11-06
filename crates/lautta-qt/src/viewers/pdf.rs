@@ -52,7 +52,8 @@ pub struct PdfDocument {
     reload: qt_method!(fn(&mut self)),
     /// Password is not kept.
     unlock: qt_method!(fn(&mut self, password: QString)),
-    rememberPage: qt_method!(fn(&self, index: i32)),
+    /// False when `index` is no page of the loaded document: nothing stored.
+    rememberPage: qt_method!(fn(&self, index: i32) -> bool),
     requestLinks: qt_method!(fn(&self, index: i32)),
 
     searching: qt_property!(bool; NOTIFY searchChanged),
@@ -144,14 +145,15 @@ impl PdfDocument {
         );
     }
 
-    fn rememberPage(&self, index: i32) {
+    fn rememberPage(&self, index: i32) -> bool {
         let (Some(core), Some(uri), Ok(page)) = (core(), parse_uri(&self.uri), usize::try_from(index)) else {
-            return;
+            return false;
         };
         if !self.loaded || page >= self.pages.len() {
-            return;
+            return false;
         }
         handle().spawn_blocking(move || core.remember_pdf_page(&uri, page));
+        true
     }
 
     fn requestLinks(&self, index: i32) {

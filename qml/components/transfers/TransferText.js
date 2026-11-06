@@ -183,7 +183,7 @@ function waitReason(reason) {
         //% "Waiting for network"
         return qsTrId("lautta-xfr-wait-network")
     case "volume":
-        //% "Insert the card to continue"
+        //% "Waiting for the memory card or USB drive"
         return qsTrId("lautta-xfr-wait-volume")
     case "bridge":
         //% "Waiting for the connection"
@@ -225,7 +225,7 @@ function historyLine(r) {
     var at = r.finishedMs >= 0 ? when(r.finishedMs) : ""
     var text
     if (r.state === "canceled")
-        //% "Canceled"
+        //% "Cancelled"
         text = qsTrId("lautta-xfr-canceled")
     else if (r.state === "failed" && r.itemsFailed > 0 && r.itemsDone > 0)
         //% "Completed with %n failures"
@@ -269,7 +269,51 @@ function itemIcon(state) {
     }
 }
 
-function itemStatus(state, kind, sizeBytes, direction) {
+// Tasks stopped by closing app: they resume at next start only with setting `auto_resume`.
+function pendingBody(autoResume) {
+    return autoResume
+        //% "They resume when you open Lautta again."
+        ? qsTrId("lautta-xfr-note-pending-body")
+        //% "Resume them in Activity when you open Lautta."
+        : qsTrId("lautta-xfr-note-pending-manual-body")
+}
+
+function pendingCover(count, autoResume) {
+    return autoResume
+        //% "%n tasks will resume when you open Lautta again"
+        ? qsTrId("lautta-xfr-cover-pending", count)
+        //% "%n tasks stopped"
+        : qsTrId("lautta-xfr-cover-stopped", count)
+}
+
+// op: task kind (copy, move, delete, compress, extract).
+function itemRunning(op, direction) {
+    if (direction === "upload")
+        //% "Uploading"
+        return qsTrId("lautta-xfr-item-uploading")
+    if (direction === "download")
+        //% "Downloading"
+        return qsTrId("lautta-xfr-item-downloading")
+    switch (op) {
+    case "move":
+        //% "Moving"
+        return qsTrId("lautta-xfr-item-moving")
+    case "delete":
+        //% "Deleting"
+        return qsTrId("lautta-xfr-item-deleting")
+    case "compress":
+        //% "Compressing"
+        return qsTrId("lautta-xfr-item-compressing")
+    case "extract":
+        //% "Extracting"
+        return qsTrId("lautta-xfr-item-extracting")
+    default:
+        //% "Copying"
+        return qsTrId("lautta-xfr-item-copying")
+    }
+}
+
+function itemStatus(state, kind, sizeBytes, direction, op) {
     var label
     switch (state) {
     case "done":
@@ -277,14 +321,7 @@ function itemStatus(state, kind, sizeBytes, direction) {
         label = qsTrId("lautta-xfr-completed")
         break
     case "running":
-        label = direction === "upload"
-            //% "Uploading"
-            ? qsTrId("lautta-xfr-item-uploading")
-            : direction === "download"
-                //% "Downloading"
-                ? qsTrId("lautta-xfr-item-downloading")
-                //% "Copying"
-                : qsTrId("lautta-xfr-item-copying")
+        label = itemRunning(op, direction)
         break
     case "skipped":
         //% "Skipped"

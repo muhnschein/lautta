@@ -8,6 +8,7 @@ ApplicationWindow {
 
     readonly property string folder: "lautta://user-documents/RemoveMe"
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property var browse
@@ -89,9 +90,10 @@ ApplicationWindow {
                 win.step++
                 break
             case 4:
-                if (favs.loaded && favs.idOf(win.folder) === -1)
+                if (favs.loaded && favs.idOf(win.folder) === -1) {
+                    win.reachedEnd = true
                     win.scenarioRunning = false
-                else if (win.waited % 10 === 0)
+                } else if (win.waited % 10 === 0)
                     favs.reload()
                 break
             }

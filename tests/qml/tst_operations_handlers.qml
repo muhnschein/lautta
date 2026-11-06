@@ -6,6 +6,7 @@ import "../../qml/components"
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     ViewerTools { id: tools }
 
@@ -23,6 +24,12 @@ ApplicationWindow {
         id: plainPage
 
         Page { }
+    }
+
+    Component {
+        id: plainDialog
+
+        Dialog { }
     }
 
     function expect(ok, what) {
@@ -47,8 +54,37 @@ ApplicationWindow {
         waitFor(function () {
             return !pageStack.busy && pageStack.currentPage.uri === dest
         }, "the extracted folder to open, current page: " + pageStack.currentPage)
-        expect(pageStack.depth === 3 && handlers.pendingFolder === "", "opened once: depth " + pageStack.depth)
+        expect(pageStack.depth === 3 && handlers.pending.length === 0, "opened once: depth " + pageStack.depth)
     }
 
-    Component.onCompleted: checkFolderAfterTransition()
+    // A large extract's plan summary that arrives while the extract dialog closes.
+    function checkSummaryWhileDialogCloses() {
+        var dialog = pageStack.push(plainDialog)
+        if (!waitFor(function () { return !pageStack.busy }, "the dialog to open"))
+            return
+        dialog.accept()
+        if (!expect(pageStack.busy, "the dialog closes"))
+            return
+        Operations.needsSummary(7, JSON.stringify({ "kind": "extract", "files": 1500 }))
+        waitFor(function () {
+            return !pageStack.busy && pageStack.currentPage.planId === 7
+        }, "the plan summary to open, current page: " + pageStack.currentPage)
+        expect(pageStack.depth === 4 && handlers.pending.length === 0, "summary once: depth " + pageStack.depth)
+    }
+
+    function checkSummaryWhenIdle() {
+        if (!expect(!pageStack.busy, "the stack is idle"))
+            return
+        Operations.needsSummary(8, JSON.stringify({ "kind": "copy", "files": 1500 }))
+        waitFor(function () {
+            return !pageStack.busy && pageStack.currentPage.planId === 8
+        }, "the plan summary to open on an idle stack")
+    }
+
+    Component.onCompleted: {
+        checkFolderAfterTransition()
+        checkSummaryWhileDialogCloses()
+        checkSummaryWhenIdle()
+        reachedEnd = true
+    }
 }

@@ -482,7 +482,7 @@ fn ci_provider(root: &Path) -> LocalProvider {
 }
 
 #[tokio::test]
-async fn case_only_rename_uses_an_intermediate_name() {
+async fn case_only_rename_on_a_fat_provider_leaves_no_temporary_name() {
     let d = tempfile::tempdir().unwrap();
     std::fs::write(d.path().join("photo.jpg"), "data").unwrap();
     let p = ci_provider(d.path());
@@ -936,9 +936,10 @@ async fn download_errors() {
 
 #[tokio::test]
 async fn download_into_a_full_device_reports_no_space() {
-    let Ok(full) = OpenOptions::new().write(true).open("/dev/full") else {
-        return; // no /dev/full on this host
-    };
+    let full = OpenOptions::new()
+        .write(true)
+        .open("/dev/full")
+        .expect("host tests need /dev/full");
     let (d, p) = setup();
     std::fs::write(d.path().join("remote"), big(100_000)).unwrap();
     let e = p

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Lautta 1.0
-import "../../../qml/components/viewers/TextRows.js" as TextRows
 
 Item {
     id: root
+    property bool reachedEnd
 
     function check(cond, what) {
         if (!cond)
@@ -21,11 +21,13 @@ Item {
     TextDocument { id: doc }
     TextDocument { id: missing }
     TextDocument { id: coloured }
+    property int bigStates
+    readonly property bool bigColoured: big.highlighted && big.syntax.length > 0
+    TextDocument { id: big; onStateChanged: root.bigStates++ }
     MarkdownDocument { id: md }
 
     function styled(document, i, colours) {
-        var row = TextRows.rows(document.text).rows[i]
-        return document.styledRow(row.text, row.line, row.start, colours)
+        return document.styledRow(i, colours)
     }
 
     function waitForColours(document, uri) {
@@ -50,6 +52,8 @@ Item {
         check(!doc.loading && doc.loaded, "loaded")
         check(doc.text === "line one\nline two", "text normalised: " + JSON.stringify(doc.text))
         check(doc.validUtf8 && !doc.truncated, "flags")
+        check(doc.rowCount === 2 && doc.lineCount === 2 && doc.rowNumber(0) === 1 && doc.rowNumber(1) === 2,
+              "rows: " + doc.rowCount + " " + doc.rowNumber(1))
         check(doc.size === 20, "size " + doc.size)
         check(!doc.highlighted && doc.syntax === "", "plain text has no colours: " + doc.syntax)
         check(styled(doc, 1, "keyword=#ff0000") === "line two", "a plain line: " + styled(doc, 1, ""))
@@ -64,16 +68,17 @@ Item {
         check(echo.indexOf("<") < 0 && echo.indexOf("&lt;b&gt;bold?&lt;/b&gt; &amp;amp;") > 0, "no colours, still escaped: " + echo)
         var indented = styled(coloured, 3, "")
         check(indented === '&nbsp;&nbsp;if [ &quot;$x&quot; ]; then&nbsp;&nbsp;echo &quot;a&nbsp;&nbsp;b&quot;; fi', "whitespace is kept: " + indented)
-        var past = [coloured.styledRow("<b>", 9, 0, "comment=#123456"), coloured.styledRow("<b>", -1, -5, "comment=#123456")]
-        check(past[0] === "&lt;b&gt;" && past[1] === "&lt;b&gt;", "past either end: escaped, no colours: " + past)
+        var past = [coloured.styledRow(9, "comment=#123456"), coloured.styledRow(-1, "comment=#123456"),
+                    coloured.rowNumber(9), coloured.rowNumber(-1)]
+        check(JSON.stringify(past) === JSON.stringify(["", "", 0, 0]), "past either end: none: " + past)
 
         waitForColours(coloured, "lautta://user-documents/rows.sh")
         var palette = "comment=#123456,function=#654321,string=#abcdef"
         var tabbed = styled(coloured, 1, palette)
         check(tabbed === '&nbsp;&nbsp;&nbsp;&nbsp;<font color="#654321">echo</font> <font color="#abcdef">&quot;\uD83D\uDE00&quot;</font> '
               + '<font color="#123456"># tab</font>', "a row with a tab and an emoji: " + tabbed)
-        var rows = TextRows.rows(coloured.text).rows
-        check(rows.length === 4 && rows[3].line === 2 && rows[3].start === 1000, "a long line in two rows: " + rows.length)
+        check(coloured.rowCount === 4 && coloured.lineCount === 3 && coloured.rowNumber(2) === 3
+              && coloured.rowNumber(3) === 0, "a long line in two rows: " + coloured.rowCount + " " + coloured.rowNumber(3))
         var rest = styled(coloured, 3, palette)
         check(rest === '<font color="#abcdef">' + new Array(107).join("x") + '&quot;</font> <font color="#123456"># long</font>',
               "the long line's second row: " + rest)
@@ -85,9 +90,24 @@ Item {
         check(markup === "&lt;img src=&quot;image://lautta-thumb/x&quot;&gt; &amp;lt;b&amp;gt; &amp; &lt;b&gt;bold&lt;/b&gt; &amp;nbsp;&lt;a href=&quot;x&quot;&gt;link&lt;/a&gt;",
               "markup in a file is text: " + markup)
 
+        // Past FIRST_WAIT of colouring: text comes plain, colours after.
+        check(tools.installRepeated(Qt.resolvedUrl("fixtures/rows.sh"), "lautta://user-documents/big.sh", 1000), "big script")
+        big.uri = "lautta://user-documents/big.sh"
+        settle(big)
+        check(big.loaded && !big.highlighted, "a big script comes plain first")
+        var states = root.bigStates
+        for (var late = 0; late < 600 && !big.highlighted; ++late)
+            tools.pump(50)
+        check(root.bigColoured, "then coloured, bindings told")
+        check(root.bigStates === states, "late colours leave text and rows be: " + (root.bigStates - states) + " changes")
+
         missing.uri = "lautta://user-documents/nope.txt"
         settle(missing)
         check(missing.errorKind === "NotFound" && !missing.loaded, "missing file: " + missing.errorKind)
+        doc.uri = "lautta://user-documents/nope.txt"
+        settle(doc)
+        check(doc.rowCount === 0 && doc.lineCount === 0 && doc.styledRow(0, "") === "",
+              "a failed load leaves no rows: " + doc.rowCount)
         var invalid = Qt.createQmlObject('import Lautta 1.0; TextDocument { uri: "garbage" }', root)
         check(!invalid.loading && !invalid.loaded, "bad uri is ignored")
 
@@ -101,5 +121,6 @@ Item {
         md.uri = "lautta://user-documents/nope.md"
         settle(md)
         check(md.errorKind === "NotFound", "markdown error " + md.errorKind)
+        reachedEnd = true
     }
 }

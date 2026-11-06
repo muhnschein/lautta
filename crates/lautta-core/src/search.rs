@@ -543,7 +543,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn date_filters_are_inclusive_and_exclude_unknown_dates() {
+    async fn date_filters_are_inclusive() {
         let (m, res) = fixture();
         m.add_file("old", b"x", 1_000_000);
         m.add_file("mid", b"x", 2_000_000);
@@ -555,14 +555,26 @@ mod tests {
         };
         let (batches, _) = run(&res, "", &query, None).await;
         assert_eq!(names(&batches), ["mid", "new"]);
-        // Folders carry no mtime in the memory provider's fixture (epoch).
-        let dated = SearchQuery {
+    }
+
+    #[tokio::test]
+    async fn date_filters_exclude_entries_without_a_date() {
+        let (_m, res) = fixture();
+        let walker: Arc<dyn TreeWalker> = Arc::new(FixedWalker);
+        let query = SearchQuery {
             modified_after: Some(at(1)),
             ..SearchQuery::default()
         };
-        m.add_dir("folder");
-        let (batches, _) = run(&res, "", &dated, None).await;
-        assert!(!names(&batches).contains(&"folder".to_owned()));
+        let (batches, _) = run_with(
+            &res,
+            "",
+            &query,
+            Some(8),
+            Arc::new(AtomicBool::new(false)),
+            Some(walker),
+        )
+        .await;
+        assert_eq!(names(&batches), ["dated"]);
     }
 
     #[tokio::test]
@@ -727,9 +739,12 @@ mod tests {
             out: mpsc::Sender<FolderListing>,
         ) -> Result<WalkStats> {
             assert_eq!(opts.depth_limit, Some(8));
+            let mut dated = Entry::new(b"dated", Kind::File);
+            dated.modified = Some(at(5_000));
             let entries = vec![
                 Entry::new(b"server-hit", Kind::File),
                 Entry::new(b"miss", Kind::File),
+                dated,
             ];
             let _ = out
                 .send(FolderListing {

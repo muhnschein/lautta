@@ -7,6 +7,7 @@ import "../../qml/pages"
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-documents/ArchiveBanner/"
     property string archiveRoot
@@ -139,5 +140,6 @@ ApplicationWindow {
         setUp()
         checkPlainFolder()
         checkArchive()
+        reachedEnd = true
     }
 }

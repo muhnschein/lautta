@@ -5,6 +5,7 @@ import Lautta 1.0
 import "../components"
 import "../components/search"
 import "../components/Open.js" as Open
+import "../components/ErrorText.js" as ErrorText
 import "../components/search/SearchText.js" as SearchText
 
 Page {
@@ -18,7 +19,7 @@ Page {
 
     function summary() {
         var parts = [searchModel.matchMode === "glob"
-                     //% "glob"
+                     //% "pattern"
                      ? qsTrId("lautta-search-mode-glob")
                      //% "contains"
                      : qsTrId("lautta-search-mode-substring")]
@@ -221,13 +222,13 @@ Page {
                   //% "No matches"
                   ? qsTrId("lautta-search-none")
                   : (searchModel.errorKind.length > 0
-                     //% "Search stopped"
+                     //% "Search failed"
                      ? qsTrId("lautta-search-failed")
                      //% "Search"
                      : qsTrId("lautta-search-idle"))
             hintText: page.searched
                       ? (searchModel.errorKind.length > 0
-                         ? searchModel.errorMessage
+                         ? ErrorText.message(searchModel.errorKind, { "location": App.locationName(page.rootUri), "open": true })
                          //% "Try another name or loosen the filters"
                          : qsTrId("lautta-search-none-hint"))
                       //% "Type part of a name, or a pattern such as *.pdf"

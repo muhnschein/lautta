@@ -12,11 +12,12 @@ use crate::vpath::VPath;
 use async_trait::async_trait;
 use sha2::Digest;
 use std::collections::{BTreeMap, HashMap};
+use std::future::Future;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::fd::OwnedFd;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 #[derive(Debug, Clone)]
 enum Node {
@@ -40,9 +41,16 @@ struct State {
     /// Keyed by path and operation name (`"list"`, `"stat"`, …).
     failures: HashMap<(String, VPath), Vec<Error>>,
     calls: Vec<String>,
+    holds: HashMap<(String, VPath), (oneshot::Sender<()>, oneshot::Receiver<()>)>,
     /// Where the location sits on its server: absolute link targets below it resolve into the tree,
     /// others point outside (empty: `/`).
     root_at: Vec<u8>,
+}
+
+/// See [`MemoryProvider::hold_next`].
+pub struct Hold {
+    pub reached: oneshot::Receiver<()>,
+    pub release: oneshot::Sender<()>,
 }
 
 /// The root always exists.
@@ -172,6 +180,36 @@ impl MemoryProvider {
             .entry((op.to_owned(), Self::vp(path)))
             .or_default()
             .push(err);
+    }
+
+    /// Next `op` on `path` does its work, signals `reached`, then waits for `release` (or its
+    /// drop): like a blocking call already running, aborting the caller cannot undo the work.
+    pub fn hold_next(&self, op: &str, path: &str) -> Hold {
+        let (reached_tx, reached) = oneshot::channel();
+        let (release, release_rx) = oneshot::channel();
+        self.lock()
+            .holds
+            .insert((op.to_owned(), Self::vp(path)), (reached_tx, release_rx));
+        Hold { reached, release }
+    }
+
+    async fn held(&self, op: &str, path: &VPath) {
+        let hold = self.lock().holds.remove(&(op.to_owned(), path.clone()));
+        let Some((reached, mut release)) = hold else {
+            return;
+        };
+        // `reached` only once parked on `release`: an abort sent after it always lands.
+        let mut reached = Some(reached);
+        std::future::poll_fn(|cx| match std::pin::Pin::new(&mut release).poll(cx) {
+            std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
+            std::task::Poll::Pending => {
+                if let Some(r) = reached.take() {
+                    let _ = r.send(());
+                }
+                std::task::Poll::Pending
+            }
+        })
+        .await;
     }
 
     pub fn calls(&self) -> Vec<String> {
@@ -363,6 +401,7 @@ impl Provider for MemoryProvider {
 
     async fn stat(&self, path: &VPath, follow: bool, _lane: Lane) -> Result<Entry> {
         self.enter("stat", path)?;
+        self.held("stat", path).await;
         let st = self.lock();
         let real = canonical(&st, path, false);
         let node = st
@@ -387,20 +426,23 @@ impl Provider for MemoryProvider {
     async fn make_dir(&self, path: &VPath, exclusive: bool) -> Result<()> {
         self.enter("make_dir", path)?;
         self.require_write()?;
-        let mut st = self.lock();
-        Self::check_parent(&st, path)?;
-        match st.nodes.get(path) {
-            Some(Node::Dir { .. }) if !exclusive => return Ok(()),
-            Some(_) => return Err(Error::kind(ErrorKind::AlreadyExists)),
-            None => {}
+        {
+            let mut st = self.lock();
+            Self::check_parent(&st, path)?;
+            match st.nodes.get(path) {
+                Some(Node::Dir { .. }) if !exclusive => return Ok(()),
+                Some(_) => return Err(Error::kind(ErrorKind::AlreadyExists)),
+                None => {}
+            }
+            st.nodes.insert(
+                path.clone(),
+                Node::Dir {
+                    mtime: SystemTime::now(),
+                    mode: 0o755,
+                },
+            );
         }
-        st.nodes.insert(
-            path.clone(),
-            Node::Dir {
-                mtime: SystemTime::now(),
-                mode: 0o755,
-            },
-        );
+        self.held("make_dir", path).await;
         Ok(())
     }
 
@@ -426,15 +468,16 @@ impl Provider for MemoryProvider {
     async fn remove_file(&self, path: &VPath) -> Result<()> {
         self.enter("remove_file", path)?;
         self.require_write()?;
-        let mut st = self.lock();
-        match st.nodes.get(path) {
-            Some(Node::Dir { .. }) => Err(Error::kind(ErrorKind::IsADirectory)),
-            Some(_) => {
-                st.nodes.remove(path);
-                Ok(())
-            }
-            None => Err(Error::kind(ErrorKind::NotFound)),
+        {
+            let mut st = self.lock();
+            match st.nodes.get(path) {
+                Some(Node::Dir { .. }) => return Err(Error::kind(ErrorKind::IsADirectory)),
+                Some(_) => st.nodes.remove(path),
+                None => return Err(Error::kind(ErrorKind::NotFound)),
+            };
         }
+        self.held("remove_file", path).await;
+        Ok(())
     }
 
     async fn remove_dir(&self, path: &VPath) -> Result<()> {
@@ -455,33 +498,36 @@ impl Provider for MemoryProvider {
     async fn rename(&self, from: &VPath, to: &VPath, mode: RenameMode) -> Result<()> {
         self.enter("rename", from)?;
         self.require_write()?;
-        let mut st = self.lock();
-        if !st.nodes.contains_key(from) {
-            return Err(Error::kind(ErrorKind::NotFound));
-        }
-        Self::check_parent(&st, to)?;
-        if to.starts_with(from) && to != from {
-            return Err(Error::kind(ErrorKind::InvalidArgument));
-        }
-        if st.nodes.contains_key(to) && from != to {
-            if mode == RenameMode::NoReplace {
-                return Err(Error::kind(ErrorKind::AlreadyExists));
+        {
+            let mut st = self.lock();
+            if !st.nodes.contains_key(from) {
+                return Err(Error::kind(ErrorKind::NotFound));
             }
-            st.nodes.retain(|p, _| !p.starts_with(to));
+            Self::check_parent(&st, to)?;
+            if to.starts_with(from) && to != from {
+                return Err(Error::kind(ErrorKind::InvalidArgument));
+            }
+            if st.nodes.contains_key(to) && from != to {
+                if mode == RenameMode::NoReplace {
+                    return Err(Error::kind(ErrorKind::AlreadyExists));
+                }
+                st.nodes.retain(|p, _| !p.starts_with(to));
+            }
+            let moved: Vec<(VPath, Node)> = st
+                .nodes
+                .iter()
+                .filter(|(p, _)| p.starts_with(from))
+                .map(|(p, n)| (p.clone(), n.clone()))
+                .collect();
+            for (p, _) in &moved {
+                st.nodes.remove(p);
+            }
+            for (p, n) in moved {
+                let rel = p.strip_prefix(from).unwrap_or_default();
+                st.nodes.insert(to.join_path(&rel), n);
+            }
         }
-        let moved: Vec<(VPath, Node)> = st
-            .nodes
-            .iter()
-            .filter(|(p, _)| p.starts_with(from))
-            .map(|(p, n)| (p.clone(), n.clone()))
-            .collect();
-        for (p, _) in &moved {
-            st.nodes.remove(p);
-        }
-        for (p, n) in moved {
-            let rel = p.strip_prefix(from).unwrap_or_default();
-            st.nodes.insert(to.join_path(&rel), n);
-        }
+        self.held("rename", from).await;
         Ok(())
     }
 

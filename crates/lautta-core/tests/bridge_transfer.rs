@@ -389,13 +389,7 @@ async fn dropping_a_transfer_cancels_the_job() {
     assert!(tokio::time::timeout(Duration::from_millis(250), upload)
         .await
         .is_err());
-    eventually("the Cancel", || !rig.fake.calls_of("Cancel").is_empty()).await;
-    tokio::time::sleep(Duration::from_millis(600)).await;
-    let partial = rig.fake.file("account:1", b"slow.bin").map_or(0, |d| d.len());
-    assert!(
-        partial < DATA.len(),
-        "the canceled job stopped early ({partial} bytes)"
-    );
+    eventually("the running job canceled", || rig.fake.jobs_canceled() == 1).await;
 }
 
 #[tokio::test]

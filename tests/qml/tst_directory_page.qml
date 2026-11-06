@@ -4,8 +4,12 @@ import Sailfish.Silica 1.0
 import "../../qml/pages"
 
 ApplicationWindow {
+    id: test
+    property bool reachedEnd
+
     initialPage: Component {
         DirectoryPage {
+            Component.onCompleted: test.reachedEnd = true
             uri: "lautta://user-documents/"
         }
     }

@@ -40,7 +40,7 @@ ListItem {
                 onClicked: Transfers.resume(row.transferId)
             }
             MenuItem {
-                //% "Move to top of the queue"
+                //% "Move to the top of the queue"
                 text: qsTrId("lautta-xfr-menu-top")
                 visible: row.group !== "history"
                 onClicked: Transfers.moveToTop(row.transferId)
@@ -56,7 +56,7 @@ ListItem {
                 text: qsTrId("lautta-xfr-menu-cancel")
                 visible: row.group !== "history"
                 onClicked: item.remorseAction(
-                    //% "Canceling"
+                    //% "Cancelling"
                     qsTrId("lautta-xfr-remorse-cancel"),
                     function() { Transfers.cancel(row.transferId) },
                     App.setting("remorse_seconds") * 1000)

@@ -4,6 +4,7 @@ import "../../../qml/components/directory/Selection.js" as Selection
 import "../../../qml/components/directory/ContextActions.js" as Actions
 
 Item {
+    property bool reachedEnd
     function check(cond, what) {
         if (!cond)
             console.error("FAILED: " + what)
@@ -166,5 +167,6 @@ Item {
         testDragRange()
         testDragSteps()
         testAutoScroll()
+        reachedEnd = true
     }
 }

@@ -9,6 +9,7 @@ ApplicationWindow {
 
     readonly property string folder: "lautta://user-documents/"
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property var dialog
@@ -95,9 +96,10 @@ ApplicationWindow {
             case 3:
                 if (win.waited % 5 === 0)
                     docs.refresh()
-                if (docs.nameKind("Plans") === "folder")
+                if (docs.nameKind("Plans") === "folder") {
+                    win.reachedEnd = true
                     win.scenarioRunning = false
-                else if (docs.nameKind("Plans") === "file")
+                } else if (docs.nameKind("Plans") === "file")
                     win.fail("made a file")
                 break
             }
