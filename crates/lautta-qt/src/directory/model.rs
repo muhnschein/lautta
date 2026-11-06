@@ -20,7 +20,7 @@ use lautta_core::sort::SortKey;
 use lautta_core::thumbs::{app_thumbnail_url, thumbnail_source, ThumbSettings, ThumbSource};
 use lautta_core::thumbs_text::{thumb_monospace, type_icon};
 use lautta_core::viewprefs::{suggest_grid, ViewMode, ViewPrefs};
-use lautta_core::watch::{DirWatcher, DIR_DEBOUNCE};
+use lautta_core::watch::DirWatch;
 use lautta_core::{Error, Uri};
 use qmetaobject::prelude::*;
 use qmetaobject::{queued_callback, QByteArray, QPointer, QVariantList};
@@ -193,7 +193,7 @@ pub struct DirectoryModel {
     pending: Option<Vec<Entry>>,
     dirty: bool,
     archive: bool,
-    watcher: Option<DirWatcher>,
+    watcher: Option<DirWatch>,
     settings_watch: Option<Guard>,
     transfer_states: HashMap<Vec<u8>, String>,
     counts: HashMap<Vec<u8>, CountSlot>,
@@ -295,15 +295,19 @@ impl DirectoryModel {
     }
 
     fn start_watch(&mut self) {
-        let Some(path) = self.local_dir.clone() else {
+        let (Some(core), Some(path)) = (core(), self.local_dir.clone()) else {
             return;
         };
-        let Ok((watcher, mut rx)) = DirWatcher::new(DIR_DEBOUNCE) else {
-            return;
+        let (watcher, mut rx) = match core.watch_dir(&path) {
+            Ok(w) => w,
+            Err(e) => {
+                // `revisit` lists it again instead.
+                if e.kind != ErrorKind::NotFound {
+                    log::warn!("folder does not update live: {e}");
+                }
+                return;
+            }
         };
-        if watcher.watch(&path).is_err() {
-            return;
-        }
         let me = QPointer::from(&*self);
         let generation = self.generation;
         let cb = queued_callback(move |()| {

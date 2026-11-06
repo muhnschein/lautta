@@ -10,6 +10,7 @@
 - Select all and clearing a selection in a large folder respond faster.
 - The app starts a little sooner.
 - Pages that show transfers refresh four times a second instead of on every file, which saves battery during long copies.
+- Folders on the phone and on drives keep updating live however many are open. Lautta no longer wakes the phone ten times a second while it runs.
 - Servers show a server icon instead of a laptop.
 - Browse rows have even heights. Servers, memory cards and USB drives show their state as a glowing dot. It pulses while a server connects or a drive mounts or unmounts, and turns red or orange on failure or warning.
 - Browse shows no item counts any more.
