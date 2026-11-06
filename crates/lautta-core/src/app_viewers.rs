@@ -788,7 +788,9 @@ mod tests {
             orientation: 1,
         };
         let u = |s: &str| Uri::parse(&format!("lautta://nv-a/{s}")).unwrap();
+        assert!(shown.is_empty());
         shown.put(&u("photo"), Some(1), img(20_000_000));
+        assert!(!shown.is_empty());
         assert_eq!(shown.len(), 1, "a 20 MB photo is kept");
         shown.put(&u("big"), Some(1), img(SHOWN_IMAGES_BYTES + 1));
         assert!(
