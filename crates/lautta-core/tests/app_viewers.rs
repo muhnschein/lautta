@@ -1188,3 +1188,38 @@ async fn sizes_and_cache_only_requests_are_jobs_of_their_own() {
     assert_eq!(sized(&small.rx.await.unwrap().unwrap()), (128, 64));
     assert_eq!(sized(&large.rx.await.unwrap().unwrap()), (512, 256));
 }
+
+#[tokio::test]
+async fn a_listed_file_s_cached_thumbnail_needs_no_server_call() {
+    use lautta_core::provider::{Lane, Provider};
+    let h = home().await;
+    h.nas.add_file("p/a.jpg", &jpeg(1200, 600), 9_000);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    thumbnail(&h, &previews, "lautta://nv-nas/p/a.jpg", 200)
+        .await
+        .unwrap();
+    let path = uri("lautta://nv-nas/p/a.jpg").path;
+    let entry = h.nas.stat(&path, true, Lane::Interactive).await.unwrap();
+    h.core.dircache.put(&uri("lautta://nv-nas/p"), &[entry]).unwrap();
+    let calls = h.nas.calls().len();
+    let t = previews.request_cached(h.core.clone(), uri("lautta://nv-nas/p/a.jpg"), 1024);
+    assert_eq!(sized(&t.rx.await.unwrap().unwrap()), (256, 128));
+    assert_eq!(h.nas.calls().len(), calls, "listing says which version is cached");
+
+    h.nas.add_symlink("p/l.jpg", "a.jpg");
+    thumbnail(&h, &previews, "lautta://nv-nas/p/l.jpg", 200)
+        .await
+        .unwrap();
+    let link = h
+        .nas
+        .stat(&uri("lautta://nv-nas/p/l.jpg").path, false, Lane::Interactive)
+        .await
+        .unwrap();
+    h.core.dircache.put(&uri("lautta://nv-nas/p"), &[link]).unwrap();
+    let t = previews.request_cached(h.core.clone(), uri("lautta://nv-nas/p/l.jpg"), 1024);
+    assert_eq!(
+        sized(&t.rx.await.unwrap().unwrap()),
+        (256, 128),
+        "a listed link says nothing of its target: asked"
+    );
+}

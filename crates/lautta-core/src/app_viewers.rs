@@ -3,7 +3,7 @@
 //! images, media playback. Qt-free.
 
 use crate::app::Core;
-use crate::entry::Entry;
+use crate::entry::{Entry, Kind};
 use crate::error::{Error, ErrorKind, Result};
 use crate::mime::{category_of, FileCategory};
 use crate::org::recents::RecentKind;
@@ -343,7 +343,7 @@ impl Previews {
     }
 
     async fn make_text(&self, core: &Core, uri: &Uri) -> Option<String> {
-        let file = ThumbFile::open(core, uri).await.ok()?;
+        let file = ThumbFile::open(core, uri, false).await.ok()?;
         let entry = &file.entry;
         let settings = ThumbSettings::new(&core.settings());
         if thumbnail_source(entry, file.local, true, &settings) != ThumbSource::Text {
@@ -400,7 +400,7 @@ impl Previews {
     /// App makes only server files' thumbnails; local ones are the system thumbnailer's. `size` is
     /// one of [`THUMB_SIZES`].
     async fn make(&self, core: &Core, uri: &Uri, size: u32, cached: bool) -> ThumbResult {
-        let file = ThumbFile::open(core, uri).await?;
+        let file = ThumbFile::open(core, uri, cached).await?;
         let entry = &file.entry;
         if entry.is_dir() {
             return Err(Error::kind(ErrorKind::IsADirectory));
@@ -471,9 +471,14 @@ struct ThumbFile {
 }
 
 impl ThumbFile {
-    async fn open(core: &Core, uri: &Uri) -> Result<ThumbFile> {
+    /// `listed`: entry from the cached folder listing when there is one, so a viewer's placeholder
+    /// waits on no server round trip (those queue behind the full image's reads).
+    async fn open(core: &Core, uri: &Uri, listed: bool) -> Result<ThumbFile> {
         let provider = core.provider(&uri.location)?;
-        let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
+        let entry = match listed.then(|| listed_file(core, uri)).flatten() {
+            Some(entry) => entry,
+            None => provider.stat(&uri.path, true, Lane::Interactive).await?,
+        };
         Ok(ThumbFile {
             provider,
             path: uri.path.clone(),
@@ -482,6 +487,15 @@ impl ThumbFile {
             key_uri: uri.to_string(),
         })
     }
+}
+
+fn listed_file(core: &Core, uri: &Uri) -> Option<Entry> {
+    let listing = core.dircache.get(&uri.parent()?).ok()??;
+    let name = uri.name()?;
+    listing
+        .entries
+        .into_iter()
+        .find(|e| e.name == name && e.kind == Kind::File)
 }
 
 type PreviewsByDir = Mutex<Vec<(PathBuf, Arc<Previews>)>>;
