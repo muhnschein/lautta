@@ -953,7 +953,8 @@ impl Inner {
         let now = self.deps.clock.now_ms();
         let mut st = self.lock();
         let due = st.throttle.due(id, now);
-        let Some(live) = st.live.get_mut(&id) else {
+        // A stopped item's thread may still report once before it sees the stop.
+        let Some(live) = st.live.get_mut(&id).filter(|l| l.running.contains_key(&seq)) else {
             return;
         };
         live.item_bytes.insert(seq, done);
