@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A cancelled task no longer shows the bytes of the file it was copying when you cancelled it, since that partial file is deleted.
 - After you cancel a task, its unfinished files say "Cancelled" on the task page instead of "Copying" or "Queued".
 - A conflict notification goes away once its question is answered, or its task is canceled or ends.
 - A video or song that can't be played says "Can't play" with its name, instead of blaming the folder or server it is in.

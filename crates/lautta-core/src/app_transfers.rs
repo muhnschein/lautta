@@ -183,10 +183,16 @@ impl ProgressBook {
         self.live.retain(|id, _| ids.contains(id));
     }
 
-    /// Bytes done is the larger of stored and live value. Only running transfers have a rate.
+    /// Bytes done is the larger of stored and live value; once finished, the stored one (cancel
+    /// drops partial files). Only running transfers have a rate.
     pub fn of(&self, s: &TransferSummary) -> (u64, u64, Option<u64>) {
-        let live = self.live.get(&s.id).copied();
-        let moving = group_of(s.state) == TransferGroup::Active;
+        let group = group_of(s.state);
+        let live = self
+            .live
+            .get(&s.id)
+            .copied()
+            .filter(|_| group != TransferGroup::History);
+        let moving = group == TransferGroup::Active;
         let done = live.map_or(s.bytes_done, |l| l.bytes_done.max(s.bytes_done));
         match live {
             Some(l) if moving => (done.min(s.bytes_total.max(done)), l.rate, l.eta_secs),
@@ -474,6 +480,18 @@ mod tests {
         let (done, rate, eta) = book.of(&list[2]);
         assert_eq!((done, rate, eta), (99, 0, None));
         assert_eq!(book.of(&list[0]), (300, 100, Some(7)));
+    }
+
+    #[test]
+    fn finished_transfers_show_stored_bytes_not_live_ones() {
+        let mut book = ProgressBook::default();
+        book.update(1, 600, 100, Some(7));
+        let canceled = summary(1, TransferState::Canceled, 200, 1200);
+        assert_eq!(
+            book.of(&canceled),
+            (200, 0, None),
+            "partial file of a cancelled copy is gone"
+        );
     }
 
     #[test]
