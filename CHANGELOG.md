@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Cancel in an Activity task's menu cancels the task again. Before, the countdown ran but the copy went on.
 - After you cancel a task, its unfinished files say "Cancelled" on the task page instead of "Copying" or "Queued".
 - A conflict notification goes away once its question is answered, or its task is canceled or ends.
 - A video or song that can't be played says "Can't play" with its name, instead of blaming the folder or server it is in.

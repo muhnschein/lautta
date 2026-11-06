@@ -24,6 +24,14 @@ ListItem {
     readonly property var titleParts: TransferText.titleParts(r)
     readonly property bool toServer: TransferText.toServer(row.direction)
 
+    // Remorse callback made here: Silica destroys menu on close; closure made in it loses its scope.
+    function cancelLater() {
+        var id = row.transferId
+        //% "Cancelling"
+        remorseAction(qsTrId("lautta-xfr-remorse-cancel"), function() { Transfers.cancel(id) },
+                      App.setting("remorse_seconds") * 1000)
+    }
+
     contentHeight: Math.max(Theme.itemSizeMedium, content.height + 2 * Theme.paddingSmall)
     menu: Component {
         ContextMenu {
@@ -55,11 +63,7 @@ ListItem {
                 //% "Cancel"
                 text: qsTrId("lautta-xfr-menu-cancel")
                 visible: row.group !== "history"
-                onClicked: item.remorseAction(
-                    //% "Cancelling"
-                    qsTrId("lautta-xfr-remorse-cancel"),
-                    function() { Transfers.cancel(row.transferId) },
-                    App.setting("remorse_seconds") * 1000)
+                onClicked: item.cancelLater()
             }
         }
     }
