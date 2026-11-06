@@ -713,6 +713,7 @@ impl Inner {
             r.task.abort();
             stopped.push(r.task);
             live.item_bytes.remove(&seq);
+            live.t.set_item_state(seq, ItemState::Pending);
             st.sched.item_finished(ItemRef { transfer: id, seq });
         }
         let leftovers: Vec<TransferItem> = live

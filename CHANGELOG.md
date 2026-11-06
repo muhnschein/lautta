@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- After you cancel a task, its unfinished files say "Cancelled" on the task page instead of "Copying" or "Queued".
 - A conflict notification goes away once its question is answered, or its task is canceled or ends.
 - A video or song that can't be played says "Can't play" with its name, instead of blaming the folder or server it is in.
 - Messages and labels say what really happened. A file or folder you may not read says "You don't have permission to open", not "to change". The folder picker shows "Sign-in failed" or "Server identity changed" instead of an internal code, and no longer calls a connecting server unreachable. A failed search explains why. Items in a running move, delete, compress or extract task no longer read "Copying". When Lautta closes with unfinished tasks and "Resume unfinished tasks at start" is off, it no longer promises they will resume. Smaller wording fixes across the app.

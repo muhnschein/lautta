@@ -45,6 +45,15 @@ ApplicationWindow {
         }
     }
 
+    function checkCanceledItems() {
+        var shown = TransferText.itemState("pending", "canceled")
+        same(TransferText.itemStatus(shown, "file", 0, "", "copy"), qsTrId("lautta-xfr-canceled"),
+             "unfinished item of cancelled task")
+        same(TransferText.itemIcon(shown), "image://theme/icon-m-dismiss", "cancelled item icon")
+        same(TransferText.itemState("pending", "paused"), "pending", "paused task keeps queued items")
+        same(TransferText.itemState("done", "canceled"), "done", "done item of cancelled task stays done")
+    }
+
     function checkPending() {
         same(TransferText.pendingBody(true), qsTrId("lautta-xfr-note-pending-body"), "resume at start")
         same(TransferText.pendingBody(false), qsTrId("lautta-xfr-note-pending-manual-body"), "no resume at start")
@@ -72,6 +81,7 @@ ApplicationWindow {
             Component.onCompleted: {
                 test.checkPermission()
                 test.checkItemStates()
+                test.checkCanceledItems()
                 test.checkPending()
                 test.checkPicker(picker)
                 test.reachedEnd = true
