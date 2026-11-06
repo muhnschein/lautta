@@ -213,15 +213,16 @@ impl DirectoryModel {
     fn load(&mut self) {
         self.generation += 1;
         self.stop_tasks();
-        self.reset_state();
         let parsed = Uri::parse(&self.uri.to_string());
         let (Some(core), Ok(dir)) = (core(), parsed) else {
+            self.reset_state();
             self.fail(&Error::new(ErrorKind::InvalidArgument, "bad folder address"));
             return;
         };
         self.prefs = core.view_prefs();
         self.global = self.prefs;
         self.prefs_set = false;
+        self.reset_state();
         self.thumb_settings = Some(ThumbSettings::new(&core.settings()));
         if self.settings_watch.is_none() {
             self.watch_settings(&core);
@@ -260,6 +261,7 @@ impl DirectoryModel {
     fn reset_state(&mut self) {
         self.begin_reset_model();
         self.state = ListingState::from_prefs(&self.prefs);
+        self.filter.show_hidden = self.prefs.show_hidden;
         self.state.set_filter(self.filter.clone());
         self.shown = 0;
         self.end_reset_model();
