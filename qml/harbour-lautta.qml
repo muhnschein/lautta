@@ -34,4 +34,5 @@ ApplicationWindow {
     BrowseHandlers { }
     OperationsHandlers { }
     TransfersHandlers { }
+    PowerSave { }
 }

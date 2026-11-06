@@ -58,6 +58,9 @@ pub struct App {
     clipboardJson: qt_method!(fn(&self) -> QString),
     takeClipboard: qt_method!(fn(&mut self) -> QString),
 
+    /// mce's battery saving (`get_psm_state`, `psm_state_ind`).
+    setPowerSave: qt_method!(fn(&self, on: bool)),
+
     prepareExternal: qt_method!(fn(&self, uri: QString)),
     externalReady: qt_signal!(uri: QString, fileUrl: QString),
     externalFailed: qt_signal!(uri: QString, kind: QString, message: QString),
@@ -121,6 +124,12 @@ impl App {
                 log::warn!("tidying the Trash failed: {e}");
             }
         });
+    }
+
+    fn setPowerSave(&self, on: bool) {
+        if let Some(core) = core() {
+            core.set_power_save(on);
+        }
     }
 
     fn publish_settings(&mut self) {

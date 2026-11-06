@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Server pictures: changing the grid size or turning the phone no longer downloads every picture again for its thumbnail. A server picture opens on its thumbnail at once and sharpens when the full picture arrives, and zooming in no longer downloads it a second time. With battery saving on, thumbnails are made only from what a picture carries inside it, never by downloading the whole file.
 - A conflict notification goes away once its question is answered, or its task is canceled or ends.
 - A video or song that can't be played says "Can't play" with its name, instead of blaming the folder or server it is in.
 - Messages and labels say what really happened. A file or folder you may not read says "You don't have permission to open", not "to change". The folder picker shows "Sign-in failed" or "Server identity changed" instead of an internal code, and no longer calls a connecting server unreachable. A failed search explains why. Items in a running move, delete, compress or extract task no longer read "Copying". When Lautta closes with unfinished tasks and "Resume unfinished tasks at start" is off, it no longer promises they will resume. Smaller wording fixes across the app.

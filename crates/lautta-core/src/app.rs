@@ -29,7 +29,7 @@ use crate::watch::{DirWatch, DirWatcher, WatchEvent, DIR_DEBOUNCE};
 use crate::workcopy::WorkingCopies;
 use async_trait::async_trait;
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::watch;
@@ -64,6 +64,9 @@ pub struct Core {
     _volume_watch: Option<VolumeWatcher>,
     /// Made on first use, again after a failed start.
     dir_watcher: Mutex<Option<DirWatcher>>,
+    /// System battery saving: server thumbnails come only from cache or EXIF.
+    power_save: AtomicBool,
+    pub(crate) shown_images: crate::app_viewers::ShownImages,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -154,6 +157,8 @@ impl Core {
             settings_changed: watch::channel(0).0,
             _volume_watch: volume_watch,
             dir_watcher: Mutex::default(),
+            power_save: AtomicBool::new(false),
+            shown_images: Default::default(),
             paths,
             db,
             locations,
@@ -165,6 +170,14 @@ impl Core {
             spawn_bridge_sync(&core, client);
         }
         Ok(core)
+    }
+
+    pub fn power_save(&self) -> bool {
+        self.power_save.load(Ordering::Relaxed)
+    }
+
+    pub fn set_power_save(&self, on: bool) {
+        self.power_save.store(on, Ordering::Relaxed);
     }
 
     pub fn settings(&self) -> Settings {

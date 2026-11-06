@@ -15,13 +15,14 @@ use crate::provider::{list_all, read_all, Lane, ProgressSink, Provider, ReadHand
 use crate::settings::Settings;
 use crate::sort::sort_permutation;
 use crate::thumbs::{
-    remote_thumbnail, thumb_key, thumbnail_source, ThumbJobs, ThumbSettings, ThumbSource, ThumbnailCache,
+    remote_thumbnail, render_thumbnail, thumb_bucket, thumb_key, thumbnail_source, ThumbJobs, ThumbSettings,
+    ThumbSource, ThumbnailCache, THUMB_SIZES,
 };
 use crate::thumbs_pdf::PdfThumbs;
 use crate::thumbs_text::{thumb_text, TEXT_THUMB_BYTES};
 use crate::uri::Uri;
 use crate::vpath::VPath;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::os::fd::OwnedFd;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -73,16 +74,72 @@ pub struct ImageItem {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FullImage {
-    pub bytes: Vec<u8>,
+    pub bytes: Arc<Vec<u8>>,
     /// 1-8; 1 = none.
     pub orientation: u8,
 }
 
-/// Size is clamped. URI may arrive percent-encoded once more (QML helpers).
-pub fn parse_thumb_id(id: &str) -> Option<(Uri, u32)> {
+/// Server images kept after reading: the viewer's zoom and its neighbours ask again.
+pub const SHOWN_IMAGES: usize = 3;
+pub const SHOWN_IMAGES_BYTES: usize = 64 * 1000 * 1000;
+
+#[derive(Default)]
+pub struct ShownImages(Mutex<VecDeque<(Uri, Option<u64>, FullImage)>>);
+
+impl ShownImages {
+    fn get(&self, uri: &Uri, size: Option<u64>) -> Option<FullImage> {
+        let list = lock(&self.0);
+        list.iter()
+            .find(|(u, s, _)| u == uri && *s == size)
+            .map(|(_, _, img)| img.clone())
+    }
+
+    /// Newest first; oldest go past [`SHOWN_IMAGES`] or [`SHOWN_IMAGES_BYTES`].
+    fn put(&self, uri: &Uri, size: Option<u64>, image: FullImage) {
+        if image.bytes.len() > SHOWN_IMAGES_BYTES {
+            return;
+        }
+        let mut list = lock(&self.0);
+        list.retain(|(u, _, _)| u != uri);
+        list.push_front((uri.clone(), size, image));
+        list.truncate(SHOWN_IMAGES);
+        while list.iter().map(|(_, _, i)| i.bytes.len()).sum::<usize>() > SHOWN_IMAGES_BYTES {
+            list.pop_back();
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        lock(&self.0).len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThumbId {
+    pub uri: Uri,
+    pub size: u32,
+    /// Only what the cache holds, any size: a stand-in while the real one loads.
+    pub cached: bool,
+}
+
+/// `<uri>?size=N[&cached=1]`. Size is clamped. URI may arrive percent-encoded once more (QML
+/// helpers).
+pub fn parse_thumb_id(id: &str) -> Option<ThumbId> {
     let (uri_part, query) = id.rsplit_once('?')?;
-    let size: u32 = query.strip_prefix("size=")?.parse().ok()?;
-    Some((parse_image_uri(uri_part)?, size.clamp(MIN_THUMB, MAX_THUMB)))
+    let (size, cached) = match query.split_once('&') {
+        Some((size, "cached=1")) => (size, true),
+        Some(_) => return None,
+        None => (query, false),
+    };
+    let size: u32 = size.strip_prefix("size=")?.parse().ok()?;
+    Some(ThumbId {
+        uri: parse_image_uri(uri_part)?,
+        size: size.clamp(MIN_THUMB, MAX_THUMB),
+        cached,
+    })
 }
 
 pub fn parse_image_uri(id: &str) -> Option<Uri> {
@@ -220,7 +277,18 @@ impl Previews {
 
     /// Requests for the same file and size share one job.
     pub fn request(self: &Arc<Self>, core: Arc<Core>, uri: Uri, size: u32) -> ThumbTicket {
-        let job_key = thumb_key(&uri.to_string(), size, None, None);
+        self.request_as(core, uri, size, false)
+    }
+
+    /// Cached thumbnail of any size, never the file: fails at once when none was made.
+    pub fn request_cached(self: &Arc<Self>, core: Arc<Core>, uri: Uri, size: u32) -> ThumbTicket {
+        self.request_as(core, uri, size, true)
+    }
+
+    fn request_as(self: &Arc<Self>, core: Arc<Core>, uri: Uri, size: u32, cached: bool) -> ThumbTicket {
+        let size = thumb_bucket(size);
+        // Sizes are even: odd key is the cache-only job.
+        let job_key = thumb_key(&uri.to_string(), size + u32::from(cached), None, None);
         let waiter = self.next_waiter.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
         lock(&self.waiters)
@@ -231,7 +299,7 @@ impl Previews {
         let key = job_key.clone();
         let location = uri.location.clone();
         let started = self.jobs.request(&job_key, &location, async move {
-            let result = me.make(&core, &uri, size).await;
+            let result = me.make(&core, &uri, size, cached).await;
             me.finish(&key, result);
         });
         if !started && lock(&self.waiters).get(&job_key).map_or(0, Vec::len) == 1 {
@@ -323,8 +391,9 @@ impl Previews {
         }
     }
 
-    /// App makes only server files' thumbnails; local ones are the system thumbnailer's.
-    async fn make(&self, core: &Core, uri: &Uri, size: u32) -> ThumbResult {
+    /// App makes only server files' thumbnails; local ones are the system thumbnailer's. `size` is
+    /// one of [`THUMB_SIZES`].
+    async fn make(&self, core: &Core, uri: &Uri, size: u32, cached: bool) -> ThumbResult {
         let file = ThumbFile::open(core, uri).await?;
         let entry = &file.entry;
         if entry.is_dir() {
@@ -343,16 +412,42 @@ impl Previews {
         if pdf && self.pdf.is_refused(&version) {
             return Err(Error::new(ErrorKind::Unsupported, "PDF cannot be drawn"));
         }
-        let key = thumb_key(&file.key_uri, size, entry.modified_ms(), entry.etag.as_deref());
+        let key_of = |s: u32| thumb_key(&file.key_uri, s, entry.modified_ms(), entry.etag.as_deref());
+        let key = key_of(size);
         if let Some(hit) = self.cache.get(&key) {
             return Ok(Arc::new(hit));
         }
-        let handle = file.provider.open_read(&file.path, Lane::Interactive).await?;
-        let bytes = if pdf {
-            let (dir, limit) = (self.cache.dir(), settings.pdf_limit());
-            self.pdf.make(dir, &version, handle.as_ref(), size, limit).await?
+        let larger = THUMB_SIZES.iter().filter(|s| **s > size);
+        let bytes = if let Some(hit) = larger.filter_map(|s| self.cache.get(&key_of(*s))).next() {
+            // Cached pixels are upright already.
+            tokio::task::spawn_blocking(move || render_thumbnail(&hit, size, 1))
+                .await
+                .map_err(|e| Error::new(ErrorKind::Internal, format!("thumbnail worker failed: {e}")))??
+        } else if cached {
+            let mut smaller = THUMB_SIZES.iter().rev().filter(|s| **s < size);
+            return smaller
+                .find_map(|s| self.cache.get(&key_of(*s)))
+                .map(Arc::new)
+                .ok_or_else(|| Error::new(ErrorKind::NotFound, "no thumbnail made yet"));
+        } else if pdf && core.power_save() {
+            return Err(Error::new(
+                ErrorKind::Unsupported,
+                "battery saving: server PDFs not read",
+            ));
         } else {
-            remote_thumbnail(handle.as_ref(), size, settings.max_remote_bytes).await?
+            let handle = file.provider.open_read(&file.path, Lane::Interactive).await?;
+            if pdf {
+                let (dir, limit) = (self.cache.dir(), settings.pdf_limit());
+                self.pdf.make(dir, &version, handle.as_ref(), size, limit).await?
+            } else {
+                // Battery saving: embedded EXIF thumbnail only, no whole file.
+                let max = if core.power_save() {
+                    0
+                } else {
+                    settings.max_remote_bytes
+                };
+                remote_thumbnail(handle.as_ref(), size, max).await?
+            }
         };
         if let Err(e) = self.cache.put(&key, &bytes) {
             log::warn!("thumbnail not cached: {e}");
@@ -488,18 +583,39 @@ impl Core {
             .collect()
     }
 
+    /// Kept in [`ShownImages`] while its file keeps its size.
     pub async fn full_image(&self, uri: &Uri) -> Result<FullImage> {
         let provider = self.provider(&uri.location)?;
         let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
-        if handle.size().is_some_and(|s| s > MAX_FULL_IMAGE_BYTES) {
+        let size = handle.size();
+        if size.is_some_and(|s| s > MAX_FULL_IMAGE_BYTES) {
             return Err(Error::new(ErrorKind::Unsupported, "image too large to show"));
+        }
+        if let Some(hit) = self.shown_images.get(uri, size) {
+            return Ok(hit);
         }
         let bytes = crate::provider::read_all(handle.as_ref(), MAX_FULL_IMAGE_BYTES + 1).await?;
         if bytes.len() as u64 > MAX_FULL_IMAGE_BYTES {
             return Err(Error::new(ErrorKind::Unsupported, "image too large to show"));
         }
         let orientation = exif::orientation(&bytes);
-        Ok(FullImage { bytes, orientation })
+        let image = FullImage {
+            bytes: Arc::new(bytes),
+            orientation,
+        };
+        if size.is_some() {
+            self.shown_images.put(uri, size, image.clone());
+        }
+        Ok(image)
+    }
+
+    pub fn shown_images(&self) -> &ShownImages {
+        &self.shown_images
+    }
+
+    /// Viewer closed: kept images go.
+    pub fn forget_shown_images(&self) {
+        lock(&self.shown_images.0).clear();
     }
 
     /// Open cache takes the new budget, trimmed off the caller's thread; one opened later reads the
@@ -647,17 +763,56 @@ mod tests {
 
     #[test]
     fn thumb_ids_parse_and_clamp() {
-        let (u, s) = parse_thumb_id("lautta://nv-a/p/a%20b.jpg?size=128").unwrap();
-        assert_eq!(u.to_string(), "lautta://nv-a/p/a%20b.jpg");
-        assert_eq!(s, 128);
-        assert_eq!(parse_thumb_id("lautta://nv-a/x.jpg?size=1").unwrap().1, MIN_THUMB);
+        let t = parse_thumb_id("lautta://nv-a/p/a%20b.jpg?size=128").unwrap();
+        assert_eq!(t.uri.to_string(), "lautta://nv-a/p/a%20b.jpg");
+        assert_eq!((t.size, t.cached), (128, false));
         assert_eq!(
-            parse_thumb_id("lautta://nv-a/x.jpg?size=99999").unwrap().1,
+            parse_thumb_id("lautta://nv-a/x.jpg?size=1").unwrap().size,
+            MIN_THUMB
+        );
+        assert_eq!(
+            parse_thumb_id("lautta://nv-a/x.jpg?size=99999").unwrap().size,
             MAX_THUMB
         );
         assert!(parse_thumb_id("lautta://nv-a/x.jpg").is_none());
         assert!(parse_thumb_id("lautta://nv-a/x.jpg?size=big").is_none());
         assert!(parse_thumb_id("http://x/y?size=3").is_none());
+    }
+
+    #[test]
+    fn shown_images_stay_within_their_byte_budget() {
+        let shown = ShownImages::default();
+        let third = SHOWN_IMAGES_BYTES / 3 + 1;
+        let img = |n: usize| FullImage {
+            bytes: Arc::new(vec![0; n]),
+            orientation: 1,
+        };
+        let u = |s: &str| Uri::parse(&format!("lautta://nv-a/{s}")).unwrap();
+        shown.put(&u("big"), Some(1), img(SHOWN_IMAGES_BYTES + 1));
+        assert!(shown.is_empty(), "larger than the budget: not kept");
+        shown.put(&u("exact"), Some(1), img(SHOWN_IMAGES_BYTES));
+        assert_eq!(shown.len(), 1, "exactly the budget fits");
+        for name in ["a", "b", "c"] {
+            shown.put(&u(name), Some(1), img(third));
+        }
+        assert_eq!(shown.len(), 2, "third one would pass the budget");
+        assert!(shown.get(&u("a"), Some(1)).is_none(), "oldest went");
+        assert!(shown.get(&u("c"), Some(1)).is_some());
+        assert!(
+            shown.get(&u("c"), Some(2)).is_none(),
+            "other size is another file"
+        );
+        shown.put(&u("b"), Some(1), img(1));
+        assert_eq!(shown.len(), 2, "same image replaced, not doubled");
+    }
+
+    #[test]
+    fn thumb_ids_may_ask_for_the_cache_only() {
+        let t = parse_thumb_id("lautta://nv-a/x.jpg?size=1024&cached=1").unwrap();
+        assert_eq!((t.size, t.cached), (1024, true));
+        assert!(parse_thumb_id("lautta://nv-a/x.jpg?size=64&cached=0").is_none());
+        assert!(parse_thumb_id("lautta://nv-a/x.jpg?size=64&other=1").is_none());
+        assert!(parse_thumb_id("lautta://nv-a/x.jpg?cached=1&size=64").is_none());
     }
 
     #[test]

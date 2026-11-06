@@ -213,7 +213,7 @@ async fn full_images_carry_their_orientation() {
     h.nas.add_file("b.jpg", &jpeg(4, 4), 0);
     let a = h.core.full_image(&uri("lautta://nv-nas/a.jpg")).await.unwrap();
     assert_eq!(a.orientation, 8);
-    assert_eq!(a.bytes, exif_jpeg(8));
+    assert_eq!(*a.bytes, exif_jpeg(8));
     let b = h.core.full_image(&uri("lautta://nv-nas/b.jpg")).await.unwrap();
     assert_eq!(b.orientation, 1);
     let err = h
@@ -260,15 +260,18 @@ async fn remote_thumbnails_are_cached_and_shared() {
     let u = uri("lautta://nv-nas/p/a.jpg");
 
     let t1 = previews.request(h.core.clone(), u.clone(), 64);
-    let t2 = previews.request(h.core.clone(), u.clone(), 64);
+    let t2 = previews.request(h.core.clone(), u.clone(), 100);
     let bytes = t1.rx.await.unwrap().unwrap();
     let again = t2.rx.await.unwrap().unwrap();
-    assert_eq!(bytes, again, "waiters of one job all get the result");
+    assert_eq!(
+        bytes, again,
+        "one size covers both: waiters of one job all get the result"
+    );
     let img = image::load_from_memory(&bytes).unwrap();
     assert_eq!(
         (img.width(), img.height()),
-        (64, 32),
-        "decoded at the target size"
+        (128, 64),
+        "made at the smallest size covering the request"
     );
     assert_eq!(previews.cache().len(), 1);
 
@@ -362,13 +365,13 @@ async fn a_remote_pdf_thumbnail_is_its_first_page_made_once_per_version() {
 
     let bytes = thumbnail(&h, &previews, u, 64).await.unwrap();
     let img = thumb_pixels(&bytes);
-    assert_eq!(img.dimensions(), (64, 64), "the size asked for");
+    assert_eq!(img.dimensions(), (128, 128), "smallest size covering the request");
     let corner = img.get_pixel(2, 2).0;
     assert!(
         corner[0] > 200 && corner[1] < 60 && corner[2] < 60,
         "page 1's red corner: {corner:?}"
     );
-    let inside = img.get_pixel(40, 40).0;
+    let inside = img.get_pixel(80, 80).0;
     assert!(
         inside.iter().all(|c| *c > 235),
         "page 2 is blue and not drawn: {inside:?}"
@@ -381,6 +384,8 @@ async fn a_remote_pdf_thumbnail_is_its_first_page_made_once_per_version() {
     assert_eq!(previews.cache().len(), 1);
 
     thumbnail(&h, &previews, u, 100).await.unwrap();
+    assert_eq!(previews.cache().len(), 1, "same size covers it");
+    thumbnail(&h, &previews, u, 512).await.unwrap();
     assert_eq!(previews.cache().len(), 2, "another size is another thumbnail");
     h.nas.add_file("d/a.pdf", &pdf(), 10_000);
     thumbnail(&h, &previews, u, 64).await.unwrap();
@@ -1014,4 +1019,152 @@ async fn a_text_thumbnail_cancelled_while_queued_never_runs() {
     assert_eq!(second.as_deref(), Some("hei"));
     assert!(first.is_err(), "a cancelled request never answers");
     assert_eq!(open_reads(&h.nas), 1);
+}
+
+fn sized(bytes: &[u8]) -> (u32, u32) {
+    let img = image::load_from_memory(bytes).unwrap();
+    (img.width(), img.height())
+}
+
+#[tokio::test]
+async fn a_smaller_thumbnail_is_scaled_from_a_cached_larger_one() {
+    let h = home().await;
+    h.nas.add_file("p/a.jpg", &jpeg(1200, 600), 9_000);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let u = "lautta://nv-nas/p/a.jpg";
+    assert_eq!(
+        sized(&thumbnail(&h, &previews, u, 360).await.unwrap()),
+        (512, 256)
+    );
+    let before = open_reads(&h.nas);
+    assert_eq!(sized(&thumbnail(&h, &previews, u, 112).await.unwrap()), (128, 64));
+    assert_eq!(before, open_reads(&h.nas), "file not read again");
+    assert_eq!(previews.cache().len(), 2, "scaled one kept too");
+    assert_eq!(
+        sized(&thumbnail(&h, &previews, u, 700).await.unwrap()),
+        (1024, 512)
+    );
+    assert_eq!(before + 1, open_reads(&h.nas), "larger one needs the file");
+}
+
+#[tokio::test]
+async fn a_cache_only_request_never_reads_the_file() {
+    let h = home().await;
+    h.nas.add_file("p/a.jpg", &jpeg(1200, 600), 9_000);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let u = uri("lautta://nv-nas/p/a.jpg");
+    let cached = |size| {
+        let t = previews.request_cached(h.core.clone(), u.clone(), size);
+        async move { t.rx.await.unwrap().map(|b| sized(&b)) }
+    };
+    assert_eq!(cached(1024).await.unwrap_err().kind, ErrorKind::NotFound);
+    assert_eq!(open_reads(&h.nas), 0, "none made yet: nothing read");
+    thumbnail(&h, &previews, "lautta://nv-nas/p/a.jpg", 200)
+        .await
+        .unwrap();
+    let before = open_reads(&h.nas);
+    assert_eq!(cached(1024).await.unwrap(), (256, 128), "largest there is");
+    assert_eq!(cached(128).await.unwrap(), (128, 64), "scaled from a larger one");
+    assert_eq!(before, open_reads(&h.nas));
+    h.nas.add_file("p/a.jpg", &jpeg(1200, 600), 10_000);
+    assert_eq!(
+        cached(1024).await.unwrap_err().kind,
+        ErrorKind::NotFound,
+        "changed file: old thumbnail is not it"
+    );
+}
+
+#[tokio::test]
+async fn battery_saving_reads_no_whole_server_file() {
+    let h = home().await;
+    h.nas.add_file("a.jpg", &jpeg(300, 300), 0);
+    h.nas.add_file("d.pdf", &pdf(), 0);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    h.core.set_power_save(true);
+    let err = thumbnail(&h, &previews, "lautta://nv-nas/a.jpg", 64)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err.kind,
+        ErrorKind::Unsupported,
+        "no EXIF thumbnail, whole file not read"
+    );
+    let before = open_reads(&h.nas);
+    let err = thumbnail(&h, &previews, "lautta://nv-nas/d.pdf", 64)
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::Unsupported);
+    assert_eq!(before, open_reads(&h.nas), "PDF not even opened");
+    h.core.set_power_save(false);
+    thumbnail(&h, &previews, "lautta://nv-nas/a.jpg", 64)
+        .await
+        .unwrap();
+    thumbnail(&h, &previews, "lautta://nv-nas/d.pdf", 64)
+        .await
+        .unwrap();
+    h.core.set_power_save(true);
+    thumbnail(&h, &previews, "lautta://nv-nas/a.jpg", 64)
+        .await
+        .expect("cached ones still show");
+}
+
+#[tokio::test]
+async fn a_shown_image_is_not_read_again_until_it_changes_or_the_viewer_closes() {
+    let h = home().await;
+    let (a, b) = (jpeg(40, 40), jpeg(41, 40));
+    h.nas.add_file("a.jpg", &a, 0);
+    let u = uri("lautta://nv-nas/a.jpg");
+    assert_eq!(*h.core.full_image(&u).await.unwrap().bytes, a);
+    let mut same_size = a.clone();
+    same_size[a.len() - 3] ^= 0xff;
+    h.nas.add_file("a.jpg", &same_size, 1);
+    assert_eq!(
+        *h.core.full_image(&u).await.unwrap().bytes,
+        a,
+        "kept copy, not read again"
+    );
+    h.core.forget_shown_images();
+    assert_eq!(
+        *h.core.full_image(&u).await.unwrap().bytes,
+        same_size,
+        "viewer closed"
+    );
+    h.nas.add_file("a.jpg", &b, 2);
+    assert_eq!(
+        *h.core.full_image(&u).await.unwrap().bytes,
+        b,
+        "other size: read again"
+    );
+}
+
+#[tokio::test]
+async fn only_the_last_few_shown_images_are_kept() {
+    use lautta_core::app_viewers::SHOWN_IMAGES;
+    let h = home().await;
+    let n = SHOWN_IMAGES + 1;
+    for i in 0..n {
+        h.nas.add_file(&format!("{i}.jpg"), &jpeg(8, 8), 0);
+        h.core
+            .full_image(&uri(&format!("lautta://nv-nas/{i}.jpg")))
+            .await
+            .unwrap();
+    }
+    assert_eq!(h.core.shown_images().len(), SHOWN_IMAGES);
+    let first = uri("lautta://nv-nas/0.jpg");
+    let mut changed = jpeg(8, 8);
+    let last = changed.len() - 3;
+    changed[last] ^= 0xff;
+    h.nas.add_file("0.jpg", &changed, 1);
+    assert_eq!(
+        *h.core.full_image(&first).await.unwrap().bytes,
+        changed,
+        "oldest went"
+    );
+    let newest = uri(&format!("lautta://nv-nas/{}.jpg", n - 1));
+    h.nas.add_file(&format!("{}.jpg", n - 1), &changed, 1);
+    assert_eq!(
+        *h.core.full_image(&newest).await.unwrap().bytes,
+        jpeg(8, 8),
+        "newest kept"
+    );
 }

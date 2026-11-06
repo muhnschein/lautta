@@ -6,7 +6,8 @@
 //! * [`remote_thumbnail`]: EXIF thumbnail from the first 64 KiB if any, else whole file (up to
 //!   View-options size, default 20 MB) decoded and scaled, orientation applied.
 //! * [`ThumbnailCache`]: on-disk LRU within View-options size (default 200 MB, changeable in use),
-//!   keyed by sha256(URI, size, mtime, etag).
+//!   keyed by sha256(URI, size, mtime, etag). Sizes are [`THUMB_SIZES`]: grid zoom or rotation
+//!   reuses them, a smaller one is scaled from a larger without reading the file again.
 //! * [`ThumbJobs`]: at most two jobs in flight per location, newest first (visible delegates),
 //!   cancelable by key.
 //!
@@ -36,6 +37,15 @@ pub const HEAD_BYTES: u64 = 64 * 1024;
 const MAX_PIXELS: u64 = 64_000_000;
 const JPEG_QUALITY: u8 = 85;
 pub const MAX_IN_FLIGHT_PER_LOCATION: usize = 2;
+/// Every server thumbnail is one of these; a request takes the smallest that covers it.
+pub const THUMB_SIZES: [u32; 4] = [128, 256, 512, 1024];
+
+pub fn thumb_bucket(size: u32) -> u32 {
+    THUMB_SIZES
+        .into_iter()
+        .find(|b| *b >= size)
+        .unwrap_or(THUMB_SIZES[THUMB_SIZES.len() - 1])
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThumbSource {
@@ -752,6 +762,32 @@ mod tests {
         png[16..20].copy_from_slice(&20_000u32.to_be_bytes());
         png[20..24].copy_from_slice(&20_000u32.to_be_bytes());
         assert!(render_thumbnail(&png, 64, 1).is_err());
+    }
+
+    #[test]
+    fn requests_take_the_smallest_size_that_covers_them() {
+        let got: Vec<u32> = [1, 128, 129, 256, 300, 512, 513, 1024, 5000]
+            .into_iter()
+            .map(thumb_bucket)
+            .collect();
+        assert_eq!(got, [128, 128, 256, 256, 512, 512, 1024, 1024, 1024]);
+    }
+
+    #[tokio::test]
+    async fn without_a_byte_budget_only_the_embedded_thumbnail_is_used() {
+        let spec = testutil::Spec {
+            orientation: None,
+            thumbnail: Some(jpeg_of(160, 120, [250, 250, 0])),
+            gps: false,
+        };
+        let file = testutil::bare_jpeg(&spec);
+        let out = remote_thumbnail(handle_for(&file).await.as_ref(), 80, 0)
+            .await
+            .unwrap();
+        assert_eq!(dims(&out), (80, 60));
+        let plain = jpeg_of(64, 64, [9, 9, 9]);
+        let refused = remote_thumbnail(handle_for(&plain).await.as_ref(), 32, 0).await;
+        assert_eq!(refused.err().map(|e| e.kind), Some(ErrorKind::Unsupported));
     }
 
     #[test]
