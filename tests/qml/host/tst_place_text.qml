@@ -3,6 +3,7 @@ import QtQuick 2.6
 import "../../../qml/components/PlaceText.js" as PlaceText
 
 QtObject {
+    property bool reachedEnd
     function same(got, want, what) {
         var g = JSON.stringify(got)
         var w = JSON.stringify(want)
@@ -25,5 +26,6 @@ QtObject {
              { "before": "", "rest": "Deleted 4 items", "named": false }, "a line without the name")
         same(PlaceText.around(line("Copied to %1"), ""),
              { "before": "", "rest": "Copied to ", "named": false }, "no name to mark")
+        reachedEnd = true
     }
 }

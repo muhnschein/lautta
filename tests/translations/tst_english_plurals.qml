@@ -1,10 +1,12 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Run with `--qml-check -T <folder>` by
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Run with `--qml-check -T <folder>` by
 // crates/lautta-qt/tests/translations.rs (host) and tools/ci/check-rpm.sh (target).
 import QtQuick 2.6
 
 QtObject {
     // Only the first difference is reported: a wrong catalogue is wrong in many places.
     property bool failed: false
+    property bool reachedEnd
 
     function same(got, want, what) {
         if (got === want || failed)
@@ -29,14 +31,14 @@ QtObject {
         plural("lautta-settings-days", "1 day", "%n days")
         plural("lautta-viewers-pdf-pages", "1 page", "%n pages")
         plural("lautta-xfr-cover-count", "1 task", "%n tasks")
-        plural("lautta-xfr-note-failed-body", "1 file couldn't be transferred. Tap to retry.",
-               "%n files couldn't be transferred. Tap to retry.")
-        plural("lautta-share-skipped", "1 file is skipped.", "%n files are skipped.")
+        plural("lautta-xfr-note-failed-body", "1 item failed. Tap to retry.", "%n items failed. Tap to retry.")
+        plural("lautta-share-skipped", "1 file will be skipped.", "%n files will be skipped.")
         plural("lautta-xfr-header-paused", "1 paused", "%n paused")
         plural("lautta-dir-selected", "1 selected", "%n selected")
 
         same(qsTrId("lautta-xfr-title-moved-many", 1).arg("NAS"), "Moved 1 item to NAS", "a plural string with an argument")
         same(qsTrId("lautta-xfr-title-moved-many", 3).arg("NAS"), "Moved 3 items to NAS", "and its plural")
         same(qsTrId("lautta-dir-grid-items-more", 10000), "More than 10000 items", "a capped count")
+        reachedEnd = true
     }
 }

@@ -2,7 +2,19 @@
 
 ## Unreleased
 
-- A cancelled transfer no longer offers its open conflicts for an answer.
+- A cancelled task no longer shows the bytes of the file it was copying when you cancelled it, since that partial file is deleted.
+- Server pictures: changing the grid size or turning the phone no longer downloads every picture again for its thumbnail. A server picture opens on its thumbnail at once and sharpens when the full picture arrives, and zooming in no longer downloads it a second time. Making a thumbnail of a large server photo takes about a sixth of the processor time it did. With battery saving on, thumbnails are made only from what a picture carries inside it, never by downloading the whole file.
+- Cancel in an Activity task's menu cancels the task again. Before, the countdown ran but the copy went on.
+- After you cancel a task, its unfinished files say "Cancelled" on the task page instead of "Copying" or "Queued".
+- A conflict notification goes away once its question is answered, or its task is canceled or ends.
+- A video or song that can't be played says "Can't play" with its name, instead of blaming the folder or server it is in.
+- Messages and labels say what really happened. A file or folder you may not read says "You don't have permission to open", not "to change". The folder picker shows "Sign-in failed" or "Server identity changed" instead of an internal code, and no longer calls a connecting server unreachable. A failed search explains why. Items in a running move, delete, compress or extract task no longer read "Copying". When Lautta closes with unfinished tasks and "Resume unfinished tasks at start" is off, it no longer promises they will resume. Smaller wording fixes across the app.
+- Extract all on a compressed tar archive (.tar.gz, .tar.bz2, .tar.xz) is many times faster: the archive is unpacked once, not once per file. A 1,000-file backup went from over 30 seconds to under 2 on a OnePlus 6.
+- Large text files open and close with shorter stalls, and long folders open sooner.
+- Select all and clearing a selection in a large folder respond faster.
+- The app starts a little sooner.
+- Pages that show transfers refresh four times a second instead of on every file, which saves battery during long copies.
+- Folders on the phone and on drives keep updating live however many are open. Lautta no longer wakes the phone ten times a second while it runs.
 - Servers show a server icon instead of a laptop.
 - Browse rows have even heights. Servers, memory cards and USB drives show their state as a glowing dot. It pulses while a server connects or a drive mounts or unmounts, and turns red or orange on failure or warning.
 - Browse shows no item counts any more.
@@ -24,11 +36,16 @@
 - Video thumbnails show the video icon on a see-through dark disc, at the size and place the icon has without a thumbnail, so they stand apart from photos.
 - A folder's header stays in place while its contents scroll, and the pulley opens above it. A folder opens at its top, and going back returns to where you were. Starting or ending selection no longer makes the header jump.
 - Closing the selection bar no longer flashes its empty state as it slides away.
+- A folder opens in the sort order and with the hidden-files choice set in View options, instead of name order with hidden files left out.
 - Counts read correctly in English: 1 item, 1 day, 1 task, not 1 items, 1 days, 1 tasks.
 - Search puts the field and filters above the results.
 - Pasting cut items moves them after a remorse timer: tap it to cancel. The undo banner is gone.
 - More actions can move the selected items into a new folder made where they are.
 - Folders inside an archive show a banner on top: tap Extract all to extract the archive.
+- Cancelling a copy stops it at once and leaves no hidden partial file behind. Copying a file to another folder in the same place, such as within Documents, shows its progress.
+- Extract all on more than 1000 items or over 1 GB opens its summary instead of doing nothing. So does sharing that much into Lautta.
+- Extracting says so: the summary reads "Extract to" and Activity names the archive, not "Copy".
+- Cancelling a large extract at its summary no longer leaves an empty folder behind.
 - The text viewer always wraps lines, colours code by its language, and puts the text on a backdrop for contrast. Markdown previews wrap code blocks.
 - The image viewer works like Jolla Gallery's. Its More button is a circle with three dots, and More › Rename renames.
 - PDFs open at the top with the whole header in view.
@@ -37,3 +54,4 @@
 - Settings › Storage opens from Lautta where the system allows it.
 - Names and server messages that contain tags, such as `<b>x</b>`, show exactly as typed instead of changing how the text looks or loading images.
 - The image viewer opens straight on the tapped image, instead of sliding to it from another one.
+- A transfer paused, or held up by a lost connection or a removed card, just as a file finishes no longer asks on resume whether to replace the file it has just written.

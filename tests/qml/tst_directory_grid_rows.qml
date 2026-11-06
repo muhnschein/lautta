@@ -6,6 +6,7 @@ import "../../qml/components/directory"
 
 ApplicationWindow {
     id: win
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-documents/GridRows/"
     readonly property string longName: "abcdefghijklmnopqrstuvwxyz-abcdefghijklmnopqrstuvwxyz.txt"
@@ -156,14 +157,12 @@ ApplicationWindow {
         var grid = view.flickable
         var narrow = view.width
         view.width = 5 * grid.tileWidth
-        tools.pump(100)
-        expect(grid.columns === 5, "a wider view has 5 per row: " + grid.columns)
+        waitFor(function () { return grid.columns === 5 && rowsOf(grid).length === 2 }, "a wider view with 5 per row")
         var rows = rowsOf(grid)
         same(namesIn(rows), [names.slice(0, 5), names.slice(5, 9)], "the items regrouped")
         checkRows(rows, "wide")
         view.width = narrow
-        tools.pump(100)
-        expect(grid.columns === 3, "3 per row again")
+        waitFor(function () { return grid.columns === 3 && rowsOf(grid).length === 3 }, "3 per row again")
         same(namesIn(rowsOf(grid)), [names.slice(0, 3), names.slice(3, 6), names.slice(6, 9)], "and the rows of 3 again")
     }
 
@@ -204,8 +203,7 @@ ApplicationWindow {
         if (!held)
             return
         tools.mouse(held, "press", held.width / 2, held.height / 2)
-        tools.pump(1200)
-        same(selected(), [1], "holding selects")
+        waitFor(function () { return String(selected()) === "1" }, "holding to select")
         moveTo(grid, 4)
         same(selected(), range(1, 4), "past the end of the row into the taller one")
         moveTo(grid, 7)
@@ -215,7 +213,6 @@ ApplicationWindow {
         moveTo(grid, 0)
         same(selected(), [0, 1], "and back to the start")
         tools.mouse(grid, "release", 0, 0)
-        tools.pump(50)
         same(selected(), [0, 1], "letting go keeps the range")
         var p = grid.contentItem.mapFromItem(cellNamed(grid, "e"), 0, 0)
         same(grid.itemIndexAt(p.x + 1, p.y + 1), 4, "the item at a point of a taller row")
@@ -226,7 +223,7 @@ ApplicationWindow {
 
     function checkPreview(width) {
         var preview = previewComponent.createObject(win.contentItem, { "screenWidth": width, "screenHeight": 960 })
-        tools.pump(300)
+        waitFor(function () { return findRows(preview).length === 2 }, "the preview's rows")
         var rows = findRows(preview)
         expect(preview.gridMode && rows.length === 2, "the preview has two rows of 3: " + rows.length)
         same(namesIn(rows).map(function (r) { return r.length }), [3, 3], "3 tiles a row")
@@ -245,14 +242,13 @@ ApplicationWindow {
         var grid = view.flickable
         var tall = view.height
         view.height = 300
-        tools.pump(100)
+        grid.forceLayout()
         grid.contentY = grid.originY + 120
-        tools.pump(100)
+        grid.forceLayout()
         var top = grid.contentY
         tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + "d")
         view.model.refresh()
-        waitFor(function () { return view.model.count === names.length + 1 }, "the new item")
-        tools.pump(100)
+        waitFor(function () { return view.model.count === names.length + 1 && rowsOf(grid).length === 4 }, "the new item's row")
         var rows = rowsOf(grid)
         same(namesIn(rows), [names.slice(0, 3), [longName, "d", "e"], ["f", "g", "h"], ["i"]], "the rows after it regrouped")
         checkRows(rows, "with the new item")
@@ -287,6 +283,7 @@ ApplicationWindow {
             checkInsert(view)
         }
         App.setSetting("view_mode", JSON.stringify("list"))
+        reachedEnd = true
     }
 
     Component {

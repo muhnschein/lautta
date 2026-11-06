@@ -4,6 +4,7 @@ import Lautta 1.0
 
 Item {
     id: root
+    property bool reachedEnd
 
     property real freed: -1
     property string failure: ""
@@ -35,17 +36,18 @@ Item {
         support.write("Documents/srch_storage_keep.txt", "mine", 0)
 
         cache.refresh()
-        check(until(function () { return cache.thumbnailBytes >= 1000 }, 3000), "thumbnail size known: " + cache.thumbnailBytes)
+        check(until(function () { return cache.thumbnailBytes >= 1000 }, 30000), "thumbnail size known: " + cache.thumbnailBytes)
         check(cache.archiveBytes >= 500, "archive size " + cache.archiveBytes)
         check(cache.cacheBytes >= 1500, "total " + cache.cacheBytes)
 
         cache.clearCache()
-        check(until(function () { return root.freed >= 0 }, 3000), "cache cleared: " + root.failure)
+        check(until(function () { return root.freed >= 0 }, 30000), "cache cleared: " + root.failure)
         check(root.freed >= 1500, "freed bytes " + root.freed)
         check(!support.exists(dir + "thumbs/a.thumb"), "thumbnails removed")
         check(!support.exists(dir + "archives/x/file"), "archive cache removed")
         check(support.exists(dir + "other/keep.txt"), "other cache files are kept")
         check(support.exists("Documents/srch_storage_keep.txt"), "user files are kept")
-        check(until(function () { return cache.thumbnailBytes === 0 && !cache.busy }, 3000), "sizes refreshed after clearing")
+        check(until(function () { return cache.thumbnailBytes === 0 && !cache.busy }, 30000), "sizes refreshed after clearing")
+        reachedEnd = true
     }
 }

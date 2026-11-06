@@ -7,6 +7,7 @@ ApplicationWindow {
     id: win
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int waited: 0
     property bool pulseChecked: false
     property var browse
@@ -241,6 +242,7 @@ ApplicationWindow {
             if (win.icons(rows["Cabin"]).length === 0 || win.stateOf(win.icons(rows["Cabin"])[0]) === "busy")
                 return
             win.checkConnected(rows["Cabin"])
+            win.reachedEnd = true
             win.scenarioRunning = false
         }
     }

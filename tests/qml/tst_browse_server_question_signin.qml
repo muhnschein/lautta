@@ -5,8 +5,12 @@ import Lautta 1.0
 import "../../qml/dialogs"
 
 ApplicationWindow {
+    id: test
+    property bool reachedEnd
+
     initialPage: Component {
         ServerQuestionDialog {
+            Component.onCompleted: test.reachedEnd = true
             questionId: "q2"
             kind: "keyboard-interactive"
             details: ({ "name": "Two-factor", "instruction": "Enter the code", "prompts": "Code: \nPIN: " })

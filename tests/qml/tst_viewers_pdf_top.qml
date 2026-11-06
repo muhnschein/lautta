@@ -6,8 +6,10 @@ import "../../qml/viewers"
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     ViewerTools { id: tools }
+    PdfDocument { id: probe }
 
     function findAll(item, pred, out) {
         if (!item)
@@ -34,11 +36,23 @@ ApplicationWindow {
         return uri
     }
 
+    function waitFor(done, what) {
+        for (var i = 0; i < 200 && !done(); ++i)
+            tools.pump(50)
+        if (!done())
+            console.error("FAILED: timed out waiting for " + what)
+        return done()
+    }
+
+    // Every page image in view rendered: nothing left that loads.
+    function rendered(viewer) {
+        var pages = findAll(viewer, function(x) { return x.status !== undefined && String(x.source).indexOf("image://lautta-pdf/") === 0 }, [])
+        return pages.length > 0 && pages.every(function(x) { return x.status === Image.Ready })
+    }
+
     function show(uri) {
         var viewer = pageStack.push(pdfComponent, { "uri": uri }, PageStackAction.Immediate)
-        for (var i = 0; i < 300 && !viewer.document.loaded; ++i)
-            tools.pump(20)
-        tools.pump(100)
+        waitFor(function() { return viewer.document.loaded }, uri)
         var view = findAll(viewer, function(x) { return x.headerItem !== undefined }, [])[0]
         view.forceLayout()
         return view
@@ -50,8 +64,8 @@ ApplicationWindow {
             console.error("FAILED: " + fixture + ": " + view.count + " pages, " + view.contentHeight
                           + " high in a view " + view.height + " high, header '" + view.headerItem.description + "'")
         checkTop(fixture, view, "when loaded")
-        tools.pump(1500)
-        checkTop(fixture, view, "a moment later")
+        waitFor(function() { return rendered(pageStack.currentPage) }, fixture + " rendered")
+        checkTop(fixture, view, "once rendered")
         pageStack.pop(null, PageStackAction.Immediate)
     }
 
@@ -65,17 +79,22 @@ ApplicationWindow {
         if (viewer.currentPage !== 2 || view.contentY >= first)
             console.error("FAILED: strips.pdf: page " + viewer.currentPage + " in the middle, contentY "
                           + view.contentY + " with the first page " + first + " high")
+        // Position is kept 1 s after the last scroll.
         tools.pump(1500)
         pageStack.pop(null, PageStackAction.Immediate)
-        tools.pump(300)
         checkTop("strips.pdf", show(uri), "reopened")
         pageStack.pop(null, PageStackAction.Immediate)
 
         var reading = install("searchable.pdf")
         show(reading).positionViewAtIndex(1, ListView.Beginning)
-        tools.pump(1500)
+        probe.uri = reading
+        waitFor(function() {
+            probe.reload()
+            for (var i = 0; i < 200 && probe.loading; ++i)
+                tools.pump(50)
+            return probe.lastPage === 1
+        }, "page 2 kept: " + probe.lastPage)
         pageStack.pop(null, PageStackAction.Immediate)
-        tools.pump(300)
         var again = show(reading)
         var top = again.indexAt(again.width / 2, again.contentY + 1)
         if (top !== 1)
@@ -88,6 +107,7 @@ ApplicationWindow {
         open("two-pages.pdf", 2)
         open("tall-page.pdf", 1)
         reopen()
+        reachedEnd = true
     }
 
     Component {

@@ -41,6 +41,15 @@ pub struct ImageListModel {
     generation: u64,
 }
 
+/// One lives as long as its image viewer.
+impl Drop for ImageListModel {
+    fn drop(&mut self) {
+        if let Some(core) = core() {
+            core.forget_shown_images();
+        }
+    }
+}
+
 impl ImageListModel {
     fn setFolderUri(&mut self, value: QString) {
         if self.folderUri == value {
@@ -384,7 +393,7 @@ fn request(kind: i32, id_data: *const u8, id_len: usize, w: i32, h: i32, req: u6
         return;
     };
     if kind == KIND_THUMB {
-        thumb_request(core, &id, req, reply);
+        thumb_request(core, &id, (w, h), req, reply);
     } else if kind == KIND_PDF {
         super::pdf::page_request(core, &id, w, req, reply);
     } else {
@@ -392,8 +401,15 @@ fn request(kind: i32, id_data: *const u8, id_len: usize, w: i32, h: i32, req: u6
     }
 }
 
-fn thumb_request(core: std::sync::Arc<lautta_core::app::Core>, id: &str, req: u64, reply: Reply) {
-    let Some((uri, size)) = parse_thumb_id(id) else {
+/// Cached thumbnail is one of `THUMB_SIZES`; decoded at the delegate's size.
+fn thumb_request(
+    core: std::sync::Arc<lautta_core::app::Core>,
+    id: &str,
+    shown: (i32, i32),
+    req: u64,
+    reply: Reply,
+) {
+    let Some(thumb) = parse_thumb_id(id) else {
         reply.fail("bad thumbnail id");
         return;
     };
@@ -402,7 +418,11 @@ fn thumb_request(core: std::sync::Arc<lautta_core::app::Core>, id: &str, req: u6
         Ok(p) => p,
         Err(e) => return finish_error(reply, req, &e),
     };
-    let ticket = previews.request(core, uri, size);
+    let ticket = if thumb.cached {
+        previews.request_cached(core, thumb.uri, thumb.size)
+    } else {
+        previews.request(core, thumb.uri, thumb.size)
+    };
     let rx = ticket.rx;
     let cancel = ticket.cancel;
     cancellers()
@@ -412,7 +432,7 @@ fn thumb_request(core: std::sync::Arc<lautta_core::app::Core>, id: &str, req: u6
         let res = rx.await;
         cancellers().get_or_insert_with(HashMap::new).remove(&req);
         match res {
-            Ok(Ok(bytes)) => reply.done(&bytes, 0, 0, 1, false),
+            Ok(Ok(bytes)) => reply.done(&bytes, shown.0, shown.1, 1, false),
             Ok(Err(e)) => reply.fail(&format!("{}: {}", e.kind.name(), e.message)),
             Err(_) => reply.fail("canceled"),
         }
@@ -563,12 +583,28 @@ mod tests {
         );
         core.locations.register(loc, Arc::new(nas.clone()));
 
+        let (e, w, h) = probe(
+            "lautta-thumb",
+            "lautta://nv-qt-images/p/a.jpg?size=64&cached=1",
+            (0, 0),
+        );
+        assert_eq!((w, h), (-1, -1), "none cached yet: {e}");
+        assert!(e.starts_with("NotFound"), "{e}");
+
         let (e, w, h) = probe("lautta-thumb", "lautta://nv-qt-images/p/a.jpg?size=64", (0, 0));
         assert_eq!(
             (e.as_str(), w, h),
-            ("", 64, 32),
-            "thumbnail at the requested edge"
+            ("", 128, 64),
+            "thumbnail at the size covering the request"
         );
+        let (e, w, h) = probe("lautta-thumb", "lautta://nv-qt-images/p/a.jpg?size=64", (64, 64));
+        assert_eq!((e.as_str(), w, h), ("", 64, 32), "decoded at the item's size");
+        let (e, w, h) = probe(
+            "lautta-thumb",
+            "lautta://nv-qt-images/p/a.jpg?size=1024&cached=1",
+            (0, 0),
+        );
+        assert_eq!((e.as_str(), w, h), ("", 128, 64), "largest cached one");
 
         let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/a.jpg", (0, 0));
         assert_eq!((e.as_str(), w, h), ("", 200, 100), "full image");
@@ -621,7 +657,11 @@ mod tests {
         let (e, ..) = probe("lautta-pdf", "lautta://nv-qt-images/p/two.pdf", (50, 0));
         assert_eq!(e, "bad page id");
 
-        let (e, w, h) = probe("lautta-thumb", "lautta://nv-qt-images/p/two.pdf?size=64", (0, 0));
+        let (e, w, h) = probe(
+            "lautta-thumb",
+            "lautta://nv-qt-images/p/two.pdf?size=64",
+            (64, 64),
+        );
         assert_eq!((e.as_str(), w, h), ("", 64, 64), "first page as wide as asked");
         let (e, ..) = probe("lautta-thumb", "lautta://nv-qt-images/p/fake.pdf?size=64", (0, 0));
         assert!(e.contains("not a readable PDF"), "{e}");

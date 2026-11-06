@@ -7,6 +7,7 @@ import "../../qml/components/directory"
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-documents/ViewOptionsTest/"
     property string openUri
@@ -31,7 +32,8 @@ ApplicationWindow {
 
     function expect(ok, what) {
         if (!ok)
-            console.error(what)
+            console.error("FAILED: " + what)
+        return ok
     }
 
     function find(item, name) {
@@ -147,18 +149,25 @@ ApplicationWindow {
         expect(remote.enabled && limit.enabled, "back with thumbnails")
     }
 
+    function waitFor(done, what) {
+        for (var i = 0; i < 200 && !done(); ++i)
+            tools.pump(50)
+        return expect(done(), "timed out waiting for " + what)
+    }
+
     function makeFolders() {
         documents.createFolder("ViewOptionsTest")
-        tools.pump(500)
         documents.createFolder("ViewOptionsPhotos")
-        tools.pump(500)
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + "a.md")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), base + "b.jpg")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), "lautta://user-documents/ViewOptionsPhotos/a.jpg")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), "lautta://user-documents/ViewOptionsPhotos/b.jpg")
+        waitFor(function () { return documents.indexOf(base.replace(/\/$/, "")) >= 0
+                                     && documents.indexOf("lautta://user-documents/ViewOptionsPhotos") >= 0 }, "the folders")
+        expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + "a.md")
+               && tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), base + "b.jpg")
+               && tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), "lautta://user-documents/ViewOptionsPhotos/a.jpg")
+               && tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), "lautta://user-documents/ViewOptionsPhotos/b.jpg"),
+               "fixtures installed")
         openUri = base
-        tools.pump(500)
-        expect(open.count === 2 && open.indexOf(base + "a.md") === 0, "the open folder lists a.md first: " + open.count)
+        waitFor(function () { return !open.loading && open.count === 2 && open.indexOf(base + "a.md") === 0 },
+                "the open folder to list a.md first")
     }
 
     function checkControls(page) {
@@ -212,7 +221,7 @@ ApplicationWindow {
     }
 
     function checkOpenFolderFollowed() {
-        tools.pump(500)
+        waitFor(function () { return open.sortKey === "size" && open.indexOf(base + "b.jpg") === 0 }, "the open folder to re-sort")
         expect(open.sortKey === "size" && open.descending && !open.foldersFirst && open.showHidden,
                "an open folder follows the view options: " + open.sortKey + " " + open.descending)
         expect(open.viewMode === "grid" && !open.thumbnails, "its view too: " + open.viewMode)
@@ -233,7 +242,7 @@ ApplicationWindow {
                 App.setSetting(key, JSON.stringify(views[i][key]))
             var preview = previewComponent.createObject(window.contentItem,
                                                         { "width": 540, "screenWidth": 540, "screenHeight": 960 })
-            tools.pump(200)
+            waitFor(function () { return preview.shown().length === preview.count }, "the preview's rows")
             var what = JSON.stringify(views[i]) + " (" + preview.count + " rows, "
                        + (preview.gridMode ? preview.columns + " per row" : "a list") + ")"
             if (size === null) {
@@ -242,7 +251,6 @@ ApplicationWindow {
             }
             sameSize(preview, size, what)
             preview.destroy()
-            tools.pump(100)
         }
         restoreDefaults()
     }
@@ -252,21 +260,21 @@ ApplicationWindow {
                          "view_mode": "list", "thumbnails_local": true }
         for (var key in defaults)
             App.setSetting(key, JSON.stringify(defaults[key]))
-        tools.pump(300)
+        waitFor(function () { return open.viewMode === "list" && open.sortKey === "name" && !open.showHidden }, "the defaults")
     }
 
     function checkOwnFolder() {
         suggestedUri = "lautta://user-documents/ViewOptionsPhotos/"
-        tools.pump(800)
-        expect(suggested.suggestGrid && suggested.viewMode === "grid", "a folder of photos suggests a grid")
+        waitFor(function () { return !suggested.loading && suggested.suggestGrid && suggested.viewMode === "grid" },
+                "a folder of photos to suggest a grid")
         pageStack.push(pageComponent, { "model": suggested }, PageStackAction.Immediate)
-        tools.pump(300)
+        waitFor(function () { return !pageStack.busy && pageStack.currentPage.objectName === "viewOptionsPage" }, "the page")
         var page = pageStack.currentPage
         expect(find(page, "thumbnailsSection").visible && find(page, "remoteThumbnailsSwitch").visible,
                "the thumbnails are there from a folder too")
         pick(page, "sortBox", "modified")
-        tools.pump(300)
-        expect(suggested.sortKey === "modified" && suggested.viewMode === "grid", "sorting keeps the suggested grid")
+        waitFor(function () { return suggested.sortKey === "modified" }, "the folder to sort by date")
+        expect(suggested.viewMode === "grid", "sorting keeps the suggested grid")
         pick(page, "viewBox", "list")
         expect(App.setting("view_mode") === "list", "the global view was list already")
         expect(suggested.viewMode === "list" && !suggested.suggestGrid, "the folder takes List: " + suggested.viewMode)
@@ -276,9 +284,9 @@ ApplicationWindow {
     Component.onCompleted: {
         makeFolders()
         pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        tools.pump(300)
+        waitFor(function () { return !pageStack.busy && pageStack.currentPage.objectName === "viewOptionsPage" }, "the page")
         var page = pageStack.currentPage
-        expect(page.objectName === "viewOptionsPage" && page.canAccept === undefined, "a page, not a dialog")
+        expect(page.canAccept === undefined, "a page, not a dialog")
         checkLayout(page)
         checkRemoteThumbnails(page)
         checkControls(page)
@@ -286,6 +294,7 @@ ApplicationWindow {
         restoreDefaults()
         checkOwnFolder()
         checkFixedSize()
+        reachedEnd = true
     }
 
     Component {

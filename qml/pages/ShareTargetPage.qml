@@ -206,7 +206,7 @@ Dialog {
                 font.pixelSize: Theme.fontSizeSmall
                 //% "%n files will be saved."
                 text: qsTrId("lautta-share-will-save", page.readableCount) + (page.skippedCount > 0
-                      //% "%n files are skipped."
+                      //% "%n files will be skipped."
                       ? " " + qsTrId("lautta-share-skipped", page.skippedCount) : "")
             }
         }

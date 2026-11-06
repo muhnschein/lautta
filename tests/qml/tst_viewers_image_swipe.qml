@@ -10,6 +10,7 @@ QtQuick.Window {
     id: window
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property var __silica_applicationwindow_instance: app
     readonly property var pageStack: app.pageStack
     property int step: 0
@@ -150,6 +151,7 @@ QtQuick.Window {
             case 5:
                 if (!window.cleaned)
                     return
+                window.reachedEnd = true
                 window.scenarioRunning = false
                 break
             }
@@ -160,11 +162,14 @@ QtQuick.Window {
 
     Component.onCompleted: {
         pictures.createFolder("ViewerSwipe")
-        tools.pump(500)
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), "lautta://user-pictures/ViewerSwipe/one.jpg")
-        tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), "lautta://user-pictures/ViewerSwipe/two.jpg")
+        for (var i = 0; i < 200 && pictures.indexOf(pictures.uri + "ViewerSwipe") < 0; ++i)
+            tools.pump(50)
+        if (pictures.indexOf(pictures.uri + "ViewerSwipe") < 0)
+            console.error("FAILED: folder ViewerSwipe not made")
+        if (!(tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), "lautta://user-pictures/ViewerSwipe/one.jpg")
+              && tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), "lautta://user-pictures/ViewerSwipe/two.jpg")))
+            console.error("FAILED: fixtures not installed")
         app.pageStack.push(belowComponent, {}, PageStackAction.Immediate)
-        tools.pump(300)
         page = app.pageStack.push(pageComponent, {}, PageStackAction.Immediate)
         started = true
     }

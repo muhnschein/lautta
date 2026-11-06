@@ -6,6 +6,7 @@ import "../../qml/pages"
 
 ApplicationWindow {
     id: window
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-documents/PasteRemorse/"
     readonly property string from: base + "from/"
@@ -208,5 +209,6 @@ ApplicationWindow {
         checkCopy()
         checkPending()
         App.setSetting("remorse_seconds", JSON.stringify(remorseBefore))
+        reachedEnd = true
     }
 }

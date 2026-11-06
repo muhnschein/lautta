@@ -1,8 +1,15 @@
+#select
+| test.rs:18:19:18:19 | p | test.rs:17:29:17:39 | ...::null(...) | test.rs:18:19:18:19 | p | This operation dereferences a pointer that may be $@. | test.rs:17:29:17:39 | ...::null(...) | invalid |
+| test.rs:28:10:28:10 | p | test.rs:27:28:27:28 | p | test.rs:28:10:28:10 | p | This operation dereferences a pointer that may be $@. | test.rs:27:28:27:28 | p | invalid |
+| test.rs:40:5:40:14 | ...::null::<...>(...) | test.rs:40:5:40:14 | ...::null::<...>(...) | test.rs:40:5:40:14 | ...::null::<...>(...) | This operation dereferences a pointer that may be $@. | test.rs:40:5:40:14 | ...::null::<...>(...) | invalid |
 edges
 | test.rs:17:13:17:13 | p | test.rs:18:19:18:19 | p | provenance |  |
-| test.rs:17:29:17:39 | ...::null(...) | test.rs:17:13:17:13 | p | provenance | Src:MaD:503  |
-| test.rs:27:28:27:28 | p | test.rs:28:10:28:10 | p | provenance | Src:MaD:500  |
-| test.rs:40:5:40:14 | ...::null::<...>(...) | test.rs:40:5:40:14 | ...::null::<...>(...) | provenance | Src:MaD:503  |
+| test.rs:17:29:17:39 | ...::null(...) | test.rs:17:13:17:13 | p | provenance | Src:MaD:2  |
+| test.rs:27:28:27:28 | p | test.rs:28:10:28:10 | p | provenance | Src:MaD:1  |
+| test.rs:40:5:40:14 | ...::null::<...>(...) | test.rs:40:5:40:14 | ...::null::<...>(...) | provenance | Src:MaD:2  |
+models
+| 1 | Source: core::ptr::drop_in_place; Argument[0]; pointer-invalidate |
+| 2 | Source: core::ptr::null; ReturnValue; pointer-invalidate |
 nodes
 | test.rs:17:13:17:13 | p | semmle.label | p |
 | test.rs:17:29:17:39 | ...::null(...) | semmle.label | ...::null(...) |
@@ -12,7 +19,3 @@ nodes
 | test.rs:40:5:40:14 | ...::null::<...>(...) | semmle.label | ...::null::<...>(...) |
 | test.rs:40:5:40:14 | ...::null::<...>(...) | semmle.label | ...::null::<...>(...) |
 subpaths
-#select
-| test.rs:18:19:18:19 | p | test.rs:17:29:17:39 | ...::null(...) | test.rs:18:19:18:19 | p | This operation dereferences a pointer that may be $@. | test.rs:17:29:17:39 | ...::null(...) | invalid |
-| test.rs:28:10:28:10 | p | test.rs:27:28:27:28 | p | test.rs:28:10:28:10 | p | This operation dereferences a pointer that may be $@. | test.rs:27:28:27:28 | p | invalid |
-| test.rs:40:5:40:14 | ...::null::<...>(...) | test.rs:40:5:40:14 | ...::null::<...>(...) | test.rs:40:5:40:14 | ...::null::<...>(...) | This operation dereferences a pointer that may be $@. | test.rs:40:5:40:14 | ...::null::<...>(...) | invalid |

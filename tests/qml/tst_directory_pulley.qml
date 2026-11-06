@@ -8,6 +8,7 @@ ApplicationWindow {
     id: win
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property var folderPage
@@ -122,6 +123,7 @@ ApplicationWindow {
                     break
                 if (page.objectName !== "transfersPage" || pageStack.previousPage(page) !== win.folderPage)
                     return win.fail("Activity opens the Activity page on the folder: " + page)
+                win.reachedEnd = true
                 win.scenarioRunning = false
                 break
             }

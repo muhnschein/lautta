@@ -9,6 +9,7 @@ ApplicationWindow {
     readonly property string folder: "lautta://user-documents/"
     readonly property string file: folder + "trash-page.md"
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property bool removed
@@ -156,8 +157,10 @@ ApplicationWindow {
             case 7:
                 if (win.waited % 5 === 0)
                     docs.refresh()
-                if (docs.nameKind("trash-page.md") === "")
+                if (docs.nameKind("trash-page.md") === "") {
+                    win.reachedEnd = true
                     win.scenarioRunning = false
+                }
                 break
             }
         }

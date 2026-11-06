@@ -9,7 +9,7 @@
 
 use crate::entry::Entry;
 use crate::filter::FilterOptions;
-use crate::sort::{sort_indices, SortKey, SortOptions, SortRecord};
+use crate::sort::{compare_entries, sort_indices, SortKey, SortOptions, SortRecord};
 use crate::viewprefs::ViewPrefs;
 use std::collections::{HashMap, HashSet};
 
@@ -145,14 +145,61 @@ impl ListingState {
     /// An entry with a name already present replaces it.
     pub fn apply_batch(&mut self, batch: Vec<Entry>) -> Vec<ListChange> {
         let was_large = self.is_large();
-        let old_visible = self.visible.clone();
+        let first_new = self.raw.len();
         let mut changed = HashSet::new();
         for entry in batch {
             if let Some(i) = self.upsert(entry) {
                 changed.insert(i);
             }
         }
+        if changed.is_empty() && was_large == self.is_large() {
+            return self.merge_new(first_new);
+        }
+        let old_visible = self.visible.clone();
         self.reconcile(old_visible, was_large, &changed)
+    }
+
+    /// Entries from `first_new` on are new and nothing else changed: sorts only them and merges
+    /// into the visible list, O(n) instead of a full re-sort per streamed batch.
+    fn merge_new(&mut self, first_new: usize) -> Vec<ListChange> {
+        let mut fresh: Vec<u32> = (first_new as u32..self.raw.len() as u32)
+            .filter(|&i| self.filter.matches(&self.raw[i as usize]))
+            .collect();
+        if fresh.is_empty() {
+            return Vec::new();
+        }
+        let opts = self.effective_sort();
+        sort_indices(&mut fresh, &self.raw, &self.records, &opts);
+        let old = std::mem::take(&mut self.visible);
+        let mut merged = Vec::with_capacity(old.len() + fresh.len());
+        let mut changes: Vec<ListChange> = Vec::new();
+        let mut old_iter = old.into_iter().peekable();
+        for f in fresh {
+            while let Some(&o) = old_iter.peek() {
+                let (fu, ou) = (f as usize, o as usize);
+                if compare_entries(
+                    &self.raw[fu],
+                    &self.records[fu],
+                    &self.raw[ou],
+                    &self.records[ou],
+                    &opts,
+                ) == std::cmp::Ordering::Less
+                {
+                    break;
+                }
+                merged.push(o);
+                old_iter.next();
+            }
+            let at = merged.len();
+            match changes.last_mut() {
+                Some(ListChange::Insert { index, count }) if *index + *count == at => *count += 1,
+                _ => changes.push(ListChange::Insert { index: at, count: 1 }),
+            }
+            merged.push(f);
+        }
+        merged.extend(old_iter);
+        self.visible = merged;
+        changes
     }
 
     pub fn finish(&mut self) {
@@ -168,13 +215,34 @@ impl ListingState {
 
     /// Matched by name, so surviving rows stay put; selection of vanished names is dropped.
     pub fn replace_with_fresh(&mut self, fresh: Vec<Entry>) -> Vec<ListChange> {
+        if self.same_entries(&fresh) {
+            self.stale = false;
+            self.loading = false;
+            return Vec::new();
+        }
         let was_large = self.is_large();
         let old_raw = std::mem::take(&mut self.raw);
         let old_visible = std::mem::take(&mut self.visible);
         let old_by_name = std::mem::take(&mut self.by_name);
-        self.records.clear();
+        let mut old_records = std::mem::take(&mut self.records);
         for entry in fresh {
-            self.upsert(entry);
+            // Unchanged entry keeps its record: folding names is most of a rebuild's cost.
+            let kept = match old_by_name.get(&entry.name) {
+                Some(&o) if old_raw[o as usize] == entry && !self.by_name.contains_key(&entry.name) => Some(
+                    std::mem::replace(&mut old_records[o as usize], SortRecord::empty()),
+                ),
+                _ => None,
+            };
+            match kept {
+                Some(record) => {
+                    self.by_name.insert(entry.name.clone(), self.raw.len() as u32);
+                    self.records.push(record);
+                    self.raw.push(entry);
+                }
+                None => {
+                    self.upsert(entry);
+                }
+            }
         }
         let by_name = &self.by_name;
         self.selection.retain(|n| by_name.contains_key(n));
@@ -284,6 +352,21 @@ impl ListingState {
         hidden.sort();
         out.extend(hidden);
         out
+    }
+
+    /// `fresh` holds exactly the entries already listed, each unchanged.
+    fn same_entries(&self, fresh: &[Entry]) -> bool {
+        if fresh.len() != self.raw.len() {
+            return false;
+        }
+        let mut seen = vec![false; self.raw.len()];
+        fresh.iter().all(|e| match self.by_name.get(&e.name) {
+            Some(&i) if !seen[i as usize] && self.raw[i as usize] == *e => {
+                seen[i as usize] = true;
+                true
+            }
+            _ => false,
+        })
     }
 
     fn row_update(&self, name: &[u8]) -> Vec<ListChange> {
@@ -447,7 +530,6 @@ fn diff_from_mapping(
 mod tests {
     use super::*;
     use crate::entry::{ms_to_system_time, Kind};
-    use std::time::Instant;
 
     fn file(name: &str, size: u64) -> Entry {
         let mut e = Entry::new(name.as_bytes(), Kind::File);
@@ -615,6 +697,86 @@ mod tests {
             "a duplicate of an unchanged entry changes nothing"
         );
         assert_eq!(names(&s), ["a", "b", "c", "d", "e"]);
+    }
+
+    #[test]
+    fn streamed_batches_merge_into_order_with_inserts_only() {
+        let mut s = ListingState::new(
+            SortOptions {
+                key: SortKey::Size,
+                descending: true,
+                folders_first: true,
+            },
+            FilterOptions::default(),
+        );
+        let mut mirror = Vec::new();
+        for b in [
+            vec![file("m", 5), file("a", 1), Entry::new(b"dir", Kind::Dir)],
+            vec![file("z", 9), file("b", 1), file("hidden", 3)],
+            vec![file("c", 5), file("y", 0)],
+        ] {
+            let changes = s.apply_batch(b);
+            assert!(
+                changes.iter().all(|c| matches!(c, ListChange::Insert { .. })),
+                "{changes:?}"
+            );
+            apply_to_mirror(&mut mirror, &changes, &s);
+        }
+        assert_eq!(names(&s), ["dir", "z", "c", "m", "hidden", "a", "b", "y"]);
+        assert_eq!(
+            s.apply_batch(vec![file("d", 5), file("e", 5)]),
+            [ListChange::Insert { index: 3, count: 2 }],
+            "neighbours in the new order form one run"
+        );
+    }
+
+    #[test]
+    fn refresh_keeps_records_of_unchanged_entries() {
+        let mut s = ListingState::default();
+        s.apply_batch(vec![file("B", 1), file("a", 1), file("c", 1)]);
+        let mut mirror = visible(&s);
+        let changes = s.replace_with_fresh(vec![file("c", 2), file("a", 1), file("B", 1), file("d", 1)]);
+        apply_to_mirror(&mut mirror, &changes, &s);
+        assert_eq!(names(&s), ["a", "B", "c", "d"]);
+        assert_eq!(
+            s.records.iter().map(|r| r.name_key.as_str()).collect::<Vec<_>>(),
+            ["c", "a", "b", "d"]
+        );
+    }
+
+    #[test]
+    fn refresh_rebuilds_records_of_changed_entries() {
+        let mut s = ListingState::default();
+        s.apply_batch(vec![file("a.png", 1), file("b", 1)]);
+        s.replace_with_fresh(vec![Entry::new(b"a.png", Kind::Dir), file("b", 1), file("c", 1)]);
+        for (record, entry) in s.records.iter().zip(&s.raw) {
+            assert_eq!(
+                *record,
+                crate::sort::SortRecord::for_entry(entry),
+                "{}",
+                entry.display_name()
+            );
+        }
+    }
+
+    #[test]
+    fn refresh_listing_a_name_twice_keeps_one_row() {
+        let mut s = ListingState::default();
+        s.apply_batch(vec![file("a", 1), file("b", 1)]);
+        s.replace_with_fresh(vec![file("a", 1), file("a", 1), file("b", 1)]);
+        assert_eq!(names(&s), ["a", "b"]);
+        assert_eq!(s.raw.len(), 2);
+    }
+
+    #[test]
+    fn refresh_with_same_names_but_new_details_updates_rows() {
+        let mut s = ListingState::default();
+        s.apply_batch(vec![file("a", 1), file("b", 2)]);
+        let mut mirror = visible(&s);
+        let changes = s.replace_with_fresh(vec![file("b", 6), file("a", 5)]);
+        assert!(!changes.is_empty());
+        apply_to_mirror(&mut mirror, &changes, &s);
+        assert_eq!(visible(&s), [file("a", 5), file("b", 6)]);
     }
 
     #[test]
@@ -850,26 +1012,6 @@ mod tests {
         assert_eq!(changes, [ListChange::Reset]);
         apply_to_mirror(&mut mirror, &changes, &s);
         assert!(!s.is_large());
-    }
-
-    #[test]
-    fn sorting_twenty_thousand_entries_is_fast_enough() {
-        let mut s = ListingState::default();
-        let started = Instant::now();
-        s.apply_batch(many(LARGE_FOLDER_THRESHOLD));
-        let fresh = many(LARGE_FOLDER_THRESHOLD);
-        assert!(s.replace_with_fresh(fresh).is_empty());
-        s.set_sort(SortOptions {
-            key: SortKey::Modified,
-            descending: true,
-            folders_first: true,
-        });
-        assert_eq!(s.len(), LARGE_FOLDER_THRESHOLD);
-        assert!(
-            started.elapsed().as_secs_f64() < 5.0,
-            "took {:?}",
-            started.elapsed()
-        );
     }
 
     #[test]

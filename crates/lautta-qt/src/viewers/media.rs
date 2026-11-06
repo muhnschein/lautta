@@ -146,7 +146,7 @@ fn read_into(ctx: *mut c_void, off: i64, buf: *mut u8, want: i64) -> i64 {
 pub fn error_kind(code: i32) -> &'static str {
     match code {
         0 => "",
-        1 | 2 | 5 => "Unsupported",
+        1 | 2 | 5 => "NotPlayable",
         3 => "ConnectionLost",
         4 => "PermissionDenied",
         _ => "Internal",
@@ -197,6 +197,8 @@ pub struct MediaSource {
     pause: qt_method!(fn(&mut self)),
     stop: qt_method!(fn(&mut self)),
     seek: qt_method!(fn(&mut self, ms: f64)),
+    /// Kind for a `QMediaPlayer::Error` code, for players outside this source.
+    playerErrorKind: qt_method!(fn(&self, code: i32) -> QString),
 
     media: usize,
     want_play: bool,
@@ -275,7 +277,8 @@ impl MediaSource {
         self.duration = duration;
         self.state = qstr(state);
         self.playing = state == "playing";
-        if code != 0 {
+        // Until this source's media is attached, the player's error is the previous source's.
+        if code != 0 && self.opened {
             changed |= self.player_failed(code);
         }
         if self.downloading {
@@ -312,6 +315,10 @@ impl MediaSource {
         self.errorKind = kind;
         self.errorMessage = self.player_error_text();
         true
+    }
+
+    fn playerErrorKind(&self, code: i32) -> QString {
+        qstr(error_kind(code))
     }
 
     fn setUri(&mut self, value: QString) {
@@ -498,11 +505,11 @@ mod tests {
     #[test]
     fn errors_map_to_app_kinds() {
         assert_eq!(error_kind(0), "");
-        assert_eq!(error_kind(1), "Unsupported");
-        assert_eq!(error_kind(2), "Unsupported");
+        assert_eq!(error_kind(1), "NotPlayable");
+        assert_eq!(error_kind(2), "NotPlayable");
         assert_eq!(error_kind(3), "ConnectionLost");
         assert_eq!(error_kind(4), "PermissionDenied");
-        assert_eq!(error_kind(5), "Unsupported");
+        assert_eq!(error_kind(5), "NotPlayable");
         assert_eq!(error_kind(9), "Internal");
     }
 

@@ -4,6 +4,7 @@ import Lautta 1.0
 
 Item {
     id: root
+    property bool reachedEnd
 
     readonly property string base: "lautta://user-downloads/TextThumbs/"
 
@@ -12,9 +13,10 @@ Item {
             console.error("FAILED: " + what)
     }
 
-    function waitFor(cond, ms) {
-        for (var t = 0; t < ms && !cond(); t += 20)
+    function waitFor(cond, what) {
+        for (var t = 0; t < 30000 && !cond(); t += 20)
             tools.pump(20)
+        check(cond(), what)
     }
 
     function install(fixture, name) {
@@ -35,6 +37,14 @@ Item {
     ViewerTools { id: tools }
 
     property int changes
+    // Name bindings evaluated: a preview must not make a row re-read its other roles.
+    // Object, not int: a counter property the binding reads would loop.
+    readonly property var nameReads: ({ "n": 0 })
+
+    function read(value) {
+        root.nameReads.n++
+        return value
+    }
 
     DirectoryModel { id: downloads; uri: "lautta://user-downloads/" }
     DirectoryModel { id: thumbs }
@@ -43,7 +53,7 @@ Item {
         id: rows
         model: thumbs
         delegate: Item {
-            readonly property string nm: name
+            readonly property string nm: root.read(name)
             readonly property bool has: textThumb
             readonly property string text: textPreview
             readonly property bool mono: textPreviewMono
@@ -53,9 +63,9 @@ Item {
     }
 
     function testWhoHasOne() {
-        waitFor(function () { return !downloads.loading }, 2000)
+        waitFor(function () { return !downloads.loading }, "Downloads listed")
         downloads.createFolder("TextThumbs")
-        waitFor(function () { return downloads.indexOf(root.base.slice(0, -1)) >= 0 }, 2000)
+        waitFor(function () { return downloads.indexOf(root.base.slice(0, -1)) >= 0 }, "TextThumbs made")
         thumbs.uri = root.base
         thumbs.createFolder("Sub")
         install("notes-crlf.txt", "notes.txt")
@@ -65,8 +75,7 @@ Item {
         install("empty.txt", "empty.txt")
         install("photo.jpg", "a.jpg")
         thumbs.refresh()
-        waitFor(function () { return thumbs.count === 7 && !thumbs.loading }, 3000)
-        check(thumbs.count === 7, "all listed: " + thumbs.count)
+        waitFor(function () { return thumbs.count === 7 && !thumbs.loading }, "all listed")
         var want = { "notes.txt": true, "run.sh": true, "README.md": true, "blob.txt": true,
                      "empty.txt": false, "a.jpg": false, "Sub": false }
         for (var n in want)
@@ -80,13 +89,15 @@ Item {
 
     function testMade() {
         var before = root.changes
+        var reads = root.nameReads.n
         ask("notes.txt")
         ask("run.sh")
         ask("blob.txt")
         ask("a.jpg")
         ask("Sub")
-        waitFor(function () { return root.changes - before >= 3 }, 3000)
+        waitFor(function () { return root.changes - before >= 3 }, "three made")
         check(root.changes - before === 3, "three made: " + (root.changes - before))
+        check(root.nameReads.n === reads, "a preview leaves names unread: " + (root.nameReads.n - reads))
         check(row("notes.txt").text === "line one\nline two", "first lines, CRLF tidied: " + JSON.stringify(row("notes.txt").text))
         check(row("run.sh").text.indexOf("#!/bin/sh\n") === 0, "a script's first line: " + row("run.sh").text)
         check(row("blob.txt").text === "", "binary data has none")
@@ -106,10 +117,9 @@ Item {
         install("short-lines.txt", "notes.txt")
         check(tools.setModified(root.base + "notes.txt", 1700000000000), "new modified time")
         thumbs.refresh()
-        waitFor(function () { return row("notes.txt") && row("notes.txt").text === "" }, 3000)
-        check(row("notes.txt").text === "", "the old preview does not stand")
+        waitFor(function () { return row("notes.txt") && row("notes.txt").text === "" }, "the old preview dropped")
         ask("notes.txt")
-        waitFor(function () { return row("notes.txt").text !== "" }, 3000)
+        waitFor(function () { return row("notes.txt").text !== "" }, "made again")
         check(row("notes.txt").text !== "line one\nline two" && row("notes.txt").text !== "",
               "made again: " + row("notes.txt").text)
     }
@@ -120,8 +130,7 @@ Item {
         tools.pump(300)
         check(row("README.md").text === "", "a cancelled preview is dropped")
         ask("README.md")
-        waitFor(function () { return row("README.md").text !== "" }, 3000)
-        check(row("README.md").text !== "", "asked again, it comes")
+        waitFor(function () { return row("README.md").text !== "" }, "asked again, it comes")
         var before = root.changes
         thumbs.cancelPreview(root.base + "README.md")
         ask("README.md")
@@ -148,5 +157,6 @@ Item {
         testChangedFile()
         testCancelled()
         testSwitchedOff()
+        reachedEnd = true
     }
 }

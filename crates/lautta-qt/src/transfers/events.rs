@@ -3,10 +3,11 @@
 //! the `Transfers` singleton and live models via a listener registry.
 
 use crate::runtime::{core, handle};
+use lautta_core::transfer::throttle::{forward_throttled, Forwarded};
 use lautta_core::transfer::TransferEvent;
 use std::cell::RefCell;
 use std::sync::Once;
-use tokio::sync::broadcast::error::RecvError;
+use std::time::Duration;
 
 type Listener = Box<dyn FnMut(&TransferEvent) -> bool>;
 
@@ -15,6 +16,9 @@ thread_local! {
 }
 
 static FORWARDER: Once = Once::new();
+
+/// Pages re-read every item of a transfer on `Changed`: at most this often per transfer.
+const CHANGED_EVERY: Duration = Duration::from_millis(250);
 
 /// Synthetic "something else changed, reload" event (history cleared, start-up restore, missed
 /// events).
@@ -50,17 +54,12 @@ pub fn reload() {
 pub fn ensure_forwarder() {
     FORWARDER.call_once(|| {
         let Some(core) = core() else { return };
-        let mut rx = core.engine.subscribe();
+        let rx = core.engine.subscribe();
         let to_gui = qmetaobject::queued_callback(|ev: TransferEvent| dispatch(&ev));
-        handle().spawn(async move {
-            loop {
-                match rx.recv().await {
-                    Ok(ev) => to_gui(ev),
-                    Err(RecvError::Lagged(_)) => to_gui(TransferEvent::Changed(RELOAD)),
-                    Err(RecvError::Closed) => break,
-                }
-            }
-        });
+        handle().spawn(forward_throttled(rx, CHANGED_EVERY, move |f| match f {
+            Forwarded::Event(ev) => to_gui(ev),
+            Forwarded::Lagged => to_gui(TransferEvent::Changed(RELOAD)),
+        }));
     });
 }
 

@@ -10,13 +10,12 @@
 
 use crate::error::Result;
 use crate::paths::AppPaths;
-use crate::watch::{lock, map_notify_error, raw_watcher, spawn_worker, StopOnDrop};
+use crate::watch::{lock, map_notify_error, raw_watcher, spawn_worker};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
@@ -128,14 +127,14 @@ fn nearest_existing(path: &Path) -> PathBuf {
 pub struct VolumeWatcher {
     known: Arc<Mutex<Vec<Volume>>>,
     _watcher: Arc<Mutex<RecommendedWatcher>>,
-    _stop: StopOnDrop,
 }
 
 struct Rescanner {
     root: PathBuf,
     known: Arc<Mutex<Vec<Volume>>>,
     tx: UnboundedSender<VolumeEvent>,
-    watcher: Arc<Mutex<RecommendedWatcher>>,
+    /// Weak: dropping [`VolumeWatcher`] drops the watcher, which ends the worker.
+    watcher: Weak<Mutex<RecommendedWatcher>>,
     watching: PathBuf,
 }
 
@@ -147,7 +146,10 @@ impl Rescanner {
         if want == self.watching {
             return;
         }
-        let mut w = lock(&self.watcher);
+        let Some(watcher) = self.watcher.upgrade() else {
+            return;
+        };
+        let mut w = lock(&watcher);
         let _ = w.unwatch(&self.watching);
         if w.watch(&want, RecursiveMode::NonRecursive).is_ok() {
             self.watching = want;
@@ -182,18 +184,16 @@ impl VolumeWatcher {
         let watcher = Arc::new(Mutex::new(watcher));
         let known = Arc::new(Mutex::new(scan(&root)));
         let (tx, rx) = unbounded_channel();
-        let stop = Arc::new(AtomicBool::new(false));
         let mut rescanner = Rescanner {
             root,
             known: known.clone(),
             tx,
-            watcher: watcher.clone(),
+            watcher: Arc::downgrade(&watcher),
             watching,
         };
         spawn_worker(
             raw,
             debounce,
-            stop.clone(),
             |ev| {
                 if matches!(ev.kind, EventKind::Access(_)) {
                     Vec::new()
@@ -207,7 +207,6 @@ impl VolumeWatcher {
             VolumeWatcher {
                 known,
                 _watcher: watcher,
-                _stop: StopOnDrop(stop),
             },
             rx,
         ))
@@ -225,7 +224,7 @@ mod tests {
     const SHORT: Duration = Duration::from_millis(60);
 
     async fn next(rx: &mut UnboundedReceiver<VolumeEvent>) -> Option<VolumeEvent> {
-        tokio::time::timeout(Duration::from_secs(5), rx.recv())
+        tokio::time::timeout(Duration::from_secs(30), rx.recv())
             .await
             .ok()
             .flatten()

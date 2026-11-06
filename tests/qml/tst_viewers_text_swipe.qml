@@ -8,6 +8,7 @@ import "../../qml/viewers"
 
 QtQuick.Window {
     id: window
+    property bool reachedEnd
 
     property var __silica_applicationwindow_instance: app
     property var pageStack: app.pageStack
@@ -34,9 +35,10 @@ QtQuick.Window {
         return out
     }
 
-    function waitFor(done) {
-        for (var i = 0; i < 100 && !done(); ++i)
+    function waitFor(done, what) {
+        for (var i = 0; i < 200 && !done(); ++i)
             tools.pump(50)
+        return expect(done(), "timed out waiting for " + what)
     }
 
     function listOf(viewer) {
@@ -46,7 +48,7 @@ QtQuick.Window {
     function openText(uri) {
         var viewer = app.pageStack.push(textComponent, { "uri": uri }, PageStackAction.Immediate)
         var view = listOf(viewer)
-        waitFor(function() { return view.count > 0 && !app.pageStack.busy })
+        waitFor(function() { return view.count > 0 && !app.pageStack.busy }, uri)
         view.forceLayout()
         return viewer
     }
@@ -57,7 +59,7 @@ QtQuick.Window {
         for (var x = 30; x <= page.width - 20; x += 10)
             events.mouseMove(page, x, y, 15, Qt.LeftButton)
         events.mouseRelease(page, page.width - 20, y, Qt.LeftButton, Qt.NoModifier, 15)
-        waitFor(function() { return !app.pageStack.busy && app.pageStack.currentPage !== page })
+        waitFor(function() { return !app.pageStack.busy && app.pageStack.currentPage !== page }, "the swipe to end")
     }
 
     function swipesBack(viewer, below, what) {
@@ -98,26 +100,28 @@ QtQuick.Window {
                "the wide line wraps: " + (wide.length ? wide[0].lineCount + " rows, " + wide[0].width + " wide" : "not shown"))
         swipesBack(viewer, below, "wrapped")
         var narrow = openText("lautta://user-documents/short.txt")
-        expect(vertical(listOf(narrow)), "narrow lines flick only up and down")
+        expect(listOf(narrow).count > 0 && vertical(listOf(narrow)), "narrow lines flick only up and down")
         swipesBack(narrow, below, "narrow lines")
     }
 
     function viewSource() {
         var markdown = app.pageStack.push(markdownComponent, {}, PageStackAction.Immediate)
-        tools.pump(300)
-        var item = findAll(markdown, function(x) {
-            return x.text === "lautta-viewers-view-source" || x.text === "View source"
-        }, [])
-        if (!expect(item.length === 1, "a View source item"))
+        var item = []
+        if (!waitFor(function() {
+            item = findAll(markdown, function(x) {
+                return x.text === "lautta-viewers-view-source" || x.text === "View source"
+            }, [])
+            return item.length === 1
+        }, "a View source item"))
             return
         item[0].clicked(null)
-        waitFor(function() { return app.pageStack.currentPage !== markdown && !app.pageStack.busy })
+        waitFor(function() { return app.pageStack.currentPage !== markdown && !app.pageStack.busy }, "the source")
         var source = app.pageStack.currentPage
         var view = listOf(source)
         if (!expect(view && findAll(source, function(x) { return x.objectName === "textBackdrop" }, []).length === 1,
                     "View source opens the text viewer"))
             return
-        waitFor(function() { return view.count > 0 })
+        waitFor(function() { return view.count > 0 }, "the source's lines")
         expect(vertical(view), "the source flicks only up and down")
         swipesBack(source, markdown, "source")
     }
@@ -129,6 +133,7 @@ QtQuick.Window {
         var below = app.pageStack.push(emptyPage, {}, PageStackAction.Immediate)
         wraps(below)
         viewSource()
+        reachedEnd = true
     }
 
     width: 540

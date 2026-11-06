@@ -368,3 +368,32 @@ fn the_script_fills_stdin_and_takes_no_file() {
         assert_eq!(out.status.code(), Some(2), "{args:?}");
     }
 }
+
+/// Words the shipped English keeps one way: British spelling, straight apostrophes, sizes as
+/// `Format.formatFileSize` writes them, no tool jargon.
+fn style_breaks(ts: &str) -> Vec<String> {
+    const BANNED: [&str; 9] = [
+        "Canceled",
+        "Canceling",
+        "Favorite",
+        "Color",
+        "\u{2019}",
+        "MiB",
+        "(s)",
+        "Glob",
+        "glob",
+    ];
+    ts.split("<source>")
+        .skip(1)
+        .filter_map(|rest| rest.split("</source>").next())
+        .filter(|source| BANNED.iter().any(|word| source.contains(word)))
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn the_catalogue_keeps_one_spelling() {
+    assert_eq!(style_breaks(&catalogue()), Vec::<String>::new());
+    let broken = "<source>Canceled</source><source>Fine</source><source>it\u{2019}s</source>";
+    assert_eq!(style_breaks(broken), ["Canceled", "it\u{2019}s"]);
+}

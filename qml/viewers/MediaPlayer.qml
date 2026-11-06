@@ -20,7 +20,7 @@ Page {
     readonly property bool playing: local ? localPlayer.playbackState === MM.MediaPlayer.PlayingState : remote.playing
     readonly property real position: local ? localPlayer.position : remote.position
     readonly property real duration: local ? localPlayer.duration : remote.duration
-    readonly property string errorKind: local ? (localPlayer.error !== MM.MediaPlayer.NoError ? "Unsupported" : "") : remote.errorKind
+    readonly property string errorKind: local ? remote.playerErrorKind(localPlayer.error) : remote.errorKind
     property bool chrome: true
 
     function toggle() {
@@ -92,7 +92,7 @@ Page {
 
     readonly property string statusText: {
         if (errorKind !== "")
-            return ErrorText.message(errorKind, { "item": fileName, "location": App.locationName(uri) })
+            return ErrorText.message(errorKind, { "item": fileName, "location": App.locationName(uri), "open": true })
         if (remote.downloading)
             //% "Downloading from %1"
             return qsTrId("lautta-viewers-media-downloading").arg(App.locationName(uri))

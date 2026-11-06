@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Cover not checked: Silica incubates it asynchronously,
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Cover not checked: Silica incubates it asynchronously,
 // engine here has no incubation controller.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -6,6 +7,7 @@ import Lautta 1.0
 
 Item {
     id: root
+    property bool reachedEnd
 
     readonly property string folderUri: "lautta://user-documents/%3Cb%3EBold"
     readonly property string instruction: "<img src=\"http://127.0.0.1:9/pixel.png\"> Enter the code"
@@ -112,5 +114,6 @@ Item {
             return
         checkFolder()
         checkSignIn()
+        reachedEnd = true
     }
 }

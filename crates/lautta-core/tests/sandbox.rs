@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Sailjail layout: every permitted folder and app data folder is its own bind mount, so
 //! `rename(2)` between them fails with `EXDEV`. Without root, two file systems (temp folder and
-//! `/dev/shm`) joined by symlinks stand in; hosts without a separate `/dev/shm` skip those tests.
+//! `/dev/shm`) joined by symlinks stand in; host tests need `/dev/shm` on a file system of its own.
 
 use lautta_core::app::Core;
 use lautta_core::app_browse::Row;
@@ -31,11 +31,16 @@ async fn open(home: &Path) -> Arc<Core> {
     Core::open_with(paths, registry).await.unwrap()
 }
 
-fn other_fs() -> Option<tempfile::TempDir> {
-    let shm = tempfile::tempdir_in("/dev/shm").ok()?;
-    let probe = tempfile::tempdir().ok()?;
-    let dev = |p: &Path| std::fs::metadata(p).map(|m| m.dev()).ok();
-    (dev(shm.path())? != dev(probe.path())?).then_some(shm)
+fn other_fs() -> tempfile::TempDir {
+    let shm = tempfile::tempdir_in("/dev/shm").expect("host tests need /dev/shm");
+    let probe = tempfile::tempdir().unwrap();
+    let dev = |p: &Path| std::fs::metadata(p).unwrap().dev();
+    assert_ne!(
+        dev(shm.path()),
+        dev(probe.path()),
+        "/dev/shm on a file system of its own"
+    );
+    shm
 }
 
 struct Sandbox {
@@ -45,20 +50,20 @@ struct Sandbox {
     core: Arc<Core>,
 }
 
-async fn sandbox() -> Option<Sandbox> {
-    let shm = other_fs()?;
+async fn sandbox() -> Sandbox {
+    let shm = other_fs();
     let disk = tempfile::tempdir().unwrap();
     let home = disk.path().join("home");
     std::fs::create_dir_all(home.join("Downloads")).unwrap();
     std::fs::create_dir(shm.path().join("Documents")).unwrap();
     symlink(shm.path().join("Documents"), home.join("Documents")).unwrap();
     let core = open(&home).await;
-    Some(Sandbox {
+    Sandbox {
         _disk: disk,
         _shm: shm,
         home,
         core,
-    })
+    }
 }
 
 fn row<'a>(rows: &'a [Row], section: &str, kind: &str, name: &str) -> Option<&'a Row> {
@@ -67,7 +72,7 @@ fn row<'a>(rows: &'a [Row], section: &str, kind: &str, name: &str) -> Option<&'a
 }
 
 async fn eventually(what: &str, cond: impl Fn() -> bool) {
-    for _ in 0..500 {
+    for _ in 0..3000 {
         if cond() {
             return;
         }
@@ -102,7 +107,7 @@ fn assert_project(dir: &Path, when: SystemTime) {
 
 #[tokio::test]
 async fn deletes_go_to_the_app_data_trash_across_mounts() {
-    let Some(s) = sandbox().await else { return };
+    let s = sandbox().await;
     let when = project(&s.home.join("Documents/Uni"));
     let docs = uri("lautta://user-documents/");
     let item = uri("lautta://user-documents/Uni");
@@ -131,7 +136,7 @@ async fn deletes_go_to_the_app_data_trash_across_mounts() {
 
 #[tokio::test]
 async fn deletes_are_kept_when_the_app_data_folder_is_a_mount_of_its_own() {
-    let Some(shm) = other_fs() else { return };
+    let shm = other_fs();
     let disk = tempfile::tempdir().unwrap();
     let home = shm.path().join("home");
     std::fs::create_dir_all(home.join("Documents")).unwrap();
@@ -151,7 +156,7 @@ async fn deletes_are_kept_when_the_app_data_folder_is_a_mount_of_its_own() {
 
 #[tokio::test]
 async fn restore_goes_back_across_mounts_into_a_folder_that_is_gone() {
-    let Some(s) = sandbox().await else { return };
+    let s = sandbox().await;
     write(&s.home.join("Documents/Uni/2024/notes.txt"), b"n");
     s.core
         .delete(&[uri("lautta://user-documents/Uni/2024/notes.txt")])
@@ -169,7 +174,7 @@ async fn restore_goes_back_across_mounts_into_a_folder_that_is_gone() {
 
 #[tokio::test]
 async fn restore_purge_and_empty_cover_every_item() {
-    let Some(s) = sandbox().await else { return };
+    let s = sandbox().await;
     write(&s.home.join("Documents/a.txt"), b"a");
     write(&s.home.join("Downloads/b.txt"), b"bb");
     for item in ["lautta://user-documents/a.txt", "lautta://user-downloads/b.txt"] {
@@ -229,7 +234,7 @@ async fn restore_purge_and_empty_cover_every_item() {
 
 #[tokio::test]
 async fn the_retention_setting_decides_what_expires() {
-    let Some(s) = sandbox().await else { return };
+    let s = sandbox().await;
     write(&s.home.join("Documents/a.txt"), b"a");
     s.core
         .delete(&[uri("lautta://user-documents/a.txt")])
@@ -246,7 +251,7 @@ async fn the_retention_setting_decides_what_expires() {
 
 #[tokio::test]
 async fn clear_app_data_removes_the_trash_and_nothing_else_in_the_folders() {
-    let Some(s) = sandbox().await else { return };
+    let s = sandbox().await;
     write(&s.home.join("Documents/a"), b"a");
     write(&s.home.join("Downloads/keep"), b"k");
     s.core.delete(&[uri("lautta://user-documents/a")]).await.unwrap();

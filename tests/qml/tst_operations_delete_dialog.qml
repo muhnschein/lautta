@@ -6,6 +6,7 @@ import "../../qml/dialogs"
 
 ApplicationWindow {
     id: win
+    property bool reachedEnd
 
     ViewerTools { id: tools }
 
@@ -35,7 +36,6 @@ ApplicationWindow {
 
     Component.onCompleted: {
         pageStack.push(dialogComponent, { "uris": ["lautta://user-documents/Uni/thesis.odt"] }, PageStackAction.Immediate)
-        tools.pump(300)
         var dialog = pageStack.currentPage
         var header = findAll(dialog, function(x) { return x.defaultAcceptText !== undefined }, [])
         expect(header.length === 1, "one dialog header")
@@ -58,6 +58,7 @@ ApplicationWindow {
                "counts the items: " + many)
         dialog.uris = []
         expect(!dialog.canAccept, "nothing to delete can't be accepted")
+        reachedEnd = true
     }
 
     Component {

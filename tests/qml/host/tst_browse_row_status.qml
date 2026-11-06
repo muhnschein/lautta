@@ -3,6 +3,7 @@ import QtQuick 2.6
 import "../../../qml/components/browse/RowStatus.js" as RowStatus
 
 QtObject {
+    property bool reachedEnd
     function same(got, want, what) {
         if (got !== want)
             console.error("FAILED: " + what + ": \"" + got + "\", not \"" + want + "\"")
@@ -55,5 +56,6 @@ QtObject {
             same(RowStatus.indicator(c[0], c[1], c[2], c[3], c[4], c[6]), c[5],
                  "dot of " + c.slice(0, 5).join("/") + (c[6] ? " busy " + c[6].join(",") : ""))
         }
+        reachedEnd = true
     }
 }

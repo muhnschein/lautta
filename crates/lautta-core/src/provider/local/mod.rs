@@ -24,6 +24,7 @@ use crate::error::{Error, ErrorKind, Result};
 use crate::sys;
 use crate::vpath::VPath;
 use async_trait::async_trait;
+use copy::{Stop, StopOnDrop};
 use entries::EntryBuilder;
 use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
@@ -145,6 +146,17 @@ where
     tokio::task::spawn_blocking(f)
         .await
         .map_err(|e| Error::new(ErrorKind::Internal, format!("blocking task failed: {e}")))?
+}
+
+/// [`blocking`] that stops `f` when this future is dropped (task aborted): see [`Stop`].
+async fn stoppable<T, F>(f: F) -> Result<T>
+where
+    T: Send + 'static,
+    F: FnOnce(&Stop) -> Result<T> + Send + 'static,
+{
+    let stop = Arc::new(Stop::default());
+    let _on_drop = StopOnDrop(stop.clone());
+    blocking(move || f(&stop)).await
 }
 
 fn list_blocking(
@@ -284,9 +296,15 @@ fn position_for_resume(dst: &mut File, offset: u64) -> Result<()> {
     Ok(())
 }
 
-fn upload_blocking(src: OwnedFd, dst: &Path, opts: &WriteOptions, progress: &ProgressSink) -> Result<()> {
+fn upload_blocking(
+    src: OwnedFd,
+    dst: &Path,
+    opts: &WriteOptions,
+    progress: &ProgressSink,
+    stop: &Stop,
+) -> Result<()> {
     let mut srcf = File::from(src);
-    let mut dstf = open_for_upload(dst, opts)?;
+    let mut dstf = stop.commit(|| open_for_upload(dst, opts))?;
     let base = if opts.disposition == Disposition::Resume {
         position_for_resume(&mut dstf, opts.offset)?;
         opts.offset
@@ -303,7 +321,8 @@ fn upload_blocking(src: OwnedFd, dst: &Path, opts: &WriteOptions, progress: &Pro
         meta.is_file()
             .then(|| meta.len().saturating_sub(opts.offset) + base)
     });
-    copy::copy_fd(&srcf, &dstf, base, total, base == 0 && opts.offset == 0, progress)?;
+    let whole = base == 0 && opts.offset == 0;
+    copy::copy_fd(&srcf, &dstf, base, total, whole, progress, stop)?;
     if let Some(t) = opts.modified {
         dstf.set_modified(t)?;
     }
@@ -314,7 +333,13 @@ fn is_regular(f: &File) -> bool {
     f.metadata().map(|m| m.is_file()).unwrap_or(false)
 }
 
-fn download_blocking(src: &Path, dst: OwnedFd, offset: u64, progress: &ProgressSink) -> Result<()> {
+fn download_blocking(
+    src: &Path,
+    dst: OwnedFd,
+    offset: u64,
+    progress: &ProgressSink,
+    stop: &Stop,
+) -> Result<()> {
     let mut srcf = File::open(src)?;
     let meta = srcf.metadata()?;
     if meta.is_dir() {
@@ -327,12 +352,26 @@ fn download_blocking(src: &Path, dst: OwnedFd, offset: u64, progress: &ProgressS
     if is_regular(&dstf) || offset > 0 {
         dstf.seek(SeekFrom::Start(offset))?;
     }
-    copy::copy_fd(&srcf, &dstf, offset, Some(meta.len()), offset == 0, progress)?;
+    copy::copy_fd(
+        &srcf,
+        &dstf,
+        offset,
+        Some(meta.len()),
+        offset == 0,
+        progress,
+        stop,
+    )?;
     Ok(())
 }
 
 /// Written to a temp sibling, renamed into place: failure never leaves a partial destination.
-fn copy_blocking(from: &Path, to: &Path, opts: &CopyOptions) -> Result<()> {
+fn copy_blocking(
+    from: &Path,
+    to: &Path,
+    opts: &CopyOptions,
+    progress: &ProgressSink,
+    stop: &Stop,
+) -> Result<()> {
     let st = sys::stat(from, false)?;
     if st.is_dir() {
         return Err(Error::kind(ErrorKind::IsADirectory));
@@ -344,12 +383,14 @@ fn copy_blocking(from: &Path, to: &Path, opts: &CopyOptions) -> Result<()> {
         return Err(Error::kind(ErrorKind::AlreadyExists));
     }
     let tmp = unique_sibling(to);
-    let result = write_copy(from, &tmp, &st, opts).and_then(|()| {
-        if opts.replace {
-            std::fs::rename(&tmp, to).map_err(Into::into)
-        } else {
-            rename_noreplace_compat(&tmp, to)
-        }
+    let result = write_copy(from, &tmp, &st, opts, progress, stop).and_then(|()| {
+        stop.commit(|| {
+            if opts.replace {
+                std::fs::rename(&tmp, to).map_err(Into::into)
+            } else {
+                rename_noreplace_compat(&tmp, to)
+            }
+        })
     });
     if result.is_err() {
         let _ = std::fs::remove_file(&tmp);
@@ -357,7 +398,14 @@ fn copy_blocking(from: &Path, to: &Path, opts: &CopyOptions) -> Result<()> {
     result
 }
 
-fn write_copy(from: &Path, tmp: &Path, st: &sys::FileStat, opts: &CopyOptions) -> Result<()> {
+fn write_copy(
+    from: &Path,
+    tmp: &Path,
+    st: &sys::FileStat,
+    opts: &CopyOptions,
+    progress: &ProgressSink,
+    stop: &Stop,
+) -> Result<()> {
     if st.is_symlink() {
         std::os::unix::fs::symlink(std::fs::read_link(from)?, tmp)?;
         return Ok(());
@@ -368,30 +416,31 @@ fn write_copy(from: &Path, tmp: &Path, st: &sys::FileStat, opts: &CopyOptions) -
         .create_new(true)
         .mode(st.permissions() & 0o777)
         .open(tmp)?;
-    copy::copy_fd(&src, &dst, 0, Some(st.size), true, &super::no_progress())?;
+    copy::copy_fd(&src, &dst, 0, Some(st.size), true, progress, stop)?;
     if opts.preserve_mtime {
         dst.set_modified(st.mtime)?;
     }
     Ok(())
 }
 
-fn hash_file(path: &Path, algorithm: &str) -> Result<Vec<u8>> {
+fn hash_file(path: &Path, algorithm: &str, stop: &Stop) -> Result<Vec<u8>> {
     let file = File::open(path)?;
     if file.metadata()?.is_dir() {
         return Err(Error::kind(ErrorKind::IsADirectory));
     }
     match algorithm {
-        "sha256" => Ok(hash_reader::<sha2::Sha256>(file)?),
-        "sha1" => Ok(hash_reader::<sha1::Sha1>(file)?),
-        "md5" => Ok(hash_reader::<md5::Md5>(file)?),
+        "sha256" => Ok(hash_reader::<sha2::Sha256>(file, stop)?),
+        "sha1" => Ok(hash_reader::<sha1::Sha1>(file, stop)?),
+        "md5" => Ok(hash_reader::<md5::Md5>(file, stop)?),
         _ => Err(Error::kind(ErrorKind::Unsupported)),
     }
 }
 
-fn hash_reader<D: sha2::Digest>(mut file: File) -> std::io::Result<Vec<u8>> {
+fn hash_reader<D: sha2::Digest>(mut file: File, stop: &Stop) -> std::io::Result<Vec<u8>> {
     let mut hasher = D::new();
     let mut buf = vec![0u8; 1 << 20];
     loop {
+        stop.check()?;
         match file.read(&mut buf) {
             Ok(0) => return Ok(hasher.finalize().to_vec()),
             Ok(n) => hasher.update(&buf[..n]),
@@ -585,6 +634,19 @@ impl Provider for LocalProvider {
         .await
     }
 
+    async fn open_local(&self, path: &VPath) -> Result<Option<OwnedFd>> {
+        let real = self.real_path(path);
+        blocking(move || {
+            let file = File::open(real)?; // NOSONAR: runs on the blocking pool
+            let meta = file.metadata()?; // NOSONAR: runs on the blocking pool
+            if !meta.is_file() {
+                return Err(Error::kind(ErrorKind::IsADirectory));
+            }
+            Ok(Some(OwnedFd::from(file)))
+        })
+        .await
+    }
+
     async fn upload_from(
         &self,
         src: OwnedFd,
@@ -595,9 +657,9 @@ impl Provider for LocalProvider {
         self.require_write()?;
         let real = self.real_path(dst);
         let permit = self.permit().await?;
-        blocking(move || {
+        stoppable(move |stop| {
             let _permit = permit;
-            upload_blocking(src, &real, &opts, &progress)
+            upload_blocking(src, &real, &opts, &progress, stop)
         })
         .await
     }
@@ -611,23 +673,29 @@ impl Provider for LocalProvider {
     ) -> Result<()> {
         let real = self.real_path(src);
         let permit = self.permit().await?;
-        blocking(move || {
+        stoppable(move |stop| {
             let _permit = permit;
-            download_blocking(&real, dst, opts.offset, &progress)
+            download_blocking(&real, dst, opts.offset, &progress, stop)
         })
         .await
     }
 
-    async fn server_copy(&self, from: &VPath, to: &VPath, opts: CopyOptions) -> Result<()> {
+    async fn server_copy(
+        &self,
+        from: &VPath,
+        to: &VPath,
+        opts: CopyOptions,
+        progress: ProgressSink,
+    ) -> Result<()> {
         self.require_write()?;
         if from == to || from.is_root() || to.is_root() {
             return Err(Error::kind(ErrorKind::InvalidArgument));
         }
         let (a, b) = (self.real_path(from), self.real_path(to));
         let permit = self.permit().await?;
-        blocking(move || {
+        stoppable(move |stop| {
             let _permit = permit;
-            copy_blocking(&a, &b, &opts)
+            copy_blocking(&a, &b, &opts, &progress, stop)
         })
         .await
     }
@@ -639,9 +707,9 @@ impl Provider for LocalProvider {
         }
         let real = self.real_path(path);
         let permit = self.permit().await?;
-        blocking(move || {
+        stoppable(move |stop| {
             let _permit = permit;
-            hash_file(&real, &algorithm)
+            hash_file(&real, &algorithm, stop)
         })
         .await
     }

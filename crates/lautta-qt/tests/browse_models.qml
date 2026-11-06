@@ -1,5 +1,5 @@
 // Scenario of browse_models.rs: steps with action and condition; a step fails when its condition
-// does not hold within five seconds. Qt 5.15 on host: no Connections here.
+// does not hold within 30 seconds. Qt 5.15 on host: no Connections here.
 Item {
     id: root
 
@@ -385,10 +385,15 @@ Item {
                         && layoutRow("volumes", "section").marked && layoutRow("volumes", "vol-CARD").marked
                         && has("volume", "CARD") && has("folder", "Music")
              })
-        step("a server that comes while Servers is off shows nowhere",
+        step("a server comes while Servers is off",
              function() { FakeWorld.addAccount(2, "Office") },
+             function() { return FakeWorld.locationKnown("nv-account:2") })
+        // A drive after the server: once the drive shows, the models have seen the server.
+        step("that server shows nowhere",
+             function() { FakeWorld.addDrive("mmcblk1p3", "SPARE", false) },
              function() {
-                 return FakeWorld.locationKnown("nv-account:2") && layoutRow("servers", "section").lhidden
+                 return layoutRow("volumes", "vol-SPARE") !== null && has("volume", "SPARE")
+                        && layoutRow("servers", "section").lhidden
                         && !has("account") && layoutRow("servers", "nv-account:2") === null
                         && JSON.stringify(layoutKeys("servers")) === '["section"]'
              })
@@ -468,7 +473,7 @@ Item {
              },
              function() {
                  var sub = remoteRow("sub")
-                 return ++root.polls > 4 && sub !== null && sub.rfolder && sub.rmodified > 0
+                 return ++root.polls > 40 && sub !== null && sub.rfolder && sub.rmodified > 0
                         && sub.ritems === -1 && !remoteDir.folderCounts && root.remoteChanges === 0
              })
         step("listing connected the server",

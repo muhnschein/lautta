@@ -8,6 +8,7 @@ Item {
 
     readonly property string docs: "lautta://user-documents/"
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property bool removed
@@ -82,9 +83,8 @@ Item {
                         || !tools.installFixture(Qt.resolvedUrl("fixtures/two-pages.pdf"), test.docs + "trash-roles.pdf")
                         || !tools.installFixture(Qt.resolvedUrl("fixtures/doc.md"), test.docs + "trash-roles.md"))
                     return test.fail("fixtures not installed")
-                // Skip where test home is not a registered folder (SDK sb2).
                 if (App.locationName(test.docs) !== "Documents")
-                    return test.finish()
+                    return test.fail("Documents is no location: " + App.locationName(test.docs))
                 Operations.remove(JSON.stringify([test.docs + "trash-roles.jpg", test.docs + "trash-roles.pdf",
                                                   test.docs + "trash-roles.md"]))
                 test.next()
@@ -126,6 +126,7 @@ Item {
                     break
                 if (again.mime !== "image/jpeg" || paperAgain.mime !== "application/pdf")
                     return test.fail("the types stay with thumbnails off: " + again.mime + ", " + paperAgain.mime)
+                test.reachedEnd = true
                 test.finish()
                 break
             }

@@ -30,6 +30,7 @@ cpp! {{
     #include <QtCore/QUrl>
     #include <QtCore/QCoreApplication>
     #include <QtCore/QElapsedTimer>
+    #include <QtCore/QFileInfo>
     #include <QtCore/QEvent>
     #include <QtCore/QEventLoop>
     #include <QtQml/QQmlComponent>
@@ -60,8 +61,9 @@ cpp! {{
 
     // QML check mode: compiles and instantiates QML documents with this binary's engine (real
     // Silica, real Lautta types). Any error, any warning or console.error naming a checked
-    // document, and any uncaught JS exception outside Qt's modules, fails. `-T <directory>`
-    // installs that directory's catalogues first; without it qsTrId gives back the id.
+    // document, and any uncaught JS exception outside Qt's modules, fails. A `tst_*` document
+    // fails unless its root `reachedEnd` is true at the end. `-T <directory>` installs that
+    // directory's catalogues first; without it qsTrId gives back the id.
     static QStringList *lauttaCheckProblems = nullptr;
     static QString lauttaCheckFile;
 
@@ -141,6 +143,9 @@ cpp! {{
                 if (object->property("scenarioRunning").toBool())
                     problems << QStringLiteral("scenario still running after 60 s");
             }
+            if (object && QFileInfo(file).fileName().startsWith(QLatin1String("tst_"))
+                && !object->property("reachedEnd").toBool())
+                problems << QStringLiteral("checks unproven: root reachedEnd is not true");
             for (const QQmlError &e : component.errors())
                 problems << e.toString();
             if (!object && problems.isEmpty())
@@ -165,10 +170,14 @@ cpp! {{
 /// `argc`/`argv` must be the process arguments as passed to `main`.
 pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
     lautta_core::panics::abort_outside_catch();
-    start();
+    // Core (database, locations, bridge) opens while Qt starts; QML waits for it, not Qt.
+    *lock_opening() = Some(std::thread::spawn(open_core));
+    register_types();
     cpp!([argc as "int", argv as "char**"] -> c_int as "int" {
-            if (argc > 1 && qstrcmp(argv[1], "--qml-check") == 0)
+            if (argc > 1 && qstrcmp(argv[1], "--qml-check") == 0) {
+                rust!(LauttaWaitCoreCheck [] { wait_core() });
                 return lauttaQmlCheck(argc, argv);
+            }
             static int count = 0;
             count = argc;
     #ifdef LAUTTA_SAILFISH
@@ -176,12 +185,14 @@ pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
             lauttaInstallTranslations(app, SailfishApp::pathTo(QStringLiteral("translations")).toLocalFile());
             QQuickView *view = SailfishApp::createView();
             lauttaRegisterImageProviders(view->engine());
+            rust!(LauttaWaitCore [] { wait_core() });
             view->setSource(SailfishApp::pathToMainQml());
             view->show();
     #else
             QGuiApplication *app = new QGuiApplication(count, argv);
             QQuickView *view = new QQuickView();
             lauttaRegisterImageProviders(view->engine());
+            rust!(LauttaWaitCoreHost [] { wait_core() });
             QByteArray qml = qgetenv("LAUTTA_QML");
             view->setSource(QUrl::fromLocalFile(QString::fromLocal8Bit(qml)));
             view->show();
@@ -195,13 +206,25 @@ pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
 pub const QML_URI: &str = "Lautta";
 
+static OPENING: std::sync::Mutex<Option<std::thread::JoinHandle<()>>> = std::sync::Mutex::new(None);
+
+fn lock_opening() -> std::sync::MutexGuard<'static, Option<std::thread::JoinHandle<()>>> {
+    OPENING.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+fn wait_core() {
+    let opening = lock_opening().take();
+    if let Some(t) = opening {
+        let _ = t.join();
+    }
+}
+
 /// Failure to open core is shown by the start page via `App.startError`.
-fn start() {
+fn open_core() {
     let paths = lautta_core::paths::AppPaths::from_env();
     if let Err(e) = runtime::init(paths) {
         log::error!("cannot open the app data: {e}");
     }
-    register_types();
 }
 
 pub fn register_types() {
@@ -226,7 +249,8 @@ pub fn cstr(s: &str) -> std::ffi::CString {
 /// `-I <path>`, `-T <catalogue folder>` and files. Opens core from `$HOME` and registers types like
 /// the app. For host QML tests.
 pub fn qml_check(args: &[String]) -> c_int {
-    start();
+    open_core();
+    register_types();
     let mut owned: Vec<std::ffi::CString> = vec![cstr("harbour-lautta"), cstr("--qml-check")];
     owned.extend(args.iter().map(|a| cstr(a)));
     let mut ptrs: Vec<*mut c_char> = owned.iter().map(|c| c.as_ptr() as *mut c_char).collect();

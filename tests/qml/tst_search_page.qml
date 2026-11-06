@@ -8,6 +8,7 @@ ApplicationWindow {
     id: win
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property int step: 0
     property int waited: 0
     property var page
@@ -228,6 +229,7 @@ ApplicationWindow {
                 win.expect(win.page.width > win.page.height, "landscape page is wide: " + win.page.width + "x" + win.page.height)
                 win.checkLayout("landscape")
                 win.expect(win.field.focus, "the field keeps the focus in landscape")
+                win.reachedEnd = true
                 win.scenarioRunning = false
                 break
             }

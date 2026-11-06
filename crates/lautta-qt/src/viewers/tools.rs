@@ -32,6 +32,8 @@ pub struct ViewerTools {
     pump: qt_method!(fn(&self, ms: i32)),
     /// Test support: copies local `sourceUrl` (`file://`) to the local path of `destUri`.
     installFixture: qt_method!(fn(&self, source_url: QString, dest_uri: QString) -> bool),
+    /// Test support: as `installFixture`, content `times` over: a large file from a small one.
+    installRepeated: qt_method!(fn(&self, source_url: QString, dest_uri: QString, times: i32) -> bool),
     /// Test support: sets mtime of local `uri` to `ms` since epoch.
     setModified: qt_method!(fn(&self, uri: QString, ms: f64) -> bool),
     /// Test support: finger `kind` ("press", "move", "release") at (`x`, `y`) of `item`, sent as
@@ -122,16 +124,22 @@ impl ViewerTools {
     }
 
     fn installFixture(&self, source_url: QString, dest_uri: QString) -> bool {
-        let (Some(core), Some(dest)) = (core(), parse_uri(&dest_uri)) else {
-            return false;
-        };
-        let source = source_url.to_string();
-        let Some(source) = source.strip_prefix("file://").map(PathBuf::from) else {
-            return false;
-        };
-        match core.locations.to_local_path(&dest) {
-            Some(target) => std::fs::copy(source, target).is_ok(),
-            None => false,
-        }
+        fixture_paths(&source_url, &dest_uri)
+            .is_some_and(|(source, target)| std::fs::copy(source, target).is_ok())
     }
+
+    fn installRepeated(&self, source_url: QString, dest_uri: QString, times: i32) -> bool {
+        let Some((source, target)) = fixture_paths(&source_url, &dest_uri) else {
+            return false;
+        };
+        let times = usize::try_from(times).unwrap_or_default();
+        std::fs::read(source).is_ok_and(|bytes| std::fs::write(target, bytes.repeat(times)).is_ok())
+    }
+}
+
+/// Local source of a `file://` URL and local target of a Lautta URI.
+fn fixture_paths(source_url: &QString, dest_uri: &QString) -> Option<(PathBuf, PathBuf)> {
+    let (core, dest) = (core()?, parse_uri(dest_uri)?);
+    let source = PathBuf::from(source_url.to_string().strip_prefix("file://")?);
+    Some((source, core.locations.to_local_path(&dest)?))
 }

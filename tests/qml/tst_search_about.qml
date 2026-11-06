@@ -5,8 +5,12 @@ import Lautta 1.0
 import "../../qml/pages"
 
 ApplicationWindow {
+    id: test
+    property bool reachedEnd
+
     initialPage: Component {
         AboutPage {
+            Component.onCompleted: test.reachedEnd = true
         }
     }
 }

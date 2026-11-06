@@ -452,9 +452,7 @@ fn restore_across_real_mounts() {
     // Sailjail: app data folder and ~/Documents are different mounts, so a rename between them
     // fails with EXDEV.
     let e = env();
-    let Some(shm) = other_device(&e.loc) else {
-        return;
-    };
+    let shm = other_device(&e.loc).expect("host tests need /dev/shm on its own device");
     let trash = Trash::new(shm.path().join("trash"), e.trash.db.clone());
     let d = e.loc.join("Project");
     let when = project(&d);

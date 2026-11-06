@@ -10,6 +10,7 @@ QtQuick.Window {
     id: window
 
     property bool scenarioRunning: true
+    property bool reachedEnd
     property var __silica_applicationwindow_instance: app
     property int step: 0
     property int waited: 0
@@ -20,6 +21,8 @@ QtQuick.Window {
 
     ViewerTools { id: tools }
     TextDocument { id: warmUp }
+    // Same file as the page: plain lines to lay out beside its rows (fixtures here have no tabs).
+    TextDocument { id: shownFile; uri: window.page ? window.page.uri : "" }
 
     Label {
         id: plain
@@ -75,8 +78,12 @@ QtQuick.Window {
         return match ? match[2] : "none"
     }
 
+    function lineOf(number) {
+        return shownFile.text.split("\n")[number - 1]
+    }
+
     function showsItsLine(row, number) {
-        var line = page.layout.rows[number - 1].text
+        var line = lineOf(number)
         plain.width = row.width
         plain.text = line
         expect(row.contentWidth > 0 && row.lineCount === plain.lineCount
@@ -126,7 +133,7 @@ QtQuick.Window {
         var row = shown["1"]
         expect(row.text.indexOf("<font") < 0 && row.text.indexOf("<img") < 0 && row.text.indexOf("<b>") < 0,
                "an unknown type has plain rows: " + row.text)
-        var line = page.layout.rows[0].text
+        var line = lineOf(1)
         expect(line.indexOf("<img") === 0, "the fixture is markup: " + line)
         showsItsLine(row, 1)
     }
@@ -137,25 +144,24 @@ QtQuick.Window {
         running: window.scenarioRunning
         onTriggered: {
             var shown = window.page ? window.rows() : {}
+            var plainReady = window.page && shownFile.loaded && !shownFile.loading && shownFile.uri === window.page.uri
             if (++window.waited > 300)
-                return window.fail("step " + window.step + " timed out: rows "
-                                   + JSON.stringify(window.page.layout.rows.map(function(r) { return r.text.slice(0, 80) }))
-                                   + ", rows " + JSON.stringify(Object.keys(shown).map(function(n) { return n + ": " + shown[n].text })))
+                return window.fail("step " + window.step + " timed out: rows " + JSON.stringify(Object.keys(shown).map(function(n) { return n + ": " + shown[n].text })))
             switch (window.step) {
             case 0:
-                if (!shown["2"] || shown["2"].text.indexOf("<font") < 0)
+                if (!plainReady || !shown["2"] || shown["2"].text.indexOf("<font") < 0)
                     return
                 window.checkWrapped(shown)
                 window.scrollTo(2)
                 break
             case 1:
-                if (!shown["4"] || shown["3"].text.indexOf("<font") < 0)
+                if (!plainReady || !shown["4"] || shown["3"].text.indexOf("<font") < 0)
                     return
                 window.checkScript(shown)
                 window.page = app.pageStack.replace(markupPage, {}, PageStackAction.Immediate)
                 break
             case 2:
-                if (!shown["1"])
+                if (!plainReady || !shown["1"])
                     return
                 if (window.waited < 10)
                     return
@@ -172,6 +178,7 @@ QtQuick.Window {
                 if (!shown[""] || shown[""].text.indexOf("<font") < 0)
                     return
                 window.checkLong(shown)
+                window.reachedEnd = true
                 window.scenarioRunning = false
                 break
             }

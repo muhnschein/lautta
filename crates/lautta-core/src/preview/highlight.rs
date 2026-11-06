@@ -142,11 +142,11 @@ pub const FIRST_WAIT: Duration = Duration::from_millis(250);
 /// Colouring overrunning budget is dropped: a line can only be cut between lines.
 const GRACE: Duration = Duration::from_millis(500);
 
-/// Columns per tab (TextRows.js).
+/// Columns per tab.
 const TAB_WIDTH: usize = 4;
 
 /// Width of `c` at `column`; UTF-16 units as JavaScript, tab to next stop.
-fn columns(column: usize, c: char) -> usize {
+pub(crate) fn columns(column: usize, c: char) -> usize {
     if c == '\t' {
         TAB_WIDTH - column % TAB_WIDTH
     } else {

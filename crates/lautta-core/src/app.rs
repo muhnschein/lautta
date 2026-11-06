@@ -25,10 +25,13 @@ use crate::trash::Trash;
 use crate::uri::Uri;
 use crate::viewprefs::{ViewMode, ViewPrefs};
 use crate::volumes::VolumeWatcher;
+use crate::watch::{DirWatch, DirWatcher, WatchEvent, DIR_DEBOUNCE};
 use crate::workcopy::WorkingCopies;
 use async_trait::async_trait;
-use std::sync::atomic::AtomicBool;
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::watch;
 
 const DIRCACHE_ENTRIES: usize = 64;
@@ -59,6 +62,11 @@ pub struct Core {
     settings_changed: watch::Sender<u64>,
     /// Follows removable-media root; `None` without inotify, Browse then rescans on refresh.
     _volume_watch: Option<VolumeWatcher>,
+    /// Made on first use, again after a failed start.
+    dir_watcher: Mutex<Option<DirWatcher>>,
+    /// System battery saving: server thumbnails come only from cache or EXIF.
+    power_save: AtomicBool,
+    pub(crate) shown_images: crate::app_viewers::ShownImages,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -148,6 +156,9 @@ impl Core {
             settings: Mutex::new(settings),
             settings_changed: watch::channel(0).0,
             _volume_watch: volume_watch,
+            dir_watcher: Mutex::default(),
+            power_save: AtomicBool::new(false),
+            shown_images: Default::default(),
             paths,
             db,
             locations,
@@ -157,8 +168,17 @@ impl Core {
         let core = Arc::new(core);
         if let Some(client) = client {
             spawn_bridge_sync(&core, client);
+            crate::powersave::spawn(&core, zbus::Connection::system());
         }
         Ok(core)
+    }
+
+    pub fn power_save(&self) -> bool {
+        self.power_save.load(Ordering::Relaxed)
+    }
+
+    pub fn set_power_save(&self, on: bool) {
+        self.power_save.store(on, Ordering::Relaxed);
     }
 
     pub fn settings(&self) -> Settings {
@@ -179,6 +199,19 @@ impl Core {
 
     pub fn watch_settings(&self) -> watch::Receiver<u64> {
         self.settings_changed.subscribe()
+    }
+
+    /// Changes of local folder `dir` after [`DIR_DEBOUNCE`] of quiet; every folder shares one
+    /// watcher.
+    pub fn watch_dir(&self, dir: &Path) -> Result<(DirWatch, UnboundedReceiver<WatchEvent>)> {
+        let watcher = {
+            let mut slot = lock(&self.dir_watcher);
+            match &*slot {
+                Some(w) => w.clone(),
+                None => slot.insert(DirWatcher::new(DIR_DEBOUNCE)?).clone(),
+            }
+        };
+        watcher.watch(dir)
     }
 
     pub fn view_prefs(&self) -> ViewPrefs {
@@ -265,7 +298,7 @@ impl Core {
         }
         let dest = permanent[0].parent().unwrap_or_else(|| permanent[0].clone());
         let plan = self.plan(OperationKind::Delete, permanent, dest).await?;
-        let title = plan_title(&plan);
+        let title = self.plan_title(&plan);
         self.engine
             .add(plan, &title, TransferOptions::default())
             .await
@@ -295,6 +328,13 @@ impl Core {
 
     pub async fn start_plan(&self, plan: Plan) -> Result<TransferId> {
         let settings = self.settings();
+        if plan.kind == OperationKind::Extract {
+            let dest = &plan.destination;
+            self.provider(&dest.location)?.make_dir(&dest.path, false).await?;
+            if let Some(parent) = dest.parent() {
+                self.invalidate(&parent);
+            }
+        }
         if plan.kind == OperationKind::Move {
             for item in &plan.items {
                 if item.src.location == item.dst.location && item.src.parent() != item.dst.parent() {
@@ -309,7 +349,7 @@ impl Core {
             trash: settings.recently_deleted,
             ..TransferOptions::default()
         };
-        let title = plan_title(&plan);
+        let title = self.plan_title(&plan);
         self.invalidate(&plan.destination);
         self.engine.add(plan, &title, options).await
     }
@@ -348,6 +388,19 @@ impl Core {
         let location = Location::remote(id.clone(), LocationKind::Archive, name, Some(uri.to_string()));
         self.locations.register(location, Arc::new(provider));
         Ok(id)
+    }
+
+    /// Extract is titled by its archive, the name of the archive's location.
+    fn plan_title(&self, plan: &Plan) -> String {
+        let first = plan.items.first();
+        if plan.kind == OperationKind::Extract {
+            if let Some(archive) = first.and_then(|i| self.locations.get(&i.src.location)) {
+                return archive.name;
+            }
+        }
+        first
+            .and_then(|i| i.src.name().map(crate::vpath::display_name))
+            .unwrap_or_default()
     }
 
     pub fn invalidate(&self, dir: &Uri) {
@@ -444,11 +497,4 @@ fn view_defaults(s: &Settings) -> ViewPrefs {
         view_mode: ViewMode::parse(&s.view_mode).unwrap_or(base.view_mode),
         thumbnails: s.thumbnails_local,
     }
-}
-
-fn plan_title(plan: &Plan) -> String {
-    plan.items
-        .first()
-        .and_then(|i| i.src.name().map(crate::vpath::display_name))
-        .unwrap_or_default()
 }

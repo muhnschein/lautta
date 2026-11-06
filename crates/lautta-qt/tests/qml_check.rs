@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `qml_check` fails a document when code it runs throws, wherever the throw site is.
+//! `qml_check` fails a document when code it runs throws, wherever the throw site is, when it
+//! reports an error, and when a test document does not reach its end.
 
 use std::path::Path;
 
@@ -37,7 +38,7 @@ fn check(dir: &Path, name: &str, body: &str) -> i32 {
 
 fn calling(how: &str) -> String {
     format!(
-        "import QtQuick 2.6\nimport \"lib.js\" as Lib\nItem {{ Component.onCompleted: Lib.boom(\"{how}\") }}\n"
+        "import QtQuick 2.6\nimport \"lib.js\" as Lib\nItem {{ property bool reachedEnd: true; Component.onCompleted: Lib.boom(\"{how}\") }}\n"
     )
 }
 
@@ -65,22 +66,51 @@ fn uncaught_exceptions_fail_the_document() {
         0,
         "a library's TypeError in a handler passes"
     );
-    let binding = "import QtQuick 2.6\nimport \"lib.js\" as Lib\nItem { width: Lib.boom(\"throw\") }\n";
+    let binding = "import QtQuick 2.6\nimport \"lib.js\" as Lib\nItem { property bool reachedEnd: true; width: Lib.boom(\"throw\") }\n";
     assert_ne!(
         check(dir, "tst_binding.qml", binding),
         0,
         "a library's throw in a binding passes"
     );
-    let component = "import QtQuick 2.6\nItem { Throwing {} }\n";
+    let component = "import QtQuick 2.6\nItem { property bool reachedEnd: true; Throwing {} }\n";
     assert_ne!(
         check(dir, "tst_component.qml", component),
         0,
         "a component's TypeError passes"
     );
-    let noisy = "import QtQuick 2.6\nItem { Noisy {} }\n";
+    let noisy = "import QtQuick 2.6\nItem { property bool reachedEnd: true; Noisy {} }\n";
     assert_eq!(
         check(dir, "tst_noisy.qml", noisy),
         0,
         "other files' warnings fail"
+    );
+
+    let reporting = "import QtQuick 2.6\nItem { property bool reachedEnd: true; Component.onCompleted: console.error(\"FAILED: x\") }\n";
+    assert_ne!(
+        check(dir, "tst_reporting.qml", reporting),
+        0,
+        "a reported failure passes"
+    );
+    let unmarked = "import QtQuick 2.6\nItem { Component.onCompleted: {} }\n";
+    assert_ne!(
+        check(dir, "tst_unmarked.qml", unmarked),
+        0,
+        "a test without reachedEnd passes"
+    );
+    let early = "import QtQuick 2.6\nItem {\n    property bool reachedEnd\n    property bool skip: true\n    Component.onCompleted: {\n        if (skip)\n            return\n        reachedEnd = true\n    }\n}\n";
+    assert_ne!(
+        check(dir, "tst_early.qml", early),
+        0,
+        "a test that returns early passes"
+    );
+    assert_eq!(
+        check(dir, "tst_whole.qml", &early.replace("skip: true", "skip: false")),
+        0,
+        "a test that reaches its end fails"
+    );
+    assert_eq!(
+        check(dir, "Shipped.qml", unmarked),
+        0,
+        "a shipped document needs reachedEnd"
     );
 }
