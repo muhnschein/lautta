@@ -1351,8 +1351,13 @@ async fn cancel_mid_copy_stops_the_copy_and_leaves_no_temporary() {
     let id = engine.add(copy, "", TransferOptions::default()).await.unwrap();
     let wait = Duration::from_secs(10);
     tokio::time::timeout(wait, reached).await.unwrap().unwrap();
-    engine.cancel(id).unwrap();
     let temp = vp("out").join(&temp_name_for(b"big", id, 0)).unwrap();
+    assert_eq!(
+        removed.try_recv().unwrap(),
+        temp,
+        "copy clears a stale temporary first"
+    );
+    engine.cancel(id).unwrap();
     while tokio::time::timeout(wait, removed.recv()).await.unwrap().unwrap() != temp {}
     release.send(()).unwrap();
     let all = sem.acquire_many(IO_PERMITS as u32);
@@ -1360,6 +1365,7 @@ async fn cancel_mid_copy_stops_the_copy_and_leaves_no_temporary() {
     let left: Vec<_> = std::fs::read_dir(d.path().join("out")).unwrap().collect();
     assert!(left.is_empty(), "left behind: {left:?}");
     assert_eq!(engine.get(id).unwrap().state, TransferState::Canceled);
+    assert_eq!(engine.items(id).unwrap()[0].state, ItemState::Pending);
 }
 
 #[tokio::test]
