@@ -13,6 +13,7 @@ workspace = true
 [dependencies]
 lautta-bridge-proto = { path = "../lautta-bridge-proto" }
 lautta-pdf = { path = "../lautta-pdf" }
+zbus = { version = "4", default-features = false, features = ["tokio"] }
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "fs", "io-util", "net"] }
 futures = "0.3"

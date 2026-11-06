@@ -54,6 +54,7 @@ pub mod search;
 pub mod date_group;
 pub mod messages;
 pub mod panics;
+pub mod powersave;
 pub mod settings;
 
 pub use error::{Error, ErrorKind, Result};
