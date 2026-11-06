@@ -412,7 +412,7 @@ async fn read_only_and_capabilities() {
         want
     );
     let copy = p
-        .server_copy(&vp("top.txt"), &vp("c"), CopyOptions::default())
+        .server_copy(&vp("top.txt"), &vp("c"), CopyOptions::default(), no_progress())
         .await;
     assert_eq!(ro(copy), want);
     assert_eq!(

@@ -155,16 +155,20 @@ pub fn clone_file(dst: &File, src: &File) -> io::Result<()> {
 
 /// Copies from the current position of `src` to the current position of
 /// `dst` until end of file with `copy_file_range`, calling `progress` with
-/// the running total of bytes. On error the positions stay consistent, so the
-/// caller can continue with a buffered copy.
-pub fn copy_range_all(src: &File, dst: &File, progress: &mut dyn FnMut(u64)) -> io::Result<u64> {
+/// the running total of bytes; its error ends the copy. On error the positions
+/// stay consistent, so the caller can continue with a buffered copy.
+pub fn copy_range_all(
+    src: &File,
+    dst: &File,
+    progress: &mut dyn FnMut(u64) -> io::Result<()>,
+) -> io::Result<u64> {
     let mut total = 0u64;
     loop {
         match copy_file_range(src, None, dst, None, COPY_CHUNK) {
             Ok(0) => return Ok(total),
             Ok(n) => {
                 total += n as u64;
-                progress(total);
+                progress(total)?;
             }
             Err(Errno::INTR) => {}
             Err(e) => return Err(e.into()),
@@ -343,7 +347,11 @@ mod tests {
         src.seek(SeekFrom::Start(1000)).unwrap();
         let dst = File::create(&b).unwrap();
         let mut last = 0;
-        let n = copy_range_all(&src, &dst, &mut |t| last = t).unwrap();
+        let n = copy_range_all(&src, &dst, &mut |t| {
+            last = t;
+            Ok(())
+        })
+        .unwrap();
         assert_eq!(n, 299_000);
         assert_eq!(last, 299_000);
         assert_eq!(std::fs::read(&b).unwrap(), &data[1000..]);
@@ -354,7 +362,7 @@ mod tests {
         let d = tmp();
         let src = File::open(d.path()).unwrap();
         let dst = File::create(d.path().join("o")).unwrap();
-        assert!(copy_range_all(&src, &dst, &mut |_| {}).is_err());
+        assert!(copy_range_all(&src, &dst, &mut |_| Ok(())).is_err());
     }
 
     #[test]

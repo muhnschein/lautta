@@ -5,7 +5,9 @@ mod bridge_support;
 use bridge_support::{eventually, Rig};
 use lautta_core::entry::{cap, EntryFlags, Kind};
 use lautta_core::error::ErrorKind;
-use lautta_core::provider::{list_all, read_all, AttributeChanges, CopyOptions, Lane, Provider, RenameMode};
+use lautta_core::provider::{
+    list_all, no_progress, read_all, AttributeChanges, CopyOptions, Lane, Provider, RenameMode,
+};
 use lautta_core::vpath::VPath;
 use std::time::{Duration, UNIX_EPOCH};
 use tokio::sync::mpsc;
@@ -322,12 +324,12 @@ async fn links_attributes_copies_checksums_and_space() {
     assert!(rig.fake.calls_of("SetAttributes").is_empty());
 
     provider
-        .server_copy(&p("a"), &p("copy"), CopyOptions::default())
+        .server_copy(&p("a"), &p("copy"), CopyOptions::default(), no_progress())
         .await
         .unwrap();
     assert_eq!(rig.fake.file("account:1", b"copy").unwrap(), b"abc");
     let e = provider
-        .server_copy(&p("a"), &p("copy"), CopyOptions::default())
+        .server_copy(&p("a"), &p("copy"), CopyOptions::default(), no_progress())
         .await
         .unwrap_err();
     assert_eq!(e.kind, ErrorKind::AlreadyExists);
@@ -339,6 +341,7 @@ async fn links_attributes_copies_checksums_and_space() {
                 replace: true,
                 preserve_mtime: false,
             },
+            no_progress(),
         )
         .await
         .unwrap();
