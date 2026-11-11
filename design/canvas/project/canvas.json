@@ -545,6 +545,86 @@
       "w": 860,
       "x": 7080,
       "y": 2060
+    },
+    "ScanEntry.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 folder pulley",
+      "w": 400,
+      "x": 0,
+      "y": 15600
+    },
+    "ScanSelect.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 from selected images",
+      "w": 400,
+      "x": 480,
+      "y": 15600
+    },
+    "ScanCamera.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 camera",
+      "w": 400,
+      "x": 960,
+      "y": 15600
+    },
+    "ScanCaptured.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 page captured, edges found",
+      "w": 400,
+      "x": 1440,
+      "y": 15600
+    },
+    "ScanCrop.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 adjust corners",
+      "w": 400,
+      "x": 1920,
+      "y": 15600
+    },
+    "ScanPages.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 pages",
+      "w": 400,
+      "x": 2400,
+      "y": 15600
+    },
+    "ScanPagesMenu.dc.html": {
+      "h": 1010,
+      "is_interactive": true,
+      "title": "Scan \u00b7 page menu",
+      "w": 400,
+      "x": 2880,
+      "y": 15600
+    },
+    "ScanPagesPulley.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 pulley, colour choices",
+      "w": 400,
+      "x": 3360,
+      "y": 15600
+    },
+    "ScanSave.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 save as PDF",
+      "w": 400,
+      "x": 3840,
+      "y": 15600
+    },
+    "ScanNoCamera.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 camera not available",
+      "w": 400,
+      "x": 4320,
+      "y": 15600
     }
   },
   "createdOnFiles": {
@@ -635,6 +715,14 @@
       "w": 240,
       "x": 0,
       "y": 14140
+    },
+    "r10": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Scan documents",
+      "w": 240,
+      "x": 0,
+      "y": 15300
     }
   },
   "order": [
@@ -705,7 +793,17 @@
     "ImageDeleteRemote.dc.html",
     "ActivityBar.dc.html",
     "ActivityBarQuestion.dc.html",
-    "ActivityBarDone.dc.html"
+    "ActivityBarDone.dc.html",
+    "ScanEntry.dc.html",
+    "ScanSelect.dc.html",
+    "ScanCamera.dc.html",
+    "ScanCaptured.dc.html",
+    "ScanCrop.dc.html",
+    "ScanPages.dc.html",
+    "ScanPagesMenu.dc.html",
+    "ScanPagesPulley.dc.html",
+    "ScanSave.dc.html",
+    "ScanNoCamera.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"
