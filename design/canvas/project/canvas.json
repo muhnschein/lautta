@@ -595,7 +595,7 @@
       "y": 15600
     },
     "ScanPages.dc.html": {
-      "h": 1100,
+      "h": 990,
       "is_interactive": true,
       "title": "Scan \u00b7 pages and save dialog",
       "w": 400,
@@ -603,7 +603,7 @@
       "y": 15600
     },
     "ScanPagesMenu.dc.html": {
-      "h": 1270,
+      "h": 1160,
       "is_interactive": true,
       "title": "Scan \u00b7 page menu",
       "w": 400,
@@ -611,7 +611,7 @@
       "y": 15600
     },
     "ScanPagesDrag.dc.html": {
-      "h": 1100,
+      "h": 990,
       "is_interactive": true,
       "title": "Scan \u00b7 page held and dragged to reorder",
       "w": 400,
@@ -619,7 +619,7 @@
       "y": 15600
     },
     "ScanPagesPulley.dc.html": {
-      "h": 1100,
+      "h": 990,
       "is_interactive": true,
       "title": "Scan \u00b7 pulley, colour choices",
       "w": 400,
