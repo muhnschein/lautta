@@ -231,6 +231,15 @@ mod tests {
     }
 
     #[test]
+    fn positions_beyond_the_photo_repeat_its_edge() {
+        let src = fields(2, 2);
+        assert_eq!(sample(&src, 5.0, 0.5), Rgb([0, 255, 0]));
+        assert_eq!(sample(&src, 0.5, 9.0), Rgb([0, 0, 255]));
+        assert_eq!(sample(&src, -3.0, -3.0), Rgb([255, 0, 0]));
+        assert_eq!(sample(&src, 7.0, 7.0), Rgb([255, 255, 0]));
+    }
+
+    #[test]
     fn empty_photo_or_flat_corners_give_white() {
         let white = RgbImage::from_pixel(3, 2, Rgb([255, 255, 255]));
         assert_eq!(warp(&RgbImage::new(0, 0), &Quad::FULL, 3, 2), white);

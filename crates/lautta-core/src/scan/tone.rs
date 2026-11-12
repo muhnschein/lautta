@@ -213,6 +213,14 @@ mod tests {
     }
 
     #[test]
+    fn window_reaches_right_and_down_too() {
+        // Corner pixel: dark enough against its three neighbours, not against one alone.
+        let mut gray = GrayImage::from_pixel(16, 16, Luma([200]));
+        gray.put_pixel(0, 0, Luma([155]));
+        assert_eq!(black_white(&gray).get_pixel(0, 0)[0], 0);
+    }
+
+    #[test]
     fn window_is_an_eighth_of_the_longer_side() {
         // Dark block of 40 × 40 on a page of 320: window of 41 around its centre sees only
         // the block, so the centre counts as paper of a dark area, not ink.
