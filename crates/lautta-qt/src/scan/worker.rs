@@ -14,6 +14,12 @@ use tokio::sync::mpsc::UnboundedReceiver;
 /// Share of the progress bar for writing pages; the rest is the copy into the folder.
 const BUILD_SHARE: f64 = 0.9;
 
+/// Bar while `done` of `total` bytes are in the folder; size unknown: bar waits where writing ended.
+fn copy_progress(done: u64, total: Option<u64>) -> f64 {
+    let share = total.map_or(0.0, |t| done as f64 / t.max(1) as f64);
+    BUILD_SHARE + (1.0 - BUILD_SHARE) * share
+}
+
 /// Pages are named by id: places on screen run ahead of the session's.
 pub enum Job {
     Add(PathBuf),
@@ -121,8 +127,7 @@ where
         Ok(()) => {
             let deliver = deliver.clone();
             let upload = Arc::new(move |done: u64, total: Option<u64>| {
-                let share = total.map_or(0.0, |t| done as f64 / t.max(1) as f64);
-                deliver(Msg::Progress(BUILD_SHARE + (1.0 - BUILD_SHARE) * share));
+                deliver(Msg::Progress(copy_progress(done, total)))
             });
             core.save_scan(&out, &dest, &name, upload).await
         }

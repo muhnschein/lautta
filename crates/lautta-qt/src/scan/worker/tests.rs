@@ -206,6 +206,19 @@ async fn save_writes_the_pdf_into_the_folder_with_rising_progress() {
     assert!(!b.dir.join("scan.pdf").exists(), "built file removed");
 }
 
+#[test]
+fn copy_fills_the_rest_of_the_bar_by_bytes() {
+    let near = |got: f64, want: f64| (got - want).abs() < 1e-9;
+    assert!(
+        near(copy_progress(1, Some(4)), 0.925),
+        "{}",
+        copy_progress(1, Some(4))
+    );
+    assert!(near(copy_progress(4, Some(4)), 1.0));
+    assert!(near(copy_progress(7, None), 0.9), "size unknown");
+    assert!(near(copy_progress(0, Some(0)), 0.9), "empty file");
+}
+
 #[tokio::test]
 async fn empty_save_fails_as_saving_and_writes_nothing() {
     let mut b = bench().await;
