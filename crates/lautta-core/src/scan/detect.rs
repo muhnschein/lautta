@@ -405,6 +405,20 @@ mod tests {
     }
 
     #[test]
+    fn threshold_weighs_group_sizes_and_the_squared_gap() {
+        // 40 dark, 40 middle, 20 bright: splitting off the small bright group wins only by
+        // its far mean, squared.
+        let img = GrayImage::from_fn(10, 10, |x, _| {
+            Luma([match x {
+                0..=3 => 0,
+                4..=7 => 100,
+                _ => 255,
+            }])
+        });
+        assert_eq!(threshold(&img), (100, 205.0));
+    }
+
+    #[test]
     fn border_colour_is_the_middle_of_the_border_only() {
         // Border mostly table; a bright strip covers a third of the top edge, the inside is paper.
         let mut img = RgbImage::from_pixel(30, 20, Rgb(PAPER));
@@ -452,6 +466,13 @@ mod tests {
     }
 
     #[test]
+    fn areas_join_upwards_too() {
+        // U: right arm is reached from below only.
+        let mask = [true, false, true, true, true, true];
+        assert_eq!(largest_area(&mask, 3, 2).len(), 5);
+    }
+
+    #[test]
     fn areas_do_not_wrap_around_the_picture_edge() {
         // Right end of row 0 and left end of row 1 are neighbours in memory only.
         let mask = [false, false, true, true, false, false];
@@ -465,6 +486,8 @@ mod tests {
         assert_eq!(outline, vec![(0, 0), (4, 0), (4, 4), (0, 4)]);
         assert_eq!(area2(&outline), 32);
         assert_eq!(hull(vec![(1, 1), (1, 1), (2, 2)]), vec![(1, 1), (2, 2)]);
+        assert_eq!(hull(vec![(3, 3)]), vec![(3, 3)]);
+        assert_eq!(hull(vec![(0, 4), (4, 0), (0, 0)]), vec![(0, 0), (4, 0), (0, 4)]);
     }
 
     #[test]

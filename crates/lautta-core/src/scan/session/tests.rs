@@ -166,6 +166,18 @@ fn large_photo_is_shown_on_a_smaller_working_picture() {
 }
 
 #[test]
+fn photo_that_is_no_jpeg_becomes_a_page_too() {
+    let mut d = desk();
+    let mut png = Vec::new();
+    sheet_photo(400, 300)
+        .write_to(&mut Cursor::new(&mut png), ImageFormat::Png)
+        .unwrap();
+    let photo = d.file("sheet.png", &png);
+    d.session.add(&photo).unwrap();
+    assert_sheet(d.info(0).quad);
+}
+
+#[test]
 fn photo_without_edges_is_a_page_of_the_whole_picture() {
     let mut d = desk();
     d.session.add(&d.plain()).unwrap();

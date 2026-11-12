@@ -84,12 +84,10 @@ fn sample(src: &RgbImage, x: f64, y: f64) -> Rgb<u8> {
     Rgb(out)
 }
 
-/// The page inside `quad`, drawn `out_w` × `out_h`. Empty photo or corners on one line: white.
+/// The page inside `quad`, drawn `out_w` × `out_h`. Corners on one line, as in a photo with an
+/// empty side: white.
 pub fn warp(src: &RgbImage, quad: &Quad, out_w: u32, out_h: u32) -> RgbImage {
     let mut out = RgbImage::from_pixel(out_w, out_h, Rgb([255, 255, 255]));
-    if src.width() == 0 || src.height() == 0 {
-        return out;
-    }
     let (sw, sh) = (f64::from(src.width()), f64::from(src.height()));
     let corners = quad.0.map(|c: Point| (f64::from(c.x) * sw, f64::from(c.y) * sh));
     let Some(map) = Homography::new(f64::from(out_w), f64::from(out_h), corners) else {
@@ -243,6 +241,8 @@ mod tests {
     fn empty_photo_or_flat_corners_give_white() {
         let white = RgbImage::from_pixel(3, 2, Rgb([255, 255, 255]));
         assert_eq!(warp(&RgbImage::new(0, 0), &Quad::FULL, 3, 2), white);
+        assert_eq!(warp(&RgbImage::new(0, 5), &Quad::FULL, 3, 2), white);
+        assert_eq!(warp(&RgbImage::new(5, 0), &Quad::FULL, 3, 2), white);
         let flat = Quad([
             Point::new(0.0, 0.0),
             Point::new(0.5, 0.5),
