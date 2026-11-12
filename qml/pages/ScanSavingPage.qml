@@ -32,7 +32,7 @@ Page {
         }
     }
     Component.onDestruction: {
-        if (scan && owner && started && !handedOver)
+        if (scan && owner && !handedOver)
             owner.endScan(scan, false)
     }
 

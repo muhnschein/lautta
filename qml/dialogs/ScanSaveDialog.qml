@@ -18,7 +18,6 @@ Dialog {
     property string name
     // Why the last save failed, as an error kind; said once.
     property string failure
-    // Silica builds this page ahead of showing it, and may drop it unseen.
     property bool shown
     property bool handedOver
     readonly property int pages: scan ? scan.count : 0
@@ -57,7 +56,7 @@ Dialog {
         next.name = nameField.text
     }
     Component.onDestruction: {
-        if (scan && owner && shown && !handedOver)
+        if (scan && owner && !handedOver)
             owner.endScan(scan, false)
     }
 

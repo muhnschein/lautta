@@ -104,17 +104,19 @@ ApplicationWindow {
         running: win.scenarioRunning
         onTriggered: {
             win.waited++
-            if (win.waited > 150)
+            // Hang guard: emulated target needs seconds per picture.
+            if (win.waited > 600)
                 return win.fail("step " + win.step + " timed out")
             var frame, handle, loupe, start, moved
             switch (win.step) {
             case 0:
                 win.scan = maker.createObject(win)
                 win.scan.add(win.sheet)
+                win.scan.add(win.sheet)
                 win.next()
                 break
             case 1:
-                if (win.scan.busy || win.scan.count !== 1)
+                if (win.scan.busy || win.scan.count !== 2)
                     break
                 win.before = info(0)
                 win.sheetCorners = win.before.quad
@@ -197,12 +199,21 @@ ApplicationWindow {
                     break
                 if (!whole(win.dialog.corners))
                     return win.fail("opens on the whole picture")
+                // An answer for another page is not for this dialog.
+                win.scan.findEdges(1)
+                win.next()
+                break
+            case 5:
+                if (win.scan.busy)
+                    break
+                if (!whole(win.dialog.corners))
+                    return win.fail("edges of another page left alone: " + JSON.stringify(win.dialog.corners))
                 named(win.dialog, "findEdgesButton").clicked(null)
                 if (!win.scan.busy)
                     return win.fail("edge search runs")
                 win.next()
                 break
-            case 5:
+            case 6:
                 if (win.scan.busy)
                     break
                 if (!same(win.dialog.corners, win.sheetCorners))
@@ -223,7 +234,7 @@ ApplicationWindow {
                 win.dialog.accept()
                 win.next()
                 break
-            case 6:
+            case 7:
                 if (pageStack.busy || pageStack.depth !== 1 || win.scan.busy)
                     break
                 if (!same(info(0).quad, win.set) || info(0).turns !== 1)
@@ -234,7 +245,7 @@ ApplicationWindow {
                 win.open()
                 win.next()
                 break
-            case 7:
+            case 8:
                 if (!win.onTop("corners") || !(named(win.dialog, "frame").width > 0))
                     break
                 if (!same(win.dialog.corners, win.set) || win.dialog.turns !== 1 || named(win.dialog, "frame").rotation !== 90)
@@ -257,7 +268,7 @@ ApplicationWindow {
                 win.dialog.accept()
                 win.next()
                 break
-            case 8:
+            case 9:
                 if (pageStack.busy || pageStack.depth !== 1)
                     break
                 if (win.scan.busy || JSON.stringify(info(0)) !== JSON.stringify(win.before))

@@ -9,7 +9,7 @@ ApplicationWindow {
 
     readonly property string folder: "lautta://user-documents/"
     readonly property string sheet: Qt.resolvedUrl("host/fixtures/sheet.jpg")
-    readonly property string plain: Qt.resolvedUrl("host/fixtures/large-photo.jpg")
+    readonly property string plain: Qt.resolvedUrl("host/fixtures/photo.jpg")
     property bool scenarioRunning: true
     property bool reachedEnd
     property int step: 0
@@ -125,7 +125,8 @@ ApplicationWindow {
         running: win.scenarioRunning
         onTriggered: {
             win.waited++
-            if (win.waited > 150)
+            // Hang guard: emulated target needs seconds per picture.
+            if (win.waited > 600)
                 return win.fail("step " + win.step + " timed out")
             var all, at, field, grid, header, content
             switch (win.step) {
@@ -303,18 +304,24 @@ ApplicationWindow {
                 if (!doc.loaded || doc.pageCount !== 3)
                     return win.fail("PDF holds the three pages: " + doc.pageCount)
                 win.scan = maker.createObject(win)
-                win.scan.add(win.plain)
-                win.next()
-                break
-            case 14:
-                if (win.scan.busy)
-                    break
                 win.open(win.folder + "Gone/", "Lost")
                 win.next()
                 break
-            case 15:
-                if (!win.onTop("addPage") || !win.dialog.acceptDestinationInstance || !win.dialog.canAccept)
+            case 14:
+                if (!win.onTop("addPage"))
                     break
+                if (win.dialog.canAccept || tiles().length !== 0)
+                    return win.fail("no pages: nothing to save")
+                win.scan.add(win.plain)
+                if (win.dialog.canAccept)
+                    return win.fail("not while a photo is worked on")
+                win.next()
+                break
+            case 15:
+                if (win.scan.busy || !win.dialog.acceptDestinationInstance)
+                    break
+                if (!win.dialog.canAccept || tiles().length !== 1)
+                    return win.fail("page in: can be saved")
                 win.dialog.accept()
                 win.next()
                 break

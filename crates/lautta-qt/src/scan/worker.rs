@@ -128,7 +128,7 @@ where
         }
         Err(e) => Err(e),
     };
-    let _ = std::fs::remove_file(&out);
+    let _ = tokio::task::spawn_blocking(move || std::fs::remove_file(out)).await;
     saved
 }
 

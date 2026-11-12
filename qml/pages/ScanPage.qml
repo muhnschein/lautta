@@ -21,7 +21,7 @@ FullscreenContentPage {
     property bool retakeOnly
     // Page the next shot replaces, -1: next shot is a new page.
     property int retakeIndex: -1
-    // Silica builds this page ahead of showing it, and may drop it unseen.
+    // Silica builds this page ahead of showing it: no camera until it is in front.
     property bool shown
     property bool handedOver
     property bool flashOn
@@ -111,7 +111,7 @@ FullscreenContentPage {
             dropStill()
     }
     Component.onDestruction: {
-        if (scan && owner && shown && !handedOver && !retakeOnly)
+        if (scan && owner && !handedOver)
             owner.endScan(scan, false)
     }
 

@@ -8,7 +8,7 @@ ApplicationWindow {
     id: win
 
     readonly property string sheet: Qt.resolvedUrl("host/fixtures/sheet.jpg")
-    readonly property string plain: Qt.resolvedUrl("host/fixtures/large-photo.jpg")
+    readonly property string plain: Qt.resolvedUrl("host/fixtures/photo.jpg")
     property bool scenarioRunning: true
     property bool reachedEnd
     property int step: 0
@@ -84,7 +84,8 @@ ApplicationWindow {
         running: win.scenarioRunning
         onTriggered: {
             win.waited++
-            if (win.waited > 150)
+            // Hang guard: emulated target needs seconds per picture.
+            if (win.waited > 600)
                 return win.fail("step " + win.step + " timed out")
             switch (win.step) {
             case 0:
