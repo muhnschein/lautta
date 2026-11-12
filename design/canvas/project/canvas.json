@@ -586,42 +586,42 @@
       "x": 1920,
       "y": 15600
     },
+    "ScanPageView.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 page view",
+      "w": 400,
+      "x": 2400,
+      "y": 15600
+    },
+    "ScanPageViewNext.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Scan \u00b7 page view, next page with its own colour",
+      "w": 400,
+      "x": 2880,
+      "y": 15600
+    },
     "ScanCrop.dc.html": {
       "h": 860,
       "is_interactive": true,
       "title": "Scan \u00b7 adjust corners",
       "w": 400,
-      "x": 2400,
-      "y": 15600
-    },
-    "ScanPages.dc.html": {
-      "h": 990,
-      "is_interactive": true,
-      "title": "Scan \u00b7 pages and save dialog",
-      "w": 400,
-      "x": 2880,
-      "y": 15600
-    },
-    "ScanPagesMenu.dc.html": {
-      "h": 1160,
-      "is_interactive": true,
-      "title": "Scan \u00b7 page menu",
-      "w": 400,
       "x": 3360,
       "y": 15600
     },
-    "ScanPagesDrag.dc.html": {
-      "h": 990,
+    "ScanPages.dc.html": {
+      "h": 940,
       "is_interactive": true,
-      "title": "Scan \u00b7 page held and dragged to reorder",
+      "title": "Scan \u00b7 save dialog",
       "w": 400,
       "x": 3840,
       "y": 15600
     },
-    "ScanPagesColour.dc.html": {
-      "h": 990,
+    "ScanPagesDrag.dc.html": {
+      "h": 940,
       "is_interactive": true,
-      "title": "Scan \u00b7 colour choices",
+      "title": "Scan \u00b7 page held and dragged to reorder",
       "w": 400,
       "x": 4320,
       "y": 15600
@@ -807,11 +807,11 @@
     "NewScan.dc.html",
     "ScanCamera.dc.html",
     "ScanCaptured.dc.html",
+    "ScanPageView.dc.html",
+    "ScanPageViewNext.dc.html",
     "ScanCrop.dc.html",
     "ScanPages.dc.html",
-    "ScanPagesMenu.dc.html",
     "ScanPagesDrag.dc.html",
-    "ScanPagesColour.dc.html",
     "ScanNoCamera.dc.html"
   ],
   "pages": [],
