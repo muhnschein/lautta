@@ -554,12 +554,28 @@
       "x": 0,
       "y": 15600
     },
+    "NewScan.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "New \u00b7 scanned document",
+      "w": 400,
+      "x": 480,
+      "y": 15600
+    },
+    "NewScanType.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "New \u00b7 type choices",
+      "w": 400,
+      "x": 960,
+      "y": 15600
+    },
     "ScanCamera.dc.html": {
       "h": 860,
       "is_interactive": true,
       "title": "Scan \u00b7 camera",
       "w": 400,
-      "x": 480,
+      "x": 1440,
       "y": 15600
     },
     "ScanCaptured.dc.html": {
@@ -567,7 +583,7 @@
       "is_interactive": true,
       "title": "Scan \u00b7 page captured, edges found",
       "w": 400,
-      "x": 960,
+      "x": 1920,
       "y": 15600
     },
     "ScanCrop.dc.html": {
@@ -575,39 +591,39 @@
       "is_interactive": true,
       "title": "Scan \u00b7 adjust corners",
       "w": 400,
-      "x": 1440,
-      "y": 15600
-    },
-    "ScanPages.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Scan \u00b7 pages",
-      "w": 400,
-      "x": 1920,
-      "y": 15600
-    },
-    "ScanPagesMenu.dc.html": {
-      "h": 1010,
-      "is_interactive": true,
-      "title": "Scan \u00b7 page menu",
-      "w": 400,
       "x": 2400,
       "y": 15600
     },
-    "ScanPagesPulley.dc.html": {
-      "h": 860,
+    "ScanPages.dc.html": {
+      "h": 1100,
       "is_interactive": true,
-      "title": "Scan \u00b7 pulley, colour choices",
+      "title": "Scan \u00b7 pages and save dialog",
       "w": 400,
       "x": 2880,
       "y": 15600
     },
-    "ScanSave.dc.html": {
-      "h": 860,
+    "ScanPagesMenu.dc.html": {
+      "h": 1270,
       "is_interactive": true,
-      "title": "Scan \u00b7 save as PDF",
+      "title": "Scan \u00b7 page menu",
       "w": 400,
       "x": 3360,
+      "y": 15600
+    },
+    "ScanPagesDrag.dc.html": {
+      "h": 1100,
+      "is_interactive": true,
+      "title": "Scan \u00b7 page held and dragged to reorder",
+      "w": 400,
+      "x": 3840,
+      "y": 15600
+    },
+    "ScanPagesPulley.dc.html": {
+      "h": 1100,
+      "is_interactive": true,
+      "title": "Scan \u00b7 pulley, colour choices",
+      "w": 400,
+      "x": 4320,
       "y": 15600
     },
     "ScanNoCamera.dc.html": {
@@ -615,7 +631,7 @@
       "is_interactive": true,
       "title": "Scan \u00b7 camera not available",
       "w": 400,
-      "x": 3840,
+      "x": 4800,
       "y": 15600
     }
   },
@@ -787,13 +803,15 @@
     "ActivityBarQuestion.dc.html",
     "ActivityBarDone.dc.html",
     "ScanEntry.dc.html",
+    "NewScan.dc.html",
+    "NewScanType.dc.html",
     "ScanCamera.dc.html",
     "ScanCaptured.dc.html",
     "ScanCrop.dc.html",
     "ScanPages.dc.html",
     "ScanPagesMenu.dc.html",
+    "ScanPagesDrag.dc.html",
     "ScanPagesPulley.dc.html",
-    "ScanSave.dc.html",
     "ScanNoCamera.dc.html"
   ],
   "pages": [],
