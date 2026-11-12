@@ -706,7 +706,7 @@ impl Core {
     }
 }
 
-fn free_name(name: &[u8], taken: &HashSet<Vec<u8>>) -> Vec<u8> {
+pub(crate) fn free_name(name: &[u8], taken: &HashSet<Vec<u8>>) -> Vec<u8> {
     if taken.contains(name) {
         keep_both_name(name, &|n| taken.contains(n))
     } else {

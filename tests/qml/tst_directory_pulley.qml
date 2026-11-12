@@ -99,7 +99,7 @@ ApplicationWindow {
                 if (!view || view.model.loading || !view.model.writable || App.clipboardCount > 0)
                     break
                 if (!win.expectTexts(["lautta-dir-menu-activity", "lautta-dir-menu-view-options", "lautta-dir-menu-search",
-                                      "lautta-dir-menu-select", "lautta-dir-menu-new"], "folder pulley"))
+                                      "lautta-dir-menu-select", "lautta-dir-menu-add"], "folder pulley"))
                     break
                 view.startSelection()
                 win.next()

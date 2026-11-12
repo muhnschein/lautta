@@ -7,6 +7,7 @@ use crate::json::from_json;
 use lautta_core::{Error, Uri};
 use qmetaobject::prelude::*;
 
+pub(crate) use singleton::local_path;
 pub use singleton::Operations;
 pub use trash::TrashModel;
 

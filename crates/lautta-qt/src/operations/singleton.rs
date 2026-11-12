@@ -108,7 +108,7 @@ fn plan_gone() -> Error {
     Error::new(ErrorKind::NotFound, "the planned operation is no longer pending")
 }
 
-fn local_path(text: &str) -> std::path::PathBuf {
+pub(crate) fn local_path(text: &str) -> std::path::PathBuf {
     let raw = text.strip_prefix("file://").unwrap_or(text);
     let bytes = raw.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());

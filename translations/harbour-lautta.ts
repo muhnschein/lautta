@@ -2627,10 +2627,6 @@
         <source>Swipe down to go to previous view</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-menu-new">
-        <source>New</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-trash-note">
         <source>Only files deleted from this device&apos;s folders appear here. Deletes on volumes and servers are permanent.</source>
         <translation type="unfinished"></translation>
@@ -2727,6 +2723,109 @@ Cabin keys from Anni</source>
     </message>
     <message id="lautta-xfr-item-extracting">
         <source>Extracting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-menu-add">
+        <source>Add</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-add-next">
+        <source>Next</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-add-folder">
+        <source>New folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-add-folder-description">
+        <source>An empty folder in this place.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-add-scan">
+        <source>Scan document</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-add-scan-description">
+        <source>Take pictures of pages with the camera. They are saved as one PDF.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-no-edges">
+        <source>No page edges found</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-adjust-done">
+        <source>Done</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-save">
+        <source>Save</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-save-title" numerus="yes">
+        <source>Save %n pages as PDF</source>
+        <translation>
+            <numerusform>Save %n page as PDF</numerusform>
+            <numerusform>Save %n pages as PDF</numerusform>
+        </translation>
+    </message>
+    <message id="lautta-scan-default-name">
+        <source>Scan %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-name">
+        <source>Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-pages">
+        <source>Pages</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-shot-failed">
+        <source>Could not take the picture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-adjust">
+        <source>Adjust</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-retake">
+        <source>Retake</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-title">
+        <source>Scan</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-no-camera">
+        <source>Camera not available</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-no-camera-hint">
+        <source>Scanning needs the camera</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-colour-grayscale">
+        <source>Grayscale</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-colour-black-white">
+        <source>Black and white</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-colour-original">
+        <source>Original</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-removing-page">
+        <source>Removing page</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-page-of">
+        <source>%1 of %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-scan-saving">
+        <source>Saving %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
