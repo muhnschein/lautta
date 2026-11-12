@@ -2,7 +2,6 @@
 // Portrait only: photo's turn then needs no sensor. `retakeOnly`: one shot for one page, then
 // back.
 import QtQuick 2.6
-import QtMultimedia 5.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/scan"
@@ -30,8 +29,8 @@ FullscreenContentPage {
     // Page shown still after its shot, null: live picture.
     property var stillPage: null
     property int stillIndex: -1
-    readonly property bool cameraFound: QtMultimedia.availableCameras.length > 0
-    readonly property bool cameraUsable: cameraFound && !cameraFailed
+    // Qt lists no camera before one was opened: known once the viewfinder is built.
+    readonly property bool cameraUsable: !cameraFailed && (!finderLoader.item || finderLoader.item.available)
     readonly property bool live: status === PageStatus.Active && Qt.application.state === Qt.ApplicationActive
     readonly property bool working: taking || (scan !== null && scan.busy)
     readonly property int pages: scan ? scan.count : 0
@@ -147,7 +146,7 @@ FullscreenContentPage {
 
         objectName: "finderLoader"
         anchors.fill: parent
-        active: page.shown && page.cameraUsable
+        active: page.shown && !page.cameraFailed
         sourceComponent: Component {
             ScanViewfinder {
                 running: page.live
@@ -166,6 +165,8 @@ FullscreenContentPage {
         PageHeader {
             //% "Scan"
             title: qsTrId("lautta-scan-title")
+            // Clear of the close button.
+            rightMargin: Theme.horizontalPageMargin + Theme.itemSizeSmall
         }
 
         ViewPlaceholder {

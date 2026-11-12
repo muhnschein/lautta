@@ -176,8 +176,6 @@ ApplicationWindow {
                         || !text(placeholder.text, "Camera not available", "lautta-scan-no-camera")
                         || !text(placeholder.hintText, "Scanning needs the camera", "lautta-scan-no-camera-hint"))
                     return win.fail("without a camera the page says so")
-                if (named(win.camera, "finderLoader").active)
-                    return win.fail("no viewfinder without a camera")
                 if (named(win.camera, "shutterButton").visible || named(win.camera, "flashButton").visible)
                     return win.fail("no camera controls without a camera")
                 if (!win.camera.backNavigation)

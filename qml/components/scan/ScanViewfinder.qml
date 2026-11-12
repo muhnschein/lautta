@@ -9,6 +9,9 @@ Item {
     property bool running
     property bool flashOn
     readonly property bool ready: camera.cameraStatus === Camera.ActiveStatus
+    // False: no camera here. Busy counts as there.
+    readonly property bool available: camera.availability !== Camera.Unavailable
+                                      && camera.availability !== Camera.ResourceMissing
 
     signal photoSaved(string path)
     signal shotFailed

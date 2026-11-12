@@ -131,8 +131,9 @@ ApplicationWindow {
                     break
                 if (!same(win.dialog.corners, win.before.quad) || win.dialog.turns !== 0 || !win.dialog.canAccept)
                     return win.fail("starts from the page's corners and turn")
-                // Photo is 480 x 360: frame keeps that shape.
-                if (!near(frame.width / frame.height, 480 / 360) || frame.rotation !== 0)
+                // Photo is 480 x 360: frame keeps that shape, as large as its place allows.
+                if (!near(frame.width / frame.height, 480 / 360) || frame.rotation !== 0
+                        || !near(Math.min(frame.parent.width / frame.width, frame.parent.height / frame.height), 1))
                     return win.fail("photo shown whole, upright: " + frame.width + " x " + frame.height)
                 for (var i = 0; i < 4; ++i) {
                     if (!onCorner(i))
@@ -167,10 +168,15 @@ ApplicationWindow {
                 named(win.dialog, "rotateRightButton").clicked(null)
                 if (win.dialog.turns !== 1 || frame.rotation !== 90 || !near(frame.width / frame.height, 480 / 360))
                     return win.fail("turned right: " + win.dialog.turns)
+                // On its side the photo's height runs across.
+                if (!near(Math.min(frame.parent.width / frame.height, frame.parent.height / frame.width), 1))
+                    return win.fail("turned photo fills its place: " + frame.width + " x " + frame.height)
                 named(win.dialog, "rotateLeftButton").clicked(null)
+                if (win.dialog.turns !== 0 || frame.rotation !== 0)
+                    return win.fail("turned back left: " + win.dialog.turns)
                 named(win.dialog, "rotateLeftButton").clicked(null)
                 if (win.dialog.turns !== 3 || frame.rotation !== 270)
-                    return win.fail("turned left twice: " + win.dialog.turns)
+                    return win.fail("turned left past upright: " + win.dialog.turns)
                 named(win.dialog, "wholePictureButton").clicked(null)
                 if (!whole(win.dialog.corners))
                     return win.fail("whole picture")
@@ -263,12 +269,30 @@ ApplicationWindow {
                 moved[7] += 0.05
                 if (!same(win.dialog.corners, moved))
                     return win.fail("drag on a turned photo: " + JSON.stringify(win.dialog.corners) + " != " + JSON.stringify(moved))
-                // Nothing changed and accepted: no work.
                 win.dialog.corners = start
+                named(win.dialog, "rotateRightButton").clicked(null)
                 win.dialog.accept()
                 win.next()
                 break
             case 9:
+                if (pageStack.busy || pageStack.depth !== 1 || win.scan.busy)
+                    break
+                if (info(0).turns !== 2 || !same(info(0).quad, win.set))
+                    return win.fail("Done turns on from the page's turn: " + JSON.stringify(info(0)))
+                win.before = info(0)
+                win.open()
+                win.next()
+                break
+            case 10:
+                if (!win.onTop("corners") || !(named(win.dialog, "frame").width > 0))
+                    break
+                if (win.dialog.turns !== 2)
+                    return win.fail("opens upside down: " + win.dialog.turns)
+                // Nothing changed and accepted: no work.
+                win.dialog.accept()
+                win.next()
+                break
+            case 11:
                 if (pageStack.busy || pageStack.depth !== 1)
                     break
                 if (win.scan.busy || JSON.stringify(info(0)) !== JSON.stringify(win.before))

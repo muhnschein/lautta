@@ -230,13 +230,21 @@ ApplicationWindow {
                 tools.mouse(win.tile, "move", at.x, at.y)
                 if (ids() !== "[2,1,3]")
                     return win.fail("on to the second place: " + ids())
-                tools.mouse(win.tile, "release", at.x, at.y)
+                win.next()
+                break
+            case 7:
+                grid = named(win.dialog, "pageGrid")
+                if (win.tile.x !== grid.cellWidth || win.tile.y !== 0)
+                    break
+                // Let go inside its own cell, where a tap opens the page.
+                tools.mouse(win.tile, "move", win.tile.width / 2, win.tile.height / 2)
+                tools.mouse(win.tile, "release", win.tile.width / 2, win.tile.height / 2)
                 if (win.tile.held || win.tile.contentItem.x !== 0 || win.tile.contentItem.y !== 0 || win.tile.contentItem.scale !== 1
                         || win.tile.z !== 0)
                     return win.fail("let go: page sits in its cell")
                 win.next()
                 break
-            case 7:
+            case 8:
                 if (win.scan.busy || pageStack.busy)
                     break
                 if (pageStack.currentPage !== win.dialog)
@@ -248,7 +256,7 @@ ApplicationWindow {
                 tools.mouse(win.tile, "move", win.tile.width / 2 + Theme.iconSizeSmall + 2, win.tile.height / 2)
                 win.next()
                 break
-            case 8:
+            case 9:
                 // Nothing may happen: finger moved before the second was up. Half a second longer.
                 if (win.waited < 15)
                     break
@@ -264,7 +272,7 @@ ApplicationWindow {
                 tools.mouse(plusTile, "release", plusTile.width / 2, plusTile.height / 2)
                 win.next()
                 break
-            case 9:
+            case 10:
                 var camera = win.onTop("photoTaken")
                 if (!camera)
                     break
@@ -273,7 +281,7 @@ ApplicationWindow {
                 camera.finish()
                 win.next()
                 break
-            case 10:
+            case 11:
                 win.dialog = win.onTop("addPage")
                 if (!win.dialog || tiles().length !== 3)
                     break
@@ -281,14 +289,14 @@ ApplicationWindow {
                     return win.fail("back with the name typed before: " + named(win.dialog, "nameField").text)
                 win.next()
                 break
-            case 11:
+            case 12:
                 // Silica has the saving page ready before it lets the dialog go on.
                 if (!win.dialog.acceptDestinationInstance || !win.dialog.canAccept)
                     break
                 win.dialog.accept()
                 win.next()
                 break
-            case 12:
+            case 13:
                 if (win.waited % 5 === 0)
                     docs.refresh()
                 if (pageStack.busy || pageStack.depth !== 1 || win.scan !== null || docs.nameKind("Contract.pdf") !== "file")
@@ -298,7 +306,7 @@ ApplicationWindow {
                 doc.uri = win.folder + "Contract.pdf"
                 win.next()
                 break
-            case 13:
+            case 14:
                 if (doc.loading)
                     break
                 if (!doc.loaded || doc.pageCount !== 3)
@@ -307,25 +315,31 @@ ApplicationWindow {
                 win.open(win.folder + "Gone/", "Lost")
                 win.next()
                 break
-            case 14:
+            case 15:
                 if (!win.onTop("addPage"))
                     break
                 if (win.dialog.canAccept || tiles().length !== 0)
                     return win.fail("no pages: nothing to save")
                 win.scan.add(win.plain)
-                if (win.dialog.canAccept)
-                    return win.fail("not while a photo is worked on")
-                win.next()
-                break
-            case 15:
-                if (win.scan.busy || !win.dialog.acceptDestinationInstance)
-                    break
-                if (!win.dialog.canAccept || tiles().length !== 1)
-                    return win.fail("page in: can be saved")
-                win.dialog.accept()
                 win.next()
                 break
             case 16:
+                if (win.scan.busy)
+                    break
+                if (!win.dialog.canAccept || tiles().length !== 1)
+                    return win.fail("page in: can be saved")
+                win.scan.turn(0, 1)
+                if (win.dialog.canAccept)
+                    return win.fail("not while a page is worked on")
+                win.next()
+                break
+            case 17:
+                if (win.scan.busy || !win.dialog.acceptDestinationInstance || !win.dialog.canAccept)
+                    break
+                win.dialog.accept()
+                win.next()
+                break
+            case 18:
                 // Folder is not there: save fails, dialog comes back.
                 var back = win.onTop("addPage")
                 if (!back || back === win.dialog)
@@ -340,7 +354,7 @@ ApplicationWindow {
                 pageStack.pop()
                 win.next()
                 break
-            case 17:
+            case 19:
                 if (pageStack.busy || pageStack.depth !== 1 || win.scan !== null)
                     break
                 if (JSON.stringify(win.ended) !== "[true,false]")
