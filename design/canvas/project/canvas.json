@@ -554,18 +554,18 @@
       "x": 0,
       "y": 15600
     },
-    "NewScan.dc.html": {
+    "NewScanType.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "New \u00b7 scanned document",
+      "title": "Add \u00b7 nothing picked yet",
       "w": 400,
       "x": 480,
       "y": 15600
     },
-    "NewScanType.dc.html": {
+    "NewScan.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "New \u00b7 type choices",
+      "title": "Add \u00b7 scan document picked",
       "w": 400,
       "x": 960,
       "y": 15600
@@ -803,8 +803,8 @@
     "ActivityBarQuestion.dc.html",
     "ActivityBarDone.dc.html",
     "ScanEntry.dc.html",
-    "NewScan.dc.html",
     "NewScanType.dc.html",
+    "NewScan.dc.html",
     "ScanCamera.dc.html",
     "ScanCaptured.dc.html",
     "ScanCrop.dc.html",
