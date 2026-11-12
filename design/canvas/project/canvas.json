@@ -618,10 +618,10 @@
       "x": 3840,
       "y": 15600
     },
-    "ScanPagesPulley.dc.html": {
+    "ScanPagesColour.dc.html": {
       "h": 990,
       "is_interactive": true,
-      "title": "Scan \u00b7 pulley, colour choices",
+      "title": "Scan \u00b7 colour choices",
       "w": 400,
       "x": 4320,
       "y": 15600
@@ -811,7 +811,7 @@
     "ScanPages.dc.html",
     "ScanPagesMenu.dc.html",
     "ScanPagesDrag.dc.html",
-    "ScanPagesPulley.dc.html",
+    "ScanPagesColour.dc.html",
     "ScanNoCamera.dc.html"
   ],
   "pages": [],
