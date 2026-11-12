@@ -99,8 +99,6 @@ ApplicationWindow {
                     break
                 if (win.camera.allowedOrientations !== Orientation.Portrait)
                     return win.fail("portrait only")
-                if (win.camera.navigationStyle !== PageNavigation.Horizontal)
-                    return win.fail("goes back sideways, as the dialogs around it")
                 if (win.camera.stillPage !== null || win.camera.pages !== 0)
                     return win.fail("live and empty at first")
                 win.camera.photoTaken(win.sheet)

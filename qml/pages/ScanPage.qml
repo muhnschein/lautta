@@ -100,8 +100,6 @@ FullscreenContentPage {
     }
 
     allowedOrientations: Orientation.Portrait
-    // As the dialogs around it. Silica's pop between two vertical pages loops its drag binding.
-    navigationStyle: PageNavigation.Horizontal
     // Pages taken: no swipe drops them, only the close button.
     backNavigation: retakeOnly || pages === 0
 
