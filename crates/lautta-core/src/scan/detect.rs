@@ -177,6 +177,12 @@ fn from_top_left(corners: [P; 4]) -> [P; 4] {
     [0, 1, 2, 3].map(|i| corners[(first + i) % 4])
 }
 
+/// Centre of a pixel, relative to a picture of `w` × `h`: the outline runs through the outermost
+/// pixels of the page.
+fn centre(p: P, w: usize, h: usize) -> Point {
+    Point::new((p.0 as f32 + 0.5) / w as f32, (p.1 as f32 + 0.5) / h as f32)
+}
+
 /// `photo`: upright, any size.
 pub fn find_page(photo: &RgbImage) -> Option<Quad> {
     if photo.width() < 8 || photo.height() < 8 {
@@ -204,12 +210,10 @@ pub fn find_page(photo: &RgbImage) -> Option<Quad> {
     let outline = hull(area);
     let corners = from_top_left(largest_quad(&outline)?);
     let (inside, around) = (area2(&corners) as f32, area2(&outline) as f32);
-    if inside < MIN_FIT * around || inside / 2.0 < MIN_COVER * total {
+    if inside < MIN_FIT * around {
         return None;
     }
-    // Pixel centres; the outline runs through the outermost pixels of the page.
-    let at = |p: P| Point::new((p.0 as f32 + 0.5) / w as f32, (p.1 as f32 + 0.5) / h as f32);
-    let quad = Quad(corners.map(at));
+    let quad = Quad(corners.map(|p| centre(p, w, h)));
     quad.is_page().then_some(quad)
 }
 
@@ -277,9 +281,36 @@ mod tests {
         assert_close(find_page(&photo(300, 800, SHEET, PAPER, TABLE)), SHEET, 0.02);
     }
 
+    /// Every corner is the centre of a pixel of a `w` × `h` picture.
+    fn assert_on_grid(found: Option<Quad>, w: f32, h: f32) {
+        for c in found.expect("page found").0 {
+            let (x, y) = (c.x * w - 0.5, c.y * h - 0.5);
+            assert!(
+                (x - x.round()).abs() < 1e-3 && (y - y.round()).abs() < 1e-3,
+                "corner {c:?} off the {w} x {h} grid"
+            );
+        }
+    }
+
     #[test]
     fn small_photos_are_searched_as_they_are() {
-        assert_close(find_page(&photo(120, 90, SHEET, PAPER, TABLE)), SHEET, 0.04);
+        for (w, h) in [(120, 90), (256, 192)] {
+            let found = find_page(&photo(w, h, SHEET, PAPER, TABLE));
+            assert_close(found, SHEET, 0.04);
+            assert_on_grid(found, w as f32, h as f32);
+        }
+    }
+
+    #[test]
+    fn large_photos_are_searched_shrunk() {
+        let found = find_page(&photo(640, 480, SHEET, PAPER, TABLE));
+        assert_on_grid(found, WORK_SIDE as f32, WORK_SIDE as f32);
+    }
+
+    #[test]
+    fn corners_are_pixel_centres() {
+        assert_eq!(centre((0, 0), 4, 2), Point::new(0.125, 0.25));
+        assert_eq!(centre((3, 1), 4, 2), Point::new(0.875, 0.75));
     }
 
     #[test]
@@ -444,6 +475,20 @@ mod tests {
         assert_eq!(area2(&quad), 190);
         assert!(quad.contains(&(0, 0)) && quad.contains(&(10, 10)) && quad.contains(&(0, 10)));
         assert_eq!(largest_quad(&[(0, 0), (5, 0), (0, 5)]), None);
+    }
+
+    #[test]
+    fn largest_quad_is_found_wherever_the_outline_starts() {
+        // Square whose left side bulges: outline starts in the bulge.
+        let outline = [(1, 15), (0, 10), (1, 5), (2, 0), (22, 0), (22, 20), (2, 20)];
+        assert_eq!(largest_quad(&outline), Some([(2, 0), (22, 0), (22, 20), (2, 20)]));
+    }
+
+    #[test]
+    fn largest_quad_adds_both_sides_of_the_diagonal() {
+        // Far points of diagonal (8,2)-(4,7) multiply to more than those of the best one.
+        let outline = [(2, 4), (8, 2), (10, 4), (10, 11), (4, 7)];
+        assert_eq!(largest_quad(&outline), Some([(2, 4), (8, 2), (10, 4), (10, 11)]));
     }
 
     #[test]

@@ -156,6 +156,9 @@ ApplicationWindow {
             case 7:
                 if (!win.dialog.acceptDestinationInstance || win.dialog.acceptDestinationInstance.photoTaken === undefined)
                     break
+                // Silica has the camera page built already; the camera itself must wait.
+                if (named(win.dialog.acceptDestinationInstance, "finderLoader").active)
+                    return win.fail("no camera before its page shows")
                 win.dialog.accept()
                 win.next()
                 break

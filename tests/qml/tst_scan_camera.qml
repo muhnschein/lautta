@@ -210,6 +210,15 @@ ApplicationWindow {
                     break
                 if (win.ended.length !== 0 || win.camera.scan !== win.scan || win.camera.pages !== 2 || win.camera.retakeOnly)
                     return win.fail("plus tile: camera again, same scan")
+                // No camera where the tests run: pages taken stay in reach all the same.
+                if (!named(win.camera, "pagesButton").visible || !named(win.camera, "doneButton").visible)
+                    return win.fail("pages and Done need no camera")
+                var finder = named(win.camera, "finderLoader")
+                if (!finder.active || win.camera.cameraFailed)
+                    return win.fail("viewfinder built once the page shows")
+                finder.item.broken()
+                if (!win.camera.cameraFailed || finder.active)
+                    return win.fail("a camera that fails is let go")
                 named(win.camera, "dismissButton").clicked(null)
                 win.next()
                 break
