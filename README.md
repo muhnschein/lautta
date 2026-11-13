@@ -1,14 +1,27 @@
 # Lautta
 
-![Lautta](icons/172x172/harbour-lautta.png)
+![Lautta - A better file manager for Sailfish OS.](store/cover.png)
 
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=muhnschein_lautta&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=muhnschein_lautta)[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=muhnschein_lautta&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=muhnschein_lautta)[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=muhnschein_lautta&metric=coverage)](https://sonarcloud.io/summary/new_code?id=muhnschein_lautta)[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=muhnschein_lautta&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=muhnschein_lautta)
 
+> 🤖 **This project was developed using AI.** If that provenance troubles
+> you, feel free to use something else.
+>
+> 📱 **Modern SailfishOS-only:** Lautta currently targets the
+> Jolla Phone 2026 and nothing else. No effort is made to accommodate older
+> targets. [Buy a Jolla Phone 2026](https://commerce.jolla.com/) and support
+> European-made alternatives. 👊🇪🇺🔥
+
+## Screenshots
+
 <p>
-  <img src="store/screenshots/1-browse.png" width="260" alt="Browse: favourites, phone folders, a USB drive, a locked memory card and two servers">
-  <img src="store/screenshots/2-folder.png" width="260" alt="A busy folder as a grid, four photos and videos selected">
-  <img src="store/screenshots/3-text.png" width="260" alt="A shell script from a server, with syntax colours">
+  <img src="store/screenshots/1-browse.png" width="32%" alt="Browse: favourites, phone folders, a USB drive, a locked memory card and two servers">
+  <img src="store/screenshots/2-folder.png" width="32%" alt="A busy folder as a grid, four photos and videos selected">
+  <img src="store/screenshots/3-text.png" width="32%" alt="A shell script from a server, with syntax colours">
 </p>
+
+Where the files and the background in the screenshots come from:
+[`store/screenshots/SOURCES.md`](store/screenshots/SOURCES.md).
 
 ## Overview
 
@@ -52,6 +65,16 @@ once whether Lautta may use them. Without netvfs, nothing of it shows.
 - Nothing runs once the app is closed.
 - No OpenRepos/Chum.
 
+## Documentation
+
+- [`doc/PROJECT.md`](doc/PROJECT.md) — project scope, platform rules and
+  explicit non-goals
+- [`doc/CONTRIBUTING-CODE.md`](doc/CONTRIBUTING-CODE.md) — code conventions,
+  toolchain and tests
+- [`doc/harbour-warnings.md`](doc/harbour-warnings.md) — Harbour validator
+  warnings CI accepts, and why
+- [`design/STYLE.md`](design/STYLE.md) — Silica style kit for the design canvas
+
 ## Building
 
 A device package, built in the Sailfish OS SDK image (needs Docker):
@@ -83,10 +106,12 @@ $ make check
 * [JetBrains](https://github.com/JetBrains/intellij-community), for the file
   type icons of IntelliJ.
 * [hayro](https://github.com/LaurenzV/hayro), for reading PDFs in pure Rust.
+* [Inter](https://rsms.me/inter/), the typeface of the cover's lettering.
 
 ## License
 
 Licensed LGPL-2.1-or-later. The image viewer files adapted from Jolla are
-BSD-3-Clause, the JetBrains icons Apache-2.0.
+BSD-3-Clause, the JetBrains icons Apache-2.0. The cover's lettering is Inter,
+SIL Open Font License 1.1.
 
 Copyright © Lautta contributors.
