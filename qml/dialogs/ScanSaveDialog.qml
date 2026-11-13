@@ -226,10 +226,37 @@ Dialog {
                     height: grid.cellHeight
                     onClicked: dialog.addPage()
 
-                    Icon {
-                        anchors.centerIn: parent
-                        source: "image://theme/icon-m-add"
-                        highlighted: addTile.highlighted
+                    // Room a page picture gets in its tile.
+                    Item {
+                        id: plusRoom
+
+                        anchors {
+                            fill: parent
+                            margins: Theme.paddingMedium
+                            bottomMargin: plusSpacer.height + Theme.paddingMedium
+                        }
+                    }
+
+                    Label {
+                        id: plusSpacer
+
+                        visible: false
+                        font.pixelSize: Theme.fontSizeSmall
+                        text: " "
+                    }
+
+                    Rectangle {
+                        objectName: "addPageShape"
+                        anchors.centerIn: plusRoom
+                        width: Math.min(plusRoom.width, plusRoom.height / Math.SQRT2)
+                        height: width * Math.SQRT2
+                        color: Theme.rgba(Theme.highlightBackgroundColor, Theme.opacityFaint)
+
+                        Icon {
+                            anchors.centerIn: parent
+                            source: "image://theme/icon-l-add"
+                            highlighted: true
+                        }
                     }
                 }
             }

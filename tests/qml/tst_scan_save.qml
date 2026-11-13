@@ -163,6 +163,10 @@ ApplicationWindow {
                 var plus = named(win.dialog, "addPageTile")
                 if (plus.y !== all[2].y || plus.x !== all[1].x)
                     return win.fail("plus tile takes the place after the last page")
+                var shape = named(plus, "addPageShape")
+                if (!shape.visible || shape.color.a === 0 || Math.abs(shape.height - shape.width * Math.SQRT2) > 1
+                        || shape.height < plus.height * 0.6 || shape.x < 0 || shape.x + shape.width > plus.width || shape.y < 0)
+                    return win.fail("plus drawn as a page: " + shape.x + "," + shape.y + " " + shape.width + "x" + shape.height + " in " + plus.width + "x" + plus.height)
                 field.text = "a/b"
                 if (win.dialog.canAccept || !field.errorHighlight)
                     return win.fail("a name with a slash is refused")
