@@ -6,6 +6,11 @@
 
 > 🤖 **This project was developed using AI.** If that provenance troubles
 > you, feel free to use something else.
+>
+> 📱 **Modern SailfishOS-only:** Lautta currently targets the
+> Jolla Phone 2026 and nothing else. No effort is made to accommodate older
+> targets. [Buy a Jolla Phone 2026](https://commerce.jolla.com/) and support
+> European-made alternatives. 👊🇪🇺🔥
 
 ## Screenshots
 
