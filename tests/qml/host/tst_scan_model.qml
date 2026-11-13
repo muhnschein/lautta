@@ -12,7 +12,7 @@ Item {
     property var failures: []
     property var savedUris: []
     readonly property string sheet: Qt.resolvedUrl("fixtures/sheet.jpg")
-    readonly property string plain: Qt.resolvedUrl("fixtures/large-photo.jpg")
+    readonly property string plain: Qt.resolvedUrl("fixtures/photo.jpg")
 
     function check(cond, what) {
         if (!cond)

@@ -1,186 +1,578 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Finds the page in a photo: the largest area whose colour differs from the photo's border, if
-//! it is four-sided. No answer (page fills photo, low contrast, clutter) = caller keeps the whole
-//! picture.
+//! Finds the page in a photo: the largest four-sided shape whose sides run along straight edges
+//! all the way round. Lines from a Hough search over colour edges on small copies; sides then
+//! moved onto the edge in the photo itself. No answer (page cut by the photo, too faint, a stack
+//! of like sheets) = caller keeps the whole picture.
 
 use super::{Point, Quad};
 use image::imageops::{self, FilterType};
-use image::{GrayImage, Luma, RgbImage};
+use image::RgbImage;
+use std::f32::consts::PI;
 
-/// Longer side of the picture the search runs on.
-const WORK_SIDE: u32 = 256;
-/// Blur wide enough to swallow lines of text.
-const BLUR_SIGMA: f32 = 2.0;
-/// Page and table differ at least this much in one colour channel (of 255).
-const MIN_CONTRAST: f64 = 40.0;
+/// Longer side of the small copies searched. Coarse one sees past print on a page that fills the
+/// photo; fine one finds a page further away. Larger page found wins.
+const SCALES: [u32; 2] = [320, 640];
+/// Smooths sensor noise and paper grain before edges.
+const BLUR_SIGMA: f32 = 1.0;
+/// Weakest edge kept: colour gradient, Sobel on 0..255 channels.
+const MIN_EDGE: f32 = 24.0;
+/// Hough angle steps over half a turn.
+const ANGLES: usize = 180;
+/// An edge pixel votes for lines this many angle steps either side of its own direction.
+const SPREAD: i32 = 5;
+/// Strongest lines tried as page sides.
+const MAX_LINES: usize = 48;
+/// Edge pixel counts for a line when their directions differ at most this much.
+const MATCH: f32 = 10.0 * PI / 180.0;
+/// Opposite sides lean at most this much against each other (perspective).
+const MAX_LEAN: f32 = 35.0 * PI / 180.0;
+/// Corners of a page seen at a slant stay within these angles.
+const MIN_CORNER: f32 = 40.0 * PI / 180.0;
 /// Share of the photo a page covers at least.
-const MIN_COVER: f32 = 0.10;
-/// Four corners must cover this much of the area's outline, else it is no sheet.
-const MIN_FIT: f32 = 0.85;
+const MIN_COVER: f32 = 0.03;
+/// Share of its length every side runs along an edge …
+const MIN_SIDE: f32 = 0.6;
+/// … and all four together.
+const MIN_MEAN: f32 = 0.75;
+/// Near each corner (this share of the side) edges cover at least MIN_END: a side running on
+/// past the page has none there.
+const END: f32 = 0.2;
+const MIN_END: f32 = 0.35;
+/// Points measured per side on the photo, and how far from the found side (in pixels of the
+/// small copy).
+const PROBES: usize = 24;
+const REACH: f32 = 1.5;
+/// Outermost edge at least this strong against the strongest wins: print near the page's edge
+/// is often sharper than the edge itself.
+const OUTER: f32 = 0.5;
+/// No edge on the photo where colour changes less (three samples summed, over two pixels).
+const MIN_RISE: f32 = 12.0;
 
-type P = (i32, i32);
+type V = (f32, f32);
 
-/// Otsu: the level splitting the histogram into two groups with the largest spread between
-/// them, and how far the groups' means lie apart.
-fn threshold(img: &GrayImage) -> (u8, f64) {
-    let mut hist = [0u64; 256];
-    for p in img.pixels() {
-        hist[usize::from(p[0])] += 1;
-    }
-    let total = u64::from(img.width()) * u64::from(img.height());
-    let sum: u64 = hist.iter().enumerate().map(|(i, n)| i as u64 * n).sum();
-    let (mut below, mut sum_below, mut best) = (0u64, 0u64, (0.0f64, 0u8, 0.0f64));
-    for (i, n) in hist.iter().enumerate() {
-        below += n;
-        sum_below += i as u64 * n;
-        let above = total - below;
-        if below == 0 || above == 0 {
-            continue;
-        }
-        let gap = (sum - sum_below) as f64 / above as f64 - sum_below as f64 / below as f64;
-        let spread = below as f64 * above as f64 * gap * gap;
-        if spread > best.0 {
-            best = (spread, i as u8, gap);
-        }
-    }
-    (best.1, best.2)
+fn dot(a: V, b: V) -> f32 {
+    a.0 * b.0 + a.1 * b.1
 }
 
-/// Middle colour of the pixels on the photo's border: the table.
-fn border_colour(img: &RgbImage) -> [u8; 3] {
-    let (w, h) = (img.width(), img.height());
-    let ring = (0..w)
-        .flat_map(|x| [(x, 0), (x, h - 1)])
-        .chain((0..h).flat_map(|y| [(0, y), (w - 1, y)]));
-    let mut channels: [Vec<u8>; 3] = Default::default();
-    for (x, y) in ring {
-        let p = img.get_pixel(x, y);
-        for (c, values) in channels.iter_mut().enumerate() {
-            values.push(p[c]);
+fn add(a: V, b: V, k: f32) -> V {
+    (a.0 + b.0 * k, a.1 + b.1 * k)
+}
+
+/// Difference of two undirected angles, 0..π/2.
+fn angle_gap(a: f32, b: f32) -> f32 {
+    let d = (a - b).rem_euclid(PI);
+    d.min(PI - d)
+}
+
+/// Straight line: points p with n·p = rho, n unit.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Line {
+    n: V,
+    rho: f32,
+}
+
+impl Line {
+    fn from_angle(angle: f32, rho: f32) -> Line {
+        Line {
+            n: (angle.cos(), angle.sin()),
+            rho,
         }
     }
-    channels.map(|mut values| {
-        values.sort_unstable();
-        values[values.len() / 2]
-    })
-}
 
-/// How far each pixel is from `colour`: largest difference of the three channels.
-fn distance(img: &RgbImage, colour: [u8; 3]) -> GrayImage {
-    GrayImage::from_fn(img.width(), img.height(), |x, y| {
-        let p = img.get_pixel(x, y);
-        Luma([(0..3).map(|c| p[c].abs_diff(colour[c])).max().unwrap_or(0)])
-    })
-}
+    /// Direction of the normal, 0..π.
+    fn angle(&self) -> f32 {
+        self.n.1.atan2(self.n.0).rem_euclid(PI)
+    }
 
-/// Pixels of the largest connected area of `mask` (4 neighbours).
-fn largest_area(mask: &[bool], w: usize, h: usize) -> Vec<P> {
-    let mut seen = vec![false; mask.len()];
-    let mut best: Vec<P> = Vec::new();
-    for start in 0..mask.len() {
-        if !mask[start] || seen[start] {
-            continue;
+    fn along(&self) -> V {
+        (-self.n.1, self.n.0)
+    }
+
+    fn meet(&self, other: &Line) -> Option<V> {
+        let det = self.n.0 * other.n.1 - self.n.1 * other.n.0;
+        if det.abs() < 1e-6 {
+            return None;
         }
-        seen[start] = true;
-        let mut area = Vec::new();
-        let mut stack = vec![start];
-        while let Some(i) = stack.pop() {
-            let (x, y) = (i % w, i / w);
-            area.push((x as i32, y as i32));
-            let mut visit = |ok: bool, j: usize| {
-                if ok && mask[j] && !seen[j] {
-                    seen[j] = true;
-                    stack.push(j);
+        Some((
+            (self.rho * other.n.1 - other.rho * self.n.1) / det,
+            (self.n.0 * other.rho - other.n.0 * self.rho) / det,
+        ))
+    }
+
+    /// Signed distance of `p`, positive on the side `n` points to.
+    fn off(&self, p: V) -> f32 {
+        dot(self.n, p) - self.rho
+    }
+
+    /// Total least squares through `points`, normal turned towards `towards`.
+    fn fit(points: &[V], towards: V) -> Option<Line> {
+        if points.len() < 2 {
+            return None;
+        }
+        let k = points.len() as f32;
+        let m = points.iter().fold((0.0, 0.0), |s, p| add(s, *p, 1.0 / k));
+        let (mut xx, mut yy, mut xy) = (0.0, 0.0, 0.0);
+        for p in points {
+            let (dx, dy) = (p.0 - m.0, p.1 - m.1);
+            xx += dx * dx;
+            yy += dy * dy;
+            xy += dx * dy;
+        }
+        let normal = 0.5 * (2.0 * xy).atan2(xx - yy) + PI / 2.0;
+        let mut n = (normal.cos(), normal.sin());
+        if dot(n, towards) < 0.0 {
+            n = (-n.0, -n.1);
+        }
+        Some(Line { n, rho: dot(n, m) })
+    }
+
+    /// Part inside a `w` × `h` picture: start point and length.
+    fn span(&self, w: f32, h: f32) -> Option<(V, f32)> {
+        let foot = (self.n.0 * self.rho, self.n.1 * self.rho);
+        let d = self.along();
+        let (mut lo, mut hi) = (f32::NEG_INFINITY, f32::INFINITY);
+        for (c, dc, most) in [(foot.0, d.0, w), (foot.1, d.1, h)] {
+            if dc.abs() < 1e-6 {
+                if !(0.0..=most).contains(&c) {
+                    return None;
                 }
-            };
-            visit(x > 0, i.wrapping_sub(1));
-            visit(x + 1 < w, i + 1);
-            visit(y > 0, i.wrapping_sub(w));
-            visit(y + 1 < h, i + w);
-        }
-        if area.len() > best.len() {
-            best = area;
-        }
-    }
-    best
-}
-
-fn cross(o: P, a: P, b: P) -> i64 {
-    i64::from(a.0 - o.0) * i64::from(b.1 - o.1) - i64::from(a.1 - o.1) * i64::from(b.0 - o.0)
-}
-
-/// Convex outline (monotone chain), clockwise on screen, no three points on one line.
-fn hull(mut points: Vec<P>) -> Vec<P> {
-    points.sort_unstable();
-    points.dedup();
-    if points.len() < 3 {
-        return points;
-    }
-    let mut out: Vec<P> = Vec::with_capacity(points.len() + 1);
-    for pass in 0..2 {
-        let floor = out.len() + 1;
-        let ordered: Box<dyn Iterator<Item = &P>> = if pass == 0 {
-            Box::new(points.iter())
-        } else {
-            Box::new(points.iter().rev())
-        };
-        for &p in ordered {
-            while out.len() > floor && cross(out[out.len() - 2], out[out.len() - 1], p) <= 0 {
-                out.pop();
+            } else {
+                let (a, b) = (-c / dc, (most - c) / dc);
+                lo = lo.max(a.min(b));
+                hi = hi.min(a.max(b));
             }
-            out.push(p);
         }
-        out.pop();
+        (hi - lo >= 1.0).then(|| (add(foot, d, lo), hi - lo))
     }
-    out
 }
 
-/// Twice the area inside a closed outline.
-fn area2(outline: &[P]) -> i64 {
-    (0..outline.len())
-        .map(|i| {
-            let (a, b) = (outline[i], outline[(i + 1) % outline.len()]);
-            i64::from(a.0) * i64::from(b.1) - i64::from(b.0) * i64::from(a.1)
-        })
-        .sum::<i64>()
-        .abs()
+/// Thinned colour edges of a small picture.
+struct Edges {
+    w: usize,
+    h: usize,
+    /// Direction across the edge, 0..π; NaN off edges.
+    angle: Vec<f32>,
 }
 
-/// The four outline points spanning the largest area, in outline order. For every diagonal the
-/// point farthest from it on each side.
-fn largest_quad(outline: &[P]) -> Option<[P; 4]> {
-    let n = outline.len();
-    let mut best: Option<(i64, [P; 4])> = None;
-    for i in 0..n {
-        for j in i + 2..n {
-            let far = |range: std::ops::Range<usize>| {
-                range
-                    .map(|k| (cross(outline[i], outline[j], outline[k % n]).abs(), k % n))
-                    .max()
+impl Edges {
+    fn new(img: &RgbImage) -> Edges {
+        let (w, h) = (img.width() as usize, img.height() as usize);
+        let mut planes = [vec![0.0f32; w * h], vec![0.0f32; w * h], vec![0.0f32; w * h]];
+        for (i, p) in img.pixels().enumerate() {
+            for (c, plane) in planes.iter_mut().enumerate() {
+                plane[i] = f32::from(p[c]);
+            }
+        }
+        let mut mag = vec![0.0f32; w * h];
+        let mut dir = vec![0.0f32; w * h];
+        for y in 1..h.saturating_sub(1) {
+            for x in 1..w - 1 {
+                let (i, up, down) = (y * w + x, (y - 1) * w + x, (y + 1) * w + x);
+                let (mut xx, mut yy, mut xy) = (0.0, 0.0, 0.0);
+                for v in &planes {
+                    let gx =
+                        v[up + 1] + 2.0 * v[i + 1] + v[down + 1] - v[up - 1] - 2.0 * v[i - 1] - v[down - 1];
+                    let gy = v[down - 1] + 2.0 * v[down] + v[down + 1] - v[up - 1] - 2.0 * v[up] - v[up + 1];
+                    xx += gx * gx;
+                    yy += gy * gy;
+                    xy += gx * gy;
+                }
+                // Di Zenzo: strongest change over all three channels, so tint counts too.
+                let half = 0.5 * (xx - yy);
+                mag[i] = (0.5 * (xx + yy) + (half * half + xy * xy).sqrt()).sqrt();
+                dir[i] = (0.5 * (2.0 * xy).atan2(xx - yy)).rem_euclid(PI);
+            }
+        }
+        let mut angle = vec![f32::NAN; w * h];
+        for y in 1..h.saturating_sub(1) {
+            for x in 1..w - 1 {
+                let i = y * w + x;
+                if mag[i] < MIN_EDGE {
+                    continue;
+                }
+                // Kept where strongest across the edge.
+                let step = match ((dir[i] / (PI / 4.0)).round() as usize) % 4 {
+                    0 => 1,
+                    1 => w + 1,
+                    2 => w,
+                    _ => w - 1,
+                };
+                if mag[i] > mag[i + step] && mag[i] >= mag[i - step] {
+                    angle[i] = dir[i];
+                }
+            }
+        }
+        Edges { w, h, angle }
+    }
+
+    /// Edge pixel under `p` running at `angle` (of its normal).
+    fn on(&self, p: V, angle: f32) -> bool {
+        let (x, y) = (p.0.floor(), p.1.floor());
+        if x < 0.0 || y < 0.0 || x >= self.w as f32 || y >= self.h as f32 {
+            return false;
+        }
+        angle_gap(self.angle[y as usize * self.w + x as usize], angle) <= MATCH
+    }
+
+    /// Strongest lines, each with votes of a side of a small page at least.
+    fn lines(&self) -> Vec<Line> {
+        let reach = (self.w as f32).hypot(self.h as f32).ceil() as i32;
+        let rows = (2 * reach + 1) as usize;
+        let unit: Vec<V> = (0..ANGLES)
+            .map(|t| {
+                let a = t as f32 * PI / ANGLES as f32;
+                (a.cos(), a.sin())
+            })
+            .collect();
+        let mut votes = vec![0u32; ANGLES * rows];
+        for (i, a) in self.angle.iter().enumerate() {
+            if a.is_nan() {
+                continue;
+            }
+            let p = ((i % self.w) as f32 + 0.5, (i / self.w) as f32 + 0.5);
+            let own = (a * ANGLES as f32 / PI).round() as i32;
+            for t in own - SPREAD..=own + SPREAD {
+                let t = t.rem_euclid(ANGLES as i32) as usize;
+                let r = dot(p, unit[t]).round() as i32 + reach;
+                votes[t * rows + r as usize] += 1;
+            }
+        }
+        // Across angle 0 = π the same line has rho negated.
+        let at = |t: i32, r: i32| -> (u32, usize) {
+            let (t, r) = if (0..ANGLES as i32).contains(&t) {
+                (t, r)
+            } else {
+                (t.rem_euclid(ANGLES as i32), 2 * reach - r)
             };
-            let (Some((a, k)), Some((b, l))) = (far(i + 1..j), far(j + 1..n + i)) else {
+            if !(0..rows as i32).contains(&r) {
+                return (0, 0);
+            }
+            let i = t as usize * rows + r as usize;
+            (votes[i], i)
+        };
+        let least = (0.04 * self.w.max(self.h) as f32).max(8.0) as u32;
+        let mut peaks: Vec<(u32, usize)> = Vec::new();
+        for t in 0..ANGLES as i32 {
+            for r in 0..rows as i32 {
+                let own = at(t, r);
+                if own.0 < least {
+                    continue;
+                }
+                let top = (-2..=2)
+                    .flat_map(|dt| (-2..=2).map(move |dr| (dt, dr)))
+                    .all(|(dt, dr)| (dt, dr) == (0, 0) || at(t + dt, r + dr) < own);
+                if top {
+                    peaks.push(own);
+                }
+            }
+        }
+        peaks.sort_unstable_by(|a, b| b.cmp(a));
+        let mut kept: Vec<Line> = Vec::new();
+        for (_, i) in peaks {
+            let coarse = Line::from_angle(
+                (i / rows) as f32 * PI / ANGLES as f32,
+                (i % rows) as i32 as f32 - reach as f32,
+            );
+            let Some(line) = self.settle(coarse) else {
                 continue;
             };
-            if best.is_none_or(|(area, _)| a + b > area) {
-                best = Some((a + b, [outline[i], outline[k], outline[j], outline[l]]));
+            let twin = kept.iter().any(|k| {
+                angle_gap(k.angle(), line.angle()) < 2f32.to_radians()
+                    && (dot(k.n, line.n) * line.rho - k.rho).abs() < 3.0
+            });
+            if !twin {
+                kept.push(line);
+                if kept.len() == MAX_LINES {
+                    break;
+                }
+            }
+        }
+        kept
+    }
+
+    /// Hough line fitted to the edge pixels along it, twice, the second time closer.
+    fn settle(&self, mut line: Line) -> Option<Line> {
+        for width in [2.0, 1.0] {
+            let (start, len) = line.span(self.w as f32, self.h as f32)?;
+            let (d, angle) = (line.along(), line.angle());
+            let mut points = Vec::new();
+            let mut seen = std::collections::HashSet::new();
+            for k in 0..len as usize {
+                let p = add(start, d, k as f32 + 0.5);
+                for o in [-width, -width / 2.0, 0.0, width / 2.0, width] {
+                    let q = add(p, line.n, o);
+                    let pixel = (q.0.floor(), q.1.floor());
+                    if self.on(q, angle) && seen.insert((pixel.0 as i32, pixel.1 as i32)) {
+                        points.push((pixel.0 + 0.5, pixel.1 + 0.5));
+                    }
+                }
+            }
+            if points.len() < 8 {
+                return None;
+            }
+            line = Line::fit(&points, line.n)?;
+        }
+        Some(line)
+    }
+}
+
+/// Where along a line edges run, counted from where it enters the picture.
+struct Track {
+    line: Line,
+    start: V,
+    /// Running count of steps with an edge.
+    hits: Vec<u32>,
+}
+
+impl Track {
+    fn new(edges: &Edges, line: Line) -> Option<Track> {
+        let (start, len) = line.span(edges.w as f32, edges.h as f32)?;
+        let (d, angle) = (line.along(), line.angle());
+        let mut hits = vec![0u32];
+        for k in 0..len as usize {
+            let p = add(start, d, k as f32 + 0.5);
+            let found = [0.0, -1.0, 1.0]
+                .iter()
+                .any(|o| edges.on(add(p, line.n, *o), angle));
+            hits.push(hits[k] + u32::from(found));
+        }
+        Some(Track { line, start, hits })
+    }
+
+    /// Length between `a` and `b` (on the line), and steps with an edge there.
+    fn between(&self, a: V, b: V) -> (f32, u32) {
+        let d = self.line.along();
+        let last = self.hits.len() - 1;
+        let step =
+            |p: V| (dot((p.0 - self.start.0, p.1 - self.start.1), d).round().max(0.0) as usize).min(last);
+        let (i, j) = (step(a), step(b));
+        let length = (a.0 - b.0).hypot(a.1 - b.1).max(1.0);
+        (length, self.hits[i.max(j)] - self.hits[i.min(j)])
+    }
+}
+
+/// Corners clockwise on screen from the one nearest the top left, if convex.
+fn clockwise(mut corners: [V; 4]) -> Option<[V; 4]> {
+    let turn = |c: &[V; 4], i: usize| {
+        let (a, b, p) = (c[i], c[(i + 1) % 4], c[(i + 2) % 4]);
+        (b.0 - a.0) * (p.1 - b.1) - (b.1 - a.1) * (p.0 - b.0)
+    };
+    if (0..4).all(|i| turn(&corners, i) < 0.0) {
+        corners.reverse();
+    }
+    if !(0..4).all(|i| turn(&corners, i) > 0.0) {
+        return None;
+    }
+    let key = |p: V| (p.0 + p.1, p.1);
+    let first = (0..4)
+        .min_by(|&i, &j| {
+            key(corners[i])
+                .partial_cmp(&key(corners[j]))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .unwrap_or(0);
+    Some([0, 1, 2, 3].map(|i| corners[(first + i) % 4]))
+}
+
+fn area(c: &[V; 4]) -> f32 {
+    let twice: f32 = (0..4)
+        .map(|i| {
+            let (a, b) = (c[i], c[(i + 1) % 4]);
+            a.0 * b.1 - b.0 * a.1
+        })
+        .sum();
+    twice.abs() / 2.0
+}
+
+/// Every corner between MIN_CORNER and its complement.
+fn square_enough(c: &[V; 4]) -> bool {
+    (0..4).all(|i| {
+        let (a, p, b) = (c[(i + 3) % 4], c[i], c[(i + 1) % 4]);
+        let (u, v) = ((a.0 - p.0, a.1 - p.1), (b.0 - p.0, b.1 - p.1));
+        let cos = dot(u, v) / (u.0.hypot(u.1) * v.0.hypot(v.1)).max(1e-6);
+        cos.abs() <= MIN_CORNER.cos()
+    })
+}
+
+/// Why four lines make no page.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Miss {
+    /// A corner outside the picture, or two sides parallel.
+    Open,
+    Small,
+    Slanted,
+    Crossed,
+    BareEnd,
+    BareSide,
+    Sparse,
+}
+
+/// Page with sides on `sides` (in order round it) in a `w` × `h` picture: corners (corner k
+/// ends side k) and score, the area.
+fn judge(sides: [&Track; 4], w: f32, h: f32) -> Result<([V; 4], f32), Miss> {
+    let inside = |p: &V| (-1.0..=w + 1.0).contains(&p.0) && (-1.0..=h + 1.0).contains(&p.1);
+    let mut corners = [(0.0, 0.0); 4];
+    for k in 0..4 {
+        corners[k] = sides[k]
+            .line
+            .meet(&sides[(k + 1) % 4].line)
+            .filter(inside)
+            .ok_or(Miss::Open)?;
+    }
+    let size = area(&corners);
+    if size < MIN_COVER * w * h {
+        return Err(Miss::Small);
+    }
+    if !square_enough(&corners) {
+        return Err(Miss::Slanted);
+    }
+    clockwise(corners).ok_or(Miss::Crossed)?;
+    let (mut total, mut hits) = (0.0, 0u32);
+    for k in 0..4 {
+        let (a, b) = (corners[(k + 3) % 4], corners[k]);
+        let at = |f: f32| add(a, (b.0 - a.0, b.1 - a.1), f);
+        for (p, q) in [(a, at(END)), (at(1.0 - END), b)] {
+            let (len, found) = sides[k].between(p, q);
+            if (found as f32) < MIN_END * len {
+                return Err(Miss::BareEnd);
+            }
+        }
+        let (len, found) = sides[k].between(a, b);
+        if (found as f32) < MIN_SIDE * len {
+            return Err(Miss::BareSide);
+        }
+        total += len;
+        hits += found;
+    }
+    if (hits as f32) < MIN_MEAN * total {
+        return Err(Miss::Sparse);
+    }
+    Ok((corners, size))
+}
+
+/// Largest page on a small picture: its corners.
+fn best_quad(edges: &Edges) -> Option<[V; 4]> {
+    let tracks: Vec<Track> = edges
+        .lines()
+        .into_iter()
+        .filter_map(|l| Track::new(edges, l))
+        .collect();
+    let (w, h) = (edges.w as f32, edges.h as f32);
+    let inside = |p: V| (0.0..=w).contains(&p.0) && (0.0..=h).contains(&p.1);
+    // Opposite sides: near parallel, not crossing in the picture.
+    let mut pairs = Vec::new();
+    for i in 0..tracks.len() {
+        for j in i + 1..tracks.len() {
+            let (a, b) = (&tracks[i].line, &tracks[j].line);
+            if angle_gap(a.angle(), b.angle()) <= MAX_LEAN && !a.meet(b).is_some_and(inside) {
+                pairs.push((i, j));
             }
         }
     }
-    best.map(|(_, q)| q)
+    let mut best: Option<([V; 4], f32)> = None;
+    for (x, &(a, b)) in pairs.iter().enumerate() {
+        for &(c, d) in &pairs[x + 1..] {
+            if [c, d].contains(&a) || [c, d].contains(&b) {
+                continue;
+            }
+            if let Ok((corners, size)) = judge([a, c, b, d].map(|k| &tracks[k]), w, h) {
+                if best.is_none_or(|(_, top)| size > top) {
+                    best = Some((corners, size));
+                }
+            }
+        }
+    }
+    best.map(|(corners, _)| corners)
 }
 
-/// Clockwise corners starting with the one nearest the photo's top left.
-fn from_top_left(corners: [P; 4]) -> [P; 4] {
-    let first = (0..4)
-        .min_by_key(|&i| (corners[i].0 + corners[i].1, corners[i].1))
-        .unwrap_or(0);
-    [0, 1, 2, 3].map(|i| corners[(first + i) % 4])
+/// Colour at `p` (pixel centres at .5), bilinear, edge pixels repeated.
+fn sample(img: &RgbImage, p: V) -> [f32; 3] {
+    let (w, h) = (img.width() as f32, img.height() as f32);
+    let x = (p.0 - 0.5).clamp(0.0, w - 1.0);
+    let y = (p.1 - 0.5).clamp(0.0, h - 1.0);
+    let (x0, y0) = (x.floor(), y.floor());
+    let (fx, fy) = (x - x0, y - y0);
+    let (x1, y1) = ((x0 + 1.0).min(w - 1.0), (y0 + 1.0).min(h - 1.0));
+    let get = |x: f32, y: f32| img.get_pixel(x as u32, y as u32).0.map(f32::from);
+    let (a, b, c, d) = (get(x0, y0), get(x1, y0), get(x0, y1), get(x1, y1));
+    [0, 1, 2].map(|k| (a[k] * (1.0 - fx) + b[k] * fx) * (1.0 - fy) + (c[k] * (1.0 - fx) + d[k] * fx) * fy)
 }
 
-/// Centre of a pixel, relative to a picture of `w` × `h`: the outline runs through the outermost
-/// pixels of the page.
-fn centre(p: P, w: usize, h: usize) -> Point {
-    Point::new((p.0 as f32 + 0.5) / w as f32, (p.1 as f32 + 0.5) / h as f32)
+/// Side from `a` to `b` of a page around `centre`, moved onto the outermost clear edge within
+/// `reach` on the photo.
+fn refine(photo: &RgbImage, a: V, b: V, centre: V, reach: f32) -> Option<Line> {
+    let len = (b.0 - a.0).hypot(b.1 - a.1);
+    let d = ((b.0 - a.0) / len, (b.1 - a.1) / len);
+    let mut n = (-d.1, d.0);
+    if dot(n, (a.0 - centre.0, a.1 - centre.1)) < 0.0 {
+        n = (-n.0, -n.1);
+    }
+    let steps = reach.ceil() as i32;
+    let mut points = Vec::with_capacity(PROBES);
+    for j in 0..PROBES {
+        let p = add(
+            a,
+            (b.0 - a.0, b.1 - a.1),
+            0.15 + 0.7 * j as f32 / (PROBES - 1) as f32,
+        );
+        // Mean of three points along the side: text strokes count less.
+        let colour = |o: f32| {
+            [-2.0, 0.0, 2.0].iter().fold([0.0f32; 3], |sum, s| {
+                let c = sample(photo, add(add(p, d, *s), n, o));
+                [sum[0] + c[0], sum[1] + c[1], sum[2] + c[2]]
+            })
+        };
+        let rise = |o: i32| {
+            let (u, v) = (colour(o as f32 - 1.0), colour(o as f32 + 1.0));
+            (0..3).map(|k| (v[k] - u[k]).powi(2)).sum::<f32>().sqrt()
+        };
+        let profile: Vec<f32> = (-steps - 1..=steps + 1).map(rise).collect();
+        let inner = 1..profile.len() - 1;
+        let most = inner.clone().map(|i| profile[i]).fold(0.0, f32::max);
+        if most < MIN_RISE {
+            continue;
+        }
+        let Some(top) = inner
+            .filter(|&i| {
+                profile[i] >= OUTER * most && profile[i] >= profile[i - 1] && profile[i] >= profile[i + 1]
+            })
+            .max()
+        else {
+            continue;
+        };
+        let (l, c, r) = (profile[top - 1], profile[top], profile[top + 1]);
+        let bend = l - 2.0 * c + r;
+        let shift = if bend < 0.0 { 0.5 * (l - r) / bend } else { 0.0 };
+        points.push(add(p, n, top as f32 - (steps + 1) as f32 + shift));
+    }
+    let line = Line::fit(&points, n)?;
+    let mut off: Vec<f32> = points.iter().map(|p| line.off(*p).abs()).collect();
+    off.sort_unstable_by(f32::total_cmp);
+    // Points off by more than three spreads (median deviation) are print or shadow.
+    let limit = (3.0 * 1.4826 * off[off.len() / 2]).max(1.0);
+    let kept: Vec<V> = points
+        .into_iter()
+        .filter(|p| line.off(*p).abs() <= limit)
+        .collect();
+    if kept.len() < PROBES / 2 {
+        return None;
+    }
+    Line::fit(&kept, n)
+}
+
+/// Corners of the page on a copy of `photo` with `side` as its longer side, in photo pixels,
+/// and the copy's scale.
+fn coarse(photo: &RgbImage, side: u32) -> Option<([V; 4], f32)> {
+    let long = photo.width().max(photo.height());
+    let k = side as f32 / long as f32;
+    let (w, h) = (
+        ((photo.width() as f32 * k).round() as u32).max(8),
+        ((photo.height() as f32 * k).round() as u32).max(8),
+    );
+    let small = imageops::blur(&imageops::resize(photo, w, h, FilterType::Triangle), BLUR_SIGMA);
+    let corners = best_quad(&Edges::new(&small))?;
+    let (sx, sy) = (photo.width() as f32 / w as f32, photo.height() as f32 / h as f32);
+    Some((corners.map(|p| (p.0 * sx, p.1 * sy)), sx.max(sy)))
 }
 
 /// `photo`: upright, any size.
@@ -188,338 +580,34 @@ pub fn find_page(photo: &RgbImage) -> Option<Quad> {
     if photo.width() < 8 || photo.height() < 8 {
         return None;
     }
-    // Squeezed to a square: corners are relative, so the shape does not matter.
-    let small = if photo.width().max(photo.height()) > WORK_SIDE {
-        imageops::resize(photo, WORK_SIDE, WORK_SIDE, FilterType::Triangle)
-    } else {
-        photo.clone()
-    };
-    let small = imageops::blur(&small, BLUR_SIGMA);
-    let (w, h) = (small.width() as usize, small.height() as usize);
-    let apart = distance(&small, border_colour(&small));
-    let (level, contrast) = threshold(&apart);
-    if contrast < MIN_CONTRAST {
-        return None;
-    }
-    let mask: Vec<bool> = apart.pixels().map(|p| p[0] > level).collect();
-    let area = largest_area(&mask, w, h);
-    let total = (w * h) as f32;
-    if (area.len() as f32) < MIN_COVER * total {
-        return None;
-    }
-    let outline = hull(area);
-    let corners = from_top_left(largest_quad(&outline)?);
-    let (inside, around) = (area2(&corners) as f32, area2(&outline) as f32);
-    if inside < MIN_FIT * around {
-        return None;
-    }
-    let quad = Quad(corners.map(|p| centre(p, w, h)));
+    let long = photo.width().max(photo.height());
+    let mut sides = SCALES.map(|s| s.min(long)).to_vec();
+    sides.dedup();
+    let (corners, scale) = sides
+        .into_iter()
+        .filter_map(|side| coarse(photo, side))
+        .max_by(|a, b| area(&a.0).total_cmp(&area(&b.0)))?;
+    let centre = corners.iter().fold((0.0, 0.0), |s, p| add(s, *p, 0.25));
+    let reach = REACH * scale + 2.0;
+    let moved = (0..4)
+        .map(|k| refine(photo, corners[(k + 3) % 4], corners[k], centre, reach))
+        .collect::<Option<Vec<Line>>>()
+        .and_then(|lines| {
+            let mut c = [(0.0, 0.0); 4];
+            for k in 0..4 {
+                c[k] = lines[k].meet(&lines[(k + 1) % 4])?;
+                // A corner moving far means a side caught something else.
+                if (c[k].0 - corners[k].0).hypot(c[k].1 - corners[k].1) > 2.0 * reach {
+                    return None;
+                }
+            }
+            Some(c)
+        });
+    let (w, h) = (photo.width() as f32, photo.height() as f32);
+    let found = clockwise(moved.unwrap_or(corners))?;
+    let quad = Quad(found.map(|p| Point::new((p.0 / w).clamp(0.0, 1.0), (p.1 / h).clamp(0.0, 1.0))));
     quad.is_page().then_some(quad)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use image::Rgb;
-
-    const PAPER: [u8; 3] = [230, 230, 230];
-    const TABLE: [u8; 3] = [40, 40, 40];
-
-    fn inside(p: (f32, f32), c: &[(f32, f32); 4]) -> bool {
-        (0..4).all(|i| {
-            let (a, b) = (c[i], c[(i + 1) % 4]);
-            (b.0 - a.0) * (p.1 - a.1) - (b.1 - a.1) * (p.0 - a.0) >= 0.0
-        })
-    }
-
-    /// Sheet with the given corners (relative) on a table.
-    fn photo(w: u32, h: u32, corners: [(f32, f32); 4], sheet: [u8; 3], table: [u8; 3]) -> RgbImage {
-        RgbImage::from_fn(w, h, |x, y| {
-            let p = ((x as f32 + 0.5) / w as f32, (y as f32 + 0.5) / h as f32);
-            Rgb(if inside(p, &corners) { sheet } else { table })
-        })
-    }
-
-    fn fill(img: &mut RgbImage, xs: std::ops::Range<u32>, ys: std::ops::Range<u32>, colour: [u8; 3]) {
-        for y in ys {
-            for x in xs.clone() {
-                img.put_pixel(x, y, Rgb(colour));
-            }
-        }
-    }
-
-    fn assert_close(found: Option<Quad>, corners: [(f32, f32); 4], tolerance: f32) {
-        let quad = found.expect("page found");
-        for (got, want) in quad.0.iter().zip(corners) {
-            assert!(
-                (got.x - want.0).abs() <= tolerance && (got.y - want.1).abs() <= tolerance,
-                "corner {got:?}, wanted {want:?}"
-            );
-        }
-    }
-
-    const SHEET: [(f32, f32); 4] = [(0.2, 0.15), (0.8, 0.2), (0.85, 0.85), (0.15, 0.8)];
-
-    #[test]
-    fn bright_sheet_on_dark_table_is_found() {
-        assert_close(find_page(&photo(640, 480, SHEET, PAPER, TABLE)), SHEET, 0.02);
-    }
-
-    #[test]
-    fn dark_sheet_on_bright_table_is_found() {
-        assert_close(find_page(&photo(640, 480, SHEET, TABLE, PAPER)), SHEET, 0.02);
-    }
-
-    #[test]
-    fn sheet_of_the_table_brightness_but_another_colour_is_found() {
-        let (green, brown) = ([90, 160, 90], [170, 120, 70]);
-        assert_close(find_page(&photo(640, 480, SHEET, green, brown)), SHEET, 0.02);
-    }
-
-    #[test]
-    fn portrait_photos_work_like_landscape_ones() {
-        assert_close(find_page(&photo(300, 800, SHEET, PAPER, TABLE)), SHEET, 0.02);
-    }
-
-    /// Every corner is the centre of a pixel of a `w` × `h` picture.
-    fn assert_on_grid(found: Option<Quad>, w: f32, h: f32) {
-        for c in found.expect("page found").0 {
-            let (x, y) = (c.x * w - 0.5, c.y * h - 0.5);
-            assert!(
-                (x - x.round()).abs() < 1e-3 && (y - y.round()).abs() < 1e-3,
-                "corner {c:?} off the {w} x {h} grid"
-            );
-        }
-    }
-
-    #[test]
-    fn small_photos_are_searched_as_they_are() {
-        for (w, h) in [(120, 90), (256, 192)] {
-            let found = find_page(&photo(w, h, SHEET, PAPER, TABLE));
-            assert_close(found, SHEET, 0.04);
-            assert_on_grid(found, w as f32, h as f32);
-        }
-    }
-
-    #[test]
-    fn large_photos_are_searched_shrunk() {
-        let found = find_page(&photo(640, 480, SHEET, PAPER, TABLE));
-        assert_on_grid(found, WORK_SIDE as f32, WORK_SIDE as f32);
-    }
-
-    #[test]
-    fn corners_are_pixel_centres() {
-        assert_eq!(centre((0, 0), 4, 2), Point::new(0.125, 0.25));
-        assert_eq!(centre((3, 1), 4, 2), Point::new(0.875, 0.75));
-    }
-
-    #[test]
-    fn text_on_the_sheet_does_not_move_the_corners() {
-        let mut img = photo(640, 480, SHEET, PAPER, TABLE);
-        for line in 0..12 {
-            fill(&mut img, 180..460, 130 + line * 20..133 + line * 20, [30, 30, 30]);
-        }
-        assert_close(find_page(&img), SHEET, 0.02);
-    }
-
-    #[test]
-    fn dark_and_coloured_parts_of_the_sheet_stay_inside() {
-        let square = [(0.2, 0.2), (0.8, 0.2), (0.8, 0.8), (0.2, 0.8)];
-        let mut img = photo(640, 480, square, PAPER, TABLE);
-        // Red picture in the sheet's top left quarter, dark bar further down.
-        fill(&mut img, 128..320, 96..240, [200, 30, 30]);
-        fill(&mut img, 160..480, 300..334, [90, 90, 90]);
-        assert_close(find_page(&img), square, 0.02);
-    }
-
-    #[test]
-    fn strongly_turned_sheet_is_found_with_top_left_first() {
-        let diamond = [(0.3, 0.3), (0.6, 0.1), (0.75, 0.6), (0.4, 0.85)];
-        assert_close(find_page(&photo(640, 480, diamond, PAPER, TABLE)), diamond, 0.02);
-    }
-
-    #[test]
-    fn sheet_cut_by_the_photo_edge_is_found() {
-        let cut = [(0.0, 0.2), (0.7, 0.2), (0.7, 0.8), (0.0, 0.8)];
-        assert_close(find_page(&photo(640, 480, cut, PAPER, TABLE)), cut, 0.02);
-    }
-
-    #[test]
-    fn plain_photo_has_no_page() {
-        assert_eq!(
-            find_page(&RgbImage::from_pixel(640, 480, Rgb([128, 128, 128]))),
-            None
-        );
-    }
-
-    #[test]
-    fn sheet_filling_the_photo_has_no_page() {
-        let mut img = RgbImage::from_pixel(640, 480, Rgb(PAPER));
-        for line in 0..12 {
-            fill(&mut img, 100..540, 100 + line * 20..103 + line * 20, [30, 30, 30]);
-        }
-        assert_eq!(find_page(&img), None);
-    }
-
-    #[test]
-    fn faint_sheet_is_not_a_page() {
-        assert_eq!(
-            find_page(&photo(640, 480, SHEET, [150, 150, 150], [120, 120, 120])),
-            None
-        );
-        let clear = find_page(&photo(640, 480, SHEET, [170, 170, 170], [120, 120, 120]));
-        assert_close(clear, SHEET, 0.02);
-    }
-
-    #[test]
-    fn small_bright_spot_is_not_a_page() {
-        let spot = [(0.4, 0.4), (0.6, 0.4), (0.6, 0.6), (0.4, 0.6)];
-        assert_eq!(find_page(&photo(640, 480, spot, PAPER, TABLE)), None);
-        // Just above a tenth of the photo.
-        let page = [(0.3, 0.3), (0.66, 0.3), (0.66, 0.66), (0.3, 0.66)];
-        assert_close(find_page(&photo(640, 480, page, PAPER, TABLE)), page, 0.02);
-    }
-
-    #[test]
-    fn round_plate_is_not_a_page() {
-        let img = RgbImage::from_fn(400, 400, |x, y| {
-            let (dx, dy) = (x as f32 - 200.0, y as f32 - 200.0);
-            Rgb(if dx.hypot(dy) < 150.0 { PAPER } else { TABLE })
-        });
-        assert_eq!(find_page(&img), None);
-    }
-
-    #[test]
-    fn tiny_pictures_are_not_searched() {
-        assert_eq!(find_page(&photo(7, 400, SHEET, PAPER, TABLE)), None);
-        assert_eq!(find_page(&photo(400, 7, SHEET, PAPER, TABLE)), None);
-    }
-
-    #[test]
-    fn threshold_lies_between_two_groups() {
-        let img = GrayImage::from_fn(10, 10, |x, _| Luma([if x < 3 { 20 } else { 200 }]));
-        let (level, contrast) = threshold(&img);
-        assert!((20..200).contains(&level), "level {level}");
-        assert!((contrast - 180.0).abs() < 1e-9, "contrast {contrast}");
-        assert_eq!(threshold(&GrayImage::from_pixel(4, 4, Luma([7]))), (0, 0.0));
-    }
-
-    #[test]
-    fn threshold_weighs_group_sizes_and_the_squared_gap() {
-        // 40 dark, 40 middle, 20 bright: splitting off the small bright group wins only by
-        // its far mean, squared.
-        let img = GrayImage::from_fn(10, 10, |x, _| {
-            Luma([match x {
-                0..=3 => 0,
-                4..=7 => 100,
-                _ => 255,
-            }])
-        });
-        assert_eq!(threshold(&img), (100, 205.0));
-    }
-
-    #[test]
-    fn border_colour_is_the_middle_of_the_border_only() {
-        // Border mostly table; a bright strip covers a third of the top edge, the inside is paper.
-        let mut img = RgbImage::from_pixel(30, 20, Rgb(PAPER));
-        for x in 0..30 {
-            img.put_pixel(x, 0, Rgb(if x < 10 { [250, 240, 10] } else { [40, 50, 60] }));
-            img.put_pixel(x, 19, Rgb([40, 50, 60]));
-        }
-        for y in 0..20 {
-            img.put_pixel(0, y, Rgb([40, 50, 60]));
-            img.put_pixel(29, y, Rgb([40, 50, 60]));
-        }
-        img.put_pixel(0, 0, Rgb([250, 240, 10]));
-        assert_eq!(border_colour(&img), [40, 50, 60]);
-    }
-
-    #[test]
-    fn distance_is_the_largest_channel_difference() {
-        let img = RgbImage::from_fn(2, 1, |x, _| Rgb(if x == 0 { [10, 20, 30] } else { [200, 25, 0] }));
-        let apart = distance(&img, [10, 20, 30]);
-        assert_eq!((apart.get_pixel(0, 0)[0], apart.get_pixel(1, 0)[0]), (0, 190));
-        let apart = distance(&img, [10, 120, 30]);
-        assert_eq!((apart.get_pixel(0, 0)[0], apart.get_pixel(1, 0)[0]), (100, 190));
-        let apart = distance(&img, [10, 20, 250]);
-        assert_eq!((apart.get_pixel(0, 0)[0], apart.get_pixel(1, 0)[0]), (220, 250));
-    }
-
-    #[test]
-    fn largest_area_wins_and_diagonals_do_not_connect() {
-        // Two pixels touching by a corner, then a row of three.
-        let mask = [
-            true, false, false, false, true, false, false, false, false, true, true, true,
-        ];
-        let area = largest_area(&mask, 3, 4);
-        let mut sorted = area.clone();
-        sorted.sort_unstable();
-        assert_eq!(sorted, vec![(0, 3), (1, 3), (2, 3)]);
-        assert!(largest_area(&[false; 6], 3, 2).is_empty());
-    }
-
-    #[test]
-    fn areas_join_in_all_four_directions() {
-        // Plus sign: centre found first only through its neighbours.
-        let mask = [false, true, false, true, true, true, false, true, false];
-        assert_eq!(largest_area(&mask, 3, 3).len(), 5);
-    }
-
-    #[test]
-    fn areas_join_upwards_too() {
-        // U: right arm is reached from below only.
-        let mask = [true, false, true, true, true, true];
-        assert_eq!(largest_area(&mask, 3, 2).len(), 5);
-    }
-
-    #[test]
-    fn areas_do_not_wrap_around_the_picture_edge() {
-        // Right end of row 0 and left end of row 1 are neighbours in memory only.
-        let mask = [false, false, true, true, false, false];
-        assert_eq!(largest_area(&mask, 3, 2).len(), 1);
-    }
-
-    #[test]
-    fn hull_drops_inner_points_and_points_on_edges() {
-        let points = vec![(0, 0), (4, 0), (4, 4), (0, 4), (2, 2), (2, 0), (1, 3), (4, 2)];
-        let outline = hull(points);
-        assert_eq!(outline, vec![(0, 0), (4, 0), (4, 4), (0, 4)]);
-        assert_eq!(area2(&outline), 32);
-        assert_eq!(hull(vec![(1, 1), (1, 1), (2, 2)]), vec![(1, 1), (2, 2)]);
-        assert_eq!(hull(vec![(3, 3)]), vec![(3, 3)]);
-        assert_eq!(hull(vec![(0, 4), (4, 0), (0, 0)]), vec![(0, 0), (4, 0), (0, 4)]);
-    }
-
-    #[test]
-    fn largest_quad_skips_cut_corners() {
-        // Square with one corner cut by a short edge.
-        let outline = [(0, 0), (9, 0), (10, 1), (10, 10), (0, 10)];
-        let quad = largest_quad(&outline).unwrap();
-        assert_eq!(area2(&quad), 190);
-        assert!(quad.contains(&(0, 0)) && quad.contains(&(10, 10)) && quad.contains(&(0, 10)));
-        assert_eq!(largest_quad(&[(0, 0), (5, 0), (0, 5)]), None);
-    }
-
-    #[test]
-    fn largest_quad_is_found_wherever_the_outline_starts() {
-        // Square whose left side bulges: outline starts in the bulge.
-        let outline = [(1, 15), (0, 10), (1, 5), (2, 0), (22, 0), (22, 20), (2, 20)];
-        assert_eq!(largest_quad(&outline), Some([(2, 0), (22, 0), (22, 20), (2, 20)]));
-    }
-
-    #[test]
-    fn largest_quad_adds_both_sides_of_the_diagonal() {
-        // Far points of diagonal (8,2)-(4,7) multiply to more than those of the best one.
-        let outline = [(2, 4), (8, 2), (10, 4), (10, 11), (4, 7)];
-        assert_eq!(largest_quad(&outline), Some([(2, 4), (8, 2), (10, 4), (10, 11)]));
-    }
-
-    #[test]
-    fn corner_order_starts_top_left() {
-        let turned = [(10, 0), (10, 10), (0, 10), (0, 0)];
-        assert_eq!(from_top_left(turned), [(0, 0), (10, 0), (10, 10), (0, 10)]);
-        // Tie on x + y: the upper corner leads.
-        let diamond = [(0, 5), (5, 0), (10, 5), (5, 10)];
-        assert_eq!(from_top_left(diamond), [(5, 0), (10, 5), (5, 10), (0, 5)]);
-    }
-}
+mod tests;

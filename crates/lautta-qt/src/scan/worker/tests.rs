@@ -136,8 +136,8 @@ async fn corners_apply_to_the_named_page() {
 #[tokio::test]
 async fn retake_swaps_the_photo_of_the_named_page() {
     let mut b = bench().await;
-    b.send(Job::Add(fixture("large-photo.jpg")));
-    b.send(Job::Add(fixture("large-photo.jpg")));
+    b.send(Job::Add(fixture("photo.jpg")));
+    b.send(Job::Add(fixture("photo.jpg")));
     b.send(Job::Retake(2, fixture("sheet.jpg")));
     b.done().await;
     b.done().await;
