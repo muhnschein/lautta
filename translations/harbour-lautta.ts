@@ -2780,14 +2780,6 @@ Cabin keys from Anni</source>
         <source>Could not take the picture</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-scan-adjust">
-        <source>Adjust</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-scan-retake">
-        <source>Retake</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-scan-title">
         <source>Scan</source>
         <translation type="unfinished"></translation>

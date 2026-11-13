@@ -5,7 +5,6 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/scan"
-import "../components/scan/ScanMath.js" as ScanMath
 import "../components/ErrorText.js" as ErrorText
 
 FullscreenContentPage {
@@ -26,9 +25,6 @@ FullscreenContentPage {
     property bool flashOn
     property bool taking
     property bool cameraFailed
-    // Page shown still after its shot, null: live picture.
-    property var stillPage: null
-    property int stillIndex: -1
     // Qt lists no camera before one was opened: known once the viewfinder is built.
     readonly property bool cameraUsable: !cameraFailed && (!finderLoader.item || finderLoader.item.available)
     readonly property bool live: status === PageStatus.Active && Qt.application.state === Qt.ApplicationActive
@@ -36,8 +32,6 @@ FullscreenContentPage {
     readonly property int pages: scan ? scan.count : 0
 
     function shoot() {
-        if (stillPage)
-            return page.dropStill()
         if (working || !finderLoader.item || !finderLoader.item.ready)
             return
         var path = scan.shotPath()
@@ -53,8 +47,6 @@ FullscreenContentPage {
             scan.retake(retakeIndex, path)
         else
             scan.add(path)
-        if (!retakeOnly)
-            retakeIndex = -1
     }
 
     function shotFailed() {
@@ -64,36 +56,22 @@ FullscreenContentPage {
         notice.show()
     }
 
-    function showStill(index) {
-        stillPage = JSON.parse(scan.pageJson(index))
-        stillIndex = stillPage ? index : -1
-        stillTimer.restart()
-    }
-
-    function dropStill() {
-        stillTimer.stop()
-        stillPage = null
-        stillIndex = -1
-    }
-
-    function retakeStill() {
-        retakeIndex = stillIndex
-        dropStill()
-    }
-
-    function adjustStill() {
-        var index = stillIndex
-        dropStill()
-        pageStack.push(Qt.resolvedUrl("../dialogs/ScanAdjustDialog.qml"), { "scan": scan, "index": index })
+    // New page flies from the whole screen into the pages button.
+    function fly(index) {
+        var shown = JSON.parse(scan.pageJson(index))
+        if (!shown)
+            return
+        flyer.source = "file://" + shown.view
+        var end = pagesButton.mapToItem(page, 0, 0)
+        flight.to = Qt.rect(end.x, end.y, pagesButton.width, pagesButton.height)
+        flight.restart()
     }
 
     function showPages() {
-        dropStill()
         pageStack.push(Qt.resolvedUrl("ScanPageView.qml"), { "scan": scan, "index": pages - 1 })
     }
 
     function finish() {
-        dropStill()
         handedOver = true
         pageStack.replace(Qt.resolvedUrl("../dialogs/ScanSaveDialog.qml"),
                           { "parentUri": parentUri, "owner": owner, "scan": scan, "name": name })
@@ -107,7 +85,7 @@ FullscreenContentPage {
         if (status === PageStatus.Active)
             shown = true
         else
-            dropStill()
+            flight.complete()
     }
     Component.onDestruction: {
         if (scan && owner && !handedOver)
@@ -122,7 +100,7 @@ FullscreenContentPage {
             if (page.retakeOnly)
                 pageStack.pop()
             else
-                page.showStill(index)
+                page.fly(index)
         }
         onFailed: {
             if (page.status !== PageStatus.Active)
@@ -132,13 +110,6 @@ FullscreenContentPage {
             notice.text = ErrorText.message(kind, {})
             notice.show()
         }
-    }
-
-    // Still stays this long unless tapped away.
-    Timer {
-        id: stillTimer
-        interval: 2500
-        onTriggered: page.dropStill()
     }
 
     Loader {
@@ -178,62 +149,6 @@ FullscreenContentPage {
             text: qsTrId("lautta-scan-no-camera")
             //% "Scanning needs the camera"
             hintText: qsTrId("lautta-scan-no-camera-hint")
-        }
-    }
-
-    MouseArea {
-        id: still
-
-        objectName: "still"
-        anchors.fill: parent
-        visible: page.stillPage !== null
-        onClicked: page.dropStill()
-
-        Rectangle {
-            anchors.fill: parent
-            color: "black"
-        }
-
-        Image {
-            id: stillImage
-
-            readonly property var size: ScanMath.fit(still.width, still.height, implicitWidth, implicitHeight, 0)
-
-            anchors.centerIn: parent
-            width: size.width
-            height: size.height
-            source: page.stillPage ? "file://" + page.stillPage.picture : ""
-            cache: false
-
-            QuadOutline {
-                objectName: "stillOutline"
-                anchors.fill: parent
-                visible: stillImage.status === Image.Ready
-                corners: page.stillPage ? page.stillPage.quad : ScanMath.whole
-            }
-        }
-
-        Row {
-            anchors {
-                horizontalCenter: parent.horizontalCenter
-                bottom: parent.bottom
-                bottomMargin: controls.height + 2 * controls.anchors.bottomMargin
-            }
-            spacing: Theme.paddingLarge
-
-            Button {
-                objectName: "adjustButton"
-                //% "Adjust"
-                text: qsTrId("lautta-scan-adjust")
-                onClicked: page.adjustStill()
-            }
-
-            Button {
-                objectName: "retakeButton"
-                //% "Retake"
-                text: qsTrId("lautta-scan-retake")
-                onClicked: page.retakeStill()
-            }
         }
     }
 
@@ -340,6 +255,30 @@ FullscreenContentPage {
             enabled: !page.working
             icon.source: "image://theme/icon-m-accept"
             onClicked: page.finish()
+        }
+    }
+
+    Image {
+        id: flyer
+
+        objectName: "flyer"
+        visible: flight.running
+        fillMode: Image.PreserveAspectFit
+        cache: false
+    }
+
+    ParallelAnimation {
+        id: flight
+
+        property rect to
+
+        NumberAnimation { target: flyer; property: "x"; from: 0; to: flight.to.x; duration: 400; easing.type: Easing.InQuad }
+        NumberAnimation { target: flyer; property: "y"; from: 0; to: flight.to.y; duration: 400; easing.type: Easing.InQuad }
+        NumberAnimation {
+            target: flyer; property: "width"; from: page.width; to: flight.to.width; duration: 400; easing.type: Easing.InQuad
+        }
+        NumberAnimation {
+            target: flyer; property: "height"; from: page.height; to: flight.to.height; duration: 400; easing.type: Easing.InQuad
         }
     }
 
