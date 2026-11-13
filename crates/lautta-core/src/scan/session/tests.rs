@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 use super::*;
 use crate::preview::exif::testutil;
-use crate::scan::Point;
 use image::{Rgb, RgbImage};
 use lautta_pdf::PdfDocument;
 
@@ -336,28 +335,6 @@ fn moved_corners_cut_another_part() {
     d.session.set_quad(0, Quad::FULL).unwrap();
     assert_eq!(d.view(0).dimensions(), (800, 600));
     assert!(!d.info(0).found);
-}
-
-#[test]
-fn edge_search_answers_without_changing_the_page() {
-    let mut d = desk();
-    d.session.add(&d.sheet()).unwrap();
-    d.session.add(&d.plain()).unwrap();
-    d.session.set_quad(0, Quad::FULL).unwrap();
-    let found = d.session.find_edges(0).unwrap().unwrap();
-    assert_sheet(found.to_flat());
-    assert_eq!(d.info(0).quad, Quad::FULL.to_flat());
-    assert!(!d.info(0).found);
-    let odd = Quad([
-        Point::new(0.1, 0.1),
-        Point::new(0.9, 0.1),
-        Point::new(0.9, 0.9),
-        Point::new(0.1, 0.9),
-    ]);
-    d.session.set_quad(1, odd).unwrap();
-    assert_eq!(d.session.find_edges(1).unwrap(), None);
-    assert_eq!(d.info(1).quad, odd.to_flat());
-    assert_eq!(d.session.find_edges(2).unwrap_err().kind, ErrorKind::NotFound);
 }
 
 #[test]

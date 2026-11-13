@@ -9,7 +9,6 @@ Item {
     property bool reachedEnd
     property var scan: null
     property var ready: []
-    property var edges: []
     property var failures: []
     property var savedUris: []
     readonly property string sheet: Qt.resolvedUrl("fixtures/sheet.jpg")
@@ -60,7 +59,6 @@ Item {
 
         ScanModel {
             onPhotoReady: root.ready = root.ready.concat([index])
-            onEdgesSearched: root.edges = root.edges.concat([[index, corners]])
             onFailed: root.failures = root.failures.concat([kind])
             onSaved: root.savedUris = root.savedUris.concat([uri])
         }
@@ -154,19 +152,10 @@ Item {
         check(cornersAre(1, half), "corners kept")
     }
 
-    function checkEdgeSearch() {
+    function checkWholePicture() {
         scan.setCorners(0, JSON.stringify(ScanMath.whole))
         idle("whole picture")
         check(!row(0).edgesFound && cornersAre(0, ScanMath.whole), "whole picture in use")
-        scan.findEdges(0)
-        idle("edge search")
-        check(edges.length === 1 && edges[0][0] === 0, "answered for the page: " + JSON.stringify(edges))
-        var found = JSON.parse(edges[0][1])
-        check(ScanMath.isPage(found) && JSON.stringify(found) !== JSON.stringify(ScanMath.whole), "sheet found: " + edges[0][1])
-        check(cornersAre(0, ScanMath.whole), "page itself untouched: " + row(0).corners)
-        scan.findEdges(1)
-        idle("edge search without edges")
-        check(edges.length === 2 && edges[1][0] === 1 && edges[1][1] === "", "nothing found: " + JSON.stringify(edges))
     }
 
     function checkRetakeAndOrder() {
@@ -191,7 +180,6 @@ Item {
         scan.movePage(0, 9)
         scan.movePage(0, 0)
         scan.retake(9, sheet)
-        scan.findEdges(9)
         scan.setColour(9, "grayscale")
         check(!scan.busy && failures.length === 0 && scan.count === 2, "pages that are not there are left alone")
 
@@ -239,7 +227,7 @@ Item {
         scan = maker.createObject(root)
         checkPhotos()
         checkChanges()
-        checkEdgeSearch()
+        checkWholePicture()
         checkRetakeAndOrder()
         checkSaving()
         checkLeaving()

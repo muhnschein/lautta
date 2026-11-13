@@ -63,3 +63,15 @@ function cellAt(x, y, cellWidth, cellHeight, columns, count) {
     var index = Math.floor(y / cellHeight) * columns + column
     return column < columns && index < count ? index : -1
 }
+
+// Top left of a round loupe of `size` for a finger at x, y: above the finger, clear of it by
+// `gap`; beside it where the area has no room above.
+function loupeAt(x, y, size, gap, areaWidth, areaHeight) {
+    var clamp = function(v, most) { return Math.max(0, Math.min(most, v)) }
+    if (y - gap - size >= 0)
+        return { "x": clamp(x - size / 2, areaWidth - size), "y": y - gap - size }
+    // Side with more room: a loupe at most half the area wide never reaches over the finger there.
+    var right = areaWidth - x >= x
+    return { "x": right ? Math.min(x + gap, areaWidth - size) : Math.max(x - gap - size, 0),
+             "y": clamp(y - size / 2, areaHeight - size) }
+}

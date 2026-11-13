@@ -3,6 +3,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../../qml/components/scan/ScanMath.js" as ScanMath
 
 ApplicationWindow {
     id: win
@@ -89,6 +90,17 @@ ApplicationWindow {
                 && near((handle.y + handle.height / 2) / frame.height, win.dialog.corners[2 * index + 1])
     }
 
+    function covers(item, p) {
+        return p.x >= item.x && p.x <= item.x + item.width && p.y >= item.y && p.y <= item.y + item.height
+    }
+
+    // As the dialog places it, for a finger at `p` on the dialog.
+    function loupeAt(p) {
+        var size = named(win.dialog, "loupe").width
+        var at = ScanMath.loupeAt(p.x, p.y, size, Theme.itemSizeLarge, win.dialog.width, win.dialog.height)
+        return JSON.stringify([at.x, at.y])
+    }
+
     function open() {
         win.dialog = pageStack.push(Qt.resolvedUrl("../../qml/dialogs/ScanAdjustDialog.qml"), { "scan": win.scan, "index": 0 })
     }
@@ -107,7 +119,7 @@ ApplicationWindow {
             // Hang guard: emulated target needs seconds per picture.
             if (win.waited > 600)
                 return win.fail("step " + win.step + " timed out")
-            var frame, handle, loupe, start, moved
+            var frame, handle, loupe, start, moved, finger
             switch (win.step) {
             case 0:
                 win.scan = maker.createObject(win)
@@ -150,12 +162,34 @@ ApplicationWindow {
                 tools.mouse(handle, "press", handle.width / 2 + 5, handle.height / 2 + 7)
                 if (win.dialog.grabbed !== 3 || !loupe.visible || !same(win.dialog.corners, start))
                     return win.fail("held corner: loupe shows, corner stays")
+                finger = handle.mapToItem(win.dialog, handle.width / 2 + 5, handle.height / 2 + 7)
+                if (!near(win.dialog.fingerX, finger.x) || !near(win.dialog.fingerY, finger.y))
+                    return win.fail("finger followed on the dialog: " + win.dialog.fingerX + "," + win.dialog.fingerY)
+                if (loupeAt(finger) !== JSON.stringify([loupe.x, loupe.y]) || named(loupe, "loupeRing").radius !== loupe.width / 2
+                        || !(loupe.width >= Math.min(win.dialog.width, win.dialog.height) / 2 - 1))
+                    return win.fail("loupe big, round, placed for the finger: " + loupe.x + "," + loupe.y + " " + loupe.width)
+                var held = finger
+                // Test screen is too small for room above a handle: finger set where there is.
+                win.dialog.fingerX = win.dialog.width / 2 + 10
+                win.dialog.fingerY = win.dialog.height - 10
+                finger = Qt.point(win.dialog.fingerX, win.dialog.fingerY)
+                if (loupe.y + loupe.height > finger.y - Theme.itemSizeLarge + 0.5 || covers(loupe, finger)
+                        || !near(loupe.x + loupe.width / 2, finger.x))
+                    return win.fail("room above: loupe above the finger, clear of it: " + loupe.x + "," + loupe.y)
                 tools.mouse(handle, "move", handle.width / 2 + 5 + dx, handle.height / 2 + 7 + dy)
+                // Handle moved with the corner: the finger is where it was, plus the move.
+                finger = Qt.point(held.x + dx, held.y + dy)
+                if (loupeAt(finger) !== JSON.stringify([loupe.x, loupe.y]))
+                    return win.fail("loupe moves with the finger: " + loupe.x + "," + loupe.y)
                 moved = start.slice()
                 moved[6] += 0.1
                 moved[7] += 0.08
                 if (!same(win.dialog.corners, moved))
                     return win.fail("corner follows the finger: " + JSON.stringify(win.dialog.corners) + " != " + JSON.stringify(moved))
+                var lensPhoto = named(loupe, "loupePhoto")
+                if (!near(lensPhoto.width, frame.width * 2) || !near(lensPhoto.x, -moved[6] * lensPhoto.width)
+                        || !near(lensPhoto.y, -moved[7] * lensPhoto.height))
+                    return win.fail("loupe: held corner twice as large, in its middle: " + lensPhoto.x + "," + lensPhoto.y)
                 if (!onCorner(3))
                     return win.fail("handle follows its corner")
                 // Far past the opposite corner: no page that way, corner stays.
@@ -165,6 +199,8 @@ ApplicationWindow {
                 tools.mouse(handle, "release", handle.width / 2 + frame.width * 2, handle.height / 2 - frame.height * 2)
                 if (win.dialog.grabbed !== -1 || loupe.visible)
                     return win.fail("let go: loupe away")
+                if (named(win.dialog, "findEdgesButton") || named(win.dialog, "wholePictureButton"))
+                    return win.fail("tools: rotate left and right only")
                 named(win.dialog, "rotateRightButton").clicked(null)
                 if (win.dialog.turns !== 1 || frame.rotation !== 90 || !near(frame.width / frame.height, 480 / 360))
                     return win.fail("turned right: " + win.dialog.turns)
@@ -177,9 +213,6 @@ ApplicationWindow {
                 named(win.dialog, "rotateLeftButton").clicked(null)
                 if (win.dialog.turns !== 3 || frame.rotation !== 270)
                     return win.fail("turned left past upright: " + win.dialog.turns)
-                named(win.dialog, "wholePictureButton").clicked(null)
-                if (!whole(win.dialog.corners))
-                    return win.fail("whole picture")
                 pageStack.pop()
                 win.dialog = null
                 win.next()
@@ -205,28 +238,21 @@ ApplicationWindow {
                     break
                 if (!whole(win.dialog.corners))
                     return win.fail("opens on the whole picture")
-                // An answer for another page is not for this dialog.
-                win.scan.findEdges(1)
-                win.next()
-                break
-            case 5:
-                if (win.scan.busy)
-                    break
-                if (!whole(win.dialog.corners))
-                    return win.fail("edges of another page left alone: " + JSON.stringify(win.dialog.corners))
-                named(win.dialog, "findEdgesButton").clicked(null)
-                if (!win.scan.busy)
-                    return win.fail("edge search runs")
-                win.next()
-                break
-            case 6:
-                if (win.scan.busy)
-                    break
-                if (!same(win.dialog.corners, win.sheetCorners))
-                    return win.fail("edges found again: " + JSON.stringify(win.dialog.corners))
-                if (JSON.stringify(info(0)) !== JSON.stringify(win.before))
-                    return win.fail("page itself untouched by the search")
+                // Corners as a drag would leave them: the sheet's.
+                win.dialog.corners = win.sheetCorners.slice()
                 frame = named(win.dialog, "frame")
+                // Top left corner held: no room above, loupe beside the finger.
+                handle = named(win.dialog, "handle0")
+                tools.mouse(handle, "press", handle.width / 2, handle.height / 2)
+                loupe = named(win.dialog, "loupe")
+                finger = handle.mapToItem(win.dialog, handle.width / 2, handle.height / 2)
+                if (finger.y - Theme.itemSizeLarge - loupe.height >= 0)
+                    return win.fail("test needs a corner without room above: " + finger.y)
+                if (loupeAt(finger) !== JSON.stringify([loupe.x, loupe.y]) || loupe.y < 0 || loupe.y + loupe.height > win.dialog.height)
+                    return win.fail("no room above: loupe beside, inside the dialog: " + loupe.x + "," + loupe.y)
+                if (covers(loupe, finger) && !near(loupe.x, finger.x) && !near(loupe.x + loupe.width, finger.x))
+                    return win.fail("no room above: loupe clear of the finger: " + loupe.x + "," + loupe.y + " " + finger.x)
+                tools.mouse(handle, "release", handle.width / 2, handle.height / 2)
                 handle = named(win.dialog, "handle3")
                 tools.mouse(handle, "press", handle.width / 2, handle.height / 2)
                 tools.mouse(handle, "move", handle.width / 2 + frame.width * 0.05, handle.height / 2 - frame.height * 0.1)
@@ -240,7 +266,7 @@ ApplicationWindow {
                 win.dialog.accept()
                 win.next()
                 break
-            case 7:
+            case 5:
                 if (pageStack.busy || pageStack.depth !== 1 || win.scan.busy)
                     break
                 if (!same(info(0).quad, win.set) || info(0).turns !== 1)
@@ -251,7 +277,7 @@ ApplicationWindow {
                 win.open()
                 win.next()
                 break
-            case 8:
+            case 6:
                 if (!win.onTop("corners") || !(named(win.dialog, "frame").width > 0))
                     break
                 if (!same(win.dialog.corners, win.set) || win.dialog.turns !== 1 || named(win.dialog, "frame").rotation !== 90)
@@ -274,7 +300,7 @@ ApplicationWindow {
                 win.dialog.accept()
                 win.next()
                 break
-            case 9:
+            case 7:
                 if (pageStack.busy || pageStack.depth !== 1 || win.scan.busy)
                     break
                 if (info(0).turns !== 2 || !same(info(0).quad, win.set))
@@ -283,7 +309,7 @@ ApplicationWindow {
                 win.open()
                 win.next()
                 break
-            case 10:
+            case 8:
                 if (!win.onTop("corners") || !(named(win.dialog, "frame").width > 0))
                     break
                 if (win.dialog.turns !== 2)
@@ -292,7 +318,7 @@ ApplicationWindow {
                 win.dialog.accept()
                 win.next()
                 break
-            case 11:
+            case 9:
                 if (pageStack.busy || pageStack.depth !== 1)
                     break
                 if (win.scan.busy || JSON.stringify(info(0)) !== JSON.stringify(win.before))

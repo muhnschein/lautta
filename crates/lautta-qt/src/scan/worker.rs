@@ -27,7 +27,6 @@ pub enum Job {
     Colour(u32, Colour),
     Turn(u32, i32),
     Corners(u32, Quad),
-    FindEdges(u32),
     Remove(u32),
     Move(u32, usize),
     Save { dest: Uri, name: String },
@@ -38,8 +37,6 @@ pub enum Event {
     Changed,
     /// Page has a new photo: new page, or retaken one.
     Photo(u32),
-    /// Edges found in a page's photo, `None` when there are none; page itself unchanged.
-    Edges(u32, Option<[f32; 8]>),
     Saved(Uri),
     Failed {
         error: Error,
@@ -83,9 +80,6 @@ fn apply(session: &mut ScanSession, job: Job) -> Result<Event> {
         Job::Corners(id, quad) => session
             .set_quad(place(session, id)?, quad)
             .map(|()| Event::Changed),
-        Job::FindEdges(id) => session
-            .find_edges(place(session, id)?)
-            .map(|found| Event::Edges(id, found.map(|q| q.to_flat()))),
         Job::Remove(id) => session.remove(place(session, id)?).map(|()| Event::Changed),
         Job::Move(id, to) => session
             .move_page(place(session, id)?, to)

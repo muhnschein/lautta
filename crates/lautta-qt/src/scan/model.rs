@@ -50,7 +50,6 @@ pub struct ScanModel {
     setColour: qt_method!(fn(&mut self, index: i32, colour: QString)),
     turn: qt_method!(fn(&mut self, index: i32, quarters: i32)),
     setCorners: qt_method!(fn(&mut self, index: i32, corners_json: QString)),
-    findEdges: qt_method!(fn(&mut self, index: i32)),
     remove: qt_method!(fn(&mut self, index: i32)),
     movePage: qt_method!(fn(&mut self, from: i32, to: i32)),
     save: qt_method!(fn(&mut self, dest_uri: QString, name: QString)),
@@ -58,8 +57,6 @@ pub struct ScanModel {
 
     /// Page at `index` has a new photo: new page, or retaken one.
     photoReady: qt_signal!(index: i32),
-    /// `corners` as `setCorners` takes them, empty when the photo shows no page edges.
-    edgesSearched: qt_signal!(index: i32, corners: QString),
     saved: qt_signal!(uri: QString),
     failed: qt_signal!(kind: QString, message: QString),
 
@@ -222,12 +219,6 @@ impl ScanModel {
                     self.photoReady(index);
                 }
             }
-            Event::Edges(id, found) => {
-                if let Some(index) = self.index_of(id) {
-                    let corners = found.map(|c| to_json(&c)).unwrap_or_default();
-                    self.edgesSearched(index, QString::from(corners.as_str()));
-                }
-            }
             Event::Saved(uri) => {
                 self.set_saving(false);
                 self.saved(QString::from(uri.to_string().as_str()));
@@ -279,10 +270,6 @@ impl ScanModel {
             Some(quad) => self.queue_for(index, |id| Job::Corners(id, quad)),
             None => self.report(&Error::new(ErrorKind::InvalidArgument, "bad arguments")),
         }
-    }
-
-    fn findEdges(&mut self, index: i32) {
-        self.queue_for(index, Job::FindEdges);
     }
 
     fn remove(&mut self, index: i32) {

@@ -98,6 +98,26 @@ Item {
         check(ScanMath.cellAt(10, 10, 100, 130, 2, 0) === -1, "no pages")
     }
 
+    function checkLoupe() {
+        // Area 400 x 800, loupe 100, gap 20.
+        var at = function(x, y) { return JSON.stringify(ScanMath.loupeAt(x, y, 100, 20, 400, 800)) }
+        check(at(200, 500) === '{"x":150,"y":380}', "above the finger, centred: " + at(200, 500))
+        check(at(200, 120) === '{"x":150,"y":0}', "just room above: " + at(200, 120))
+        check(at(10, 500) === '{"x":0,"y":380}' && at(390, 500) === '{"x":300,"y":380}', "kept inside at the sides: " + at(10, 500) + at(390, 500))
+        check(at(200, 119) === '{"x":220,"y":69}', "no room above: right of the finger: " + at(200, 119))
+        check(at(300, 30) === '{"x":180,"y":0}', "more room left: left of it, inside: " + at(300, 30))
+        check(at(280, 60) === '{"x":160,"y":10}', "more room left though right would fit: " + at(280, 60))
+        check(at(180, 50) === '{"x":200,"y":0}' && at(230, 50) === '{"x":110,"y":0}',
+              "gap does not fit: pushed in, still off the finger: " + at(180, 50) + at(230, 50))
+        check(at(380, 50) === '{"x":260,"y":0}', "left of the finger by the gap: " + at(380, 50))
+        // Loupe half the area wide: no room for the gap on either side.
+        var narrow = function(x) { return JSON.stringify(ScanMath.loupeAt(x, 50, 100, 20, 200, 800)) }
+        check(narrow(90) === '{"x":100,"y":0}' && narrow(110) === '{"x":0,"y":0}',
+              "narrow area: loupe kept inside, finger left uncovered: " + narrow(90) + narrow(110))
+        check(at(50, 790) === '{"x":0,"y":670}', "low finger: above")
+        check(JSON.stringify(ScanMath.loupeAt(200, 100, 100, 20, 400, 120)) === '{"x":220,"y":20}', "beside, kept inside at the bottom")
+    }
+
     Component.onCompleted: {
         checkPages()
         checkMoves()
@@ -105,6 +125,7 @@ Item {
         checkFit()
         checkEdges()
         checkCells()
+        checkLoupe()
         reachedEnd = true
     }
 }

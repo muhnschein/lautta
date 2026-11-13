@@ -119,7 +119,7 @@ async fn jobs_run_in_queue_order_and_each_reports_the_pages() {
 }
 
 #[tokio::test]
-async fn corners_and_edge_search_apply_to_the_named_page() {
+async fn corners_apply_to_the_named_page() {
     let mut b = bench().await;
     b.send(Job::Add(fixture("large-photo.jpg")));
     b.send(Job::Add(fixture("sheet.jpg")));
@@ -130,17 +130,6 @@ async fn corners_and_edge_search_apply_to_the_named_page() {
     let (pages, event, _) = b.done().await;
     assert!(matches!(event, Event::Changed), "{event:?}");
     assert_eq!(pages[1].quad, half.to_flat());
-    assert!(pages[0].quad != half.to_flat());
-    b.send(Job::FindEdges(2));
-    let (pages, event, _) = b.done().await;
-    let Event::Edges(2, Some(found)) = event else {
-        panic!("{event:?}")
-    };
-    assert!(found != half.to_flat() && Quad::from_flat(&found).is_some());
-    assert_eq!(pages[1].quad, half.to_flat());
-    b.send(Job::FindEdges(1));
-    let (pages, event, _) = b.done().await;
-    assert!(matches!(event, Event::Edges(1, None)), "{event:?}");
     assert!(pages[0].quad != half.to_flat());
 }
 

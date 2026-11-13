@@ -2749,10 +2749,6 @@ Cabin keys from Anni</source>
         <source>Take pictures of pages with the camera. They are saved as one PDF.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-scan-no-edges">
-        <source>No page edges found</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-scan-adjust-done">
         <source>Done</source>
         <translation type="unfinished"></translation>

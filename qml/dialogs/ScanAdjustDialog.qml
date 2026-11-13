@@ -19,7 +19,9 @@ Dialog {
     property string startCorners
     // Corner under the finger, -1 none.
     property int grabbed: -1
+    // Finger on the dialog.
     property real fingerX
+    property real fingerY
 
     function load() {
         var info = scan ? JSON.parse(scan.pageJson(index)) : null
@@ -36,6 +38,12 @@ Dialog {
         turns = ScanMath.turned(turns, by)
     }
 
+    function follow(item, x, y) {
+        var at = item.mapToItem(dialog, x, y)
+        fingerX = at.x
+        fingerY = at.y
+    }
+
     allowedOrientations: Orientation.All
     canAccept: picture.length > 0
 
@@ -45,21 +53,6 @@ Dialog {
             scan.setCorners(index, JSON.stringify(corners))
         if (turns !== startTurns)
             scan.turn(index, turns - startTurns)
-    }
-
-    Connections {
-        target: dialog.scan
-        onEdgesSearched: {
-            if (index !== dialog.index)
-                return
-            if (corners.length > 0) {
-                dialog.corners = JSON.parse(corners)
-                return
-            }
-            //% "No page edges found"
-            notice.text = qsTrId("lautta-scan-no-edges")
-            notice.show()
-        }
     }
 
     DialogHeader {
@@ -125,14 +118,14 @@ Dialog {
                     onPressed: {
                         grabX = mouse.x - width / 2
                         grabY = mouse.y - height / 2
-                        dialog.fingerX = mapToItem(stage, mouse.x, mouse.y).x
+                        dialog.follow(handle, mouse.x, mouse.y)
                         dialog.grabbed = index
                     }
                     onReleased: dialog.grabbed = -1
                     onCanceled: dialog.grabbed = -1
                     onPositionChanged: {
                         var at = mapToItem(frame, mouse.x - grabX, mouse.y - grabY)
-                        dialog.fingerX = mapToItem(stage, mouse.x, mouse.y).x
+                        dialog.follow(handle, mouse.x, mouse.y)
                         dialog.corners = ScanMath.moved(dialog.corners, index, at.x / frame.width, at.y / frame.height)
                     }
 
@@ -150,28 +143,35 @@ Dialog {
                 }
             }
         }
+    }
 
-        // Held corner enlarged, on the side away from the finger.
+    // Held corner enlarged, round, above the finger so the thumb leaves it in sight.
+    Item {
+        id: loupe
+
+        readonly property real size: Math.min(Theme.itemSizeHuge * 2, Math.min(dialog.width, dialog.height) / 2)
+        readonly property var at: ScanMath.loupeAt(dialog.fingerX, dialog.fingerY, size, Theme.itemSizeLarge,
+                                                   dialog.width, dialog.height)
+
+        objectName: "loupe"
+        visible: dialog.grabbed >= 0
+        x: at.x
+        y: at.y
+        width: size
+        height: size
+
         Rectangle {
-            id: loupe
+            id: lens
 
-            objectName: "loupe"
-            visible: dialog.grabbed >= 0
-            width: Theme.itemSizeHuge
-            height: Theme.itemSizeHuge
-            x: dialog.fingerX > stage.width / 2 ? 0 : stage.width - width
+            anchors.fill: parent
             color: "black"
-            border {
-                width: Math.max(2, Math.round(Theme.paddingSmall / 2))
-                color: Theme.highlightColor
-            }
-            clip: true
 
             Item {
                 anchors.centerIn: parent
                 rotation: dialog.turns * 90
 
                 Image {
+                    objectName: "loupePhoto"
                     width: frame.width * 2
                     height: frame.height * 2
                     x: dialog.grabbed >= 0 ? -dialog.corners[2 * dialog.grabbed] * width : 0
@@ -180,20 +180,50 @@ Dialog {
                     cache: false
                 }
             }
+        }
 
-            Rectangle {
-                anchors.centerIn: parent
-                width: Theme.paddingLarge
-                height: 1
+        // Cuts the lens round; Qt 5.6 clips to rectangles only.
+        ShaderEffect {
+            anchors.fill: parent
+            property variant source: ShaderEffectSource {
+                sourceItem: lens
+                hideSource: true
+            }
+            property real edge: 1.0 / Math.max(1, loupe.size)
+            fragmentShader: "
+                varying highp vec2 qt_TexCoord0;
+                uniform sampler2D source;
+                uniform lowp float qt_Opacity;
+                uniform highp float edge;
+                void main() {
+                    highp float d = distance(qt_TexCoord0, vec2(0.5));
+                    gl_FragColor = texture2D(source, qt_TexCoord0) * (1.0 - smoothstep(0.5 - 2.0 * edge, 0.5, d)) * qt_Opacity;
+                }"
+        }
+
+        Rectangle {
+            objectName: "loupeRing"
+            anchors.fill: parent
+            radius: width / 2
+            color: "transparent"
+            border {
+                width: Math.max(2, Math.round(Theme.paddingSmall / 2))
                 color: Theme.highlightColor
             }
+        }
 
-            Rectangle {
-                anchors.centerIn: parent
-                width: 1
-                height: Theme.paddingLarge
-                color: Theme.highlightColor
-            }
+        Rectangle {
+            anchors.centerIn: parent
+            width: Theme.paddingLarge
+            height: 1
+            color: Theme.highlightColor
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: 1
+            height: Theme.paddingLarge
+            color: Theme.highlightColor
         }
     }
 
@@ -205,31 +235,21 @@ Dialog {
             bottom: parent.bottom
             bottomMargin: Theme.paddingLarge
         }
-        spacing: Theme.paddingLarge
+        spacing: Theme.paddingLarge * 2
 
+        // The app's own icons: the theme's rotate arrows read as undo and redo.
         IconButton {
             objectName: "rotateLeftButton"
-            icon.source: "image://theme/icon-m-rotate-left"
+            icon.source: Qt.resolvedUrl("../icons/rotate-left.svg")
+            icon.sourceSize: Qt.size(Theme.iconSizeMedium, Theme.iconSizeMedium)
             onClicked: dialog.turn(-1)
         }
 
         IconButton {
             objectName: "rotateRightButton"
-            icon.source: "image://theme/icon-m-rotate-right"
+            icon.source: Qt.resolvedUrl("../icons/rotate-right.svg")
+            icon.sourceSize: Qt.size(Theme.iconSizeMedium, Theme.iconSizeMedium)
             onClicked: dialog.turn(1)
-        }
-
-        IconButton {
-            objectName: "findEdgesButton"
-            icon.source: "image://theme/icon-m-crop"
-            enabled: dialog.scan !== null && !dialog.scan.busy
-            onClicked: dialog.scan.findEdges(dialog.index)
-        }
-
-        IconButton {
-            objectName: "wholePictureButton"
-            icon.source: "image://theme/icon-m-image"
-            onClicked: dialog.corners = ScanMath.whole
         }
     }
 
@@ -238,6 +258,4 @@ Dialog {
         size: BusyIndicatorSize.Large
         running: dialog.scan !== null && dialog.scan.busy
     }
-
-    Notice { id: notice }
 }

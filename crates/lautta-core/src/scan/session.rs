@@ -305,13 +305,6 @@ impl ScanSession {
         })
     }
 
-    /// Page edges in the photo of a page, `None` when there are none. Page stays as it is.
-    pub fn find_edges(&self, index: usize) -> Result<Option<Quad>> {
-        let shot = self.page(index)?.shot;
-        let work = image::open(self.work(shot)).map_err(bad_picture)?.into_rgb8();
-        Ok(detect::find_page(&work))
-    }
-
     pub fn remove(&mut self, index: usize) -> Result<()> {
         self.page(index)?;
         let page = self.pages.remove(index);

@@ -185,7 +185,8 @@ FullscreenContentPage {
 
                 IconButton {
                     objectName: "rotateButton"
-                    icon.source: "image://theme/icon-m-rotate-right"
+                    icon.source: Qt.resolvedUrl("../icons/rotate-right.svg")
+                    icon.sourceSize: Qt.size(Theme.iconSizeMedium, Theme.iconSizeMedium)
                     onClicked: page.scan.turn(page.current, 1)
                 }
 
