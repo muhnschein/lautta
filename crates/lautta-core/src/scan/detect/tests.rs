@@ -813,6 +813,18 @@ fn settle_fits_the_edge_pixels_along_the_whole_line() {
 }
 
 #[test]
+fn settle_looks_a_pixel_either_side_and_to_both_ends() {
+    let row = |rho: f32| Line { n: (0.0, 1.0), rho };
+    for rho in [9.0, 11.0] {
+        let e = edges(100, 20, &[(0..100, 10..11, ACROSS)]);
+        assert!(e.settle(row(rho)).is_some(), "{rho}");
+    }
+    // Eight edge pixels, four at each end: all count.
+    let ends = edges(100, 20, &[(0..4, 10..11, ACROSS), (96..100, 10..11, ACROSS)]);
+    assert!(ends.settle(row(10.5)).is_some());
+}
+
+#[test]
 fn many_lines_keep_the_strongest() {
     // Columns 6 apart, each shorter than the one before.
     let marks: Vec<_> = (0..60)
@@ -955,12 +967,14 @@ fn refine_needs_the_edge_along_half_the_side() {
         refine(&img, (103.0, 10.0), (103.0, 90.0), (150.0, 50.0), 6.0),
         None
     );
-    let img = RgbImage::from_fn(
-        200,
-        100,
-        |x, y| Rgb([if x < 100 && y < 60 { 60 } else { 220 }; 3]),
-    );
-    assert!(refine(&img, (103.0, 10.0), (103.0, 90.0), (150.0, 50.0), 6.0).is_some());
+    // Half the probes from either end: 12 of 24, the last seeing the edge only in one of its
+    // three points.
+    for half in [|y: u32| y < 47, |y: u32| y >= 53] {
+        let img = RgbImage::from_fn(200, 100, |x, y| {
+            Rgb([if x < 100 && half(y) { 60 } else { 220 }; 3])
+        });
+        assert!(refine(&img, (103.0, 10.0), (103.0, 90.0), (150.0, 50.0), 6.0).is_some());
+    }
 }
 
 #[test]
@@ -994,4 +1008,20 @@ fn refine_drops_stray_points_and_gives_up_on_noise() {
         refine(&flat, (102.0, 10.0), (102.0, 90.0), (150.0, 50.0), 6.0),
         None
     );
+}
+
+#[test]
+fn refine_keeps_points_within_three_spreads() {
+    // Edge wavers a pixel either way; rows 48..64 bulge 3 px in: they count and pull the side in.
+    let img = RgbImage::from_fn(200, 100, |x, y| {
+        let edge = match y {
+            48..64 => 103,
+            _ if (y / 16) % 2 == 0 => 99,
+            _ => 101,
+        };
+        Rgb([if x < edge { 60 } else { 220 }; 3])
+    });
+    let line = refine(&img, (108.0, 10.0), (108.0, 90.0), (150.0, 50.0), 9.0).unwrap();
+    let pulled = line.off((100.0, 50.0));
+    assert!((0.1..0.4).contains(&pulled), "{line:?}");
 }
