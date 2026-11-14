@@ -295,6 +295,17 @@ fn span_is_the_part_inside_the_picture() {
         near(start, (3.0, 0.0)) && (len - 8.0).abs() < 1e-4,
         "{start:?} {len}"
     );
+    // On the border: still inside.
+    let (start, len) = Line {
+        n: (1.0, 0.0),
+        rho: 0.0,
+    }
+    .span(10.0, 8.0)
+    .unwrap();
+    assert!(
+        near(start, (0.0, 0.0)) && (len - 8.0).abs() < 1e-4,
+        "{start:?} {len}"
+    );
     let slant = Line::from_angle(PI / 4.0, 2f32.sqrt() * 4.0);
     let (start, len) = slant.span(10.0, 8.0).unwrap();
     let end = add(start, slant.along(), len);
@@ -379,6 +390,22 @@ fn edges(w: usize, h: usize, marks: &[(std::ops::Range<usize>, std::ops::Range<u
 const ACROSS: f32 = PI / 2.0;
 
 #[test]
+fn nothing_outside_the_picture_is_an_edge() {
+    let e = edges(4, 3, &[(0..4, 0..3, 0.0)]);
+    assert!(e.on((0.5, 0.5), 0.0) && e.on((3.5, 2.5), 0.0));
+    for p in [
+        (-0.5, 1.5),
+        (4.5, 1.5),
+        (1.5, -0.5),
+        (1.5, 3.5),
+        (-0.5, -0.5),
+        (4.5, 2.5),
+    ] {
+        assert!(!e.on(p, 0.0), "{p:?}");
+    }
+}
+
+#[test]
 fn track_counts_edges_along_the_line_and_beside_it() {
     // Row 10 marked from x 20 to 59, row 11 from 70 to 79, row 13 from 85 to 89 (too far).
     let e = edges(
@@ -400,6 +427,11 @@ fn track_counts_edges_along_the_line_and_beside_it() {
     .unwrap();
     assert_eq!(track.between((0.0, 10.5), (100.0, 10.5)), (100.0, 50));
     assert_eq!(track.between((60.0, 10.5), (20.0, 10.5)), (40.0, 40));
+    assert_eq!(
+        track.between((0.0, 10.5), (150.0, 10.5)),
+        (150.0, 50),
+        "past the end"
+    );
     assert_eq!(
         track.between((30.0, 0.0), (40.0, 30.0)).1,
         10,
@@ -487,6 +519,36 @@ fn judge_takes_a_square_with_edges_all_round() {
         "{corners:?}"
     );
     assert!((size - 59.0 * 59.0).abs() < 1e-2, "{size}");
+}
+
+/// Diamond with every corner half a pixel outside the 100 × 100 picture.
+#[test]
+fn judge_takes_corners_up_to_a_pixel_outside() {
+    let c = [(-0.5, 50.0), (50.0, -0.5), (100.5, 50.0), (50.0, 100.5)];
+    let mut angle = vec![f32::NAN; 100 * 100];
+    let sides = [0, 1, 2, 3].map(|k| {
+        let (a, b) = (c[k], c[(k + 1) % 4]);
+        let line = Line::fit(&[a, b], (1.0, 1.0)).unwrap();
+        for s in 0..=400 {
+            let p = add(a, (b.0 - a.0, b.1 - a.1), s as f32 / 400.0);
+            if (0.0..100.0).contains(&p.0) && (0.0..100.0).contains(&p.1) {
+                angle[p.1 as usize * 100 + p.0 as usize] = line.angle();
+            }
+        }
+        line
+    });
+    let e = Edges {
+        w: 100,
+        h: 100,
+        angle,
+    };
+    let (corners, _) = judged(&e, sides).unwrap();
+    for want in c {
+        assert!(
+            corners.iter().any(|got| near(*got, want)),
+            "{want:?}: {corners:?}"
+        );
+    }
 }
 
 #[test]
@@ -713,6 +775,38 @@ fn hough_finds_long_lines_once_and_skips_short_ones() {
         assert_eq!(lines.len(), 1, "{a}: {lines:?}");
         assert!(lines[0].off((100.5, 50.5)).abs() < 0.6, "{a}: {lines:?}");
     }
+}
+
+/// Votes needed grow with the picture: 4 % of its long side, at least 8.
+#[test]
+fn hough_needs_more_votes_on_larger_pictures() {
+    let line = |len: usize| edges(300, 60, &[(100..100 + len, 30..31, ACROSS)]).lines().len();
+    assert_eq!(line(10), 0);
+    assert_eq!(line(12), 1);
+}
+
+#[test]
+fn settle_fits_the_edge_pixels_along_the_whole_line() {
+    let coarse = Line {
+        n: (0.0, 1.0),
+        rho: 11.0,
+    };
+    // Edges only near the far end of the line.
+    let line = edges(100, 20, &[(80..96, 10..11, ACROSS)])
+        .settle(coarse)
+        .unwrap();
+    assert!(
+        (line.rho - 10.5).abs() < 1e-3 && near(line.n, (0.0, 1.0)),
+        "{line:?}"
+    );
+    assert!(edges(100, 20, &[(80..88, 10..11, ACROSS)])
+        .settle(coarse)
+        .is_some());
+    assert_eq!(
+        edges(100, 20, &[(80..87, 10..11, ACROSS)]).settle(coarse),
+        None,
+        "7 points"
+    );
 }
 
 #[test]

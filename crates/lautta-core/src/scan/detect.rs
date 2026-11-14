@@ -118,8 +118,8 @@ impl Line {
             yy += dy * dy;
             xy += dx * dy;
         }
-        let normal = 0.5 * (2.0 * xy).atan2(xx - yy) + PI / 2.0;
-        let mut n = (normal.cos(), normal.sin());
+        let along = 0.5 * (2.0 * xy).atan2(xx - yy);
+        let mut n = (-along.sin(), along.cos());
         if dot(n, towards) < 0.0 {
             n = (-n.0, -n.1);
         }
