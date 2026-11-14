@@ -196,9 +196,12 @@ fn round_plate_is_not_a_page() {
 }
 
 #[test]
-fn tiny_pictures_are_not_searched() {
+fn tiny_pictures_have_no_page() {
     assert_eq!(find_page(&photo(7, 400, SHEET, PAPER, TABLE)), None);
     assert_eq!(find_page(&photo(400, 7, SHEET, PAPER, TABLE)), None);
+    assert_eq!(find_page(&RgbImage::new(0, 0)), None);
+    assert_eq!(find_page(&RgbImage::new(1, 1)), None);
+    assert_eq!(find_page(&RgbImage::new(0, 50)), None);
 }
 
 #[test]
@@ -835,6 +838,11 @@ fn sample_blends_neighbours() {
     assert_eq!(sample(&img, (0.5, 1.5)), [0.0, 200.0, 50.0]);
     assert_eq!(sample(&img, (-3.0, 9.0)), [0.0, 200.0, 50.0]);
     assert_eq!(sample(&img, (1.25, 0.5)), [75.0, 0.0, 50.0]);
+    // Past the right and the bottom edge: the last pixels.
+    assert_eq!(sample(&img, (5.0, 0.5)), [100.0, 0.0, 50.0]);
+    assert_eq!(sample(&img, (0.5, 5.0)), [0.0, 200.0, 50.0]);
+    let img = RgbImage::from_fn(3, 3, |x, y| Rgb([(x * 100) as u8, (y * 100) as u8, 0]));
+    assert_eq!(sample(&img, (2.25, 2.25)), [175.0, 175.0, 0.0]);
 }
 
 #[test]
@@ -847,11 +855,128 @@ fn refine_moves_onto_the_outermost_clear_edge() {
     // Facing the other way round the side, outermost means the print's far edge.
     let line = refine(&img, (105.0, 90.0), (105.0, 10.0), (50.0, 50.0), 8.0).unwrap();
     assert!(line.off((111.0, 50.0)).abs() < 0.6, "{line:?}");
+    // The same whichever way the side runs.
+    let line = refine(&img, (105.0, 10.0), (105.0, 90.0), (50.0, 50.0), 8.0).unwrap();
+    assert!(line.off((111.0, 50.0)).abs() < 0.6, "{line:?}");
+    // Turned a quarter: page edge at y = 100, print below it.
+    let mut img = RgbImage::from_fn(100, 200, |_, y| Rgb(if y < 100 { [110; 3] } else { [210; 3] }));
+    fill(&mut img, 0..100, 106..111, [20, 20, 20]);
+    let line = refine(&img, (10.0, 105.0), (90.0, 105.0), (50.0, 150.0), 8.0).unwrap();
+    assert!(line.off((50.0, 100.0)).abs() < 0.5, "{line:?}");
+    let line = refine(&img, (10.0, 105.0), (90.0, 105.0), (50.0, 50.0), 8.0).unwrap();
+    assert!(line.off((50.0, 111.0)).abs() < 0.6, "{line:?}");
     // A much fainter edge outside loses to the clear one.
     let mut img = RgbImage::from_fn(200, 100, |x, _| Rgb(if x < 100 { [200; 3] } else { [205; 3] }));
     fill(&mut img, 106..200, 0..100, [120, 120, 120]);
     let line = refine(&img, (105.0, 10.0), (105.0, 90.0), (150.0, 50.0), 8.0).unwrap();
     assert!(line.off((106.0, 50.0)).abs() < 0.6, "{line:?}");
+}
+
+/// Vertical edge between 60 and 220 at `x` (a fraction of pixel `x.floor()` dark).
+fn step_at(x: f32) -> RgbImage {
+    RgbImage::from_fn(200, 100, |px, _| {
+        let dark = (x - px as f32).clamp(0.0, 1.0);
+        Rgb([(60.0 * dark + 220.0 * (1.0 - dark)).round() as u8; 3])
+    })
+}
+
+#[test]
+fn refine_finds_the_edge_to_a_tenth_of_a_pixel() {
+    for x in [100.3f32, 100.7] {
+        let line = refine(&step_at(x), (104.0, 10.0), (104.0, 90.0), (150.0, 50.0), 6.0).unwrap();
+        assert!(
+            line.off((x, 50.0)).abs() < 0.1 && angle_gap(line.angle(), 0.0) < 1e-3,
+            "{x}: {line:?}"
+        );
+    }
+    // Edge as far out as `reach` reaches.
+    let line = refine(&step_at(100.0), (108.0, 10.0), (108.0, 90.0), (150.0, 50.0), 7.5).unwrap();
+    assert!(line.off((100.0, 50.0)).abs() < 0.1, "{line:?}");
+    // One pixel further: out of reach.
+    assert_eq!(
+        refine(&step_at(100.0), (109.0, 10.0), (109.0, 90.0), (150.0, 50.0), 7.5),
+        None
+    );
+}
+
+#[test]
+fn refine_follows_slanted_sides_of_a_sheet() {
+    let (w, h) = (640.0, 480.0);
+    // Sides a little off level, and at 45°.
+    let diamond = [(0.5, 0.1), (0.8, 0.5), (0.5, 0.9), (0.2, 0.5)];
+    for sheet in [SHEET, diamond] {
+        let img = photo(640, 480, sheet, PAPER, TABLE);
+        let c = sheet.map(|p| (p.0 * w, p.1 * h));
+        let centre = c.iter().fold((0.0, 0.0), |s, p| add(s, *p, 0.25));
+        for k in 0..4 {
+            let (a, b) = (c[(k + 3) % 4], c[k]);
+            // Coarse side 2.5 px inside the sheet.
+            let inward = |p: V| {
+                add(
+                    p,
+                    (centre.0 - p.0, centre.1 - p.1),
+                    2.5 / (centre.0 - p.0).hypot(centre.1 - p.1),
+                )
+            };
+            let line = refine(&img, inward(a), inward(b), centre, 6.0).unwrap();
+            assert!(
+                line.off(a).abs() < 0.3 && line.off(b).abs() < 0.3,
+                "{sheet:?} side {k}: {line:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn refine_sees_an_edge_in_any_one_colour() {
+    for k in 0..3 {
+        let img = RgbImage::from_fn(200, 100, |x, _| {
+            let mut c = [128u8; 3];
+            c[k] = if x < 100 { 60 } else { 220 };
+            Rgb(c)
+        });
+        let line = refine(&img, (103.0, 10.0), (103.0, 90.0), (150.0, 50.0), 6.0);
+        assert!(
+            line.is_some_and(|l| l.off((100.0, 50.0)).abs() < 0.2),
+            "channel {k}: {line:?}"
+        );
+    }
+}
+
+#[test]
+fn refine_needs_the_edge_along_half_the_side() {
+    // Edge only for y < 40: 8 of the 24 probes along y 22..78.
+    let img = RgbImage::from_fn(
+        200,
+        100,
+        |x, y| Rgb([if x < 100 && y < 40 { 60 } else { 220 }; 3]),
+    );
+    assert_eq!(
+        refine(&img, (103.0, 10.0), (103.0, 90.0), (150.0, 50.0), 6.0),
+        None
+    );
+    let img = RgbImage::from_fn(
+        200,
+        100,
+        |x, y| Rgb([if x < 100 && y < 60 { 60 } else { 220 }; 3]),
+    );
+    assert!(refine(&img, (103.0, 10.0), (103.0, 90.0), (150.0, 50.0), 6.0).is_some());
+}
+
+#[test]
+fn refined_corners_stay_near_the_coarse_ones() {
+    let was = [(79.5, 20.5), (79.5, 79.5), (20.5, 79.5), (20.5, 20.5)];
+    let corners = settled(&square_lines(), &was, 5.0).unwrap();
+    assert!(corners.iter().zip(was).all(|(c, w)| near(*c, w)), "{corners:?}");
+    // 8 px off with reach 5: still near; 11 px: a side caught something else.
+    let shifted = |dx: f32, dy: f32| was.map(|p| (p.0 + dx, p.1 + dy));
+    assert!(settled(&square_lines(), &shifted(8.0, 0.0), 5.0).is_some());
+    assert!(settled(&square_lines(), &shifted(0.0, 8.0), 5.0).is_some());
+    assert_eq!(settled(&square_lines(), &shifted(11.0, 0.0), 5.0), None);
+    assert_eq!(settled(&square_lines(), &shifted(0.0, 11.0), 5.0), None);
+    let mut parallel = square_lines();
+    parallel[1] = parallel[0];
+    assert_eq!(settled(&parallel, &was, 5.0), None);
 }
 
 #[test]

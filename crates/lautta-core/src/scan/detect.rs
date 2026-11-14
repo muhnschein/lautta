@@ -575,11 +575,21 @@ fn coarse(photo: &RgbImage, side: u32) -> Option<([V; 4], f32)> {
     Some((corners.map(|p| (p.0 * sx, p.1 * sy)), sx.max(sy)))
 }
 
+/// Corners where `sides` meet (corner k ends side k), unless one lies more than `2 × reach`
+/// from where it `was`: then a side caught something else.
+fn settled(sides: &[Line], was: &[V; 4], reach: f32) -> Option<[V; 4]> {
+    let mut c = [(0.0, 0.0); 4];
+    for k in 0..4 {
+        c[k] = sides[k].meet(&sides[(k + 1) % 4])?;
+        if (c[k].0 - was[k].0).hypot(c[k].1 - was[k].1) > 2.0 * reach {
+            return None;
+        }
+    }
+    Some(c)
+}
+
 /// `photo`: upright, any size.
 pub fn find_page(photo: &RgbImage) -> Option<Quad> {
-    if photo.width() < 8 || photo.height() < 8 {
-        return None;
-    }
     let long = photo.width().max(photo.height());
     let mut sides = SCALES.map(|s| s.min(long)).to_vec();
     sides.dedup();
@@ -592,17 +602,7 @@ pub fn find_page(photo: &RgbImage) -> Option<Quad> {
     let moved = (0..4)
         .map(|k| refine(photo, corners[(k + 3) % 4], corners[k], centre, reach))
         .collect::<Option<Vec<Line>>>()
-        .and_then(|lines| {
-            let mut c = [(0.0, 0.0); 4];
-            for k in 0..4 {
-                c[k] = lines[k].meet(&lines[(k + 1) % 4])?;
-                // A corner moving far means a side caught something else.
-                if (c[k].0 - corners[k].0).hypot(c[k].1 - corners[k].1) > 2.0 * reach {
-                    return None;
-                }
-            }
-            Some(c)
-        });
+        .and_then(|lines| settled(&lines, &corners, reach));
     let (w, h) = (photo.width() as f32, photo.height() as f32);
     let found = clockwise(moved.unwrap_or(corners))?;
     let quad = Quad(found.map(|p| Point::new((p.0 / w).clamp(0.0, 1.0), (p.1 / h).clamp(0.0, 1.0))));
