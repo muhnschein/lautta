@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Scan documents: "Add" in a folder's pulley menu (it was "New") offers "Scan document" next to "New folder". Take pictures of the pages with the camera; Lautta finds the page edges, straightens each page, and saves all of them as one PDF into that folder, on the phone or on a server. Each page can be shown in colour, grayscale or black and white, and be adjusted, rotated, retaken, removed or moved before saving. Lautta now asks for the camera permission.
 - New app icon: a folder holding a page.
 - A cancelled task no longer shows the bytes of the file it was copying when you cancelled it, since that partial file is deleted.
 - Server pictures: changing the grid size or turning the phone no longer downloads every picture again for its thumbnail. A server picture opens on its thumbnail at once and sharpens when the full picture arrives, and zooming in no longer downloads it a second time. Making a thumbnail of a large server photo takes about a sixth of the processor time it did. With battery saving on, thumbnails are made only from what a picture carries inside it, never by downloading the whole file.

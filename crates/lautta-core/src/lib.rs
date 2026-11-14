@@ -7,6 +7,7 @@ pub mod app_browse;
 pub mod app_directory;
 pub mod app_operations;
 pub mod app_pdf;
+pub mod app_scan;
 pub mod app_search;
 pub mod app_transfers;
 pub mod app_viewers;
@@ -44,6 +45,7 @@ pub mod workcopy;
 
 pub mod compress;
 pub mod preview;
+pub mod scan;
 pub mod thumbs;
 pub mod thumbs_pdf;
 pub mod thumbs_text;

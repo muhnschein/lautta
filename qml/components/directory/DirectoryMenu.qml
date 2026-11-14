@@ -57,8 +57,8 @@ PullDownMenu {
     }
     MenuItem {
         visible: !menu.selecting && menu.writable
-        //% "New"
-        text: qsTrId("lautta-dir-menu-new")
-        onClicked: menu.owner.newFolder()
+        //% "Add"
+        text: qsTrId("lautta-dir-menu-add")
+        onClicked: menu.owner.add()
     }
 }

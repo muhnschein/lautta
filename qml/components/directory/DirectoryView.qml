@@ -63,6 +63,29 @@ Item {
         })
     }
 
+    function add() {
+        var dialog = openDialog("../../dialogs/AddDialog.qml", { "parentUri": uri })
+        dialog.picked.connect(function (choice, next) {
+            if (choice === "scan") {
+                next.owner = view
+                next.scan = scanMaker.createObject(view)
+                return
+            }
+            next.accepted.connect(function () {
+                view.pendingName = next.itemName
+                view.toMove = []
+                dir.createFolder(next.itemName)
+            })
+        })
+    }
+
+    // Scan left or saved: its photos go.
+    function endScan(scan, saved) {
+        scan.destroy()
+        if (saved)
+            dir.refresh()
+    }
+
     function rename(info) {
         var dialog = openDialog("../../dialogs/RenameDialog.qml", { "uri": info.uri, "isDir": info.isDir })
         dialog.accepted.connect(function () {
@@ -465,6 +488,12 @@ Item {
                 view.notifyFailure(kind, message, App.nameOf(uri))
             }
         }
+    }
+
+    Component {
+        id: scanMaker
+
+        ScanModel { }
     }
 
     Component {
