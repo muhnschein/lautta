@@ -13,6 +13,7 @@ pub mod directory;
 pub mod json;
 pub mod operations;
 pub mod runtime;
+pub mod scan;
 pub mod search;
 pub mod transfers;
 pub mod viewers;
@@ -232,6 +233,7 @@ pub fn register_types() {
     browse::register();
     directory::register();
     operations::register();
+    scan::register();
     transfers::register();
     viewers::register();
     search::register();

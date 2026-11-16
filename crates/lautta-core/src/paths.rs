@@ -57,6 +57,11 @@ impl AppPaths {
         self.cache_dir().join("dircache")
     }
 
+    /// Photos and pages of a scan in progress.
+    pub fn scan_dir(&self) -> PathBuf {
+        self.cache_dir().join("scan")
+    }
+
     pub fn opened_dir(&self) -> PathBuf {
         self.home.join("Downloads/Lautta/Opened")
     }
@@ -88,6 +93,10 @@ mod tests {
         assert_eq!(
             p.thumbs_dir(),
             Path::new("/home/defaultuser/.cache/org.netvfs/lautta/thumbs")
+        );
+        assert_eq!(
+            p.scan_dir(),
+            Path::new("/home/defaultuser/.cache/org.netvfs/lautta/scan")
         );
         assert_eq!(
             p.opened_dir(),

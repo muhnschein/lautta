@@ -14,5 +14,5 @@ SupportedMimeTypes=*
 [X-Sailjail]
 OrganizationName=org.netvfs
 ApplicationName=lautta
-Permissions=UserDirs;RemovableMedia;Audio
+Permissions=UserDirs;RemovableMedia;Audio;Camera
 ExecDBus=harbour-lautta

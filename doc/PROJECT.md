@@ -73,7 +73,7 @@ netvfs-bridge (not part of this app) -> SFTP / SMB servers
 [X-Sailjail]
 OrganizationName=org.netvfs
 ApplicationName=lautta
-Permissions=UserDirs;RemovableMedia;Audio
+Permissions=UserDirs;RemovableMedia;Audio;Camera
 ExecDBus=harbour-lautta
 ```
 
@@ -82,6 +82,7 @@ ExecDBus=harbour-lautta
 | `UserDirs` | user's files, their thumbnails | `~/Documents`, `~/Downloads`, `~/Pictures`, `~/Music`, `~/Playlists`, `~/Videos`, `~/Public`, `~/android_storage/{Documents,Download,Pictures,DCIM,Music,Podcasts,Movies}`; via `Pictures`/`Videos` also `Thumbnails`: `thumbnaild-pdf`, `thumbnaild-video`, `~/.cache/org.nemomobile/thumbnails`, D-Bus `org.nemomobile.Thumbnailer` |
 | `RemovableMedia` | SD cards, USB drives | `/run/media`, UDisks2 signals |
 | `Audio` | sound in audio/video preview | PulseAudio, GStreamer cache |
+| `Camera` | document scan (*Add* → *Scan document*); camera runs only while scan's camera page is in front | camera devices |
 
 Not requested, on purpose: `Internet` (app opens no sockets; netvfs does), `Accounts`, `Secrets` (credentials stay in netvfs), `MediaIndexing`, `Compatibility`.
 
@@ -95,6 +96,7 @@ File system seen (firejail `whitelist`): tmpfs on `$HOME`, each granted folder a
 Browse ─┬─ Directory ─┬─ Directory …
         │             ├─ Viewers
         │             ├─ Folder picker
+        │             ├─ Add ── Scan (camera, page view, adjust, save as PDF)
         │             └─ Search results
         ├─ Recents
         ├─ Trash
