@@ -18,16 +18,17 @@ Item {
     Connections {
         target: Bridge
 
+        // Both can arrive while a dialog closes, e.g. Connect to server's.
         onQuestion: {
-            pageStack.push(Qt.resolvedUrl("../dialogs/ServerQuestionDialog.qml"), {
-                               "questionId": questionId,
-                               "kind": kind,
-                               "details": JSON.parse(detailsJson)
-                           })
+            pages.push(Qt.resolvedUrl("../dialogs/ServerQuestionDialog.qml"), {
+                           "questionId": questionId,
+                           "kind": kind,
+                           "details": JSON.parse(detailsJson)
+                       })
         }
 
         onAdhocConnected: {
-            pageStack.push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": locationUri })
+            pages.push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": locationUri })
         }
 
         onFailed: {
@@ -39,5 +40,9 @@ Item {
     Notice {
         id: notice
         duration: Notice.Long
+    }
+
+    PageQueue {
+        id: pages
     }
 }

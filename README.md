@@ -110,7 +110,7 @@ $ make check
 
 ## License
 
-Licensed LGPL-2.1-or-later. The image viewer files adapted from Jolla are
+Licensed LGPL-2.1-or-later (text in `LICENSE`). The image viewer files adapted from Jolla are
 BSD-3-Clause, the JetBrains icons Apache-2.0. The cover's lettering is Inter,
 SIL Open Font License 1.1.
 

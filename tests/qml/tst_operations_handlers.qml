@@ -54,7 +54,7 @@ ApplicationWindow {
         waitFor(function () {
             return !pageStack.busy && pageStack.currentPage.uri === dest
         }, "the extracted folder to open, current page: " + pageStack.currentPage)
-        expect(pageStack.depth === 3 && handlers.pending.length === 0, "opened once: depth " + pageStack.depth)
+        expect(pageStack.depth === 3, "opened once: depth " + pageStack.depth)
     }
 
     // A large extract's plan summary that arrives while the extract dialog closes.
@@ -69,7 +69,7 @@ ApplicationWindow {
         waitFor(function () {
             return !pageStack.busy && pageStack.currentPage.planId === 7
         }, "the plan summary to open, current page: " + pageStack.currentPage)
-        expect(pageStack.depth === 4 && handlers.pending.length === 0, "summary once: depth " + pageStack.depth)
+        expect(pageStack.depth === 4, "summary once: depth " + pageStack.depth)
     }
 
     function checkSummaryWhenIdle() {
@@ -81,10 +81,28 @@ ApplicationWindow {
         }, "the plan summary to open on an idle stack")
     }
 
+    // Shared files that arrive while a page still moves.
+    function checkShareWhileDialogCloses() {
+        var depth = pageStack.depth
+        var dialog = pageStack.push(plainDialog)
+        if (!waitFor(function () { return !pageStack.busy }, "the dialog to open"))
+            return
+        dialog.accept()
+        if (!expect(pageStack.busy, "the dialog closes"))
+            return
+        handlers.receiveShare([ "file:///home/user/Downloads/shared.jpg" ])
+        waitFor(function () {
+            return !pageStack.busy && pageStack.currentPage.resources !== undefined
+        }, "the share target to open, current page: " + pageStack.currentPage)
+        expect(pageStack.depth === depth + 1 && pageStack.currentPage.resources.length === 1,
+               "share target once: depth " + pageStack.depth)
+    }
+
     Component.onCompleted: {
         checkFolderAfterTransition()
         checkSummaryWhileDialogCloses()
         checkSummaryWhenIdle()
+        checkShareWhileDialogCloses()
         reachedEnd = true
     }
 }

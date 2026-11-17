@@ -1,59 +1,14 @@
 # Changelog
 
-## Unreleased
+## 1.0.0
 
-- Scan documents: "Add" in a folder's pulley menu (it was "New") offers "Scan document" next to "New folder". Take pictures of the pages with the camera; Lautta finds the page edges, straightens each page, and saves all of them as one PDF into that folder, on the phone or on a server. Each page can be shown in colour, grayscale or black and white, and be adjusted, rotated, retaken, removed or moved before saving. Lautta now asks for the camera permission.
-- New app icon: a folder holding a page.
-- A cancelled task no longer shows the bytes of the file it was copying when you cancelled it, since that partial file is deleted.
-- Server pictures: changing the grid size or turning the phone no longer downloads every picture again for its thumbnail. A server picture opens on its thumbnail at once and sharpens when the full picture arrives, and zooming in no longer downloads it a second time. Making a thumbnail of a large server photo takes about a sixth of the processor time it did. With battery saving on, thumbnails are made only from what a picture carries inside it, never by downloading the whole file.
-- Cancel in an Activity task's menu cancels the task again. Before, the countdown ran but the copy went on.
-- After you cancel a task, its unfinished files say "Cancelled" on the task page instead of "Copying" or "Queued".
-- A conflict notification goes away once its question is answered, or its task is canceled or ends.
-- A video or song that can't be played says "Can't play" with its name, instead of blaming the folder or server it is in.
-- Messages and labels say what really happened. A file or folder you may not read says "You don't have permission to open", not "to change". The folder picker shows "Sign-in failed" or "Server identity changed" instead of an internal code, and no longer calls a connecting server unreachable. A failed search explains why. Items in a running move, delete, compress or extract task no longer read "Copying". When Lautta closes with unfinished tasks and "Resume unfinished tasks at start" is off, it no longer promises they will resume. Smaller wording fixes across the app.
-- Extract all on a compressed tar archive (.tar.gz, .tar.bz2, .tar.xz) is many times faster: the archive is unpacked once, not once per file. A 1,000-file backup went from over 30 seconds to under 2 on a OnePlus 6.
-- Large text files open and close with shorter stalls, and long folders open sooner.
-- Select all and clearing a selection in a large folder respond faster.
-- The app starts a little sooner.
-- Pages that show transfers refresh four times a second instead of on every file, which saves battery during long copies.
-- Folders on the phone and on drives keep updating live however many are open. Lautta no longer wakes the phone ten times a second while it runs.
-- Servers show a server icon instead of a laptop.
-- Browse rows have even heights. Servers, memory cards and USB drives show their state as a glowing dot. It pulses while a server connects or a drive mounts or unmounts, and turns red or orange on failure or warning.
-- Browse shows no item counts any more.
-- Memory cards and USB drives can be mounted and unmounted from Browse, including drives Sailfish OS does not mount on its own. This needs netvfs with drive mounting.
-- A locked encrypted memory card or USB drive shows on Browse as a dimmed row with a padlock. Tapping it opens Settings › Storage to unlock it. This needs netvfs that lists locked drives.
-- Settings › Browse page edits the Browse page in place, with a live preview. It follows drives and servers as they come and go. Volumes and Servers can each be hidden as a whole, and come back with their earlier choices. "Hide from Browse" is gone from the menus.
-- Recents is a row on Browse. Activity and Recents are grouped by date.
-- Deleted files go to a Trash in the app's own data instead of a folder in each location. Deleting for good asks first. The Trash shows thumbnails, and its note sits at the top.
-- Files can be favourites. A favourite is edited on a page of its own, with a choice of icons.
-- More actions replaces the Details page. In selection mode the bar is the same for one item or several, and Compress, Rename and Add to favourites live behind More actions. Stop selecting sits on a highlighted key.
-- The folder pulley reads, from the bottom: New, Select, Search, View options, Activity. "New folder" is now "New".
-- View options is a settings page with a live preview, and open folders follow it at once.
-- Settings are split into pages. The thumbnail cache size applies without a restart. A size limit replaces the metered-network limit for server thumbnails.
-- PDFs get thumbnails of their first page, under the same thumbnail switches as images. For PDFs on the phone the system draws them, as it does for photos and videos.
-- In grid view, holding and dragging selects a range. Bars at the bottom are opaque.
-- The grid has one size, so View options offers just grid or list. Its icons are bigger, names take up to two lines and keep their extension, each row is only as tall as its tallest tile, and each tile shows, right under its name, the date and size, or how many items a folder on the phone or a drive holds, counting up to 1000.
-- File icons are Lautta's own drawings, sharp in the grid and in every list at any screen scale. An icon turns the highlight colour with its name when pressed or selected.
-- In grid view, text files, code and Markdown show their first lines, with a small icon of their type in the corner. Rust files get a crab. The plain document icon is now an outline, like the folder and image icons.
-- Video thumbnails show the video icon on a see-through dark disc, at the size and place the icon has without a thumbnail, so they stand apart from photos.
-- A folder's header stays in place while its contents scroll, and the pulley opens above it. A folder opens at its top, and going back returns to where you were. Starting or ending selection no longer makes the header jump.
-- Closing the selection bar no longer flashes its empty state as it slides away.
-- A folder opens in the sort order and with the hidden-files choice set in View options, instead of name order with hidden files left out.
-- Counts read correctly in English: 1 item, 1 day, 1 task, not 1 items, 1 days, 1 tasks.
-- Search puts the field and filters above the results.
-- Pasting cut items moves them after a remorse timer: tap it to cancel. The undo banner is gone.
-- More actions can move the selected items into a new folder made where they are.
-- Folders inside an archive show a banner on top: tap Extract all to extract the archive.
-- Cancelling a copy stops it at once and leaves no hidden partial file behind. Copying a file to another folder in the same place, such as within Documents, shows its progress.
-- Extract all on more than 1000 items or over 1 GB opens its summary instead of doing nothing. So does sharing that much into Lautta.
-- Extracting says so: the summary reads "Extract to" and Activity names the archive, not "Copy".
-- Cancelling a large extract at its summary no longer leaves an empty folder behind.
-- The text viewer always wraps lines, colours code by its language, and puts the text on a backdrop for contrast. Markdown previews wrap code blocks.
-- The image viewer works like Jolla Gallery's. Its More button is a circle with three dots, and More › Rename renames.
-- PDFs open at the top with the whole header in view.
-- A PDF that trips the PDF renderer shows as unreadable instead of closing Lautta.
-- Photos show the date they were taken, in the system's formats.
-- Settings › Storage opens from Lautta where the system allows it.
-- Names and server messages that contain tags, such as `<b>x</b>`, show exactly as typed instead of changing how the text looks or loading images.
-- The image viewer opens straight on the tapped image, instead of sliding to it from another one.
-- A transfer paused, or held up by a lost connection or a removed card, just as a file finishes no longer asks on resume whether to replace the file it has just written.
+First release.
+
+- Browse the phone's folders, memory cards and USB drives, as a list or a grid, with Recents, Favourites and a Trash. Settings › Browse page picks what Browse shows.
+- Copy, move, rename and delete; paste moves after a remorse timer. Copies run as tasks in Activity that can be paused, resumed and cancelled, and unfinished tasks resume at the next start.
+- Open zip, tar (plain, gz, bz2, xz, zst) and 7z archives as folders, extract them, or compress files to zip or tar.gz.
+- View pictures, PDFs, text and code with syntax colours, Markdown, music and videos. Thumbnails for photos, videos, PDFs and text files.
+- Search a folder and its subfolders, with filters.
+- Scan documents with the camera into one PDF.
+- Save files shared from other apps with "Save to Lautta".
+- With [netvfs](https://github.com/muhnschein/netvfs) installed: SFTP and SMB servers from Settings › Accounts and servers nearby show up as locations, Connect to server opens one-off servers, transfers between phone and server, music and videos play straight from a server, memory cards and USB drives can be mounted and unmounted, and locked encrypted drives show on Browse.
