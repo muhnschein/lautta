@@ -11,12 +11,6 @@ Item {
 
     // Off in --qml-check: no session bus for the share provider to register on.
     property bool shareEnabled: Qt.application.arguments.indexOf("--qml-check") < 0
-    property var pending: []
-
-    // Resolved when used: window publishes its instance once created.
-    function stack() {
-        return __silica_applicationwindow_instance.pageStack
-    }
 
     function show(text) {
         notice.text = text
@@ -29,20 +23,6 @@ Item {
         return { "item": Operations.displayPath(subject), "location": App.locationName(subject) }
     }
 
-    // PageStack drops a push during a transition, e.g. the extract dialog closing.
-    function pushWhenIdle(url, props) {
-        pending = pending.concat([{ "url": url, "props": props }])
-        openPending()
-    }
-
-    function openPending() {
-        if (stack().busy)
-            return
-        var next = pending[0]
-        pending = pending.slice(1)
-        stack().push(next.url, next.props)
-    }
-
     function background() {
         //% "Running in the background"
         show(qsTrId("lautta-ops-background"))
@@ -52,6 +32,10 @@ Item {
         id: notice
     }
 
+    PageQueue {
+        id: pages
+    }
+
     KeepAlive {
         enabled: Operations.jobsActive > 0
     }
@@ -59,11 +43,11 @@ Item {
     Connections {
         target: Operations
 
-        onNeedsSummary: handlers.pushWhenIdle(Qt.resolvedUrl("../dialogs/PlanSummaryDialog.qml"), {
+        onNeedsSummary: pages.push(Qt.resolvedUrl("../dialogs/PlanSummaryDialog.qml"), {
             "planId": planId,
             "summary": JSON.parse(summaryJson)
         })
-        onArchiveOpened: handlers.stack().push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": rootUri })
+        onArchiveOpened: pages.stack().push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": rootUri })
         onFailed: handlers.show(ErrorText.message(kind, handlers.context(subject)))
         onStarted: handlers.background()
         onJobStarted: handlers.background()
@@ -74,13 +58,8 @@ Item {
         }
         onExtractFinished: {
             if (ok)
-                handlers.pushWhenIdle(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": destUri })
+                pages.push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": destUri })
         }
-    }
-
-    Connections {
-        target: handlers.pending.length > 0 ? handlers.stack() : null
-        onBusyChanged: handlers.openPending()
     }
 
     Loader {
@@ -88,7 +67,7 @@ Item {
         sourceComponent: ShareProvider {
             method: "files"
             registerName: true
-            onTriggered: handlers.stack().push(Qt.resolvedUrl("../pages/ShareTargetPage.qml"), { "resources": resources })
+            onTriggered: pages.stack().push(Qt.resolvedUrl("../pages/ShareTargetPage.qml"), { "resources": resources })
         }
     }
 }

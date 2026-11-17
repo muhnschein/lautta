@@ -54,7 +54,7 @@ ApplicationWindow {
         waitFor(function () {
             return !pageStack.busy && pageStack.currentPage.uri === dest
         }, "the extracted folder to open, current page: " + pageStack.currentPage)
-        expect(pageStack.depth === 3 && handlers.pending.length === 0, "opened once: depth " + pageStack.depth)
+        expect(pageStack.depth === 3, "opened once: depth " + pageStack.depth)
     }
 
     // A large extract's plan summary that arrives while the extract dialog closes.
@@ -69,7 +69,7 @@ ApplicationWindow {
         waitFor(function () {
             return !pageStack.busy && pageStack.currentPage.planId === 7
         }, "the plan summary to open, current page: " + pageStack.currentPage)
-        expect(pageStack.depth === 4 && handlers.pending.length === 0, "summary once: depth " + pageStack.depth)
+        expect(pageStack.depth === 4, "summary once: depth " + pageStack.depth)
     }
 
     function checkSummaryWhenIdle() {
