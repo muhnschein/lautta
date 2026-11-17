@@ -83,13 +83,13 @@ ApplicationWindow {
 
     // Shared files that arrive while a page still moves.
     function checkShareWhileDialogCloses() {
+        var depth = pageStack.depth
         var dialog = pageStack.push(plainDialog)
         if (!waitFor(function () { return !pageStack.busy }, "the dialog to open"))
             return
         dialog.accept()
         if (!expect(pageStack.busy, "the dialog closes"))
             return
-        var depth = pageStack.depth - 1
         handlers.receiveShare([ "file:///home/user/Downloads/shared.jpg" ])
         waitFor(function () {
             return !pageStack.busy && pageStack.currentPage.resources !== undefined
