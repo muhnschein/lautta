@@ -4,6 +4,7 @@
 #   - Harbour intake: sdk-harbour-rpmvalidator at VALIDATOR_COMMIT; any error fails,
 #     warnings must be listed in doc/harbour-warnings.md;
 #   - binary exports `main`, links __libc_start_main@GLIBC_2.34, no RPATH, only Harbour libraries;
+#   - LGPL text shipped in /usr/share/harbour-lautta/LICENSE;
 #   - package installs into the target, every library resolves;
 #   - every shipped QML file and tests/qml/tst_*.qml loads in the target, each test in its own
 #     process and home; a test with a `scenarioRunning` property runs until it clears it;
@@ -71,6 +72,8 @@ for needed in $(readelf -d "$bin" | sed -n 's/.*Shared library: \[\(.*\)\]/\1/p'
         *) fail "links $needed, not in the allowed list" ;;
     esac
 done
+grep -q 'GNU LESSER GENERAL PUBLIC LICENSE' "$work/usr/share/harbour-lautta/LICENSE" ||
+    fail "LGPL text not shipped in /usr/share/harbour-lautta/LICENSE"
 size=$(stat -c %s "$bin")
 [ "$size" -le 20971520 ] || fail "binary is $size bytes, over the 20 MB budget"
 
