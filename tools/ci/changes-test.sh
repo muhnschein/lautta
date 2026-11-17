@@ -50,12 +50,11 @@ event() {
     want=$1 why=$2 name=$3 before=${4:-}
     check "$want" "$(cd "$work" && EVENT=$name BEFORE=$before "$script" 2> /dev/null)" "$why"
 }
-rev() { git -C "$work" rev-parse "$1"; }
 g init -q
 echo a > "$work/main.rs"
 g add . && g commit -qm code
 event true "a first commit (no base) runs" pull_request
-code=$(rev HEAD)
+code=$(git -C "$work" rev-parse HEAD)
 echo a > "$work/README.md"
 g add . && g commit -qm docs
 event false "a pull request with docs alone skips" pull_request
