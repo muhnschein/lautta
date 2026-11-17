@@ -23,6 +23,12 @@ Item {
         return { "item": Operations.displayPath(subject), "location": App.locationName(subject) }
     }
 
+    // Share sheet leaves its own app in front.
+    function receiveShare(resources) {
+        __silica_applicationwindow_instance.activate()
+        pages.push(Qt.resolvedUrl("../pages/ShareTargetPage.qml"), { "resources": resources })
+    }
+
     function background() {
         //% "Running in the background"
         show(qsTrId("lautta-ops-background"))
@@ -67,7 +73,7 @@ Item {
         sourceComponent: ShareProvider {
             method: "files"
             registerName: true
-            onTriggered: pages.stack().push(Qt.resolvedUrl("../pages/ShareTargetPage.qml"), { "resources": resources })
+            onTriggered: handlers.receiveShare(resources)
         }
     }
 }
