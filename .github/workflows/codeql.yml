@@ -11,12 +11,32 @@ on:
     - cron: "23 5 * * 1"
 permissions:
   contents: read
+# Push: own group, never cancelled: a docs-only push after it skips, trusting its run.
 concurrency:
-  group: codeql-${{ github.ref }}
+  group: codeql-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: true
 jobs:
+  changes:
+    name: What changed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          # Pull request: merge commit and its base parent. Push: back to `before`.
+          fetch-depth: ${{ github.event_name != 'push' && 2 || 0 }}
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: ./tools/ci/changes.sh >> "$GITHUB_OUTPUT"
+
   analyze:
     name: Analyze (${{ matrix.language }})
+    needs: changes
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -24,7 +44,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [actions, rust]
+        # Docs-only: actions alone (seconds), so every commit keeps a CodeQL analysis for the
+        # ruleset's code scanning rule; Rust takes ten minutes.
+        language: ${{ fromJSON(needs.changes.outputs.code == 'true' && '["actions", "rust"]' || '["actions"]') }}
     env:
       # Shipped build: no cfg(test), default features only.
       CODEQL_EXTRACTOR_RUST_OPTION_CARGO_CFG_OVERRIDES: -test
