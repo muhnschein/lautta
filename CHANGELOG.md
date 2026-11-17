@@ -4,11 +4,18 @@
 
 First release.
 
-- Browse the phone's folders, memory cards and USB drives, as a list or a grid, with Recents, Favourites and a Trash. Settings › Browse page picks what Browse shows.
-- Copy, move, rename and delete; paste moves after a remorse timer. Copies run as tasks in Activity that can be paused, resumed and cancelled, and unfinished tasks resume at the next start.
-- Open zip, tar (plain, gz, bz2, xz, zst) and 7z archives as folders, extract them, or compress files to zip or tar.gz.
-- View pictures, PDFs, text and code with syntax colours, Markdown, music and videos. Thumbnails for photos, videos, PDFs and text files.
-- Search a folder and its subfolders, with filters.
-- Scan documents with the camera into one PDF.
-- Save files shared from other apps with "Save to Lautta".
-- With [netvfs](https://github.com/muhnschein/netvfs) installed: SFTP and SMB servers from Settings › Accounts and servers nearby show up as locations, Connect to server opens one-off servers, transfers between phone and server, music and videos play straight from a server, memory cards and USB drives can be mounted and unmounted, and locked encrypted drives show on Browse.
+- Browse, copy, move, rename and delete files on the phone, memory cards and USB drives, and on SFTP and SMB servers with netvfs ([#1](https://github.com/muhnschein/lautta/pull/1)).
+- Built-in PDF viewer ([#12](https://github.com/muhnschein/lautta/pull/12)), with password, page count and reopen at the last page ([#14](https://github.com/muhnschein/lautta/pull/14)), contents, go to page and links ([#16](https://github.com/muhnschein/lautta/pull/16)), and text search ([#18](https://github.com/muhnschein/lautta/pull/18)).
+- Images zoom around your fingers ([#7](https://github.com/muhnschein/lautta/pull/7)).
+- Running tasks show in an Activity bar ([#11](https://github.com/muhnschein/lautta/pull/11)).
+- Grid view with 3 or 4 items per row ([#15](https://github.com/muhnschein/lautta/pull/15)).
+- Hide and reorder what Browse shows ([#17](https://github.com/muhnschein/lautta/pull/17)).
+- Selection mode is hard to enter by accident and easy to leave ([#19](https://github.com/muhnschein/lautta/pull/19)).
+- Item menus are plain Silica rows ([#20](https://github.com/muhnschein/lautta/pull/20)).
+- Five rounds of device feedback reshape Browse, folders, Trash and the viewers ([#25](https://github.com/muhnschein/lautta/pull/25)).
+- Text files show their first lines in the grid ([#48](https://github.com/muhnschein/lautta/pull/48)).
+- Servers show a server icon ([#58](https://github.com/muhnschein/lautta/pull/58)).
+- Folders inside an archive offer Extract all ([#64](https://github.com/muhnschein/lautta/pull/64)).
+- New app icon: a folder holding a page ([#91](https://github.com/muhnschein/lautta/pull/91), [#93](https://github.com/muhnschein/lautta/pull/93)).
+- Scan documents into a PDF from a folder's Add menu ([#92](https://github.com/muhnschein/lautta/pull/92)).
+- The licence text ships with the app ([#97](https://github.com/muhnschein/lautta/pull/97)).
