@@ -1,17 +1,18 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Does this change need the build and test jobs? Prints `code=true` or
-# `code=false` for $GITHUB_OUTPUT (`changes` job in ci.yml, build.yml).
+# `code=false` for $GITHUB_OUTPUT (`changes` job in ci.yml, build.yml, codeql.yml).
 #
-# false only for a pull request touching nothing but `*.md` outside what
+# false only for a pull request or push touching nothing but `*.md` outside what
 # builds, tests or packaging read: tests/ (markdown fixtures), qml/ and
 # third_party/ (shipped, built), doc/harbour-warnings.md (check-rpm.sh).
-# Push to main, dispatch, unreadable diff: true. Running too much costs
+# Dispatch, schedule, new branch, unreadable diff: true. Running too much costs
 # minutes; skipping wrongly costs a red main.
 #
-# Usage:  changes.sh             (pull request: merge commit against its base)
+# Usage:  changes.sh             (pull request: merge commit against its base;
+#                                 push: BEFORE against HEAD)
 #         changes.sh --classify  (file names on stdin; tools/ci/changes-test.sh)
-# Env: EVENT = github.event_name.
+# Env: EVENT = github.event_name, BEFORE = github.event.before (push).
 set -eu
 
 # Nothing named = true: an empty diff proves nothing.
@@ -33,13 +34,18 @@ if [ "${1:-}" = --classify ]; then
     exit 0
 fi
 
-if [ "${EVENT:-}" != pull_request ]; then
-    echo code=true
-    exit 0
-fi
+case ${EVENT:-} in
+    # Pull request checkout = merge commit: first parent is the base.
+    pull_request) base=HEAD^1 ;;
+    # New branch: all zeros, diff unreadable.
+    push) base=${BEFORE:-} ;;
+    *)
+        echo code=true
+        exit 0
+        ;;
+esac
 
-# Pull request checkout = merge commit: first parent is the base.
-if ! files=$(git diff --name-only HEAD^1 HEAD); then
+if ! files=$(git diff --name-only "$base" HEAD); then
     echo "changes: diff unreadable; running everything" >&2
     echo code=true
     exit 0
