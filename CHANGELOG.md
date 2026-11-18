@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Videos stream again instead of downloading first ([#100](https://github.com/muhnschein/lautta/issues/100)).
+- Videos from servers stream and seek instead of downloading first ([#100](https://github.com/muhnschein/lautta/issues/100)).
 
 ## 1.0.0
 
