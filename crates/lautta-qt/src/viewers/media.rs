@@ -33,15 +33,21 @@ const POLL: Duration = Duration::from_millis(250);
 cpp! {{
     #include <QtMultimedia/QMediaPlayer>
     #include <QtMultimedia/QMediaContent>
+    #include <QtMultimedia/QMediaService>
+    #include <QtCore/QCoreApplication>
+    #include <QtCore/QEvent>
     #include <QtCore/QIODevice>
     #include <QtCore/QUrl>
     #include <QtCore/QVariant>
 
     // Random-access device over a Rust `ReadAhead`. Reads block the calling (player) thread until
-    // the provider answers.
+    // the provider answers. Unbuffered: a held read must not come from QIODevice's buffer either.
     class LauttaMediaDevice : public QIODevice {
     public:
-        LauttaMediaDevice(void *ctx, qint64 size) : m_ctx(ctx), m_size(size) { open(QIODevice::ReadOnly); }
+        LauttaMediaDevice(void *ctx, qint64 size) : m_ctx(ctx), m_size(size)
+        {
+            open(QIODevice::ReadOnly | QIODevice::Unbuffered);
+        }
         ~LauttaMediaDevice() override
         {
             void *ctx = m_ctx;
@@ -49,10 +55,35 @@ cpp! {{
         }
         bool isSequential() const override { return false; }
         qint64 size() const override { return m_size; }
+        bool seek(qint64 pos) override
+        {
+            m_held = false;
+            return QIODevice::seek(pos);
+        }
+        // Reads give nothing until the next seek() or until the events posted so far are handled.
+        void hold() { m_held = true; }
+        void releaseLater() { QCoreApplication::postEvent(this, new QEvent(releaseEvent())); }
+        bool held() const { return m_held; }
+
+        static QEvent::Type releaseEvent()
+        {
+            static const int type = QEvent::registerEventType();
+            return static_cast<QEvent::Type>(type);
+        }
 
     protected:
+        bool event(QEvent *e) override
+        {
+            if (e->type() != releaseEvent())
+                return QIODevice::event(e);
+            m_held = false;
+            return true;
+        }
+
         qint64 readData(char *data, qint64 maxlen) override
         {
+            if (m_held)
+                return 0;
             const qint64 off = pos();
             if (off >= m_size)
                 return 0;
@@ -67,6 +98,7 @@ cpp! {{
     private:
         void *m_ctx;
         qint64 m_size;
+        bool m_held = false;
     };
 
     struct LauttaMedia {
@@ -102,6 +134,26 @@ cpp! {{
     {
         lauttaMediaDropDevice(m);
         m->player->setMedia(QMediaContent(QUrl::fromLocalFile(path)));
+    }
+
+    // Qt 5.6 QGstAppSrc reads and pushes on the GUI thread, queued from GStreamer's need-data. A
+    // read still queued when the seek flushes appsrc lands after the flush and is taken as data
+    // for the new position. Queued reads run first; those queued meanwhile get nothing.
+    static void lauttaMediaSeek(LauttaMedia *m, qint64 ms)
+    {
+        if (!m->device) {
+            m->player->setPosition(ms);
+            return;
+        }
+        if (QMediaService *service = m->player->service()) {
+            for (QObject *o : service->findChildren<QObject *>()) {
+                if (qstrcmp(o->metaObject()->className(), "QGstAppSrc") == 0)
+                    QCoreApplication::sendPostedEvents(o, QEvent::MetaCall);
+            }
+        }
+        m->device->hold();
+        m->player->setPosition(ms);
+        m->device->releaseLater();
     }
 
     static void lauttaMediaFree(LauttaMedia *m)
@@ -483,7 +535,7 @@ impl MediaSource {
         if self.media != 0 {
             let m = self.player_ptr();
             let ms = ms.max(0.0) as i64;
-            cpp!(unsafe [m as "LauttaMedia*", ms as "qint64"] { m->player->setPosition(ms); });
+            cpp!(unsafe [m as "LauttaMedia*", ms as "qint64"] { lauttaMediaSeek(m, ms); });
         }
     }
 }
@@ -548,5 +600,51 @@ mod tests {
         assert_eq!(read_into(ctx, 10_000, buf.as_mut_ptr(), 100), 0);
         assert_eq!(read_into(ctx, -1, buf.as_mut_ptr(), 100), -1);
         release_reader(ctx);
+    }
+
+    #[test]
+    fn a_held_device_reads_nothing_until_a_seek_or_the_release() {
+        use lautta_core::provider::memory::MemoryProvider;
+        use lautta_core::provider::{Lane, Provider};
+        let rt = crate::runtime::handle();
+        let mem = MemoryProvider::default();
+        mem.add_file("a.bin", &(0..=255u8).cycle().take(100_000).collect::<Vec<_>>(), 0);
+        let path = lautta_core::vpath::VPath::parse(b"a.bin").unwrap();
+        let reader = rt.block_on(async {
+            let h = mem.open_read(&path, Lane::Interactive).await.unwrap();
+            ReadAhead::new(Arc::from(h)).unwrap()
+        });
+        let ctx = reader_ptr(Arc::new(reader));
+        // Each step: bytes read, then the first byte. Small reads would fill a QIODevice buffer.
+        let got = cpp!(unsafe [ctx as "void*"] -> QString as "QString" {
+            // Posted events need an application object.
+            static int argc = 1;
+            static char name[] = "test";
+            static char *argv[] = {name, nullptr};
+            static QCoreApplication *app = QCoreApplication::instance() ? nullptr : new QCoreApplication(argc, argv);
+            Q_UNUSED(app);
+            LauttaMediaDevice device(ctx, 100000);
+            QStringList steps;
+            auto step = [&]() {
+                QByteArray b = device.read(100);
+                steps << QStringLiteral("%1@%2").arg(b.size()).arg(b.isEmpty() ? -1 : int(uchar(b.at(0))));
+            };
+            step();
+            device.hold();
+            step();
+            device.releaseLater();
+            step();
+            QCoreApplication::sendPostedEvents(&device, 0);
+            step();
+            device.hold();
+            device.seek(300);
+            step();
+            return steps.join(QLatin1Char(' '));
+        });
+        assert_eq!(
+            got.to_string(),
+            "100@0 0@-1 0@-1 100@100 100@44",
+            "read, held, held until the release is handled, released, seek releases"
+        );
     }
 }
