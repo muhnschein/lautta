@@ -192,10 +192,26 @@ impl ReadAhead {
         self.size
     }
 
+    /// Short only at the end of the file: Qt 5.6's `QGstAppSrc` pushes a short read as a full-size
+    /// buffer, and the bytes after it land at the wrong offsets.
     pub async fn read(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
-        if offset >= self.size || max == 0 {
-            return Ok(Vec::new());
+        let want = usize::try_from(self.size.saturating_sub(offset))
+            .unwrap_or(usize::MAX)
+            .min(max);
+        let mut out = Vec::new();
+        while out.len() < want {
+            let part = self
+                .read_window(offset + out.len() as u64, want - out.len())
+                .await?;
+            if part.is_empty() {
+                break;
+            }
+            out.extend_from_slice(&part);
         }
+        Ok(out)
+    }
+
+    async fn read_window(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
         if let Some(hit) = self.cached(offset, max) {
             return Ok(hit);
         }
@@ -775,6 +791,28 @@ mod tests {
         assert!(r.read(total as u64, 10).await.unwrap().is_empty());
         assert!(r.read(0, 0).await.unwrap().is_empty());
         assert_eq!(r.read(0, 3).await.unwrap(), data[..3]);
+    }
+
+    #[tokio::test]
+    async fn a_media_read_across_windows_comes_back_whole() {
+        let total = READ_AHEAD_BYTES * 2;
+        let data: Vec<u8> = (0..total).map(|i| (i % 251) as u8).collect();
+        let h = Arc::new(Counting {
+            data: data.clone(),
+            reads: Default::default(),
+            hints: Default::default(),
+        });
+        let r = ReadAhead::new(h.clone()).unwrap();
+        assert_eq!(r.read(0, 4096).await.unwrap().len(), 4096);
+        // Window ends 10,000 bytes into this read.
+        let at = READ_AHEAD_BYTES - 10_000;
+        let got = r.read(at as u64, 24_679).await.unwrap();
+        assert_eq!(got, data[at..at + 24_679]);
+        assert_eq!(h.reads.load(Ordering::Relaxed), 2, "rest from the next window");
+        let big = r.read(5, READ_AHEAD_BYTES + 3).await.unwrap();
+        assert_eq!(big, data[5..READ_AHEAD_BYTES + 8], "longer than a window");
+        let tail = r.read(total as u64 - 7, 100).await.unwrap();
+        assert_eq!(tail, data[total - 7..], "short at the end only");
     }
 
     #[tokio::test]
