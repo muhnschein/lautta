@@ -3,8 +3,8 @@
 //!
 //! QML's `MediaPlayer` cannot take a `QIODevice`: this type owns a `QMediaPlayer` and exposes it as
 //! `mediaObject` (what `VideoOutput { source: mediaSource }` looks for). The player reads through a
-//! `QIODevice` subclass whose `readData` calls into Rust, where a [`ReadAhead`] keeps a 2 MiB
-//! window over the bridge read handle.
+//! `QIODevice` subclass whose `readData` calls into Rust, where a [`ReadAhead`] keeps the next
+//! 4 MiB of the bridge read handle cached, fetched in the background.
 //!
 //! If the device's GStreamer backend cannot play from or seek in a `QIODevice`, the player reports
 //! a resource or format error and `MediaSource` falls back to download-then-play (`downloading`,
@@ -40,8 +40,8 @@ cpp! {{
     #include <QtCore/QUrl>
     #include <QtCore/QVariant>
 
-    // Random-access device over a Rust `ReadAhead`. Reads block the calling (player) thread until
-    // the provider answers. Unbuffered: a held read must not come from QIODevice's buffer either.
+    // Random-access device over a Rust `ReadAhead`. Reads run on the GUI thread (Qt 5.6 `QGstAppSrc`)
+    // and block it only when the bytes are not cached yet (start, seek). Unbuffered: a held read must not come from QIODevice's buffer either.
     class LauttaMediaDevice : public QIODevice {
     public:
         LauttaMediaDevice(void *ctx, qint64 size) : m_ctx(ctx), m_size(size)

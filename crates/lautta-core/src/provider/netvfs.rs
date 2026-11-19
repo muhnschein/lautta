@@ -353,7 +353,12 @@ impl ReadHandle for NetvfsReadHandle {
         let offset =
             i64::try_from(offset).map_err(|_| Error::new(ErrorKind::InvalidArgument, "offset too large"))?;
         let want = u32::try_from(max).unwrap_or(u32::MAX).min(MAX_READ_BYTES);
-        rpc(self.link.proxy().read(self.handle, offset, want).await)
+        rpc(self
+            .link
+            .proxy()
+            .read(self.handle, offset, want)
+            .await
+            .map(|b| b.0))
     }
 
     async fn read_ahead(&self, offset: u64, bytes: u64) -> Result<()> {
