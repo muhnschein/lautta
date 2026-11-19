@@ -633,6 +633,110 @@
       "w": 400,
       "x": 4800,
       "y": 15600
+    },
+    "AccessNotification.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "netvfs \u00b7 consent notification",
+      "w": 400,
+      "x": 0,
+      "y": 17100
+    },
+    "AccessSettings.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "netvfs \u00b7 Settings, apps using network locations",
+      "w": 400,
+      "x": 480,
+      "y": 17100
+    },
+    "AccessSettingsMenu.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "netvfs \u00b7 Settings, level menu open",
+      "w": 400,
+      "x": 960,
+      "y": 17100
+    },
+    "AccessBrowse.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Browse \u00b7 account servers read only",
+      "w": 400,
+      "x": 0,
+      "y": 18260
+    },
+    "AccessReadOnly.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Read only \u00b7 folder pulley",
+      "w": 400,
+      "x": 480,
+      "y": 18260
+    },
+    "AccessReadAdd.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Read and add \u00b7 folder pulley",
+      "w": 400,
+      "x": 960,
+      "y": 18260
+    },
+    "AccessItemMenu.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Read only, read and add \u00b7 item menu",
+      "w": 400,
+      "x": 1440,
+      "y": 18260
+    },
+    "AccessSelect.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Read only, read and add \u00b7 selection",
+      "w": 400,
+      "x": 1920,
+      "y": 18260
+    },
+    "AccessConflict.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Read and add \u00b7 conflict",
+      "w": 400,
+      "x": 2400,
+      "y": 18260
+    },
+    "AccessDropBox.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Drop box \u00b7 folder pulley",
+      "w": 400,
+      "x": 2880,
+      "y": 18260
+    },
+    "AccessPicker.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Copy to\u2026 \u00b7 read-only servers dimmed",
+      "w": 400,
+      "x": 3360,
+      "y": 18260
+    },
+    "AccessNarrowed.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Access narrowed during a transfer",
+      "w": 400,
+      "x": 3840,
+      "y": 18260
+    },
+    "AccessAbout.dc.html": {
+      "h": 520,
+      "is_interactive": true,
+      "title": "About \u00b7 access level",
+      "w": 400,
+      "x": 4320,
+      "y": 18260
     }
   },
   "createdOnFiles": {
@@ -731,6 +835,22 @@
       "w": 240,
       "x": 0,
       "y": 15300
+    },
+    "r11": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Access levels \u00b7 netvfs notification and Settings",
+      "w": 240,
+      "x": 0,
+      "y": 16800
+    },
+    "r12": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Access levels \u00b7 Lautta",
+      "w": 240,
+      "x": 0,
+      "y": 17960
     }
   },
   "order": [
@@ -812,7 +932,20 @@
     "ScanCrop.dc.html",
     "ScanPages.dc.html",
     "ScanPagesDrag.dc.html",
-    "ScanNoCamera.dc.html"
+    "ScanNoCamera.dc.html",
+    "AccessNotification.dc.html",
+    "AccessSettings.dc.html",
+    "AccessSettingsMenu.dc.html",
+    "AccessBrowse.dc.html",
+    "AccessReadOnly.dc.html",
+    "AccessReadAdd.dc.html",
+    "AccessItemMenu.dc.html",
+    "AccessSelect.dc.html",
+    "AccessConflict.dc.html",
+    "AccessDropBox.dc.html",
+    "AccessPicker.dc.html",
+    "AccessNarrowed.dc.html",
+    "AccessAbout.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"
