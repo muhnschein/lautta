@@ -5,7 +5,7 @@
 ## What this is
 
 - Usable store app today: user's folders, SD cards, USB drives, archives, Trash. Browse, preview, open, share, copy, move.
-- Showcase for platform file access: with netvfs installed, SFTP and SMB servers from Settings → Accounts become ordinary locations, plus persistent, resumable transfer queue.
+- Showcase for platform file access: with netvfs installed, SFTP, SMB, WebDAV and FTPS servers from Settings → Accounts become ordinary locations, plus persistent, resumable transfer queue.
 
 ## What this isn't
 
@@ -33,7 +33,7 @@ Standalone is what Harbour reviewers and most users see: must be useful and poli
 - Connection: p2p D-Bus (`zbus`, unix socket, fd passing), `org.netvfs.Bridge1`. `Hello` first, then `GetFeatures`: optional parts (`storage-settings`, `drives`) offered only while bridge names them; unknown names ignored.
 - Consent: until `granted`, *Servers* shows one row asking to allow access in netvfs's notification, with *Ask again*. `denied` hides section, reason in *About*.
 - Accounts handed off: *Add server*, *Edit server*, *Update sign-in*, *Review server identity* open Settings via bridge. App never edits accounts, pins, secrets; never opens or closes connections.
-- Ad-hoc servers: *Connect to server* takes `sftp://` or `smb://` URL and secret if needed; buffer zeroized after call. Identity prompts and unencrypted-connection consent arrive as `Question` signals, answered in app (for accounts: in Settings).
+- Ad-hoc servers: *Connect to server* takes `sftp://`, `smb://`, `davs://` or `ftps://` URL and secret if needed; buffer zeroized after call. Identity prompts and unencrypted-connection consent arrive as `Question` signals, answered in app (for accounts: in Settings).
 - Server row status: one dot, no text, no protocol or host. Connected = highlight; not connected = primary; connecting = pulsing (only on screen, app in front); failed = red; sign-in or identity needs user = orange. Not connected stays browsable; opening connects.
 - Names and paths cross as bytes (`ay`): netvfs names may be non-UTF-8, D-Bus strings may not.
 - Local data never by path: uploads pass read-only fd, downloads a writable fd to app-created temp file, archive streams a pipe end.
@@ -51,7 +51,7 @@ lautta-qt (qmetaobject-rs; no logic)
 lautta-core (no Qt): providers (local, archive, netvfs),
 planner, transfer queue, caches, SQLite
         |  p2p D-Bus + fd passing, unix socket
-netvfs-bridge (not part of this app) -> SFTP / SMB servers
+netvfs-bridge (not part of this app) -> SFTP / SMB / WebDAV / FTPS servers
 ```
 
 - QObjects on GUI thread only; core answers via queued callbacks.
