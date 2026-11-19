@@ -70,6 +70,7 @@ Every added or changed test, before push:
 
 ## UI and words
 
+- Vocabulary: screens, features, flows named and numbered as `doc/feature-map.md` (`SCR-*`, `F-*`, `FL-*`); use those names in code comments, issues, PRs, chat. Screen, feature or flow added, changed or removed → update `doc/feature-map.md`, `doc/flows.md`, `doc/flow-mapping.md`, same PR.
 - Silica stock components only, built like existing pages; idioms in `design/STYLE.md` (pulley, no push-up menu, remorse, dialog pages). Jolla app has same feature (e.g. Gallery's image viewer) → match it. Feature references: Harbour File Browser, Transmit/Cyberduck, iOS Files.
 - "Design first" / "no PR yet" → artboard on design canvas (`design/canvas/project/*.dc.html`, kit `design/STYLE.md`), wait for approval, then code.
 - Every string `qsTrId()` with `//%` engineering English; error text as `doc/PROJECT.md` "Words on screen". Changed strings → `make translations` (`make check` fails on drift). A count in a text → one `%n` plural string, never "(s)"; `make translations` adds its English singular (read the printed pairs).
