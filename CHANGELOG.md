@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Videos from servers stream and seek instead of downloading first ([#100](https://github.com/muhnschein/lautta/issues/100)).
+- Streaming videos no longer freeze the screen every second or so, and start and seek faster.
 
 ## 1.0.0
 

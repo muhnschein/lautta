@@ -165,14 +165,80 @@ fn display(uri: &Uri) -> String {
     uri.name().map(crate::vpath::display_name).unwrap_or_default()
 }
 
-pub const READ_AHEAD_BYTES: usize = 2 * 1024 * 1024;
+/// How far the background reader runs ahead of the player.
+pub const READ_AHEAD_BYTES: usize = 4 * 1024 * 1024;
+/// One background read; also the most a seek waits behind one already sent.
+const PIECE_BYTES: usize = 512 * 1024;
+/// Read on a miss (start, seek), before the player gets its bytes.
+const FIRST_BYTES: usize = 256 * 1024;
+/// Pieces kept, oldest dropped first: read-ahead plus some behind for small seeks back.
+const KEEP_BYTES: usize = READ_AHEAD_BYTES + 2 * 1024 * 1024;
 
-/// Player asks small pieces, provider large ones; next window is announced with `read_ahead` so a
-/// bridge can prefetch.
+/// Player reads small pieces on Qt's GUI thread (Qt 5.6 `QGstAppSrc`); a background task keeps
+/// [`READ_AHEAD_BYTES`] past the last read cached, so steady playback never waits on the provider.
 pub struct ReadAhead {
     handle: Arc<dyn ReadHandle>,
     size: u64,
-    window: Mutex<(u64, Arc<Vec<u8>>)>,
+    shared: Arc<Shared>,
+}
+
+struct Shared {
+    state: Mutex<Cache>,
+    /// Sent on every change a reader or the fetch task may wait for.
+    changed: tokio::sync::watch::Sender<()>,
+}
+
+#[derive(Default)]
+struct Cache {
+    pieces: VecDeque<(u64, Arc<Vec<u8>>)>,
+    bytes: usize,
+    /// End of the player's last read.
+    pos: u64,
+    /// Fetch task's generation: a task whose generation is gone stops.
+    generation: u64,
+    fetch: Option<Fetch>,
+}
+
+struct Fetch {
+    /// Next offset the task reads; bytes before it from the task's start are cached.
+    next: u64,
+    failed: bool,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl Cache {
+    fn find(&self, offset: u64, max: usize) -> Option<Vec<u8>> {
+        self.pieces.iter().find_map(|(start, data)| {
+            let at = usize::try_from(offset.checked_sub(*start)?).ok()?;
+            let rest = data.get(at..).filter(|r| !r.is_empty())?;
+            Some(rest[..rest.len().min(max)].to_vec())
+        })
+    }
+
+    fn insert(&mut self, offset: u64, data: Vec<u8>) {
+        self.bytes += data.len();
+        self.pieces.push_back((offset, Arc::new(data)));
+        while self.bytes > KEEP_BYTES {
+            match self.pieces.pop_front() {
+                Some((_, old)) => self.bytes -= old.len(),
+                None => break,
+            }
+        }
+    }
+
+    /// Fetch about to answer `offset` with the piece it reads now.
+    fn fetching(&self, offset: u64) -> bool {
+        self.fetch
+            .as_ref()
+            .is_some_and(|f| !f.failed && offset >= f.next && offset < f.next + PIECE_BYTES as u64)
+    }
+
+    fn stop_fetch(&mut self) {
+        self.generation += 1;
+        if let Some(f) = self.fetch.take() {
+            f.task.abort();
+        }
+    }
 }
 
 impl ReadAhead {
@@ -184,7 +250,10 @@ impl ReadAhead {
         Ok(ReadAhead {
             handle,
             size,
-            window: Mutex::new((0, Arc::default())),
+            shared: Arc::new(Shared {
+                state: Mutex::new(Cache::default()),
+                changed: tokio::sync::watch::channel(()).0,
+            }),
         })
     }
 
@@ -193,7 +262,7 @@ impl ReadAhead {
     }
 
     /// Short only at the end of the file: Qt 5.6's `QGstAppSrc` pushes a short read as a full-size
-    /// buffer, and the bytes after it land at the wrong offsets.
+    /// buffer, and the bytes after it land at the wrong offsets. Needs a tokio runtime.
     pub async fn read(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
         let want = usize::try_from(self.size.saturating_sub(offset))
             .unwrap_or(usize::MAX)
@@ -201,7 +270,7 @@ impl ReadAhead {
         let mut out = Vec::new();
         while out.len() < want {
             let part = self
-                .read_window(offset + out.len() as u64, want - out.len())
+                .read_piece(offset + out.len() as u64, want - out.len())
                 .await?;
             if part.is_empty() {
                 break;
@@ -211,33 +280,116 @@ impl ReadAhead {
         Ok(out)
     }
 
-    async fn read_window(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
-        if let Some(hit) = self.cached(offset, max) {
-            return Ok(hit);
+    async fn read_piece(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
+        loop {
+            // Subscribed before the check: a piece landing after it still wakes this read.
+            let mut changed = self.shared.changed.subscribe();
+            {
+                let mut cache = lock(&self.shared.state);
+                if let Some(hit) = cache.find(offset, max) {
+                    cache.pos = offset + hit.len() as u64;
+                    drop(cache);
+                    self.shared.changed.send_replace(());
+                    return Ok(hit);
+                }
+                if !cache.fetching(offset) {
+                    cache.stop_fetch();
+                    break;
+                }
+            }
+            if changed.changed().await.is_err() {
+                break;
+            }
         }
         let want = usize::try_from(self.size - offset)
             .unwrap_or(usize::MAX)
-            .min(READ_AHEAD_BYTES);
+            .min(FIRST_BYTES.max(max));
         let data = self.handle.read_at(offset, want).await?;
         if data.is_empty() {
             return Ok(data);
         }
         let end = offset + data.len() as u64;
         let first = data[..data.len().min(max)].to_vec();
-        *lock(&self.window) = (offset, Arc::new(data));
+        let mut cache = lock(&self.shared.state);
+        cache.insert(offset, data);
+        cache.pos = offset + first.len() as u64;
         if end < self.size {
-            // A failed hint only costs the prefetch.
-            let _ = self.handle.read_ahead(end, READ_AHEAD_BYTES as u64).await;
+            cache.stop_fetch();
+            let generation = cache.generation;
+            let task = tokio::spawn(fetch(
+                self.handle.clone(),
+                self.shared.clone(),
+                generation,
+                end,
+                self.size,
+            ));
+            cache.fetch = Some(Fetch {
+                next: end,
+                failed: false,
+                task,
+            });
         }
         Ok(first)
     }
+}
 
-    fn cached(&self, offset: u64, max: usize) -> Option<Vec<u8>> {
-        let w = lock(&self.window);
-        let (start, data) = &*w;
-        let at = usize::try_from(offset.checked_sub(*start)?).ok()?;
-        let rest = data.get(at..).filter(|r| !r.is_empty())?;
-        Some(rest[..rest.len().min(max)].to_vec())
+impl Drop for ReadAhead {
+    fn drop(&mut self) {
+        lock(&self.shared.state).stop_fetch();
+    }
+}
+
+/// Reads [`PIECE_BYTES`] at a time while under [`READ_AHEAD_BYTES`] ahead of the player.
+async fn fetch(handle: Arc<dyn ReadHandle>, shared: Arc<Shared>, generation: u64, mut next: u64, size: u64) {
+    let mut changed = shared.changed.subscribe();
+    let mut hinted = next;
+    while next < size {
+        changed.borrow_and_update();
+        let ahead = {
+            let cache = lock(&shared.state);
+            if cache.generation != generation {
+                return;
+            }
+            next >= cache.pos + READ_AHEAD_BYTES as u64
+        };
+        if ahead {
+            if changed.changed().await.is_err() {
+                return;
+            }
+            continue;
+        }
+        if next >= hinted {
+            hinted = next + READ_AHEAD_BYTES as u64;
+            // A failed hint only costs the provider's own prefetch.
+            let _ = handle.read_ahead(next, READ_AHEAD_BYTES as u64).await;
+        }
+        let want = usize::try_from(size - next)
+            .unwrap_or(usize::MAX)
+            .min(PIECE_BYTES);
+        let got = handle.read_at(next, want).await;
+        let mut cache = lock(&shared.state);
+        if cache.generation != generation {
+            return;
+        }
+        let failed = match got {
+            Ok(data) if !data.is_empty() => {
+                let at = next;
+                next += data.len() as u64;
+                cache.insert(at, data);
+                false
+            }
+            // Reader repeats the read itself and sees the error.
+            _ => true,
+        };
+        if let Some(f) = cache.fetch.as_mut() {
+            f.next = next;
+            f.failed = failed;
+        }
+        drop(cache);
+        shared.changed.send_replace(());
+        if failed {
+            return;
+        }
     }
 }
 
@@ -734,85 +886,279 @@ impl Core {
 mod tests {
     use super::*;
 
-    struct Counting {
+    /// Logs each `read_at` when called; each read then waits for one permit of `gate`.
+    struct Gated {
         data: Vec<u8>,
-        reads: std::sync::atomic::AtomicUsize,
-        hints: std::sync::atomic::AtomicUsize,
+        calls: std::sync::Mutex<Vec<(u64, usize)>>,
+        called: tokio::sync::watch::Sender<usize>,
+        gate: tokio::sync::Semaphore,
+        hints: std::sync::Mutex<Vec<(u64, u64)>>,
+        fail_at: std::sync::Mutex<Option<u64>>,
+        /// Claimed size beyond the data: a file that shrank since it was opened.
+        missing: std::sync::atomic::AtomicU64,
+    }
+
+    impl Gated {
+        fn new(total: usize, permits: usize) -> Arc<Gated> {
+            Arc::new(Gated {
+                data: (0..total).map(|i| (i % 251) as u8).collect(),
+                calls: Default::default(),
+                called: tokio::sync::watch::channel(0).0,
+                gate: tokio::sync::Semaphore::new(permits),
+                hints: Default::default(),
+                fail_at: Default::default(),
+                missing: Default::default(),
+            })
+        }
+
+        fn calls(&self) -> Vec<(u64, usize)> {
+            self.calls.lock().unwrap().clone()
+        }
+
+        /// Hang guard only: work of milliseconds.
+        async fn until(&self, what: impl Fn(&[(u64, usize)]) -> bool) {
+            let mut rx = self.called.subscribe();
+            let wait = async {
+                while !what(&self.calls()) {
+                    rx.changed().await.unwrap();
+                }
+            };
+            tokio::time::timeout(std::time::Duration::from_secs(10), wait)
+                .await
+                .expect("reads never got there");
+        }
     }
 
     #[async_trait::async_trait]
-    impl ReadHandle for Counting {
+    impl ReadHandle for Gated {
         fn size(&self) -> Option<u64> {
-            Some(self.data.len() as u64)
+            Some(self.data.len() as u64 + self.missing.load(Ordering::Relaxed))
         }
         async fn read_at(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
-            self.reads.fetch_add(1, Ordering::Relaxed);
+            self.calls.lock().unwrap().push((offset, max));
+            self.called.send_modify(|n| *n += 1);
+            self.gate.acquire().await.unwrap().forget();
+            if self.fail_at.lock().unwrap().take_if(|at| *at == offset).is_some() {
+                return Err(Error::new(ErrorKind::ConnectionLost, "gone"));
+            }
             let start = usize::try_from(offset).unwrap_or(usize::MAX).min(self.data.len());
             Ok(self.data[start..(start + max).min(self.data.len())].to_vec())
         }
-        async fn read_ahead(&self, _offset: u64, _bytes: u64) -> Result<()> {
-            self.hints.fetch_add(1, Ordering::Relaxed);
+        async fn read_ahead(&self, offset: u64, bytes: u64) -> Result<()> {
+            self.hints.lock().unwrap().push((offset, bytes));
             Ok(())
         }
     }
 
-    #[tokio::test]
-    async fn the_media_reader_serves_small_reads_from_one_big_one() {
-        let total = READ_AHEAD_BYTES * 2 + 1000;
-        let data: Vec<u8> = (0..total).map(|i| (i % 251) as u8).collect();
-        let h = Arc::new(Counting {
-            data: data.clone(),
-            reads: Default::default(),
-            hints: Default::default(),
-        });
-        let r = ReadAhead::new(h.clone()).unwrap();
-        assert_eq!(r.size(), total as u64);
-        for i in 0..100u64 {
-            let got = r.read(i * 4096, 4096).await.unwrap();
-            assert_eq!(got, data[(i * 4096) as usize..(i * 4096 + 4096) as usize]);
-        }
-        assert_eq!(
-            h.reads.load(Ordering::Relaxed),
-            1,
-            "one 2 MiB window serves 400 KiB"
-        );
-        assert_eq!(h.hints.load(Ordering::Relaxed), 1, "the next window is announced");
-        let at = (READ_AHEAD_BYTES + 5) as u64;
-        assert_eq!(r.read(at, 10).await.unwrap(), data[at as usize..at as usize + 10]);
-        assert_eq!(h.reads.load(Ordering::Relaxed), 2);
-        let edge = (READ_AHEAD_BYTES * 2 + 5) as u64;
-        let tail = r.read(edge, 5000).await.unwrap();
-        assert_eq!(tail.len(), 995, "cut at the end of the file");
-        assert_eq!(
-            h.hints.load(Ordering::Relaxed),
-            2,
-            "no hint at the end of the file"
-        );
-        assert!(r.read(total as u64, 10).await.unwrap().is_empty());
-        assert!(r.read(0, 0).await.unwrap().is_empty());
-        assert_eq!(r.read(0, 3).await.unwrap(), data[..3]);
+    const OPEN: usize = tokio::sync::Semaphore::MAX_PERMITS;
+
+    fn reach(calls: &[(u64, usize)]) -> u64 {
+        calls.iter().map(|(at, len)| at + *len as u64).max().unwrap_or(0)
     }
 
-    #[tokio::test]
-    async fn a_media_read_across_windows_comes_back_whole() {
-        let total = READ_AHEAD_BYTES * 2;
-        let data: Vec<u8> = (0..total).map(|i| (i % 251) as u8).collect();
-        let h = Arc::new(Counting {
-            data: data.clone(),
-            reads: Default::default(),
-            hints: Default::default(),
-        });
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn playing_on_reads_only_what_the_background_fetch_already_has() {
+        let h = Gated::new(12 << 20, OPEN);
         let r = ReadAhead::new(h.clone()).unwrap();
-        assert_eq!(r.read(0, 4096).await.unwrap().len(), 4096);
-        // Window ends 10,000 bytes into this read.
-        let at = READ_AHEAD_BYTES - 10_000;
-        let got = r.read(at as u64, 24_679).await.unwrap();
-        assert_eq!(got, data[at..at + 24_679]);
-        assert_eq!(h.reads.load(Ordering::Relaxed), 2, "rest from the next window");
-        let big = r.read(5, READ_AHEAD_BYTES + 3).await.unwrap();
-        assert_eq!(big, data[5..READ_AHEAD_BYTES + 8], "longer than a window");
+        assert_eq!(r.read(0, 4096).await.unwrap(), h.data[..4096]);
+        let mut pos = 4096u64;
+        while pos < 3 << 20 {
+            h.until(|c| reach(c) >= (pos + (4 << 20)).min(12 << 20)).await;
+            let got = r.read(pos, 23_000).await.unwrap();
+            assert_eq!(got, h.data[pos as usize..pos as usize + 23_000]);
+            pos += 23_000;
+        }
+        let calls = h.calls();
+        assert_eq!(
+            calls[0],
+            (0, 256 << 10),
+            "player waits only for a short first read"
+        );
+        let mut next = 256 << 10;
+        for &(at, len) in &calls[1..] {
+            assert_eq!(
+                (at, len),
+                (next, 512 << 10),
+                "rest in pieces, in order, in the background"
+            );
+            next += len as u64;
+        }
+        // Nothing to wait for: the fetch must stay idle once far enough ahead.
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert!(
+            reach(&h.calls()) <= pos + (4 << 20) + (512 << 10),
+            "fetch stops 4 MiB ahead of the player"
+        );
+        let hints = h.hints.lock().unwrap().clone();
+        assert_eq!(
+            hints,
+            [(256 << 10, 4 << 20), ((256 << 10) + (4 << 20), 4 << 20)],
+            "one hint per 4 MiB"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_read_the_fetch_is_about_to_answer_waits_for_it() {
+        let h = Gated::new(4 << 20, 1);
+        let r = Arc::new(ReadAhead::new(h.clone()).unwrap());
+        r.read(0, 4096).await.unwrap();
+        h.until(|c| c.len() == 2).await;
+        let at = FIRST_BYTES as u64 + 10;
+        let reader = tokio::spawn({
+            let r = r.clone();
+            async move { r.read(at, 100).await.unwrap() }
+        });
+        h.gate.add_permits(1);
+        let got = tokio::time::timeout(std::time::Duration::from_secs(10), reader)
+            .await
+            .expect("read waits for the fetch's piece")
+            .unwrap();
+        assert_eq!(got, h.data[at as usize..at as usize + 100]);
+        assert_eq!(
+            h.calls()[1],
+            (FIRST_BYTES as u64, PIECE_BYTES),
+            "no second read of it"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_seek_reads_there_first_and_fetches_on_from_there() {
+        let h = Gated::new(20 << 20, OPEN);
+        let r = ReadAhead::new(h.clone()).unwrap();
+        r.read(0, 4096).await.unwrap();
+        h.until(|c| c.len() >= 2).await;
+        let at = 6u64 << 20;
+        assert_eq!(
+            r.read(at, 4096).await.unwrap(),
+            h.data[at as usize..at as usize + 4096]
+        );
+        assert!(h.calls().contains(&(at, FIRST_BYTES)));
+        let ahead = at + 4096 + READ_AHEAD_BYTES as u64;
+        h.until(|c| reach(c) >= ahead).await;
+        // Nothing to wait for: the fetch must stay idle once far enough ahead of the seek.
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert!(reach(&h.calls()) <= ahead + PIECE_BYTES as u64);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_piece_a_stopped_fetch_gets_late_is_not_kept() {
+        let h = Gated::new(4 << 20, 1);
+        let r = ReadAhead::new(h.clone()).unwrap();
+        r.read(0, 4096).await.unwrap();
+        h.until(|c| c.len() == 2).await;
+        // Fetch past its read and waiting for the lock when stopped: abort cannot reach it.
+        let f = lock(&r.shared.state).fetch.take().unwrap();
+        lock(&r.shared.state).stop_fetch();
+        h.gate.add_permits(1);
+        f.task.await.unwrap();
+        assert!(lock(&r.shared.state).find(FIRST_BYTES as u64, 1).is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_fetch_stops_at_an_early_end_of_file() {
+        let h = Gated::new(1 << 20, OPEN);
+        h.missing.store(2 << 20, Ordering::Relaxed);
+        let r = ReadAhead::new(h.clone()).unwrap();
+        r.read(0, 10).await.unwrap();
+        h.until(|c| c.iter().any(|c| c.0 == 1 << 20)).await;
+        // Nothing to wait for: an empty read ends the fetch.
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert_eq!(h.calls().iter().filter(|c| c.0 == 1 << 20).count(), 1);
+        assert!(r.read(1 << 20, 10).await.unwrap().is_empty(), "file ends early");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_skip_past_the_piece_on_its_way_reads_at_once() {
+        let h = Gated::new(4 << 20, 1);
+        let r = Arc::new(ReadAhead::new(h.clone()).unwrap());
+        r.read(0, 4096).await.unwrap();
+        h.until(|c| c.len() == 2).await;
+        let at = (FIRST_BYTES + PIECE_BYTES) as u64 + 10;
+        let reader = tokio::spawn({
+            let r = r.clone();
+            async move { r.read(at, 100).await.unwrap() }
+        });
+        h.until(|c| c.contains(&(at, FIRST_BYTES))).await;
+        h.gate.add_permits(OPEN - 1);
+        assert_eq!(reader.await.unwrap(), h.data[at as usize..at as usize + 100]);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn played_bytes_are_dropped_once_6_mib_are_cached() {
+        let h = Gated::new(12 << 20, OPEN);
+        let r = ReadAhead::new(h.clone()).unwrap();
+        r.read(0, 10).await.unwrap();
+        // Player 4 MiB behind `upto`: fetch stops at the first piece end past it.
+        let fill = |upto: u64| {
+            let (h, r) = (h.clone(), &r);
+            async move {
+                h.until(|c| reach(c) >= 4 << 20).await;
+                r.read(upto - (4 << 20), 10).await.unwrap();
+                h.until(|c| reach(c) >= upto).await;
+            }
+        };
+        fill(5 << 20).await;
+        r.read(0, 10).await.unwrap();
+        assert_eq!(
+            h.calls().iter().filter(|c| c.0 == 0).count(),
+            1,
+            "5.25 MiB cached: kept"
+        );
+        fill(7 << 20).await;
+        let second = FIRST_BYTES as u64 + 10;
+        r.read(second, 10).await.unwrap();
+        assert!(
+            h.calls().contains(&(second, FIRST_BYTES)),
+            "7.25 MiB cached: oldest 1.25 MiB dropped"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_failed_fetch_leaves_the_read_to_the_player() {
+        let h = Gated::new(4 << 20, OPEN);
+        *h.fail_at.lock().unwrap() = Some(FIRST_BYTES as u64);
+        let r = ReadAhead::new(h.clone()).unwrap();
+        r.read(0, 4096).await.unwrap();
+        let at = FIRST_BYTES as u64;
+        let got = tokio::time::timeout(std::time::Duration::from_secs(10), r.read(at, 10))
+            .await
+            .expect("no wait on a fetch that failed")
+            .unwrap();
+        assert_eq!(got, h.data[at as usize..at as usize + 10]);
+        assert_eq!(
+            h.calls().iter().filter(|c| c.0 == at).count(),
+            2,
+            "fetch's read, then the player's"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn dropping_the_reader_stops_its_fetch() {
+        let h = Gated::new(12 << 20, 1);
+        let r = ReadAhead::new(h.clone()).unwrap();
+        r.read(0, 4096).await.unwrap();
+        h.until(|c| c.len() == 2).await;
+        drop(r);
+        h.gate.add_permits(OPEN - 1);
+        // Nothing to wait for: a stopped fetch reads nothing more.
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert_eq!(h.calls().len(), 2);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_media_read_comes_back_whole_and_short_only_at_the_end() {
+        let total = 3 << 20;
+        let h = Gated::new(total, OPEN);
+        let r = ReadAhead::new(h.clone()).unwrap();
+        assert_eq!(r.size(), total as u64);
+        let big = r.read(5, (2 << 20) + 3).await.unwrap();
+        assert_eq!(big, h.data[5..(2 << 20) + 8], "longer than any piece");
+        h.until(|c| reach(c) == total as u64).await;
         let tail = r.read(total as u64 - 7, 100).await.unwrap();
-        assert_eq!(tail, data[total - 7..], "short at the end only");
+        assert_eq!(tail, h.data[total - 7..], "short at the end only");
+        assert!(r.read(total as u64, 10).await.unwrap().is_empty());
+        assert!(r.read(0, 0).await.unwrap().is_empty());
+        assert_eq!(r.read(0, 3).await.unwrap(), h.data[..3]);
     }
 
     #[tokio::test]
