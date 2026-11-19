@@ -661,7 +661,7 @@
     "AccessBrowse.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Browse \u00b7 level per server",
+      "title": "Browse \u00b7 no level shown",
       "w": 400,
       "x": 0,
       "y": 18260
@@ -706,18 +706,10 @@
       "x": 2400,
       "y": 18260
     },
-    "AccessDropBox.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Drop box \u00b7 folder pulley",
-      "w": 400,
-      "x": 2880,
-      "y": 18260
-    },
     "AccessPicker.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Copy to\u2026 \u00b7 read-only server dimmed",
+      "title": "Copy to\u2026 \u00b7 read-only server greyed out",
       "w": 400,
       "x": 3360,
       "y": 18260
@@ -769,6 +761,14 @@
       "w": 400,
       "x": 1440,
       "y": 17100
+    },
+    "AccessAddOnly.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Add files only \u00b7 folder pulley",
+      "w": 400,
+      "x": 2880,
+      "y": 18260
     }
   },
   "createdOnFiles": {
@@ -978,7 +978,7 @@
     "AccessItemMenu.dc.html",
     "AccessSelect.dc.html",
     "AccessConflict.dc.html",
-    "AccessDropBox.dc.html",
+    "AccessAddOnly.dc.html",
     "AccessPicker.dc.html",
     "AccessNarrowed.dc.html",
     "AccessAbout.dc.html"
