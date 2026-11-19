@@ -151,6 +151,11 @@ pub mod cap {
     pub const READ_ONLY: &str = "ReadOnly";
     /// vfat/exFAT/SMB name rules.
     pub const RESTRICTED_NAMES: &str = "RestrictedNames";
+    /// Access level of a netvfs location, not a server's: existing items stay as they are
+    /// (`read-add`, `add`).
+    pub const NO_CHANGE: &str = "NoChange";
+    /// Access level `add`: only folders are seen; files and their contents are not.
+    pub const NO_READ: &str = "NoRead";
 }
 
 impl Capabilities {
@@ -165,8 +170,19 @@ impl Capabilities {
         self.raw.contains(flag)
     }
 
+    /// New items can be added.
     pub fn writable(&self) -> bool {
         self.has(cap::WRITE) && !self.has(cap::READ_ONLY)
+    }
+
+    /// Existing items can be renamed, moved, replaced or deleted.
+    pub fn changeable(&self) -> bool {
+        self.writable() && !self.has(cap::NO_CHANGE)
+    }
+
+    /// Files and what folders hold can be read.
+    pub fn readable(&self) -> bool {
+        !self.has(cap::NO_READ)
     }
 }
 
@@ -214,7 +230,13 @@ mod tests {
         assert!(c.writable());
         assert!(c.has(cap::SYMLINKS));
         assert!(!c.has(cap::PERMISSIONS));
+        assert!(c.changeable() && c.readable());
         let c = Capabilities::with(&[cap::WRITE, cap::READ_ONLY]);
         assert!(!c.writable());
+        assert!(!c.changeable() && c.readable());
+        let c = Capabilities::with(&[cap::WRITE, cap::NO_CHANGE]);
+        assert!(c.writable() && !c.changeable() && c.readable());
+        let c = Capabilities::with(&[cap::WRITE, cap::NO_CHANGE, cap::NO_READ]);
+        assert!(c.writable() && !c.changeable() && !c.readable());
     }
 }

@@ -8,7 +8,7 @@ use super::{
 };
 use crate::bridge::convert::{capabilities_from_wire, entry_from_wire};
 use crate::bridge::link::{rpc, JobOutcome, Link};
-use crate::bridge::{bridge_id, location_id, BridgeClient};
+use crate::bridge::{bridge_id, location_id, BridgeClient, Level};
 use crate::entry::{cap, system_time_to_ms, Capabilities, Entry};
 use crate::error::{Error, ErrorKind, Result};
 use crate::uri::LocationId;
@@ -131,14 +131,29 @@ fn to_i64(v: u64) -> i64 {
     i64::try_from(v).unwrap_or(i64::MAX)
 }
 
+/// The server's `caps` narrowed to what `level` lets Lautta do; not listed (`None`): unchanged, the
+/// bridge refuses.
+fn with_access(mut caps: Capabilities, level: Option<Level>) -> Capabilities {
+    let flags: &[&str] = match level {
+        None | Some(Level::Full) => &[],
+        Some(Level::ReadAdd) => &[cap::NO_CHANGE],
+        Some(Level::Read) => &[cap::READ_ONLY],
+        Some(Level::Add) => &[cap::NO_CHANGE, cap::NO_READ],
+    };
+    caps.raw.extend(flags.iter().map(|f| (*f).to_owned()));
+    caps
+}
+
 #[async_trait]
 impl Provider for NetvfsProvider {
     fn capabilities(&self) -> Capabilities {
-        self.caps
+        let caps = self
+            .caps
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
-            .unwrap_or_else(|| Capabilities::with(&[cap::WRITE]))
+            .unwrap_or_else(|| Capabilities::with(&[cap::WRITE]));
+        with_access(caps, self.client.access(&self.loc))
     }
 
     /// Fetched once; a bridge that cannot answer yet leaves the assumed ones
@@ -393,6 +408,20 @@ mod tests {
 
     fn int(o: &Opts, k: &str) -> Option<i64> {
         o.get(k).and_then(value_i64)
+    }
+
+    #[test]
+    fn levels_narrow_the_capabilities() {
+        let server = Capabilities::with(&[cap::WRITE, cap::SERVER_COPY]);
+        let at = |level| with_access(server.clone(), level);
+        assert_eq!(at(None), server);
+        assert_eq!(at(Some(Level::Full)), server);
+        let read = at(Some(Level::Read));
+        assert!(!read.writable() && read.readable() && read.has(cap::SERVER_COPY));
+        let read_add = at(Some(Level::ReadAdd));
+        assert!(read_add.writable() && !read_add.changeable() && read_add.readable());
+        let add = at(Some(Level::Add));
+        assert!(add.writable() && !add.changeable() && !add.readable());
     }
 
     #[test]

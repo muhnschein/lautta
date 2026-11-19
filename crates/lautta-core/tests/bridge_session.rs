@@ -6,7 +6,7 @@ use bridge_support::{eventually, quick_backoff, Rig, ACCOUNT};
 use lautta_bridge_proto::fake::{Consent, FakeBridge, FakeDrive};
 use lautta_bridge_proto::WireNearby;
 use lautta_core::bridge::{
-    feature, AdHocOptions, Attention, BridgeConfig, BridgeStatus, DriveKind, RemoteKind,
+    feature, AdHocOptions, Attention, BridgeConfig, BridgeStatus, DriveKind, Level, RemoteKind,
 };
 use lautta_core::error::ErrorKind;
 use lautta_core::provider::{Lane, Provider};
@@ -51,7 +51,7 @@ async fn hello_names_the_app_and_reports_the_bridge() {
     assert_eq!(hello.len(), 1);
     assert!(hello[0].target.starts_with("lautta "), "{:?}", hello[0]);
     assert_eq!(rig.client.bridge_version().as_deref(), Some("0.2.0-fake"));
-    assert_eq!(rig.client.consent(), Some(lautta_core::bridge::Consent::Granted));
+    assert_eq!(rig.client.consent(), Some(lautta_core::bridge::Consent::Decided));
 }
 
 #[tokio::test]
@@ -107,43 +107,41 @@ async fn nothing_is_shown_until_the_user_allows() {
     rig.client.request_consent().await.unwrap();
     assert_eq!(rig.fake.consent_requests(), 2);
 
-    rig.fake.set_consent(Consent::Granted).await;
+    rig.fake.set_consent(Consent::Allowed(Level::Full)).await;
     rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
     eventually("the locations", || rig.client.locations().len() == 1).await;
 }
 
 #[tokio::test]
-async fn denial_hides_the_servers_and_revocation_takes_them_back() {
+async fn a_denied_app_lists_no_server_and_revocation_takes_them_back() {
     let fake = FakeBridge::new();
     fake.set_consent(Consent::Denied).await;
     fake.add_account(1, "fake", "Fake 1", "fake.example").await;
     let rig = Rig::with_fake(fake, true, |c| c).await;
-    rig.client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
+    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
     assert!(rig.client.locations().is_empty());
+    assert_eq!(rig.client.consent(), Some(lautta_core::bridge::Consent::Decided));
     assert_eq!(
         rig.fake.consent_requests(),
         0,
-        "a denial is not asked again unprompted"
+        "a decided app is not asked again unprompted"
     );
 
-    rig.fake.set_consent(Consent::Granted).await;
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    rig.fake.set_consent(Consent::Allowed(Level::Full)).await;
     eventually("the locations", || rig.client.locations().len() == 1).await;
 
     rig.fake.set_consent(Consent::Denied).await;
-    rig.client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
-    assert!(rig.client.locations().is_empty());
-    assert_eq!(rig.client.consent(), Some(lautta_core::bridge::Consent::Denied));
+    eventually("no location", || rig.client.locations().is_empty()).await;
 }
 
 #[tokio::test]
 async fn the_bridge_can_answer_the_notification_by_itself() {
     let fake = FakeBridge::new();
     fake.set_consent(Consent::Unknown).await;
-    fake.auto_consent(Some(Consent::Granted));
+    fake.auto_consent(Some(Consent::Allowed(Level::Full)));
     let rig = Rig::with_fake(fake, true, |c| c).await;
     rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
-    assert_eq!(rig.fake.consent(), Consent::Granted);
+    assert_eq!(rig.fake.consent(), Consent::Allowed(Level::Full));
 }
 
 #[tokio::test]
@@ -322,9 +320,11 @@ async fn account_management_is_handed_off() {
 #[tokio::test]
 async fn the_bridge_opens_storage_settings_whatever_the_consent() {
     let fake = FakeBridge::new();
-    fake.set_consent(Consent::Denied).await;
+    fake.set_consent(Consent::Unknown).await;
     let rig = Rig::with_fake(fake, true, |c| c).await;
-    rig.client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
+    rig.client
+        .wait_status(|s| s == BridgeStatus::ConsentUnknown)
+        .await;
     let order: Vec<String> = rig.fake.calls().into_iter().map(|c| c.method).collect();
     assert_eq!(order, ["Hello", "GetFeatures", "GetConsent"]);
     assert!(rig.client.offers(feature::STORAGE_SETTINGS));
@@ -393,9 +393,11 @@ async fn drives_fake() -> FakeBridge {
 #[tokio::test]
 async fn drives_need_no_consent_and_follow_the_bridge() {
     let fake = drives_fake().await;
-    fake.set_consent(Consent::Denied).await;
+    fake.set_consent(Consent::Unknown).await;
     let rig = Rig::with_fake(fake, true, |c| c).await;
-    rig.client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
+    rig.client
+        .wait_status(|s| s == BridgeStatus::ConsentUnknown)
+        .await;
     eventually("the card", || rig.client.drives().len() == 1).await;
     let card = rig.client.drives()[0].clone();
     assert_eq!(

@@ -291,15 +291,6 @@ impl Core {
         Ok(StartReport { restored, paused })
     }
 
-    /// False only while a bridge is present but unusable (consent denied). Standalone and
-    /// still-connecting count as reachable; the engine parks bridge transfers until ready.
-    pub fn bridge_reachable(&self) -> bool {
-        use crate::bridge::BridgeStatus;
-        self.bridge
-            .as_ref()
-            .is_none_or(|b| b.status() != BridgeStatus::ConsentDenied)
-    }
-
     pub fn pending_at_close(&self) -> usize {
         self.engine.pending_summary()
     }

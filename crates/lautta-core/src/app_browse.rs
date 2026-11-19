@@ -3,7 +3,7 @@
 //! to model rows.
 
 use crate::app::Core;
-use crate::bridge::{AdHocOptions, BridgeStatus, Drive, DriveKind, NearbyServer, RemoteKind};
+use crate::bridge::{AdHocOptions, BridgeClient, BridgeStatus, Drive, DriveKind, NearbyServer, RemoteKind};
 use crate::browse_layout::{layout_item, Layout, NEARBY_ITEM, SECTION_ITEM, SWITCHED_SECTIONS};
 use crate::date_group::DateGroup;
 use crate::error::{Error, ErrorKind, Result};
@@ -737,7 +737,7 @@ impl Core {
             loop {
                 let current = *status.borrow_and_update();
                 let list = locations.borrow_and_update().clone();
-                if purge_step(&weak, current, &list, &mut known, &on_purged)
+                if purge_step(&weak, &client, current, &list, &mut known, &on_purged)
                     .await
                     .is_none()
                 {
@@ -827,6 +827,7 @@ fn now_ms() -> i64 {
 
 async fn purge_step(
     weak: &Weak<Core>,
+    client: &BridgeClient,
     status: BridgeStatus,
     list: &[crate::bridge::RemoteLocation],
     known: &mut Option<BTreeSet<String>>,
@@ -853,6 +854,13 @@ async fn purge_step(
         }
     };
     *known = Some(current);
+    let mut removed = Vec::new();
+    for id in gone {
+        if client.is_removed(&id).await {
+            removed.push(id);
+        }
+    }
+    let gone = removed;
     if !gone.is_empty() {
         let c = core.clone();
         let _ = tokio::task::spawn_blocking(move || {

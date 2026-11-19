@@ -5,9 +5,10 @@ use crate::locations::ConnectionState;
 use crate::paths::AppPaths;
 use crate::uri::LocationId;
 use crate::vpath::VPath;
+pub use lautta_bridge_proto::access::Level;
 use lautta_bridge_proto::{
-    drive_info, location_state, value_bool, value_bytes, value_i64, value_str, WireDrive, WireLocation,
-    WireNearby,
+    access, drive_info, location_state, value_bool, value_bytes, value_i64, value_str, WireDrive,
+    WireLocation, WireNearby,
 };
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
@@ -20,7 +21,6 @@ pub enum BridgeStatus {
     Absent,
     Connecting,
     ConsentUnknown,
-    ConsentDenied,
     Ready,
     Reconnecting,
 }
@@ -35,19 +35,18 @@ impl BridgeStatus {
     }
 }
 
+/// Whether the user chose in Settings what Lautta may do; the levels come per location.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Consent {
     Unknown,
-    Granted,
-    Denied,
+    Decided,
 }
 
 impl Consent {
     /// Anything unrecognised is `Unknown`: nothing shown.
     pub fn from_wire(s: &str) -> Consent {
         match s {
-            "granted" => Consent::Granted,
-            "denied" => Consent::Denied,
+            "decided" => Consent::Decided,
             _ => Consent::Unknown,
         }
     }
@@ -94,6 +93,9 @@ pub struct RemoteLocation {
     pub url: Option<String>,
     pub attention: Attention,
     pub connection: ConnectionState,
+    /// What the user lets Lautta do there; missing or unknown: `read`, so Lautta offers nothing the
+    /// bridge would refuse.
+    pub access: Level,
 }
 
 /// Missing or unknown state is [`ConnectionState::Unknown`]: a bridge not reporting states shows
@@ -151,6 +153,9 @@ impl RemoteLocation {
                 str_of(location_state::KEY).as_deref(),
                 str_of(location_state::ERROR_KEY),
             ),
+            access: str_of(access::KEY)
+                .and_then(|w| Level::parse(&w))
+                .unwrap_or(Level::Read),
         }
     }
 }
@@ -314,7 +319,8 @@ mod tests {
                 .int("accountId", 7)
                 .str("url", "sftp://nas.local/")
                 .bytes("path", b"/docs//x")
-                .str("attention", "auth-failed"),
+                .str("attention", "auth-failed")
+                .str("access", "read-add"),
         ));
         assert_eq!(loc.id, "nv-account:7");
         assert_eq!(loc.kind, RemoteKind::Account);
@@ -325,6 +331,7 @@ mod tests {
         assert_eq!(loc.attention, Attention::AuthFailed);
         assert_eq!(loc.url.as_deref(), Some("sftp://nas.local/"));
         assert_eq!(loc.connection, ConnectionState::Unknown, "no state was sent");
+        assert_eq!(loc.access, Level::ReadAdd);
     }
 
     #[test]
@@ -384,6 +391,11 @@ mod tests {
         assert_eq!(odd.port, None);
         assert_eq!(odd.attention, Attention::None);
         assert_eq!(odd.kind, RemoteKind::Account);
+        assert_eq!(odd.access, Level::Read, "no level was sent");
+        let future = RemoteLocation::from_wire(&wire(OptsBuilder::new().str("access", "write-only")));
+        assert_eq!(future.access, Level::Read);
+        let full = RemoteLocation::from_wire(&wire(OptsBuilder::new().str("access", "full")));
+        assert_eq!(full.access, Level::Full);
     }
 
     #[test]
@@ -393,8 +405,8 @@ mod tests {
             Attention::ServerIdentityChanged
         );
         assert_eq!(Attention::from_wire(""), Attention::None);
-        assert_eq!(Consent::from_wire("granted"), Consent::Granted);
-        assert_eq!(Consent::from_wire("denied"), Consent::Denied);
+        assert_eq!(Consent::from_wire("decided"), Consent::Decided);
+        assert_eq!(Consent::from_wire("granted"), Consent::Unknown);
         assert_eq!(Consent::from_wire("whatever"), Consent::Unknown);
     }
 

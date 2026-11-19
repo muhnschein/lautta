@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `status`: `absent`, `connecting`, `consentUnknown`, `consentDenied`, `ready`, `reconnecting`.
+//! `status`: `absent`, `connecting`, `consentUnknown`, `ready`, `reconnecting`.
 //!
 //! Secrets moved into buffers core wipes. QML's `QString` cannot be wiped from Qt memory: QML
 //! clears its field right after the call, keeps no copy.
@@ -24,7 +24,6 @@ pub fn status_name(s: BridgeStatus) -> &'static str {
         BridgeStatus::Absent => "absent",
         BridgeStatus::Connecting => "connecting",
         BridgeStatus::ConsentUnknown => "consentUnknown",
-        BridgeStatus::ConsentDenied => "consentDenied",
         BridgeStatus::Ready => "ready",
         BridgeStatus::Reconnecting => "reconnecting",
     }
@@ -431,7 +430,6 @@ mod tests {
     fn status_names_are_the_documented_ones() {
         assert_eq!(status_name(BridgeStatus::Absent), "absent");
         assert_eq!(status_name(BridgeStatus::ConsentUnknown), "consentUnknown");
-        assert_eq!(status_name(BridgeStatus::ConsentDenied), "consentDenied");
         assert_eq!(status_name(BridgeStatus::Ready), "ready");
         assert_eq!(status_name(BridgeStatus::Reconnecting), "reconnecting");
         assert_eq!(status_name(BridgeStatus::Connecting), "connecting");

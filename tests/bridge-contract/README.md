@@ -18,7 +18,7 @@ Shared with consumers (the file browser's fake bridge replays the same files).
 ```json
 {
   "description": "...",
-  "consent": "granted | denied | unknown",
+  "consent": "unknown | denied | full | read-add | read | add",
   "files": { "path/in/the/fake/server": "content" },
   "steps": [
     { "call": "Stat", "sig": "saybs", "args": [...], "reply": [...] },

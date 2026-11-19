@@ -6,6 +6,7 @@
 #![allow(non_snake_case)]
 
 use lautta_bridge_proto::fake::{Consent, FakeBridge, FakeDrive, InfoValue, ScriptedQuestion};
+use lautta_bridge_proto::access::Level;
 use lautta_bridge_proto::feature;
 use lautta_core::org::RecentKind;
 use lautta_core::paths::AppPaths;
@@ -50,7 +51,7 @@ impl FakeWorld {
     }
 
     fn grant(&self) {
-        run(fake().set_consent(Consent::Granted));
+        run(fake().set_consent(Consent::Allowed(Level::Full)));
     }
 
     fn consentRequests(&self) -> i32 {

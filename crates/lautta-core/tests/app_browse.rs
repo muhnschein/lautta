@@ -6,7 +6,7 @@ use bridge_support::{config, eventually};
 use lautta_bridge_proto::fake::{Consent, FakeBridge, FakeDrive, Listener};
 use lautta_core::app::Core;
 use lautta_core::app_browse::{LayoutRow, Row, SECTION_KIND};
-use lautta_core::bridge::{feature, AdHocOptions, BridgeStatus};
+use lautta_core::bridge::{feature, AdHocOptions, BridgeStatus, Level};
 use lautta_core::browse_layout::SECTION_ITEM;
 use lautta_core::date_group::DateGroup;
 use lautta_core::locations::LocationRegistry;
@@ -658,7 +658,7 @@ async fn server_rows_show_the_connection_state() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn consent_row_until_allowed_and_nothing_when_denied() {
+async fn consent_row_until_decided_and_nothing_when_denied() {
     let fake = account_fake().await;
     fake.set_consent(Consent::Unknown).await;
     let e = env(Some(&fake), &["Documents"]).await;
@@ -670,7 +670,7 @@ async fn consent_row_until_allowed_and_nothing_when_denied() {
     assert_eq!((servers[0].kind, servers[0].icon.as_str()), ("consent", "server"));
 
     fake.set_consent(Consent::Denied).await;
-    client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
+    client.wait_status(|s| s == BridgeStatus::Ready).await;
     assert!(of(&e.core.browse_rows().await, "servers").is_empty());
     assert_eq!(
         section_of(&e.core.browse_layout_rows().await, "servers"),
@@ -894,7 +894,7 @@ async fn withdrawn_consent_and_lost_connection_purge_nothing() {
     fake.set_consent(Consent::Unknown).await;
     client.wait_status(|s| s == BridgeStatus::ConsentUnknown).await;
     eventually("the list is cleared", || client.locations().is_empty()).await;
-    fake.set_consent(Consent::Granted).await;
+    fake.set_consent(Consent::Allowed(Level::Full)).await;
     client.wait_status(|s| s == BridgeStatus::Ready).await;
     // The task takes changes in order: once account 3's removal is purged, so would be 1.
     fake.add_account(3, "sftp", "Office", "office.home").await;
@@ -908,6 +908,27 @@ async fn withdrawn_consent_and_lost_connection_purge_nothing() {
         "an empty list without consent is not a removal"
     );
     assert_eq!(purges.load(Ordering::SeqCst), 2, "nothing else purged");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn accounts_the_app_may_not_use_are_not_purged() {
+    let fake = account_fake().await;
+    fake.add_account(2, "sftp", "Office", "office.home").await;
+    fake.set_access("account:2", None).await;
+    let e = env(Some(&fake), &["Documents"]).await;
+    let client = e.core.bridge.clone().unwrap();
+    client.wait_status(|s| s == BridgeStatus::Ready).await;
+    eventually("the account", || e.core.location("nv-account:1").is_some()).await;
+    remember_account(&e.core, 1);
+    remember_account(&e.core, 2);
+    let purges = counted_purge(&e.core);
+    purged(&purges, 1).await;
+    assert!(!remembered(&e.core, 9));
+    assert!(
+        remembered(&e.core, 2),
+        "an account hidden from the app is not a removal"
+    );
+    assert!(remembered(&e.core, 1));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

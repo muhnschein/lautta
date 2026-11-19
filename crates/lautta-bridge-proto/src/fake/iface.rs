@@ -4,10 +4,11 @@
 
 use super::args::{self, Dict};
 use super::fail::Fail;
-use super::state::{CancelOutcome, Consent, FakeDrive, InfoValue, RecordedAnswer, Session, Shared};
+use super::state::{CancelOutcome, Consent, FakeDrive, InfoValue, RecordedAnswer, Session, Shared, State};
 use super::transfer::{self, Env};
 use super::tree::Tree;
 use super::{tree::TreeError, DEFAULT_CAPS};
+use crate::access::{self, After, Level, Op, Verdict};
 use crate::wire::{
     feature, location_state, WireCapabilities, WireDrive, WireEntry, WireLocation, WireNearby, WireWalkItem,
     INTERFACE, OBJECT_PATH,
@@ -145,10 +146,10 @@ impl Iface {
         if method != "Hello" && !self.session.with(|s| s.hello) {
             return Err(Fail::net("ProtocolError", "Hello must be the first call"));
         }
-        if needs_consent && self.shared.with(|s| s.consent) != Consent::Granted {
+        if needs_consent && self.shared.with(|s| s.consent) == Consent::Unknown {
             return Err(Fail::net(
                 "PermissionDenied",
-                "The user has not allowed this app to use network locations",
+                "The user has not decided yet what this app may do",
             ));
         }
         let (latency, failure) = self.shared.with(|s| (s.latency, s.due_failure(method)));
@@ -196,12 +197,54 @@ impl Iface {
         Ok(after)
     }
 
-    fn require_location(&self, loc: &str) -> Result<(), Fail> {
-        if self.shared.with(|s| s.locations.contains_key(loc)) {
-            Ok(())
-        } else {
-            Err(Fail::net("NotFound", "No such location"))
+    /// What the app may do in `loc`: `NotFound` for an unknown location, `PermissionDenied`
+    /// (detail `denied`) for one it may not use.
+    fn require_location(&self, loc: &str) -> Result<Level, Fail> {
+        self.shared.with(|s| {
+            if !s.locations.contains_key(loc) {
+                return Err(Fail::net("NotFound", "No such location"));
+            }
+            s.level(loc).ok_or_else(|| {
+                Fail::net(
+                    "PermissionDenied",
+                    "The user has not allowed this app to use this account",
+                )
+                .with_detail(Some("denied".to_owned()), None)
+            })
+        })
+    }
+
+    /// `op` on `path` in `loc` by the level's rules ([`access::check`]): the verdict, or the refusal.
+    fn admit(&self, loc: &str, path: &[u8], op: Op) -> Result<Verdict, Fail> {
+        let level = self.require_location(loc)?;
+        let own = self.shared.with(|s| s.own(loc, path));
+        match access::check(level, op, own) {
+            Verdict::Deny => Err(refused(level)),
+            verdict => Ok(verdict),
         }
+    }
+
+    /// Records what a finished `call` made of `path` in `loc`.
+    fn after<T>(&self, loc: &str, path: &[u8], call: After, result: &Result<T, Fail>) {
+        self.shared
+            .with(|s| s.after_call(loc, path, call, result.as_ref().err().map(Fail::bare)));
+    }
+
+    /// `RemoveFile`, `RemoveDir`: an add level refuses another's item, but says `NotFound` for a
+    /// missing one.
+    fn remove(
+        &self,
+        loc: &str,
+        path: &[u8],
+        f: impl FnOnce(&mut Tree) -> Result<(), TreeError>,
+    ) -> Result<(), Fail> {
+        if self.admit(loc, path, Op::Remove)? == Verdict::DenyUnlessMissing {
+            self.tree(loc, |t| t.stat(path, false))?;
+            return Err(refused(self.require_location(loc)?));
+        }
+        let result = self.tree(loc, f);
+        self.after(loc, path, After::Gone, &result);
+        result
     }
 
     /// Call needing a connection of `loc`'s pool: location is connected until `Disconnect`; a
@@ -241,9 +284,8 @@ impl Iface {
             s.auto_consent
         });
         if let Some(answer) = auto {
-            self.shared.with(|s| s.consent = answer);
             let shared = self.shared.clone();
-            tokio::spawn(async move { shared.broadcast_consent(answer).await });
+            tokio::spawn(async move { shared.decide(|s| s.consent = answer).await });
         }
     }
 
@@ -279,6 +321,27 @@ impl Iface {
             }
         }
         Ok(())
+    }
+}
+
+/// `PermissionDenied` for what `level` does not allow; the level as detail.
+fn refused(level: Level) -> Fail {
+    let what = match level {
+        Level::Full => "do this",
+        Level::ReadAdd => "read and add",
+        Level::Read => "read",
+        Level::Add => "add",
+    };
+    Fail::net("PermissionDenied", &format!("This app may only {what} in this account"))
+        .with_detail(Some(level.as_str().to_owned()), None)
+}
+
+/// A copy's destination.
+fn copy_op(replace: bool) -> Op {
+    if replace {
+        Op::Unrestricted
+    } else {
+        Op::Create
     }
 }
 
@@ -397,12 +460,12 @@ impl Iface {
 
     async fn get_consent(&self) -> Result<String, Fail> {
         self.begin("GetConsent", "interactive", "", false).await?;
-        Ok(self.shared.with(|s| s.consent).as_str().to_owned())
+        Ok(self.shared.with(|s| s.consent).wire().to_owned())
     }
 
     async fn request_consent(&self) -> Result<(), Fail> {
         self.begin("RequestConsent", "interactive", "", false).await?;
-        if self.shared.with(|s| s.consent) != Consent::Granted {
+        if self.shared.with(|s| s.consent) == Consent::Unknown {
             self.ask_consent();
         }
         Ok(())
@@ -418,13 +481,7 @@ impl Iface {
 
     /// List as of the call: with latency the consent may change before the answer arrives.
     async fn list_locations(&self) -> Result<Vec<WireLocation>, Fail> {
-        let list = self.shared.with(|s| {
-            if s.consent == Consent::Granted {
-                s.wire_locations()
-            } else {
-                Vec::new()
-            }
-        });
+        let list = self.shared.with(|s| s.wire_locations());
         self.begin("ListLocations", "interactive", "", false).await?;
         self.shared.with(|s| s.location_replies += 1);
         Ok(list)
@@ -515,8 +572,12 @@ impl Iface {
         let lane = args::lane(&lane, "interactive")?;
         let batch = args::list_batch(batch)?;
         self.begin("List", lane, &loc, true).await?;
+        let folders_only = self.admit(&loc, &dir, Op::Browse)? == Verdict::FoldersOnly;
         self.reach(&loc)?;
-        let listing = self.tree(&loc, |t| t.list(&dir));
+        let listing = self.tree(&loc, |t| t.list(&dir)).map(|mut entries| {
+            entries.retain(|e| !folders_only || access::is_folder(e.kind, e.target_kind));
+            entries
+        });
         Ok(self.start_job(&ctxt, move |env, req, cancel| {
             transfer::run_list(env, req, listing, batch, cancel)
         }))
@@ -533,13 +594,19 @@ impl Iface {
         let path = args::path(&path)?;
         let lane = args::lane(&lane, "interactive")?;
         self.begin("Stat", lane, &loc, true).await?;
-        self.tree(&loc, |t| t.stat(&path, follow)).map(|e| (e,))
+        let verdict = self.admit(&loc, &path, Op::Look)?;
+        let entry = self.tree(&loc, |t| t.stat(&path, follow))?;
+        if verdict == Verdict::IfFolder && !access::is_folder(entry.kind, entry.target_kind) {
+            return Err(refused(self.require_location(&loc)?));
+        }
+        Ok((entry,))
     }
 
     async fn read_link(&self, loc: String, path: Vec<u8>) -> Result<Vec<u8>, Fail> {
         let loc = args::location(&loc)?;
         let path = args::path(&path)?;
         self.begin("ReadLink", "interactive", &loc, true).await?;
+        self.admit(&loc, &path, Op::ReadLink)?;
         self.tree(&loc, |t| t.read_link(&path))
     }
 
@@ -561,6 +628,7 @@ impl Iface {
         let path = args::path(&path)?;
         let algo = args::token(&algo, 32)?;
         self.begin("Checksum", "bulk", &loc, true).await?;
+        self.admit(&loc, &path, Op::Read)?;
         if algo != "sha256" {
             return Err(Fail::net("Unsupported", "Unknown checksum algorithm"));
         }
@@ -573,6 +641,7 @@ impl Iface {
         let loc = args::location(&loc)?;
         let path = args::path(&path)?;
         self.begin("MakeDir", "interactive", &loc, true).await?;
+        self.admit(&loc, &path, Op::MakeDir)?;
         self.tree(&loc, |t| t.make_dir(&path, exclusive))
     }
 
@@ -580,14 +649,14 @@ impl Iface {
         let loc = args::location(&loc)?;
         let path = args::path(&path)?;
         self.begin("RemoveFile", "interactive", &loc, true).await?;
-        self.tree(&loc, |t| t.remove_file(&path))
+        self.remove(&loc, &path, |t| t.remove_file(&path))
     }
 
     async fn remove_dir(&self, loc: String, path: Vec<u8>) -> Result<(), Fail> {
         let loc = args::location(&loc)?;
         let path = args::path(&path)?;
         self.begin("RemoveDir", "interactive", &loc, true).await?;
-        self.tree(&loc, |t| t.remove_dir(&path))
+        self.remove(&loc, &path, |t| t.remove_dir(&path))
     }
 
     async fn rename(&self, loc: String, from: Vec<u8>, to: Vec<u8>, replace: bool) -> Result<(), Fail> {
@@ -595,7 +664,10 @@ impl Iface {
         let from = args::path(&from)?;
         let to = args::path(&to)?;
         self.begin("Rename", "interactive", &loc, true).await?;
-        self.tree(&loc, |t| t.rename(&from, &to, replace))
+        self.admit(&loc, &from, if replace { Op::Unrestricted } else { Op::Rename })?;
+        let result = self.tree(&loc, |t| t.rename(&from, &to, replace));
+        self.after(&loc, &from, After::Gone, &result);
+        result
     }
 
     async fn set_attributes(&self, loc: String, path: Vec<u8>, changes: Dict) -> Result<(), Fail> {
@@ -603,6 +675,7 @@ impl Iface {
         let path = args::path(&path)?;
         let changes = args::attributes(&changes)?;
         self.begin("SetAttributes", "interactive", &loc, true).await?;
+        self.admit(&loc, &path, Op::SetAttributes)?;
         if changes.is_empty() {
             return Ok(());
         }
@@ -616,6 +689,7 @@ impl Iface {
         }
         let link = args::path(&link_path)?;
         self.begin("MakeSymlink", "interactive", &loc, true).await?;
+        self.admit(&loc, &link, Op::Unrestricted)?;
         self.tree(&loc, |t| t.make_symlink(&target, &link))
     }
 
@@ -624,6 +698,7 @@ impl Iface {
         let existing = args::path(&existing)?;
         let new_path = args::path(&new_path)?;
         self.begin("MakeHardlink", "interactive", &loc, true).await?;
+        self.admit(&loc, &new_path, Op::Unrestricted)?;
         self.tree(&loc, |t| t.make_hardlink(&existing, &new_path))
     }
 
@@ -633,7 +708,13 @@ impl Iface {
         let to = args::path(&to)?;
         let opts = args::copy_opts(&opts)?;
         self.begin("ServerCopy", "bulk", &loc, true).await?;
-        self.tree(&loc, |t| t.server_copy(&from, &to, opts.recursive, opts.replace))
+        self.admit(&loc, &from, Op::Read)?;
+        self.admit(&loc, &to, copy_op(opts.replace))?;
+        let result = self.tree(&loc, |t| t.server_copy(&from, &to, opts.recursive, opts.replace));
+        if !opts.recursive {
+            self.after(&loc, &to, After::Created, &result);
+        }
+        result
     }
 
     async fn open_read(&self, loc: String, path: Vec<u8>, lane: String) -> Result<(u32, i64), Fail> {
@@ -641,6 +722,7 @@ impl Iface {
         let path = args::path(&path)?;
         let lane = args::lane(&lane, "stream")?;
         self.begin("OpenRead", lane, &loc, true).await?;
+        self.admit(&loc, &path, Op::Read)?;
         let size = self.tree(&loc, |t| {
             t.file_data(&path)
                 .map(|d| i64::try_from(d.len()).unwrap_or(i64::MAX))
@@ -694,10 +776,15 @@ impl Iface {
         let path = args::path(&path)?;
         let opts = args::transfer_opts(&opts, true)?;
         self.begin("Upload", opts.lane, &loc, true).await?;
+        let (op, call) = match opts.disposition {
+            args::Disposition::Create => (Op::Create, After::Created),
+            args::Disposition::Truncate | args::Disposition::Resume => (Op::Rewrite, After::Rewritten),
+        };
+        self.admit(&loc, &path, op)?;
         let file = transfer::Source::new(std::fs::File::from(std::os::fd::OwnedFd::from(fd)))?;
         self.reach(&loc)?;
         Ok(self.start_job(&ctxt, move |env, job, cancel| {
-            transfer::run_upload(env, job, cancel, loc, path, file, opts)
+            transfer::run_upload(env, job, cancel, (loc, path, call), file, opts)
         }))
     }
 
@@ -713,6 +800,7 @@ impl Iface {
         let path = args::path(&path)?;
         let opts = args::transfer_opts(&opts, false)?;
         self.begin("Download", opts.lane, &loc, true).await?;
+        self.admit(&loc, &path, Op::Read)?;
         let file = transfer::Source::new(std::fs::File::from(std::os::fd::OwnedFd::from(fd)))?;
         self.reach(&loc)?;
         Ok(self.start_job(&ctxt, move |env, job, cancel| {
@@ -736,8 +824,8 @@ impl Iface {
         let opts = args::copy_opts(&opts)?;
         self.begin("CopyAcross", "bulk", &src_loc, true).await?;
         // Copy jobs connect outside the pools: no state change.
-        self.require_location(&src_loc)?;
-        self.require_location(&dst_loc)?;
+        self.admit(&src_loc, &src, Op::Read)?;
+        self.admit(&dst_loc, &dst, copy_op(opts.replace))?;
         Ok(self.start_job(&ctxt, move |env, job, cancel| {
             transfer::run_copy_across(env, job, cancel, (src_loc, src), (dst_loc, dst), opts)
         }))
@@ -752,6 +840,7 @@ impl Iface {
         let loc = args::location(&loc)?;
         let path = args::path(&path)?;
         self.begin("RemoveTree", "bulk", &loc, true).await?;
+        self.admit(&loc, &path, Op::Unrestricted)?;
         self.reach(&loc)?;
         Ok(self.start_job(&ctxt, move |env, job, cancel| {
             transfer::run_remove_tree(env, job, cancel, loc, path)
@@ -769,9 +858,10 @@ impl Iface {
         let root = args::path(&root)?;
         let opts = args::walk_opts(&opts)?;
         self.begin("Walk", "bulk", &loc, true).await?;
+        let folders_only = self.admit(&loc, &root, Op::Browse)? == Verdict::FoldersOnly;
         self.reach(&loc)?;
         Ok(self.start_job(&ctxt, move |env, job, cancel| {
-            transfer::run_walk(env, job, cancel, loc, root, opts)
+            transfer::run_walk(env, job, cancel, (loc, root, folders_only), opts)
         }))
     }
 
@@ -909,11 +999,41 @@ pub(super) fn context(session: &Session) -> Option<SignalContext<'static>> {
 }
 
 impl Shared {
-    pub async fn broadcast_consent(&self, consent: Consent) {
-        for session in self.sessions_snapshot() {
-            if let Some(ctx) = context(&session) {
-                let _ = Iface::consent_changed(&ctx, consent.as_str().to_owned()).await;
+    /// Applies `change` to the user's decision as the bridge does: `ConsentChanged` when
+    /// `GetConsent` would say otherwise; when any location allows less, every client is
+    /// disconnected, else `LocationsChanged`.
+    pub async fn decide(&self, change: impl FnOnce(&mut State)) {
+        let (before, after, narrowed) = self.with(|s| {
+            let ids: Vec<String> = s.locations.keys().cloned().collect();
+            let old: Vec<Option<Level>> = ids.iter().map(|id| s.level(id)).collect();
+            let before = s.consent.wire();
+            change(s);
+            let narrowed = ids.iter().zip(old).any(|(id, old)| match (old, s.level(id)) {
+                (Some(old), Some(new)) => !new.covers(old),
+                (Some(_), None) => true,
+                (None, _) => false,
+            });
+            if s.consent == Consent::Unknown {
+                s.own.clear();
             }
+            (before, s.consent.wire(), narrowed)
+        });
+        if before != after {
+            for session in self.sessions_snapshot() {
+                if let Some(ctx) = context(&session) {
+                    let _ = Iface::consent_changed(&ctx, after.to_owned()).await;
+                }
+            }
+        }
+        if narrowed {
+            for session in self.take_sessions() {
+                session.shut();
+                if let Some(conn) = session.take_conn() {
+                    let _ = conn.close().await;
+                }
+            }
+        } else {
+            self.broadcast_locations().await;
         }
     }
 

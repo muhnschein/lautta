@@ -3,6 +3,7 @@
 //! in-process fake bridge replaying the shared contract sequences.
 #![forbid(unsafe_code)]
 
+pub mod access;
 pub mod connect;
 pub mod errors;
 pub mod proxy;
