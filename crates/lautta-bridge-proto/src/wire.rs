@@ -12,6 +12,33 @@ pub const MAX_READ_BYTES: u32 = 1 << 20;
 /// Largest `ListBatch` size the bridge accepts.
 pub const MAX_LIST_BATCH: u32 = 512;
 
+/// `ay` decoded in one copy; zvariant decodes `Vec<u8>` byte by byte (about 30 ms per MiB on a
+/// desktop CPU).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Bytes(pub Vec<u8>);
+
+impl Type for Bytes {
+    fn signature() -> zbus::zvariant::Signature<'static> {
+        <Vec<u8>>::signature()
+    }
+}
+
+impl<'de> Deserialize<'de> for Bytes {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Bytes, D::Error> {
+        struct Visit;
+        impl serde::de::Visitor<'_> for Visit {
+            type Value = Bytes;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a byte array")
+            }
+            fn visit_bytes<E: serde::de::Error>(self, v: &[u8]) -> Result<Bytes, E> {
+                Ok(Bytes(v.to_vec()))
+            }
+        }
+        d.deserialize_bytes(Visit)
+    }
+}
+
 pub mod entry_flags {
     pub const HIDDEN: u16 = 0x1;
     pub const READ_ONLY: u16 = 0x2;
@@ -263,6 +290,19 @@ mod tests {
         assert_eq!(WireNearby::signature().as_str(), "(sssq)");
         assert_eq!(WireWalkItem::signature().as_str(), "(ay(ayyyxxxxixxssqays))");
         assert_eq!(WireDrive::signature().as_str(), "(ssaya{sv})");
+    }
+
+    #[test]
+    fn read_bytes_decode_from_an_ay_reply() {
+        assert_eq!(Bytes::signature().as_str(), "ay");
+        for data in [Vec::new(), (0..=255u8).cycle().take(70_000).collect::<Vec<u8>>()] {
+            let msg = zbus::Message::method("/a", "Read")
+                .unwrap()
+                .build(&(7u32, data.clone()))
+                .unwrap();
+            let (n, got): (u32, Bytes) = msg.body().deserialize().unwrap();
+            assert_eq!((n, got.0), (7, data));
+        }
     }
 
     #[test]

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Interface text: `tests/bridge-contract/org.netvfs.Bridge1.xml`.
 
-use crate::wire::{Opts, WireCapabilities, WireDrive, WireEntry, WireLocation, WireNearby, WireWalkItem};
+use crate::wire::{
+    Bytes, Opts, WireCapabilities, WireDrive, WireEntry, WireLocation, WireNearby, WireWalkItem,
+};
 use zbus::zvariant::{Fd, OwnedValue};
 
 #[zbus::proxy(
@@ -63,7 +65,7 @@ pub trait Bridge1 {
 
     // Handles
     fn open_read(&self, loc: &str, path: &[u8], lane: &str) -> zbus::Result<(u32, i64)>;
-    fn read(&self, handle: u32, offset: i64, max: u32) -> zbus::Result<Vec<u8>>;
+    fn read(&self, handle: u32, offset: i64, max: u32) -> zbus::Result<Bytes>;
     fn read_ahead(&self, handle: u32, offset: i64, bytes: i64) -> zbus::Result<()>;
     fn close(&self, handle: u32) -> zbus::Result<()>;
 
