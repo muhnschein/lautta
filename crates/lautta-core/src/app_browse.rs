@@ -183,7 +183,7 @@ pub fn provider_label(provider: &str) -> String {
     match provider {
         "sftp" | "ssh" => "SFTP".to_owned(),
         "smb" | "cifs" => "SMB".to_owned(),
-        "webdav" | "davs" => "WebDAV".to_owned(),
+        "webdav" | "davs" | "https" => "WebDAV".to_owned(),
         "ftps" => "FTPS".to_owned(),
         "nfs" => "NFS".to_owned(),
         other => other.to_uppercase(),
@@ -887,6 +887,7 @@ mod tests {
         assert_eq!(provider_label("sftp"), "SFTP");
         assert_eq!(provider_label("smb"), "SMB");
         assert_eq!(provider_label("webdav"), "WebDAV");
+        assert_eq!(provider_label("https"), "WebDAV");
         assert_eq!(provider_label("ftps"), "FTPS");
         assert_eq!(provider_label("weird"), "WEIRD");
     }
