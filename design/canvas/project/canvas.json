@@ -647,7 +647,7 @@
       "is_interactive": true,
       "title": "netvfs \u00b7 Settings, apps using network locations",
       "w": 400,
-      "x": 480,
+      "x": 1920,
       "y": 17100
     },
     "AccessSettingsMenu.dc.html": {
@@ -655,7 +655,7 @@
       "is_interactive": true,
       "title": "netvfs \u00b7 Settings, level menu open",
       "w": 400,
-      "x": 1440,
+      "x": 2880,
       "y": 17100
     },
     "AccessBrowse.dc.html": {
@@ -743,7 +743,31 @@
       "is_interactive": true,
       "title": "netvfs \u00b7 Settings, one app per account",
       "w": 400,
+      "x": 2400,
+      "y": 17100
+    },
+    "AccessRequest.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "netvfs \u00b7 first request, full screen",
+      "w": 400,
+      "x": 480,
+      "y": 17100
+    },
+    "AccessRequestMenu.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "netvfs \u00b7 first request, level menu open",
+      "w": 400,
       "x": 960,
+      "y": 17100
+    },
+    "AccessRequestNew.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "netvfs \u00b7 request for a new account",
+      "w": 400,
+      "x": 1440,
       "y": 17100
     }
   },
@@ -942,6 +966,9 @@
     "ScanPagesDrag.dc.html",
     "ScanNoCamera.dc.html",
     "AccessNotification.dc.html",
+    "AccessRequest.dc.html",
+    "AccessRequestMenu.dc.html",
+    "AccessRequestNew.dc.html",
     "AccessSettings.dc.html",
     "AccessSettingsApp.dc.html",
     "AccessSettingsMenu.dc.html",
