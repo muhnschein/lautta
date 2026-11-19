@@ -82,9 +82,8 @@ Features: F-VWR-01 Image viewer, F-VWR-02 Image details, F-VWR-03 Image More, F-
 | 2 | SCR-27 Image viewer | Image viewer: (i) details, close, first-use hint |
 | 3 | SCR-27 Image viewer | Tap: chrome hides, photo only |
 | 4 | SCR-27 Image viewer | Chrome back: (i), close; Delete, Rename, Share, More |
-| 5 | SCR-27 Image viewer | Grid photo, toolbar |
-| 6 | SCR-28 Image details | Details (EXIF) |
-| 7 | SCR-27 Image viewer | Swipe down: back to folder |
+| 5 | SCR-28 Image details | Details (EXIF) |
+| 6 | SCR-27 Image viewer | Swipe down: back to folder |
 
 ### FL-07 Play video or audio (standalone)
 
@@ -126,6 +125,13 @@ Features: F-VWR-07 PDF viewer, F-VWR-08 PDF search, F-VWR-09 PDF contents / go t
 | 3 | SCR-33 PDF viewer | Pull: Unlock, Open with, Share, Search, Contents and pages |
 | 4 | SCR-34 PDF contents | Contents and pages: this PDF has no table of contents |
 | 5 | SCR-33 PDF viewer | Search the text: hits |
+| 6 | SCR-33 PDF viewer | PDF with a web link and an outline |
+| 7 | SCR-36 PDF link | Tap web link: Link to a website, Open, Copy link |
+| 8 | SCR-34 PDF contents | Contents: outline entries with page numbers, Go to page |
+| 9 | SCR-33 PDF viewer | Tap outline entry: jumps to page 2 |
+| 10 | SCR-35 PDF password | Locked PDF: password asked on open |
+| 11 | SCR-35 PDF password | Wrong password. Try again. |
+| 12 | SCR-33 PDF viewer | Unlocked |
 
 ## Organise
 
@@ -194,12 +200,15 @@ Features: F-OPS-02 Plan summary, F-OPS-03 Conflict resolution, F-OPS-04 Not-enou
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-19 Plan summary | Plan summary: items, size, free, conflicts, options |
-| 2 | SCR-20 Conflict | Conflict: Merge, Keep both, Skip, Replace, … |
-| 3 | SCR-20 Conflict | Picked Keep both |
-| 4 | SCR-19 Plan summary | Summary after answer |
-| 5 | SCR-23 Activity bar | Started: activity bar |
-| 6 | SCR-03 Folder page (list) | Done |
+| 1 | SCR-07 Item context menu | Long-press folder: Copy |
+| 2 | SCR-10 Clipboard panel | Clipboard panel: 1 item copied |
+| 3 | SCR-06 Folder pulley | In target folder, pull: Paste |
+| 4 | SCR-19 Plan summary | Large paste: plan summary: items, size, free, conflicts, options |
+| 5 | SCR-20 Conflict | Conflict: Merge, Keep both, Skip, Replace, … |
+| 6 | SCR-20 Conflict | Picked Keep both |
+| 7 | SCR-19 Plan summary | Summary after answer |
+| 8 | SCR-23 Activity bar | Started: activity bar |
+| 9 | SCR-03 Folder page (list) | Done |
 
 ### FL-15 Act on many items (standalone)
 
@@ -255,7 +264,7 @@ Features: F-XFR-01 Activity page, F-XFR-02 Task row menu, F-XFR-03 Task details,
 | 1 | SCR-06 Folder pulley | Pull: Activity |
 | 2 | SCR-21 Activity | Activity empty |
 | 3 | SCR-21 Activity | Activity with tasks |
-| 4 | SCR-22 Task details | Task details |
+| 4 | SCR-22 Task details | Task details: done of total, destination, started, verify, items |
 | 5 | SCR-21 Activity | Pull: Clear history, Resume all, Pause all |
 
 ## Find
@@ -320,10 +329,16 @@ Features: F-SCN-01 Scan document, F-SCN-02 Page edge detection and crop, F-SCN-0
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-12 Add | Add: Scan document |
+| 1 | SCR-12 Add | Pull Add: New folder, Scan document |
 | 2 | SCR-53 Scan camera | Camera page |
-| 3 | SCR-54 Scan page view | Page view |
-| 4 | SCR-56 Scan save | Save as PDF |
+| 3 | SCR-53 Scan camera | Shutter: page flies into pages button, count |
+| 4 | SCR-54 Scan page view | Pages button: page view, n of N, colour, adjust, turn, retake, remove |
+| 5 | SCR-54 Scan page view | Grayscale |
+| 6 | SCR-55 Scan adjust (crop, turn) | Adjust: crop corners, turn |
+| 7 | SCR-53 Scan camera | Back to camera with 2 pages |
+| 8 | SCR-56 Scan save | Done: Save 2 pages as PDF, name, page strip |
+| 9 | SCR-57 Scan saving | Saving |
+| 10 | SCR-03 Folder page (list) | Saved PDF in folder |
 
 ## Share
 
@@ -335,8 +350,11 @@ Features: F-ITM-02 Share (out), F-ITM-09 Open with, F-SRV-16 Open remote in othe
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-07 Item context menu | Long-press: Share |
-| 2 | SCR-37 Open remote (Getting file) | Remote file: Getting … first |
+| 1 | SCR-07 Item context menu | Long-press (server file): Share, Copy, Cut, Rename, Delete, More actions |
+| 2 | SCR-09 Selection mode + selection bar | Server folder, long-press: selection bar, Share first |
+| 3 | SCR-50 Server question | Sign-in again when share needs new connection (#105) |
+| 4 | SCR-37 Open remote (Getting file) | Remote file: Getting … first |
+| 5 | SCR-07 Item context menu | Sailfish share sheet |
 
 ### FL-25 Save files shared to Lautta (standalone)
 
@@ -397,10 +415,11 @@ Features: F-SRV-02 Consent banner, F-SRV-01 Bridge detection
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-01 Browse | Consent banner: Ask again |
-| 2 | SCR-01 Browse | Asked again |
-| 3 | SCR-48 About | About: Waiting for your permission |
-| 4 | SCR-01 Browse | Allowed: servers listed |
+| 1 | SCR-01 Browse | Browse before consent: favourite on server shows raw location id |
+| 2 | SCR-01 Browse | Servers section: Allow access in the notification from netvfs, Ask again |
+| 3 | SCR-59 Notifications | Events: netvfs asks, Lautta wants to use your network locations |
+| 4 | SCR-48 About | About: Waiting for your permission |
+| 5 | SCR-01 Browse | Allowed: servers listed |
 
 ### FL-29 Open a saved server (bridge)
 
@@ -439,10 +458,10 @@ Features: F-SRV-09 Connect to server (ad-hoc), F-SRV-10 Recent ad-hoc servers, F
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-01 Browse | Tap Nearby row or recent ad-hoc row |
-| 2 | SCR-49 Connect to server | Connect to server |
-| 3 | SCR-49 Connect to server | Filled |
-| 4 | SCR-50 Server question | Unknown server: Trust |
+| 1 | SCR-01 Browse | Servers: Nearby row or recent ad-hoc row |
+| 2 | SCR-49 Connect to server | Connect to server: address filled from row, Recent list |
+| 3 | SCR-49 Connect to server | Filled: user name, password |
+| 4 | SCR-50 Server question | Unknown server: host, port, key type, fingerprint; Trust |
 | 5 | SCR-03 Folder page (list) | Ad-hoc server root |
 
 ### FL-32 Work with files on a server (bridge)
@@ -481,4 +500,27 @@ Features: F-APP-01 Cover, F-XFR-10 Transfer cover, F-XFR-09 Notifications
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-58 Cover (folder / tasks) | Cover on Home |
+| 1 | SCR-58 Cover (folder / tasks) | Cover on Browse page: Lautta |
+| 2 | SCR-58 Cover (folder / tasks) | Cover in a folder: name, item count |
+| 3 | SCR-58 Cover (folder / tasks) | Task running: count, percent, rate; actions Pause all, Activity |
+| 4 | SCR-21 Activity | Activity pulley: Pause all |
+| 5 | SCR-58 Cover (folder / tasks) | Tasks paused: n paused, action Resume all |
+| 6 | SCR-21 Activity | Tap cover: back in Activity |
+| 7 | SCR-58 Cover (folder / tasks) | Long-press Home: close Lautta while a task runs |
+| 8 | SCR-59 Notifications | Closed with a task running: pop-up "1 task stopped", resumes on next open |
+
+### FL-35 Follow tasks from Events (standalone)
+
+Leave Lautta while tasks run; get told when they need you.
+
+Features: F-XFR-09 Notifications, F-XFR-10 Transfer cover, F-XFR-05 Restored tasks, F-APP-01 Cover
+
+| # | Screen | Step |
+|---|---|---|
+| 1 | SCR-23 Activity bar | Start a copy, leave: Running in the background |
+| 2 | SCR-59 Notifications | Events: n task · percent · time left, progress bar |
+| 3 | SCR-59 Notifications | Finished in background: pop-up and Events, Tasks finished |
+| 4 | SCR-59 Notifications | Conflict in background: Lautta needs an answer, n conflict in task |
+| 5 | SCR-20 Conflict | Tap note: Conflict |
+| 6 | SCR-59 Notifications | Item failed: task failed, n items failed. Tap to retry. |
+| 7 | SCR-59 Notifications | Closed with tasks: n tasks stopped |
