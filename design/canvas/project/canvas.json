@@ -655,13 +655,13 @@
       "is_interactive": true,
       "title": "netvfs \u00b7 Settings, level menu open",
       "w": 400,
-      "x": 960,
+      "x": 1440,
       "y": 17100
     },
     "AccessBrowse.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Browse \u00b7 account servers read only",
+      "title": "Browse \u00b7 level per server",
       "w": 400,
       "x": 0,
       "y": 18260
@@ -717,7 +717,7 @@
     "AccessPicker.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Copy to\u2026 \u00b7 read-only servers dimmed",
+      "title": "Copy to\u2026 \u00b7 read-only server dimmed",
       "w": 400,
       "x": 3360,
       "y": 18260
@@ -737,6 +737,14 @@
       "w": 400,
       "x": 4320,
       "y": 18260
+    },
+    "AccessSettingsApp.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "netvfs \u00b7 Settings, one app per account",
+      "w": 400,
+      "x": 960,
+      "y": 17100
     }
   },
   "createdOnFiles": {
@@ -935,6 +943,7 @@
     "ScanNoCamera.dc.html",
     "AccessNotification.dc.html",
     "AccessSettings.dc.html",
+    "AccessSettingsApp.dc.html",
     "AccessSettingsMenu.dc.html",
     "AccessBrowse.dc.html",
     "AccessReadOnly.dc.html",
