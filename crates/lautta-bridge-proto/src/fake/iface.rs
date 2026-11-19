@@ -332,8 +332,11 @@ fn refused(level: Level) -> Fail {
         Level::Read => "read",
         Level::Add => "add",
     };
-    Fail::net("PermissionDenied", &format!("This app may only {what} in this account"))
-        .with_detail(Some(level.as_str().to_owned()), None)
+    Fail::net(
+        "PermissionDenied",
+        &format!("This app may only {what} in this account"),
+    )
+    .with_detail(Some(level.as_str().to_owned()), None)
 }
 
 /// A copy's destination.

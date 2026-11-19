@@ -4,6 +4,7 @@ import Sailfish.Silica 1.0
 import "../../qml/dialogs"
 import "../../qml/components/ErrorText.js" as ErrorText
 import "../../qml/components/transfers/TransferText.js" as TransferText
+import "../../qml/components/Access.js" as Access
 
 ApplicationWindow {
     id: test
@@ -61,6 +62,26 @@ ApplicationWindow {
         same(TransferText.pendingCover(2, false), qsTrId("lautta-xfr-cover-stopped", 2), "cover, no resume at start")
     }
 
+    function checkLevels() {
+        same(Access.name("read"), qsTrId("lautta-access-read"), "Read only")
+        same(Access.name("read-add"), qsTrId("lautta-access-read-add"), "Read and add")
+        same(Access.name("add"), qsTrId("lautta-access-add"), "Add only")
+        same(Access.name("full"), "", "full access has no notice")
+        same(Access.name(""), "", "no level, no notice")
+        var failed = { "state": "failed", "itemsFailed": 1, "itemsDone": 0, "refusedLevel": "read",
+                       "refusedName": "NAS" }
+        same(TransferText.barDetail("failed", failed, 0, 0), qsTrId("lautta-xfr-refused-read").arg("NAS"),
+             "stopped by a narrower level says what is left")
+        failed.refusedLevel = "read-add"
+        same(TransferText.barDetail("failed", failed, 0, 0), qsTrId("lautta-xfr-refused-read-add").arg("NAS"),
+             "read and add")
+        failed.refusedLevel = "add"
+        same(TransferText.barDetail("failed", failed, 0, 0), qsTrId("lautta-xfr-refused-add").arg("NAS"),
+             "add only")
+        failed.refusedLevel = ""
+        same(TransferText.barDetail("failed", failed, 0, 0), qsTrId("lautta-xfr-failed"), "any other failure")
+    }
+
     function checkPicker(picker) {
         same(picker.rootStatus("attention", "auth-failed", "NAS"), qsTrId("lautta-attention-auth-title"),
              "sign-in failure is words, not its code")
@@ -83,6 +104,7 @@ ApplicationWindow {
                 test.checkItemStates()
                 test.checkCanceledItems()
                 test.checkPending()
+                test.checkLevels()
                 test.checkPicker(picker)
                 test.reachedEnd = true
             }

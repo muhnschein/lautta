@@ -42,15 +42,22 @@ Item {
     }
 
     function testPanel() {
-        same(ids(Selection.panelButtons(3, true)), ["share", "copy", "cut", "delete", "more", "done"],
+        var full = { "changeable": true, "readable": true }
+        var keeps = { "changeable": false, "readable": true }
+        same(ids(Selection.panelButtons(3, full)), ["share", "copy", "cut", "delete", "more", "done"],
              "the menu's order, then More actions, then leaving")
-        same(ids(Selection.panelButtons(1, true)), ["share", "copy", "cut", "delete", "more", "done"],
+        same(ids(Selection.panelButtons(1, full)), ["share", "copy", "cut", "delete", "more", "done"],
              "one item: the same buttons, no push-up menu")
-        same(ids(Selection.panelButtons(3, false)), ["share", "copy", "more", "done"], "read-only folder")
-        same(ids(Selection.panelButtons(1, false)), ["share", "copy", "more", "done"],
-             "read-only folder, one item: Add to favourites and Compress stay")
-        same(ids(Selection.panelButtons(0, true)), ["done"], "waiting for the first item")
-        var buttons = Selection.panelButtons(1, true)
+        same(ids(Selection.panelButtons(3, keeps)), ["share", "copy", "more", "done"],
+             "read only, read and add: nothing that changes items")
+        same(ids(Selection.panelButtons(1, keeps)), ["share", "copy", "more", "done"],
+             "read only, one item: Add to favourites and Compress stay")
+        same(ids(Selection.panelButtons(2, { "changeable": false, "readable": false })), ["done"],
+             "add only: nothing to read or change")
+        same(ids(Selection.panelButtons(0, full)), ["done"], "waiting for the first item")
+        same(Selection.context({ "changeable": false, "readable": true, "writable": true }),
+             { "isDir": false, "changeable": false, "readable": true }, "the folder's level")
+        var buttons = Selection.panelButtons(1, full)
         same(buttons.map(function (b) { return b.icon }),
              ["image://theme/icon-m-share", "dir-copy", "dir-cut", "image://theme/icon-m-delete",
               "more", "image://theme/icon-m-dismiss"], "icons")
@@ -60,16 +67,16 @@ Item {
     }
 
     function testMoreRows() {
-        var file = { "isDir": false, "writable": true }
+        var file = { "isDir": false, "changeable": true, "readable": true }
         same(ids(Selection.moreRows(1, file)), ["rename", "favourite", "compress", "moveToNewFolder"],
              "one item: Rename, then its own More actions page")
-        same(ids(Selection.moreRows(1, { "isDir": true, "writable": true })),
+        same(ids(Selection.moreRows(1, { "isDir": true, "changeable": true, "readable": true })),
              ["rename", "favourite", "compress", "moveToNewFolder"], "one folder")
-        same(ids(Selection.moreRows(1, { "isDir": false, "writable": false })), ["favourite", "compress"],
+        same(ids(Selection.moreRows(1, { "isDir": false, "changeable": false, "readable": true })), ["favourite", "compress"],
              "no Rename in a read-only folder")
         same(ids(Selection.moreRows(2, file)), ["compress", "moveToNewFolder"],
              "several items: only what works on several")
-        same(ids(Selection.moreRows(5, { "isDir": false, "writable": false })), ["compress"],
+        same(ids(Selection.moreRows(5, { "isDir": false, "changeable": false, "readable": true })), ["compress"],
              "several, read-only: no Move to new folder")
         same(Selection.moreRows(0, file), [], "nothing selected")
         same(Selection.moreRows(1, file).map(function (r) { return r.icon }),
@@ -82,11 +89,11 @@ Item {
     }
 
     function testPanelParity() {
-        var contexts = [{ "isDir": false, "writable": true }, { "isDir": true, "writable": true },
-                        { "isDir": false, "writable": false }, { "isDir": true, "writable": false }]
+        var contexts = [{ "isDir": false, "changeable": true, "readable": true }, { "isDir": true, "changeable": true, "readable": true },
+                        { "isDir": false, "changeable": false, "readable": true }, { "isDir": true, "changeable": false, "readable": true }]
         for (var c = 0; c < contexts.length; ++c) {
             var ctx = contexts[c]
-            var offered = ids(Selection.panelButtons(1, ctx.writable)).concat(ids(Selection.moreRows(1, ctx)))
+            var offered = ids(Selection.panelButtons(1, ctx)).concat(ids(Selection.moreRows(1, ctx)))
             var menu = ids(Actions.menu(ctx)).concat(ids(Actions.more(ctx)))
             for (var i = 0; i < menu.length; ++i)
                 check(menu[i] === "more" || offered.indexOf(menu[i]) >= 0,

@@ -112,20 +112,8 @@
         <source>Waiting for your permission</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-about-status-consent-denied">
-        <source>Access was denied</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-about-access-denied">
-        <source>Denied</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-about-access-unknown">
         <source>Not asked yet</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-about-access-allowed">
-        <source>Allowed</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-about-title">
@@ -150,10 +138,6 @@
     </message>
     <message id="lautta-about-access">
         <source>Access</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-about-reason">
-        <source>Reason</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-about-permissions">
@@ -1659,10 +1643,6 @@
         <oldsource>Transfers</oldsource>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-browse-consent">
-        <source>Allow access in the notification from netvfs</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-browse-consent-hint">
         <source>Network locations need your permission</source>
         <translation type="unfinished"></translation>
@@ -2814,6 +2794,54 @@ Cabin keys from Anni</source>
     </message>
     <message id="lautta-scan-saving">
         <source>Saving %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-access-read">
+        <source>Read only</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-access-read-add">
+        <source>Read and add</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-access-add">
+        <source>Add only</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-hidden">
+        <source>Files here are hidden</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-hidden-hint">
+        <source>Files you add show in Activity, not here</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-refused-read">
+        <source>Lautta may now only read on %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-refused-read-add">
+        <source>Lautta may now only read and add on %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-refused-add">
+        <source>Lautta may now only add on %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-add-only">
+        <source>Lautta may only add files here.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-access-per-server">
+        <source>Set per server</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-access-hint">
+        <source>Change in Settings › Accounts › Apps using network locations › Lautta. Servers you add in Lautta always have full access.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-consent-choose">
+        <source>Choose access in the notification from netvfs</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

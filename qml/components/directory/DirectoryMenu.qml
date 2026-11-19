@@ -9,6 +9,7 @@ PullDownMenu {
     property var owner
     readonly property bool selecting: owner ? owner.selecting : false
     readonly property bool writable: owner ? owner.model.writable : false
+    readonly property bool readable: owner ? owner.model.readable : false
 
     MenuItem {
         visible: menu.selecting
@@ -38,13 +39,13 @@ PullDownMenu {
         onClicked: menu.owner.viewOptions()
     }
     MenuItem {
-        visible: !menu.selecting
+        visible: !menu.selecting && menu.readable
         //% "Search"
         text: qsTrId("lautta-dir-menu-search")
         onClicked: menu.owner.searchHere()
     }
     MenuItem {
-        visible: !menu.selecting
+        visible: !menu.selecting && menu.readable
         //% "Select"
         text: qsTrId("lautta-dir-menu-select")
         onClicked: menu.owner.startSelection()

@@ -448,7 +448,12 @@ pub(super) async fn run_copy_across(
     };
     if !opts.recursive {
         env.shared.with(|s| {
-            s.after_call(&dst.0, &dst.1, After::Created, result.as_ref().err().map(Fail::bare))
+            s.after_call(
+                &dst.0,
+                &dst.1,
+                After::Created,
+                result.as_ref().err().map(Fail::bare),
+            )
         });
     }
     if let Ok(extra) = &result {

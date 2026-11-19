@@ -4,9 +4,10 @@ use super::events;
 use crate::json::to_json;
 use crate::runtime::core;
 use lautta_core::app_transfers::{direction_of, split_error, state_name, wait_reason_name, ProgressBook};
+use lautta_core::bridge::Level;
 use lautta_core::ops::OperationKind;
 use lautta_core::transfer::model::{kind_name, operation_name};
-use lautta_core::transfer::{TransferEvent, TransferItem};
+use lautta_core::transfer::{TransferEvent, TransferItem, TransferState};
 use lautta_core::vpath::display_name;
 use qmetaobject::prelude::*;
 use qmetaobject::QPointer;
@@ -223,6 +224,11 @@ pub(super) fn summary_json(core: &lautta_core::app::Core, id: i64, book: &Progre
         direction_of(&core.locations, s.kind, &i.src, &i.dst).name()
     });
     let loc_name = |u: &lautta_core::Uri| core.location(&u.location).map(|l| l.name).unwrap_or_default();
+    let (refused_level, refused_name) = if s.state == TransferState::Failed {
+        refused(core, id)
+    } else {
+        ("", String::new())
+    };
     Some(to_json(&serde_json::json!({
         "id": s.id,
         "kind": operation_name(s.kind),
@@ -245,7 +251,23 @@ pub(super) fn summary_json(core: &lautta_core::app::Core, id: i64, book: &Progre
         "sourceName": source_dir.as_ref().map(loc_name),
         "verifyChecksums": s.options.verify_checksums,
         "preserveMtime": s.options.preserve_mtime,
+        "refusedLevel": refused_level,
+        "refusedName": refused_name,
     })))
+}
+
+/// Level netvfs now grants where an item was refused, less than full, and that place's name.
+fn refused(core: &lautta_core::app::Core, id: i64) -> (&'static str, String) {
+    let Some(item) = core.engine.first_refused(id) else {
+        return ("", String::new());
+    };
+    let bridge = core.bridge.as_ref();
+    let found = [&item.dst, &item.src].into_iter().find_map(|u| {
+        let level = bridge?.access(&u.location)?;
+        let name = core.location(&u.location).map(|l| l.name).unwrap_or_default();
+        (level != Level::Full).then(|| (level.as_str(), name))
+    });
+    found.unwrap_or_default()
 }
 
 #[cfg(test)]

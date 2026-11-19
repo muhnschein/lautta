@@ -275,7 +275,9 @@ mod tests {
 
     #[test]
     fn read_only_reads() {
-        let want = [Allow, Allow, Allow, Allow, Allow, Deny, Deny, Deny, Deny, Deny, Deny, Deny];
+        let want = [
+            Allow, Allow, Allow, Allow, Allow, Deny, Deny, Deny, Deny, Deny, Deny, Deny,
+        ];
         for own in [Own::No, Own::Writing, Own::Written] {
             assert_eq!(row(Level::Read, own), want, "{own:?}");
         }
@@ -283,12 +285,28 @@ mod tests {
 
     #[test]
     fn read_and_add() {
-        let others =
-            [Allow, Allow, Allow, Allow, Allow, Allow, Allow, Deny, Deny, DenyUnlessMissing, Deny, Deny];
+        let others = [
+            Allow,
+            Allow,
+            Allow,
+            Allow,
+            Allow,
+            Allow,
+            Allow,
+            Deny,
+            Deny,
+            DenyUnlessMissing,
+            Deny,
+            Deny,
+        ];
         assert_eq!(row(Level::ReadAdd, Own::No), others);
-        let writing = [Allow, Allow, Allow, Allow, Allow, Allow, Allow, Allow, Allow, Allow, Allow, Deny];
+        let writing = [
+            Allow, Allow, Allow, Allow, Allow, Allow, Allow, Allow, Allow, Allow, Allow, Deny,
+        ];
         assert_eq!(row(Level::ReadAdd, Own::Writing), writing);
-        let written = [Allow, Allow, Allow, Allow, Allow, Allow, Allow, Deny, Allow, Allow, Allow, Deny];
+        let written = [
+            Allow, Allow, Allow, Allow, Allow, Allow, Allow, Deny, Allow, Allow, Allow, Deny,
+        ];
         assert_eq!(row(Level::ReadAdd, Own::Written), written);
     }
 
@@ -309,10 +327,35 @@ mod tests {
             Deny,
         ];
         assert_eq!(row(Level::Add, Own::No), others);
-        let writing =
-            [Allow, FoldersOnly, Allow, Deny, Allow, Allow, Allow, Allow, Allow, Allow, Allow, Deny];
+        let writing = [
+            Allow,
+            FoldersOnly,
+            Allow,
+            Deny,
+            Allow,
+            Allow,
+            Allow,
+            Allow,
+            Allow,
+            Allow,
+            Allow,
+            Deny,
+        ];
         assert_eq!(row(Level::Add, Own::Writing), writing);
-        let written = [Allow, FoldersOnly, Allow, Deny, Allow, Allow, Allow, Deny, Allow, Allow, Allow, Deny];
+        let written = [
+            Allow,
+            FoldersOnly,
+            Allow,
+            Deny,
+            Allow,
+            Allow,
+            Allow,
+            Deny,
+            Allow,
+            Allow,
+            Allow,
+            Deny,
+        ];
         assert_eq!(row(Level::Add, Own::Written), written);
     }
 
@@ -360,7 +403,15 @@ mod tests {
         for e in nothing {
             assert_eq!(after(Own::No, After::Created, Some(e)), Own::No, "{e}");
         }
-        for e in ["Canceled", "Timeout", "NoSpace", "Internal", "ConnectionLost", "DirectoryNotEmpty", "Locked"] {
+        for e in [
+            "Canceled",
+            "Timeout",
+            "NoSpace",
+            "Internal",
+            "ConnectionLost",
+            "DirectoryNotEmpty",
+            "Locked",
+        ] {
             assert_eq!(after(Own::No, After::Created, Some(e)), Own::Writing, "{e}");
         }
     }

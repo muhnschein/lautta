@@ -269,8 +269,8 @@ Page {
                         width: parent.width
                         wrapMode: Text.Wrap
                         text: row.kind === "consent"
-                              //% "Allow access in the notification from netvfs"
-                              ? qsTrId("lautta-browse-consent")
+                              //% "Choose access in the notification from netvfs"
+                              ? qsTrId("lautta-browse-consent-choose")
                               : ErrorText.message("BridgeUnavailable")
                         font.pixelSize: Theme.fontSizeSmall
                     }

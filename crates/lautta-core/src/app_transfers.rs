@@ -139,6 +139,7 @@ pub fn conflict_json(id: TransferId, item: u32, name: &str, c: &Conflict) -> ser
         "dst_mtime_ms": c.dst_mtime_ms,
         "resumable": c.resumable,
         "choices": c.choices.iter().map(|x| choice_name(*x)).collect::<Vec<_>>(),
+        "add_only": c.add_only,
     })
 }
 
@@ -577,6 +578,7 @@ mod tests {
             dst_mtime_ms: None,
             resumable: false,
             choices: vec![ConflictChoice::Replace, ConflictChoice::KeepBoth],
+            add_only: true,
         };
         let j = conflict_json(7, 2, "a.txt", &c);
         assert_eq!(j["transferId"], 7);
@@ -585,6 +587,7 @@ mod tests {
         assert_eq!(j["dst_size"], 4);
         assert!(j["dst_mtime_ms"].is_null());
         assert_eq!(j["choices"], serde_json::json!(["Replace", "KeepBoth"]));
+        assert_eq!(j["add_only"], true);
     }
 
     #[test]

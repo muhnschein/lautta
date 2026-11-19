@@ -28,6 +28,8 @@ Item {
 
     property url source
     property bool error
+    // Delete offered: false where netvfs grants less than full access.
+    property bool changeable: true
 
     signal details
     signal remove
@@ -100,6 +102,7 @@ Item {
 
                 objectName: "deleteButton"
                 icon.source: "image://theme/icon-m-delete"
+                visible: overlay.changeable
                 anchors.verticalCenter: parent.verticalCenter
                 onClicked: overlay.remove()
             }

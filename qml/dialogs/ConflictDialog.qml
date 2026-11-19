@@ -191,15 +191,18 @@ Dialog {
                 }
             }
             Label {
-                visible: !dialog.isDir
+                visible: !dialog.isDir || dialog.c.add_only === true
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 horizontalAlignment: Text.AlignRight
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeExtraSmall
-                //% "Merge is only offered for folders."
-                text: qsTrId("lautta-conflict-merge-folders")
+                text: dialog.c.add_only === true
+                      //% "Lautta may only add files here."
+                      ? qsTrId("lautta-conflict-add-only")
+                      //% "Merge is only offered for folders."
+                      : qsTrId("lautta-conflict-merge-folders")
             }
             TextSwitch {
                 id: applyAll

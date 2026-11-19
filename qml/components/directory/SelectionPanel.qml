@@ -8,16 +8,16 @@ DockedPanel {
     id: panel
 
     property var owner
-    readonly property bool writable: owner ? owner.model.writable : false
+    readonly property var ctx: Selection.context(owner ? owner.model : {})
     readonly property int count: owner ? owner.model.selectedCount : 0
     readonly property bool waiting: owner ? owner.selectionWaiting : false
     // Ending selection zeroes `count` while panel fades out: no switch to no-selection set on the
     // way.
-    property var buttons: Selection.panelButtons(0, false)
+    property var buttons: Selection.panelButtons(0, {})
 
     function refreshButtons() {
         if (count > 0 || waiting)
-            buttons = Selection.panelButtons(count, writable)
+            buttons = Selection.panelButtons(count, ctx)
     }
 
     function run(id) {
@@ -36,7 +36,7 @@ DockedPanel {
     height: Theme.itemSizeLarge
     open: owner ? owner.selecting : false
     onCountChanged: refreshButtons()
-    onWritableChanged: refreshButtons()
+    onCtxChanged: refreshButtons()
     onWaitingChanged: refreshButtons()
     background: BarBackground { }
 
