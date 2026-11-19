@@ -187,6 +187,17 @@ ApplicationWindow {
         row.clicked(null)
     }
 
+    function checkConsentRow(list) {
+        var row = rowOf(list, "", "consent")
+        if (!row)
+            return fail("no access row")
+        var shown = []
+        findAll(row, function(x) { return x.visible && String(x.text).indexOf("lautta-browse-") === 0 }, [])
+            .forEach(function(x) { if (shown.indexOf(x.text) < 0) shown.push(x.text) })
+        if (shown.join(",") !== "lautta-browse-consent-needed,lautta-browse-ask-again")
+            fail("the access row reads " + shown.join(","))
+    }
+
     Timer {
         interval: 100
         repeat: true
@@ -218,6 +229,8 @@ ApplicationWindow {
                 win.checkLockedRowWithoutStorage(list)
             if (win.scenarioRunning)
                 win.checkUnmountedRow(list)
+            if (win.scenarioRunning)
+                win.checkConsentRow(list)
             if (win.scenarioRunning)
                 win.checkRecentsRow(list)
             win.step = 1

@@ -1643,10 +1643,6 @@
         <oldsource>Transfers</oldsource>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-browse-consent-hint">
-        <source>Network locations need your permission</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-browse-ask-again">
         <source>Ask again</source>
         <translation type="unfinished"></translation>
@@ -2840,8 +2836,8 @@ Cabin keys from Anni</source>
         <source>Change in Settings › Accounts › Apps using network locations › Lautta. Servers you add in Lautta always have full access.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-browse-consent-choose">
-        <source>Choose access in the notification from netvfs</source>
+    <message id="lautta-browse-consent-needed">
+        <source>Network locations need your permission</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
