@@ -5,7 +5,7 @@
 ## What this is
 
 - Usable store app today: user's folders, SD cards, USB drives, archives, Trash. Browse, preview, open, share, copy, move.
-- Showcase for platform file access: with netvfs installed, SFTP and SMB servers from Settings → Accounts become ordinary locations, plus persistent, resumable transfer queue.
+- Showcase for platform file access: with netvfs installed, SFTP, SMB, WebDAV and FTPS servers from Settings → Accounts become ordinary locations, plus persistent, resumable transfer queue.
 
 ## What this isn't
 
@@ -19,10 +19,10 @@
 
 | | Standalone (Harbour default) | With netvfs bridge |
 |---|---|---|
-| Locations | user folders, Android folders, removable media, archives | + netvfs accounts with *Files* on, ad-hoc servers, Nearby |
+| Locations | user folders, Android folders, removable media, archives | + netvfs accounts with *Files* on, Nearby as hints |
 | Network | none | none in app; bridge does it |
-| Credentials | none | saved accounts: never seen by app; ad-hoc secrets passed once, wiped |
-| UI | no *Servers*, no *Connect to server*, no trace of bridge | full |
+| Credentials | none | accounts in Settings only: app never sees, asks for or passes one |
+| UI | no *Servers*, no *Nearby*, no trace of bridge | full |
 | Detection | bridge socket absent | socket present, handshake succeeds |
 
 Standalone is what Harbour reviewers and most users see: must be useful and polished alone. Store text names network locations neutrally ("works with network locations provided by netvfs, if installed"), never as main feature.
@@ -31,9 +31,10 @@ Standalone is what Harbour reviewers and most users see: must be useful and poli
 
 - Discovery: socket `~/.local/share/org.netvfs/lautta/netvfs/bridge.sock`, checked at start, back in foreground, on inotify create. Absent → standalone, no message. App never creates it.
 - Connection: p2p D-Bus (`zbus`, unix socket, fd passing), `org.netvfs.Bridge1`. `Hello` first, then `GetFeatures`: optional parts (`storage-settings`, `drives`) offered only while bridge names them; unknown names ignored.
-- Consent: until `granted`, *Servers* shows one row asking to allow access in netvfs's notification, with *Ask again*. `denied` hides section, reason in *About*.
+- Access: until `decided`, *Servers* shows one row, "Network locations need your permission", with *Ask again*. Then user's level per server (`ListLocations` info `access`): `full`, `read-add`, `read`, `add`; not allowed = not listed. Folder shows level (lock + name) and offers only what it allows: `read-add` adds, changes nothing; `add` lists folders only, conflicts there keep both. Narrowed level ends sessions; refused transfer says what is left.
+- Purge: account missing from list is forgotten only when `Disconnect` answers `NotFound`; one not allowed (`PermissionDenied`) keeps favourites and recents.
 - Accounts handed off: *Add server*, *Edit server*, *Update sign-in*, *Review server identity* open Settings via bridge. App never edits accounts, pins, secrets; never opens or closes connections.
-- Ad-hoc servers: *Connect to server* takes `sftp://` or `smb://` URL and secret if needed; buffer zeroized after call. Identity prompts and unencrypted-connection consent arrive as `Question` signals, answered in app (for accounts: in Settings).
+- Every server is a netvfs account: app takes no address, secret, code or trust answer. *Nearby* row opens a dialog; accepting hands off to Settings' add-account flow for that provider.
 - Server row status: one dot, no text, no protocol or host. Connected = highlight; not connected = primary; connecting = pulsing (only on screen, app in front); failed = red; sign-in or identity needs user = orange. Not connected stays browsable; opening connects.
 - Names and paths cross as bytes (`ay`): netvfs names may be non-UTF-8, D-Bus strings may not.
 - Local data never by path: uploads pass read-only fd, downloads a writable fd to app-created temp file, archive streams a pipe end.
@@ -51,7 +52,7 @@ lautta-qt (qmetaobject-rs; no logic)
 lautta-core (no Qt): providers (local, archive, netvfs),
 planner, transfer queue, caches, SQLite
         |  p2p D-Bus + fd passing, unix socket
-netvfs-bridge (not part of this app) -> SFTP / SMB servers
+netvfs-bridge (not part of this app) -> SFTP / SMB / WebDAV / FTPS servers
 ```
 
 - QObjects on GUI thread only; core answers via queued callbacks.
@@ -101,7 +102,7 @@ Browse ─┬─ Directory ─┬─ Directory …
         ├─ Recents
         ├─ Trash
         ├─ Activity ── Transfer details
-        ├─ Connect to server (nearby, recent)
+        ├─ Nearby server ── set up in Settings
         └─ Settings / About
 ```
 
@@ -128,7 +129,7 @@ Remote throughput is netvfs's budget; app must not be bottleneck (fd passing, no
 |---|---|---|
 | M0 skeleton | workspace, SailfishApp bootstrap from Rust, rpmvalidator in CI, Browse with user folders | validator clean; launches on device |
 | M1 local MVP | directory page, sort/filter, cache, file operations, clipboard, folder picker, Trash, image/text viewers, local thumbnails, local transfers, cover | Harbour submission of standalone 1.0 candidate; folder, scroll, launch budgets met |
-| M2 bridge | netvfs provider, consent, accounts and ad-hoc servers, remote browse and operations, local↔remote transfers with resume, remote thumbnails | contract tests with netvfs green; device test with SFTP and SMB |
+| M2 bridge | netvfs provider, consent, accounts, remote browse and operations, local↔remote transfers with resume, remote thumbnails | contract tests with netvfs green; device test with SFTP and SMB |
 | M3 depth | streaming, share target, search, archives, Nearby | parity list below done |
 | M4 power | server copy wherever available | — |
 
@@ -137,8 +138,8 @@ Standalone releases ship to Harbour from M1; bridge features ship only once the 
 ### Parity
 
 - Harbour File Browser (in sandbox): browse ✓, search ✓, share/open externally ✓, previews of images, audio, video, archives, PDFs ✓, multi-select ✓, bulk copy/move ✓, new folders ✓, hidden files ✓, edit/enter paths ✓, quick filter ✓, shortcuts ✓. Not: database previews (*Open with*), links, bulk rename, permissions, new empty files, per-folder view settings, multiple windows, root mode.
-- Transmit/Cyberduck (bridge): saved servers ✓ (Settings), quick connect ✓, dual-location copy ✓, queue with concurrency ✓, resume ✓, server-side copy ✓, preserve timestamps ✓, Bonjour discovery ✓. Not: external edit with auto-upload, sync/compare, recursive permissions.
-- iOS Files: Browse/Recents ✓, Favourites ✓, Connect to server ✓, quick look ✓, Recently deleted ✓ (Trash), compress/uncompress ✓. Not: Tags.
+- Transmit/Cyberduck (bridge): saved servers ✓ (Settings), dual-location copy ✓, queue with concurrency ✓, resume ✓, server-side copy ✓, preserve timestamps ✓, Bonjour discovery ✓. Not: external edit with auto-upload, sync/compare, recursive permissions, quick connect (servers are Settings accounts only).
+- iOS Files: Browse/Recents ✓, Favourites ✓, quick look ✓, Recently deleted ✓ (Trash), compress/uncompress ✓. Not: Tags, Connect to server (servers are Settings accounts only).
 
 ## Words on screen
 

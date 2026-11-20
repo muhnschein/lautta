@@ -526,6 +526,7 @@ impl Scan<'_> {
         let ctx = ConflictContext {
             dest_can_resume: self.opts.dest_is_local || self.dst_caps.has(cap::RESUME_UPLOAD),
             same_item: item.src == item.dst,
+            dest_add_only: self.dst_caps.has(cap::NO_CHANGE),
         };
         if check_dst {
             if let Some(found) = self.stat_dst(&item.dst).await? {
@@ -549,6 +550,8 @@ impl Scan<'_> {
         match self.dst.stat(&dst.path, false, Lane::Bulk).await {
             Ok(e) => Ok(Some(e)),
             Err(e) if matches!(e.kind, ErrorKind::NotFound | ErrorKind::NotADirectory) => Ok(None),
+            // A file the level hides: the run keeps both.
+            Err(e) if e.kind == ErrorKind::PermissionDenied && !self.dst_caps.readable() => Ok(None),
             Err(e) => Err(e.about(dst)),
         }
     }

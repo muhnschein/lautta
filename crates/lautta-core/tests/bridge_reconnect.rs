@@ -11,7 +11,6 @@ use lautta_bridge_proto::WireNearby;
 use lautta_core::bridge::{BridgeClient, BridgeStatus};
 use lautta_core::error::ErrorKind;
 use lautta_core::provider::{Lane, Provider};
-use lautta_core::questions::Questions;
 use lautta_core::vpath::VPath;
 use std::time::Duration;
 use tokio::time::{sleep, Instant};
@@ -143,7 +142,7 @@ async fn a_socket_without_a_bridge_behind_it_is_standalone_not_an_error() {
     rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
     assert!(rig.paths.bridge_socket().exists());
 
-    let fresh = BridgeClient::start(bridge_support::config(&rig.paths), Questions::new()).unwrap();
+    let fresh = BridgeClient::start(bridge_support::config(&rig.paths)).unwrap();
     // Absent is also the status before the first look at the socket.
     eventually("an attempt", || fresh.connection_attempts() >= 1).await;
     fresh.wait_status(|s| s == BridgeStatus::Absent).await;
@@ -172,7 +171,7 @@ async fn a_silent_bridge_is_given_up_on_after_the_handshake_timeout() {
     let mut config = bridge_support::config(&paths);
     config.handshake_timeout = Some(ms(300));
     let t0 = Instant::now();
-    let client = BridgeClient::start(config, Questions::new()).unwrap();
+    let client = BridgeClient::start(config).unwrap();
     client.wait_status(|s| s == BridgeStatus::Connecting).await;
     client.wait_status(|s| s == BridgeStatus::Absent).await;
     assert!(t0.elapsed() >= ms(295), "gave up after {:?}", t0.elapsed());

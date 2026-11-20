@@ -3,24 +3,22 @@
 //! to model rows.
 
 use crate::app::Core;
-use crate::bridge::{AdHocOptions, BridgeStatus, Drive, DriveKind, NearbyServer, RemoteKind};
+use crate::bridge::{BridgeClient, BridgeStatus, Drive, DriveKind, NearbyServer};
 use crate::browse_layout::{layout_item, Layout, NEARBY_ITEM, SECTION_ITEM, SWITCHED_SECTIONS};
 use crate::date_group::DateGroup;
 use crate::error::{Error, ErrorKind, Result};
-use crate::locations::{ConnectionState, Location, LocationKind, LocationStatus};
+use crate::locations::{Location, LocationKind, LocationStatus};
 use crate::org::favourites::Favourite;
 use crate::org::{self, Recent, RecentsFilter};
 use crate::settings::LocationPrefs;
 use crate::uri::Uri;
 use crate::vpath::{display_name, VPath};
 use crate::workcopy::blocking;
-use rusqlite::params;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
 use std::path::Path;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-use zeroize::Zeroizing;
 
 const PLACE_SEPARATOR: &str = " › ";
 const SERVER_ICON: &str = "server";
@@ -34,7 +32,7 @@ pub struct Row {
     /// `favourites`, `device`, `android`, `volumes`, `servers`, `nearby`.
     pub section: &'static str,
     /// `favourite`, `folder`, `recents`, `deleted`, `volume`, `account`,
-    /// `adhoc`, `adhocRecent`, `consent`, `unavailable`, `nearby`.
+    /// `consent`, `unavailable`, `nearby`.
     pub kind: &'static str,
     pub uri: String,
     pub name: String,
@@ -146,14 +144,6 @@ pub struct VolumeInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AdHocRecent {
-    pub location_id: String,
-    pub url: String,
-    pub name: String,
-    pub last_used_ms: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecentRow {
     pub id: i64,
     pub uri: String,
@@ -183,6 +173,8 @@ pub fn provider_label(provider: &str) -> String {
     match provider {
         "sftp" | "ssh" => "SFTP".to_owned(),
         "smb" | "cifs" => "SMB".to_owned(),
+        "webdav" | "davs" | "https" => "WebDAV".to_owned(),
+        "ftps" => "FTPS".to_owned(),
         "nfs" => "NFS".to_owned(),
         other => other.to_uppercase(),
     }
@@ -202,31 +194,6 @@ pub fn nearby_url(n: &NearbyServer) -> String {
     format!("{}://{}{port}/", n.provider, n.host)
 }
 
-/// `scheme://user@host/path` without password, query or fragment.
-pub fn public_url(url: &str) -> String {
-    let cut = url.find(['?', '#']).unwrap_or(url.len());
-    let url = &url[..cut];
-    let Some(at) = url.find("://") else {
-        return url.to_owned();
-    };
-    let (scheme, rest) = url.split_at(at + 3);
-    let end = rest.find('/').unwrap_or(rest.len());
-    let (authority, path) = rest.split_at(end);
-    match authority.rfind('@') {
-        Some(i) => {
-            let user = authority[..i].split(':').next().unwrap_or("");
-            format!("{scheme}{user}@{}{path}", &authority[i + 1..])
-        }
-        None => url.to_owned(),
-    }
-}
-
-pub fn url_host(url: &str) -> String {
-    let rest = url.split_once("://").map_or(url, |(_, r)| r);
-    let authority = rest.split('/').next().unwrap_or(rest);
-    authority.rsplit('@').next().unwrap_or(authority).to_owned()
-}
-
 fn status_name(s: LocationStatus) -> &'static str {
     match s {
         LocationStatus::Ready => "ready",
@@ -241,10 +208,7 @@ fn clamp_i64(v: u64) -> i64 {
 }
 
 fn account_ids(list: &[crate::bridge::RemoteLocation]) -> BTreeSet<String> {
-    list.iter()
-        .filter(|l| l.kind == RemoteKind::Account)
-        .map(|l| l.id.clone())
-        .collect()
+    list.iter().map(|l| l.id.clone()).collect()
 }
 
 fn location_of(uri: &str) -> Option<&str> {
@@ -540,11 +504,7 @@ impl Core {
                 rows.extend(self.listed_servers(prefs));
                 rows
             }
-            BridgeStatus::Ready => {
-                let mut rows = self.listed_servers(prefs);
-                rows.extend(self.recent_adhoc_rows(&rows));
-                rows
-            }
+            BridgeStatus::Ready => self.listed_servers(prefs),
             _ => Vec::new(),
         }
     }
@@ -556,11 +516,10 @@ impl Core {
         self.locations
             .locations()
             .into_iter()
-            .filter(|l| matches!(l.kind, LocationKind::Server { .. } | LocationKind::AdHoc))
+            .filter(|l| matches!(l.kind, LocationKind::Server { .. }))
             .map(|l| {
                 let remote = client.location(&l.id);
-                let adhoc = l.kind == LocationKind::AdHoc;
-                let mut row = Row::new("servers", if adhoc { "adhoc" } else { "account" });
+                let mut row = Row::new("servers", "account");
                 let start = prefs
                     .get(&l.id)
                     .and_then(|p| p.start_folder.clone())
@@ -588,31 +547,6 @@ impl Core {
             .collect()
     }
 
-    fn recent_adhoc_rows(&self, listed: &[Row]) -> Vec<Row> {
-        let urls: BTreeSet<String> = listed.iter().map(|r| r.place.clone()).collect();
-        self.adhoc_recents()
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|r| !urls.contains(&r.url))
-            .map(|r| {
-                let mut row = Row::new("servers", "adhocRecent");
-                row.name = r.name;
-                row.status = "offline";
-                row.connection = ConnectionState::Disconnected.name();
-                row.icon = SERVER_ICON.to_owned();
-                row.provider = r
-                    .url
-                    .split_once("://")
-                    .map(|(s, _)| provider_label(s))
-                    .unwrap_or_default();
-                row.place = r.url.clone();
-                row.uri = r.url;
-                row.item_id = r.location_id;
-                row
-            })
-            .collect()
-    }
-
     fn nearby_rows(&self) -> Vec<Row> {
         let Some(client) = &self.bridge else {
             return Vec::new();
@@ -635,62 +569,6 @@ impl Core {
                 row
             })
             .collect()
-    }
-
-    pub fn adhoc_recents(&self) -> Result<Vec<AdHocRecent>> {
-        let conn = self.db.lock();
-        let mut stmt = conn.prepare(
-            "SELECT location_id, url, name, last_used_ms FROM adhoc_servers ORDER BY last_used_ms DESC",
-        )?;
-        let rows = stmt
-            .query_map([], |r| {
-                Ok(AdHocRecent {
-                    location_id: r.get(0)?,
-                    url: r.get(1)?,
-                    name: r.get(2)?,
-                    last_used_ms: r.get(3)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        Ok(rows)
-    }
-
-    fn remember_adhoc(&self, location_id: &str, url: &str, name: &str) -> Result<()> {
-        let conn = self.db.lock();
-        // One row per address: a new connection replaces it.
-        conn.execute("DELETE FROM adhoc_servers WHERE url = ?1", [url])?;
-        conn.execute(
-            "INSERT OR REPLACE INTO adhoc_servers(location_id, url, name, last_used_ms) VALUES (?1, ?2, ?3, ?4)",
-            params![location_id, url, name, now_ms()],
-        )?;
-        Ok(())
-    }
-
-    pub fn remove_adhoc_recent(&self, location_id: &str) -> Result<()> {
-        self.db
-            .lock()
-            .execute("DELETE FROM adhoc_servers WHERE location_id = ?1", [location_id])?;
-        self.purge_location_data(location_id)
-    }
-
-    /// Secret moves into a wiping buffer at once, wiped when the call ends whatever the outcome.
-    pub async fn connect_adhoc(&self, url: &str, secret: Vec<u8>, opts: AdHocOptions) -> Result<String> {
-        let mut secret = Zeroizing::new(secret);
-        let client = self
-            .bridge
-            .as_ref()
-            .ok_or_else(|| Error::new(ErrorKind::BridgeUnavailable, "network locations are unavailable"))?;
-        let id = client.connect_adhoc_wiping(url, &mut secret, &opts).await?;
-        let shown = public_url(url);
-        self.remember_adhoc(&id, &shown, &url_host(&shown))?;
-        Ok(id)
-    }
-
-    pub async fn forget_adhoc(&self, location_id: &str) -> Result<()> {
-        if let Some(client) = &self.bridge {
-            let _ = client.forget_adhoc(location_id).await;
-        }
-        self.remove_adhoc_recent(location_id)
     }
 
     pub fn purge_location_data(&self, location: &str) -> Result<()> {
@@ -737,7 +615,7 @@ impl Core {
             loop {
                 let current = *status.borrow_and_update();
                 let list = locations.borrow_and_update().clone();
-                if purge_step(&weak, current, &list, &mut known, &on_purged)
+                if purge_step(&weak, &client, current, &list, &mut known, &on_purged)
                     .await
                     .is_none()
                 {
@@ -827,6 +705,7 @@ fn now_ms() -> i64 {
 
 async fn purge_step(
     weak: &Weak<Core>,
+    client: &BridgeClient,
     status: BridgeStatus,
     list: &[crate::bridge::RemoteLocation],
     known: &mut Option<BTreeSet<String>>,
@@ -853,6 +732,13 @@ async fn purge_step(
         }
     };
     *known = Some(current);
+    let mut removed = Vec::new();
+    for id in gone {
+        if client.is_removed(&id).await {
+            removed.push(id);
+        }
+    }
+    let gone = removed;
     if !gone.is_empty() {
         let c = core.clone();
         let _ = tokio::task::spawn_blocking(move || {
@@ -884,6 +770,9 @@ mod tests {
     fn provider_labels() {
         assert_eq!(provider_label("sftp"), "SFTP");
         assert_eq!(provider_label("smb"), "SMB");
+        assert_eq!(provider_label("webdav"), "WebDAV");
+        assert_eq!(provider_label("https"), "WebDAV");
+        assert_eq!(provider_label("ftps"), "FTPS");
         assert_eq!(provider_label("weird"), "WEIRD");
     }
 
@@ -905,17 +794,6 @@ mod tests {
         assert_eq!(nearby_url(&n), "sftp://mac-mini.local/");
         n.port = 2222;
         assert_eq!(nearby_url(&n), "sftp://mac-mini.local:2222/");
-    }
-
-    #[test]
-    fn urls_lose_secrets() {
-        assert_eq!(
-            public_url("sftp://pi:hunter2@raspberrypi.local/home?x=1#f"),
-            "sftp://pi@raspberrypi.local/home"
-        );
-        assert_eq!(public_url("smb://nas/share"), "smb://nas/share");
-        assert_eq!(url_host("sftp://pi@raspberrypi.local/home"), "raspberrypi.local");
-        assert_eq!(url_host("nas"), "nas");
     }
 
     #[test]

@@ -40,6 +40,9 @@ pub struct Conflict {
     pub dst_mtime_ms: Option<i64>,
     pub resumable: bool,
     pub choices: Vec<ConflictChoice>,
+    /// Destination keeps existing items as they are (access level `read-add`, `add`).
+    #[serde(default)]
+    pub add_only: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

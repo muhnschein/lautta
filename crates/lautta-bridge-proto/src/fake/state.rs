@@ -2,6 +2,7 @@
 //! Shared state of the fake bridge and of one client session.
 
 use super::tree::Tree;
+use crate::access::{self, After, Level, Own};
 use crate::wire::{
     drive_info, feature, location_state, WireCapabilities, WireDrive, WireLocation, WireNearby,
 };
@@ -11,23 +12,43 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
-use tokio::sync::oneshot;
 use tokio::time::Instant;
 use zbus::zvariant::{OwnedValue, Value};
 
+/// What the user decided for this app, for every account location.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Consent {
+    /// Not decided yet.
     Unknown,
-    Granted,
+    /// No account.
     Denied,
+    /// Every account at this level.
+    Allowed(Level),
 }
 
 impl Consent {
+    /// Word of a contract sequence (as in netvfs `bridge.conf`).
     pub fn as_str(self) -> &'static str {
         match self {
             Consent::Unknown => "unknown",
-            Consent::Granted => "granted",
             Consent::Denied => "denied",
+            Consent::Allowed(level) => level.as_str(),
+        }
+    }
+
+    pub fn parse(word: &str) -> Option<Consent> {
+        match word {
+            "unknown" => Some(Consent::Unknown),
+            "denied" => Some(Consent::Denied),
+            _ => Level::parse(word).map(Consent::Allowed),
+        }
+    }
+
+    /// What `GetConsent` and `ConsentChanged` say: `unknown` or `decided`.
+    pub fn wire(self) -> &'static str {
+        match self {
+            Consent::Unknown => "unknown",
+            Consent::Denied | Consent::Allowed(_) => "decided",
         }
     }
 }
@@ -201,19 +222,6 @@ impl FakeDrive {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ScriptedQuestion {
-    pub kind: String,
-    pub details: Vec<(String, InfoValue)>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RecordedAnswer {
-    pub id: String,
-    pub accept: bool,
-    pub answers: Vec<Vec<u8>>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallRecord {
     pub method: String,
@@ -230,6 +238,10 @@ pub struct LocationRec {
 
 pub struct State {
     pub consent: Consent,
+    /// Per location, overriding [`State::consent`]: `None` not allowed.
+    pub access: HashMap<String, Option<Level>>,
+    /// What the app added at an add level.
+    pub own: HashMap<(String, Vec<u8>), Own>,
     pub consent_requests: u32,
     pub auto_consent: Option<Consent>,
     pub bridge_version: String,
@@ -246,16 +258,11 @@ pub struct State {
     pub chunk: usize,
     pub failures: Vec<Failure>,
     pub job_failures: Vec<JobFailure>,
-    pub adhoc_questions: Vec<ScriptedQuestion>,
-    pub received_secrets: Vec<Vec<u8>>,
-    pub answers: Vec<RecordedAnswer>,
     pub calls: Vec<CallRecord>,
     pub location_replies: usize,
     pub jobs_canceled: usize,
     pub handoffs: Vec<String>,
     pub nearby: Vec<WireNearby>,
-    pub next_adhoc: u32,
-    pub next_question: u32,
     pub sessions: Vec<Arc<Session>>,
     pub accepting: bool,
     pub accepts: Vec<Instant>,
@@ -264,7 +271,9 @@ pub struct State {
 impl Default for State {
     fn default() -> State {
         State {
-            consent: Consent::Granted,
+            consent: Consent::Allowed(Level::Full),
+            access: HashMap::new(),
+            own: HashMap::new(),
             consent_requests: 0,
             auto_consent: None,
             bridge_version: "0.2.0-fake".to_owned(),
@@ -279,16 +288,11 @@ impl Default for State {
             chunk: 64 * 1024,
             failures: Vec::new(),
             job_failures: Vec::new(),
-            adhoc_questions: Vec::new(),
-            received_secrets: Vec::new(),
-            answers: Vec::new(),
             calls: Vec::new(),
             location_replies: 0,
             jobs_canceled: 0,
             handoffs: Vec::new(),
             nearby: Vec::new(),
-            next_adhoc: 1,
-            next_question: 1,
             sessions: Vec::new(),
             accepting: true,
             accepts: Vec::new(),
@@ -377,20 +381,61 @@ impl State {
         self.trees.entry(loc.to_owned()).or_default()
     }
 
+    /// Locations the app may use, each with its level.
     pub fn wire_locations(&self) -> Vec<WireLocation> {
         self.locations
             .iter()
-            .map(|(id, rec)| WireLocation {
-                id: id.clone(),
-                provider: rec.provider.clone(),
-                name: rec.name.clone(),
-                info: rec
+            .filter_map(|(id, rec)| {
+                let level = self.level(id)?;
+                let mut info: HashMap<String, OwnedValue> = rec
                     .info
                     .iter()
                     .map(|(k, v)| (k.clone(), v.to_owned_value()))
-                    .collect(),
+                    .collect();
+                info.insert(
+                    access::KEY.to_owned(),
+                    InfoValue::Str(level.as_str().to_owned()).to_owned_value(),
+                );
+                Some(WireLocation {
+                    id: id.clone(),
+                    provider: rec.provider.clone(),
+                    name: rec.name.clone(),
+                    info,
+                })
             })
             .collect()
+    }
+
+    /// What the app may do in location `id`; `None` while undecided or not allowed.
+    pub fn level(&self, id: &str) -> Option<Level> {
+        let default = match self.consent {
+            Consent::Unknown => return None,
+            Consent::Denied => None,
+            Consent::Allowed(level) => Some(level),
+        };
+        self.access.get(id).copied().unwrap_or(default)
+    }
+
+    pub fn own(&self, loc: &str, path: &[u8]) -> Own {
+        self.own
+            .get(&(loc.to_owned(), path.to_vec()))
+            .copied()
+            .unwrap_or(Own::No)
+    }
+
+    /// Records what a finished `call` (`error`: bare name of its failure) made of `path` in `loc`;
+    /// nothing at a level that changes anything.
+    pub fn after_call(&mut self, loc: &str, path: &[u8], call: After, error: Option<&str>) {
+        if self.level(loc).is_none_or(Level::changes) {
+            return;
+        }
+        let own = access::after(self.own(loc, path), call, error);
+        let key = (loc.to_owned(), path.to_vec());
+        if own == Own::No {
+            self.own.remove(&key);
+        } else {
+            self.own.insert(key, own);
+        }
     }
 
     pub fn due_failure(&mut self, method: &str) -> Option<Failure> {
@@ -434,7 +479,6 @@ pub struct SessionState {
     next_handle: u32,
     pub handles: HashMap<u32, (String, Vec<u8>)>,
     jobs: HashMap<u32, Arc<AtomicBool>>,
-    questions: HashMap<String, oneshot::Sender<RecordedAnswer>>,
     pub discovering: bool,
 }
 
@@ -458,7 +502,6 @@ impl Session {
                 next_handle: 1,
                 handles: HashMap::new(),
                 jobs: HashMap::new(),
-                questions: HashMap::new(),
                 discovering: false,
             }),
         }
@@ -522,25 +565,14 @@ impl Session {
         })
     }
 
-    /// Client gone: jobs canceled, questions unanswerable, handles closed, as the real bridge does.
+    /// Client gone: jobs canceled, handles closed, as the real bridge does.
     pub fn shut(&self) {
         self.with(|s| {
             for flag in s.jobs.values() {
                 flag.store(true, Ordering::SeqCst);
             }
-            s.questions.clear();
             s.handles.clear();
         });
-    }
-
-    pub fn add_question(&self, id: &str) -> oneshot::Receiver<RecordedAnswer> {
-        let (tx, rx) = oneshot::channel();
-        self.with(|s| s.questions.insert(id.to_owned(), tx));
-        rx
-    }
-
-    pub fn take_question(&self, id: &str) -> Option<oneshot::Sender<RecordedAnswer>> {
-        self.with(|s| s.questions.remove(id))
     }
 }
 
@@ -674,22 +706,10 @@ mod tests {
         assert!(!st.set_state("account:1", "connected", None));
         assert_eq!(state(&st, "host").as_deref(), Some("h"));
         assert!(!st.set_state("account:9", "connected", None));
-        st.add_location(
-            "adhoc:1",
-            "sftp",
-            "h",
-            vec![("state".into(), InfoValue::Str("connected".into()))],
-        );
-        let adhoc = &st.wire_locations()[1];
-        assert_eq!(adhoc.info.len(), 1);
-        assert_eq!(
-            crate::wire::value_str(&adhoc.info["state"]).as_deref(),
-            Some("connected")
-        );
-        st.remove_location("adhoc:1");
         st.remove_location("account:1");
         assert!(st.wire_locations().is_empty());
         assert_eq!(Consent::Denied.as_str(), "denied");
+        assert_eq!(Consent::Denied.wire(), "decided");
     }
 
     #[test]
@@ -697,26 +717,8 @@ mod tests {
         let s = Session::new();
         let flag = s.register_job(1);
         s.add_handle("a", b"f");
-        let mut rx = s.add_question("q1");
         s.shut();
         assert!(flag.load(Ordering::SeqCst));
         assert_eq!(s.open_handles(), 0);
-        assert!(matches!(rx.try_recv(), Err(oneshot::error::TryRecvError::Closed)));
-    }
-
-    #[test]
-    fn question_round_trip() {
-        let s = Session::new();
-        let mut rx = s.add_question("q1");
-        assert!(rx.try_recv().is_err());
-        let tx = s.take_question("q1").unwrap();
-        tx.send(RecordedAnswer {
-            id: "q1".into(),
-            accept: true,
-            answers: vec![],
-        })
-        .unwrap();
-        assert!(rx.try_recv().unwrap().accept);
-        assert!(s.take_question("q1").is_none());
     }
 }

@@ -34,8 +34,7 @@ pub enum ErrorKind {
     RateLimited,
     BridgeUnavailable,
     Sandbox,
-    /// Disconnected, or bridge restarted (ends ad-hoc servers): items copied from it cannot be
-    /// reached through it again.
+    /// Disconnected or removed: items copied from it cannot be reached through it again.
     LocationGone,
     CrossesDevice,
     Io,

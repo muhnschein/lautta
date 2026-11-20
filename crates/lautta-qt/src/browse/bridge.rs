@@ -1,21 +1,14 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `status`: `absent`, `connecting`, `consentUnknown`, `consentDenied`, `ready`, `reconnecting`.
-//!
-//! Secrets moved into buffers core wipes. QML's `QString` cannot be wiped from Qt memory: QML
-//! clears its field right after the call, keeps no copy.
+//! `status`: `absent`, `connecting`, `consentUnknown`, `ready`, `reconnecting`.
 
 use super::{error_parts, Guard};
-use crate::json::{from_json, to_json};
 use crate::runtime::{core, handle, spawn_then};
 use lautta_core::app::Core;
-use lautta_core::bridge::{feature, AdHocOptions, BridgeStatus};
-use lautta_core::questions::{Answer, Question, QuestionEvent, QuestionKind, Responses};
+use lautta_core::bridge::{feature, BridgeStatus};
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
 use qmetaobject::{queued_callback, QPointer, QSingletonInit, QVariant, QVariantList};
-use serde::Deserialize;
 use std::sync::{Arc, Once};
-use zeroize::Zeroizing;
 
 static PURGE: Once = Once::new();
 
@@ -24,7 +17,6 @@ pub fn status_name(s: BridgeStatus) -> &'static str {
         BridgeStatus::Absent => "absent",
         BridgeStatus::Connecting => "connecting",
         BridgeStatus::ConsentUnknown => "consentUnknown",
-        BridgeStatus::ConsentDenied => "consentDenied",
         BridgeStatus::Ready => "ready",
         BridgeStatus::Reconnecting => "reconnecting",
     }
@@ -32,42 +24,6 @@ pub fn status_name(s: BridgeStatus) -> &'static str {
 
 /// Provider preselected by *Add server*.
 const DEFAULT_PROVIDER: &str = "sftp";
-
-#[derive(Deserialize, Default)]
-#[serde(default)]
-struct OptionsJson {
-    user: Option<String>,
-    #[serde(rename = "securityProfile")]
-    security_profile: Option<String>,
-}
-
-/// Answer from QML: `{"accept":true}`, `{"decline":true}` or `{"responses":["…"]}`.
-#[derive(Deserialize, Default)]
-#[serde(default)]
-struct AnswerJson {
-    accept: bool,
-    responses: Option<Vec<String>>,
-}
-
-/// Secret strings are moved, not copied, into the wiping buffer.
-fn parse_answer(json: Zeroizing<String>) -> Answer {
-    let parsed: AnswerJson = from_json(&json).unwrap_or_default();
-    match parsed.responses {
-        Some(responses) => Answer::Responses(Responses::new(
-            responses.into_iter().map(String::into_bytes).collect(),
-        )),
-        None if parsed.accept => Answer::Accept,
-        None => Answer::Decline,
-    }
-}
-
-fn details_json(q: &Question) -> String {
-    to_json(&q.details)
-}
-
-fn is_ours(q: &Question) -> bool {
-    q.kind != QuestionKind::Conflict
-}
 
 /// One entry per call: two calls on one drive keep it busy until both ended.
 #[derive(Default)]
@@ -109,18 +65,12 @@ pub struct Bridge {
     mountDrive: qt_method!(fn(&mut self, drive: QString, name: QString)),
     unmountDrive: qt_method!(fn(&mut self, drive: QString, name: QString)),
     editAccount: qt_method!(fn(&mut self, location_uri: QString)),
-    connectAdHoc: qt_method!(fn(&mut self, url: QString, secret: QString, options_json: QString)),
-    forgetAdHoc: qt_method!(fn(&mut self, id: QString)),
-    removeRecent: qt_method!(fn(&mut self, id: QString)),
     setDiscover: qt_method!(fn(&mut self, on: bool)),
     setForeground: qt_method!(fn(&mut self, foreground: bool)),
     poke: qt_method!(fn(&mut self)),
-    answer: qt_method!(fn(&mut self, id: QString, answer_json: QString)),
-    pending: qt_method!(fn(&self) -> QString),
 
-    question: qt_signal!(questionId: QString, kind: QString, detailsJson: QString),
-    questionResolved: qt_signal!(questionId: QString),
-    adhocConnected: qt_signal!(locationUri: QString),
+    /// A drive mounted: its folder to open.
+    mounted: qt_signal!(locationUri: QString),
     /// `subject` names what it was about (server, address).
     failed: qt_signal!(kind: QString, message: QString, subject: QString),
 
@@ -136,8 +86,7 @@ impl QSingletonInit for Bridge {
             let core = core.clone();
             handle().spawn(async move { core.spawn_account_purge(super::store_changed) });
         });
-        self.follow_status(core.clone());
-        self.follow_questions(core);
+        self.follow_status(core);
     }
 }
 
@@ -181,44 +130,6 @@ impl Bridge {
         });
     }
 
-    fn follow_questions(&mut self, core: Arc<Core>) {
-        let me = QPointer::from(&*self);
-        let notify = queued_callback(move |event: QuestionEvent| {
-            let Some(b) = me.as_pinned() else { return };
-            let b = b.borrow();
-            match event {
-                QuestionEvent::Asked(q) if is_ours(&q) => b.announce(&q),
-                QuestionEvent::Asked(_) => {}
-                QuestionEvent::Resolved(id) => b.questionResolved(QString::from(id.as_str())),
-            }
-        });
-        let mut stop = self.guard.subscribe();
-        let mut events = core.questions.subscribe();
-        for q in core.questions.pending() {
-            notify(QuestionEvent::Asked(q));
-        }
-        handle().spawn(async move {
-            loop {
-                tokio::select! {
-                    event = events.recv() => match event {
-                        Ok(e) => notify(e),
-                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
-                        Err(_) => return,
-                    },
-                    _ = stop.changed() => return,
-                }
-            }
-        });
-    }
-
-    fn announce(&self, q: &Question) {
-        self.question(
-            QString::from(q.id.as_str()),
-            QString::from(q.kind.name()),
-            QString::from(details_json(q).as_str()),
-        );
-    }
-
     fn report(&self, e: &lautta_core::Error, subject: &str) {
         let (kind, message) = error_parts(e);
         self.failed(kind, message, QString::from(subject));
@@ -237,22 +148,6 @@ impl Bridge {
         });
     }
 
-    fn open_when<F>(&self, subject: String, f: impl FnOnce(Arc<Core>) -> F)
-    where
-        F: std::future::Future<Output = lautta_core::Result<Uri>> + Send + 'static,
-    {
-        let Some(core) = core() else { return };
-        let me = QPointer::from(self);
-        spawn_then(f(core), move |res| {
-            let Some(b) = me.as_pinned() else { return };
-            let b = b.borrow();
-            match res {
-                Ok(uri) => b.adhocConnected(QString::from(uri.to_string().as_str())),
-                Err(e) => b.report(&e, &subject),
-            }
-        });
-    }
-
     /// `drive` is in `busyDrives` until the call ends.
     fn drive_call<F>(&mut self, drive: String, subject: String, f: impl FnOnce(Arc<Core>) -> F)
     where
@@ -267,7 +162,7 @@ impl Bridge {
             b.borrow_mut().drive_done(&drive);
             let b = b.borrow();
             match res {
-                Ok(Some(uri)) => b.adhocConnected(QString::from(uri.to_string().as_str())),
+                Ok(Some(uri)) => b.mounted(QString::from(uri.to_string().as_str())),
                 Ok(None) => {}
                 Err(e) => b.report(&e, &subject),
             }
@@ -339,35 +234,6 @@ impl Bridge {
         });
     }
 
-    fn connectAdHoc(&mut self, url: QString, secret: QString, options_json: QString) {
-        // Moved, not copied: core wipes the Vec when the call ends.
-        let secret = secret.to_string().into_bytes();
-        let options: OptionsJson = from_json(&options_json.to_string()).unwrap_or_default();
-        let opts = AdHocOptions {
-            user: options.user.filter(|u| !u.is_empty()),
-            security_profile: options.security_profile.filter(|p| !p.is_empty()),
-        };
-        let url = url.to_string();
-        let subject = lautta_core::app_browse::url_host(&url);
-        self.open_when(subject, |core| async move {
-            core.connect_adhoc(&url, secret, opts).await.map(Uri::root)
-        });
-    }
-
-    fn forgetAdHoc(&mut self, id: QString) {
-        let id = location_id(&id.to_string());
-        self.call(name_of(&id), |core| async move { core.forget_adhoc(&id).await });
-    }
-
-    fn removeRecent(&mut self, id: QString) {
-        let id = location_id(&id.to_string());
-        self.call(name_of(&id), |core| async move {
-            tokio::task::spawn_blocking(move || core.remove_adhoc_recent(&id))
-                .await
-                .map_err(|e| lautta_core::Error::new(lautta_core::ErrorKind::Internal, e.to_string()))?
-        });
-    }
-
     fn setDiscover(&mut self, on: bool) {
         self.call(String::new(), |core| async move {
             match &core.bridge {
@@ -387,26 +253,6 @@ impl Bridge {
         if let Some(b) = core().and_then(|c| c.bridge.clone()) {
             b.poke();
         }
-    }
-
-    fn answer(&mut self, id: QString, answer_json: QString) {
-        let Some(core) = core() else { return };
-        let answer = parse_answer(Zeroizing::new(answer_json.to_string()));
-        if let Err(e) = core.questions.answer(&id.to_string(), answer) {
-            // Question gone (answered elsewhere, connection lost).
-            log::debug!("answer not delivered: {e}");
-        }
-    }
-
-    fn pending(&self) -> QString {
-        let list: Vec<serde_json::Value> = core()
-            .map(|c| c.questions.pending())
-            .unwrap_or_default()
-            .iter()
-            .filter(|q| is_ours(q))
-            .map(|q| serde_json::json!({"id": q.id, "kind": q.kind.name(), "details": q.details}))
-            .collect();
-        QString::from(to_json(&list).as_str())
     }
 }
 
@@ -431,22 +277,9 @@ mod tests {
     fn status_names_are_the_documented_ones() {
         assert_eq!(status_name(BridgeStatus::Absent), "absent");
         assert_eq!(status_name(BridgeStatus::ConsentUnknown), "consentUnknown");
-        assert_eq!(status_name(BridgeStatus::ConsentDenied), "consentDenied");
         assert_eq!(status_name(BridgeStatus::Ready), "ready");
         assert_eq!(status_name(BridgeStatus::Reconnecting), "reconnecting");
         assert_eq!(status_name(BridgeStatus::Connecting), "connecting");
-    }
-
-    #[test]
-    fn answers_are_read_from_json() {
-        let a = |s: &str| parse_answer(Zeroizing::new(s.to_owned()));
-        assert!(matches!(a(r#"{"accept":true}"#), Answer::Accept));
-        assert!(matches!(a(r#"{"decline":true}"#), Answer::Decline));
-        assert!(matches!(a("nonsense"), Answer::Decline));
-        match a(r#"{"responses":["123456","0000"]}"#) {
-            Answer::Responses(r) => assert_eq!(r.as_slice(), [b"123456".to_vec(), b"0000".to_vec()]),
-            other => panic!("not responses: {other:?}"),
-        }
     }
 
     #[test]
@@ -475,18 +308,6 @@ mod tests {
     #[test]
     fn locations_come_from_uris_or_ids() {
         assert_eq!(location_id("lautta://nv-account:1/photos"), "nv-account:1");
-        assert_eq!(location_id("nv-adhoc:3"), "nv-adhoc:3");
-    }
-
-    #[test]
-    fn conflicts_are_not_ours() {
-        let q = |kind| Question {
-            id: "q1".into(),
-            kind,
-            details: Default::default(),
-        };
-        assert!(!is_ours(&q(QuestionKind::Conflict)));
-        assert!(is_ours(&q(QuestionKind::IdentityUnknown)));
-        assert_eq!(details_json(&q(QuestionKind::Conflict)), "{}");
+        assert_eq!(location_id("nv-account:3"), "nv-account:3");
     }
 }

@@ -3,14 +3,14 @@
 mod bridge_support;
 
 use bridge_support::{config, eventually};
-use lautta_bridge_proto::fake::{Consent, FakeBridge};
+use lautta_bridge_proto::fake::FakeBridge;
 use lautta_core::app::{Core, Started};
-use lautta_core::bridge::BridgeStatus;
+use lautta_core::bridge::Level;
 use lautta_core::error::ErrorKind;
 use lautta_core::locations::{ConnectionState, LocationRegistry, LocationStatus};
 use lautta_core::ops::OperationKind;
 use lautta_core::paths::AppPaths;
-use lautta_core::transfer::TransferState;
+use lautta_core::transfer::{TransferState, WaitReason};
 use lautta_core::Uri;
 use std::sync::Arc;
 
@@ -40,19 +40,6 @@ async fn fake_with_files() -> FakeBridge {
     fake.add_account(1, "sftp", "NAS", "nas.home").await;
     fake.put_file("account:1", b"photos/a.jpg", b"jpeg bytes");
     fake
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn transfers_wait_for_the_bridge_only_while_consent_is_denied() {
-    let fake = fake_with_files().await;
-    fake.set_consent(Consent::Denied).await;
-    let (_home, core, _l) = core_with(&fake, true).await;
-    let bridge = core.bridge.clone().unwrap();
-    bridge.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
-    assert!(!core.bridge_reachable());
-    fake.set_consent(Consent::Granted).await;
-    bridge.wait_status(|s| s == BridgeStatus::Ready).await;
-    assert!(core.bridge_reachable());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -120,6 +107,67 @@ async fn uploads_follow_the_server_name_rules() {
         Some(&b"text"[..])
     );
     assert!(!fake.exists("account:1", b"photos/a:b.txt"));
+}
+
+async fn core_at(
+    fake: &FakeBridge,
+    level: Level,
+) -> (
+    tempfile::TempDir,
+    Arc<Core>,
+    Option<lautta_bridge_proto::fake::Listener>,
+) {
+    fake.set_access("account:1", Some(level)).await;
+    let (home, core, l) = core_with(fake, true).await;
+    let client = core.bridge.clone().unwrap();
+    eventually("the level", || client.access(SERVER) == Some(level)).await;
+    eventually("server location", || core.location(SERVER).is_some()).await;
+    std::fs::write(home.path().join("Documents/a.jpg"), b"new").unwrap();
+    (home, core, l)
+}
+
+fn upload_a() -> (OperationKind, Vec<Uri>, Uri) {
+    (
+        OperationKind::Copy,
+        vec![Uri::parse("lautta://user-documents/a.jpg").unwrap()],
+        Uri::parse("lautta://nv-account:1/photos").unwrap(),
+    )
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_file_the_level_hides_is_kept_beside_the_copy() {
+    let fake = fake_with_files().await;
+    let (_home, core, _l) = core_at(&fake, Level::Add).await;
+    let (kind, items, to) = upload_a();
+    let started = core.copy_or_move(kind, items, to).await;
+    let Started::Transfer(id) = started.map_err(|e| format!("{e:?}")).unwrap() else {
+        panic!("no conflict the user could see")
+    };
+    let done = core.engine.wait_for(id, |s| s.state.is_finished()).await.unwrap();
+    assert_eq!(done.state, TransferState::Completed);
+    assert_eq!(
+        fake.file("account:1", b"photos/a.jpg").as_deref(),
+        Some(&b"jpeg bytes"[..])
+    );
+    assert_eq!(
+        fake.file("account:1", b"photos/a 2.jpg").as_deref(),
+        Some(&b"new"[..])
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_conflict_where_items_stay_offers_no_replace() {
+    let fake = fake_with_files().await;
+    let (_home, core, _l) = core_at(&fake, Level::ReadAdd).await;
+    let (kind, items, to) = upload_a();
+    let Started::Transfer(id) = core.copy_or_move(kind, items, to).await.unwrap() else {
+        panic!("small copy starts at once")
+    };
+    let asking = TransferState::Waiting(WaitReason::Question);
+    core.engine.wait_for(id, |s| s.state == asking).await.unwrap();
+    let questions = core.question_list(id).unwrap();
+    assert_eq!(questions[0]["add_only"], true);
+    assert_eq!(questions[0]["choices"], serde_json::json!(["KeepBoth", "Skip"]));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

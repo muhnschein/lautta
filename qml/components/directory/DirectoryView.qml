@@ -8,6 +8,7 @@ import "../"
 import "../transfers"
 import "../Open.js" as Open
 import "../ErrorText.js" as ErrorText
+import "../Access.js" as Access
 import "DirFormat.js" as DirFormat
 import "GridRows.js" as GridRows
 import "Selection.js" as Selection
@@ -324,6 +325,17 @@ Item {
             endSelection()
     }
 
+    // Add only: folders listed, files not.
+    function hiddenTitle() {
+        //% "Files here are hidden"
+        return qsTrId("lautta-dir-hidden")
+    }
+
+    function hiddenHint() {
+        //% "Files you add show in Activity, not here"
+        return qsTrId("lautta-dir-hidden-hint")
+    }
+
     function placeholderKind() {
         if (dir.count > 0 || dir.loading)
             return ""
@@ -331,7 +343,7 @@ Item {
             return "noaccess"
         if (dir.errorKind.length > 0)
             return "error"
-        return "empty"
+        return dir.readable ? "empty" : "hidden"
     }
 
     function placeholderTitle(kind) {
@@ -342,6 +354,8 @@ Item {
         case "empty":
             //% "No files"
             return qsTrId("lautta-dir-empty")
+        case "hidden":
+            return hiddenTitle()
         }
         switch (dir.errorKind) {
         case "AuthFailed":
@@ -370,6 +384,8 @@ Item {
                    ? qsTrId("lautta-dir-noaccess-hint")
                    //% "You don't have permission to open this folder."
                    : qsTrId("lautta-dir-noaccess-permission")
+        case "hidden":
+            return hiddenHint()
         case "empty":
             return dir.writable
                    //% "Pull down to create a folder or paste"
@@ -681,7 +697,8 @@ Item {
                 else
                     view.openItem(model.uri, model.isDir, model.mimeType)
             }
-            onPressAndHold: dragSelect.begin(cell, index, mouse.x, mouse.y)
+            // Add only: no Select, as in the pulley.
+            onPressAndHold: if (dir.readable) dragSelect.begin(cell, index, mouse.x, mouse.y)
             onPositionChanged: if (dragSelect.holder === cell) dragSelect.move(mouse.x, mouse.y)
             onReleased: cell.letGo()
             onCanceled: cell.letGo()
@@ -901,10 +918,40 @@ Item {
                 onFavouriteRequested: view.runAction("favourite", [view.uri], {}, null)
             }
 
+            Item {
+                id: accessNotice
+
+                objectName: "folderAccessNotice"
+                anchors.top: pathMenu.bottom
+                width: parent.width
+                visible: dir.access.length > 0
+                height: visible ? accessRow.height + Theme.paddingMedium : 0
+
+                Row {
+                    id: accessRow
+
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: Theme.paddingSmall
+
+                    HighlightImage {
+                        anchors.verticalCenter: parent.verticalCenter
+                        source: "image://theme/icon-s-secure"
+                        color: Theme.secondaryHighlightColor
+                    }
+                    Label {
+                        objectName: "folderAccessLevel"
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Access.name(dir.access)
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.secondaryHighlightColor
+                    }
+                }
+            }
+
             InfoBanner {
                 id: offlineNotice
 
-                anchors.top: pathMenu.bottom
+                anchors.top: accessNotice.bottom
                 visible: dir.offline
                 height: visible ? implicitHeight : 0
                 //% "Offline. Showing the copy from %1. Changes aren't possible."
@@ -980,7 +1027,17 @@ Item {
             delegate: listDelegate
             footer: Item {
                 width: list.width
-                height: panelSpace.height
+                height: (hiddenNote.visible ? hiddenNote.y + hiddenNote.height : 0) + panelSpace.height
+
+                FolderPlaceholder {
+                    id: hiddenNote
+
+                    visible: !dir.readable && dir.count > 0
+                    x: Theme.horizontalPageMargin
+                    y: Theme.itemSizeLarge
+                    title: view.hiddenTitle()
+                    hint: view.hiddenHint()
+                }
             }
 
             VerticalScrollDecorator { }
@@ -1011,7 +1068,17 @@ Item {
             onColumnsChanged: view.fitGridRows()
             footer: Item {
                 width: grid.width
-                height: panelSpace.height
+                height: (hiddenNote.visible ? hiddenNote.y + hiddenNote.height : 0) + panelSpace.height
+
+                FolderPlaceholder {
+                    id: hiddenNote
+
+                    visible: !dir.readable && dir.count > 0
+                    x: Theme.horizontalPageMargin
+                    y: Theme.itemSizeLarge
+                    title: view.hiddenTitle()
+                    hint: view.hiddenHint()
+                }
             }
 
             VerticalScrollDecorator { }

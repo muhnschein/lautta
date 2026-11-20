@@ -4,6 +4,7 @@ use crate::directory::preview;
 use crate::json::{from_json, json_value_to_qvariant, to_json};
 use crate::runtime::{core, handle, spawn_then};
 use lautta_core::clipboard::{Clipboard, ClipboardMode};
+use lautta_core::entry::Capabilities;
 use lautta_core::mime::{category_of_name, extension_of, from_extension, viewer_for, FileCategory, Viewer};
 use lautta_core::settings::Settings;
 use lautta_core::transfer::scheduler::is_bridge_location;
@@ -47,6 +48,8 @@ pub struct App {
     isLocal: qt_method!(fn(&self, uri: QString) -> bool),
     /// True for a server URI, even a gone one.
     isRemote: qt_method!(fn(&self, uri: QString) -> bool),
+    /// Items there can be renamed or deleted: false where netvfs grants less than full access.
+    canChange: qt_method!(fn(&self, uri: QString) -> bool),
     localUrl: qt_method!(fn(&self, uri: QString) -> QString),
     categoryOf: qt_method!(fn(&self, name_or_uri: QString) -> QString),
     viewerFor: qt_method!(fn(&self, name_or_uri: QString, mime: QString) -> QString),
@@ -214,6 +217,15 @@ impl App {
 
     fn isRemote(&self, uri: QString) -> bool {
         parse_uri(&uri).is_some_and(|u| is_bridge_location(&u.location))
+    }
+
+    fn canChange(&self, uri: QString) -> bool {
+        let (Some(c), Some(u)) = (core(), parse_uri(&uri)) else {
+            return false;
+        };
+        let flags = c.capability_flags(&u.location);
+        let flags: Vec<&str> = flags.iter().map(String::as_str).collect();
+        Capabilities::with(&flags).changeable()
     }
 
     fn localUrl(&self, uri: QString) -> QString {

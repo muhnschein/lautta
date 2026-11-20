@@ -44,18 +44,19 @@ function icon(id) {
     return ""
 }
 
-// ctx: { isDir, writable }
+// ctx: { isDir, changeable, readable }; readable unless false.
 function applicable(id, ctx) {
+    var readable = ctx.readable !== false
     switch (id) {
-    case "share": return !ctx.isDir
-    case "copy": return true
-    case "cut": return ctx.writable
-    case "rename": return ctx.writable
-    case "delete": return ctx.writable
+    case "share": return !ctx.isDir && readable
+    case "copy": return readable
+    case "cut": return ctx.changeable === true
+    case "rename": return ctx.changeable === true
+    case "delete": return ctx.changeable === true
     case "more": return more(ctx).length > 0
     case "favourite": return true
-    case "compress": return true
-    case "moveToNewFolder": return ctx.writable === true
+    case "compress": return readable
+    case "moveToNewFolder": return ctx.changeable === true
     }
     return false
 }

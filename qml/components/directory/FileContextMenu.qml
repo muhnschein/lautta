@@ -13,7 +13,8 @@ ContextMenu {
     Repeater {
         model: Actions.menu({
             "isDir": self.info.isDir,
-            "writable": self.owner ? self.owner.model.writable : false
+            "changeable": self.owner ? self.owner.model.changeable : false,
+            "readable": self.owner ? self.owner.model.readable : false
         })
 
         MenuItem {

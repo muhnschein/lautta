@@ -268,14 +268,15 @@ impl Transfers {
         }
     }
 
-    /// Engine loads with auto-resume when the setting is on and the bridge is reachable.
+    /// Engine loads with auto-resume when the setting is on; it parks bridge transfers until the
+    /// bridge is ready.
     fn start(&mut self) {
         if self.started {
             return;
         }
         let Some(core) = core() else { return };
         self.started = true;
-        let auto = core.settings().auto_resume && core.bridge_reachable();
+        let auto = core.settings().auto_resume;
         let me = QPointer::from(&*self);
         spawn_then(async move { core.start_transfers(auto).await }, move |res| {
             if let Some(p) = me.as_pinned() {

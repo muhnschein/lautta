@@ -10,7 +10,6 @@ Item {
     property bool reachedEnd
 
     readonly property string folderUri: "lautta://user-documents/%3Cb%3EBold"
-    readonly property string instruction: "<img src=\"http://127.0.0.1:9/pixel.png\"> Enter the code"
     property var win
 
     ViewerTools { id: tools }
@@ -89,31 +88,12 @@ Item {
         expectPlain(tagged(page), "folder page")
     }
 
-    function checkSignIn() {
-        win.pageStack.push(Qt.resolvedUrl("../../qml/dialogs/ServerQuestionDialog.qml"), {
-            "questionId": "q-markup",
-            "kind": "keyboard-interactive",
-            "details": {
-                "name": "<b>Bank",
-                "instruction": instruction,
-                "prompts": "<u>Code: "
-            }
-        }, PageStackAction.Immediate)
-        var dialog = win.pageStack.currentPage
-        waitFor(function () {
-            var t = tagged(dialog)
-            return shows(t, "<b>Bank") && shows(t, instruction) && shows(t, "<u>Code")
-        }, "the server's texts")
-        expectPlain(tagged(dialog), "sign-in dialog")
-    }
-
     Component.onCompleted: {
         makeFolder()
         openWindow()
         if (!win)
             return
         checkFolder()
-        checkSignIn()
         reachedEnd = true
     }
 }

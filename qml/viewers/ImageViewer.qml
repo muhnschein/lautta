@@ -72,7 +72,9 @@ FullscreenContentPage {
     }
 
     function showMore() {
-        var more = pageStack.push(Qt.resolvedUrl("../components/viewers/ImageMorePage.qml"), { "uri": page.currentUri })
+        var more = pageStack.push(Qt.resolvedUrl("../components/viewers/ImageMorePage.qml"), {
+            "uri": page.currentUri, "changeable": App.canChange(page.currentUri)
+        })
         more.renameChosen.connect(page.askRename)
     }
 
@@ -166,6 +168,12 @@ FullscreenContentPage {
                 page.place()
             }
         }
+    }
+
+    Binding {
+        target: page.slideshow ? page.slideshow.overlay : null
+        property: "changeable"
+        value: App.canChange(page.folderUri)
     }
 
     Connections {

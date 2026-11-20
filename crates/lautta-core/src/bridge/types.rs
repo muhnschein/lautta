@@ -5,9 +5,10 @@ use crate::locations::ConnectionState;
 use crate::paths::AppPaths;
 use crate::uri::LocationId;
 use crate::vpath::VPath;
+pub use lautta_bridge_proto::access::Level;
 use lautta_bridge_proto::{
-    drive_info, location_state, value_bool, value_bytes, value_i64, value_str, WireDrive, WireLocation,
-    WireNearby,
+    access, drive_info, location_state, value_bool, value_bytes, value_i64, value_str, WireDrive,
+    WireLocation, WireNearby,
 };
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
@@ -20,7 +21,6 @@ pub enum BridgeStatus {
     Absent,
     Connecting,
     ConsentUnknown,
-    ConsentDenied,
     Ready,
     Reconnecting,
 }
@@ -35,19 +35,18 @@ impl BridgeStatus {
     }
 }
 
+/// Whether the user chose in Settings what Lautta may do; the levels come per location.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Consent {
     Unknown,
-    Granted,
-    Denied,
+    Decided,
 }
 
 impl Consent {
     /// Anything unrecognised is `Unknown`: nothing shown.
     pub fn from_wire(s: &str) -> Consent {
         match s {
-            "granted" => Consent::Granted,
-            "denied" => Consent::Denied,
+            "decided" => Consent::Decided,
             _ => Consent::Unknown,
         }
     }
@@ -71,20 +70,13 @@ impl Attention {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum RemoteKind {
-    Account,
-    AdHoc,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteLocation {
     pub id: LocationId,
-    /// Bridge's id (`account:1`, `adhoc:3`).
+    /// Bridge's id (`account:1`).
     pub bridge_id: String,
     pub provider: String,
     pub name: String,
-    pub kind: RemoteKind,
     pub host: String,
     pub port: Option<u16>,
     pub user: Option<String>,
@@ -94,6 +86,9 @@ pub struct RemoteLocation {
     pub url: Option<String>,
     pub attention: Attention,
     pub connection: ConnectionState,
+    /// What the user lets Lautta do there; missing or unknown: `read`, so Lautta offers nothing the
+    /// bridge would refuse.
+    pub access: Level,
 }
 
 /// Missing or unknown state is [`ConnectionState::Unknown`]: a bridge not reporting states shows
@@ -124,17 +119,11 @@ impl RemoteLocation {
     pub fn from_wire(w: &WireLocation) -> RemoteLocation {
         let str_of = |k: &str| w.info.get(k).and_then(|v| value_str(v));
         let int_of = |k: &str| w.info.get(k).and_then(|v| value_i64(v));
-        let kind = if str_of("kind").as_deref() == Some("adhoc") {
-            RemoteKind::AdHoc
-        } else {
-            RemoteKind::Account
-        };
         RemoteLocation {
             id: location_id(&w.id),
             bridge_id: w.id.clone(),
             provider: w.provider.clone(),
             name: w.name.clone(),
-            kind,
             host: str_of("host").unwrap_or_default(),
             port: int_of("port").and_then(|p| u16::try_from(p).ok()),
             user: str_of("user"),
@@ -151,6 +140,9 @@ impl RemoteLocation {
                 str_of(location_state::KEY).as_deref(),
                 str_of(location_state::ERROR_KEY),
             ),
+            access: str_of(access::KEY)
+                .and_then(|w| Level::parse(&w))
+                .unwrap_or(Level::Read),
         }
     }
 }
@@ -238,13 +230,6 @@ impl Drive {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct AdHocOptions {
-    pub user: Option<String>,
-    /// SMB only: `strict`, `signed`, `legacy` or `guest`.
-    pub security_profile: Option<String>,
-}
-
 #[derive(Debug, Clone)]
 pub struct BridgeConfig {
     pub socket: PathBuf,
@@ -299,8 +284,8 @@ mod tests {
     #[test]
     fn location_ids_use_the_prefix() {
         assert_eq!(location_id("account:1"), "nv-account:1");
-        assert_eq!(bridge_id("nv-adhoc:3"), "adhoc:3");
-        assert_eq!(bridge_id("adhoc:3"), "adhoc:3");
+        assert_eq!(bridge_id("nv-account:3"), "account:3");
+        assert_eq!(bridge_id("account:3"), "account:3");
     }
 
     #[test]
@@ -314,10 +299,10 @@ mod tests {
                 .int("accountId", 7)
                 .str("url", "sftp://nas.local/")
                 .bytes("path", b"/docs//x")
-                .str("attention", "auth-failed"),
+                .str("attention", "auth-failed")
+                .str("access", "read-add"),
         ));
         assert_eq!(loc.id, "nv-account:7");
-        assert_eq!(loc.kind, RemoteKind::Account);
         assert_eq!((loc.host.as_str(), loc.port), ("nas.local", Some(22)));
         assert_eq!(loc.user.as_deref(), Some("me"));
         assert_eq!(loc.account_id, Some(7));
@@ -325,6 +310,7 @@ mod tests {
         assert_eq!(loc.attention, Attention::AuthFailed);
         assert_eq!(loc.url.as_deref(), Some("sftp://nas.local/"));
         assert_eq!(loc.connection, ConnectionState::Unknown, "no state was sent");
+        assert_eq!(loc.access, Level::ReadAdd);
     }
 
     #[test]
@@ -372,9 +358,8 @@ mod tests {
     }
 
     #[test]
-    fn adhoc_and_sparse_info() {
-        let loc = RemoteLocation::from_wire(&wire(OptsBuilder::new().str("kind", "adhoc")));
-        assert_eq!(loc.kind, RemoteKind::AdHoc);
+    fn sparse_info() {
+        let loc = RemoteLocation::from_wire(&wire(OptsBuilder::new()));
         assert_eq!(loc.host, "");
         assert_eq!(loc.attention, Attention::None);
         assert!(loc.start_path.is_root());
@@ -383,7 +368,11 @@ mod tests {
         ));
         assert_eq!(odd.port, None);
         assert_eq!(odd.attention, Attention::None);
-        assert_eq!(odd.kind, RemoteKind::Account);
+        assert_eq!(odd.access, Level::Read, "no level was sent");
+        let future = RemoteLocation::from_wire(&wire(OptsBuilder::new().str("access", "write-only")));
+        assert_eq!(future.access, Level::Read);
+        let full = RemoteLocation::from_wire(&wire(OptsBuilder::new().str("access", "full")));
+        assert_eq!(full.access, Level::Full);
     }
 
     #[test]
@@ -393,8 +382,8 @@ mod tests {
             Attention::ServerIdentityChanged
         );
         assert_eq!(Attention::from_wire(""), Attention::None);
-        assert_eq!(Consent::from_wire("granted"), Consent::Granted);
-        assert_eq!(Consent::from_wire("denied"), Consent::Denied);
+        assert_eq!(Consent::from_wire("decided"), Consent::Decided);
+        assert_eq!(Consent::from_wire("granted"), Consent::Unknown);
         assert_eq!(Consent::from_wire("whatever"), Consent::Unknown);
     }
 

@@ -18,7 +18,8 @@ Page {
     property int count: 1
     readonly property var ctx: ({
         "isDir": info.isDir,
-        "writable": owner ? owner.model.writable : false
+        "changeable": owner ? owner.model.changeable : false,
+        "readable": owner ? owner.model.readable : false
     })
     readonly property var actions: selection ? Selection.moreRows(count, ctx) : Actions.more(ctx)
 

@@ -9,7 +9,8 @@ use crate::runtime::{self, core, spawn_then};
 use cpp::cpp;
 use lautta_core::app::Core;
 use lautta_core::app_directory::{file_url, forward_coalesced, ListEvent};
-use lautta_core::entry::{cap, Entry, EntryFlags};
+use lautta_core::bridge::Level;
+use lautta_core::entry::{Capabilities, Entry, EntryFlags};
 use lautta_core::error::ErrorKind;
 use lautta_core::filter::FilterOptions;
 use lautta_core::foldercount::FolderCount;
@@ -80,6 +81,11 @@ fn is_connectivity(kind: ErrorKind) -> bool {
     )
 }
 
+/// `None`: not a netvfs location, or no longer listed.
+fn level_of(core: &Core, location: &str) -> Option<Level> {
+    core.bridge.as_ref()?.access(location)
+}
+
 fn qs(s: &str) -> QString {
     QString::from(s)
 }
@@ -126,7 +132,14 @@ pub struct DirectoryModel {
     count: qt_property!(i32; NOTIFY stateChanged),
     cachedAt: qt_property!(f64; NOTIFY stateChanged),
     capabilities: qt_property!(QVariantList; NOTIFY stateChanged),
+    /// New items can be added.
     writable: qt_property!(bool; NOTIFY stateChanged),
+    /// Existing items can be renamed, moved, replaced or deleted.
+    changeable: qt_property!(bool; NOTIFY stateChanged),
+    /// Files can be seen and read.
+    readable: qt_property!(bool; NOTIFY stateChanged),
+    /// Level netvfs grants here when less than full (`read`, `read-add`, `add`), else "".
+    access: qt_property!(QString; NOTIFY stateChanged),
     locationName: qt_property!(QString; NOTIFY stateChanged),
     title: qt_property!(QString; NOTIFY stateChanged),
     /// Folder is on this device or a drive, not a server or archive.
@@ -195,6 +208,8 @@ pub struct DirectoryModel {
     archive: bool,
     watcher: Option<DirWatch>,
     settings_watch: Option<Guard>,
+    level: Option<Level>,
+    level_watch: Option<Guard>,
     transfer_states: HashMap<Vec<u8>, String>,
     counts: HashMap<Vec<u8>, CountSlot>,
     previews: HashMap<Vec<u8>, PreviewSlot>,
@@ -229,6 +244,10 @@ impl DirectoryModel {
         }
         self.apply_prefs_state();
         self.flags = core.capability_flags(&dir.location);
+        self.level = level_of(&core, &dir.location);
+        if self.level_watch.is_none() {
+            self.watch_level(&core);
+        }
         self.local_dir = core.locations.to_local_path(&dir);
         self.folderCounts = self.local_dir.is_some();
         let location = core.location(&dir.location);
@@ -323,6 +342,45 @@ impl DirectoryModel {
             }
         });
         self.watcher = Some(watcher);
+    }
+
+    /// Level the user changes in Settings shows at once: actions, notice, and what is listed.
+    fn watch_level(&mut self, core: &Core) {
+        let Some(mut changes) = core.bridge.as_ref().map(|c| c.watch_locations()) else {
+            return;
+        };
+        let guard = Guard::default();
+        let mut stop = guard.subscribe();
+        let me = QPointer::from(&*self);
+        let cb = queued_callback(move |()| {
+            if let Some(m) = me.as_pinned() {
+                m.borrow_mut().follow_level();
+            }
+        });
+        runtime::handle().spawn(async move {
+            loop {
+                tokio::select! {
+                    r = changes.changed() => if r.is_err() { return },
+                    _ = stop.changed() => return,
+                }
+                changes.borrow_and_update();
+                cb(());
+            }
+        });
+        self.level_watch = Some(guard);
+    }
+
+    fn follow_level(&mut self) {
+        let (Some(core), Some(dir)) = (core(), self.dir.as_ref()) else {
+            return;
+        };
+        let level = level_of(&core, &dir.location);
+        if level == self.level {
+            return;
+        }
+        self.level = level;
+        self.flags = core.capability_flags(&dir.location);
+        self.refresh();
     }
 
     /// Change on another page shows here at once, not only on reopen.
@@ -535,8 +593,15 @@ impl DirectoryModel {
         self.count = self.state.len() as i32;
         self.stale = self.state.is_stale();
         self.large = self.state.is_large();
-        self.writable =
-            self.flags.iter().any(|f| f == cap::WRITE) && !self.flags.iter().any(|f| f == cap::READ_ONLY);
+        let flags: Vec<&str> = self.flags.iter().map(String::as_str).collect();
+        let caps = Capabilities::with(&flags);
+        self.writable = caps.writable();
+        self.changeable = caps.changeable();
+        self.readable = caps.readable();
+        self.access = qs(match self.level {
+            Some(level) if level != Level::Full => level.as_str(),
+            _ => "",
+        });
         let mut list = QVariantList::default();
         for f in &self.flags {
             list.push(QVariant::from(qs(f)));

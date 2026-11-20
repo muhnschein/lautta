@@ -21,23 +21,30 @@ Item {
     }
 
     function testMenu() {
-        same(ids(Actions.menu({ "isDir": false, "writable": true })),
+        same(ids(Actions.menu({ "isDir": false, "changeable": true, "readable": true })),
              ["share", "copy", "cut", "rename", "delete", "more"], "file in a writable folder")
-        same(ids(Actions.menu({ "isDir": true, "writable": true })),
+        same(ids(Actions.menu({ "isDir": true, "changeable": true, "readable": true })),
              ["copy", "cut", "rename", "delete", "more"], "folder: no Share")
-        same(ids(Actions.menu({ "isDir": false, "writable": false })),
-             ["share", "copy", "more"], "read-only folder: nothing that changes it")
-        same(ids(Actions.menu({ "isDir": true, "writable": false })), ["copy", "more"], "read-only folder, folder")
+        same(ids(Actions.menu({ "isDir": false, "changeable": false, "readable": true })),
+             ["share", "copy", "more"], "read-only folder, read and add: nothing that changes items")
+        same(ids(Actions.menu({ "isDir": true, "changeable": false, "readable": true })), ["copy", "more"],
+             "read-only folder, folder")
+        same(ids(Actions.menu({ "isDir": true, "changeable": false, "readable": false })), ["more"],
+             "add only: nothing to read; Add to favourites stays")
+        same(ids(Actions.more({ "isDir": true, "changeable": false, "readable": false })), ["favourite"],
+             "add only: no Compress")
+        same(ids(Actions.menu({ "isDir": false, "changeable": true })),
+             ["share", "copy", "cut", "rename", "delete", "more"], "readable unless said")
     }
 
     function testMore() {
-        var ctxs = [{ "isDir": false, "writable": true }, { "isDir": true, "writable": true },
-                    { "isDir": false, "writable": false }, { "isDir": true, "writable": false }]
+        var ctxs = [{ "isDir": false, "changeable": true }, { "isDir": true, "changeable": true },
+                    { "isDir": false, "changeable": false }, { "isDir": true, "changeable": false }]
         for (var i = 0; i < ctxs.length; ++i) {
             var menu = ids(Actions.menu(ctxs[i]))
             check(menu[menu.length - 1] === "more", "More actions is the last row: " + JSON.stringify(ctxs[i]))
             same(ids(Actions.more(ctxs[i])),
-                 ctxs[i].writable ? ["favourite", "compress", "moveToNewFolder"] : ["favourite", "compress"],
+                 ctxs[i].changeable ? ["favourite", "compress", "moveToNewFolder"] : ["favourite", "compress"],
                  "More actions: " + JSON.stringify(ctxs[i]))
         }
         same(ids(Actions.more({ "isDir": false })), ["favourite", "compress"], "More actions of the image viewer")
@@ -45,9 +52,9 @@ Item {
 
     function testIcons() {
         var favourite = "image://theme/icon-m-favorite"
-        same(Actions.more({ "isDir": false, "writable": true }).map(function(r) { return r.icon }),
+        same(Actions.more({ "isDir": false, "changeable": true }).map(function(r) { return r.icon }),
              [favourite, "file-archive", "file-folder"], "More actions icons, writable folder")
-        same(Actions.more({ "isDir": true, "writable": false }).map(function(r) { return r.icon }),
+        same(Actions.more({ "isDir": true, "changeable": false }).map(function(r) { return r.icon }),
              [favourite, "file-archive"], "More actions icons, read-only folder")
         same(Actions.icon("moveToNewFolder"), "file-folder", "Move to new folder: the folder glyph")
         same(Actions.icon("favourite"), "image://theme/icon-m-favorite", "Add to favourites")
@@ -57,7 +64,7 @@ Item {
     }
 
     function testText() {
-        var entries = Actions.menu({ "isDir": false, "writable": true }).concat(Actions.more({ "isDir": false, "writable": true }))
+        var entries = Actions.menu({ "isDir": false, "changeable": true }).concat(Actions.more({ "isDir": false, "changeable": true }))
         for (var i = 0; i < entries.length; ++i)
             check(entries[i].text.indexOf("lautta-dir-act-") === 0, entries[i].id + " has a translated text")
         same(Actions.text("more"), "lautta-dir-act-more", "More actions")
@@ -69,7 +76,7 @@ Item {
 
     function testGone() {
         var gone = ["info", "open_with", "copy_to", "move_to", "download", "upload_to", "extract", "open_remote", "select"]
-        var ctxs = [{ "isDir": false, "writable": true }, { "isDir": true, "writable": true }]
+        var ctxs = [{ "isDir": false, "changeable": true }, { "isDir": true, "changeable": true }]
         for (var i = 0; i < gone.length; ++i) {
             for (var j = 0; j < ctxs.length; ++j)
                 check(!Actions.applicable(gone[i], ctxs[j]), gone[i] + " is not offered")

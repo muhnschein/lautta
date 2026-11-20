@@ -1,6 +1,6 @@
 {
     "description": "Error names: backend results as org.netvfs.Error.<Name>, malformed calls as InvalidArgs (XB-9, XSEC-7)",
-    "consent": "granted",
+    "consent": "full",
     "files": { "a.txt": "a" },
     "steps": [
         { "call": "Hello", "sig": "s", "args": ["contract"], "reply": ["*"] },
@@ -19,8 +19,6 @@
           "error": "org.freedesktop.DBus.Error.InvalidArgs" },
         { "call": "Frobnicate", "sig": "", "args": [], "error": "org.freedesktop.DBus.Error.UnknownMethod" },
         { "call": "Stat", "sig": "saybs", "args": ["no such", { "bytes": "" }, true, ""],
-          "error": "org.freedesktop.DBus.Error.InvalidArgs" },
-        { "call": "ConnectAdHoc", "sig": "saya{sv}", "args": ["sftp://user:pw@host/", { "bytes": "" }, {}],
-          "error": "org.netvfs.Error.SecurityPolicy" }
+          "error": "org.freedesktop.DBus.Error.InvalidArgs" }
     ]
 }

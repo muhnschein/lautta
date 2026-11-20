@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! App context: `Core` wires stores, location registry and transfer engine. Qt-free.
 
-use crate::bridge::{Attention, BridgeClient, BridgeConfig, BridgeStatus, RemoteKind, RemoteLocation};
+use crate::bridge::{Attention, BridgeClient, BridgeConfig, BridgeStatus, RemoteLocation};
 use crate::browse_layout::BrowseLayout;
 use crate::db::Db;
 use crate::dircache::DirCache;
@@ -15,7 +15,6 @@ use crate::org::recents::Recents;
 use crate::paths::AppPaths;
 use crate::provider::archive::{archive_location_id, ArchiveProvider};
 use crate::provider::{list_all, Lane, Provider, ProviderResolver, RenameMode};
-use crate::questions::Questions;
 use crate::search::RecentSearches;
 use crate::settings::{LocationPrefsStore, Settings};
 use crate::sort::SortKey;
@@ -55,7 +54,6 @@ pub struct Core {
     pub location_prefs: LocationPrefsStore,
     pub browse_layout: BrowseLayout,
     pub working_copies: WorkingCopies,
-    pub questions: Arc<Questions>,
     /// `None` only in tests.
     pub bridge: Option<BridgeClient>,
     settings: Mutex<Settings>,
@@ -138,9 +136,8 @@ impl Core {
         };
         let engine = Engine::new(deps, cfg);
         let settings = Settings::default();
-        let questions = Questions::new();
         let client = match bridge {
-            Some(cfg) => Some(BridgeClient::start(cfg, questions.clone())?),
+            Some(cfg) => Some(BridgeClient::start(cfg)?),
             None => None,
         };
         let core = Core {
@@ -151,7 +148,6 @@ impl Core {
             location_prefs: LocationPrefsStore::new(db.clone()),
             browse_layout: BrowseLayout::new(db.clone()),
             working_copies: WorkingCopies::new(db.clone(), paths.clone(), Arc::new(SystemClock)),
-            questions: questions.clone(),
             bridge: client.clone(),
             settings: Mutex::new(settings),
             settings_changed: watch::channel(0).0,
@@ -456,11 +452,8 @@ fn remote_entries(
     remote
         .iter()
         .map(|r| {
-            let kind = match r.kind {
-                RemoteKind::Account => LocationKind::Server {
-                    provider: r.provider.clone(),
-                },
-                RemoteKind::AdHoc => LocationKind::AdHoc,
+            let kind = LocationKind::Server {
+                provider: r.provider.clone(),
             };
             let mut location = Location::remote(r.id.clone(), kind, r.name.clone(), r.url.clone());
             // Last list's states are stale while bridge is away.

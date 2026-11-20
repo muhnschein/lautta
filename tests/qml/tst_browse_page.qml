@@ -22,9 +22,7 @@ ApplicationWindow {
         { "name": "VAULT", "items": ["open-storage-settings"] },
         { "name": "NAS", "items": ["edit-server", "copy-address"] },
         { "name": "Office", "items": ["edit-server", "update-sign-in", "copy-address"] },
-        { "name": "Vault", "items": ["edit-server", "review-identity", "copy-address"] },
-        { "name": "host.example", "items": ["copy-address", "remove-recent"] },
-        { "name": "files.kotisivu.fi", "items": ["connect-recent", "copy-address", "remove-recent"] }
+        { "name": "Vault", "items": ["edit-server", "review-identity", "copy-address"] }
     ]
 
     readonly property var withoutStorage: { "name": "SD card", "items": ["add-favourite", "copy-address"] }
@@ -48,8 +46,6 @@ ApplicationWindow {
         ListElement { section: "servers"; uri: "lautta://nv-account:2/"; name: "Office"; kind: "account"; icon: "image://theme/icon-m-file-folder"; status: "attention"; attention: "auth-failed"; connection: "failed"; connectionError: "AuthFailed"; colour: ""; itemId: "nv-account:2"; place: ""; provider: "SMB"; host: ""; free: -1; total: -1; fs: "" }
         ListElement { section: "servers"; uri: "lautta://nv-account:4/"; name: "Vault"; kind: "account"; icon: "image://theme/icon-m-file-folder"; status: "attention"; attention: "server-identity-changed"; connection: "failed"; connectionError: "ServerIdentityChanged"; colour: ""; itemId: "nv-account:4"; place: ""; provider: "SFTP"; host: ""; free: -1; total: -1; fs: "" }
         ListElement { section: "servers"; uri: "lautta://nv-account:3/"; name: "Cabin"; kind: "account"; icon: "image://theme/icon-m-file-folder"; status: "connecting"; attention: ""; connection: "connecting"; connectionError: ""; colour: ""; itemId: "nv-account:3"; place: ""; provider: "SMB"; host: ""; free: -1; total: -1; fs: "" }
-        ListElement { section: "servers"; uri: "lautta://nv-adhoc:1/"; name: "host.example"; kind: "adhoc"; icon: "image://theme/icon-m-file-folder"; status: "ready"; attention: ""; connection: "disconnected"; connectionError: ""; colour: ""; itemId: "nv-adhoc:1"; place: ""; provider: "SFTP"; host: "host.example"; free: -1; total: -1; fs: "" }
-        ListElement { section: "servers"; uri: "sftp://files.kotisivu.fi/"; name: "files.kotisivu.fi"; kind: "adhocRecent"; icon: "image://theme/icon-m-file-folder"; status: "offline"; attention: ""; connection: "disconnected"; connectionError: ""; colour: ""; itemId: "nv-adhoc:9"; place: "sftp://files.kotisivu.fi/"; provider: "SFTP"; host: ""; free: -1; total: -1; fs: "" }
         ListElement { section: "nearby"; uri: "sftp://raspberrypi.local/"; name: "raspberrypi"; kind: "nearby"; icon: "image://theme/icon-m-wlan"; status: "ready"; attention: ""; colour: ""; itemId: "0"; place: ""; provider: "SFTP"; host: "raspberrypi.local"; free: -1; total: -1; fs: "" }
             }
         }
@@ -187,6 +183,41 @@ ApplicationWindow {
         row.clicked(null)
     }
 
+    // Tapping a server found nearby offers to set it up as an account; nothing connects.
+    function checkNearbyRow(list) {
+        var row = rowOf(list, "raspberrypi", "nearby")
+        if (!row)
+            return fail("no nearby row")
+        if (row.menu !== null)
+            return fail("the nearby row has a menu")
+        row.clicked(null)
+    }
+
+    function checkNearbyDialog() {
+        var dialog = pageStack.currentPage
+        if (dialog.provider !== "sftp")
+            return fail("the nearby dialog has provider " + dialog.provider)
+        var shown = findAll(dialog, function(x) { return x.visible && String(x.text).indexOf("lautta-nearby-") === 0 }, [])
+            .map(function(x) { return x.text })
+        if (shown.indexOf("lautta-nearby-set-up") < 0 || shown.indexOf("lautta-nearby-set-up-hint") < 0)
+            return fail("the nearby dialog reads " + shown.join(","))
+        var fields = findAll(dialog, function(x) { return x.echoMode !== undefined }, [])
+        if (fields.length !== 0)
+            return fail("the nearby dialog has " + fields.length + " text fields")
+        pageStack.pop(undefined, PageStackAction.Immediate)
+    }
+
+    function checkConsentRow(list) {
+        var row = rowOf(list, "", "consent")
+        if (!row)
+            return fail("no access row")
+        var shown = []
+        findAll(row, function(x) { return x.visible && String(x.text).indexOf("lautta-browse-") === 0 }, [])
+            .forEach(function(x) { if (shown.indexOf(x.text) < 0) shown.push(x.text) })
+        if (shown.join(",") !== "lautta-browse-consent-needed,lautta-browse-ask-again")
+            fail("the access row reads " + shown.join(","))
+    }
+
     Timer {
         interval: 100
         repeat: true
@@ -195,6 +226,16 @@ ApplicationWindow {
             if (++win.waited > 100)
                 return win.fail("step " + win.step + " timed out")
             if (win.step === 1) {
+                if (pageStack.busy || pageStack.currentPage.provider === undefined)
+                    return
+                win.checkNearbyDialog()
+                var browse = win.browseList()
+                if (win.scenarioRunning && browse)
+                    win.checkRecentsRow(browse)
+                win.step = 2
+                return
+            }
+            if (win.step === 2) {
                 if (pageStack.currentPage.recentsOn === undefined || win.storageCalls === 0)
                     return
                 if (win.storageCalls !== 1)
@@ -219,7 +260,9 @@ ApplicationWindow {
             if (win.scenarioRunning)
                 win.checkUnmountedRow(list)
             if (win.scenarioRunning)
-                win.checkRecentsRow(list)
+                win.checkConsentRow(list)
+            if (win.scenarioRunning)
+                win.checkNearbyRow(list)
             win.step = 1
         }
     }

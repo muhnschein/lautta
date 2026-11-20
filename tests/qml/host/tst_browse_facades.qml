@@ -19,15 +19,15 @@ QtObject {
         check(!Bridge.ready, "bridge not ready")
         check(Bridge.version === "", "no bridge version")
         check(!Bridge.storageSettings, "no Storage settings without the bridge")
-        check(Bridge.pending() === "[]", "no questions waiting")
+        check(Bridge.connectAdHoc === undefined && Bridge.answer === undefined,
+              "Lautta takes no server address, password or answer")
         check(typeof Bridge.mountDrive === "function" && typeof Bridge.unmountDrive === "function",
               "drives are mounted through the Bridge")
         Bridge.poke()
         Bridge.setForeground(true)
         Bridge.setDiscover(false)
-        Bridge.answer("q404", JSON.stringify({ "accept": true }))
-        check(Bridge.status === "absent" && Bridge.pending() === "[]",
-              "nothing to wake, ask or answer without the bridge: " + Bridge.status + " " + Bridge.pending())
+        Bridge.addServer("smb")
+        check(Bridge.status === "absent", "nothing to wake or hand off without the bridge: " + Bridge.status)
 
         check(favourites.count === 0 && !favourites.loaded, "favourites start empty")
         check(favourites.get(7) === "{}", "no such favourite: " + favourites.get(7))
@@ -39,7 +39,7 @@ QtObject {
 
         check(locations.count === 0, "locations start empty")
         check(locations.sectionCount("servers") === 0, "no servers section")
-        check(locations.recentCount === 0 && locations.nearbyCount === 0, "no recent or nearby servers")
+        check(locations.nearbyCount === 0, "no nearby servers")
         locations.refresh()
 
         check(recents.count === 0 && !recents.enabled && !recents.loaded, "recents start empty")

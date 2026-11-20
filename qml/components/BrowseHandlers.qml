@@ -18,16 +18,8 @@ Item {
     Connections {
         target: Bridge
 
-        // Both can arrive while a dialog closes, e.g. Connect to server's.
-        onQuestion: {
-            pages.push(Qt.resolvedUrl("../dialogs/ServerQuestionDialog.qml"), {
-                           "questionId": questionId,
-                           "kind": kind,
-                           "details": JSON.parse(detailsJson)
-                       })
-        }
-
-        onAdhocConnected: {
+        // Can arrive while a dialog closes.
+        onMounted: {
             pages.push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": locationUri })
         }
 

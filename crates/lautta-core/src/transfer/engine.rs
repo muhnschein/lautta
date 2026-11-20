@@ -337,6 +337,16 @@ impl Engine {
         st.live.get(&id)?.t.items.first().map(|i| i.plan.clone())
     }
 
+    /// Plan of the first item refused for lack of permission (`PermissionDenied`).
+    pub fn first_refused(&self, id: TransferId) -> Option<PlanItem> {
+        let st = self.inner.lock();
+        let refused = ErrorKind::PermissionDenied.name();
+        st.live.get(&id)?.t.items.iter().find_map(|i| {
+            let kind = i.error.as_deref()?.split(':').next()?;
+            (kind == refused).then(|| i.plan.clone())
+        })
+    }
+
     /// Unanswered conflicts of a transfer: item index and the question.
     pub fn questions(&self, id: TransferId) -> Result<Vec<(u32, Conflict)>> {
         let st = self.inner.lock();
@@ -1433,6 +1443,7 @@ mod tests {
                 let conflict = crate::transfer::conflict::build_conflict(
                     &job.plan,
                     &crate::entry::Entry::new(b"f", Kind::File),
+                    false,
                     false,
                 );
                 inner.ask(pick, conflict);

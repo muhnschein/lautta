@@ -140,6 +140,17 @@ const MIGRATIONS: &[&str] = &[
     CREATE TABLE trash_drain (due INTEGER NOT NULL);
     INSERT INTO trash_drain VALUES (1);
     "#,
+    // 8: no ad-hoc servers any more (every server is a netvfs account): their recents and data go.
+    r#"
+    DROP TABLE adhoc_servers;
+    DELETE FROM favourites WHERE uri LIKE 'lautta://nv-adhoc:%';
+    DELETE FROM recents WHERE location_id LIKE 'nv-adhoc:%';
+    DELETE FROM location_prefs WHERE location_id LIKE 'nv-adhoc:%';
+    DELETE FROM browse_layout WHERE item LIKE 'nv-adhoc:%';
+    DELETE FROM dircache WHERE location_id LIKE 'nv-adhoc:%';
+    DELETE FROM recent_searches WHERE location_id LIKE 'nv-adhoc:%';
+    DELETE FROM reading_positions WHERE location_id LIKE 'nv-adhoc:%';
+    "#,
 ];
 
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -271,6 +282,63 @@ mod tests {
         assert!(list[0].is_dir, "rows from before are folders");
         let file = crate::uri::Uri::parse("lautta://user-documents/Uni/a.pdf").unwrap();
         assert!(!favourites.add(&file, "A", None, false).unwrap().is_dir);
+    }
+
+    #[test]
+    fn ad_hoc_servers_and_their_data_go_accounts_stay() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v7.db");
+        {
+            let c = Connection::open(&path).unwrap();
+            for sql in &MIGRATIONS[..7] {
+                c.execute_batch(sql).unwrap();
+            }
+            c.pragma_update(None, "user_version", 7).unwrap();
+            let mut rows =
+                String::from("INSERT INTO adhoc_servers VALUES ('nv-adhoc:a-1', 'sftp://h/', 'h', 1);");
+            for (n, loc) in ["nv-adhoc:a-1", "nv-account:1"].iter().enumerate() {
+                rows += &format!(
+                    "INSERT INTO favourites(uri, label, position) VALUES ('lautta://{loc}/x', 'x', {n}); \
+                     INSERT INTO recents(uri, name, kind, location_id, at_ms) \
+                       VALUES ('lautta://{loc}/x', 'x', 'opened', '{loc}', 1); \
+                     INSERT INTO location_prefs(location_id) VALUES ('{loc}'); \
+                     INSERT INTO browse_layout(section, item) VALUES ('servers', '{loc}'); \
+                     INSERT INTO dircache VALUES ('lautta://{loc}/', '{loc}', 1, x'00'); \
+                     INSERT INTO recent_searches(location_id, query, at_ms) VALUES ('{loc}', 'q', 1); \
+                     INSERT INTO reading_positions VALUES ('lautta://{loc}/x', '{loc}', 1, 1);"
+                );
+            }
+            c.execute_batch(&rows).unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.version().unwrap(), SCHEMA_VERSION);
+        let conn = db.lock();
+        let tables: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE name = 'adhoc_servers'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(tables, 0);
+        for (table, column) in [
+            ("favourites", "uri"),
+            ("recents", "location_id"),
+            ("location_prefs", "location_id"),
+            ("browse_layout", "item"),
+            ("dircache", "location_id"),
+            ("recent_searches", "location_id"),
+            ("reading_positions", "location_id"),
+        ] {
+            let mut stmt = conn.prepare(&format!("SELECT {column} FROM {table}")).unwrap();
+            let left: Vec<String> = stmt
+                .query_map([], |r| r.get(0))
+                .unwrap()
+                .collect::<std::result::Result<_, _>>()
+                .unwrap();
+            assert_eq!(left.len(), 1, "{table}: {left:?}");
+            assert!(left[0].contains("nv-account:1"), "{table}: {left:?}");
+        }
     }
 
     #[test]

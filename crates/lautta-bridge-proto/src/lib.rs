@@ -3,6 +3,7 @@
 //! in-process fake bridge replaying the shared contract sequences.
 #![forbid(unsafe_code)]
 
+pub mod access;
 pub mod connect;
 pub mod errors;
 pub mod proxy;
@@ -17,6 +18,5 @@ pub use errors::BridgeError;
 pub use proxy::Bridge1Proxy;
 pub use signals::Signal;
 pub use wire::*;
-pub use zeroize::Zeroizing;
 pub type ProxyResult<T> = zbus::Result<T>;
 pub use zbus::zvariant;

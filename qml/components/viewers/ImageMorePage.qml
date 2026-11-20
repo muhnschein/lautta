@@ -9,6 +9,7 @@ Page {
     id: page
 
     property string uri
+    property bool changeable: true
 
     signal renameChosen()
 
@@ -30,10 +31,10 @@ Page {
 
     SilicaListView {
         anchors.fill: parent
-        model: [
+        model: (page.changeable ? [
             //% "Rename"
             { "id": "rename", "text": qsTrId("lautta-viewers-more-rename") }
-        ].concat(Actions.more({ "isDir": false }))
+        ] : []).concat(Actions.more({ "isDir": false }))
 
         header: PageHeader {
             title: App.nameOf(page.uri)

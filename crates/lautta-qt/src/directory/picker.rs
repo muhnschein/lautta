@@ -3,6 +3,7 @@
 
 use crate::runtime::core;
 use cpp::cpp;
+use lautta_core::app::Core;
 use lautta_core::locations::{Location, LocationKind, LocationStatus};
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
@@ -23,6 +24,7 @@ const ROLE_KIND: i32 = 0x0102;
 const ROLE_STATUS: i32 = 0x0103;
 const ROLE_ATTENTION: i32 = 0x0104;
 const ROLE_SELECTABLE: i32 = 0x0105;
+const ROLE_WRITABLE: i32 = 0x0106;
 
 #[derive(Clone)]
 struct Root {
@@ -31,6 +33,8 @@ struct Root {
     kind: &'static str,
     status: &'static str,
     attention: String,
+    /// False where the access level netvfs grants adds nothing.
+    writable: bool,
 }
 
 #[derive(QObject, Default)]
@@ -48,7 +52,7 @@ fn kind_name(kind: &LocationKind) -> &'static str {
         LocationKind::UserFolder => "folder",
         LocationKind::Android => "android",
         LocationKind::Volume => "volume",
-        LocationKind::Server { .. } | LocationKind::AdHoc => "server",
+        LocationKind::Server { .. } => "server",
         LocationKind::Archive => "archive",
     }
 }
@@ -62,8 +66,10 @@ fn status_name(s: LocationStatus) -> &'static str {
     }
 }
 
-fn to_root(l: Location) -> Root {
+fn to_root(core: &Core, l: Location) -> Root {
+    let level = core.bridge.as_ref().and_then(|b| b.access(&l.id));
     Root {
+        writable: level.is_none_or(|level| level.adds()),
         uri: Uri::root(l.id.clone()).to_string(),
         kind: kind_name(&l.kind),
         status: status_name(l.status),
@@ -79,7 +85,7 @@ impl PickerRootsModel {
                 c.picker_locations()
                     .into_iter()
                     .filter(|l| l.kind != LocationKind::Archive)
-                    .map(to_root)
+                    .map(|l| to_root(&c, l))
                     .collect()
             })
             .unwrap_or_default()
@@ -132,6 +138,7 @@ impl QAbstractListModel for PickerRootsModel {
             ROLE_STATUS => QString::from(root.status).into(),
             ROLE_ATTENTION => QString::from(root.attention.as_str()).into(),
             ROLE_SELECTABLE => (root.status == "ready").into(),
+            ROLE_WRITABLE => root.writable.into(),
             _ => QVariant::default(),
         }
     }
@@ -144,6 +151,7 @@ impl QAbstractListModel for PickerRootsModel {
             (ROLE_STATUS, "status".into()),
             (ROLE_ATTENTION, "attention".into()),
             (ROLE_SELECTABLE, "selectable".into()),
+            (ROLE_WRITABLE, "writable".into()),
         ])
     }
 }

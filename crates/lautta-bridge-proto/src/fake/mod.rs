@@ -10,8 +10,9 @@ mod state;
 mod transfer;
 pub mod tree;
 
-pub use state::{Consent, Failure, FakeDrive, InfoValue, JobFailure, RecordedAnswer, ScriptedQuestion};
+pub use state::{Consent, Failure, FakeDrive, InfoValue, JobFailure};
 
+use crate::access::Level;
 use crate::connect::Connection;
 use crate::errors::BridgeError;
 use crate::wire::{WireCapabilities, WireLocation, WireNearby, OBJECT_PATH};
@@ -167,9 +168,21 @@ impl FakeBridge {
         self.shared.with(|s| s.consent)
     }
 
+    /// Changes what the user decided for this app, as the bridge does: `ConsentChanged` when
+    /// `GetConsent` would say otherwise; when any location allows less, every client is
+    /// disconnected, else `LocationsChanged`.
     pub async fn set_consent(&self, consent: Consent) {
-        self.shared.with(|s| s.consent = consent);
-        self.shared.broadcast_consent(consent).await;
+        self.shared.decide(|s| s.consent = consent).await;
+    }
+
+    /// Location `id` at `level` (`None`: not allowed) instead of what [`FakeBridge::set_consent`]
+    /// says; as there.
+    pub async fn set_access(&self, id: &str, level: Option<Level>) {
+        self.shared
+            .decide(|s| {
+                s.access.insert(id.to_owned(), level);
+            })
+            .await;
     }
 
     /// Times the user was asked (first `Hello` while `unknown`, `RequestConsent`).
@@ -311,23 +324,6 @@ impl FakeBridge {
         });
     }
 
-    pub fn script_adhoc_questions(&self, questions: Vec<ScriptedQuestion>) {
-        self.shared.with(|s| s.adhoc_questions = questions);
-    }
-
-    /// Unprompted question (keyboard-interactive during a session); resolves with the app's answer.
-    pub async fn ask(&self, kind: &str, details: Vec<(String, InfoValue)>) -> Option<RecordedAnswer> {
-        self.shared.ask(kind, &details).await
-    }
-
-    pub fn received_secrets(&self) -> Vec<Vec<u8>> {
-        self.shared.with(|s| s.received_secrets.clone())
-    }
-
-    pub fn answers(&self) -> Vec<RecordedAnswer> {
-        self.shared.with(|s| s.answers.clone())
-    }
-
     pub fn calls(&self) -> Vec<CallRecord> {
         self.shared.with(|s| s.calls.clone())
     }
@@ -411,7 +407,7 @@ mod tests {
         fake.remove_location(&id).await;
         assert!(fake.locations().is_empty());
         assert_eq!(fake.session_count(), 0);
-        assert!(fake.calls().is_empty() && fake.handoffs().is_empty() && fake.answers().is_empty());
+        assert!(fake.calls().is_empty() && fake.handoffs().is_empty());
     }
 
     #[tokio::test]

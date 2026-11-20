@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Location registry: everything the user can browse, with the provider behind each. User folders
 //! and Android storage are found by looking at the home folder, shown only if they exist and are
-//! readable. Removable volumes come from [`crate::volumes`]; netvfs accounts and ad-hoc servers are
-//! pushed in with [`LocationRegistry::set_remote`]; archives via `register`/`unregister`. Cheap to
+//! readable. Removable volumes come from [`crate::volumes`]; netvfs accounts are pushed in with [`LocationRegistry::set_remote`]; archives via `register`/`unregister`. Cheap to
 //! clone (shared state); implements [`ProviderResolver`]; follow changes with
 //! [`LocationRegistry::subscribe`].
 
@@ -62,7 +61,6 @@ pub enum LocationKind {
     Android,
     Volume,
     Server { provider: String },
-    AdHoc,
     Archive,
 }
 
@@ -824,10 +822,17 @@ mod tests {
             "NAS",
             Some("sftp://me@nas.local".into()),
         );
-        let adhoc = Location::remote("nv-adhoc-2", LocationKind::AdHoc, "Quick", None);
-        e.reg.set_remote(vec![(nas, mem()), (adhoc, mem())]);
+        let pi = Location::remote(
+            "nv-2",
+            LocationKind::Server {
+                provider: "smb".into(),
+            },
+            "Pi",
+            None,
+        );
+        e.reg.set_remote(vec![(nas, mem()), (pi, mem())]);
         assert!(rx.has_changed().unwrap());
-        assert_eq!(ids(&e.reg), ["user-documents", "nv-1", "nv-adhoc-2"]);
+        assert_eq!(ids(&e.reg), ["user-documents", "nv-1", "nv-2"]);
         assert!(e.reg.provider("nv-1").is_ok());
         assert!(!e.reg.get("nv-1").unwrap().is_local());
         e.reg.set_remote(Vec::new());
@@ -946,7 +951,15 @@ mod tests {
             ]
         );
         assert_eq!(
-            Location::remote("nv-1", LocationKind::AdHoc, "x", None).connection,
+            Location::remote(
+                "nv-1",
+                LocationKind::Server {
+                    provider: "smb".into()
+                },
+                "x",
+                None
+            )
+            .connection,
             ConnectionState::Unknown
         );
     }

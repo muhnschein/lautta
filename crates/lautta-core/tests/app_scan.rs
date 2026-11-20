@@ -43,7 +43,14 @@ fn uri(s: &str) -> Uri {
 fn server(h: &Home, caps: &[&str]) -> Arc<MemoryProvider> {
     let mem = Arc::new(MemoryProvider::new(Capabilities::with(caps)));
     mem.add_dir("scans");
-    let location = Location::remote("nas", LocationKind::AdHoc, "NAS", Some("sftp://nas.home".into()));
+    let location = Location::remote(
+        "nas",
+        LocationKind::Server {
+            provider: "sftp".into(),
+        },
+        "NAS",
+        Some("sftp://nas.home".into()),
+    );
     h.core.locations.register(location, mem.clone());
     mem
 }

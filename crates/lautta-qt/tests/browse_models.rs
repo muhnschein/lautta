@@ -5,7 +5,8 @@
 
 #![allow(non_snake_case)]
 
-use lautta_bridge_proto::fake::{Consent, FakeBridge, FakeDrive, InfoValue, ScriptedQuestion};
+use lautta_bridge_proto::access::Level;
+use lautta_bridge_proto::fake::{Consent, FakeBridge, FakeDrive};
 use lautta_bridge_proto::feature;
 use lautta_core::org::RecentKind;
 use lautta_core::paths::AppPaths;
@@ -34,9 +35,7 @@ struct FakeWorld {
     addAccount: qt_method!(fn(&self, n: i32, name: QString)),
     locationKnown: qt_method!(fn(&self, id: QString) -> bool),
     removeAccount: qt_method!(fn(&self, id: QString)),
-    scriptQuestion: qt_method!(fn(&self, kind: QString)),
-    secrets: qt_method!(fn(&self) -> QString),
-    answers: qt_method!(fn(&self) -> QString),
+    setAccess: qt_method!(fn(&self, id: QString, level: QString)),
     handoffs: qt_method!(fn(&self) -> QString),
     drives: qt_method!(fn(&self) -> QString),
     addDrive: qt_method!(fn(&self, id: QString, label: QString, locked: bool)),
@@ -50,7 +49,7 @@ impl FakeWorld {
     }
 
     fn grant(&self) {
-        run(fake().set_consent(Consent::Granted));
+        run(fake().set_consent(Consent::Allowed(Level::Full)));
     }
 
     fn consentRequests(&self) -> i32 {
@@ -86,44 +85,9 @@ impl FakeWorld {
         run(fake().remove_location(&id.to_string()));
     }
 
-    fn scriptQuestion(&self, kind: QString) {
-        let kind = kind.to_string();
-        let details = match kind.as_str() {
-            "identity-unknown" => vec![
-                ("host".to_owned(), InfoValue::Str("host.example".into())),
-                ("fingerprint".to_owned(), InfoValue::Str("SHA256:abc".into())),
-            ],
-            _ => vec![
-                ("name".to_owned(), InfoValue::Str("Two-factor".into())),
-                ("prompts".to_owned(), InfoValue::Strings(vec!["Code: ".into()])),
-            ],
-        };
-        fake().script_adhoc_questions(vec![ScriptedQuestion { kind, details }]);
-    }
-
-    fn secrets(&self) -> QString {
-        let list: Vec<String> = fake()
-            .received_secrets()
-            .iter()
-            .map(|s| String::from_utf8_lossy(s).into_owned())
-            .collect();
-        QString::from(serde_json::to_string(&list).unwrap().as_str())
-    }
-
-    fn answers(&self) -> QString {
-        let list: Vec<serde_json::Value> = fake()
-            .answers()
-            .iter()
-            .map(|a| {
-                let responses: Vec<String> = a
-                    .answers
-                    .iter()
-                    .map(|s| String::from_utf8_lossy(s).into_owned())
-                    .collect();
-                serde_json::json!({"accept": a.accept, "answers": responses})
-            })
-            .collect();
-        QString::from(serde_json::to_string(&list).unwrap().as_str())
+    /// `level`: a level word, else not allowed.
+    fn setAccess(&self, id: QString, level: QString) {
+        run(fake().set_access(&id.to_string(), Level::parse(&level.to_string())));
     }
 
     fn handoffs(&self) -> QString {

@@ -34,12 +34,12 @@ function buttonIcon(id) {
     return "image://theme/icon-m-dismiss"
 }
 
-function context(writable) {
-    return { "isDir": false, "writable": writable }
+// What folder `model` allows, for the selection's files.
+function context(model) {
+    return { "isDir": false, "changeable": model.changeable, "readable": model.readable }
 }
 
-function allowed(order, writable) {
-    var ctx = context(writable)
+function allowed(order, ctx) {
     return order.filter(function (id) { return Actions.applicable(id, ctx) })
 }
 
@@ -51,9 +51,9 @@ function moreRows(count, ctx) {
     return []
 }
 
-function panelButtons(count, writable) {
-    var ids = count > 0 ? allowed(buttonOrder, writable) : []
-    if (moreRows(count, context(writable)).length > 0)
+function panelButtons(count, ctx) {
+    var ids = count > 0 ? allowed(buttonOrder, ctx) : []
+    if (moreRows(count, ctx).length > 0)
         ids.push("more")
     var out = ids.map(function (id) { return { "id": id, "icon": buttonIcon(id), "text": Actions.text(id) } })
     //% "Stop selecting"
