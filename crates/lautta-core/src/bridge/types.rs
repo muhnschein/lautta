@@ -70,20 +70,13 @@ impl Attention {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum RemoteKind {
-    Account,
-    AdHoc,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteLocation {
     pub id: LocationId,
-    /// Bridge's id (`account:1`, `adhoc:3`).
+    /// Bridge's id (`account:1`).
     pub bridge_id: String,
     pub provider: String,
     pub name: String,
-    pub kind: RemoteKind,
     pub host: String,
     pub port: Option<u16>,
     pub user: Option<String>,
@@ -126,17 +119,11 @@ impl RemoteLocation {
     pub fn from_wire(w: &WireLocation) -> RemoteLocation {
         let str_of = |k: &str| w.info.get(k).and_then(|v| value_str(v));
         let int_of = |k: &str| w.info.get(k).and_then(|v| value_i64(v));
-        let kind = if str_of("kind").as_deref() == Some("adhoc") {
-            RemoteKind::AdHoc
-        } else {
-            RemoteKind::Account
-        };
         RemoteLocation {
             id: location_id(&w.id),
             bridge_id: w.id.clone(),
             provider: w.provider.clone(),
             name: w.name.clone(),
-            kind,
             host: str_of("host").unwrap_or_default(),
             port: int_of("port").and_then(|p| u16::try_from(p).ok()),
             user: str_of("user"),
@@ -243,13 +230,6 @@ impl Drive {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct AdHocOptions {
-    pub user: Option<String>,
-    /// SMB only: `strict`, `signed`, `legacy` or `guest`.
-    pub security_profile: Option<String>,
-}
-
 #[derive(Debug, Clone)]
 pub struct BridgeConfig {
     pub socket: PathBuf,
@@ -304,8 +284,8 @@ mod tests {
     #[test]
     fn location_ids_use_the_prefix() {
         assert_eq!(location_id("account:1"), "nv-account:1");
-        assert_eq!(bridge_id("nv-adhoc:3"), "adhoc:3");
-        assert_eq!(bridge_id("adhoc:3"), "adhoc:3");
+        assert_eq!(bridge_id("nv-account:3"), "account:3");
+        assert_eq!(bridge_id("account:3"), "account:3");
     }
 
     #[test]
@@ -323,7 +303,6 @@ mod tests {
                 .str("access", "read-add"),
         ));
         assert_eq!(loc.id, "nv-account:7");
-        assert_eq!(loc.kind, RemoteKind::Account);
         assert_eq!((loc.host.as_str(), loc.port), ("nas.local", Some(22)));
         assert_eq!(loc.user.as_deref(), Some("me"));
         assert_eq!(loc.account_id, Some(7));
@@ -379,9 +358,8 @@ mod tests {
     }
 
     #[test]
-    fn adhoc_and_sparse_info() {
-        let loc = RemoteLocation::from_wire(&wire(OptsBuilder::new().str("kind", "adhoc")));
-        assert_eq!(loc.kind, RemoteKind::AdHoc);
+    fn sparse_info() {
+        let loc = RemoteLocation::from_wire(&wire(OptsBuilder::new()));
         assert_eq!(loc.host, "");
         assert_eq!(loc.attention, Attention::None);
         assert!(loc.start_path.is_root());
@@ -390,7 +368,6 @@ mod tests {
         ));
         assert_eq!(odd.port, None);
         assert_eq!(odd.attention, Attention::None);
-        assert_eq!(odd.kind, RemoteKind::Account);
         assert_eq!(odd.access, Level::Read, "no level was sent");
         let future = RemoteLocation::from_wire(&wire(OptsBuilder::new().str("access", "write-only")));
         assert_eq!(future.access, Level::Read);

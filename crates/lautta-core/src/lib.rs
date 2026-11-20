@@ -33,7 +33,6 @@ pub mod volumes;
 pub mod watch;
 
 pub mod bridge;
-pub mod questions;
 
 pub mod clipboard;
 pub mod ops;

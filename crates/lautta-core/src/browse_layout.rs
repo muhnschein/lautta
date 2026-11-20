@@ -23,7 +23,7 @@ pub fn layout_item(kind: &str, item_id: &str) -> Option<String> {
         "deleted" => Some(DELETED_ITEM.to_owned()),
         "recents" => Some(RECENTS_ITEM.to_owned()),
         "nearby" => Some(NEARBY_ITEM.to_owned()),
-        "folder" | "volume" | "account" | "adhoc" | "adhocRecent" => Some(item_id.to_owned()),
+        "folder" | "volume" | "account" => Some(item_id.to_owned()),
         _ => None,
     }
 }
@@ -196,10 +196,10 @@ mod tests {
         assert_eq!(layout_item("deleted", "").as_deref(), Some("deleted"));
         assert_eq!(layout_item("recents", "").as_deref(), Some("recents"));
         assert_eq!(layout_item("nearby", "3").as_deref(), Some("nearby"));
-        for kind in ["folder", "volume", "account", "adhoc", "adhocRecent"] {
+        for kind in ["folder", "volume", "account"] {
             assert_eq!(layout_item(kind, "x").as_deref(), Some("x"), "{kind}");
         }
-        for kind in ["favourite", "consent", "unavailable", ""] {
+        for kind in ["favourite", "consent", "unavailable", "adhoc", ""] {
             assert_eq!(layout_item(kind, "x"), None, "{kind}");
         }
     }

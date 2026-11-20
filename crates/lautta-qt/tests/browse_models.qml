@@ -7,8 +7,6 @@ Item {
     property int waited: 0
     property bool acted: false
     property var steps: []
-    property string questionKind: ""
-    property string questionHost: ""
     property string connected: ""
     property string failedKind: ""
     property string failedSubject: ""
@@ -209,13 +207,7 @@ Item {
     }
 
     Component.onCompleted: {
-        Bridge.question.connect(function(questionId, kind, detailsJson) {
-            root.questionKind = kind
-            root.questionHost = JSON.parse(detailsJson).host || ""
-            var answer = kind === "keyboard-interactive" ? { "responses": ["123456"] } : { "accept": true }
-            Bridge.answer(questionId, JSON.stringify(answer))
-        })
-        Bridge.adhocConnected.connect(function(uri) { root.connected = uri })
+        Bridge.mounted.connect(function(uri) { root.connected = uri })
         Bridge.failed.connect(function(kind, message, subject) {
             root.failedKind = kind
             root.failedSubject = subject
@@ -263,7 +255,7 @@ Item {
         step("the drive was busy while it was unmounted and is not any more",
              null,
              function() { return root.busyAtOnce === "sda1" && Bridge.busyDrives.length === 0 })
-        step("no account without consent", null, function() { return !has("account") && !has("adhocRecent") })
+        step("no account without consent", null, function() { return !has("account") })
         step("ask again reaches the bridge",
              function() { Bridge.requestConsent() },
              function() { return FakeWorld.consentRequests() >= 2 })
@@ -381,7 +373,7 @@ Item {
              function() {
                  var s = layoutRow("servers", "section")
                  return s !== null && s.lhidden && s.marked && layoutRow("servers", "nv-account:1") === null
-                        && !has("account") && !has("adhocRecent")
+                        && !has("account")
                         && layoutRow("volumes", "section").marked && layoutRow("volumes", "vol-CARD").marked
                         && has("volume", "CARD") && has("folder", "Music")
              })
@@ -663,41 +655,15 @@ Item {
                  return nas !== null && nas.rstatus === "attention" && nas.rattention === "auth-failed"
              })
 
-        step("an ad-hoc server asks about its identity and connects",
-             function() {
-                 FakeWorld.scriptQuestion("identity-unknown")
-                 Bridge.connectAdHoc("sftp://host.example:2222/docs", "pw", JSON.stringify({ "user": "me" }))
-             },
-             function() {
-                 return root.connected === "lautta://nv-adhoc:1/" && root.questionKind === "identity-unknown"
-                        && root.questionHost === "host.example" && hasItem("adhoc", "nv-adhoc:1") && FakeWorld.secrets() === '["pw"]'
-                        && JSON.parse(FakeWorld.answers())[0].accept === true
-             })
-        step("sign-in prompts are answered with the typed code",
-             function() {
-                 FakeWorld.scriptQuestion("keyboard-interactive")
-                 Bridge.connectAdHoc("sftp://other.example/", "", "{}")
-             },
-             function() {
-                 var answers = JSON.parse(FakeWorld.answers())
-                 return root.questionKind === "keyboard-interactive" && answers.length === 2
-                        && answers[1].answers[0] === "123456"
-             })
-        step("a refused connection says what and where",
-             function() { Bridge.connectAdHoc("gopher://nowhere.example/", "", "{}") },
-             function() { return root.failedKind === "Unsupported" && root.failedSubject === "nowhere.example" })
-        step("forget an ad-hoc server",
-             function() { Bridge.forgetAdHoc("nv-adhoc:1") },
-             function() { return !hasItem("adhoc", "nv-adhoc:1") && !hasItem("adhocRecent", "nv-adhoc:1") })
-
         step("hand-offs reach the bridge",
              function() {
                  Bridge.addServer("")
+                 Bridge.addServer("smb")
                  Bridge.editAccount("lautta://nv-account:1/")
              },
              function() {
                  var h = JSON.parse(FakeWorld.handoffs())
-                 return h.indexOf("add:sftp") >= 0 && h.indexOf("settings:account:1") >= 0
+                 return h.indexOf("add:sftp") >= 0 && h.indexOf("add:smb") >= 0 && h.indexOf("settings:account:1") >= 0
              })
 
         step("an account removed in Settings is forgotten",

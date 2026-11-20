@@ -52,7 +52,7 @@ fn kind_name(kind: &LocationKind) -> &'static str {
         LocationKind::UserFolder => "folder",
         LocationKind::Android => "android",
         LocationKind::Volume => "volume",
-        LocationKind::Server { .. } | LocationKind::AdHoc => "server",
+        LocationKind::Server { .. } => "server",
         LocationKind::Archive => "archive",
     }
 }

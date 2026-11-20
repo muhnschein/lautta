@@ -6,7 +6,7 @@ use bridge_support::{config, eventually};
 use lautta_bridge_proto::fake::{Consent, FakeBridge, FakeDrive, Listener};
 use lautta_core::app::Core;
 use lautta_core::app_browse::{LayoutRow, Row, SECTION_KIND};
-use lautta_core::bridge::{feature, AdHocOptions, BridgeStatus, Level};
+use lautta_core::bridge::{feature, BridgeStatus, Level};
 use lautta_core::browse_layout::SECTION_ITEM;
 use lautta_core::date_group::DateGroup;
 use lautta_core::locations::LocationRegistry;
@@ -745,67 +745,6 @@ async fn nearby_servers_prefill_the_connect_form() {
     assert_eq!(of(&e.core.browse_rows().await, "servers").len(), 1);
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn adhoc_servers_are_remembered_and_forgotten() {
-    let (fake, e) = ready_env().await;
-    let id = e
-        .core
-        .connect_adhoc(
-            "sftp://pi@host.example:2222/docs",
-            b"pw".to_vec(),
-            AdHocOptions::default(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(fake.received_secrets(), vec![b"pw".to_vec()]);
-    let recents = e.core.adhoc_recents().unwrap();
-    assert_eq!(recents.len(), 1);
-    assert_eq!(recents[0].url, "sftp://pi@host.example:2222/docs");
-    assert_eq!(recents[0].name, "host.example:2222");
-    eventually("the ad-hoc location", || e.core.location(&id).is_some()).await;
-    let rows = e.core.browse_rows().await;
-    let adhoc: Vec<&Row> = of(&rows, "servers")
-        .into_iter()
-        .filter(|r| r.kind == "adhoc")
-        .collect();
-    assert_eq!(adhoc.len(), 1, "a connected server is not listed twice");
-    assert_eq!(adhoc[0].connection, "connected");
-    assert_eq!(adhoc[0].icon, "server");
-
-    fake.remove_location(&id.replace("nv-", "")).await;
-    eventually("gone", || e.core.location(&id).is_none()).await;
-    let rows = e.core.browse_rows().await;
-    let recent: Vec<&Row> = of(&rows, "servers")
-        .into_iter()
-        .filter(|r| r.kind == "adhocRecent")
-        .collect();
-    assert_eq!(recent.len(), 1);
-    assert_eq!(
-        (
-            recent[0].status,
-            recent[0].provider.as_str(),
-            recent[0].uri.as_str()
-        ),
-        ("offline", "SFTP", "sftp://pi@host.example:2222/docs")
-    );
-    assert_eq!(recent[0].connection, "disconnected");
-    assert_eq!(recent[0].icon, "server");
-    e.core.remove_adhoc_recent(&id).unwrap();
-    assert!(e.core.adhoc_recents().unwrap().is_empty());
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_failed_connect_stores_nothing() {
-    let (_fake, e) = ready_env().await;
-    let err = e
-        .core
-        .connect_adhoc("gopher://host/", b"pw".to_vec(), AdHocOptions::default())
-        .await
-        .unwrap_err();
-    assert_eq!(err.kind, lautta_core::ErrorKind::Unsupported);
-    assert!(e.core.adhoc_recents().unwrap().is_empty());
-}
-
 fn remember_account(core: &Core, n: i32) -> Uri {
     let u = uri(&format!("lautta://nv-account:{n}/photos"));
     core.favourites.add(&u, "Photos", None, true).unwrap();
@@ -936,12 +875,12 @@ async fn accounts_removed_while_the_app_was_closed_are_purged_at_start() {
     let (_fake, e) = ready_env().await;
     remember_account(&e.core, 1);
     remember_account(&e.core, 9);
-    let adhoc = uri("lautta://nv-adhoc:4/x");
-    e.core.favourites.add(&adhoc, "Adhoc", None, true).unwrap();
+    let local = uri("lautta://user-documents/x");
+    e.core.favourites.add(&local, "Local", None, true).unwrap();
     e.core.spawn_account_purge(|| {});
     eventually("purge", || !remembered(&e.core, 9)).await;
     assert!(remembered(&e.core, 1));
-    assert!(e.core.favourites.is_favourite(&adhoc).unwrap());
+    assert!(e.core.favourites.is_favourite(&local).unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

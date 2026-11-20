@@ -18,6 +18,5 @@ pub use errors::BridgeError;
 pub use proxy::Bridge1Proxy;
 pub use signals::Signal;
 pub use wire::*;
-pub use zeroize::Zeroizing;
 pub type ProxyResult<T> = zbus::Result<T>;
 pub use zbus::zvariant;

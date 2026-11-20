@@ -357,7 +357,7 @@ fn location_kind_name(kind: &crate::locations::LocationKind) -> &'static str {
         K::UserFolder => "device",
         K::Android => "android",
         K::Volume => "volume",
-        K::Server { .. } | K::AdHoc => "server",
+        K::Server { .. } => "server",
         K::Archive => "archive",
     }
 }

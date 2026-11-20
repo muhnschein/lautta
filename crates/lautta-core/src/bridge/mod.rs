@@ -13,6 +13,6 @@ pub use client::BridgeClient;
 pub use lautta_bridge_proto::feature;
 pub use link::JobOutcome;
 pub use types::{
-    bridge_id, location_id, AdHocOptions, Attention, BridgeConfig, BridgeStatus, Consent, Drive, DriveKind,
-    Level, NearbyServer, RemoteKind, RemoteLocation, LOCATION_PREFIX,
+    bridge_id, location_id, Attention, BridgeConfig, BridgeStatus, Consent, Drive, DriveKind, Level,
+    NearbyServer, RemoteLocation, LOCATION_PREFIX,
 };

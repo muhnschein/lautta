@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Supervisor: finds the socket, connects, says `Hello`, follows consent, locations, drives and
-//! questions; reconnects with backoff in the foreground.
+//! Supervisor: finds the socket, connects, says `Hello`, follows consent, locations and drives;
+//! reconnects with backoff in the foreground.
 
 use super::client::Inner;
 use super::link::{rpc, Link};
 use super::types::{BridgeStatus, Consent, Drive, NearbyServer, RemoteLocation};
-use crate::questions::{Answer, QuestionKind};
 use futures::{FutureExt, StreamExt};
-use lautta_bridge_proto::zvariant::{OwnedValue, Value};
-use lautta_bridge_proto::{feature, value_i64, BridgeError, Connection, Signal, SignalStream, Zeroizing};
-use std::collections::{BTreeMap, HashMap};
+use lautta_bridge_proto::{feature, BridgeError, Signal, SignalStream};
 use std::future::Future;
 use std::os::unix::fs::FileTypeExt;
 use std::path::Path;
@@ -187,15 +184,11 @@ async fn run_signals(inner: &Arc<Inner>, link: &Arc<Link>, signals: &mut SignalS
 
 fn teardown(inner: &Arc<Inner>, link: &Arc<Link>) {
     link.close();
-    let questions = {
+    {
         let mut info = inner.info();
         info.link = None;
         info.features.clear();
         info.nearby.cancel();
-        std::mem::take(&mut info.questions)
-    };
-    for id in questions {
-        inner.questions.cancel(&id);
     }
     inner.nearby.send_if_modified(|n| {
         let changed = !n.is_empty();
@@ -221,7 +214,6 @@ fn handle_signal(inner: &Arc<Inner>, link: &Arc<Link>, signal: Signal) {
             let show = inner.info().nearby.receive(&shown, list);
             show_nearby(inner, show);
         }
-        Signal::Question { id, kind, details } => spawn_question(inner, link, id, &kind, &details),
         Signal::DrivesChanged => spawn_drives(inner, link),
         _ => {}
     }
@@ -363,72 +355,4 @@ fn publish<T: PartialEq>(tx: &watch::Sender<Arc<T>>, value: T) {
         }
         changed
     });
-}
-
-fn show(v: &Value<'_>) -> String {
-    match v {
-        Value::Str(s) => s.as_str().to_owned(),
-        Value::Bool(b) => b.to_string(),
-        Value::Value(inner) => show(inner),
-        Value::Array(a) if a.element_signature().as_str() == "y" => {
-            hex::encode(a.iter().filter_map(|b| u8::try_from(b).ok()).collect::<Vec<u8>>())
-        }
-        Value::Array(a) => a.iter().map(show).collect::<Vec<_>>().join("\n"),
-        other => value_i64(other).map(|n| n.to_string()).unwrap_or_default(),
-    }
-}
-
-fn spawn_question(
-    inner: &Arc<Inner>,
-    link: &Arc<Link>,
-    id: String,
-    kind: &str,
-    details: &HashMap<String, OwnedValue>,
-) {
-    let details: BTreeMap<String, String> = details.iter().map(|(k, v)| (k.clone(), show(v))).collect();
-    let pending = inner.questions.ask(QuestionKind::from_wire(kind), details);
-    let hub_id = pending.id().to_owned();
-    inner.info().questions.push(hub_id.clone());
-    let inner = inner.clone();
-    let link = link.clone();
-    tokio::spawn(async move {
-        let answer = pending.wait().await;
-        inner.info().questions.retain(|q| *q != hub_id);
-        send_answer(link.connection(), &id, answer).await;
-    });
-}
-
-async fn send_answer(conn: &Connection, id: &str, answer: Option<Answer>) {
-    let (accept, mut secrets) = match answer {
-        Some(Answer::Responses(r)) => (true, r.into_inner()),
-        Some(Answer::Accept | Answer::Choice(_)) => (true, Zeroizing::new(Vec::new())),
-        Some(Answer::Decline) | None => (false, Zeroizing::new(Vec::new())),
-    };
-    if let Err(e) = conn.answer_wiping(id, accept, &mut secrets).await {
-        // Question is gone with its connection; nothing is left to answer.
-        log::debug!("answer to {id} not delivered: {e}");
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use lautta_bridge_proto::OptsBuilder;
-
-    #[test]
-    fn details_become_display_strings() {
-        let o = OptsBuilder::new()
-            .str("host", "nas")
-            .int("port", 22)
-            .bool("guest", false)
-            .bytes("publicKey", &[0xde, 0xad])
-            .build();
-        assert_eq!(show(&o["host"]), "nas");
-        assert_eq!(show(&o["port"]), "22");
-        assert_eq!(show(&o["guest"]), "false");
-        assert_eq!(show(&o["publicKey"]), "dead");
-        assert_eq!(show(&Value::from(vec!["a".to_owned(), "b".to_owned()])), "a\nb");
-        assert_eq!(show(&Value::from(1.5f64)), "");
-        assert_eq!(show(&Value::Value(Box::new(Value::from("x")))), "x");
-    }
 }

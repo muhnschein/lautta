@@ -55,8 +55,8 @@ network protocol: everything remote goes through netvfs.
 | Mount, unmount drives | ✗ | ✓ |
 | Locked encrypted drives | ✗ | ✓ |
 
-Lautta never sees a password or a key. Accounts live in Settings; netvfs asks
-once whether Lautta may use them. Without netvfs, nothing of it shows.
+Lautta never sees or asks for a password or a key. Every server is an account
+in Settings; netvfs asks once whether Lautta may use them. Without netvfs, nothing of it shows.
 
 ## Limitations
 

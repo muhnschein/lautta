@@ -31,10 +31,6 @@ pub trait Bridge1 {
     fn capabilities(&self, loc: &str) -> zbus::Result<WireCapabilities>;
     fn disconnect(&self, loc: &str) -> zbus::Result<()>;
 
-    // Ad-hoc locations
-    fn connect_ad_hoc(&self, url: &str, secret: &[u8], opts: &Opts) -> zbus::Result<String>;
-    fn forget_ad_hoc(&self, loc: &str) -> zbus::Result<()>;
-
     // Discovery
     fn discover(&self, on: bool) -> zbus::Result<()>;
     #[zbus(signal)]
@@ -95,16 +91,6 @@ pub trait Bridge1 {
         message: String,
         extra: std::collections::HashMap<String, OwnedValue>,
     ) -> zbus::Result<()>;
-
-    // Questions
-    #[zbus(signal)]
-    fn question(
-        &self,
-        id: String,
-        kind: String,
-        details: std::collections::HashMap<String, OwnedValue>,
-    ) -> zbus::Result<()>;
-    fn answer(&self, id: &str, answer: &Opts) -> zbus::Result<()>;
 
     // Handoff
     fn open_account_settings(&self, loc: &str) -> zbus::Result<()>;

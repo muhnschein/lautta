@@ -57,8 +57,8 @@ Page {
             pageStack.push(Qt.resolvedUrl("TrashPage.qml"))
             break
         case "nearby":
-        case "adhocRecent":
-            connectTo(row.uri)
+            pageStack.push(Qt.resolvedUrl("../dialogs/NearbySetupDialog.qml"),
+                           { "provider": row.uri.split("://")[0] })
             break
         case "volume":
             if (row.status === "locked") {
@@ -71,7 +71,6 @@ Page {
             }
             break
         case "account":
-        case "adhoc":
             if (row.attention.length > 0 && row.attention !== "")
                 pageStack.push(Qt.resolvedUrl("../components/browse/ServerAttentionPage.qml"), {
                                    "locationId": row.itemId,
@@ -87,10 +86,6 @@ Page {
         }
     }
 
-    function connectTo(url) {
-        pageStack.push(Qt.resolvedUrl("../dialogs/ConnectServerDialog.qml"), { "url": url })
-    }
-
     function openFavourite(uri) {
         pageStack.push(Qt.resolvedUrl("FavouritePage.qml"), { "uri": uri })
     }
@@ -104,16 +99,6 @@ Page {
     function removeFavourite(item, id) {
         //% "Removing favourite"
         remorseRow(item, qsTrId("lautta-browse-removing-favourite"), function() { favourites.remove(id) })
-    }
-
-    function removeServer(item, id, connected) {
-        //% "Removing server"
-        remorseRow(item, qsTrId("lautta-browse-removing-server"), function() {
-            if (connected)
-                Bridge.forgetAdHoc(id)
-            else
-                Bridge.removeRecent(id)
-        })
     }
 
     function copyAddress(text) {
@@ -193,7 +178,7 @@ Page {
                                                                           Bridge.busyDrives)
             readonly property bool hasMenu: kind === "favourite" || kind === "folder"
                                             || (kind === "volume" && (!locked || page.storageSettings))
-                                            || kind === "account" || kind === "adhoc" || kind === "adhocRecent"
+                                            || kind === "account"
 
             contentHeight: banner ? bannerContent.height + 2 * Theme.paddingMedium
                                   : (subtitle.length > 0 ? Theme.itemSizeMedium : Theme.itemSizeSmall)
@@ -301,12 +286,6 @@ Page {
                     }
 
                     MenuItem {
-                        visible: row.kind === "adhocRecent"
-                        //% "Connect"
-                        text: qsTrId("lautta-browse-connect-recent")
-                        onClicked: page.connectTo(model.uri)
-                    }
-                    MenuItem {
                         visible: row.kind === "account"
                         //% "Edit server"
                         text: qsTrId("lautta-browse-edit-server")
@@ -341,7 +320,7 @@ Page {
                         visible: !row.notMounted
                         //% "Copy address"
                         text: qsTrId("lautta-browse-copy-address")
-                        onClicked: page.copyAddress(row.kind === "adhocRecent" ? model.place : App.displayAddress(model.uri))
+                        onClicked: page.copyAddress(App.displayAddress(model.uri))
                     }
                     MenuItem {
                         visible: row.kind === "volume" && !row.notMounted && row.drive.length > 0
@@ -360,12 +339,6 @@ Page {
                         //% "Remove from favourites"
                         text: qsTrId("lautta-browse-remove-favourite")
                         onClicked: page.removeFavourite(row, parseInt(model.itemId))
-                    }
-                    MenuItem {
-                        visible: row.kind === "adhoc" || row.kind === "adhocRecent"
-                        //% "Remove from recents"
-                        text: qsTrId("lautta-browse-remove-recent")
-                        onClicked: page.removeServer(row, model.itemId, row.kind === "adhoc")
                     }
                 }
             }

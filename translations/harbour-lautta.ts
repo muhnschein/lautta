@@ -1499,43 +1499,6 @@
             <numerusform>%n items</numerusform>
         </translation>
     </message>
-    <message id="lautta-connect-accept">
-        <source>Connect</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-connect-title">
-        <source>Connect to server</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-connect-address">
-        <source>Server address</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-connect-schemes">
-        <source>sftp://, smb://, davs:// or ftps://</source>
-        <oldsource>sftp:// or smb://</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-connect-user">
-        <source>User name</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-connect-password">
-        <source>Password (optional)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-connect-secret-note">
-        <source>The password is passed to netvfs once and not stored by Lautta.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-connect-recent">
-        <source>Recent</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-connect-nearby">
-        <source>Nearby</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-favourite-edit-title">
         <source>Edit favourite</source>
         <translation type="unfinished"></translation>
@@ -1550,72 +1513,6 @@
     </message>
     <message id="lautta-favourite-colour">
         <source>Colour</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-trust">
-        <source>Trust</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-allow">
-        <source>Allow</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-sign-in">
-        <source>Sign in</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-accept">
-        <source>Accept</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-reject">
-        <source>Reject</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-cancel">
-        <source>Cancel</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-identity-title">
-        <source>Unknown server</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-insecure-title">
-        <source>Unencrypted connection</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-sign-in-title">
-        <source>Sign-in</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-other-title">
-        <source>Question from the server</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-identity-text">
-        <source>%1 hasn&apos;t been seen before. Check that this fingerprint matches the server.</source>
-        <oldsource>%1 hasn’t been seen before. Check that this fingerprint matches the server.</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-insecure-text">
-        <source>%1 doesn&apos;t encrypt the connection. What you send can be read on the network.</source>
-        <oldsource>%1 doesn’t encrypt the connection. What you send can be read on the network.</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-host">
-        <source>Host</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-port">
-        <source>Port</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-key-type">
-        <source>Key type</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-question-fingerprint">
-        <source>Fingerprint</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-browse-title">
@@ -1664,10 +1561,6 @@
         <source>Removing favourite</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-browse-connect-recent">
-        <source>Connect</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-browse-update-sign-in">
         <source>Update sign-in</source>
         <translation type="unfinished"></translation>
@@ -1686,14 +1579,6 @@
     </message>
     <message id="lautta-browse-open-storage-settings">
         <source>Open Storage settings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-browse-remove-recent">
-        <source>Remove from recents</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-browse-removing-server">
-        <source>Removing server</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-recents-title">
@@ -2839,6 +2724,14 @@ Cabin keys from Anni</source>
     </message>
     <message id="lautta-browse-consent-needed">
         <source>Network locations need your permission</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-nearby-set-up">
+        <source>Set up</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-nearby-set-up-hint">
+        <source>This server isn&apos;t set up yet. Proceed to add it as an account in Settings › Accounts. After that, you can access it in Lautta.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

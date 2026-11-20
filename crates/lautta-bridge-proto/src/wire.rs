@@ -205,12 +205,6 @@ impl OptsBuilder {
         self
     }
 
-    pub fn byte_arrays(mut self, key: &str, v: &[Vec<u8>]) -> OptsBuilder {
-        let items: Vec<Vec<u8>> = v.to_vec();
-        self.0.insert(key.to_owned(), Value::from(items));
-        self
-    }
-
     pub fn build(self) -> Opts {
         self.0
     }
@@ -318,14 +312,12 @@ mod tests {
             .bool("b", true)
             .int("n", -5)
             .str("s", "x")
-            .byte_arrays("a", &[b"p".to_vec()])
             .build();
-        assert_eq!(o.len(), 4);
+        assert_eq!(o.len(), 3);
         assert_eq!(value_bool(&o["b"]), Some(true));
         assert_eq!(value_i64(&o["n"]), Some(-5));
         assert_eq!(value_str(&o["s"]).as_deref(), Some("x"));
         assert_eq!(value_i64(&o["s"]), None);
-        assert_eq!(o["a"].value_signature().as_str(), "aay");
     }
 
     #[test]

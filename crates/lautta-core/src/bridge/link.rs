@@ -62,10 +62,6 @@ impl Link {
         self.conn.proxy()
     }
 
-    pub(crate) fn connection(&self) -> &Connection {
-        &self.conn
-    }
-
     pub(crate) fn route(&self, signal: Signal) -> Option<Signal> {
         match signal {
             Signal::ListBatch { req, entries } => self.lists.push(req, ListEvent::Batch(entries)),
