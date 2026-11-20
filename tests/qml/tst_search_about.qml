@@ -44,9 +44,11 @@ ApplicationWindow {
 
     initialPage: Component {
         AboutPage {
-            Component.onCompleted: {
-                test.check(this)
-                test.reachedEnd = true
+            onStatusChanged: {
+                if (status === PageStatus.Active && !test.reachedEnd) {
+                    test.check(this)
+                    test.reachedEnd = true
+                }
             }
         }
     }
