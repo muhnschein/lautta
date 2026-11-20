@@ -12,6 +12,7 @@ pub mod tree;
 
 pub use state::{Consent, Failure, FakeDrive, InfoValue, JobFailure, RecordedAnswer, ScriptedQuestion};
 
+use crate::access::Level;
 use crate::connect::Connection;
 use crate::errors::BridgeError;
 use crate::wire::{WireCapabilities, WireLocation, WireNearby, OBJECT_PATH};
@@ -167,9 +168,21 @@ impl FakeBridge {
         self.shared.with(|s| s.consent)
     }
 
+    /// Changes what the user decided for this app, as the bridge does: `ConsentChanged` when
+    /// `GetConsent` would say otherwise; when any location allows less, every client is
+    /// disconnected, else `LocationsChanged`.
     pub async fn set_consent(&self, consent: Consent) {
-        self.shared.with(|s| s.consent = consent);
-        self.shared.broadcast_consent(consent).await;
+        self.shared.decide(|s| s.consent = consent).await;
+    }
+
+    /// Location `id` at `level` (`None`: not allowed) instead of what [`FakeBridge::set_consent`]
+    /// says; as there.
+    pub async fn set_access(&self, id: &str, level: Option<Level>) {
+        self.shared
+            .decide(|s| {
+                s.access.insert(id.to_owned(), level);
+            })
+            .await;
     }
 
     /// Times the user was asked (first `Hello` while `unknown`, `RequestConsent`).

@@ -380,10 +380,27 @@ function barDetail(mode, s, others, questions) {
             text = qsTrId("lautta-xfr-items-progress").arg(s.itemsDone).arg(s.itemsTotal)
         break
     default:
+        if (mode === "failed" && s.refusedLevel)
+            return refused(s.refusedLevel, s.refusedName)
         return historyLine({ "state": s.state, "itemsFailed": s.itemsFailed, "itemsDone": s.itemsDone, "finishedMs": -1 })
     }
     //% "%n more"
     return others > 0 ? text + " · " + qsTrId("lautta-xfr-bar-more", others) : text
+}
+
+// Why a transfer stopped: netvfs now grants only `level` on `place`.
+function refused(level, place) {
+    switch (level) {
+    case "read":
+        //% "Lautta may now only read on %1"
+        return qsTrId("lautta-xfr-refused-read").arg(place)
+    case "read-add":
+        //% "Lautta may now only read and add on %1"
+        return qsTrId("lautta-xfr-refused-read-add").arg(place)
+    default:
+        //% "Lautta may now only add on %1"
+        return qsTrId("lautta-xfr-refused-add").arg(place)
+    }
 }
 
 function barIcon(mode, direction) {

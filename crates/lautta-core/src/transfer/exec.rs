@@ -122,6 +122,24 @@ async fn remove_if_exists(p: &dyn Provider, path: &VPath) -> Result<()> {
     }
 }
 
+/// Destination keeps existing items as they are (access level `read-add`, `add`).
+fn add_only(env: &ItemEnv) -> bool {
+    env.dst.capabilities().has(cap::NO_CHANGE)
+}
+
+/// At a level that hides files (`add`), a refused look means a file is there.
+fn hidden(env: &ItemEnv, e: &Error) -> bool {
+    e.kind == ErrorKind::PermissionDenied && !env.dst.capabilities().readable()
+}
+
+/// Existing destination item, or `Err(None)`: one is there that the level hides.
+async fn stat_dst(env: &ItemEnv, path: &VPath) -> std::result::Result<Option<Entry>, Option<Error>> {
+    match stat_opt(&*env.dst, path).await {
+        Err(e) if hidden(env, &e) => Err(None),
+        other => other.map_err(Some),
+    }
+}
+
 fn is_move(env: &ItemEnv) -> bool {
     env.op == OperationKind::Move
 }
@@ -165,8 +183,19 @@ pub async fn cleanup_temp(dst: &dyn Provider, job: &ItemJob) {
 async fn run_file(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     let plan = &job.plan;
     let can_resume = env.dst.capabilities().has(cap::RESUME_UPLOAD);
-    let existing = stat_opt(&*env.dst, &plan.dst.path).await?;
-    let mode = match decide(plan, existing.as_ref(), env.options.resolve_all, can_resume) {
+    let add_only = add_only(env);
+    let existing = match stat_dst(env, &plan.dst.path).await {
+        Ok(existing) => existing,
+        Err(None) => return keep_both(env, plan).await,
+        Err(Some(e)) => return Err(e),
+    };
+    let mode = match decide(
+        plan,
+        existing.as_ref(),
+        env.options.resolve_all,
+        can_resume,
+        add_only,
+    ) {
         Decision::Proceed(m) => m,
         Decision::Skip => return Ok(Outcome::Skipped),
         Decision::KeepBoth => return keep_both(env, plan).await,
@@ -174,9 +203,11 @@ async fn run_file(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     };
     match place_file(env, job, mode).await {
         Err(e) if e.kind == ErrorKind::AlreadyExists && !mode.replace => {
-            match stat_opt(&*env.dst, &plan.dst.path).await? {
-                Some(d) => Ok(Outcome::Ask(build_conflict(plan, &d, can_resume))),
-                None => Err(e),
+            match stat_dst(env, &plan.dst.path).await {
+                Ok(Some(d)) => Ok(Outcome::Ask(build_conflict(plan, &d, can_resume, add_only))),
+                Ok(None) => Err(e),
+                Err(None) => keep_both(env, plan).await,
+                Err(Some(s)) => Err(s),
             }
         }
         other => other.map(|()| Outcome::Done),
@@ -518,8 +549,10 @@ async fn keep_both(env: &ItemEnv, plan: &PlanItem) -> Result<Outcome> {
     let is_dir = plan.kind == Kind::Dir;
     for n in 2..1000 {
         let candidate = parent.join(&numbered_name(name, n, is_dir))?;
-        if stat_opt(&*env.dst, &candidate.path).await?.is_none() {
-            return Ok(Outcome::KeepBoth(candidate));
+        match stat_dst(env, &candidate.path).await {
+            Ok(None) => return Ok(Outcome::KeepBoth(candidate)),
+            Ok(Some(_)) | Err(None) => {}
+            Err(Some(e)) => return Err(e),
         }
     }
     Err(Error::new(ErrorKind::AlreadyExists, "no free name for the copy"))
@@ -528,8 +561,19 @@ async fn keep_both(env: &ItemEnv, plan: &PlanItem) -> Result<Outcome> {
 async fn run_dir(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     let plan = &job.plan;
     let can_resume = env.dst.capabilities().has(cap::RESUME_UPLOAD);
-    let existing = stat_opt(&*env.dst, &plan.dst.path).await?;
-    let mode = match decide(plan, existing.as_ref(), env.options.resolve_all, can_resume) {
+    let add_only = add_only(env);
+    let existing = match stat_dst(env, &plan.dst.path).await {
+        Ok(existing) => existing,
+        Err(None) => return keep_both(env, plan).await,
+        Err(Some(e)) => return Err(e),
+    };
+    let mode = match decide(
+        plan,
+        existing.as_ref(),
+        env.options.resolve_all,
+        can_resume,
+        add_only,
+    ) {
         Decision::Proceed(m) => m,
         Decision::Skip => return Ok(Outcome::Skipped),
         Decision::KeepBoth => return keep_both(env, plan).await,
@@ -549,9 +593,11 @@ async fn run_dir(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     }
     match env.dst.make_dir(&plan.dst.path, !mode.merge).await {
         Ok(()) => Ok(Outcome::Done),
-        Err(e) if e.kind == ErrorKind::AlreadyExists => match stat_opt(&*env.dst, &plan.dst.path).await? {
-            Some(d) => Ok(Outcome::Ask(build_conflict(plan, &d, can_resume))),
-            None => Err(e),
+        Err(e) if e.kind == ErrorKind::AlreadyExists => match stat_dst(env, &plan.dst.path).await {
+            Ok(Some(d)) => Ok(Outcome::Ask(build_conflict(plan, &d, can_resume, add_only))),
+            Ok(None) => Err(e),
+            Err(None) => keep_both(env, plan).await,
+            Err(Some(s)) => Err(s),
         },
         Err(e) => Err(e),
     }
@@ -560,7 +606,13 @@ async fn run_dir(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
 async fn run_symlink(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     let plan = &job.plan;
     let existing = stat_opt(&*env.dst, &plan.dst.path).await?;
-    let mode = match decide(plan, existing.as_ref(), env.options.resolve_all, false) {
+    let mode = match decide(
+        plan,
+        existing.as_ref(),
+        env.options.resolve_all,
+        false,
+        add_only(env),
+    ) {
         Decision::Proceed(m) => m,
         Decision::Skip => return Ok(Outcome::Skipped),
         Decision::KeepBoth => return keep_both(env, plan).await,

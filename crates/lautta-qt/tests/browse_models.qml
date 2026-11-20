@@ -476,6 +476,35 @@ Item {
                  return ++root.polls > 40 && sub !== null && sub.rfolder && sub.rmodified > 0
                         && sub.ritems === -1 && !remoteDir.folderCounts && root.remoteChanges === 0
              })
+        step("a folder with full access shows no level",
+             null,
+             function() {
+                 return remoteDir.access === "" && remoteDir.writable && remoteDir.changeable && remoteDir.readable
+             })
+        step("a narrower level shows in the open folder at once",
+             function() { FakeWorld.setAccess("account:1", "read-add") },
+             function() {
+                 return remoteDir.access === "read-add" && remoteDir.writable && !remoteDir.changeable
+                        && remoteDir.readable && !remoteDir.loading && remoteDir.count === 5
+             })
+        step("add only lists the folders only",
+             function() { FakeWorld.setAccess("account:1", "add") },
+             function() {
+                 return remoteDir.access === "add" && remoteDir.writable && !remoteDir.readable
+                        && !remoteDir.loading && remoteDir.count === 1
+             })
+        step("read only adds nothing",
+             function() { FakeWorld.setAccess("account:1", "read") },
+             function() {
+                 return remoteDir.access === "read" && !remoteDir.writable && remoteDir.readable
+                        && !remoteDir.loading && remoteDir.count === 5
+             })
+        step("full access again",
+             function() { FakeWorld.setAccess("account:1", "full") },
+             function() {
+                 return remoteDir.access === "" && remoteDir.changeable && !remoteDir.loading
+                        && remoteDir.count === 5
+             })
         step("listing connected the server",
              null,
              function() {

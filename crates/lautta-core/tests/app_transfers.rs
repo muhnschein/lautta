@@ -141,10 +141,3 @@ async fn unfinished_transfers_come_back_paused_or_resumed() {
         .await
         .unwrap();
 }
-
-#[tokio::test]
-async fn standalone_mode_counts_as_bridge_reachable() {
-    let h = home().await;
-    assert!(h.core.bridge.is_none());
-    assert!(h.core.bridge_reachable(), "no bridge: nothing to wait for");
-}

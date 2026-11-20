@@ -261,28 +261,15 @@ Page {
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 spacing: Theme.paddingMedium
 
-                Column {
+                Label {
                     width: parent.width - actionButton.width - parent.spacing
                     anchors.verticalCenter: parent.verticalCenter
-
-                    Label {
-                        width: parent.width
-                        wrapMode: Text.Wrap
-                        text: row.kind === "consent"
-                              //% "Allow access in the notification from netvfs"
-                              ? qsTrId("lautta-browse-consent")
-                              : ErrorText.message("BridgeUnavailable")
-                        font.pixelSize: Theme.fontSizeSmall
-                    }
-                    Label {
-                        visible: row.kind === "consent"
-                        width: parent.width
-                        wrapMode: Text.Wrap
-                        //% "Network locations need your permission"
-                        text: qsTrId("lautta-browse-consent-hint")
-                        font.pixelSize: Theme.fontSizeExtraSmall
-                        color: Theme.secondaryColor
-                    }
+                    wrapMode: Text.Wrap
+                    text: row.kind === "consent"
+                          //% "Network locations need your permission"
+                          ? qsTrId("lautta-browse-consent-needed")
+                          : ErrorText.message("BridgeUnavailable")
+                    font.pixelSize: Theme.fontSizeSmall
                 }
                 Button {
                     id: actionButton

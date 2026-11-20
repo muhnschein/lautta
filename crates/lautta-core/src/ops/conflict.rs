@@ -21,10 +21,12 @@ pub struct Side {
 pub struct ConflictContext {
     pub dest_can_resume: bool,
     pub same_item: bool,
+    /// Destination keeps existing items as they are: nothing replaced or resumed.
+    pub dest_add_only: bool,
 }
 
 pub fn make_conflict(src: Side, dst: Side, ctx: ConflictContext) -> Conflict {
-    let resumable = !ctx.same_item && is_resumable(src, dst, ctx.dest_can_resume);
+    let resumable = !ctx.same_item && !ctx.dest_add_only && is_resumable(src, dst, ctx.dest_can_resume);
     let mut conflict = Conflict {
         dst_is_dir: dst.is_dir,
         src_is_dir: src.is_dir,
@@ -34,9 +36,21 @@ pub fn make_conflict(src: Side, dst: Side, ctx: ConflictContext) -> Conflict {
         dst_mtime_ms: dst.mtime_ms,
         resumable,
         choices: Vec::new(),
+        add_only: ctx.dest_add_only,
     };
     conflict.choices = choices_for(&conflict, ctx.same_item);
+    if ctx.dest_add_only {
+        conflict.choices.retain(|c| !replaces(*c));
+    }
     conflict
+}
+
+/// Choices that change the existing item.
+pub fn replaces(c: ConflictChoice) -> bool {
+    matches!(
+        c,
+        ConflictChoice::Replace | ConflictChoice::ReplaceIfNewer | ConflictChoice::Resume
+    )
 }
 
 fn is_resumable(src: Side, dst: Side, dest_can_resume: bool) -> bool {
@@ -322,7 +336,7 @@ mod tests {
     fn ctx(resume: bool) -> ConflictContext {
         ConflictContext {
             dest_can_resume: resume,
-            same_item: false,
+            ..ConflictContext::default()
         }
     }
 
@@ -393,6 +407,21 @@ mod tests {
     }
 
     #[test]
+    fn where_items_stay_nothing_is_replaced_or_resumed() {
+        let add_only = ConflictContext {
+            dest_can_resume: true,
+            dest_add_only: true,
+            ..ConflictContext::default()
+        };
+        let c = make_conflict(file(100, 5), file(40, 1), add_only);
+        assert_eq!(c.choices, vec![KeepBoth, Skip]);
+        assert!(c.add_only && !c.resumable);
+        let c = make_conflict(DIR, DIR, add_only);
+        assert_eq!(c.choices, vec![Merge, KeepBoth, Skip]);
+        assert!(!make_conflict(file(100, 5), file(40, 1), ctx(true)).add_only);
+    }
+
+    #[test]
     fn same_item_offers_no_replace() {
         let c = make_conflict(
             file(100, 5),
@@ -400,6 +429,7 @@ mod tests {
             ConflictContext {
                 dest_can_resume: true,
                 same_item: true,
+                dest_add_only: false,
             },
         );
         assert_eq!(c.choices, vec![KeepBoth, Skip]);

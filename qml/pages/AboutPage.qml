@@ -7,8 +7,6 @@ Page {
     id: page
 
     readonly property string bridgeStatus: typeof Bridge !== "undefined" ? String(Bridge.status) : "absent"
-    readonly property string denialReason: typeof Bridge !== "undefined" && Bridge.consentReason
-                                           ? String(Bridge.consentReason) : ""
     readonly property bool hasBridge: bridgeStatus !== "absent" && bridgeStatus !== "undefined"
 
     function statusText() {
@@ -25,9 +23,6 @@ Page {
         case "consentUnknown":
             //% "Waiting for your permission"
             return qsTrId("lautta-about-status-consent-unknown")
-        case "consentDenied":
-            //% "Access was denied"
-            return qsTrId("lautta-about-status-consent-denied")
         default:
             return ""
         }
@@ -35,17 +30,14 @@ Page {
 
     function accessText() {
         switch (bridgeStatus) {
-        case "consentDenied":
-            //% "Denied"
-            return qsTrId("lautta-about-access-denied")
         case "consentUnknown":
             //% "Not asked yet"
             return qsTrId("lautta-about-access-unknown")
         case "connecting":
             return ""
         default:
-            //% "Allowed"
-            return qsTrId("lautta-about-access-allowed")
+            //% "Set per server"
+            return qsTrId("lautta-about-access-per-server")
         }
     }
 
@@ -121,11 +113,16 @@ Page {
                 label: qsTrId("lautta-about-access")
                 value: page.accessText()
             }
-            DetailItem {
-                visible: page.bridgeStatus === "consentDenied" && page.denialReason.length > 0
-                //% "Reason"
-                label: qsTrId("lautta-about-reason")
-                value: page.denialReason
+            Label {
+                visible: page.hasBridge
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                horizontalAlignment: Text.AlignRight
+                wrapMode: Text.Wrap
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeSmall
+                //% "Change in Settings › Accounts › Apps using network locations › Lautta. Servers you add in Lautta always have full access."
+                text: qsTrId("lautta-about-access-hint")
             }
 
             SectionHeader {

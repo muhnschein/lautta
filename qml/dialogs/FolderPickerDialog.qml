@@ -106,7 +106,7 @@ Dialog {
                 BackgroundItem {
                     width: list.width
                     height: Theme.itemSizeSmall
-                    enabled: model.selectable
+                    enabled: model.selectable && (!dialog.requireWrite || model.writable)
                     opacity: enabled ? 1 : Theme.opacityLow
                     highlighted: down || dialog.currentUri.indexOf(model.uri) === 0
                     onClicked: dialog.currentUri = model.uri

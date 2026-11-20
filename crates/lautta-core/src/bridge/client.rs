@@ -5,7 +5,7 @@ use super::convert::map_error;
 use super::link::{rpc, Link};
 use super::nearby::Settle;
 use super::types::{
-    bridge_id, location_id, AdHocOptions, BridgeConfig, BridgeStatus, Consent, Drive, NearbyServer,
+    bridge_id, location_id, AdHocOptions, BridgeConfig, BridgeStatus, Consent, Drive, Level, NearbyServer,
     RemoteLocation,
 };
 use crate::error::{Error, ErrorKind, Result};
@@ -115,6 +115,18 @@ impl BridgeClient {
 
     pub fn status(&self) -> BridgeStatus {
         *self.inner.status.borrow()
+    }
+
+    /// Level of location `location` (`nv-account:1` or `account:1`) as last listed; `None` when not
+    /// listed.
+    pub fn access(&self, location: &str) -> Option<Level> {
+        let id = bridge_id(location);
+        self.inner
+            .locations
+            .borrow()
+            .iter()
+            .find(|l| l.bridge_id == id)
+            .map(|l| l.access)
     }
 
     pub fn watch_status(&self) -> watch::Receiver<BridgeStatus> {
@@ -243,6 +255,18 @@ impl BridgeClient {
             .await)
     }
 
+    /// Whether account `loc`, missing from the list, was removed. A missing account may also be one
+    /// this app may not use: `Disconnect` answers `NotFound` only for the first, without network work.
+    pub async fn is_removed(&self, loc: &str) -> bool {
+        let Ok(link) = self.files_link() else {
+            return false;
+        };
+        matches!(
+            rpc(link.proxy().disconnect(bridge_id(loc)).await),
+            Err(e) if e.kind == ErrorKind::NotFound
+        )
+    }
+
     /// Bridge opens Settings › Storage, which the sandbox cannot. Needs no consent.
     pub async fn open_storage_settings(&self) -> Result<()> {
         rpc(self.link()?.proxy().open_storage_settings().await)
@@ -307,9 +331,9 @@ impl BridgeClient {
 pub(super) fn unavailable(status: BridgeStatus) -> Error {
     match status {
         BridgeStatus::Reconnecting => Error::new(ErrorKind::ConnectionLost, "reconnecting to the bridge"),
-        BridgeStatus::ConsentUnknown | BridgeStatus::ConsentDenied => Error::new(
+        BridgeStatus::ConsentUnknown => Error::new(
             ErrorKind::PermissionDenied,
-            "the user has not allowed this app to use network locations",
+            "the user has not decided yet what this app may do",
         ),
         _ => Error::new(ErrorKind::BridgeUnavailable, "network locations are unavailable"),
     }
@@ -327,10 +351,6 @@ mod tests {
         );
         assert_eq!(
             unavailable(BridgeStatus::ConsentUnknown).kind,
-            ErrorKind::PermissionDenied
-        );
-        assert_eq!(
-            unavailable(BridgeStatus::ConsentDenied).kind,
             ErrorKind::PermissionDenied
         );
         assert_eq!(

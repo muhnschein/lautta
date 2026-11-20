@@ -4,7 +4,7 @@ mod bridge_support;
 
 use bridge_support::{eventually, Rig};
 use lautta_bridge_proto::fake::Consent;
-use lautta_core::bridge::BridgeStatus;
+use lautta_core::bridge::{BridgeStatus, Level};
 use lautta_core::provider::{no_progress, Lane, Provider, WriteOptions};
 use lautta_core::vpath::VPath;
 use std::fs::File;
@@ -12,21 +12,23 @@ use std::io::Write;
 use std::time::Duration;
 
 #[tokio::test]
-async fn a_late_location_list_does_not_resurrect_a_revoked_consent() {
+async fn a_late_location_list_does_not_resurrect_a_withdrawn_consent() {
     let rig = Rig::ready().await;
-    rig.fake.set_consent(Consent::Denied).await;
-    rig.client.wait_status(|s| s == BridgeStatus::ConsentDenied).await;
+    rig.fake.set_consent(Consent::Unknown).await;
+    rig.client
+        .wait_status(|s| s == BridgeStatus::ConsentUnknown)
+        .await;
 
     rig.fake.set_latency(Duration::from_millis(300));
     let replies = rig.fake.location_replies();
     let asked = rig.fake.calls_of("ListLocations").len();
-    rig.fake.set_consent(Consent::Granted).await;
+    rig.fake.set_consent(Consent::Allowed(Level::Full)).await;
     // The bridge has made its list (with the account) and is slow to answer.
     eventually("the list asked for", || {
         rig.fake.calls_of("ListLocations").len() > asked
     })
     .await;
-    rig.fake.set_consent(Consent::Denied).await;
+    rig.fake.set_consent(Consent::Unknown).await;
     eventually("the late list", || rig.fake.location_replies() > replies).await;
     rig.fake.set_latency(Duration::ZERO);
     // One more round trip: the late answer came before it on the same connection.
@@ -34,7 +36,9 @@ async fn a_late_location_list_does_not_resurrect_a_revoked_consent() {
         .provider()
         .stat(&VPath::root(), false, Lane::Interactive)
         .await;
-    assert_eq!(rig.client.status(), BridgeStatus::ConsentDenied);
+    rig.client
+        .wait_status(|s| s == BridgeStatus::ConsentUnknown)
+        .await;
     assert!(
         rig.client.locations().is_empty(),
         "nothing is shown without consent"

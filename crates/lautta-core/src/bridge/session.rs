@@ -212,10 +212,10 @@ fn handle_signal(inner: &Arc<Inner>, link: &Arc<Link>, signal: Signal) {
     };
     match signal {
         Signal::ConsentChanged(consent) => apply_consent(inner, link, Consent::from_wire(&consent)),
-        Signal::LocationsChanged if consent_granted(inner) => {
+        Signal::LocationsChanged if consent_decided(inner) => {
             spawn_refresh(inner, link);
         }
-        Signal::NearbyChanged(list) if consent_granted(inner) => {
+        Signal::NearbyChanged(list) if consent_decided(inner) => {
             let list: Vec<NearbyServer> = list.iter().map(NearbyServer::from_wire).collect();
             let shown = inner.nearby.borrow().clone();
             let show = inner.info().nearby.receive(&shown, list);
@@ -227,16 +227,16 @@ fn handle_signal(inner: &Arc<Inner>, link: &Arc<Link>, signal: Signal) {
     }
 }
 
-fn consent_granted(inner: &Inner) -> bool {
-    inner.info().consent == Some(Consent::Granted)
+fn consent_decided(inner: &Inner) -> bool {
+    inner.info().consent == Some(Consent::Decided)
 }
 
-/// Nothing but status until consent is `granted`. `Ready` follows the first list of locations so
+/// Nothing but status until the user decided. `Ready` follows the first list of locations so
 /// Servers never flashes empty.
 fn apply_consent(inner: &Arc<Inner>, link: &Arc<Link>, consent: Consent) {
     inner.info().consent = Some(consent);
     match consent {
-        Consent::Granted => {
+        Consent::Decided => {
             let (inner2, link2) = (inner.clone(), link.clone());
             tokio::spawn(async move {
                 refresh_locations(&inner2, &link2).await;
@@ -246,7 +246,7 @@ fn apply_consent(inner: &Arc<Inner>, link: &Arc<Link>, consent: Consent) {
                     .as_ref()
                     .is_some_and(|l| Arc::ptr_eq(l, &link2));
                 // Consent or connection may have changed meanwhile.
-                if current && consent_granted(&inner2) {
+                if current && consent_decided(&inner2) {
                     inner2.set_status(BridgeStatus::Ready);
                 }
             });
@@ -261,10 +261,6 @@ fn apply_consent(inner: &Arc<Inner>, link: &Arc<Link>, consent: Consent) {
         }
         Consent::Unknown => {
             inner.set_status(BridgeStatus::ConsentUnknown);
-            clear_lists(inner);
-        }
-        Consent::Denied => {
-            inner.set_status(BridgeStatus::ConsentDenied);
             clear_lists(inner);
         }
     }
@@ -313,7 +309,7 @@ async fn refresh_locations(inner: &Arc<Inner>, link: &Arc<Link>) {
     let list: Vec<RemoteLocation> = wire.iter().map(RemoteLocation::from_wire).collect();
     {
         let mut info = inner.info();
-        if generation <= info.applied_refresh || info.consent != Some(Consent::Granted) {
+        if generation <= info.applied_refresh || info.consent != Some(Consent::Decided) {
             return;
         }
         info.applied_refresh = generation;

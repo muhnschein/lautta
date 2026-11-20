@@ -5,6 +5,7 @@
 
 #![allow(non_snake_case)]
 
+use lautta_bridge_proto::access::Level;
 use lautta_bridge_proto::fake::{Consent, FakeBridge, FakeDrive, InfoValue, ScriptedQuestion};
 use lautta_bridge_proto::feature;
 use lautta_core::org::RecentKind;
@@ -34,6 +35,7 @@ struct FakeWorld {
     addAccount: qt_method!(fn(&self, n: i32, name: QString)),
     locationKnown: qt_method!(fn(&self, id: QString) -> bool),
     removeAccount: qt_method!(fn(&self, id: QString)),
+    setAccess: qt_method!(fn(&self, id: QString, level: QString)),
     scriptQuestion: qt_method!(fn(&self, kind: QString)),
     secrets: qt_method!(fn(&self) -> QString),
     answers: qt_method!(fn(&self) -> QString),
@@ -50,7 +52,7 @@ impl FakeWorld {
     }
 
     fn grant(&self) {
-        run(fake().set_consent(Consent::Granted));
+        run(fake().set_consent(Consent::Allowed(Level::Full)));
     }
 
     fn consentRequests(&self) -> i32 {
@@ -84,6 +86,11 @@ impl FakeWorld {
 
     fn removeAccount(&self, id: QString) {
         run(fake().remove_location(&id.to_string()));
+    }
+
+    /// `level`: a level word, else not allowed.
+    fn setAccess(&self, id: QString, level: QString) {
+        run(fake().set_access(&id.to_string(), Level::parse(&level.to_string())));
     }
 
     fn scriptQuestion(&self, kind: QString) {
