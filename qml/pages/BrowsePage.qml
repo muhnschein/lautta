@@ -155,7 +155,7 @@ Page {
                 visible: Bridge.ready
                 //% "Add server"
                 text: qsTrId("lautta-browse-add-server")
-                onClicked: Bridge.addServer("")
+                onClicked: pageStack.push(Qt.resolvedUrl("AddServerPage.qml"))
             }
             MenuItem {
                 text: Transfers.activeCount > 0

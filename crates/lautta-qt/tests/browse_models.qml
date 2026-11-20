@@ -664,11 +664,13 @@ Item {
         step("hand-offs reach the bridge",
              function() {
                  Bridge.addServer("")
+                 Bridge.addServer("webdav")
                  Bridge.editAccount("lautta://nv-account:1/")
              },
              function() {
                  var h = JSON.parse(FakeWorld.handoffs())
-                 return h.indexOf("add:sftp") >= 0 && h.indexOf("settings:account:1") >= 0
+                 return h.indexOf("add:sftp") >= 0 && h.indexOf("add:webdav") >= 0
+                     && h.indexOf("settings:account:1") >= 0
              })
 
         step("an account removed in Settings is forgotten",
