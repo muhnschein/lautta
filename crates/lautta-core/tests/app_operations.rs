@@ -193,7 +193,14 @@ async fn compress_tar_gz_and_errors() {
 fn register_remote(h: &Home) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let provider = LocalProvider::new(dir.path().to_path_buf());
-    let location = Location::remote("nas", LocationKind::AdHoc, "NAS", Some("sftp://nas.home".into()));
+    let location = Location::remote(
+        "nas",
+        LocationKind::Server {
+            provider: "sftp".into(),
+        },
+        "NAS",
+        Some("sftp://nas.home".into()),
+    );
     h.core.locations.register(location, Arc::new(provider));
     dir
 }
@@ -246,7 +253,14 @@ async fn read_only_destinations_are_refused() {
     write(&h.root.join("Documents/f.txt"), b"x");
     let mem = MemoryProvider::new(Capabilities::with(&[cap::READ_ONLY]));
     h.core.locations.register(
-        Location::remote("ro", LocationKind::AdHoc, "RO", None),
+        Location::remote(
+            "ro",
+            LocationKind::Server {
+                provider: "sftp".into(),
+            },
+            "RO",
+            None,
+        ),
         Arc::new(mem),
     );
     let err = h

@@ -35,8 +35,6 @@ function volume(status, drive, busyDrives) {
 function indicator(kind, status, connection, connectionError, drive, busyDrives) {
     switch (kind) {
     case "account":
-    case "adhoc":
-    case "adhocRecent":
         return server(status, connection, connectionError)
     case "volume":
         return volume(status, drive || "", busyDrives)

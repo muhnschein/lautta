@@ -65,7 +65,6 @@ fn key_of(r: &Row) -> String {
 pub struct LocationsModel {
     base: qt_base_class!(trait QAbstractListModel),
     count: qt_property!(i32; NOTIFY countChanged),
-    recentCount: qt_property!(i32; NOTIFY countChanged),
     nearbyCount: qt_property!(i32; NOTIFY countChanged),
     countChanged: qt_signal!(),
     refresh: qt_method!(fn(&mut self)),
@@ -110,7 +109,6 @@ impl LocationsModel {
         let keys: Vec<String> = rows.iter().map(key_of).collect();
         let mut cells: Vec<Vec<Cell>> = rows.iter().map(cells).collect();
         self.sections = rows.iter().map(|r| r.section.to_owned()).collect();
-        self.recentCount = rows.iter().filter(|r| r.kind == "adhocRecent").count() as i32;
         self.nearbyCount = rows.iter().filter(|r| r.kind == "nearby").count() as i32;
         let (start, removed, inserted) = splice(&self.keys, &keys);
         if removed > 0 {

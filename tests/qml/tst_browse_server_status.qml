@@ -19,11 +19,9 @@ ApplicationWindow {
         "Office": "failed",
         "Vault": "warning",
         "Keep": "warning",
-        "Old": "none",
-        "Quick": "on",
-        "Recent": "off"
+        "Old": "none"
     })
-    readonly property var hidden: ["SFTP", "SMB", "nas.home", "cabin.lan", "files.example", "kotisivu"]
+    readonly property var hidden: ["SFTP", "SMB", "nas.home", "cabin.lan"]
 
     ListModel {
         id: servers
@@ -34,8 +32,6 @@ ApplicationWindow {
         ListElement { section: "servers"; uri: "lautta://nv-account:5/"; name: "Vault"; kind: "account"; icon: "server"; status: "ready"; attention: ""; connection: "failed"; connectionError: "AuthFailed"; colour: ""; itemId: "nv-account:5"; place: ""; provider: "SFTP"; host: "nas.home"; free: -1; total: -1; fs: "" }
         ListElement { section: "servers"; uri: "lautta://nv-account:6/"; name: "Keep"; kind: "account"; icon: "server"; status: "attention"; attention: "auth-failed"; connection: "connected"; connectionError: ""; colour: ""; itemId: "nv-account:6"; place: ""; provider: "SMB"; host: "cabin.lan"; free: -1; total: -1; fs: "" }
         ListElement { section: "servers"; uri: "lautta://nv-account:7/"; name: "Old"; kind: "account"; icon: "server"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "nv-account:7"; place: ""; provider: "SFTP"; host: "nas.home"; free: -1; total: -1; fs: "" }
-        ListElement { section: "servers"; uri: "lautta://nv-adhoc:1/"; name: "Quick"; kind: "adhoc"; icon: "server"; status: "ready"; attention: ""; connection: "connected"; connectionError: ""; colour: ""; itemId: "nv-adhoc:1"; place: "sftp://files.example/"; provider: "SFTP"; host: "files.example"; free: -1; total: -1; fs: "" }
-        ListElement { section: "servers"; uri: "sftp://files.kotisivu.fi/"; name: "Recent"; kind: "adhocRecent"; icon: "server"; status: "offline"; attention: ""; connection: "disconnected"; connectionError: ""; colour: ""; itemId: "nv-adhoc:9"; place: "sftp://files.kotisivu.fi/"; provider: "SFTP"; host: ""; free: -1; total: -1; fs: "" }
     }
 
     initialPage: Component {

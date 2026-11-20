@@ -1,17 +1,13 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Bridge client the app talks to. Connection kept by the supervisor in [`super::session`].
 
-use super::convert::map_error;
 use super::link::{rpc, Link};
 use super::nearby::Settle;
 use super::types::{
-    bridge_id, location_id, AdHocOptions, BridgeConfig, BridgeStatus, Consent, Drive, Level, NearbyServer,
-    RemoteLocation,
+    bridge_id, BridgeConfig, BridgeStatus, Consent, Drive, Level, NearbyServer, RemoteLocation,
 };
 use crate::error::{Error, ErrorKind, Result};
 use crate::paths::AppPaths;
-use crate::questions::Questions;
-use lautta_bridge_proto::{OptsBuilder, Zeroizing};
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
@@ -26,7 +22,6 @@ pub(super) struct Info {
     pub bridge_version: Option<String>,
     pub features: Vec<String>,
     pub consent: Option<Consent>,
-    pub questions: Vec<String>,
     pub applied_refresh: u64,
     pub applied_drives: u64,
     pub nearby: Settle,
@@ -34,7 +29,6 @@ pub(super) struct Info {
 
 pub(super) struct Inner {
     pub config: BridgeConfig,
-    pub questions: Arc<Questions>,
     pub status: watch::Sender<BridgeStatus>,
     pub locations: watch::Sender<Arc<Vec<RemoteLocation>>>,
     pub nearby: watch::Sender<Arc<Vec<NearbyServer>>>,
@@ -69,13 +63,12 @@ pub struct BridgeClient {
 }
 
 impl BridgeClient {
-    pub fn start(config: BridgeConfig, questions: Arc<Questions>) -> Result<BridgeClient> {
+    pub fn start(config: BridgeConfig) -> Result<BridgeClient> {
         let runtime = tokio::runtime::Handle::try_current()
             .map_err(|_| Error::new(ErrorKind::Internal, "the bridge client needs a tokio runtime"))?;
         let inner = Arc::new(Inner {
             foreground: watch::channel(config.foreground).0,
             config,
-            questions,
             status: watch::channel(BridgeStatus::Absent).0,
             locations: watch::channel(Arc::new(Vec::new())).0,
             nearby: watch::channel(Arc::new(Vec::new())).0,
@@ -93,8 +86,8 @@ impl BridgeClient {
         Ok(BridgeClient { inner })
     }
 
-    pub fn start_for_app(paths: &AppPaths, questions: Arc<Questions>) -> Result<BridgeClient> {
-        BridgeClient::start(BridgeConfig::for_app(paths), questions)
+    pub fn start_for_app(paths: &AppPaths) -> Result<BridgeClient> {
+        BridgeClient::start(BridgeConfig::for_app(paths))
     }
 
     pub fn shutdown(&self) {
@@ -282,50 +275,6 @@ impl BridgeClient {
     pub async fn unmount_drive(&self, drive: &str) -> Result<()> {
         rpc(self.link()?.proxy().unmount(drive).await)
     }
-
-    /// Secret is wiped before return, whatever the outcome; identity prompts arrive as questions.
-    pub async fn connect_adhoc(
-        &self,
-        url: &str,
-        secret: Zeroizing<Vec<u8>>,
-        opts: AdHocOptions,
-    ) -> Result<String> {
-        let mut secret = secret;
-        self.connect_adhoc_wiping(url, &mut secret, &opts).await
-    }
-
-    /// Buffer is empty afterwards, also when the call fails or is dropped.
-    pub async fn connect_adhoc_wiping(
-        &self,
-        url: &str,
-        secret: &mut Zeroizing<Vec<u8>>,
-        opts: &AdHocOptions,
-    ) -> Result<String> {
-        let link = match self.files_link() {
-            Ok(link) => link,
-            Err(e) => {
-                zeroize::Zeroize::zeroize(&mut **secret);
-                return Err(e);
-            }
-        };
-        let mut wire = OptsBuilder::new();
-        if let Some(user) = &opts.user {
-            wire = wire.str("user", user);
-        }
-        if let Some(profile) = &opts.security_profile {
-            wire = wire.str("security_profile", profile);
-        }
-        let loc = link
-            .connection()
-            .connect_ad_hoc_wiping(url, secret, &wire.build())
-            .await
-            .map_err(map_error)?;
-        Ok(location_id(&loc))
-    }
-
-    pub async fn forget_adhoc(&self, loc: &str) -> Result<()> {
-        rpc(self.files_link()?.proxy().forget_ad_hoc(bridge_id(loc)).await)
-    }
 }
 
 pub(super) fn unavailable(status: BridgeStatus) -> Error {
@@ -366,9 +315,7 @@ mod tests {
     #[test]
     fn starting_without_a_runtime_is_an_error() {
         let paths = AppPaths::new("/nonexistent-home");
-        let e = BridgeClient::start_for_app(&paths, Questions::new())
-            .err()
-            .unwrap();
+        let e = BridgeClient::start_for_app(&paths).err().unwrap();
         assert_eq!(e.kind, ErrorKind::Internal);
     }
 }

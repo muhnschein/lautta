@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Client against the fake: errors with details, malformed calls, ordered signals,
-//! disconnects, secret handling.
+//! disconnects.
 #![cfg(feature = "fake")]
 
 use futures::StreamExt;
 use lautta_bridge_proto::fake::{Failure, FakeBridge};
-use lautta_bridge_proto::{connect, BridgeError, OptsBuilder, Signal, SignalStream, Zeroizing};
+use lautta_bridge_proto::{connect, BridgeError, OptsBuilder, Signal, SignalStream};
 use std::time::Duration;
 
 async fn fake_with_account() -> FakeBridge {
@@ -188,54 +188,6 @@ async fn the_signal_stream_ends_when_the_bridge_goes_away() {
     assert!(matches!(e, BridgeError::Disconnected(_)), "{e:?}");
 }
 
-#[tokio::test]
-async fn the_secret_is_wiped_after_the_call_whatever_happens() {
-    let fake = fake_with_account().await;
-    let conn = fake.connect().await.unwrap();
-    hello(&conn).await;
-    let none = OptsBuilder::new().build();
-
-    let mut secret = Zeroizing::new(b"hunter2".to_vec());
-    let loc = conn
-        .connect_ad_hoc_wiping("sftp://host/", &mut secret, &none)
-        .await
-        .unwrap();
-    assert_eq!(loc, "adhoc:1");
-    assert!(secret.is_empty(), "wiped after success");
-    assert_eq!(
-        fake.received_secrets(),
-        vec![b"hunter2".to_vec()],
-        "the bridge did get it"
-    );
-
-    let mut secret = Zeroizing::new(b"hunter3".to_vec());
-    let e = conn
-        .connect_ad_hoc_wiping("sftp://u:pw@host/", &mut secret, &none)
-        .await
-        .unwrap_err();
-    assert_eq!(e.netvfs_name(), Some("SecurityPolicy"));
-    assert!(secret.is_empty(), "wiped after a refusal");
-
-    fake.set_latency(Duration::from_secs(5));
-    let mut secret = Zeroizing::new(b"hunter4".to_vec());
-    let call = conn.connect_ad_hoc_wiping("sftp://host/", &mut secret, &none);
-    assert!(tokio::time::timeout(Duration::from_millis(50), call)
-        .await
-        .is_err());
-    assert!(secret.is_empty(), "wiped when the future is dropped");
-}
-
-#[tokio::test]
-async fn keyboard_answers_are_wiped_after_the_call() {
-    let fake = fake_with_account().await;
-    let conn = fake.connect().await.unwrap();
-    hello(&conn).await;
-    let mut answers = Zeroizing::new(vec![b"123456".to_vec()]);
-    let e = conn.answer_wiping("q1", true, &mut answers).await.unwrap_err();
-    assert_eq!(e.netvfs_name(), Some("NotFound"));
-    assert!(answers.is_empty());
-}
-
 async fn state_of(conn: &lautta_bridge_proto::Connection, loc: &str) -> (String, Option<String>) {
     let locations = conn.proxy().list_locations().await.unwrap();
     let info = &locations.iter().find(|l| l.id == loc).unwrap().info;
@@ -282,12 +234,6 @@ async fn connection_states_follow_use_disconnect_and_the_script() {
     conn.proxy().stat("account:1", b"", true, "").await.unwrap();
     let quiet = tokio::time::timeout(Duration::from_millis(200), signals.next()).await;
     assert!(quiet.is_err(), "{quiet:?}");
-    let loc = conn
-        .proxy()
-        .connect_ad_hoc("sftp://h/", b"", &OptsBuilder::new().build())
-        .await
-        .unwrap();
-    assert_eq!(state_of(&conn, &loc).await, s("connected", None));
 }
 
 #[tokio::test]

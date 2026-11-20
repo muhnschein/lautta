@@ -184,7 +184,9 @@ async fn remote_addresses_are_paths_inside_the_location() {
     let h = home().await;
     let loc = lautta_core::locations::Location::remote(
         "nv-nas",
-        lautta_core::locations::LocationKind::AdHoc,
+        lautta_core::locations::LocationKind::Server {
+            provider: "sftp".into(),
+        },
         "NAS",
         Some("sftp://nas.home".to_owned()),
     );
@@ -293,7 +295,9 @@ async fn a_server_folder_is_not_counted() {
     let h = home().await;
     let loc = lautta_core::locations::Location::remote(
         "nv-nas",
-        lautta_core::locations::LocationKind::AdHoc,
+        lautta_core::locations::LocationKind::Server {
+            provider: "sftp".into(),
+        },
         "NAS",
         Some("sftp://nas.home".to_owned()),
     );

@@ -18,7 +18,6 @@ QtObject {
         check(App.nameOf(child) === "a b.txt", "nameOf")
         check(App.childUri(docs, "x/y") === "", "names with a slash are refused")
         check(App.isRemote("lautta://nv-account:1/srv/photos"), "an account is remote")
-        check(App.isRemote("lautta://nv-adhoc:9/"), "an ad-hoc server is remote")
         check(!App.isRemote(child), "a local folder is not remote")
         check(!App.isRemote("lautta://arc-1/a.txt"), "an archive is not remote")
         check(!App.isRemote("") && !App.isRemote("nv-account:1"), "nothing is remote without a URI")

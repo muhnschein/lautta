@@ -10,7 +10,7 @@ mod state;
 mod transfer;
 pub mod tree;
 
-pub use state::{Consent, Failure, FakeDrive, InfoValue, JobFailure, RecordedAnswer, ScriptedQuestion};
+pub use state::{Consent, Failure, FakeDrive, InfoValue, JobFailure};
 
 use crate::access::Level;
 use crate::connect::Connection;
@@ -324,23 +324,6 @@ impl FakeBridge {
         });
     }
 
-    pub fn script_adhoc_questions(&self, questions: Vec<ScriptedQuestion>) {
-        self.shared.with(|s| s.adhoc_questions = questions);
-    }
-
-    /// Unprompted question (keyboard-interactive during a session); resolves with the app's answer.
-    pub async fn ask(&self, kind: &str, details: Vec<(String, InfoValue)>) -> Option<RecordedAnswer> {
-        self.shared.ask(kind, &details).await
-    }
-
-    pub fn received_secrets(&self) -> Vec<Vec<u8>> {
-        self.shared.with(|s| s.received_secrets.clone())
-    }
-
-    pub fn answers(&self) -> Vec<RecordedAnswer> {
-        self.shared.with(|s| s.answers.clone())
-    }
-
     pub fn calls(&self) -> Vec<CallRecord> {
         self.shared.with(|s| s.calls.clone())
     }
@@ -424,7 +407,7 @@ mod tests {
         fake.remove_location(&id).await;
         assert!(fake.locations().is_empty());
         assert_eq!(fake.session_count(), 0);
-        assert!(fake.calls().is_empty() && fake.handoffs().is_empty() && fake.answers().is_empty());
+        assert!(fake.calls().is_empty() && fake.handoffs().is_empty());
     }
 
     #[tokio::test]

@@ -98,14 +98,6 @@
       "x": 960,
       "y": 4860
     },
-    "ConnectServer.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Connect to server",
-      "w": 400,
-      "x": 2880,
-      "y": 0
-    },
     "Covers.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -266,6 +258,14 @@
       "x": 3840,
       "y": 2060
     },
+    "NearbySetup.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Nearby server \u00b7 set up as account",
+      "w": 400,
+      "x": 3360,
+      "y": 960
+    },
     "Notifications.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -353,22 +353,6 @@
       "w": 400,
       "x": 480,
       "y": 9480
-    },
-    "ServerAdhocMenu.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Ad-hoc server menu",
-      "w": 400,
-      "x": 4320,
-      "y": 14440
-    },
-    "ServerQuestion.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Ad-hoc server question",
-      "w": 400,
-      "x": 3360,
-      "y": 0
     },
     "Settings.dc.html": {
       "h": 820,
@@ -892,8 +876,7 @@
     "BrowseServerMenu.dc.html",
     "BrowseVolume.dc.html",
     "Recents.dc.html",
-    "ConnectServer.dc.html",
-    "ServerQuestion.dc.html",
+    "NearbySetup.dc.html",
     "FavouriteEdit.dc.html",
     "ShareTarget.dc.html",
     "Directory.dc.html",
@@ -949,7 +932,6 @@
     "FolderPickerPulley.dc.html",
     "TransferDetailsPulley.dc.html",
     "TextViewerPulley.dc.html",
-    "ServerAdhocMenu.dc.html",
     "ImageDeleteRemote.dc.html",
     "ActivityBar.dc.html",
     "ActivityBarQuestion.dc.html",

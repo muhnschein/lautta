@@ -4,14 +4,12 @@
 
 use super::fail::Fail;
 use super::tree::normalize;
-use crate::wire::{value_bool, value_bytes, value_i64, value_str, MAX_LIST_BATCH, MAX_READ_BYTES};
+use crate::wire::{value_bool, value_i64, value_str, MAX_LIST_BATCH, MAX_READ_BYTES};
 use std::collections::HashMap;
 use zbus::zvariant::OwnedValue;
 
 pub const MAX_OFFSET: i64 = 1 << 62;
 const MAX_TIME_MS: i64 = 1 << 53;
-const MAX_URL: usize = 4096;
-const MAX_SECRET: usize = 64 * 1024;
 const MAX_ID: usize = 64;
 
 pub type Dict = HashMap<String, OwnedValue>;
@@ -88,20 +86,6 @@ pub fn token(s: &str, max: usize) -> Result<String, Fail> {
     } else {
         Err(Fail::args("Argument is not a valid name"))
     }
-}
-
-pub fn url(s: &str) -> Result<(), Fail> {
-    if s.len() > MAX_URL {
-        return Err(Fail::args("Argument is too long"));
-    }
-    Ok(())
-}
-
-pub fn secret(s: &[u8]) -> Result<(), Fail> {
-    if s.len() > MAX_SECRET {
-        return Err(Fail::args("Secret too long"));
-    }
-    Ok(())
 }
 
 fn int_option(key: &str, v: &OwnedValue, min: i64, max: i64) -> Result<i64, Fail> {
@@ -257,59 +241,6 @@ pub fn walk_opts(opts: &Dict) -> Result<WalkOpts, Fail> {
     Ok(out)
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
-pub struct AdHocOpts {
-    pub user: Option<String>,
-    pub security_profile: Option<String>,
-}
-
-pub fn adhoc_opts(opts: &Dict) -> Result<AdHocOpts, Fail> {
-    let mut out = AdHocOpts::default();
-    for (key, v) in opts {
-        let s = value_str(v)
-            .filter(|s| s.len() <= 256)
-            .ok_or_else(|| Fail::args(&format!("Option \"{key}\" must be a short string")))?;
-        match key.as_str() {
-            "user" if !s.contains('\0') => out.user = Some(s),
-            "security_profile" if ["strict", "signed", "legacy", "guest"].contains(&s.as_str()) => {
-                out.security_profile = Some(s);
-            }
-            "user" | "security_profile" => return Err(Fail::args("Invalid option value")),
-            _ => return Err(unknown(key)),
-        }
-    }
-    Ok(out)
-}
-
-#[derive(Debug, Default, PartialEq, Eq)]
-pub struct AnswerOpts {
-    pub accept: bool,
-    pub answers: Vec<Vec<u8>>,
-}
-
-pub fn answer_opts(opts: &Dict) -> Result<AnswerOpts, Fail> {
-    let mut out = AnswerOpts::default();
-    for (key, v) in opts {
-        match key.as_str() {
-            "accept" => out.accept = bool_option(key, v)?,
-            "answers" => out.answers = byte_arrays(v)?,
-            _ => return Err(unknown(key)),
-        }
-    }
-    Ok(out)
-}
-
-fn byte_arrays(v: &OwnedValue) -> Result<Vec<Vec<u8>>, Fail> {
-    let bad = || Fail::args("Option \"answers\" must be an array of byte arrays");
-    match &**v {
-        zbus::zvariant::Value::Array(items) if items.len() <= 16 => items
-            .iter()
-            .map(|item| value_bytes(item).filter(|b| b.len() <= 1024).ok_or_else(bad))
-            .collect(),
-        _ => Err(bad()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -338,8 +269,6 @@ mod tests {
         assert_eq!(read_size(5).unwrap(), 5);
         assert!(token("sha256", 32).is_ok());
         assert!(token("SHA", 32).is_err());
-        assert!(url(&"x".repeat(5000)).is_err());
-        assert!(secret(&vec![0; 70_000]).is_err());
         assert_eq!(path(b"a/./b").unwrap(), b"a/b");
         assert_eq!(path(b"a/../b").unwrap_err().bare(), "InvalidName");
     }
@@ -399,30 +328,5 @@ mod tests {
         assert_eq!((t.lane, t.create_mode), ("stream", Some(0o600)));
         assert!(transfer_opts(&dict(OptsBuilder::new().int("lane", 1)), false).is_err());
         assert!(transfer_opts(&dict(OptsBuilder::new().int("size", -2)), false).is_err());
-    }
-
-    #[test]
-    fn adhoc_and_answer_options() {
-        let o = adhoc_opts(&dict(
-            OptsBuilder::new()
-                .str("user", "me")
-                .str("security_profile", "strict"),
-        ))
-        .unwrap();
-        assert_eq!(o.user.as_deref(), Some("me"));
-        assert_eq!(o.security_profile.as_deref(), Some("strict"));
-        assert!(adhoc_opts(&dict(OptsBuilder::new().str("security_profile", "loose"))).is_err());
-        assert!(adhoc_opts(&dict(OptsBuilder::new().str("password", "x"))).is_err());
-        assert!(adhoc_opts(&dict(OptsBuilder::new().bool("user", true))).is_err());
-        let a = answer_opts(&dict(
-            OptsBuilder::new()
-                .bool("accept", true)
-                .byte_arrays("answers", &[b"1".to_vec(), b"2".to_vec()]),
-        ))
-        .unwrap();
-        assert!(a.accept);
-        assert_eq!(a.answers, vec![b"1".to_vec(), b"2".to_vec()]);
-        assert!(answer_opts(&dict(OptsBuilder::new().str("answers", "x"))).is_err());
-        assert!(answer_opts(&dict(OptsBuilder::new().str("x", "x"))).is_err());
     }
 }

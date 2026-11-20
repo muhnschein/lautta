@@ -28,7 +28,6 @@ sha2 = "0.10"
 md-5 = "0.10"
 sha1 = "0.10"
 hex = "0.4"
-zeroize = "1"
 notify = { version = "6", default-features = false }
 image = { version = "0.24", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 kamadak-exif = "0.5"

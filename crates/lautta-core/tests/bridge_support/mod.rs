@@ -5,8 +5,6 @@ use lautta_bridge_proto::fake::{FakeBridge, Listener};
 use lautta_core::bridge::{BridgeClient, BridgeConfig, BridgeStatus};
 use lautta_core::paths::AppPaths;
 use lautta_core::provider::netvfs::NetvfsProvider;
-use lautta_core::questions::Questions;
-use std::sync::Arc;
 use std::time::Duration;
 use tempfile::TempDir;
 
@@ -15,7 +13,6 @@ pub const ACCOUNT: &str = "nv-account:1";
 pub struct Rig {
     pub fake: FakeBridge,
     pub client: BridgeClient,
-    pub questions: Arc<Questions>,
     pub paths: AppPaths,
     pub listener: Option<Listener>,
     pub home: TempDir,
@@ -66,12 +63,10 @@ impl Rig {
         let home = tempfile::tempdir().unwrap();
         let paths = AppPaths::new(home.path());
         let listener = listen.then(|| fake.listen(&paths.bridge_socket()).unwrap());
-        let questions = Questions::new();
-        let client = BridgeClient::start(tune(config(&paths)), questions.clone()).unwrap();
+        let client = BridgeClient::start(tune(config(&paths))).unwrap();
         Rig {
             fake,
             client,
-            questions,
             paths,
             listener,
             home,
