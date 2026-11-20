@@ -10,7 +10,6 @@ Page {
 
     readonly property alias layoutModel: layout
     readonly property alias listView: list
-    property int previewCount
 
     allowedOrientations: Orientation.All
 
@@ -74,29 +73,6 @@ Page {
             layoutMovable: model.movable
             layoutNested: model.nested
             onToggled: layout.setHidden(layoutSection, layoutItem, shown)
-        }
-
-        footer: Column {
-            width: list.width
-
-            SectionHeader {
-                //% "Preview"
-                text: qsTrId("lautta-browse-layout-preview")
-            }
-            Item {
-                width: 1
-                height: Theme.paddingLarge
-            }
-            BrowsePreview {
-                width: parent.width
-                onCountChanged: page.previewCount = count
-                screenWidth: page.width
-                screenHeight: page.height
-            }
-            Item {
-                width: 1
-                height: Theme.paddingLarge
-            }
         }
 
         VerticalScrollDecorator { }

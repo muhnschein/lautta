@@ -221,23 +221,6 @@ ApplicationWindow {
         view.endSelection()
     }
 
-    function checkPreview(width) {
-        var preview = previewComponent.createObject(win.contentItem, { "screenWidth": width, "screenHeight": 960 })
-        waitFor(function () { return findRows(preview).length === 2 }, "the preview's rows")
-        var rows = findRows(preview)
-        expect(preview.gridMode && rows.length === 2, "the preview has two rows of 3: " + rows.length)
-        same(namesIn(rows).map(function (r) { return r.length }), [3, 3], "3 tiles a row")
-        var tiles = preview.tiles()
-        for (var i = 0; i < tiles.length; ++i) {
-            var t = tiles[i]
-            var lines = metrics.nameLines(t.name, t.width - 2 * t.gap).length
-            same(t.implicitHeight, cellHeight(preview.cellWidth, lines, t.isDir ? 1 : 2),
-                 t.name + ": its name and caption lines only")
-        }
-        checkRows(rows, "preview")
-        preview.destroy()
-    }
-
     function checkInsert(view) {
         var grid = view.flickable
         var tall = view.height
@@ -279,7 +262,6 @@ ApplicationWindow {
             checkPortrait(view.flickable)
             checkWidths(view)
             checkDrag(view.flickable)
-            checkPreview(view.width)
             checkInsert(view)
         }
         App.setSetting("view_mode", JSON.stringify("list"))
@@ -300,11 +282,5 @@ ApplicationWindow {
                 uri: win.base
             }
         }
-    }
-
-    Component {
-        id: previewComponent
-
-        ViewPreview { }
     }
 }

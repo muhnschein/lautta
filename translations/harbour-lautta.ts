@@ -125,7 +125,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-about-tagline">
-        <source>A file manager for Sailfish OS.</source>
+        <source>A better file manager for Sailfish OS.</source>
+        <oldsource>A file manager for Sailfish OS.</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-about-network">
@@ -138,18 +139,6 @@
     </message>
     <message id="lautta-about-access">
         <source>Access</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-about-permissions">
-        <source>Permissions</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-about-permission-list">
-        <source>Your folders, Removable media, Audio</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-about-no-network">
-        <source>Lautta never opens network connections itself.</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-about-licence">
@@ -2156,10 +2145,6 @@
         <source>Servers found nearby</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-browse-layout-preview">
-        <source>Preview</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-sel-done">
         <source>Stop selecting</source>
         <translation type="unfinished"></translation>
@@ -2260,38 +2245,6 @@
         <source>Older</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-view-preview-photos">
-        <source>Photos</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-view-preview-work">
-        <source>Work</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-view-preview-photo">
-        <source>beach</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-view-preview-notes">
-        <source>notes</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-view-preview-report">
-        <source>report</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-view-preview-song">
-        <source>song</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-view-preview-hidden">
-        <source>backup</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-view-preview-title">
-        <source>Documents</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-recents-off-settings-hint">
         <source>Turn them on in Settings</source>
         <translation type="unfinished"></translation>
@@ -2302,10 +2255,6 @@
     </message>
     <message id="lautta-settings-view-options">
         <source>View options</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-opts-preview">
-        <source>Preview</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-act-more">
@@ -2390,72 +2339,6 @@
         <source>File renamed</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-settings-summary-list">
-        <source>List</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-summary-by-size">
-        <source>size</source>
-        <extracomment>How folders are sorted, in &quot;List, sorted by size&quot;</extracomment>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-summary-by-modified">
-        <source>date modified</source>
-        <extracomment>How folders are sorted, in &quot;List, sorted by date modified&quot;</extracomment>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-summary-by-type">
-        <source>type</source>
-        <extracomment>How folders are sorted, in &quot;List, sorted by type&quot;</extracomment>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-summary-by-name">
-        <source>name</source>
-        <extracomment>How folders are sorted, in &quot;List, sorted by name&quot;</extracomment>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-summary-view">
-        <source>%1, sorted by %2</source>
-        <extracomment>%1 is how folders show (&quot;List&quot;, &quot;Grid&quot;), %2 their order (&quot;name&quot;)</extracomment>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-summary-trash" numerus="yes">
-        <source>Kept in Trash for %n days</source>
-        <translation>
-            <numerusform>Kept in Trash for %n day</numerusform>
-            <numerusform>Kept in Trash for %n days</numerusform>
-        </translation>
-    </message>
-    <message id="lautta-settings-summary-no-trash">
-        <source>Deleted permanently</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-summary-transfers" numerus="yes">
-        <source>%n at once</source>
-        <translation>
-            <numerusform>%n at once</numerusform>
-            <numerusform>%n at once</numerusform>
-        </translation>
-    </message>
-    <message id="lautta-settings-summary-search" numerus="yes">
-        <source>%n folders deep on servers</source>
-        <translation>
-            <numerusform>%n folder deep on servers</numerusform>
-            <numerusform>%n folders deep on servers</numerusform>
-        </translation>
-    </message>
-    <message id="lautta-settings-summary-recents-on">
-        <source>Remembered</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-summary-recents-off">
-        <source>Not remembered</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-summary-storage">
-        <source>%1 cached</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-settings-search-depth-hint">
         <source>Searches on this device go through every folder</source>
         <translation type="unfinished"></translation>
@@ -2533,16 +2416,6 @@
             <numerusform>Moving %n item</numerusform>
             <numerusform>Moving %n items</numerusform>
         </translation>
-    </message>
-    <message id="lautta-settings-summary-grid">
-        <source>Grid</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-view-preview-notes-text">
-        <source>Ferry at 06:00
-Sauna wood: 2 sacks
-Cabin keys from Anni</source>
-        <translation type="unfinished"></translation>
     </message>
     <message id="lautta-err-not-playable">
         <source>Can&apos;t play %1.</source>
@@ -2719,7 +2592,8 @@ Cabin keys from Anni</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-about-access-hint">
-        <source>Change in Settings › Accounts › Apps using network locations › Lautta. Servers you add in Lautta always have full access.</source>
+        <source>Change it in Settings › Accounts › Apps using network locations.</source>
+        <oldsource>Change in Settings › Accounts › Apps using network locations › Lautta. Servers you add in Lautta always have full access.</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-browse-consent-needed">
@@ -2732,6 +2606,14 @@ Cabin keys from Anni</source>
     </message>
     <message id="lautta-nearby-set-up-hint">
         <source>This server isn&apos;t set up yet. Proceed to add it as an account in Settings › Accounts. After that, you can access it in Lautta.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-licence-source">
+        <source>Licence and source</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-about-source-github">
+        <source>On GitHub</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
