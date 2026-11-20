@@ -1,6 +1,6 @@
 # Lautta feature map
 
-Shared names for Lautta's screens, features and flows. Each feature: how user reaches it (*Entry*) and what on screen proves it worked (*Proof*). Flows: `doc/flows.md`; feature ↔ flow ↔ screen: `doc/flow-mapping.md`.
+Shared names for Lautta's screens, features and flows. Each feature: how user reaches it (*Entry*) and what on screen proves it worked (*Proof*). Flows: `doc/flows.md`; feature ↔ flow ↔ screen: `doc/flow-mapping.md`; flows as phone screenshots: `doc/canvas/index.html` (open in browser).
 
 IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` feature, `FL-*` flow (`doc/flows.md`). Name in **bold** = canonical term; use it in code comments, PRs and talk. Mode: **S** standalone (no netvfs), **B** needs netvfs bridge.
 
