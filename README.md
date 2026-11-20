@@ -48,7 +48,7 @@ network protocol: everything remote goes through netvfs.
 | Image, video, PDF, text viewers | ✓ | ✓ |
 | Thumbnails | ✓ | ✓ |
 | Share sheet target | ✓ | ✓ |
-| SFTP and SMB servers | ✗ | ✓ |
+| SFTP, SMB, WebDAV and FTPS servers | ✗ | ✓ |
 | Servers nearby | ✗ | ✓ |
 | Phone ⇄ server transfers | ✗ | ✓ |
 | Remote media streaming | ✗ | ✓ |

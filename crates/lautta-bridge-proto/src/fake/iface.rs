@@ -381,12 +381,17 @@ fn parse_adhoc(url: &str, opts: &args::AdHocOpts) -> Result<AdHocUrl, Fail> {
     let provider = match scheme {
         "sftp" | "ssh" => "sftp",
         "smb" => "smb",
+        "davs" | "https" => "webdav",
+        "ftps" => "ftps",
         "fake" => "fake",
-        "dav" | "davs" | "ftp" | "ftps" => {
+        "dav" | "http" => {
             return Err(Fail::net(
-                "Unsupported",
-                &format!("{scheme} URLs are no longer supported"),
+                "SecurityPolicy",
+                "WebDAV needs TLS; use davs:// or https://",
             ));
+        }
+        "ftp" => {
+            return Err(Fail::net("SecurityPolicy", "FTP needs TLS; use ftps://"));
         }
         "file" | "local" => {
             return Err(Fail::net(
@@ -1160,6 +1165,9 @@ mod tests {
         assert!(info.contains(&("user".to_owned(), InfoValue::Str("other".into()))));
         assert!(!info.iter().any(|(k, _)| k == "port"));
         assert_eq!(parse_adhoc("smb://h/", &plain()).unwrap().provider, "smb");
+        assert_eq!(parse_adhoc("davs://h/dav", &plain()).unwrap().provider, "webdav");
+        assert_eq!(parse_adhoc("https://h/", &plain()).unwrap().provider, "webdav");
+        assert_eq!(parse_adhoc("ftps://h/", &plain()).unwrap().provider, "ftps");
         assert_eq!(parse_adhoc("fake://h/", &plain()).unwrap().provider, "fake");
     }
 
@@ -1172,14 +1180,9 @@ mod tests {
         );
         assert_eq!(bare("file:///x", &plain()).as_deref(), Some("PermissionDenied"));
         assert_eq!(bare("gopher://h/", &plain()).as_deref(), Some("Unsupported"));
-        for url in ["dav://h/", "davs://h/", "ftp://h/", "ftps://h/", "https://h/"] {
-            assert_eq!(bare(url, &plain()).as_deref(), Some("Unsupported"), "{url}");
+        for url in ["dav://h/", "http://h/", "ftp://h/"] {
+            assert_eq!(bare(url, &plain()).as_deref(), Some("SecurityPolicy"), "{url}");
         }
-        let removed = parse_adhoc("davs://h/", &plain()).err();
-        assert_eq!(
-            removed.as_ref().map(Fail::message),
-            Some("davs URLs are no longer supported")
-        );
         let legacy = AdHocOpts {
             user: None,
             security_profile: Some("legacy".into()),

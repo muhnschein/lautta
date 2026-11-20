@@ -5,7 +5,7 @@
 ## What this is
 
 - Usable store app today: user's folders, SD cards, USB drives, archives, Trash. Browse, preview, open, share, copy, move.
-- Showcase for platform file access: with netvfs installed, SFTP and SMB servers from Settings → Accounts become ordinary locations, plus persistent, resumable transfer queue.
+- Showcase for platform file access: with netvfs installed, SFTP, SMB, WebDAV and FTPS servers from Settings → Accounts become ordinary locations, plus persistent, resumable transfer queue.
 
 ## What this isn't
 
@@ -34,7 +34,7 @@ Standalone is what Harbour reviewers and most users see: must be useful and poli
 - Access: until `decided`, *Servers* shows one row, "Network locations need your permission", with *Ask again*. Then user's level per server (`ListLocations` info `access`): `full`, `read-add`, `read`, `add`; not allowed = not listed. Folder shows level (lock + name) and offers only what it allows: `read-add` adds, changes nothing; `add` lists folders only, conflicts there keep both. Ad-hoc servers always full. Narrowed level ends sessions; refused transfer says what is left.
 - Purge: account missing from list is forgotten only when `Disconnect` answers `NotFound`; one not allowed (`PermissionDenied`) keeps favourites and recents.
 - Accounts handed off: *Add server*, *Edit server*, *Update sign-in*, *Review server identity* open Settings via bridge. App never edits accounts, pins, secrets; never opens or closes connections.
-- Ad-hoc servers: *Connect to server* takes `sftp://` or `smb://` URL and secret if needed; buffer zeroized after call. Identity prompts and unencrypted-connection consent arrive as `Question` signals, answered in app (for accounts: in Settings).
+- Ad-hoc servers: *Connect to server* takes `sftp://`, `smb://`, `davs://` or `ftps://` URL and secret if needed; buffer zeroized after call. Identity prompts and unencrypted-connection consent arrive as `Question` signals, answered in app (for accounts: in Settings).
 - Server row status: one dot, no text, no protocol or host. Connected = highlight; not connected = primary; connecting = pulsing (only on screen, app in front); failed = red; sign-in or identity needs user = orange. Not connected stays browsable; opening connects.
 - Names and paths cross as bytes (`ay`): netvfs names may be non-UTF-8, D-Bus strings may not.
 - Local data never by path: uploads pass read-only fd, downloads a writable fd to app-created temp file, archive streams a pipe end.
@@ -52,7 +52,7 @@ lautta-qt (qmetaobject-rs; no logic)
 lautta-core (no Qt): providers (local, archive, netvfs),
 planner, transfer queue, caches, SQLite
         |  p2p D-Bus + fd passing, unix socket
-netvfs-bridge (not part of this app) -> SFTP / SMB servers
+netvfs-bridge (not part of this app) -> SFTP / SMB / WebDAV / FTPS servers
 ```
 
 - QObjects on GUI thread only; core answers via queued callbacks.

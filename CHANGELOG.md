@@ -5,6 +5,7 @@
 - Videos from servers stream and seek instead of downloading first ([#100](https://github.com/muhnschein/lautta/issues/100)).
 - Streaming videos no longer freeze the screen every second or so, and start and seek faster.
 - Servers follow what you allow Lautta in netvfs: full access, read and add, read only, or add only, per server ([#104](https://github.com/muhnschein/lautta/pull/104)). Folders show the level and offer only what it allows. Needs netvfs 2.0.
+- WebDAV and FTPS servers work like SFTP and SMB: accounts from *Settings › Accounts* show up as locations, and *Connect to server* takes `davs://` and `ftps://` addresses (needs netvfs with WebDAV and FTPS).
 
 ## 1.0.0
 
