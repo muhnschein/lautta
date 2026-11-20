@@ -1528,7 +1528,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-connect-schemes">
-        <source>sftp:// or smb://</source>
+        <source>sftp://, smb://, davs:// or ftps://</source>
+        <oldsource>sftp:// or smb://</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-connect-user">

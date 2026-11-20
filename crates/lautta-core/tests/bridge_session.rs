@@ -545,24 +545,24 @@ async fn adhoc_refusals_keep_their_names() {
 }
 
 #[tokio::test]
-async fn only_sftp_and_smb_urls_connect() {
+async fn plain_dav_and_ftp_are_refused_and_tls_urls_connect() {
     let rig = Rig::ready().await;
-    for url in ["dav://h/", "davs://h/", "ftp://h/", "ftps://h/", "https://h/"] {
+    for url in ["dav://h/", "http://h/", "ftp://h/"] {
         let e = rig
             .client
             .connect_adhoc(url, secret(b"pw"), AdHocOptions::default())
             .await
             .unwrap_err();
-        assert_eq!(e.kind, ErrorKind::Unsupported, "{url}");
+        assert_eq!(e.kind, ErrorKind::SecurityPolicy, "{url}");
     }
-    let e = rig
-        .client
-        .connect_adhoc("davs://h/", secret(b""), AdHocOptions::default())
-        .await
-        .unwrap_err();
-    assert_eq!(e.message, "davs URLs are no longer supported");
     assert_eq!(rig.client.locations().len(), 1, "nothing was added");
-    for url in ["sftp://h/", "smb://h/share"] {
+    for url in [
+        "sftp://h/",
+        "smb://h/share",
+        "davs://h/dav",
+        "https://h/",
+        "ftps://h/",
+    ] {
         let id = rig
             .client
             .connect_adhoc(url, secret(b""), AdHocOptions::default())
