@@ -150,7 +150,7 @@ Features: F-DIR-07 Folder states
 | 3 | SCR-12 Add | New folder picked |
 | 4 | SCR-13 New folder | Name it |
 | 5 | SCR-13 New folder | New name typed |
-| 6 | SCR-03 Folder page (list) | Folder made |
+| 6 | SCR-03 Folder page (list) | Folder made, scrolled into view, briefly highlighted |
 | 7 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint, archive banner) | Empty folder state |
 
 ### FL-11 Rename (standalone)

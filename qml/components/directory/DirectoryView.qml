@@ -31,8 +31,10 @@ Item {
     property string undoingUri
     property Item moreActionsPage
     property var toMove: []
+    property string madeUri
 
     signal openFolder(string uri)
+    signal flashed(string itemUri)
 
     function setSelection(state) {
         selectionMode = state.selecting
@@ -163,7 +165,24 @@ Item {
         if (index < 0)
             return
         renamed.revealed = true
+        showIndex(index)
+    }
+
+    function showIndex(index) {
         flickable.positionViewAtIndex(gridMode ? GridRows.rowOf(index, grid.columns) : index, ListView.Contain)
+    }
+
+    // Waits for listing that follows `created`: rows made before it may not stay.
+    function revealMade() {
+        if (!madeUri || dir.loading)
+            return
+        var made = madeUri
+        madeUri = ""
+        var index = dir.indexOf(made)
+        if (index < 0)
+            return
+        showIndex(index)
+        flashed(made)
     }
 
     // Rows come and go at the end only: a new count as model would start grid anew at its top.
@@ -215,6 +234,7 @@ Item {
     }
 
     function folderMade(folderUri) {
+        madeUri = folderUri
         var items = toMove
         toMove = []
         if (items.length > 0)
@@ -439,7 +459,10 @@ Item {
                 view.undoingUri = ""
             view.notifyFailure(kind, message, view.pendingName)
         }
-        onStateChanged: view.revealRenamed()
+        onStateChanged: {
+            view.revealRenamed()
+            view.revealMade()
+        }
         onCountChanged: view.fitGridRows()
         onCreated: view.folderMade(uri)
         onCreateFailed: {
@@ -571,6 +594,12 @@ Item {
             RenameRemorse {
                 owner: view
                 row: item
+                uri: model.uri
+            }
+
+            NewItemFlash {
+                anchors.fill: parent
+                owner: view
                 uri: model.uri
             }
 
@@ -757,6 +786,12 @@ Item {
                     previewMono: model.textPreviewMono
                     typeIcon: model.typeIcon
                     highlighted: cell.highlighted || model.selected
+                }
+
+                NewItemFlash {
+                    anchors.fill: parent
+                    owner: view
+                    uri: model.uri
                 }
             }
 
