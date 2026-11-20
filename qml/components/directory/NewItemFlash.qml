@@ -6,7 +6,7 @@ import Sailfish.Silica 1.0
 Rectangle {
     id: flash
 
-    property var owner
+    property Item owner
     property string uri
     readonly property bool running: fade.running
 
@@ -16,6 +16,8 @@ Rectangle {
 
     Connections {
         target: flash.owner
+        // Owner may come after: unknown signal until then.
+        ignoreUnknownSignals: true
         onFlashed: if (itemUri === flash.uri) fade.restart()
     }
 
