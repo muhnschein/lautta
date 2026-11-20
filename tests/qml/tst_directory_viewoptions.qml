@@ -3,7 +3,6 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../../qml/pages"
-import "../../qml/components/directory"
 
 ApplicationWindow {
     id: window
@@ -66,32 +65,6 @@ ApplicationWindow {
         find(page, name).clicked(null)
     }
 
-    function fileSizes(rows) {
-        return rows.filter(function (r) { return !r.isDir }).map(function (r) { return r.size })
-    }
-
-    function ordered(list, descending) {
-        for (var i = 1; i < list.length; ++i) {
-            if (descending ? list[i] > list[i - 1] : list[i] < list[i - 1])
-                return false
-        }
-        return list.length > 1
-    }
-
-    function photoShown(rows) {
-        return rows.some(function (r) { return r.photo })
-    }
-
-    function textShown(rows) {
-        return rows.some(function (r) { return r.text })
-    }
-
-    function sameSize(preview, size, what) {
-        expect(preview.width === size.width && preview.height === size.height,
-               "the preview keeps its size with " + what + ": " + preview.width + "x" + preview.height
-               + ", was " + size.width + "x" + size.height)
-    }
-
     function keysOf(page) {
         var out = []
         var walk = function (item) {
@@ -124,7 +97,9 @@ ApplicationWindow {
         var section = find(page, "thumbnailsSection")
         var local = find(page, "thumbnailsSwitch")
         var remote = find(page, "remoteThumbnailsSwitch")
-        expect(section && section.visible && rowOf(section) > rowOf(page.preview), "a Thumbnails section below the preview")
+        var view = find(page, "viewBox")
+        expect(section && section.visible && rowOf(section) === rowOf(view) + 1,
+               "Thumbnails right after View, no preview between: " + [rowOf(view), rowOf(section)])
         expect(rowOf(local) > rowOf(section) && rowOf(remote) > rowOf(local),
                "both thumbnail switches are in the section: " + [rowOf(section), rowOf(local), rowOf(remote)])
         var keys = keysOf(page)
@@ -171,53 +146,20 @@ ApplicationWindow {
     }
 
     function checkControls(page) {
-        var preview = page.preview
-        var size = { "width": preview.width, "height": preview.height }
-        expect(size.width > 0 && size.height > 0, "the preview has a size: " + size.width + "x" + size.height)
-        var rows = preview.shown()
-        expect(!preview.gridMode && rows.length === 6 && rows[0].isDir && rows[1].isDir,
-               "the preview starts as a list, folders first, no hidden file: " + JSON.stringify(rows))
-        expect(photoShown(rows), "the photo has its thumbnail")
-
         pick(page, "sortBox", "size")
         expect(App.setting("sort_key") === "size", "Sort by applies at once")
-        expect(ordered(fileSizes(preview.shown()), false), "smallest file first: " + fileSizes(preview.shown()))
-        sameSize(preview, size, "another order")
-
         tap(page, "descendingSwitch")
         expect(App.setting("sort_descending") === true, "Descending applies at once")
-        expect(ordered(fileSizes(preview.shown()), true), "largest file first: " + fileSizes(preview.shown()))
-
         tap(page, "foldersFirstSwitch")
-        rows = preview.shown()
         expect(App.setting("folders_first") === false, "Folders first applies at once")
-        expect(!rows[0].isDir && rows[rows.length - 1].isDir, "folders, which have no size, go last: " + JSON.stringify(rows))
-
         tap(page, "hiddenSwitch")
-        rows = preview.shown()
         expect(App.setting("show_hidden") === true, "Show hidden files applies at once")
-        expect(rows.length === 7 && rows.some(function (r) { return r.name.charAt(0) === "." }),
-               "the hidden file is shown: " + JSON.stringify(rows))
-        sameSize(preview, size, "the hidden file")
-
         pick(page, "viewBox", "grid")
         expect(App.setting("view_mode") === "grid", "View applies at once")
-        expect(preview.gridMode && preview.columns === 3 && preview.shown().length === 7,
-               "the preview is a grid of 3 per row: " + preview.columns)
-        expect(preview.shown().every(function (r) { return r.captions.length > 0 }),
-               "with caption lines under every name: " + JSON.stringify(preview.shown()))
         expect(find(page, "viewBox").currentIndex === 1, "View shows Grid")
         expect(find(page, "gridBox") === null, "a grid has no size to choose")
-        sameSize(preview, size, "a grid")
-
-        expect(photoShown(preview.shown()), "the grid shows the photo")
-        expect(textShown(preview.shown()), "and the notes' first lines")
         tap(page, "thumbnailsSwitch")
         expect(App.setting("thumbnails_local") === false, "Thumbnails applies at once")
-        expect(!photoShown(preview.shown()) && !textShown(preview.shown()), "no thumbnail without thumbnails")
-        tap(page, "hiddenSwitch")
-        sameSize(preview, size, "no hidden file in the grid")
-        tap(page, "hiddenSwitch")
     }
 
     function checkOpenFolderFollowed() {
@@ -226,33 +168,6 @@ ApplicationWindow {
                "an open folder follows the view options: " + open.sortKey + " " + open.descending)
         expect(open.viewMode === "grid" && !open.thumbnails, "its view too: " + open.viewMode)
         expect(open.indexOf(base + "b.jpg") === 0, "the larger file is first now")
-    }
-
-    function checkFixedSize() {
-        var views = [
-            { "show_hidden": false, "view_mode": "list" },
-            { "show_hidden": true },
-            { "view_mode": "grid" },
-            { "show_hidden": false },
-            { "sort_key": "size", "thumbnails_local": false }
-        ]
-        var size = null
-        for (var i = 0; i < views.length; ++i) {
-            for (var key in views[i])
-                App.setSetting(key, JSON.stringify(views[i][key]))
-            var preview = previewComponent.createObject(window.contentItem,
-                                                        { "width": 540, "screenWidth": 540, "screenHeight": 960 })
-            waitFor(function () { return preview.shown().length === preview.count }, "the preview's rows")
-            var what = JSON.stringify(views[i]) + " (" + preview.count + " rows, "
-                       + (preview.gridMode ? preview.columns + " per row" : "a list") + ")"
-            if (size === null) {
-                size = { "width": preview.width, "height": preview.height }
-                expect(size.height === 960 / 2, "half the page's height: " + size.height)
-            }
-            sameSize(preview, size, what)
-            preview.destroy()
-        }
-        restoreDefaults()
     }
 
     function restoreDefaults() {
@@ -293,14 +208,7 @@ ApplicationWindow {
         checkOpenFolderFollowed()
         restoreDefaults()
         checkOwnFolder()
-        checkFixedSize()
         reachedEnd = true
-    }
-
-    Component {
-        id: previewComponent
-
-        ViewPreview { }
     }
 
     Component {

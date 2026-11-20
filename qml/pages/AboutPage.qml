@@ -61,12 +61,16 @@ Page {
                 width: parent.width
                 height: logo.height + Theme.paddingLarge * 2
 
-                HighlightImage {
+                Image {
                     id: logo
 
+                    objectName: "aboutIcon"
                     anchors.centerIn: parent
-                    source: "image://theme/icon-l-storage"
-                    color: Theme.highlightColor
+                    width: Theme.iconSizeExtraLarge
+                    height: width
+                    sourceSize.width: width
+                    sourceSize.height: height
+                    source: Qt.resolvedUrl("../icons/lautta-256.png")
                 }
             }
 
@@ -92,7 +96,7 @@ Page {
                 bottomPadding: Theme.paddingLarge
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.Wrap
-                //% "A file manager for Sailfish OS."
+                //% "A better file manager for Sailfish OS."
                 text: qsTrId("lautta-about-tagline")
             }
 
@@ -114,70 +118,42 @@ Page {
                 value: page.accessText()
             }
             Label {
+                objectName: "accessHint"
                 visible: page.hasBridge
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
+                bottomPadding: Theme.paddingMedium
                 horizontalAlignment: Text.AlignRight
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                //% "Change in Settings › Accounts › Apps using network locations › Lautta. Servers you add in Lautta always have full access."
+                //% "Change it in Settings › Accounts › Apps using network locations."
                 text: qsTrId("lautta-about-access-hint")
             }
 
             SectionHeader {
-                //% "Permissions"
-                text: qsTrId("lautta-about-permissions")
+                //% "Licence and source"
+                text: qsTrId("lautta-about-licence-source")
             }
-            Label {
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                horizontalAlignment: Text.AlignRight
-                wrapMode: Text.Wrap
-                //% "Your folders, Removable media, Audio"
-                text: qsTrId("lautta-about-permission-list")
-            }
-            Label {
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                horizontalAlignment: Text.AlignRight
-                wrapMode: Text.Wrap
-                color: Theme.secondaryColor
-                font.pixelSize: Theme.fontSizeSmall
-                //% "Lautta never opens network connections itself."
-                text: qsTrId("lautta-about-no-network")
-            }
-
-            SectionHeader {
+            DetailItem {
                 //% "Licence"
-                text: qsTrId("lautta-about-licence")
-            }
-            Label {
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                horizontalAlignment: Text.AlignRight
-                font.pixelSize: Theme.fontSizeSmall
+                label: qsTrId("lautta-about-licence")
                 //% "LGPL-2.1-or-later"
-                text: qsTrId("lautta-about-licence-name")
+                value: qsTrId("lautta-about-licence-name")
             }
-
             BackgroundItem {
+                objectName: "sourceCode"
                 width: column.width
-                height: Theme.itemSizeSmall
+                height: source.height
                 onClicked: Qt.openUrlExternally("https://github.com/muhnschein/lautta")
 
-                Label {
-                    anchors {
-                        left: parent.left
-                        right: parent.right
-                        leftMargin: Theme.horizontalPageMargin
-                        rightMargin: Theme.horizontalPageMargin
-                        verticalCenter: parent.verticalCenter
-                    }
-                    horizontalAlignment: Text.AlignRight
+                DetailItem {
+                    id: source
+
                     //% "Source code"
-                    text: qsTrId("lautta-about-source")
-                    color: Theme.highlightColor
+                    label: qsTrId("lautta-about-source")
+                    //% "On GitHub"
+                    value: qsTrId("lautta-about-source-github")
                 }
             }
         }

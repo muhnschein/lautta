@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
-use crate::directory::preview;
 use crate::json::{from_json, json_value_to_qvariant, to_json};
 use crate::runtime::{core, handle, spawn_then};
 use lautta_core::clipboard::{Clipboard, ClipboardMode};
@@ -11,7 +10,7 @@ use lautta_core::transfer::scheduler::is_bridge_location;
 use lautta_core::trash::now_secs;
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
-use qmetaobject::{QPointer, QSingletonInit, QVariantList};
+use qmetaobject::{QPointer, QSingletonInit};
 
 #[derive(QObject, Default)]
 pub struct App {
@@ -29,16 +28,6 @@ pub struct App {
     loadSettings: qt_method!(fn(&mut self, json: QString)),
     setting: qt_method!(fn(&self, key: QString) -> QVariant),
     setSetting: qt_method!(fn(&mut self, key: QString, value_json: QString) -> bool),
-    previewRows: qt_method!(
-        fn(
-            &self,
-            entries: QString,
-            sort_key: QString,
-            descending: bool,
-            folders_first: bool,
-            show_hidden: bool,
-        ) -> QVariantList
-    ),
 
     childUri: qt_method!(fn(&self, parent: QString, name: QString) -> QString),
     parentUri: qt_method!(fn(&self, uri: QString) -> QString),
@@ -156,18 +145,6 @@ impl App {
         core.apply_settings(settings);
         self.publish_settings();
         true
-    }
-
-    fn previewRows(
-        &self,
-        entries: QString,
-        sort_key: QString,
-        descending: bool,
-        folders_first: bool,
-        show_hidden: bool,
-    ) -> QVariantList {
-        let prefs = preview::prefs(&sort_key.to_string(), descending, folders_first, show_hidden);
-        preview::rows(&entries.to_string(), &prefs)
     }
 
     fn childUri(&self, parent: QString, name: QString) -> QString {

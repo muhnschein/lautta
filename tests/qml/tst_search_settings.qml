@@ -152,17 +152,23 @@ ApplicationWindow {
         pageStack.pop(settings, PageStackAction.Immediate)
     }
 
-    function checkValues(settings) {
-        var names = ["viewOptionsRow", "searchEntry", "recentsEntry", "deletingEntry", "transfersEntry", "storageEntry"]
+    function texts(item, out) {
+        if (item.visible && typeof item.text === "string" && item.text.length > 0 && item.truncationMode !== undefined)
+            out.push(item.text)
+        var kids = item.children || []
+        for (var i = 0; i < kids.length; ++i)
+            texts(kids[i], out)
+        return out
+    }
+
+    function checkNamesOnly(settings) {
+        var names = ["browsePageEntry", "viewOptionsRow", "searchEntry", "recentsEntry", "deletingEntry",
+                     "transfersEntry", "storageEntry", "aboutEntry"]
         names.forEach(function (name) {
             var row = find(settings, name)
-            expect(row && row.value.length > 0, name + " tells what is chosen: " + (row ? row.value : ""))
+            var shown = row ? texts(row, []) : []
+            expect(shown.length === 1, name + " shows its name only: " + JSON.stringify(shown))
         })
-        var deleting = find(settings, "deletingEntry")
-        var before = deleting.value
-        App.setSetting("recently_deleted", JSON.stringify(false))
-        expect(deleting.value !== before, "Deleting tells that Trash is off: " + deleting.value)
-        App.setSetting("recently_deleted", JSON.stringify(true))
     }
 
     Component.onCompleted: {
@@ -172,7 +178,7 @@ ApplicationWindow {
         expect(keys.length === 0, "Settings is a list of entries, with no setting of its own: " + keys)
         expect(find(settings, "browsePageEntry") !== null && find(settings, "aboutEntry") !== null,
                "Browse page and About stay on Settings")
-        checkValues(settings)
+        checkNamesOnly(settings)
         subPages.forEach(function (spec) { checkSubPage(settings, spec) })
         checkLargeOps(settings)
         checkViewOptions(settings)

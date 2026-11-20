@@ -176,7 +176,7 @@ QtQuick.Window {
         if (!expect(folder !== "" && firstDeviceRow(layout) === "recents",
                     "Recents is the first row of On this device: " + describe(layout)))
             return
-        expect(page.previewCount === rows, "the preview shows every row: " + page.previewCount + " of " + rows)
+        expect(page.listView.footer === null, "no preview below the rows")
         folderRow = delegateOf(folder)
         var toggle = named(folderRow, "layoutSwitch")
         if (!expect(toggle !== null && toggle.checked, "the row of " + folder + " has its switch on"))
@@ -227,18 +227,17 @@ QtQuick.Window {
                 return
             if (++window.waited > 150)
                 return window.fail("step " + window.step + " timed out: " + window.describe(window.page.layoutModel)
-                                   + ", preview " + window.page.previewCount
                                    + (window.stored ? ", stored " + window.describe(window.stored) : ""))
             var layout = window.page.layoutModel
             switch (window.step) {
             case 0:
-                if (layout.count === 0 || window.page.previewCount === 0)
+                if (layout.count === 0)
                     return
                 window.start()
                 break
             case 1:
                 var toggle = window.named(window.folderRow, "layoutSwitch")
-                if ((toggle && toggle.checked) || window.page.previewCount !== window.rows - 1)
+                if (!toggle || toggle.checked)
                     return
                 window.afterSwitch()
                 if (window.scenarioRunning)
@@ -257,13 +256,15 @@ QtQuick.Window {
                 layout.restoreDefaults()
                 break
             case 3:
-                if (window.page.previewCount !== window.rows || window.firstDeviceRow(layout) !== "recents")
+                var back = window.delegateOf(window.folder)
+                var restored = back ? window.named(back, "layoutSwitch") : null
+                if (!restored || !restored.checked || window.firstDeviceRow(layout) !== "recents")
                     return
                 window.listed = layout.count
                 favourites.add("lautta://user-music/", "Tunes", "")
                 break
             case 4:
-                if (layout.count !== window.listed + 1 || window.page.previewCount !== window.rows + 1)
+                if (layout.count !== window.listed + 1)
                     return
                 favourites.removeUri("lautta://user-music/")
                 favourites.removeUri("lautta://user-documents/")
