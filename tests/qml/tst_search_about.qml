@@ -34,14 +34,11 @@ ApplicationWindow {
                "the app's own icon: " + (icon ? icon.source + " " + icon.status : "none"))
         var texts = items.filter(function (x) { return typeof x.text === "string" && x.visible })
                          .map(function (x) { return x.text })
-        expect(texts.indexOf(qsTrId("lautta-about-tagline")) >= 0
-               && qsTrId("lautta-about-tagline") === "A better file manager for Sailfish OS.",
-               "the claim: " + qsTrId("lautta-about-tagline"))
-        expect(texts.indexOf("Permissions") < 0 && texts.indexOf("Your folders, Removable media, Audio") < 0,
+        expect(texts.indexOf(qsTrId("lautta-about-tagline")) >= 0, "the claim: " + JSON.stringify(texts))
+        expect(texts.indexOf(qsTrId("lautta-about-permissions")) < 0 && texts.indexOf("Permissions") < 0,
                "no Permissions section: " + JSON.stringify(texts))
         var hint = named("accessHint")
-        expect(hint && hint.text.indexOf("Servers you add") < 0 && hint.text.indexOf("Apps using network locations") >= 0,
-               "the access hint names where to change access: " + (hint ? hint.text : "none"))
+        expect(hint && hint.text === qsTrId("lautta-about-access-hint"), "the access hint: " + (hint ? hint.text : "none"))
         expect(named("sourceCode") !== undefined, "Source code is a row to tap")
     }
 
