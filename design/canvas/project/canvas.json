@@ -633,6 +633,22 @@
       "w": 400,
       "x": 4800,
       "y": 15600
+    },
+    "AddServerFlowA.dc.html": {
+      "h": 1080,
+      "is_interactive": true,
+      "title": "Add server \u00b7 flow A",
+      "w": 1870,
+      "x": 0,
+      "y": 16740
+    },
+    "AddServerFlowB.dc.html": {
+      "h": 1080,
+      "is_interactive": true,
+      "title": "Add server \u00b7 flow B",
+      "w": 2340,
+      "x": 0,
+      "y": 18020
     }
   },
   "createdOnFiles": {
@@ -812,7 +828,9 @@
     "ScanCrop.dc.html",
     "ScanPages.dc.html",
     "ScanPagesDrag.dc.html",
-    "ScanNoCamera.dc.html"
+    "ScanNoCamera.dc.html",
+    "AddServerFlowA.dc.html",
+    "AddServerFlowB.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"
