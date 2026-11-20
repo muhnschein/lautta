@@ -5,7 +5,7 @@
 - Videos from servers stream and seek instead of downloading first ([#100](https://github.com/muhnschein/lautta/issues/100)).
 - Streaming videos no longer freeze the screen every second or so, and start and seek faster.
 - WebDAV and FTPS servers work like SFTP and SMB: accounts from *Settings › Accounts* show up as locations, and *Connect to server* takes `davs://` and `ftps://` addresses (needs netvfs with WebDAV and FTPS).
-- *Add server* asks which kind of server: SFTP, SMB, WebDAV or FTPS.
+- *Add server* asks which kind of server, SFTP, SMB, WebDAV or FTPS, and opens its form in Settings (needs netvfs with add-account entries).
 
 ## 1.0.0
 
