@@ -29,14 +29,14 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-SRV-14 Remote thumbnails | B | FL-29, FL-32 | SCR-01, SCR-03, SCR-04, SCR-06, SCR-10, SCR-27, SCR-30 |
 | F-SRV-15 Remote streaming | B | FL-32 | SCR-04, SCR-06, SCR-10, SCR-27, SCR-30 |
 | F-SRV-16 Open remote in other app | B | FL-24, FL-32 | SCR-04, SCR-06, SCR-07, SCR-09, SCR-10, SCR-27, SCR-30, SCR-37 |
-| F-SRV-17 Access levels | B | FL-37 | SCR-03, SCR-06, SCR-07, SCR-11, SCR-20, SCR-21 |
+| F-SRV-17 Access levels | B | FL-37 | SCR-03, SCR-06, SCR-07, SCR-11, SCR-21 |
 | F-DIR-01 Folder listing | S | FL-02 | SCR-01, SCR-03 |
 | F-DIR-02 Grid view | S | FL-04 | SCR-04, SCR-06, SCR-24 |
 | F-DIR-03 Grid hint | S | FL-04 | SCR-04, SCR-06, SCR-24 |
 | F-DIR-04 Sort and filter | S | FL-04 | SCR-04, SCR-06, SCR-24 |
 | F-DIR-05 Thumbnails switch | S | FL-04 | SCR-04, SCR-06, SCR-24 |
 | F-DIR-06 Path menu | S | FL-03 | SCR-03, SCR-05 |
-| F-DIR-07 Folder states | S | FL-10, FL-37 | SCR-03, SCR-06, SCR-07, SCR-11, SCR-12, SCR-13, SCR-20, SCR-21 |
+| F-DIR-07 Folder states | S | FL-10, FL-37 | SCR-03, SCR-06, SCR-07, SCR-11, SCR-12, SCR-13, SCR-21 |
 | F-DIR-08 Large folder | S | FL-05 | SCR-11 |
 | F-DIR-09 Live updates | S | — | — |
 | F-DIR-10 Listing cache | S | FL-26 | SCR-01, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
@@ -132,7 +132,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-17 Extract | FL-17 |
 | SCR-18 Folder picker | FL-25 |
 | SCR-19 Plan summary | FL-14 |
-| SCR-20 Conflict | FL-14, FL-35, FL-37 |
+| SCR-20 Conflict | FL-14, FL-35 |
 | SCR-21 Activity | FL-18, FL-34, FL-37 |
 | SCR-22 Task details | FL-18 |
 | SCR-23 Activity bar | FL-14, FL-35 |

@@ -499,8 +499,10 @@ Features: F-SRV-17 Access levels, F-DIR-07 Folder states, F-OPS-03 Conflict reso
 | 2 | SCR-06 Folder pulley | Read only: pulley has no Paste, no Add |
 | 3 | SCR-07 Item context menu | Read and add: long-press has no Cut, Rename, Delete |
 | 4 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint, archive banner) | Add only: folders listed, Files here are hidden |
-| 5 | SCR-20 Conflict | Add only, name taken: Keep both only, Lautta may only add files here. |
-| 6 | SCR-21 Activity | Level narrowed during a task: failed, Lautta may now only read on … |
+| 5 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint, archive banner) | Paste a file whose name is taken: no question, upload done, server keeps both (readme 2.txt) |
+| 6 | SCR-03 Folder page (list) | Full access: 1 GB upload running |
+| 7 | SCR-03 Folder page (list) | Level narrowed to Read only meanwhile: lock shows, upload Failed |
+| 8 | SCR-21 Activity | Activity: upload Failed, Retry failed |
 
 ## System
 
