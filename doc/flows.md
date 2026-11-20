@@ -2,6 +2,8 @@
 
 Every user flow: goal → steps → screens. IDs as `doc/feature-map.md`: `FL-*` flow, `SCR-*` screen, `F-*` feature.
 
+Retired, never reuse: FL-31 Connect to a server once.
+
 ## Start
 
 ### FL-01 Start the app (both modes)
@@ -352,9 +354,8 @@ Features: F-ITM-02 Share (out), F-ITM-09 Open with, F-SRV-16 Open remote in othe
 |---|---|---|
 | 1 | SCR-07 Item context menu | Long-press (server file): Share, Copy, Cut, Rename, Delete, More actions |
 | 2 | SCR-09 Selection mode + selection bar | Server folder, long-press: selection bar, Share first |
-| 3 | SCR-50 Server question | Sign-in again when share needs new connection (#105) |
-| 4 | SCR-37 Open remote (Getting file) | Remote file: Getting … first |
-| 5 | SCR-07 Item context menu | Sailfish share sheet |
+| 3 | SCR-37 Open remote (Getting file) | Remote file: Getting … first |
+| 4 | SCR-07 Item context menu | Sailfish share sheet |
 
 ### FL-25 Save files shared to Lautta (standalone)
 
@@ -415,9 +416,9 @@ Features: F-SRV-02 Consent banner, F-SRV-01 Bridge detection
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-01 Browse | Browse before consent: favourite on server shows raw location id |
-| 2 | SCR-01 Browse | Servers section: Allow access in the notification from netvfs, Ask again |
-| 3 | SCR-59 Notifications | Events: netvfs asks, Lautta wants to use your network locations |
+| 1 | SCR-01 Browse | Servers section: Network locations need your permission, Ask again |
+| 2 | SCR-59 Notifications | Events: netvfs asks which servers Lautta may use |
+| 3 | SCR-59 Notifications | Tap note: netvfs dialog, level per server |
 | 4 | SCR-48 About | About: Waiting for your permission |
 | 5 | SCR-01 Browse | Allowed: servers listed |
 
@@ -425,16 +426,15 @@ Features: F-SRV-02 Consent banner, F-SRV-01 Bridge detection
 
 Browse an account server.
 
-Features: F-SRV-04 Account servers, F-SRV-08 Server question, F-SRV-06 Edit server / Update sign-in / Review server identity, F-SRV-14 Remote thumbnails
+Features: F-SRV-04 Account servers, F-SRV-06 Edit server / Update sign-in / Review server identity, F-SRV-14 Remote thumbnails
 
 | # | Screen | Step |
 |---|---|---|
 | 1 | SCR-01 Browse | Servers section |
 | 2 | SCR-01 Browse | Server row menu: Edit server, Copy address |
 | 3 | SCR-01 Browse | SMB server menu |
-| 4 | SCR-50 Server question | Sign-in question |
-| 5 | SCR-03 Folder page (list) | Server root |
-| 6 | SCR-03 Folder page (list) | Server folder |
+| 4 | SCR-03 Folder page (list) | Server root |
+| 5 | SCR-03 Folder page (list) | Server folder |
 
 ### FL-30 Fix a server that needs you (bridge)
 
@@ -450,20 +450,6 @@ Features: F-SRV-07 Server attention page, F-SRV-06 Edit server / Update sign-in 
 | 4 | SCR-01 Browse | Menu: Review server identity |
 | 5 | SCR-51 Server attention | Sign-in failed (no stored password) |
 
-### FL-31 Connect to a server once (bridge)
-
-Ad-hoc connect without an account.
-
-Features: F-SRV-09 Connect to server (ad-hoc), F-SRV-10 Recent ad-hoc servers, F-SRV-08 Server question, F-SRV-11 Nearby
-
-| # | Screen | Step |
-|---|---|---|
-| 1 | SCR-01 Browse | Servers: Nearby row or recent ad-hoc row |
-| 2 | SCR-49 Connect to server | Connect to server: address filled from row, Recent list |
-| 3 | SCR-49 Connect to server | Filled: user name, password |
-| 4 | SCR-50 Server question | Unknown server: host, port, key type, fingerprint; Trust |
-| 5 | SCR-03 Folder page (list) | Ad-hoc server root |
-
 ### FL-32 Work with files on a server (bridge)
 
 View, stream, upload.
@@ -477,7 +463,6 @@ Features: F-SRV-14 Remote thumbnails, F-SRV-15 Remote streaming, F-SRV-16 Open r
 | 3 | SCR-30 Media player (video, audio) | Video streams from server |
 | 4 | SCR-10 Clipboard panel | Clipboard from this device, on server |
 | 5 | SCR-06 Folder pulley | Pull: Paste 1 item |
-| 6 | SCR-50 Server question | Sign-in again when upload needs new connection (#105) |
 
 ### FL-33 Server goes away (bridge)
 
@@ -489,6 +474,33 @@ Features: F-SRV-12 Offline listing, F-SRV-13 Reconnect
 |---|---|---|
 | 1 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint, archive banner) | Offline banner: stored copy, Retry |
 | 2 | SCR-01 Browse | Server row after drop |
+
+### FL-36 Set up a nearby server (bridge)
+
+Server found on the network becomes an account.
+
+Features: F-SRV-11 Nearby, F-SRV-05 Add server
+
+| # | Screen | Step |
+|---|---|---|
+| 1 | SCR-01 Browse | Nearby: server found on the network |
+| 2 | SCR-60 Nearby setup | Tap: This server isn't set up yet …, Set up |
+| 3 | SCR-60 Nearby setup | Set up: Settings › Accounts opens its add-account flow |
+
+### FL-37 Work on a server with limited access (bridge)
+
+See what Lautta may do on a server and get only those actions.
+
+Features: F-SRV-17 Access levels, F-DIR-07 Folder states, F-OPS-03 Conflict resolution
+
+| # | Screen | Step |
+|---|---|---|
+| 1 | SCR-03 Folder page (list) | Read only: lock and Read only under header |
+| 2 | SCR-06 Folder pulley | Read only: pulley has no Paste, no Add |
+| 3 | SCR-07 Item context menu | Read and add: long-press has no Cut, Rename, Delete |
+| 4 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint, archive banner) | Add only: folders listed, Files here are hidden |
+| 5 | SCR-20 Conflict | Add only, name taken: Keep both only, Lautta may only add files here. |
+| 6 | SCR-21 Activity | Level narrowed during a task: failed, Lautta may now only read on … |
 
 ## System
 

@@ -19,46 +19,44 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-SRV-01 Bridge detection | B | FL-01, FL-28 | SCR-01, SCR-02, SCR-48, SCR-59 |
 | F-SRV-02 Consent banner | B | FL-28 | SCR-01, SCR-48, SCR-59 |
 | F-SRV-03 Bridge unavailable banner | B | — | — |
-| F-SRV-04 Account servers | B | FL-29 | SCR-01, SCR-03, SCR-50 |
-| F-SRV-05 Add server | B | FL-26 | SCR-01, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
-| F-SRV-06 Edit server / Update sign-in / Review server identity | B | FL-29, FL-30 | SCR-01, SCR-03, SCR-50, SCR-51 |
+| F-SRV-04 Account servers | B | FL-29 | SCR-01, SCR-03 |
+| F-SRV-05 Add server | B | FL-26, FL-36 | SCR-01, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48, SCR-60 |
+| F-SRV-06 Edit server / Update sign-in / Review server identity | B | FL-29, FL-30 | SCR-01, SCR-03, SCR-51 |
 | F-SRV-07 Server attention page | B | FL-30 | SCR-01, SCR-03, SCR-51 |
-| F-SRV-08 Server question | B | FL-29, FL-31 | SCR-01, SCR-03, SCR-49, SCR-50 |
-| F-SRV-09 Connect to server (ad-hoc) | B | FL-31 | SCR-01, SCR-03, SCR-49, SCR-50 |
-| F-SRV-10 Recent ad-hoc servers | B | FL-31 | SCR-01, SCR-03, SCR-49, SCR-50 |
-| F-SRV-11 Nearby | B | FL-31 | SCR-01, SCR-03, SCR-49, SCR-50 |
+| F-SRV-11 Nearby | B | FL-36 | SCR-01, SCR-60 |
 | F-SRV-12 Offline listing | B | FL-33 | SCR-01, SCR-11 |
 | F-SRV-13 Reconnect | B | FL-33 | SCR-01, SCR-11 |
-| F-SRV-14 Remote thumbnails | B | FL-29, FL-32 | SCR-01, SCR-03, SCR-04, SCR-06, SCR-10, SCR-27, SCR-30, SCR-50 |
-| F-SRV-15 Remote streaming | B | FL-32 | SCR-04, SCR-06, SCR-10, SCR-27, SCR-30, SCR-50 |
-| F-SRV-16 Open remote in other app | B | FL-24, FL-32 | SCR-04, SCR-06, SCR-07, SCR-09, SCR-10, SCR-27, SCR-30, SCR-37, SCR-50 |
+| F-SRV-14 Remote thumbnails | B | FL-29, FL-32 | SCR-01, SCR-03, SCR-04, SCR-06, SCR-10, SCR-27, SCR-30 |
+| F-SRV-15 Remote streaming | B | FL-32 | SCR-04, SCR-06, SCR-10, SCR-27, SCR-30 |
+| F-SRV-16 Open remote in other app | B | FL-24, FL-32 | SCR-04, SCR-06, SCR-07, SCR-09, SCR-10, SCR-27, SCR-30, SCR-37 |
+| F-SRV-17 Access levels | B | FL-37 | SCR-03, SCR-06, SCR-07, SCR-11, SCR-20, SCR-21 |
 | F-DIR-01 Folder listing | S | FL-02 | SCR-01, SCR-03 |
 | F-DIR-02 Grid view | S | FL-04 | SCR-04, SCR-06, SCR-24 |
 | F-DIR-03 Grid hint | S | FL-04 | SCR-04, SCR-06, SCR-24 |
 | F-DIR-04 Sort and filter | S | FL-04 | SCR-04, SCR-06, SCR-24 |
 | F-DIR-05 Thumbnails switch | S | FL-04 | SCR-04, SCR-06, SCR-24 |
 | F-DIR-06 Path menu | S | FL-03 | SCR-03, SCR-05 |
-| F-DIR-07 Folder states | S | FL-10 | SCR-03, SCR-06, SCR-11, SCR-12, SCR-13 |
+| F-DIR-07 Folder states | S | FL-10, FL-37 | SCR-03, SCR-06, SCR-07, SCR-11, SCR-12, SCR-13, SCR-20, SCR-21 |
 | F-DIR-08 Large folder | S | FL-05 | SCR-11 |
 | F-DIR-09 Live updates | S | — | — |
 | F-DIR-10 Listing cache | S | FL-26 | SCR-01, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
 | F-DIR-11 Folder cover | S | FL-02 | SCR-01, SCR-03 |
 | F-ITM-01 Open item | S | FL-02 | SCR-01, SCR-03 |
-| F-ITM-02 Share (out) | S | FL-06, FL-24 | SCR-03, SCR-07, SCR-09, SCR-27, SCR-28, SCR-37, SCR-50 |
+| F-ITM-02 Share (out) | S | FL-06, FL-24 | SCR-03, SCR-07, SCR-09, SCR-27, SCR-28, SCR-37 |
 | F-ITM-03 Copy / Cut | S | FL-13 | SCR-03, SCR-06, SCR-07, SCR-10 |
 | F-ITM-04 Rename | S | FL-11 | SCR-03, SCR-07, SCR-14 |
 | F-ITM-05 Delete | S | FL-06, FL-12 | SCR-03, SCR-07, SCR-15, SCR-27, SCR-28 |
 | F-ITM-06 Add to favourites | S | FL-03, FL-22 | SCR-01, SCR-03, SCR-05, SCR-40 |
 | F-ITM-07 Compress | S | FL-16 | SCR-07, SCR-08, SCR-16 |
 | F-ITM-08 Move to new folder | S | FL-16 | SCR-07, SCR-08, SCR-16 |
-| F-ITM-09 Open with | S | FL-06, FL-24 | SCR-03, SCR-07, SCR-09, SCR-27, SCR-28, SCR-37, SCR-50 |
+| F-ITM-09 Open with | S | FL-06, FL-24 | SCR-03, SCR-07, SCR-09, SCR-27, SCR-28, SCR-37 |
 | F-SEL-01 Selection mode | S | FL-15 | SCR-06, SCR-08, SCR-09 |
 | F-SEL-02 Drag-select | S | FL-15 | SCR-06, SCR-08, SCR-09 |
 | F-SEL-03 Select all / Clear selection | S | FL-15 | SCR-06, SCR-08, SCR-09 |
 | F-SEL-04 Selection bar | S | FL-15 | SCR-06, SCR-08, SCR-09 |
 | F-OPS-01 Paste | S | FL-13 | SCR-03, SCR-06, SCR-07, SCR-10 |
 | F-OPS-02 Plan summary | S | FL-14 | SCR-03, SCR-06, SCR-07, SCR-10, SCR-19, SCR-20, SCR-23 |
-| F-OPS-03 Conflict resolution | S | FL-14 | SCR-03, SCR-06, SCR-07, SCR-10, SCR-19, SCR-20, SCR-23 |
+| F-OPS-03 Conflict resolution | S | FL-14, FL-37 | SCR-03, SCR-06, SCR-07, SCR-10, SCR-11, SCR-19, SCR-20, SCR-21, SCR-23 |
 | F-OPS-04 Not-enough-space check | S | FL-14 | SCR-03, SCR-06, SCR-07, SCR-10, SCR-19, SCR-20, SCR-23 |
 | F-OPS-05 Extract | S | FL-17 | SCR-03, SCR-11, SCR-17 |
 | F-OPS-06 Archive location | S | FL-17 | SCR-03, SCR-11, SCR-17 |
@@ -74,7 +72,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-XFR-09 Notifications | S | FL-34, FL-35 | SCR-20, SCR-21, SCR-23, SCR-58, SCR-59 |
 | F-XFR-10 Transfer cover | S | FL-34, FL-35 | SCR-20, SCR-21, SCR-23, SCR-58, SCR-59 |
 | F-XFR-11 Resume on start / keep history | S | FL-26 | SCR-01, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
-| F-XFR-12 Item status in folder | S | FL-32 | SCR-04, SCR-06, SCR-10, SCR-27, SCR-30, SCR-50 |
+| F-XFR-12 Item status in folder | S | FL-32 | SCR-04, SCR-06, SCR-10, SCR-27, SCR-30 |
 | F-VWR-01 Image viewer | S | FL-06 | SCR-03, SCR-27, SCR-28 |
 | F-VWR-02 Image details | S | FL-06 | SCR-03, SCR-27, SCR-28 |
 | F-VWR-03 Image More | S | FL-06 | SCR-03, SCR-27, SCR-28 |
@@ -115,17 +113,17 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 
 | Screen | Flows |
 |---|---|
-| SCR-01 Browse | FL-01, FL-02, FL-22, FL-26, FL-27, FL-28, FL-29, FL-30, FL-31, FL-33 |
+| SCR-01 Browse | FL-01, FL-02, FL-22, FL-26, FL-27, FL-28, FL-29, FL-30, FL-33, FL-36 |
 | SCR-02 Start error | FL-01 |
-| SCR-03 Folder page (list) | FL-02, FL-03, FL-06, FL-10, FL-11, FL-12, FL-13, FL-14, FL-17, FL-23, FL-25, FL-29, FL-30, FL-31 |
+| SCR-03 Folder page (list) | FL-02, FL-03, FL-06, FL-10, FL-11, FL-12, FL-13, FL-14, FL-17, FL-23, FL-25, FL-29, FL-30, FL-37 |
 | SCR-04 Folder page (grid) | FL-04, FL-32 |
 | SCR-05 Path menu | FL-03, FL-22 |
-| SCR-06 Folder pulley | FL-04, FL-10, FL-13, FL-14, FL-15, FL-18, FL-19, FL-32 |
-| SCR-07 Item context menu | FL-11, FL-12, FL-13, FL-14, FL-16, FL-24 |
+| SCR-06 Folder pulley | FL-04, FL-10, FL-13, FL-14, FL-15, FL-18, FL-19, FL-32, FL-37 |
+| SCR-07 Item context menu | FL-11, FL-12, FL-13, FL-14, FL-16, FL-24, FL-37 |
 | SCR-08 More actions | FL-15, FL-16 |
 | SCR-09 Selection mode + selection bar | FL-15, FL-24 |
 | SCR-10 Clipboard panel | FL-13, FL-14, FL-32 |
-| SCR-11 Folder states (empty, no access, error, offline, large, grid hint, archive banner) | FL-05, FL-10, FL-17, FL-33 |
+| SCR-11 Folder states (empty, no access, error, offline, large, grid hint, archive banner) | FL-05, FL-10, FL-17, FL-33, FL-37 |
 | SCR-12 Add | FL-10, FL-23 |
 | SCR-13 New folder | FL-10 |
 | SCR-14 Rename | FL-11 |
@@ -134,8 +132,8 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-17 Extract | FL-17 |
 | SCR-18 Folder picker | FL-25 |
 | SCR-19 Plan summary | FL-14 |
-| SCR-20 Conflict | FL-14, FL-35 |
-| SCR-21 Activity | FL-18, FL-34 |
+| SCR-20 Conflict | FL-14, FL-35, FL-37 |
+| SCR-21 Activity | FL-18, FL-34, FL-37 |
 | SCR-22 Task details | FL-18 |
 | SCR-23 Activity bar | FL-14, FL-35 |
 | SCR-24 View options | FL-04, FL-26 |
@@ -163,8 +161,6 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-46 Settings › Transfers | FL-26 |
 | SCR-47 Settings › Storage | FL-26 |
 | SCR-48 About | FL-26, FL-28 |
-| SCR-49 Connect to server | FL-31 |
-| SCR-50 Server question | FL-24, FL-29, FL-31, FL-32 |
 | SCR-51 Server attention | FL-30 |
 | SCR-52 Share target ("Save to") | FL-25 |
 | SCR-53 Scan camera | FL-23 |
@@ -174,6 +170,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-57 Scan saving | FL-23 |
 | SCR-58 Cover (folder / tasks) | FL-34 |
 | SCR-59 Notifications | FL-28, FL-34, FL-35 |
+| SCR-60 Nearby setup | FL-36 |
 
 Features in no flow: background behaviour, nothing to tap (F-BRW-09, F-SRV-03, F-DIR-09, F-XFR-07, F-VWR-11, F-APP-06).
 Screens in no flow: reached only from states flows don't set up (SCR-29).

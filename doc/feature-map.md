@@ -14,12 +14,12 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | **Android folder** | `~/android_storage/…` folder (section Android) | |
 | **volume** | memory card or USB drive under `/run/media` | "drive" is the netvfs/udisks object behind it |
 | **drive** | udisks2 device netvfs mounts/unmounts; unmounted or locked drive shows as volume row | |
-| **server** | netvfs location: **account server** (from Settings → Accounts) or **ad-hoc server** (Connect to server) | "share", "NAS" |
-| **Nearby** | servers netvfs discovers on LAN (mDNS), section on Browse | |
+| **server** | netvfs location: account from Settings → Accounts (SFTP, SMB, WebDAV, FTPS); Lautta takes no address or password | "share", "NAS" |
+| **Nearby** | servers netvfs discovers on LAN (mDNS), section on Browse; tap offers set-up as account | |
 | **bridge** | netvfs-bridge, p2p D-Bus peer; present → bridge mode | "daemon" |
-| **consent** | netvfs's allow/deny for Lautta using accounts; asked in netvfs notification | "permission" (that is sailjail) |
+| **consent** | netvfs's first ask whether Lautta may use network locations; netvfs notification | "permission" (that is sailjail) |
+| **access level** | what netvfs lets Lautta do per server: Full access, Read and add, Read only, Add only; not allowed = not listed | |
 | **attention** | server state needing user: `auth-failed`, `server-identity-changed` | |
-| **server question** | prompt from bridge during connect: unknown host key, unencrypted connection, sign-in prompt | |
 | **folder page** | `DirectoryPage`: one folder's listing | "directory view" in UI talk |
 | **list / grid** | folder view modes (grid 3 or 4 per row) | |
 | **path menu** | drop-down from tapping folder header: path crumbs, Edit path, Copy address, Add to favourites | "breadcrumbs" |
@@ -99,8 +99,6 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | SCR-46 | Settings › Transfers | `pages/TransfersSettingsPage.qml` | S | Settings |
 | SCR-47 | Settings › Storage | `pages/StorageSettingsPage.qml` | S | Settings |
 | SCR-48 | About | `pages/AboutPage.qml` | S | Settings |
-| SCR-49 | Connect to server | `dialogs/ConnectServerDialog.qml` | B | Nearby row, recent ad-hoc row |
-| SCR-50 | Server question | `dialogs/ServerQuestionDialog.qml` | B | bridge `Question` during connect |
 | SCR-51 | Server attention | `browse/ServerAttentionPage.qml` | B | tap server row with attention |
 | SCR-52 | Share target ("Save to") | `pages/ShareTargetPage.qml` | S | Sailfish share sheet → Lautta |
 | SCR-53 | Scan camera | `pages/ScanPage.qml` | S | Add → Scan document |
@@ -110,8 +108,11 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | SCR-57 | Scan saving | `pages/ScanSavingPage.qml` | S | scan save accept |
 | SCR-58 | Cover (folder / tasks) | `cover/CoverPage.qml`, `cover/TransferCover.qml` | S | app in background |
 | SCR-59 | Notifications | `components/TransferNotifications.qml` | S | tasks in background |
+| SCR-60 | Nearby setup | `dialogs/NearbySetupDialog.qml` | B | tap Nearby row |
 
-Browse rows (inside SCR-01): favourite, user folder, Android folder, Recents, Trash, volume (mounted, unmounted, locked), account server, ad-hoc server, recent ad-hoc server, Nearby server, consent banner, bridge-unavailable banner. Row status dot: connected, not connected, connecting, failed, needs user.
+Retired, never reuse: SCR-49 Connect to server, SCR-50 Server question.
+
+Browse rows (inside SCR-01): favourite, user folder, Android folder, Recents, Trash, volume (mounted, unmounted, locked), server, Nearby server, consent banner, bridge-unavailable banner. Row status dot: connected, not connected, connecting, failed, needs user.
 
 ## 3. Features
 
@@ -133,21 +134,21 @@ Format: **F-ID Name** (mode) — what. *Entry:* where user starts it. *Proof:* w
 ### 3.2 Servers and bridge (B)
 
 - **F-SRV-01 Bridge detection** — socket present → server sections; absent → no trace. *Proof:* Servers section shown/hidden; About › Network locations status.
-- **F-SRV-02 Consent banner** — "Allow access in the notification from netvfs", Ask again. *Entry:* bridge present, consent unknown.
+- **F-SRV-02 Consent banner** — "Network locations need your permission", Ask again. *Entry:* bridge present, access not decided.
 - **F-SRV-03 Bridge unavailable banner** — "Retry" while reconnecting; listed servers stay.
-- **F-SRV-04 Account servers** — servers from Settings › Accounts with *Files* on; row dot shows state; opening connects. *Entry:* Servers rows.
+- **F-SRV-04 Account servers** — SFTP, SMB, WebDAV, FTPS accounts from Settings › Accounts with *Files* on and an access level other than not allowed; row dot shows state; opening connects. *Entry:* Servers rows.
 - **F-SRV-05 Add server** — pulley "Add server" opens Settings › Accounts (netvfs). *Proof:* Sailfish Settings opens.
 - **F-SRV-06 Edit server / Update sign-in / Review server identity** — row menu, hands off to Settings.
 - **F-SRV-07 Server attention page** — "Sign-in failed" or "Server identity changed" with Update sign-in / Review in Settings. *Entry:* tap row with attention.
-- **F-SRV-08 Server question** — Unknown server (fingerprint: Trust/Reject), Unencrypted connection (Allow), Sign-in (password: Sign in), generic question. *Entry:* during connect.
-- **F-SRV-09 Connect to server (ad-hoc)** — `sftp://`/`smb://` URL, user, password passed once; Recent and Nearby lists. *Entry:* tap Nearby row or recent ad-hoc row. Open question: no entry for a blank dialog (see §5).
-- **F-SRV-10 Recent ad-hoc servers** — rows after a connect; menu Connect, Copy address, Remove from recents.
-- **F-SRV-11 Nearby** — mDNS-found servers while Browse is in front. *Proof:* "Nearby" section rows.
+- **F-SRV-11 Nearby** — mDNS-found servers while Browse is in front; tap → SCR-60 "This server isn't set up yet …", Set up opens Settings' add-account flow for that provider. *Proof:* "Nearby" section rows; Settings opens.
 - **F-SRV-12 Offline listing** — cached listing with banner "Offline. Showing the copy from …", Retry. *Code:* `dircache.rs`.
 - **F-SRV-13 Reconnect** — backoff, rows show connecting; running tasks wait then resume.
 - **F-SRV-14 Remote thumbnails** — pictures and PDFs from servers, size cap. *Entry:* View options.
 - **F-SRV-15 Remote streaming** — video/audio stream with seek ("Streaming from …"), else download first. *Code:* `MediaPlayer.qml`, `app_viewers.rs`.
 - **F-SRV-16 Open remote in other app** — working copy to `Downloads/Lautta/Opened`, removed after 24 h. *Entry:* Open with / Share on remote file. *Proof:* SCR-37 "Getting …".
+- **F-SRV-17 Access levels** — folder on a server with less than full access shows lock + level under header ("Read only", "Read and add", "Add only") and offers only what level allows: Read and add adds, changes nothing (no Cut, Rename, Delete); Read only adds nothing; Add only lists folders only ("Files here are hidden"), no Select, conflicts keep both. Folder picker greys out servers it can't write. Level narrowed mid-task → task fails "Lautta may now only … on …". *Entry:* open server with narrowed level. *Code:* `Access.js`, `ContextActions.js`, `access.rs`.
+
+Retired, never reuse: F-SRV-08 Server question, F-SRV-09 Connect to server, F-SRV-10 Recent ad-hoc servers.
 
 ### 3.3 Folder page
 
@@ -157,7 +158,7 @@ Format: **F-ID Name** (mode) — what. *Entry:* where user starts it. *Proof:* w
 - **F-DIR-04 Sort and filter** — sort by Name/Size/Modified/Type, Descending, Folders first, Show hidden files. *Entry:* View options (folder pulley or Settings).
 - **F-DIR-05 Thumbnails switch** — Show thumbnails (untrusted-file warning), Thumbnails from servers, largest server file, cache size.
 - **F-DIR-06 Path menu** — crumbs to any ancestor, Edit path (type a path), Copy address, Add to favourites, "Folder · from cache". *Entry:* tap header.
-- **F-DIR-07 Folder states** — empty ("Pull down to create a folder or paste"), no access, sign-in failed (Update sign-in), not found, can't reach (Retry, Details).
+- **F-DIR-07 Folder states** — empty ("Pull down to create a folder or paste"), hidden (Add only: "Files here are hidden"), no access, sign-in failed (Update sign-in), not found, can't reach (Retry, Details).
 - **F-DIR-08 Large folder** — "N loaded · large folder: name order, thumbnails off", Stop.
 - **F-DIR-09 Live updates** — inotify refresh of local folders. *Code:* `watch.rs`.
 - **F-DIR-10 Listing cache** — cached folder visible at once, refreshed after. *Code:* `dircache.rs`; Storage › Keep stored listings.
@@ -188,7 +189,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 
 - **F-OPS-01 Paste** — pulley "Paste N items" or clipboard panel "Paste here"; Cut → remorse "Moving …" then move. Panel: "N items copied/cut from …", Clear clipboard.
 - **F-OPS-02 Plan summary** — before ops over threshold (Settings › Transfers › Ask before large operations): items, size, free on destination, conflicts, names changed (Use suggested names for all), options (Keep modification times, Keep permissions, Verify with checksums), Start.
-- **F-OPS-03 Conflict resolution** — Merge (folders), Keep both ("Saves as …"), Skip, Replace, Replace if newer, Resume (unfinished copies); "Do this for the remaining N conflicts".
+- **F-OPS-03 Conflict resolution** — Merge (folders), Keep both ("Saves as …"), Skip, Replace, Replace if newer, Resume (unfinished copies); "Do this for the remaining N conflicts". Add only: Keep both only, "Lautta may only add files here."
 - **F-OPS-04 Not-enough-space check** — error names place and sizes.
 - **F-OPS-05 Extract** — archive banner Extract all: Contents, Size, Into (New folder "…" or the destination itself), Extract to, Open folder when done. *Proof:* folder page of result.
 - **F-OPS-06 Archive location** — archive opens read-only as folder, banner "Archive contents are read-only." *Code:* `provider/archive.rs`.
@@ -256,7 +257,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-APP-02 Start error** — "Lautta can't open its data".
 - **F-APP-03 Settings** — Browsing (Browse page, View options, Search, Recents), Files (Deleting, Transfers, Storage), About Lautta.
 - **F-APP-04 Storage** — Keep stored listings, Clear cache, Clear app data ("Removes queue, history, favourites and everything in Trash"; refuses while tasks run).
-- **F-APP-05 About** — version, network locations status and access, permissions, licence, source code.
+- **F-APP-05 About** — version, network locations status, access "Set per server" and where to change it, permissions, licence, source code.
 - **F-APP-06 Background notices** — Notice toasts for errors (`ErrorText.js`) and starts.
 
 ## 4. Feature × entry point (reach-from-everywhere check)
