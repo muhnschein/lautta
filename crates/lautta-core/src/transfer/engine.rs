@@ -331,6 +331,16 @@ impl Engine {
             .ok_or_else(|| not_found(id))
     }
 
+    /// `Transfer::landed`, without cloning its items.
+    pub fn landed(&self, id: TransferId) -> Vec<Uri> {
+        self.inner
+            .lock()
+            .live
+            .get(&id)
+            .map(|l| l.t.landed())
+            .unwrap_or_default()
+    }
+
     /// First item's plan for the list's direction icon, without cloning a 100 000 item plan.
     pub fn first_item(&self, id: TransferId) -> Option<PlanItem> {
         let st = self.inner.lock();
@@ -1388,6 +1398,29 @@ mod tests {
             proposed_name: None,
             resolution: None,
         }
+    }
+
+    #[tokio::test]
+    async fn landed_reads_the_live_transfer() {
+        let resolver = StaticResolver::default()
+            .with("a", Arc::new(MemoryProvider::default()))
+            .with("b", Arc::new(MemoryProvider::default()));
+        let engine = Engine::new(
+            EngineDeps::new(Db::open_in_memory().unwrap(), Arc::new(resolver)),
+            EngineConfig::default(),
+        );
+        engine.volume_present("a", false);
+        let dest = Uri::new("b", VPath::parse(b"/Out").unwrap());
+        let plan = Plan {
+            kind: OperationKind::Extract,
+            destination: dest.clone(),
+            items: vec![file_item("f", "/Out/f")],
+            totals: PlanTotals::default(),
+            needs_summary: false,
+        };
+        let id = engine.add(plan, "", TransferOptions::default()).await.unwrap();
+        assert_eq!(engine.landed(id), [dest]);
+        assert!(engine.landed(id + 1).is_empty());
     }
 
     /// A task that no longer runs its item (paused, then the item went to another task) changes

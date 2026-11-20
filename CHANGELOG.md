@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- A folder you just made scrolls into view and lights up briefly, in folders and in the folder picker ([#113](https://github.com/muhnschein/lautta/issues/113)).
+- New items scroll into view and light up briefly: folders you make (also in the folder picker), pasted or moved items, archives you compress, extracted files, scans and renamed items ([#113](https://github.com/muhnschein/lautta/issues/113)).
+- A folder listed again right after a change no longer shows as empty for a moment.
 - Videos from servers stream and seek instead of downloading first ([#100](https://github.com/muhnschein/lautta/issues/100)).
 - Streaming videos no longer freeze the screen every second or so, and start and seek faster.
 - Servers follow what you allow Lautta in netvfs: full access, read and add, read only, or add only, per server ([#104](https://github.com/muhnschein/lautta/pull/104)). Folders show the level and offer only what it allows. Needs netvfs 2.0.

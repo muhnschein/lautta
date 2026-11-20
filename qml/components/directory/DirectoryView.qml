@@ -31,7 +31,7 @@ Item {
     property string undoingUri
     property Item moreActionsPage
     property var toMove: []
-    property string madeUri
+    property var made: []
 
     signal openFolder(string uri)
     signal flashed(string itemUri)
@@ -83,10 +83,10 @@ Item {
     }
 
     // Scan left or saved: its photos go.
-    function endScan(scan, saved) {
+    function endScan(scan, savedUri) {
         scan.destroy()
-        if (saved)
-            dir.refresh()
+        if (savedUri)
+            landed([savedUri], true)
     }
 
     function rename(info) {
@@ -166,23 +166,37 @@ Item {
             return
         renamed.revealed = true
         showIndex(index)
+        flashed(renamed.uri)
     }
 
     function showIndex(index) {
         flickable.positionViewAtIndex(gridMode ? GridRows.rowOf(index, grid.columns) : index, ListView.Contain)
     }
 
-    // Waits for listing that follows `created`: rows made before it may not stay.
+    // New items of this folder light up once the listing that follows has them; rows made before
+    // it may not stay. `relist`: nothing lists them anew otherwise.
+    function landed(uris, relist) {
+        var bare = function (u) { return u.replace(/\/+$/, "") }
+        var here = uris.filter(function (u) { return bare(App.parentUri(u)) === bare(view.uri) })
+        if (here.length === 0)
+            return
+        made = made.concat(here)
+        if (relist)
+            dir.refresh()
+    }
+
     function revealMade() {
-        if (!madeUri || dir.loading)
+        if (made.length === 0 || dir.loading)
             return
-        var made = madeUri
-        madeUri = ""
-        var index = dir.indexOf(made)
-        if (index < 0)
+        var found = made.filter(function (u) { return dir.indexOf(u) >= 0 })
+        made = []
+        if (found.length === 0)
             return
-        showIndex(index)
-        flashed(made)
+        var rows = found.map(function (u) { return dir.indexOf(u) })
+        // Last first: first new item stays in view, as many after it as fit.
+        showIndex(Math.max.apply(null, rows))
+        showIndex(Math.min.apply(null, rows))
+        found.forEach(function (u) { view.flashed(u) })
     }
 
     // Rows come and go at the end only: a new count as model would start grid anew at its top.
@@ -234,7 +248,7 @@ Item {
     }
 
     function folderMade(folderUri) {
-        madeUri = folderUri
+        landed([folderUri], false)
         var items = toMove
         toMove = []
         if (items.length > 0)
@@ -508,7 +522,13 @@ Item {
     // Server folder not watched: relisted when a transfer ends.
     Connections {
         target: Transfers
+        onLanded: view.landed(JSON.parse(urisJson), true)
         onFinished: if (view.visible && Qt.application.state === Qt.ApplicationActive) dir.revisit()
+    }
+
+    Connections {
+        target: Operations
+        onJobFinished: if (ok && resultUri) view.landed([resultUri], true)
     }
 
     Connections {

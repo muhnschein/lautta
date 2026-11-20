@@ -192,7 +192,7 @@ Features: F-ITM-03 Copy / Cut, F-OPS-01 Paste, F-OPS-07 Background notice
 | 4 | SCR-10 Clipboard panel | Cut: panel |
 | 5 | SCR-03 Folder page (list) | Target folder |
 | 6 | SCR-03 Folder page (list) | Remorse: Moving … |
-| 7 | SCR-03 Folder page (list) | Moved |
+| 7 | SCR-03 Folder page (list) | Moved, new items briefly highlighted |
 
 ### FL-14 Large operation with conflicts (standalone)
 
@@ -340,7 +340,7 @@ Features: F-SCN-01 Scan document, F-SCN-02 Page edge detection and crop, F-SCN-0
 | 7 | SCR-53 Scan camera | Back to camera with 2 pages |
 | 8 | SCR-56 Scan save | Done: Save 2 pages as PDF, name, page strip |
 | 9 | SCR-57 Scan saving | Saving |
-| 10 | SCR-03 Folder page (list) | Saved PDF in folder |
+| 10 | SCR-03 Folder page (list) | Saved PDF in folder, briefly highlighted |
 
 ## Share
 
