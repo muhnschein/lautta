@@ -7,6 +7,7 @@ use crate::entry::{Entry, Kind};
 use crate::error::{Error, ErrorKind, Result};
 use crate::mime::{category_of, FileCategory};
 use crate::org::recents::RecentKind;
+use crate::preview::audio::{self, AudioRead, AudioTags, RangeReader};
 use crate::preview::exif::{self, ExifInfo};
 use crate::preview::highlight::{self, ColourJob, ColouredText};
 use crate::preview::markdown;
@@ -15,8 +16,8 @@ use crate::provider::{list_all, read_all, Lane, ProgressSink, Provider, ReadHand
 use crate::settings::Settings;
 use crate::sort::sort_permutation;
 use crate::thumbs::{
-    remote_thumbnail, render_thumbnail, thumb_bucket, thumb_key, thumbnail_source, ThumbJobs, ThumbSettings,
-    ThumbSource, ThumbnailCache, THUMB_SIZES,
+    remote_thumbnail, render_glow, render_thumbnail, thumb_bucket, thumb_key, thumbnail_source, ThumbJobs,
+    ThumbSettings, ThumbSource, ThumbnailCache, THUMB_SIZES,
 };
 use crate::thumbs_pdf::PdfThumbs;
 use crate::thumbs_text::{thumb_text, TEXT_THUMB_BYTES};
@@ -68,6 +69,20 @@ pub struct ExifReport {
     pub size: Option<u64>,
     pub modified_ms: Option<i64>,
     pub info: Option<ExifInfo>,
+}
+
+/// Media player's track info. `cover`: where the player's picture comes from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AudioInfo {
+    pub tags: AudioTags,
+    pub cover: CoverFrom,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CoverFrom {
+    File,
+    Folder,
+    None,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -400,6 +415,18 @@ pub struct Previews {
     pdf: PdfThumbs,
     waiters: Mutex<HashMap<String, Waiting>>,
     next_waiter: AtomicU64,
+    /// Cover of the audio file last read for the player, by [`version_key`]: its cover request
+    /// then reads no file again.
+    last_cover: Mutex<Option<(String, Arc<Vec<u8>>)>>,
+}
+
+/// What an image request makes. Covers serve the media player: any audio file, whatever the
+/// thumbnail settings; glow is the blurred backdrop drawn from the cover.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreviewKind {
+    Thumb,
+    Cover,
+    Glow,
 }
 
 /// `job`: [`ThumbJobs`] key, new per start: a cancelled job keeps its slot until its task wakes,
@@ -419,6 +446,13 @@ pub struct TextTicket {
 
 /// Image sizes are 16 or more.
 const TEXT_KEY_SIZE: u32 = 1;
+/// Empty entry: the audio file holds no cover (until it changes).
+const NO_COVER_KEY_SIZE: u32 = 2;
+const GLOW_KEY_SIZE: u32 = 3;
+/// Cover the glow is drawn from; glow itself is [`crate::thumbs::GLOW_SIDE`] square.
+const GLOW_FROM: u32 = 128;
+/// Largest folder picture (`cover.jpg`, …) read for a cover.
+pub const MAX_FOLDER_COVER_BYTES: u64 = 16 * 1024 * 1024;
 
 /// `cancel` (or the part kept after taking `rx`) drops the request when the delegate is gone.
 pub struct ThumbTicket {
@@ -457,19 +491,42 @@ impl Previews {
 
     /// Requests for the same file and size share one job.
     pub fn request(self: &Arc<Self>, core: Arc<Core>, uri: Uri, size: u32) -> ThumbTicket {
-        self.request_as(core, uri, size, false)
+        self.request_as(core, uri, size, false, PreviewKind::Thumb)
     }
 
     /// Cached thumbnail of any size, never the file: fails at once when none was made.
     pub fn request_cached(self: &Arc<Self>, core: Arc<Core>, uri: Uri, size: u32) -> ThumbTicket {
-        self.request_as(core, uri, size, true)
+        self.request_as(core, uri, size, true, PreviewKind::Thumb)
     }
 
-    fn request_as(self: &Arc<Self>, core: Arc<Core>, uri: Uri, size: u32, cached: bool) -> ThumbTicket {
+    /// Media player's cover or its glow; `size` ignored for glow.
+    pub fn request_cover(
+        self: &Arc<Self>,
+        core: Arc<Core>,
+        uri: Uri,
+        size: u32,
+        kind: PreviewKind,
+    ) -> ThumbTicket {
+        self.request_as(core, uri, size, false, kind)
+    }
+
+    fn request_as(
+        self: &Arc<Self>,
+        core: Arc<Core>,
+        uri: Uri,
+        size: u32,
+        cached: bool,
+        kind: PreviewKind,
+    ) -> ThumbTicket {
         let size = thumb_bucket(size);
         let mut job_key = thumb_key(&uri.to_string(), size, None, None);
         if cached {
             job_key.push_str(":cached");
+        }
+        match kind {
+            PreviewKind::Thumb => {}
+            PreviewKind::Cover => job_key.push_str(":cover"),
+            PreviewKind::Glow => job_key.push_str(":glow"),
         }
         let waiter = self.next_waiter.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
@@ -488,7 +545,7 @@ impl Previews {
             let me = Arc::clone(self);
             let key = job_key.clone();
             self.jobs.request(&job, &uri.location.clone(), async move {
-                let result = me.make(&core, &uri, size, cached).await;
+                let result = me.make(&core, &uri, size, cached, kind).await;
                 me.finish(&key, result);
             });
         }
@@ -580,19 +637,27 @@ impl Previews {
 
     /// App makes only server files' thumbnails; local ones are the system thumbnailer's. `size` is
     /// one of [`THUMB_SIZES`].
-    async fn make(&self, core: &Core, uri: &Uri, size: u32, cached: bool) -> ThumbResult {
+    async fn make(&self, core: &Core, uri: &Uri, size: u32, cached: bool, kind: PreviewKind) -> ThumbResult {
         let file = ThumbFile::open(core, uri, cached).await?;
         let entry = &file.entry;
         if entry.is_dir() {
             return Err(Error::kind(ErrorKind::IsADirectory));
         }
+        let audio = category_of(entry) == FileCategory::Audio;
         // Read when asked: a View options change holds from the next thumbnail on.
         let settings = ThumbSettings::new(&core.settings());
-        if thumbnail_source(entry, file.local, true, &settings) != ThumbSource::App {
+        if kind != PreviewKind::Thumb {
+            if !audio {
+                return Err(Error::new(ErrorKind::Unsupported, "not an audio file"));
+            }
+        } else if thumbnail_source(entry, file.local, true, &settings) != ThumbSource::App {
             return Err(Error::new(
                 ErrorKind::Unsupported,
                 "no app thumbnail for this file",
             ));
+        }
+        if kind == PreviewKind::Glow {
+            return self.glow(core, &file).await;
         }
         let pdf = category_of(entry) == FileCategory::Pdf;
         let version = thumb_key(&file.key_uri, 0, entry.modified_ms(), entry.etag.as_deref());
@@ -621,6 +686,18 @@ impl Previews {
                 ErrorKind::Unsupported,
                 "battery saving: server PDFs not read",
             ));
+        } else if audio && kind == PreviewKind::Thumb && !file.local && core.power_save() {
+            return Err(Error::new(
+                ErrorKind::Unsupported,
+                "battery saving: server audio not read",
+            ));
+        } else if audio {
+            let (bytes, own) = self.audio_cover(core, &file, size).await?;
+            // A folder picture is kept under its own key: one change to it shows in every track.
+            if own {
+                self.put(&key, &bytes);
+            }
+            return Ok(Arc::new(bytes));
         } else {
             let handle = file.provider.open_read(&file.path, Lane::Interactive).await?;
             if pdf {
@@ -636,11 +713,138 @@ impl Previews {
                 remote_thumbnail(handle.as_ref(), size, max).await?
             }
         };
-        if let Err(e) = self.cache.put(&key, &bytes) {
-            log::warn!("thumbnail not cached: {e}");
-        }
+        self.put(&key, &bytes);
         Ok(Arc::new(bytes))
     }
+
+    fn put(&self, key: &str, bytes: &[u8]) {
+        if let Err(e) = self.cache.put(key, bytes) {
+            log::warn!("thumbnail not cached: {e}");
+        }
+    }
+
+    fn key_of(file: &ThumbFile, size: u32) -> String {
+        thumb_key(
+            &file.key_uri,
+            size,
+            file.entry.modified_ms(),
+            file.entry.etag.as_deref(),
+        )
+    }
+
+    /// Rendered cover at `size`: the file's own (`true`), else its folder's picture.
+    async fn audio_cover(&self, core: &Core, file: &ThumbFile, size: u32) -> Result<(Vec<u8>, bool)> {
+        let none_key = Self::key_of(file, NO_COVER_KEY_SIZE);
+        if !self.cache.contains(&none_key) {
+            let version = Self::key_of(file, 0);
+            let memo = lock(&self.last_cover)
+                .as_ref()
+                .filter(|(k, _)| *k == version)
+                .map(|(_, b)| Arc::clone(b));
+            let embedded = match memo {
+                Some(bytes) => Some(bytes),
+                None => read_cover(file).await?.map(Arc::new),
+            };
+            if let Some(bytes) = embedded {
+                let rendered = spawn_render(move || render_thumbnail(&bytes, size, 1)).await;
+                if let Ok(done) = rendered {
+                    return Ok((done, true));
+                }
+            }
+            self.put(&none_key, &[]);
+        }
+        match self.folder_cover(core, file, size).await {
+            Some(bytes) => Ok((bytes, false)),
+            None => Err(Error::new(ErrorKind::NotFound, "no cover")),
+        }
+    }
+
+    /// `cover.jpg`, `folder.jpg` or `front.jpg` beside the file, rendered at `size` and kept by its
+    /// own name and change time. None when missing, too large or not an image.
+    async fn folder_cover(&self, core: &Core, file: &ThumbFile, size: u32) -> Option<Vec<u8>> {
+        let folder = Uri::parse(&file.key_uri).ok()?.parent()?;
+        let entries = match core.dircache.get(&folder) {
+            Ok(Some(hit)) => hit.entries,
+            _ => list_all(file.provider.as_ref(), &folder.path, Lane::Interactive)
+                .await
+                .ok()?,
+        };
+        let picture = audio::folder_cover(&entries)?.clone();
+        let uri = folder.join(&picture.name).ok()?;
+        let key = thumb_key(
+            &uri.to_string(),
+            size,
+            picture.modified_ms(),
+            picture.etag.as_deref(),
+        );
+        if let Some(hit) = self.cache.get(&key) {
+            return Some(hit);
+        }
+        if picture.size.is_some_and(|s| s > MAX_FOLDER_COVER_BYTES) {
+            return None;
+        }
+        let handle = file.provider.open_read(&uri.path, Lane::Interactive).await.ok()?;
+        let bytes = read_all(handle.as_ref(), MAX_FOLDER_COVER_BYTES + 1).await.ok()?;
+        if bytes.len() as u64 > MAX_FOLDER_COVER_BYTES {
+            return None;
+        }
+        let rendered = spawn_render(move || render_thumbnail(&bytes, size, exif::orientation(&bytes)))
+            .await
+            .ok()?;
+        self.put(&key, &rendered);
+        Some(rendered)
+    }
+
+    async fn glow(&self, core: &Core, file: &ThumbFile) -> ThumbResult {
+        let key = Self::key_of(file, GLOW_KEY_SIZE);
+        if let Some(hit) = self.cache.get(&key) {
+            return Ok(Arc::new(hit));
+        }
+        let base_key = Self::key_of(file, GLOW_FROM);
+        let base = match self.cache.get(&base_key) {
+            Some(hit) => hit,
+            None => self.audio_cover(core, file, GLOW_FROM).await?.0,
+        };
+        let glow = spawn_render(move || render_glow(&base)).await?;
+        self.put(&key, &glow);
+        Ok(Arc::new(glow))
+    }
+
+    /// Player read the file: its cover serves the next cover request.
+    fn remember_cover(&self, version: String, cover: Option<Vec<u8>>) {
+        *lock(&self.last_cover) = cover.map(|c| (version, Arc::new(c)));
+    }
+}
+
+async fn spawn_render<T: Send + 'static>(work: impl FnOnce() -> Result<T> + Send + 'static) -> Result<T> {
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Internal, format!("thumbnail worker failed: {e}")))?
+}
+
+/// Tags (and cover when `want_cover`) of an audio file; only the parts the parser reads cross the
+/// network ([`audio::RangeReader`]). `None`: not readable as audio.
+async fn read_audio_of(handle: Arc<dyn ReadHandle>, want_cover: bool) -> Result<Option<AudioRead>> {
+    let Some(size) = handle.size() else {
+        return Ok(None);
+    };
+    let rt = Handle::current();
+    tokio::task::spawn_blocking(move || {
+        let fetch = |offset: u64, max: usize| {
+            rt.block_on(handle.read_at(offset, max))
+                .map_err(|e| std::io::Error::other(e.message))
+        };
+        audio::read_audio(RangeReader::new(size, audio::READ_BUDGET, fetch), want_cover)
+    })
+    .await
+    .map_err(|e| Error::new(ErrorKind::Internal, format!("audio reader failed: {e}")))
+}
+
+async fn read_cover(file: &ThumbFile) -> Result<Option<Vec<u8>>> {
+    let handle = file.provider.open_read(&file.path, Lane::Interactive).await?;
+    Ok(read_audio_of(Arc::from(handle), true)
+        .await?
+        .and_then(|r| r.cover))
 }
 
 struct ThumbFile {
@@ -772,6 +976,44 @@ impl Core {
         })
     }
 
+    /// Tags of an audio file and where its cover comes from. A file lofty can't read has empty
+    /// tags, not an error: the player then shows its name.
+    pub async fn audio_info(&self, uri: &Uri) -> Result<AudioInfo> {
+        let provider = self.provider(&uri.location)?;
+        let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
+        let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
+        let read = read_audio_of(Arc::from(handle), true).await?.unwrap_or_default();
+        let has_cover = read.cover.is_some();
+        let previews = self.previews(&Handle::current())?;
+        let version = thumb_key(&uri.to_string(), 0, entry.modified_ms(), entry.etag.as_deref());
+        previews.remember_cover(version, read.cover);
+        let cover = if has_cover {
+            CoverFrom::File
+        } else if self.folder_has_cover(uri, provider.as_ref()).await {
+            CoverFrom::Folder
+        } else {
+            CoverFrom::None
+        };
+        Ok(AudioInfo {
+            tags: read.tags,
+            cover,
+        })
+    }
+
+    async fn folder_has_cover(&self, uri: &Uri, provider: &dyn Provider) -> bool {
+        let Some(folder) = uri.parent() else {
+            return false;
+        };
+        let entries = match self.dircache.get(&folder) {
+            Ok(Some(hit)) => hit.entries,
+            _ => match list_all(provider, &folder.path, Lane::Interactive).await {
+                Ok(all) => all,
+                Err(_) => return false,
+            },
+        };
+        audio::folder_cover(&entries).is_some()
+    }
+
     pub async fn list_images(&self, folder: &Uri) -> Result<Vec<ImageItem>> {
         let provider = self.provider(&folder.location)?;
         let all = list_all(provider.as_ref(), &folder.path, Lane::Interactive).await?;
@@ -858,6 +1100,7 @@ impl Core {
             pdf: PdfThumbs::default(),
             waiters: Mutex::default(),
             next_waiter: AtomicU64::new(1),
+            last_cover: Mutex::default(),
         });
         list.push((dir, Arc::clone(&previews)));
         Ok(previews)

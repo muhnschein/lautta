@@ -22,6 +22,18 @@ Page {
     readonly property real duration: local ? localPlayer.duration : remote.duration
     readonly property string errorKind: local ? remote.playerErrorKind(localPlayer.error) : remote.errorKind
     property bool chrome: true
+    // Audio in landscape: cover left, the rest right.
+    readonly property bool sideBySide: !video && isLandscape
+    readonly property real paneX: sideBySide ? width / 2 : 0
+    readonly property real paneWidth: sideBySide ? width / 2 : width
+    readonly property string coverUrl: !video && info.cover !== "" ? "image://lautta-cover/" + uri : ""
+    // No title tag: file name without its extension.
+    readonly property string trackTitle: {
+        if (info.title !== "")
+            return info.title
+        var bare = fileName.replace(/\.[^.]*$/, "")
+        return bare !== "" ? bare : fileName
+    }
 
     function toggle() {
         if (local) {
@@ -60,6 +72,11 @@ Page {
 
     ViewerTools { id: tools }
 
+    AudioInfo {
+        id: info
+        uri: page.video ? "" : page.uri
+    }
+
     Component.onCompleted: if (local) tools.noteViewed(uri)
     Component.onDestruction: {
         if (local)
@@ -75,6 +92,25 @@ Page {
     Rectangle {
         anchors.fill: parent
         color: page.video ? "black" : "transparent"
+    }
+
+    // Glow: blurred, tiny copy of the cover stretched over the page, dimmed so text stays legible.
+    Image {
+        id: glow
+
+        objectName: "coverGlow"
+        anchors.fill: parent
+        source: page.coverUrl !== "" ? page.coverUrl + "?size=48&glow=1" : ""
+        fillMode: Image.PreserveAspectCrop
+        smooth: true
+        asynchronous: true
+        opacity: status === Image.Ready ? 1 : 0
+        Behavior on opacity { FadeAnimation { } }
+
+        Rectangle {
+            anchors.fill: parent
+            color: Theme.rgba(Theme.overlayBackgroundColor, 0.55)
+        }
     }
 
     MM.VideoOutput {
@@ -104,6 +140,8 @@ Page {
 
     PageHeader {
         id: header
+        x: page.paneX
+        width: page.paneWidth
         opacity: page.chrome || !page.video ? 1 : 0
         visible: opacity > 0
         title: page.fileName
@@ -111,16 +149,109 @@ Page {
         Behavior on opacity { FadeAnimation { } }
     }
 
+    // Space between header and controls; portrait centres cover and track info in it as one block.
+    Item {
+        id: stage
+        x: page.paneX
+        width: page.paneWidth
+        anchors { top: header.bottom; bottom: controls.top }
+    }
+
     Rectangle {
-        anchors { horizontalCenter: parent.horizontalCenter; top: header.bottom; topMargin: Theme.paddingLarge * 2 }
-        visible: !page.video && page.height > page.width
-        width: Math.min(parent.width - 2 * Theme.horizontalPageMargin, Theme.itemSizeHuge * 2.4)
+        id: cover
+
+        objectName: "cover"
+        readonly property real block: height + Theme.paddingLarge * 2 + trackInfo.height
+        visible: !page.video
+        width: page.sideBySide
+               ? Math.min(page.width / 2 - 2 * Theme.horizontalPageMargin, page.height - 2 * Theme.paddingLarge)
+               : Math.max(0, Math.min(page.width - 2 * Theme.horizontalPageMargin, Theme.itemSizeHuge * 2.4,
+                                      stage.height - trackInfo.height - Theme.paddingLarge * 4))
         height: width
+        x: page.sideBySide ? (page.width / 2 - width) / 2 : (page.width - width) / 2
+        y: page.sideBySide ? (page.height - height) / 2 : stage.y + Math.max(0, (stage.height - block) / 2)
         color: Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity)
 
         Image {
             anchors.centerIn: parent
             source: "image://theme/icon-l-music?" + Theme.highlightColor
+            visible: coverImage.status !== Image.Ready
+        }
+
+        Image {
+            id: coverImage
+
+            objectName: "coverImage"
+            anchors.fill: parent
+            source: page.coverUrl !== "" ? page.coverUrl + "?size=" + Math.round(Math.max(cover.width, 16)) : ""
+            sourceSize.width: cover.width
+            sourceSize.height: cover.height
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            opacity: status === Image.Ready ? 1 : 0
+            Behavior on opacity { FadeAnimation { } }
+        }
+    }
+
+    Column {
+        id: trackInfo
+
+        objectName: "trackInfo"
+        x: page.paneX + Theme.horizontalPageMargin
+        width: page.paneWidth - 2 * Theme.horizontalPageMargin
+        y: page.sideBySide ? stage.y + Math.max(0, (stage.height - height) / 2)
+                           : cover.y + cover.height + Theme.paddingLarge * 2
+        visible: !page.video
+        opacity: info.loading ? 0 : 1
+        spacing: Theme.paddingSmall
+        Behavior on opacity { FadeAnimation { } }
+
+        Label {
+            objectName: "trackTitle"
+            width: parent.width
+            text: page.trackTitle
+            textFormat: Text.PlainText
+            color: Theme.highlightColor
+            font.pixelSize: Theme.fontSizeLarge
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.Wrap
+            maximumLineCount: 2
+            elide: Text.ElideRight
+        }
+        Label {
+            objectName: "trackArtist"
+            width: parent.width
+            visible: text !== ""
+            text: info.artist
+            textFormat: Text.PlainText
+            horizontalAlignment: Text.AlignHCenter
+            truncationMode: TruncationMode.Fade
+        }
+        Label {
+            objectName: "trackAlbum"
+            width: parent.width
+            visible: text !== ""
+            text: [info.album, info.year > 0 ? String(info.year) : ""].filter(function (s) { return s !== "" }).join(" · ")
+            textFormat: Text.PlainText
+            color: Theme.secondaryColor
+            font.pixelSize: Theme.fontSizeSmall
+            horizontalAlignment: Text.AlignHCenter
+            truncationMode: TruncationMode.Fade
+        }
+        Label {
+            objectName: "trackNumber"
+            width: parent.width
+            visible: text !== ""
+            text: info.track <= 0 ? ""
+                : info.trackTotal >= info.track
+                  //% "Track %1 of %2"
+                  ? qsTrId("lautta-viewers-media-track-of").arg(info.track).arg(info.trackTotal)
+                  //% "Track %1"
+                  : qsTrId("lautta-viewers-media-track").arg(info.track)
+            textFormat: Text.PlainText
+            color: Theme.secondaryColor
+            font.pixelSize: Theme.fontSizeSmall
+            horizontalAlignment: Text.AlignHCenter
         }
     }
 
@@ -131,7 +262,9 @@ Page {
     }
 
     ProgressBar {
-        anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter }
+        x: page.paneX
+        width: page.paneWidth
+        y: page.video ? (page.height - height) / 2 : page.height - height - Theme.paddingLarge * 2
         visible: remote.downloading && remote.downloadProgress >= 0
         minimumValue: 0
         maximumValue: 1
@@ -143,7 +276,9 @@ Page {
     Column {
         id: controls
 
-        anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+        x: page.paneX
+        width: page.paneWidth
+        anchors.bottom: parent.bottom
         opacity: page.chrome || !page.video ? 1 : 0
         visible: opacity > 0 && !remote.downloading
         Behavior on opacity { FadeAnimation { } }

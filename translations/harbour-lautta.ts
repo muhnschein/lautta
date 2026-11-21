@@ -2624,5 +2624,13 @@
         <source>USB drive</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-viewers-media-track-of">
+        <source>Track %1 of %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-media-track">
+        <source>Track %1</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

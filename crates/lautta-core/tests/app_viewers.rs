@@ -1258,3 +1258,358 @@ async fn a_listed_file_s_cached_thumbnail_needs_no_server_call() {
         "a listed link says nothing of its target: asked"
     );
 }
+
+#[path = "fixtures/audio.rs"]
+#[allow(dead_code)]
+mod audio_fixture;
+
+use lautta_core::app_viewers::{CoverFrom, PreviewKind};
+
+fn red() -> [u8; 3] {
+    [220, 20, 20]
+}
+
+fn blue() -> [u8; 3] {
+    [20, 20, 220]
+}
+
+fn tagged(cover: Option<[u8; 3]>) -> Vec<u8> {
+    let art = cover.map(|c| audio_fixture::jpeg(300, c));
+    audio_fixture::mp3(
+        &[
+            ("TIT2", "Harbour Lights"),
+            ("TPE1", "The Ferry Pilots"),
+            ("TRCK", "3/11"),
+        ],
+        art.as_deref(),
+        8,
+    )
+}
+
+/// Mean colour of a decoded thumbnail, to tell which picture it came from.
+fn tint(bytes: &[u8]) -> [u8; 3] {
+    let img = thumb_pixels(bytes);
+    let n = u64::from(img.width() * img.height());
+    let mut sum = [0u64; 3];
+    for p in img.pixels() {
+        for (s, c) in sum.iter_mut().zip(p.0) {
+            *s += u64::from(c);
+        }
+    }
+    sum.map(|s| (s / n) as u8)
+}
+
+fn near(a: [u8; 3], b: [u8; 3]) -> bool {
+    a.iter().zip(b).all(|(x, y)| x.abs_diff(y) < 40)
+}
+
+fn reads_of(nas: &MemoryProvider, path: &str) -> usize {
+    nas.calls()
+        .iter()
+        .filter(|c| c.starts_with("open_read") && c.ends_with(path))
+        .count()
+}
+
+async fn cover(
+    h: &Home,
+    previews: &Arc<lautta_core::app_viewers::Previews>,
+    u: &str,
+    kind: PreviewKind,
+) -> Result<Vec<u8>, lautta_core::Error> {
+    let t = previews.request_cover(h.core.clone(), uri(u), 512, kind);
+    t.rx.await.unwrap().map(|b| b.to_vec())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn audio_info_has_the_tags_and_where_the_cover_comes_from() {
+    let h = home().await;
+    h.nas.add_file("m/own.mp3", &tagged(Some(red())), 1);
+    h.nas.add_file("m/bare.mp3", &audio_fixture::mp3(&[], None, 8), 1);
+    h.nas.add_file("m/noise.mp3", b"not audio at all", 1);
+    h.nas
+        .add_file("lone/bare.mp3", &audio_fixture::mp3(&[], None, 8), 1);
+
+    let info = h
+        .core
+        .audio_info(&uri("lautta://nv-nas/m/own.mp3"))
+        .await
+        .unwrap();
+    assert_eq!(info.tags.title.as_deref(), Some("Harbour Lights"));
+    assert_eq!(info.tags.artist.as_deref(), Some("The Ferry Pilots"));
+    assert_eq!((info.tags.track, info.tags.track_total), (Some(3), Some(11)));
+    assert_eq!(info.cover, CoverFrom::File);
+
+    let bare = h
+        .core
+        .audio_info(&uri("lautta://nv-nas/m/bare.mp3"))
+        .await
+        .unwrap();
+    assert_eq!(bare.cover, CoverFrom::None, "no picture in the folder yet");
+    h.nas
+        .add_file("m/Folder.JPG", &audio_fixture::jpeg(40, blue()), 1);
+    let bare = h
+        .core
+        .audio_info(&uri("lautta://nv-nas/m/bare.mp3"))
+        .await
+        .unwrap();
+    assert_eq!(bare.cover, CoverFrom::Folder);
+    assert_eq!(bare.tags, Default::default());
+
+    let noise = h
+        .core
+        .audio_info(&uri("lautta://nv-nas/m/noise.mp3"))
+        .await
+        .unwrap();
+    assert_eq!(noise.tags, Default::default(), "unreadable: empty tags, no error");
+    let lone = h
+        .core
+        .audio_info(&uri("lautta://nv-nas/lone/bare.mp3"))
+        .await
+        .unwrap();
+    assert_eq!(lone.cover, CoverFrom::None);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_player_cover_needs_no_second_read_after_audio_info() {
+    let h = home().await;
+    h.nas.add_file("m/own.mp3", &tagged(Some(red())), 1);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    h.core
+        .audio_info(&uri("lautta://nv-nas/m/own.mp3"))
+        .await
+        .unwrap();
+    let before = reads_of(&h.nas, "m/own.mp3");
+    let big = cover(&h, &previews, "lautta://nv-nas/m/own.mp3", PreviewKind::Cover)
+        .await
+        .unwrap();
+    assert!(near(tint(&big), red()));
+    assert_eq!(thumb_pixels(&big).width(), 300, "never scaled up");
+    assert_eq!(
+        reads_of(&h.nas, "m/own.mp3"),
+        before,
+        "cover from what audio_info read"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn audio_thumbnails_take_the_files_cover_else_the_folders() {
+    let h = home().await;
+    h.nas.add_file("m/own.mp3", &tagged(Some(red())), 1);
+    h.nas.add_file("m/a.mp3", &tagged(None), 1);
+    h.nas
+        .add_file("m/b.flac", &audio_fixture::flac(&["TITLE=b"], None), 1);
+    h.nas
+        .add_file("m/cover.jpg", &audio_fixture::jpeg(300, blue()), 1);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+
+    let own = thumbnail(&h, &previews, "lautta://nv-nas/m/own.mp3", 128)
+        .await
+        .unwrap();
+    assert!(
+        near(tint(&own), red()),
+        "file's own cover first: {:?}",
+        tint(&own)
+    );
+    assert_eq!(thumb_pixels(&own).width(), 128);
+
+    let a = thumbnail(&h, &previews, "lautta://nv-nas/m/a.mp3", 128)
+        .await
+        .unwrap();
+    let b = thumbnail(&h, &previews, "lautta://nv-nas/m/b.flac", 128)
+        .await
+        .unwrap();
+    assert!(
+        near(tint(&a), blue()) && near(tint(&b), blue()),
+        "folder's cover.jpg"
+    );
+    assert_eq!(
+        reads_of(&h.nas, "m/cover.jpg"),
+        1,
+        "folder picture made once for all tracks"
+    );
+
+    let (a_reads, cover_reads) = (reads_of(&h.nas, "m/a.mp3"), reads_of(&h.nas, "m/cover.jpg"));
+    thumbnail(&h, &previews, "lautta://nv-nas/m/a.mp3", 256)
+        .await
+        .unwrap();
+    assert_eq!(
+        reads_of(&h.nas, "m/a.mp3"),
+        a_reads,
+        "known to have no cover: not read again"
+    );
+    assert_eq!(
+        reads_of(&h.nas, "m/cover.jpg"),
+        cover_reads + 1,
+        "new size of the folder picture"
+    );
+
+    h.nas.add_file("m/cover.jpg", &audio_fixture::jpeg(300, red()), 2);
+    h.core.dircache.invalidate(&uri("lautta://nv-nas/m")).unwrap();
+    let a = thumbnail(&h, &previews, "lautta://nv-nas/m/a.mp3", 256)
+        .await
+        .unwrap();
+    assert!(near(tint(&a), red()), "changed folder picture shows at once");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn audio_without_any_cover_is_read_once() {
+    let h = home().await;
+    h.nas.add_file("m/a.mp3", &tagged(None), 1);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let err = thumbnail(&h, &previews, "lautta://nv-nas/m/a.mp3", 128)
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::NotFound);
+    let reads = reads_of(&h.nas, "m/a.mp3");
+    thumbnail(&h, &previews, "lautta://nv-nas/m/a.mp3", 128)
+        .await
+        .unwrap_err();
+    assert_eq!(reads_of(&h.nas, "m/a.mp3"), reads);
+    h.nas.add_file("m/a.mp3", &tagged(Some(blue())), 2);
+    let changed = thumbnail(&h, &previews, "lautta://nv-nas/m/a.mp3", 128)
+        .await
+        .unwrap();
+    assert!(near(tint(&changed), blue()), "a changed file is read again");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn local_audio_gets_cover_thumbnails_too() {
+    let h = home().await;
+    std::fs::write(h.root.join("Documents/song.mp3"), tagged(Some(red()))).unwrap();
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let t = thumbnail(&h, &previews, "lautta://user-documents/song.mp3", 64)
+        .await
+        .unwrap();
+    assert!(near(tint(&t), red()));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn server_audio_thumbnails_follow_switches_but_the_player_cover_does_not() {
+    let h = home().await;
+    h.nas.add_file("m/own.mp3", &tagged(Some(red())), 1);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let u = "lautta://nv-nas/m/own.mp3";
+
+    h.core.set_power_save(true);
+    let err = thumbnail(&h, &previews, u, 128).await.unwrap_err();
+    assert_eq!(
+        err.kind,
+        ErrorKind::Unsupported,
+        "battery saving reads no server audio"
+    );
+    assert_eq!(reads_of(&h.nas, "m/own.mp3"), 0);
+    let mut s = h.core.settings();
+    s.thumbnails_remote = false;
+    h.core.apply_settings(s);
+    h.core.set_power_save(false);
+    let err = thumbnail(&h, &previews, u, 128).await.unwrap_err();
+    assert_eq!(err.kind, ErrorKind::Unsupported, "Thumbnails from servers off");
+
+    h.core.set_power_save(true);
+    let c = cover(&h, &previews, u, PreviewKind::Cover).await.unwrap();
+    assert!(
+        near(tint(&c), red()),
+        "player shows the cover of the file it plays"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_glow_is_a_small_soft_copy_of_the_cover() {
+    let h = home().await;
+    h.nas.add_file("m/own.mp3", &tagged(Some(red())), 1);
+    h.nas.add_file("m/a.jpg", &jpeg(10, 10), 1);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let g = cover(&h, &previews, "lautta://nv-nas/m/own.mp3", PreviewKind::Glow)
+        .await
+        .unwrap();
+    let px = thumb_pixels(&g);
+    assert_eq!((px.width(), px.height()), (48, 48));
+    assert!(near(tint(&g), red()));
+    let reads = reads_of(&h.nas, "m/own.mp3");
+    cover(&h, &previews, "lautta://nv-nas/m/own.mp3", PreviewKind::Glow)
+        .await
+        .unwrap();
+    assert_eq!(reads_of(&h.nas, "m/own.mp3"), reads, "kept");
+
+    let err = cover(&h, &previews, "lautta://nv-nas/m/a.jpg", PreviewKind::Cover)
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::Unsupported, "covers are for audio files");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_pictures_up_to_the_limit_are_covers_larger_ones_are_not() {
+    // The promised 16 MiB, written out: the constant itself could drift with the code.
+    const LIMIT: u64 = 16 * 1024 * 1024;
+    let h = home().await;
+    let padded = |extra: u64| {
+        // Bytes after the JPEG's end marker are ignored by the decoder.
+        let mut jpg = audio_fixture::jpeg(32, blue());
+        jpg.resize((LIMIT + extra) as usize, 0);
+        jpg
+    };
+    h.nas.add_file("fit/a.mp3", &tagged(None), 1);
+    h.nas.add_file("fit/cover.jpg", &padded(0), 1);
+    h.nas.add_file("big/a.mp3", &tagged(None), 1);
+    h.nas.add_file("big/cover.jpg", &padded(1), 1);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let fit = thumbnail(&h, &previews, "lautta://nv-nas/fit/a.mp3", 64)
+        .await
+        .unwrap();
+    assert!(near(tint(&fit), blue()), "exactly the limit: {:?}", tint(&fit));
+    let big = thumbnail(&h, &previews, "lautta://nv-nas/big/a.mp3", 64)
+        .await
+        .unwrap_err();
+    assert_eq!(big.kind, ErrorKind::NotFound);
+    assert_eq!(reads_of(&h.nas, "big/cover.jpg"), 0, "too large: never read");
+}
+
+fn listed(name: &str, size: u64) -> lautta_core::entry::Entry {
+    let mut e = lautta_core::entry::Entry::new(name.as_bytes(), lautta_core::entry::Kind::File);
+    e.size = Some(size);
+    e.modified = Some(std::time::UNIX_EPOCH + std::time::Duration::from_millis(1));
+    e
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_cached_folder_listing_finds_the_folder_cover_without_listing_again() {
+    let h = home().await;
+    let jpg = audio_fixture::jpeg(32, blue());
+    h.nas.add_file("m/a.mp3", &tagged(None), 1);
+    h.nas.add_file("m/cover.jpg", &jpg, 1);
+    let entries = [listed("a.mp3", 9), listed("cover.jpg", jpg.len() as u64)];
+    h.core.dircache.put(&uri("lautta://nv-nas/m"), &entries).unwrap();
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let info = h.core.audio_info(&uri("lautta://nv-nas/m/a.mp3")).await.unwrap();
+    assert_eq!(info.cover, CoverFrom::Folder);
+    let t = thumbnail(&h, &previews, "lautta://nv-nas/m/a.mp3", 64)
+        .await
+        .unwrap();
+    assert!(near(tint(&t), blue()));
+    let lists: Vec<String> = h
+        .nas
+        .calls()
+        .into_iter()
+        .filter(|c| c.starts_with("list"))
+        .collect();
+    assert!(lists.is_empty(), "folder listed again: {lists:?}");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_folder_picture_grown_past_the_limit_since_listing_is_no_cover() {
+    // The promised 16 MiB, written out.
+    const LIMIT: usize = 16 * 1024 * 1024;
+    let h = home().await;
+    let mut jpg = audio_fixture::jpeg(32, blue());
+    jpg.resize(LIMIT + 1, 0);
+    h.nas.add_file("m/a.mp3", &tagged(None), 1);
+    h.nas.add_file("m/cover.jpg", &jpg, 1);
+    // Listing from before it grew: small size, so only the read itself can tell.
+    let entries = [listed("a.mp3", 9), listed("cover.jpg", 1000)];
+    h.core.dircache.put(&uri("lautta://nv-nas/m"), &entries).unwrap();
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let err = thumbnail(&h, &previews, "lautta://nv-nas/m/a.mp3", 64)
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::NotFound);
+}
