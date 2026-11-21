@@ -335,6 +335,11 @@ impl<'s> Renderer<'s> {
                 kind: self.kind,
                 joined,
             });
+        } else if !joined {
+            // Element filled its last part exactly: that part ends it.
+            if let Some(last) = self.blocks.last_mut() {
+                last.joined = false;
+            }
         }
     }
 
@@ -466,18 +471,18 @@ impl<'s> Renderer<'s> {
         let lines = coloured.line_count();
         let mut body = String::new();
         let mut in_body = 0;
-        let mut panels = 0;
         for index in 0..lines {
             let line = coloured.line(index).unwrap_or_default();
+            let last = index + 1 == lines;
             if line.len() < half {
                 if in_body > 0 {
                     body.push('\n');
                 }
                 push_coloured(&mut body, &coloured, index..index + 1, &self.style.syntax);
                 in_body += 1;
-                if body.len() >= half && index + 1 < lines {
+                if body.len() >= half && !last {
                     self.code_panel(&std::mem::take(&mut body), false);
-                    (in_body, panels) = (0, panels + 1);
+                    in_body = 0;
                 }
                 continue;
             }
@@ -485,22 +490,19 @@ impl<'s> Renderer<'s> {
                 self.code_panel(&std::mem::take(&mut body), false);
                 in_body = 0;
             }
-            panels += self.long_code_line(line, index + 1 == lines);
+            self.long_code_line(line, last);
         }
-        if in_body > 0 || panels == 0 {
+        if in_body > 0 {
             self.code_panel(&body, true);
         }
     }
 
-    /// Line past highlight's line limit, so never coloured, on panels of its own. Returns their count.
-    fn long_code_line(&mut self, line: &str, last_line: bool) -> usize {
+    /// Line past highlight's line limit, so never coloured, on panels of its own.
+    fn long_code_line(&mut self, line: &str, last_line: bool) {
         let mut parts = pieces(line, self.block_bytes / 2).peekable();
-        let mut panels = 0;
         while let Some(part) = parts.next() {
             self.code_panel(&escape_html(part), last_line && parts.peek().is_none());
-            panels += 1;
         }
-        panels
     }
 
     /// One tinted panel; panels of one code block touch. Top-level: a block each, viewer draws panel.
@@ -1443,6 +1445,7 @@ mod tests {
             let b = &block.html;
             assert!(b.len() <= 3 * BLOCK_BYTES, "{} bytes: {}", b.len(), &b[..200]);
             balanced(b);
+            assert!(!visible(b).trim().is_empty(), "no empty block: {b}");
         }
         let whole = render_in(&md, &style, usize::MAX);
         assert!(whole.len() < blocks.len() && whole.iter().all(|b| !b.joined));
@@ -1466,6 +1469,78 @@ mod tests {
             .filter(|b| b.html.starts_with("<ol start=\""))
             .count();
         assert!(numbered > 1, "a split numbered list counts on: {numbered}");
+    }
+
+    #[test]
+    fn a_code_block_comes_in_whole_parts_that_end_with_it() {
+        let long = "y".repeat(300);
+        for n in 1..60 {
+            let lines = "let x = 1;\n".repeat(n);
+            for code in [
+                lines.clone(),
+                format!("a\n{long}\nb\n{lines}"),
+                format!("{lines}{long}\n"),
+            ] {
+                let blocks = render_in(&format!("```\n{code}```\n\nafter\n"), &Style::default(), 128);
+                let parts: Vec<&Block> = blocks.iter().filter(|b| b.kind == BlockKind::Code).collect();
+                let (last, rest) = parts.split_last().unwrap();
+                assert!(
+                    rest.iter().all(|b| b.joined) && !last.joined,
+                    "{n} lines: {parts:?}"
+                );
+                assert!(
+                    parts.iter().all(|b| !visible(&b.html).is_empty()),
+                    "no empty part: {parts:?}"
+                );
+                let text: String = parts.iter().map(|b| visible(&b.html).replace('\n', "")).collect();
+                assert_eq!(text, code.replace('\n', ""), "{n} lines, in order");
+            }
+        }
+    }
+
+    #[test]
+    fn nested_code_in_parts_keeps_its_gap_on_the_last_part() {
+        let long = "y".repeat(300);
+        for n in 1..60 {
+            let lines = "let x = 1;\n".repeat(n);
+            for code in [lines.clone(), format!("{lines}{long}\n")] {
+                let md = format!(
+                    "- item\n\n  ```\n{}  ```\n",
+                    code.lines().map(|l| format!("  {l}\n")).collect::<String>()
+                );
+                let html = html(&render_in(&md, &Style::default(), 128));
+                let margins: Vec<&str> = html
+                    .match_indices("style=\"margin-bottom: ")
+                    .map(|(i, _)| &html[i + 22..i + 25])
+                    .collect();
+                let (last, rest) = margins.split_last().unwrap();
+                assert!(
+                    *last == "12p" && rest.iter().all(|m| *m == "0px"),
+                    "{n} lines: {margins:?} in {html}"
+                );
+            }
+        }
+        assert!(
+            plain("```\n```\n").contains("monospace\"></pre>"),
+            "an empty code block still shows"
+        );
+    }
+
+    #[test]
+    fn a_list_under_the_block_size_stays_whole() {
+        assert_eq!(render(&"- item\n".repeat(20), &Style::default()).len(), 1);
+    }
+
+    #[test]
+    fn a_task_after_a_nested_plain_list_still_makes_a_task_list() {
+        let html = styled("- plain\n  - nested\n- [ ] task\n");
+        assert!(html.starts_with("<p") && html.contains("plain</p><ul"), "{html}");
+    }
+
+    #[test]
+    fn a_paragraph_under_the_block_size_stays_whole() {
+        let blocks = render(&"word ".repeat(1000), &Style::default());
+        assert_eq!(blocks.len(), 1, "{} blocks", blocks.len());
     }
 
     #[test]

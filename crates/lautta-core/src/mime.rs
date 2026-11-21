@@ -421,6 +421,10 @@ mod tests {
         for (name, cat) in cases {
             assert_eq!(category_of(&file(name)), cat, "{name}");
         }
+        assert_eq!(
+            mime_of(&file("a.tsv")).as_deref(),
+            Some("text/tab-separated-values")
+        );
     }
 
     #[test]
