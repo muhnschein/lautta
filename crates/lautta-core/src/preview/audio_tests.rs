@@ -7,7 +7,7 @@ use std::io::{self, Cursor, Read, Seek, SeekFrom};
 #[path = "../../tests/fixtures/audio.rs"]
 #[allow(dead_code)]
 mod fixtures;
-use fixtures::{flac, jpeg, mp3};
+use fixtures::{flac, jpeg, mp3, mp3_pictures};
 
 fn tagged_mp3(cover: Option<&[u8]>) -> Vec<u8> {
     mp3(
@@ -231,4 +231,89 @@ fn folder_cover_prefers_cover_then_folder_then_front() {
         None,
         "folders never"
     );
+}
+
+#[test]
+fn a_field_missing_from_the_main_tag_comes_from_another_tag() {
+    let mut file = mp3(&[("TIT2", "Ice Road")], None, 8);
+    // ID3v1 at the end: title, artist, album (30 bytes each), year, comment, genre.
+    let field = |s: &str, n: usize| {
+        let mut f = s.as_bytes().to_vec();
+        f.resize(n, 0);
+        f
+    };
+    file.extend_from_slice(b"TAG");
+    for part in [
+        field("", 30),
+        field("", 30),
+        field("Winter", 30),
+        field("1999", 4),
+        field("", 30),
+    ] {
+        file.extend_from_slice(&part);
+    }
+    file.push(255);
+    let read = read_audio(Cursor::new(file), false).expect("parsed");
+    assert_eq!(read.tags.title.as_deref(), Some("Ice Road"), "main tag first");
+    assert_eq!(read.tags.album.as_deref(), Some("Winter"));
+    assert_eq!(read.tags.year, Some(1999));
+}
+
+#[test]
+fn the_front_cover_wins_over_earlier_pictures() {
+    let (back, front) = (jpeg(8, [1, 1, 1]), jpeg(8, [250, 250, 250]));
+    let file = mp3_pictures(&[], &[(4, &back), (3, &front)], 8);
+    let read = read_audio(Cursor::new(file), true).expect("parsed");
+    assert_eq!(read.cover.as_deref(), Some(&front[..]));
+    let only_back = mp3_pictures(&[], &[(4, &back)], 8);
+    let read = read_audio(Cursor::new(only_back), true).expect("parsed");
+    assert_eq!(read.cover.as_deref(), Some(&back[..]), "no front: first picture");
+}
+
+#[test]
+fn a_few_megabyte_cover_fits_the_budget() {
+    // 16 MiB promised, written out: READ_BUDGET could drift with the code.
+    const BUDGET: u64 = 16 * 1024 * 1024;
+    assert_eq!(READ_BUDGET, BUDGET);
+    let mut art = jpeg(8, [9, 9, 9]);
+    art.resize(3 * 1024 * 1024, 0);
+    let file = tagged_mp3(Some(&art));
+    let mut reader = ranged(&file, READ_BUDGET);
+    let read = parse(&mut reader, true).expect("parsed");
+    assert_eq!(read.cover.map(|c| c.len()), Some(art.len()));
+}
+
+#[test]
+fn the_last_block_costs_only_its_own_bytes() {
+    let data = vec![5u8; BLOCK as usize + 10];
+    let mut r = ranged(&data, BLOCK + 10);
+    let mut all = Vec::new();
+    r.read_to_end(&mut all).unwrap();
+    assert_eq!(all, data, "whole file within a budget of its size");
+    assert_eq!(r.fetched(), BLOCK + 10);
+}
+
+#[test]
+fn fetches_never_ask_past_the_block_and_extra_bytes_are_dropped() {
+    let data: Vec<u8> = (0..100_000u32).map(|i| (i % 253) as u8).collect();
+    let mut asked = Vec::new();
+    let mut r = RangeReader::new(data.len() as u64, u64::MAX, |off, max| {
+        asked.push((off, max));
+        // Short read, then 50 bytes more than asked: a server can send either.
+        let s = off as usize;
+        let n = if max > 1000 { 1000 } else { max + 50 };
+        Ok(data[s..(s + n).min(data.len())].to_vec())
+    });
+    let mut all = Vec::new();
+    r.read_to_end(&mut all).unwrap();
+    assert_eq!(all, data);
+    assert_eq!(r.fetched(), data.len() as u64);
+    drop(r);
+    for (off, max) in asked {
+        let block_end = (off / BLOCK + 1) * BLOCK;
+        assert!(
+            off + max as u64 <= block_end.min(data.len() as u64),
+            "asked {off}+{max}"
+        );
+    }
 }

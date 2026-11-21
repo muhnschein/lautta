@@ -4,16 +4,24 @@
 
 /// Text frames by ID (`TIT2`, `TPE1`, `TALB`, `TDRC`, `TRCK`), UTF-8.
 pub fn mp3(texts: &[(&str, &str)], cover: Option<&[u8]>, audio_frames: usize) -> Vec<u8> {
+    let pictures: Vec<(u8, &[u8])> = cover.into_iter().map(|c| (3, c)).collect();
+    mp3_pictures(texts, &pictures, audio_frames)
+}
+
+/// As [`mp3`], pictures as (ID3 picture type, JPEG); 3 = front cover.
+pub fn mp3_pictures(texts: &[(&str, &str)], pictures: &[(u8, &[u8])], audio_frames: usize) -> Vec<u8> {
     let mut frames = Vec::new();
     for (id, value) in texts {
         let mut body = vec![3u8];
         body.extend_from_slice(value.as_bytes());
         id3_frame(&mut frames, id, &body);
     }
-    if let Some(data) = cover {
+    for (i, (kind, data)) in pictures.iter().enumerate() {
         let mut body = vec![3u8];
         body.extend_from_slice(b"image/jpeg\0");
-        body.push(3);
+        body.push(*kind);
+        // Descriptions must differ between pictures.
+        body.extend_from_slice(i.to_string().as_bytes());
         body.push(0);
         body.extend_from_slice(data);
         id3_frame(&mut frames, "APIC", &body);

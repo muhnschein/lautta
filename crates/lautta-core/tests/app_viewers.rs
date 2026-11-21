@@ -1563,3 +1563,53 @@ async fn folder_pictures_up_to_the_limit_are_covers_larger_ones_are_not() {
     assert_eq!(big.kind, ErrorKind::NotFound);
     assert_eq!(reads_of(&h.nas, "big/cover.jpg"), 0, "too large: never read");
 }
+
+fn listed(name: &str, size: u64) -> lautta_core::entry::Entry {
+    let mut e = lautta_core::entry::Entry::new(name.as_bytes(), lautta_core::entry::Kind::File);
+    e.size = Some(size);
+    e.modified = Some(std::time::UNIX_EPOCH + std::time::Duration::from_millis(1));
+    e
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_cached_folder_listing_finds_the_folder_cover_without_listing_again() {
+    let h = home().await;
+    let jpg = audio_fixture::jpeg(32, blue());
+    h.nas.add_file("m/a.mp3", &tagged(None), 1);
+    h.nas.add_file("m/cover.jpg", &jpg, 1);
+    let entries = [listed("a.mp3", 9), listed("cover.jpg", jpg.len() as u64)];
+    h.core.dircache.put(&uri("lautta://nv-nas/m"), &entries).unwrap();
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let info = h.core.audio_info(&uri("lautta://nv-nas/m/a.mp3")).await.unwrap();
+    assert_eq!(info.cover, CoverFrom::Folder);
+    let t = thumbnail(&h, &previews, "lautta://nv-nas/m/a.mp3", 64)
+        .await
+        .unwrap();
+    assert!(near(tint(&t), blue()));
+    let lists: Vec<String> = h
+        .nas
+        .calls()
+        .into_iter()
+        .filter(|c| c.starts_with("list"))
+        .collect();
+    assert!(lists.is_empty(), "folder listed again: {lists:?}");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_folder_picture_grown_past_the_limit_since_listing_is_no_cover() {
+    // The promised 16 MiB, written out.
+    const LIMIT: usize = 16 * 1024 * 1024;
+    let h = home().await;
+    let mut jpg = audio_fixture::jpeg(32, blue());
+    jpg.resize(LIMIT + 1, 0);
+    h.nas.add_file("m/a.mp3", &tagged(None), 1);
+    h.nas.add_file("m/cover.jpg", &jpg, 1);
+    // Listing from before it grew: small size, so only the read itself can tell.
+    let entries = [listed("a.mp3", 9), listed("cover.jpg", 1000)];
+    h.core.dircache.put(&uri("lautta://nv-nas/m"), &entries).unwrap();
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let err = thumbnail(&h, &previews, "lautta://nv-nas/m/a.mp3", 64)
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::NotFound);
+}

@@ -1072,6 +1072,31 @@ mod tests {
     }
 
     #[test]
+    fn the_glow_is_soft_near_edges_and_keeps_far_colours() {
+        let img = image::RgbImage::from_fn(128, 128, |x, _| {
+            if x < 64 {
+                image::Rgb([220, 20, 20])
+            } else {
+                image::Rgb([20, 20, 220])
+            }
+        });
+        let mut cover = std::io::Cursor::new(Vec::new());
+        DynamicImage::ImageRgb8(img)
+            .write_to(&mut cover, ImageOutputFormat::Png)
+            .unwrap();
+        let glow = image::load_from_memory(&render_glow(cover.get_ref()).unwrap())
+            .unwrap()
+            .to_rgb8();
+        let far = glow.get_pixel(0, GLOW_SIDE / 2).0;
+        let near = glow.get_pixel(GLOW_SIDE / 2 - 3, GLOW_SIDE / 2).0;
+        assert!(far[0] > 180 && far[2] < 60, "far side stays red: {far:?}");
+        assert!(
+            near[2] > 50 && near[0] > near[2],
+            "blurred across the edge: {near:?}"
+        );
+    }
+
+    #[test]
     fn the_pdf_limit_never_passes_what_the_viewer_opens() {
         let set = ThumbSettings {
             max_remote_bytes: 1_000_000_000,
