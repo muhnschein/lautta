@@ -9,6 +9,7 @@
 - Servers follow what you allow Lautta in netvfs: full access, read and add, read only, or add only, per server ([#104](https://github.com/muhnschein/lautta/pull/104)). Folders show the level and offer only what it allows. Needs netvfs 2.0.
 - WebDAV and FTPS servers work like SFTP and SMB: accounts from *Settings › Accounts* show up as locations (needs netvfs with WebDAV and FTPS).
 - Lautta never takes a server address, password or one-time code any more: every server is an account in *Settings › Accounts*. *Connect to server* and its recent servers are gone. Tapping a server found nearby offers to set it up as an account. Needs netvfs 2.0.
+- Settings is tidier: no previews in *View options* and *Browse page*, and the Settings list shows names only. *About* shows the Lautta icon and no longer lists permissions ([#117](https://github.com/muhnschein/lautta/issues/117)).
 
 ## 1.0.0
 

@@ -2,7 +2,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
-import "../components/directory"
 import "../components/search"
 import "../components/search/SettingsText.js" as SettingsText
 
@@ -11,7 +10,6 @@ Page {
 
     property var model
     readonly property var sortKeys: ["name", "size", "modified", "type"]
-    readonly property alias preview: preview
     readonly property bool thumbnails: setting("thumbnails_local") === true
 
     function setting(key) {
@@ -127,22 +125,6 @@ Page {
                         onClicked: page.choose("view_mode", "viewMode", objectName)
                     }
                 }
-            }
-
-            SectionHeader {
-                //% "Preview"
-                text: qsTrId("lautta-dir-opts-preview")
-            }
-            Item {
-                width: 1
-                height: Theme.paddingLarge
-            }
-            ViewPreview {
-                id: preview
-
-                width: parent.width
-                screenWidth: page.width
-                screenHeight: page.height
             }
 
             SectionHeader {

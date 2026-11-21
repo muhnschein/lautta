@@ -126,7 +126,7 @@ Format: **F-ID Name** (mode) — what. *Entry:* where user starts it. *Proof:* w
 - **F-BRW-04 Volumes** (S) — mounted memory cards, USB drives with free/total and file system line. *Entry:* Browse "Volumes".
 - **F-BRW-05 Mount / Unmount drive** (B) — *Entry:* tap unmounted volume, or menu Mount; menu Unmount. *Proof:* row turns mounted/disappears from mounted state.
 - **F-BRW-06 Locked drive → Storage settings** (B) — *Entry:* tap locked volume, menu "Open Storage settings". *Proof:* Sailfish Settings › Storage opens (bridge feature `storage-settings`).
-- **F-BRW-07 Browse layout** (S) — hide sections and rows, reorder rows by drag, Restore defaults, live preview. *Entry:* Settings › Browse page. *Code:* `BrowseSettingsPage.qml`, `browse_layout.rs`.
+- **F-BRW-07 Browse layout** (S) — hide sections and rows, reorder rows by drag, Restore defaults. *Entry:* Settings › Browse page. *Code:* `BrowseSettingsPage.qml`, `browse_layout.rs`.
 - **F-BRW-08 Copy address** (S) — location address to clipboard. *Entry:* Browse row menu, path menu.
 - **F-BRW-09 Rescan volumes** (S) — Browse refreshes rows when shown and when app returns to front (sandbox can miss mounts). *Proof:* new card shows without restart.
 - **F-BRW-10 Activity from Browse** (S) — pulley "Activity (n)". *Proof:* SCR-21.
@@ -257,7 +257,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-APP-02 Start error** — "Lautta can't open its data".
 - **F-APP-03 Settings** — Browsing (Browse page, View options, Search, Recents), Files (Deleting, Transfers, Storage), About Lautta.
 - **F-APP-04 Storage** — Keep stored listings, Clear cache, Clear app data ("Removes queue, history, favourites and everything in Trash"; refuses while tasks run).
-- **F-APP-05 About** — version, network locations status, access "Set per server" and where to change it, permissions, licence, source code.
+- **F-APP-05 About** — app icon, version, claim, network locations status, access "Set per server" and where to change it, licence, source code.
 - **F-APP-06 Background notices** — Notice toasts for errors (`ErrorText.js`) and starts.
 
 ## 4. Feature × entry point (reach-from-everywhere check)

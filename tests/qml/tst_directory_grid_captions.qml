@@ -324,36 +324,6 @@ ApplicationWindow {
         same(DirFormat.gridCaptions(true, -1, -1, false, -1, false), [], "and none if that is unknown")
     }
 
-    function checkPreview(view) {
-        var preview = previewComponent.createObject(window.contentItem,
-                                                    { "screenWidth": view.width, "screenHeight": view.height })
-        waitFor(function () { return preview.tiles().length === preview.count }, "the preview's tiles")
-        expect(preview.gridMode, "the preview is a grid")
-        same(preview.cellWidth, view.flickable.cellWidth, "its cell is as wide")
-        var notes = cellNamed(view, "notes.txt")
-        var nameLines = metrics.nameLines(notes.itemName, notes.width - 2 * notes.gap).length
-        var file = preview.tiles().filter(function (t) {
-            return !t.isDir && metrics.nameLines(t.name, t.width - 2 * t.gap).length === nameLines
-        })
-        expect(file.length > 0 && file[0].implicitHeight === notes.implicitHeight,
-               "a file of as many name lines is as tall: " + (file.length > 0 ? file[0].implicitHeight : "none")
-               + " and " + notes.implicitHeight)
-        var rows = preview.shown()
-        expect(rows.length === 6, "the sample folder has six items: " + rows.length)
-        for (var i = 0; i < rows.length; ++i) {
-            same(rows[i].captions.length, rows[i].isDir ? 1 : 2,
-                 "lines of " + rows[i].name + ": " + JSON.stringify(rows[i].captions))
-        }
-        expect(rows[0].isDir && rows[0].captions[0] === qsTrId("lautta-dir-grid-items", 24)
-               && preview.itemsOf(rows[0].name) === 24,
-               "a sample folder has its items: " + JSON.stringify(rows[0].captions))
-        same(find(preview, "gridCaption0").text, rows[0].captions[0], "shown under the first tile")
-        var glyph = find(view, "fileGlyph")
-        expect(Math.abs(find(preview, "fileGlyph").width - glyph.width) <= 1,
-               "its glyph is as large as the view's: " + find(preview, "fileGlyph").width + " and " + glyph.width)
-        preview.destroy()
-    }
-
     Component.onCompleted: {
         var settings = { "view_mode": "grid", "show_hidden": false, "thumbnails_local": false }
         for (var key in settings)
@@ -369,7 +339,6 @@ ApplicationWindow {
         checkPdfThumbnails()
         checkNames()
         checkCells(view)
-        checkPreview(view)
         checkArchive()
         checkCaptionText()
         var restore = { "view_mode": "list", "thumbnails_local": true }
@@ -400,11 +369,5 @@ ApplicationWindow {
         id: captionComponent
 
         GridCaption { }
-    }
-
-    Component {
-        id: previewComponent
-
-        ViewPreview { }
     }
 }
