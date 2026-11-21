@@ -66,5 +66,5 @@ for arg in "$@"; do
 done
 docker exec "$container" bash -lc "
     home=\$(mktemp -d) && mkdir -p \$home/Documents \$home/Downloads \$home/Pictures
-    sb2 -t '$target' env HOME=\$home QT_QPA_PLATFORM=minimal '$work/harbour-lautta' --qml-check -I '$work/src/qml' -F '$work/src/fonts' ${files[*]}
+    sb2 -t '$target' env HOME=\$home QT_QPA_PLATFORM=minimal:enable_fonts '$work/harbour-lautta' --qml-check -I '$work/src/qml' -F '$work/src/fonts' ${files[*]}
 "

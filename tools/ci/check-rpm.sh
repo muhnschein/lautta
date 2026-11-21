@@ -116,7 +116,8 @@ qml_check() {
     h=$1
     shift
     mkdir -p "$h/Documents" "$h/Downloads" "$h/Pictures"
-    sb2 -t "$TARGET" env HOME="$h" QT_QPA_PLATFORM=minimal \
+    # Plain `minimal` has no font database: `-F` fonts would never load.
+    sb2 -t "$TARGET" env HOME="$h" QT_QPA_PLATFORM=minimal:enable_fonts \
         /usr/bin/harbour-lautta --qml-check -I /usr/share/harbour-lautta/qml \
         -F /usr/share/harbour-lautta/fonts "$@"
 }
