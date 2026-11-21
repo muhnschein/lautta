@@ -66,9 +66,9 @@ ApplicationWindow {
         return found.length === 1 ? found[0] : null
     }
 
-    function inView(item, view) {
+    function inView(item, view, covered) {
         var top = item.mapToItem(view, 0, 0).y
-        return top >= 0 && top + item.height <= view.height
+        return top >= 0 && top + item.height <= view.height - (covered || 0)
     }
 
     function name(i) {
@@ -112,7 +112,7 @@ ApplicationWindow {
             if (!expect(flash, what + ": " + uris[i] + " has its highlight"))
                 continue
             expect(flash.running, what + ": its highlight runs")
-            expect(inView(flash, view.flickable), what + ": " + uris[i] + " is scrolled into view")
+            expect(inView(flash, view.flickable, view.coveredHeight), what + ": " + uris[i] + " is scrolled into view")
         }
         var others = findAll(view.flickable, function (x) { return x.running === true && x.owner === view && uris.indexOf(x.uri) < 0 }, [])
         expect(others.length === 0, what + ": no other row lights up: " + others.length)
@@ -155,10 +155,17 @@ ApplicationWindow {
             view.flickable.positionViewAtEnd()
             Operations.copyTo(JSON.stringify([source + "aa-top", source + "zz-bottom.md"]), base)
         }, [base + "aa-top", base + "zz-bottom.md"], "paste far apart", true)
-                // Word of it after the folder's own relisting saw the file: still lights up.
+        // Word of it after the folder's own relisting saw the file: still lights up.
         fixture(base + "zz-late.md")
         waitFor(function () { return !view.model.loading && view.model.indexOf(base + "zz-late.md") >= 0 }, "the late file listed")
         checkFlash(view, function () { view.landed([base + "zz-late.md"], true) }, [base + "zz-late.md"], "late word")
+        // Clipboard panel covers the list's bottom: new last row scrolls above it.
+        fixture(source + "zz-under-panel.md")
+        expect(App.copy(JSON.stringify([source + "zz-under-panel.md"])), "copy for the panel")
+        waitFor(function () { return view.coveredHeight >= Theme.itemSizeLarge }, "the clipboard panel's room")
+        checkFlash(view, function () { Operations.copyTo(JSON.stringify([source + "zz-under-panel.md"]), base) },
+                   [base + "zz-under-panel.md"], "paste under the clipboard panel")
+        App.clearClipboard()
         checkFlash(view, function () { Operations.compress(JSON.stringify([source + "zz-inner.md"]), base, "zz-packed", "zip") },
                    [base + "zz-packed.zip"], "compress")
         var archive = finished(function () {
@@ -225,7 +232,9 @@ ApplicationWindow {
 
             DirectoryView {
                 id: folder
-                anchors.fill: parent
+                // Phone-like height: test window leaves less than a row above the panels.
+                width: parent.width
+                height: 1000
                 uri: window.base
             }
         }

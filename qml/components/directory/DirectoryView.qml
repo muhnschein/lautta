@@ -32,6 +32,8 @@ Item {
     property Item moreActionsPage
     property var toMove: []
     property var made: []
+    // Bottom of the view under clipboard, selection or activity panel.
+    readonly property real coveredHeight: panelSpace.height
 
     signal openFolder(string uri)
     signal flashed(string itemUri)
@@ -170,7 +172,13 @@ Item {
     }
 
     function showIndex(index) {
-        flickable.positionViewAtIndex(gridMode ? GridRows.rowOf(index, grid.columns) : index, ListView.Contain)
+        var f = flickable
+        var row = gridMode ? GridRows.rowOf(index, grid.columns) : index
+        f.positionViewAtIndex(row, ListView.Contain)
+        // Panels cover the view's bottom; footer leaves room to scroll a row above them.
+        var covered = f.indexAt(f.width / 2, f.contentY + f.height - coveredHeight)
+        if (coveredHeight > 0 && covered >= 0 && row >= covered)
+            f.contentY = Math.min(f.contentY + coveredHeight, f.originY + f.contentHeight - f.height)
     }
 
     // New items of this folder light up once the listing that follows has them; rows made before
