@@ -81,8 +81,8 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | SCR-28 | Image details | `viewers/ImageDetailsPage.qml` | S | image viewer (i) |
 | SCR-29 | Image More | `viewers/ImageMorePage.qml` | S | image viewer (…) |
 | SCR-30 | Media player (video, audio) | `viewers/MediaPlayer.qml` | S/B | tap video or audio |
-| SCR-31 | Text viewer | `viewers/TextViewer.qml` | S | tap text/code file, Markdown "View source" |
-| SCR-32 | Markdown viewer | `viewers/MarkdownViewer.qml` | S | tap `.md` |
+| SCR-31 | Text viewer | `viewers/TextViewer.qml` | S | tap text/code file, Markdown or plain text "View source" |
+| SCR-32 | Markdown viewer | `viewers/MarkdownViewer.qml` | S | tap `.md` (`.markdown`, `.mkd`, `.mdown`, `.mdwn`, `.markdn`) or `.txt` |
 | SCR-33 | PDF viewer | `viewers/PdfViewer.qml` | S | tap PDF |
 | SCR-34 | PDF contents | `viewers/PdfContentsPage.qml` | S | PDF pulley "Contents and pages" |
 | SCR-35 | PDF password | `dialogs/PdfPasswordDialog.qml` | S | locked PDF, pulley Unlock |
@@ -216,8 +216,8 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-VWR-02 Image details** — Camera, Lens, Exposure, Taken, Dimensions, Size, Location, Orientation (EXIF; "applied" rotation note).
 - **F-VWR-03 Image More** — Rename, Add to favourites, Compress.
 - **F-VWR-04 Media player** — video and audio; play/pause, back to start, +30 s, seek bar, tap toggles controls; remote stream or download.
-- **F-VWR-05 Text viewer** — syntax colours (syntect), read-only line "Read-only · type", first 1 MB, non-UTF-8 warning; pulley Open with, Share.
-- **F-VWR-06 Markdown viewer** — rendered; pulley View source, Share, Open with; first 1 MB.
+- **F-VWR-05 Text viewer** — code, logs, config, data: syntax colours (syntect), read-only line "Read-only · type", first 1 MB, non-UTF-8 warning; pulley Open with, Share.
+- **F-VWR-06 Markdown viewer** — Markdown rendered in ambience colours (highlight headings, ☐/☑ tasks, quote bar, code on tinted panel with syntax colours, ruled tables), `.txt` as prose in reading font; text viewer's backdrop; shown in blocks, only those on screen laid out; pulley View source, Share, Open with; first 1 MB.
 - **F-VWR-07 PDF viewer** — pages, zoom, page count, reopen at last page, links (internal jump, web link dialog), Back to page n; pulley Unlock, Open with, Share, Search, Contents and pages.
 - **F-VWR-08 PDF search** — search field with up/down hits, "n of m · page p", "Not found in N pages".
 - **F-VWR-09 PDF contents / go to page** — outline list, "Go to page, 1 to N".

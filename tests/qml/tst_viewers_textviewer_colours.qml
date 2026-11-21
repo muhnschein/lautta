@@ -29,7 +29,7 @@ QtQuick.Window {
         visible: false
         textFormat: Text.PlainText
         wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-        font.family: "monospace"
+        font.family: App.monoFont
         font.pixelSize: Theme.fontSizeExtraSmall
     }
 
@@ -61,7 +61,7 @@ QtQuick.Window {
         var lists = findAll(page, function(x) { return x.forceLayout !== undefined }, [])
         if (lists.length > 0)
             lists[0].forceLayout()
-        var labels = findAll(page, function(x) { return x.textFormat === Text.StyledText && x.font.family === "monospace" }, [])
+        var labels = findAll(page, function(x) { return x.textFormat === Text.StyledText && x.font.family === App.monoFont }, [])
         var out = {}
         for (var i = 0; i < labels.length; ++i) {
             var siblings = labels[i].parent.children

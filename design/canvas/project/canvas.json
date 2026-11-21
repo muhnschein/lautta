@@ -753,6 +753,22 @@
       "w": 400,
       "x": 2880,
       "y": 18260
+    },
+    "MarkdownMore.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Markdown \u00b7 further down",
+      "w": 400,
+      "x": 3840,
+      "y": 8200
+    },
+    "TextProse.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Plain text \u00b7 prose",
+      "w": 400,
+      "x": 4320,
+      "y": 8200
     }
   },
   "createdOnFiles": {
@@ -916,6 +932,8 @@
     "ImageExif.dc.html",
     "TextViewer.dc.html",
     "Markdown.dc.html",
+    "MarkdownMore.dc.html",
+    "TextProse.dc.html",
     "PdfViewer.dc.html",
     "VideoPlayer.dc.html",
     "AudioPlayer.dc.html",

@@ -73,8 +73,13 @@ fn check_one(file: &str) {
     }
     std::env::set_var("HOME", home.path());
     std::env::set_var("QT_QPA_PLATFORM", "offscreen");
+    // No system fonts: bundled one must load from `-F`, as on phone.
+    let fonts_conf = home.path().join("fonts.conf");
+    std::fs::write(&fonts_conf, "<fontconfig></fontconfig>").unwrap();
+    std::env::set_var("FONTCONFIG_FILE", &fonts_conf);
+    let fonts = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fonts");
     assert_eq!(
-        lautta_qt::qml_check(&[file.to_string()]),
+        lautta_qt::qml_check(&["-F".into(), fonts.display().to_string(), file.to_string()]),
         0,
         "QML host test failed: {file}"
     );

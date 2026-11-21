@@ -7,8 +7,10 @@
 - Servers follow what you allow Lautta in netvfs: full access, read and add, read only, or add only, per server ([#104](https://github.com/muhnschein/lautta/pull/104)). Folders show the level and offer only what it allows. Needs netvfs 2.0.
 - WebDAV and FTPS servers work like SFTP and SMB: accounts from *Settings › Accounts* show up as locations (needs netvfs with WebDAV and FTPS).
 - Lautta never takes a server address, password or one-time code any more: every server is an account in *Settings › Accounts*. *Connect to server* and its recent servers are gone. Tapping a server found nearby offers to set it up as an account. Needs netvfs 2.0.
+- Markdown is nicer to read: headings in the ambience colour, check boxes for task lists, quotes with a bar, code on a tinted panel with syntax colours, and calmer tables, on the same backdrop as the text viewer. Plain `.txt` files open in the reading font, with *View source* for the line view. Big files no longer freeze the app while they open ([#50](https://github.com/muhnschein/lautta/issues/50)).
 - Settings is tidier: no previews in *View options* and *Browse page*, and the Settings list shows names only. *About* shows the Lautta icon and no longer lists permissions ([#117](https://github.com/muhnschein/lautta/issues/117)).
 - Memory cards and USB drives without a label show as "Memory card" or "USB drive" instead of a string of letters and digits ([#123](https://github.com/muhnschein/lautta/issues/123)).
+- Code, logs and other monospaced text use JetBrains Mono, in the text viewer, in grid previews and in Markdown code.
 
 ## 1.0.0
 

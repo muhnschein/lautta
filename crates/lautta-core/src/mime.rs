@@ -51,6 +51,8 @@ pub enum Viewer {
     Image,
     Text,
     Markdown,
+    /// Plain prose (`.txt`) in reading viewer; View source shows it as [`Viewer::Text`].
+    Prose,
     Audio,
     Video,
     Archive,
@@ -67,6 +69,13 @@ pub fn extension_of(name: &[u8]) -> Option<String> {
         return None;
     }
     Some(String::from_utf8_lossy(ext).to_ascii_lowercase())
+}
+
+const MARKDOWN_EXTENSIONS: [&str; 6] = ["md", "markdown", "mkd", "mdown", "mdwn", "markdn"];
+
+/// `ext` lowercased.
+pub fn is_markdown_extension(ext: &str) -> bool {
+    MARKDOWN_EXTENSIONS.contains(&ext)
 }
 
 pub fn from_extension(ext: &str) -> Option<(&'static str, FileCategory)> {
@@ -106,7 +115,7 @@ pub fn from_extension(ext: &str) -> Option<(&'static str, FileCategory)> {
         "txt" | "log" | "ini" | "conf" | "cfg" | "nfo" => ("text/plain", Text),
         "csv" => ("text/csv", Text),
         "tsv" => ("text/tab-separated-values", Text),
-        "md" | "markdown" => ("text/markdown", Markdown),
+        e if is_markdown_extension(e) => ("text/markdown", Markdown),
         "pdf" => ("application/pdf", Pdf),
         "json" => ("application/json", Code),
         "xml" => ("application/xml", Code),
@@ -321,6 +330,14 @@ pub(crate) fn looks_like_text(head: &[u8]) -> bool {
     control * 100 <= valid.chars().count() * TEXT_SNIFF_MAX_CONTROL_PERCENT
 }
 
+/// [`viewer_for`], with `.txt` read as prose.
+pub fn viewer_for_name(name: &[u8], category: FileCategory, mime: &str) -> Viewer {
+    match viewer_for(category, mime) {
+        Viewer::Text if crate::preview::text::reads_as_prose(name) => Viewer::Prose,
+        viewer => viewer,
+    }
+}
+
 pub fn viewer_for(category: FileCategory, mime: &str) -> Viewer {
     match category {
         FileCategory::Image => Viewer::Image,
@@ -386,6 +403,11 @@ mod tests {
             ("a.txt", FileCategory::Text),
             ("a.rs", FileCategory::Code),
             ("a.MD", FileCategory::Markdown),
+            ("a.mkd", FileCategory::Markdown),
+            ("a.mdown", FileCategory::Markdown),
+            ("a.mdwn", FileCategory::Markdown),
+            ("a.Markdn", FileCategory::Markdown),
+            ("a.markdown", FileCategory::Markdown),
             ("a.pdf", FileCategory::Pdf),
             ("a.7z", FileCategory::Archive),
             ("a.docx", FileCategory::Document),
@@ -399,6 +421,10 @@ mod tests {
         for (name, cat) in cases {
             assert_eq!(category_of(&file(name)), cat, "{name}");
         }
+        assert_eq!(
+            mime_of(&file("a.tsv")).as_deref(),
+            Some("text/tab-separated-values")
+        );
     }
 
     #[test]
@@ -541,6 +567,21 @@ mod tests {
         assert_eq!(viewer_for(Text, "text/plain"), Viewer::Text);
         assert_eq!(viewer_for(Code, "text/x-rust"), Viewer::Text);
         assert_eq!(viewer_for(Markdown, "text/markdown"), Viewer::Markdown);
+        assert_eq!(viewer_for_name(b"a.TXT", Text, "text/plain"), Viewer::Prose);
+        assert_eq!(viewer_for_name(b"a.log", Text, "text/plain"), Viewer::Text);
+        assert_eq!(
+            viewer_for_name(b"CMakeLists.txt", Text, "text/plain"),
+            Viewer::Text
+        );
+        assert_eq!(
+            viewer_for_name(b"a.txt", Image, "image/png"),
+            Viewer::Image,
+            "only text turns prose"
+        );
+        assert_eq!(
+            viewer_for_name(b"a.md", Markdown, "text/markdown"),
+            Viewer::Markdown
+        );
         assert_eq!(viewer_for(Audio, "audio/mpeg"), Viewer::Audio);
         assert_eq!(viewer_for(Video, "video/mp4"), Viewer::Video);
         assert_eq!(viewer_for(Database, "application/vnd.sqlite3"), Viewer::External);

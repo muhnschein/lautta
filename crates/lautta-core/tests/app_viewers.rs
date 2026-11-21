@@ -4,6 +4,7 @@ use lautta_core::app::Core;
 use lautta_core::locations::{Location, LocationKind, LocationRegistry};
 use lautta_core::org::recents::{RecentKind, RecentsFilter};
 use lautta_core::paths::AppPaths;
+use lautta_core::preview::markdown::Style;
 use lautta_core::provider::memory::MemoryProvider;
 use lautta_core::{ErrorKind, Uri};
 use std::sync::Arc;
@@ -102,14 +103,33 @@ async fn large_and_binary_files_are_flagged() {
 async fn markdown_is_rendered_and_truncation_is_reported() {
     let h = home().await;
     h.nas.add_file("n.md", b"# Hi\n\n<script>x</script> *there*\n", 0);
+    let style = Style::parse("md-heading=#123456");
     let r = h
         .core
-        .render_markdown(&uri("lautta://nv-nas/n.md"))
+        .render_reading(&uri("lautta://nv-nas/n.md"), style)
         .await
         .unwrap();
-    assert!(r.html.contains("Hi</h1>"));
-    assert!(r.html.contains("&lt;script&gt;"), "raw HTML is not trusted");
+    let html: String = r.blocks.iter().map(|b| b.html.as_str()).collect();
+    assert!(html.contains("color: #123456; font-weight: normal"), "{html}");
+    assert!(html.contains("Hi</h1>"));
+    assert!(html.contains("&lt;script&gt;"), "raw HTML is not trusted");
     assert!(!r.truncated);
+}
+
+#[tokio::test]
+async fn text_files_are_read_as_prose_not_markdown() {
+    let h = home().await;
+    h.nas.add_file("n.TXT", b"# not a heading\n  <b>kept</b>\n", 0);
+    let r = h
+        .core
+        .render_reading(&uri("lautta://nv-nas/n.TXT"), Style::default())
+        .await
+        .unwrap();
+    assert_eq!(r.blocks.len(), 1);
+    assert_eq!(
+        r.blocks[0].html,
+        "<p style=\"white-space: pre-wrap; margin: 0px\"># not a heading\n  &lt;b&gt;kept&lt;/b&gt;</p>"
+    );
 }
 
 async fn colours_of(

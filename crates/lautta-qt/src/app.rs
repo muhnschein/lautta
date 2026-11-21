@@ -4,7 +4,9 @@ use crate::json::{from_json, json_value_to_qvariant, to_json};
 use crate::runtime::{core, handle, spawn_then};
 use lautta_core::clipboard::{Clipboard, ClipboardMode};
 use lautta_core::entry::Capabilities;
-use lautta_core::mime::{category_of_name, extension_of, from_extension, viewer_for, FileCategory, Viewer};
+use lautta_core::mime::{
+    category_of_name, extension_of, from_extension, viewer_for_name, FileCategory, Viewer,
+};
 use lautta_core::settings::Settings;
 use lautta_core::transfer::scheduler::is_bridge_location;
 use lautta_core::trash::now_secs;
@@ -20,6 +22,7 @@ pub struct App {
     ready_changed: qt_signal!(),
     startError: qt_property!(QString; NOTIFY ready_changed),
     version: qt_property!(QString; CONST),
+    monoFont: qt_property!(QString; CONST),
     settingsJson: qt_property!(QString; NOTIFY settingsJsonChanged),
     settingsJsonChanged: qt_signal!(),
     clipboardCount: qt_property!(i32; NOTIFY clipboard_changed),
@@ -63,6 +66,7 @@ pub struct App {
 impl QSingletonInit for App {
     fn init(&mut self) {
         self.version = QString::from(env!("CARGO_PKG_VERSION"));
+        self.monoFont = QString::from(lautta_core::fonts::MONO_FAMILY);
         match core() {
             Some(core) => {
                 self.ready = true;
@@ -89,6 +93,7 @@ pub fn viewer_name(v: Viewer) -> &'static str {
         Viewer::Image => "image",
         Viewer::Text => "text",
         Viewer::Markdown => "markdown",
+        Viewer::Prose => "prose",
         Viewer::Audio => "audio",
         Viewer::Video => "video",
         Viewer::Archive => "archive",
@@ -248,7 +253,7 @@ impl App {
         } else {
             category
         };
-        QString::from(viewer_name(viewer_for(category, &mime)))
+        QString::from(viewer_name(viewer_for_name(&name, category, &mime)))
     }
 
     fn set_clipboard(&mut self, mode: ClipboardMode, uris_json: QString) -> bool {
