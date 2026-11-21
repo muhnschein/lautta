@@ -143,7 +143,7 @@ Format: **F-ID Name** (mode) — what. *Entry:* where user starts it. *Proof:* w
 - **F-SRV-11 Nearby** — mDNS-found servers while Browse is in front; tap → SCR-60 "This server isn't set up yet …", Set up opens Settings' add-account flow for that provider. *Proof:* "Nearby" section rows; Settings opens.
 - **F-SRV-12 Offline listing** — cached listing with banner "Offline. Showing the copy from …", Retry. *Code:* `dircache.rs`.
 - **F-SRV-13 Reconnect** — backoff, rows show connecting; running tasks wait then resume.
-- **F-SRV-14 Remote thumbnails** — pictures and PDFs from servers, size cap. *Entry:* View options.
+- **F-SRV-14 Remote thumbnails** — pictures, PDFs and audio covers from servers, size cap; audio reads tag area only. *Entry:* View options.
 - **F-SRV-15 Remote streaming** — video/audio stream with seek ("Streaming from …"), else download first. *Code:* `MediaPlayer.qml`, `app_viewers.rs`.
 - **F-SRV-16 Open remote in other app** — working copy to `Downloads/Lautta/Opened`, removed after 24 h. *Entry:* Open with / Share on remote file. *Proof:* SCR-37 "Getting …".
 - **F-SRV-17 Access levels** — folder on a server with less than full access shows lock + level under header ("Read only", "Read and add", "Add only") and offers only what level allows: Read and add adds, changes nothing (no Cut, Rename, Delete); Read only adds nothing; Add only lists folders only ("Files here are hidden"), no Select, conflicts keep both. Folder picker greys out servers it can't write. Level narrowed mid-task → task fails "Lautta may now only … on …". *Entry:* open server with narrowed level. *Code:* `Access.js`, `ContextActions.js`, `access.rs`.
@@ -153,7 +153,7 @@ Retired, never reuse: F-SRV-08 Server question, F-SRV-09 Connect to server, F-SR
 ### 3.3 Folder page
 
 - **F-DIR-01 Folder listing** — list with name, size/date line; folders show item counts; new items (made, pasted, extracted, compressed, scanned, renamed) scroll into view and light up briefly. *Code:* `DirectoryView.qml`, `app_directory.rs`.
-- **F-DIR-02 Grid view** — 3/4 per row, captions, thumbnails, text thumbs. *Entry:* View options › View.
+- **F-DIR-02 Grid view** — 3/4 per row, captions, thumbnails (audio: cover), text thumbs. *Entry:* View options › View.
 - **F-DIR-03 Grid hint** — "Shown as grid because most items are photos", Use list.
 - **F-DIR-04 Sort and filter** — sort by Name/Size/Modified/Type, Descending, Folders first, Show hidden files. *Entry:* View options (folder pulley or Settings).
 - **F-DIR-05 Thumbnails switch** — Show thumbnails (untrusted-file warning), Thumbnails from servers, largest server file, cache size.
@@ -215,7 +215,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-VWR-01 Image viewer** — Jolla Gallery viewer: swipe for next/previous in folder, pinch zoom around fingers, swipe down to close; toolbar Delete, Open with, Share, More; (i) Details.
 - **F-VWR-02 Image details** — Camera, Lens, Exposure, Taken, Dimensions, Size, Location, Orientation (EXIF; "applied" rotation note).
 - **F-VWR-03 Image More** — Rename, Add to favourites, Compress.
-- **F-VWR-04 Media player** — video and audio; play/pause, back to start, +30 s, seek bar, tap toggles controls; remote stream or download.
+- **F-VWR-04 Media player** — video and audio; play/pause, back to start, +30 s, seek bar, tap toggles controls; remote stream or download. Audio: cover (from file, else folder `cover`/`folder`/`front` .jpg/.png, else note icon) and title, artist, album · year, track; no title tag → file name; blurred cover behind; landscape cover left.
 - **F-VWR-05 Text viewer** — code, logs, config, data: syntax colours (syntect), read-only line "Read-only · type", first 1 MB, non-UTF-8 warning; pulley Open with, Share.
 - **F-VWR-06 Markdown viewer** — Markdown rendered in ambience colours (highlight headings, ☐/☑ tasks, quote bar, code on tinted panel with syntax colours, ruled tables), `.txt` as prose in reading font; text viewer's backdrop; shown in blocks, only those on screen laid out; pulley View source, Share, Open with; first 1 MB.
 - **F-VWR-07 PDF viewer** — pages, zoom, page count, reopen at last page, links (internal jump, web link dialog), Back to page n; pulley Unlock, Open with, Share, Search, Contents and pages.

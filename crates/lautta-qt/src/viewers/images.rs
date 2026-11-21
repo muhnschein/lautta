@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! `ImageListModel` (folder's images, for swiping) and QML image providers for remote files,
-//! `image://lautta-thumb/<uri>?size=N` and `image://lautta-file/<uri>`.
+//! `image://lautta-thumb/<uri>?size=N`, `image://lautta-file/<uri>` and the media player's
+//! `image://lautta-cover/<uri>?size=N[&glow=1]`.
 //!
 //! Local images, videos and PDFs never come here for thumbnails (`Nemo.Thumbnailer`). Providers are
 //! asynchronous (`QQuickAsyncImageProvider`): request returns at once, tokio runtime fetches, a
@@ -10,7 +11,7 @@
 use super::{parse_uri, qstr, run_then};
 use crate::runtime::{core, handle};
 use cpp::cpp;
-use lautta_core::app_viewers::{parse_image_uri, parse_thumb_id, ImageItem};
+use lautta_core::app_viewers::{parse_image_uri, parse_thumb_id, ImageItem, PreviewKind};
 use qmetaobject::prelude::*;
 use qmetaobject::qml_register_type;
 use std::collections::HashMap;
@@ -282,10 +283,11 @@ cpp! {{
         engine->addImageProvider(QStringLiteral("lautta-thumb"), new LauttaImageProvider(0));
         engine->addImageProvider(QStringLiteral("lautta-file"), new LauttaImageProvider(1));
         engine->addImageProvider(QStringLiteral("lautta-pdf"), new LauttaImageProvider(2));
+        engine->addImageProvider(QStringLiteral("lautta-cover"), new LauttaImageProvider(3));
     }
 }}
 
-/// Adds `lautta-thumb`, `lautta-file` and `lautta-pdf` providers to a `QQmlEngine` (engine takes
+/// Adds `lautta-thumb`, `lautta-file`, `lautta-pdf` and `lautta-cover` providers to a `QQmlEngine` (engine takes
 /// ownership). Once per engine.
 ///
 /// # Safety
@@ -296,6 +298,7 @@ pub unsafe fn register_image_providers(engine: *mut c_void) {
 
 const KIND_THUMB: i32 = 0;
 const KIND_PDF: i32 = 2;
+const KIND_COVER: i32 = 3;
 
 pub(crate) type Canceller = Box<dyn FnOnce() + Send>;
 
@@ -392,8 +395,8 @@ fn request(kind: i32, id_data: *const u8, id_len: usize, w: i32, h: i32, req: u6
         reply.fail("the app is not ready");
         return;
     };
-    if kind == KIND_THUMB {
-        thumb_request(core, &id, (w, h), req, reply);
+    if kind == KIND_THUMB || kind == KIND_COVER {
+        thumb_request(core, &id, kind, (w, h), req, reply);
     } else if kind == KIND_PDF {
         super::pdf::page_request(core, &id, w, req, reply);
     } else {
@@ -405,10 +408,12 @@ fn request(kind: i32, id_data: *const u8, id_len: usize, w: i32, h: i32, req: u6
 fn thumb_request(
     core: std::sync::Arc<lautta_core::app::Core>,
     id: &str,
+    kind: i32,
     shown: (i32, i32),
     req: u64,
     reply: Reply,
 ) {
+    let (id, preview) = preview_kind(id, kind);
     let Some(thumb) = parse_thumb_id(id) else {
         reply.fail("bad thumbnail id");
         return;
@@ -418,10 +423,10 @@ fn thumb_request(
         Ok(p) => p,
         Err(e) => return finish_error(reply, req, &e),
     };
-    let ticket = if thumb.cached {
-        previews.request_cached(core, thumb.uri, thumb.size)
-    } else {
-        previews.request(core, thumb.uri, thumb.size)
+    let ticket = match preview {
+        PreviewKind::Thumb if thumb.cached => previews.request_cached(core, thumb.uri, thumb.size),
+        PreviewKind::Thumb => previews.request(core, thumb.uri, thumb.size),
+        cover => previews.request_cover(core, thumb.uri, thumb.size, cover),
     };
     let rx = ticket.rx;
     let cancel = ticket.cancel;
@@ -437,6 +442,17 @@ fn thumb_request(
             Err(_) => reply.fail("canceled"),
         }
     });
+}
+
+/// Cover provider: `&glow=1` asks for the backdrop.
+fn preview_kind(id: &str, kind: i32) -> (&str, PreviewKind) {
+    if kind != KIND_COVER {
+        return (id, PreviewKind::Thumb);
+    }
+    match id.strip_suffix("&glow=1") {
+        Some(rest) => (rest, PreviewKind::Glow),
+        None => (id, PreviewKind::Cover),
+    }
 }
 
 fn file_request(
@@ -665,5 +681,55 @@ mod tests {
         assert_eq!((e.as_str(), w, h), ("", 64, 64), "first page as wide as asked");
         let (e, ..) = probe("lautta-thumb", "lautta://nv-qt-images/p/fake.pdf?size=64", (0, 0));
         assert!(e.contains("not a readable PDF"), "{e}");
+
+        nas.add_file("m/song.mp3", &mp3_with_cover(&test_jpeg(300, 300)), 1);
+        let (e, w, h) = probe(
+            "lautta-cover",
+            "lautta://nv-qt-images/m/song.mp3?size=200",
+            (0, 0),
+        );
+        assert_eq!(
+            (e.as_str(), w, h),
+            ("", 256, 256),
+            "cover at the size covering the request"
+        );
+        let (e, w, h) = probe(
+            "lautta-cover",
+            "lautta://nv-qt-images/m/song.mp3?size=200&glow=1",
+            (0, 0),
+        );
+        assert_eq!((e.as_str(), w, h), ("", 48, 48), "glow");
+        let (e, w, h) = probe("lautta-thumb", "lautta://nv-qt-images/m/song.mp3?size=64", (0, 0));
+        assert_eq!((e.as_str(), w, h), ("", 128, 128), "audio thumbnail");
+        let (e, ..) = probe("lautta-cover", "lautta://nv-qt-images/p/a.jpg?size=64", (0, 0));
+        assert!(e.starts_with("Unsupported"), "covers only for audio: {e}");
+        let (e, ..) = probe("lautta-cover", "lautta://nv-qt-images/m/song.mp3&glow=1", (0, 0));
+        assert!(e.contains("bad thumbnail id"), "{e}");
+    }
+
+    /// ID3v2.4 with one front cover, then silent MPEG frames.
+    fn mp3_with_cover(jpeg: &[u8]) -> Vec<u8> {
+        let safe = |n: usize| {
+            [
+                (n >> 21) as u8 & 0x7f,
+                (n >> 14) as u8 & 0x7f,
+                (n >> 7) as u8 & 0x7f,
+                n as u8 & 0x7f,
+            ]
+        };
+        let mut body = b"\x03image/jpeg\0\x03\0".to_vec();
+        body.extend_from_slice(jpeg);
+        let mut frame = b"APIC".to_vec();
+        frame.extend_from_slice(&safe(body.len()));
+        frame.extend_from_slice(&[0, 0]);
+        frame.extend_from_slice(&body);
+        let mut out = b"ID3\x04\0\0".to_vec();
+        out.extend_from_slice(&safe(frame.len()));
+        out.extend_from_slice(&frame);
+        for _ in 0..8 {
+            out.extend_from_slice(&[0xff, 0xfb, 0x90, 0x64]);
+            out.extend(std::iter::repeat_n(0u8, 413));
+        }
+        out
     }
 }

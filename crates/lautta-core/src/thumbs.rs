@@ -11,6 +11,7 @@
 //! * [`ThumbJobs`]: at most two jobs in flight per location, newest first (visible delegates),
 //!   cancelable by key.
 //!
+//! Audio: cover inside the file, else its folder's `cover.jpg` (`app_viewers`), local and remote.
 //! Local images, videos and PDFs come from `Nemo.Thumbnailer` in QML, not here: it draws them in
 //! helper processes, so a crashing PDF leaves the app running. Server PDFs: [`crate::thumbs_pdf`].
 
@@ -96,6 +97,7 @@ pub fn thumbnail_source(entry: &Entry, local: bool, shown: bool, set: &ThumbSett
             ThumbSource::Text
         }
         (FileCategory::Image | FileCategory::Video | FileCategory::Pdf, true) => ThumbSource::System,
+        (FileCategory::Audio, _) if local || set.remote => ThumbSource::App,
         (FileCategory::Image, false) if set.remote => ThumbSource::App,
         (FileCategory::Pdf, false) if set.remote && entry.size.is_none_or(|s| s <= set.pdf_limit()) => {
             ThumbSource::App
@@ -185,6 +187,18 @@ pub fn render_thumbnail(bytes: &[u8], target: u32, orientation: u8) -> Result<Ve
         img
     };
     encode(&apply_orientation(img, orientation))
+}
+
+/// Side of the media player's backdrop; the page scales it up, so it is drawn small and soft.
+pub const GLOW_SIDE: u32 = 48;
+
+/// Blurred, small copy of a rendered cover for the media player's backdrop. JPEG.
+pub fn render_glow(cover: &[u8]) -> Result<Vec<u8>> {
+    let img =
+        image::load_from_memory(cover).map_err(|e| thumb_error(&format!("not a decodable image: {e}")))?;
+    let small = img.resize_exact(GLOW_SIDE, GLOW_SIDE, FilterType::Triangle);
+    let soft = image::imageops::blur(&small.to_rgb8(), GLOW_SIDE as f32 / 12.0);
+    encode(&DynamicImage::ImageRgb8(soft))
 }
 
 /// Without an EXIF thumbnail the whole file is read if at most `max_bytes`. Returns JPEG, or PNG
@@ -1009,6 +1023,80 @@ mod tests {
     }
 
     #[test]
+    fn audio_is_the_apps_locally_and_on_servers_with_the_server_switch() {
+        let on = settings();
+        for name in ["a.mp3", "b.FLAC", "c.m4a", "d.ogg"] {
+            for local in [true, false] {
+                assert_eq!(
+                    thumbnail_source(&file(name, Some(5)), local, true, &on),
+                    ThumbSource::App,
+                    "{name} local {local}"
+                );
+                assert_eq!(
+                    thumbnail_source(&file(name, Some(5)), local, false, &on),
+                    ThumbSource::Icon,
+                    "Show thumbnails off"
+                );
+            }
+        }
+        let off = ThumbSettings { remote: false, ..on };
+        assert_eq!(
+            thumbnail_source(&file("a.mp3", None), false, true, &off),
+            ThumbSource::Icon
+        );
+        assert_eq!(
+            thumbnail_source(&file("a.mp3", None), true, true, &off),
+            ThumbSource::App,
+            "the server switch does not touch local audio"
+        );
+        assert_eq!(
+            thumbnail_source(&file("big.mp3", Some(u64::MAX)), false, true, &on),
+            ThumbSource::App,
+            "only tags are read: no size limit"
+        );
+    }
+
+    #[test]
+    fn the_glow_is_small_and_keeps_the_colour() {
+        let mut cover = std::io::Cursor::new(Vec::new());
+        DynamicImage::ImageRgb8(image::RgbImage::from_pixel(128, 128, image::Rgb([30, 200, 60])))
+            .write_to(&mut cover, ImageOutputFormat::Png)
+            .unwrap();
+        let glow = image::load_from_memory(&render_glow(cover.get_ref()).unwrap())
+            .unwrap()
+            .to_rgb8();
+        assert_eq!(glow.dimensions(), (GLOW_SIDE, GLOW_SIDE));
+        let p = glow.get_pixel(GLOW_SIDE / 2, GLOW_SIDE / 2).0;
+        assert!(p[1] > 150 && p[0] < 80 && p[2] < 110, "{p:?}");
+        assert!(render_glow(b"not an image").is_err());
+    }
+
+    #[test]
+    fn the_glow_is_soft_near_edges_and_keeps_far_colours() {
+        let img = image::RgbImage::from_fn(128, 128, |x, _| {
+            if x < 64 {
+                image::Rgb([220, 20, 20])
+            } else {
+                image::Rgb([20, 20, 220])
+            }
+        });
+        let mut cover = std::io::Cursor::new(Vec::new());
+        DynamicImage::ImageRgb8(img)
+            .write_to(&mut cover, ImageOutputFormat::Png)
+            .unwrap();
+        let glow = image::load_from_memory(&render_glow(cover.get_ref()).unwrap())
+            .unwrap()
+            .to_rgb8();
+        let far = glow.get_pixel(0, GLOW_SIDE / 2).0;
+        let near = glow.get_pixel(GLOW_SIDE / 2 - 3, GLOW_SIDE / 2).0;
+        assert!(far[0] > 180 && far[2] < 60, "far side stays red: {far:?}");
+        assert!(
+            near[2] > 50 && near[0] > near[2],
+            "blurred across the edge: {near:?}"
+        );
+    }
+
+    #[test]
     fn the_pdf_limit_never_passes_what_the_viewer_opens() {
         let set = ThumbSettings {
             max_remote_bytes: 1_000_000_000,
@@ -1022,7 +1110,7 @@ mod tests {
     fn other_files_and_unreachable_ones_have_none() {
         let on = settings();
         for local in [true, false] {
-            for name in ["a.zip", "a.mp3", "noext"] {
+            for name in ["a.zip", "noext"] {
                 assert_eq!(
                     thumbnail_source(&file(name, Some(5)), local, true, &on),
                     ThumbSource::Icon,
@@ -1031,7 +1119,7 @@ mod tests {
             }
             let dir = Entry::new(b"photos.jpg", crate::entry::Kind::Dir);
             assert_eq!(thumbnail_source(&dir, local, true, &on), ThumbSource::Icon);
-            for name in ["a.jpg", "a.pdf", "a.txt"] {
+            for name in ["a.jpg", "a.pdf", "a.txt", "a.mp3"] {
                 let mut e = file(name, Some(5));
                 e.flags |= EntryFlags::NOT_ACCESSIBLE;
                 assert_eq!(
