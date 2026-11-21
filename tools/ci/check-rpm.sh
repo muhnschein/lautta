@@ -22,7 +22,7 @@ if [ "${1:-}" != --in-sdk ]; then
     git clone -q https://github.com/sailfishos/sdk-harbour-rpmvalidator.git "$work/.validator"
     git -C "$work/.validator" checkout -q "$VALIDATOR_COMMIT"
     # SDK runs as mersdk (uid 100000): world-writable copy.
-    (cd "$root" && cp -r --parents RPMS tests/qml tests/translations tools/ci doc/harbour-warnings.md "$work/")
+    (cd "$root" && cp -r --parents RPMS tests/qml tests/translations tests/fonts tools/ci doc/harbour-warnings.md "$work/")
     chmod -R a+rwX "$work"
     # shellcheck disable=SC2086
     docker run --rm ${DOCKER_ARGS:-} -e TARGET -e SDK_IMAGE -v "$work:/home/mersdk/src" -w /home/mersdk/src \
