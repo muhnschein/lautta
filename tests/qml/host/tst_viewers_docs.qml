@@ -11,6 +11,26 @@ Item {
             console.error("FAILED: " + what)
     }
 
+    function html(d) {
+        var out = []
+        for (var i = 0; i < d.blockCount; ++i)
+            out.push(d.block(i))
+        check(d.block(d.blockCount) === "" && d.block(-1) === "", "no block past the ends")
+        return out.join("")
+    }
+
+    function kinds(fixture) {
+        var uri = "lautta://user-documents/" + fixture
+        if (fixture !== "long.md")
+            check(tools.installFixture(Qt.resolvedUrl("fixtures/" + fixture), uri), fixture + " installed")
+        md.uri = uri
+        settle(md)
+        var out = []
+        for (var i = 0; i < md.blockCount; ++i)
+            out.push(md.blockKind(i) + (md.blockJoined(i) ? "+" : ""))
+        return out.join()
+    }
+
     function settle(o) {
         for (var i = 0; i < 1200 && o.loading; ++i)
             tools.pump(25)
@@ -115,12 +135,25 @@ Item {
         md.uri = "lautta://user-documents/doc.md"
         check(md.loading, "markdown loading")
         settle(md)
-        check(md.html.indexOf("Title") >= 0 && md.html.indexOf("<em>emphasis</em>") >= 0, "rendered: " + md.html)
-        check(md.html.indexOf("<script") < 0 && md.html.indexOf("&lt;script&gt;") >= 0, "raw html is shown as text")
+        check(html(md).indexOf("Title") >= 0 && html(md).indexOf("<em>emphasis</em>") >= 0, "rendered: " + html(md))
+        check(html(md).indexOf("<script") < 0 && html(md).indexOf("&lt;script&gt;") >= 0, "raw html is shown as text")
         check(md.errorKind === "" && !md.truncated, "no error")
+        md.colours = "md-heading=#123456"
+        check(md.loading, "new colours render again")
+        settle(md)
+        check(html(md).indexOf("color: #123456") >= 0, "in the new colours: " + html(md))
+        check(kinds("doc.md") === "heading,text,text", "a block per element: " + kinds("doc.md"))
+        check(kinds("styled.md") === "text,quote,text" && kinds("code-lines.md") === "code",
+              "by kind: " + kinds("styled.md") + " " + kinds("code-lines.md"))
+        check(md.blockKind(md.blockCount) === "" && md.blockKind(-1) === "" && !md.blockJoined(-1), "no kind past the ends")
+        check(tools.installRepeated(Qt.resolvedUrl("fixtures/line.md"), "lautta://user-documents/long.md", 400), "long paragraph")
+        check(kinds("long.md").match(/^(text\+,)+text$/), "a long paragraph comes in joined parts: " + kinds("long.md"))
         md.uri = "lautta://user-documents/nope.md"
         settle(md)
         check(md.errorKind === "NotFound", "markdown error " + md.errorKind)
+        check(md.blockCount === 0 && md.block(0) === "", "a failed load leaves no blocks")
+        var idle = Qt.createQmlObject('import Lautta 1.0; MarkdownDocument { colours: "md-gap=3" }', root)
+        check(!idle.loading, "colours alone load nothing")
         reachedEnd = true
     }
 }

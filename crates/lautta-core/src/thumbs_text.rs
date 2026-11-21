@@ -52,7 +52,7 @@ pub fn type_icon(name: &[u8]) -> &'static str {
     let lower = String::from_utf8_lossy(name).to_lowercase();
     let ext = lower.rsplit_once('.').map_or("", |(_, e)| e);
     match ext {
-        "md" | "markdown" => "types/markdown",
+        e if crate::mime::is_markdown_extension(e) => "types/markdown",
         "sh" | "bash" | "zsh" => "types/shell",
         "toml" => "types/toml",
         "json" => "types/json",
@@ -141,6 +141,7 @@ mod tests {
         let cases = [
             ("README.md", "types/markdown"),
             ("notes.MARKDOWN", "types/markdown"),
+            ("notes.mkd", "types/markdown"),
             ("backup.sh", "types/shell"),
             ("run.bash", "types/shell"),
             (".zsh", "types/shell"),
