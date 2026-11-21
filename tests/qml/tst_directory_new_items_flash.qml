@@ -118,6 +118,28 @@ ApplicationWindow {
         expect(others.length === 0, what + ": no other row lights up: " + others.length)
     }
 
+    // Tile's name and details take ambience colours with its highlight, then return to plain.
+    function checkGridCaption(view, uri, name) {
+        var flash = flashOf(view.flickable, uri)
+        var names = findAll(view.flickable, function (x) { return x.objectName === "gridName" && x.text === name }, [])
+        if (!expect(flash && names.length === 1, "grid caption: tile and name of " + name))
+            return
+        var caption = names[0].parent
+        var details = findAll(caption, function (x) { return x.objectName === "gridCaption0" }, [])
+        if (!expect(details.length === 1, "grid caption: details line of " + name))
+            return
+        if (!waitFor(function () { return !flash.running }, "grid caption: highlight over"))
+            return
+        expect(Qt.colorEqual(names[0].color, Theme.primaryColor), "grid caption: name back to plain: " + names[0].color)
+        expect(Qt.colorEqual(details[0].color, Theme.secondaryColor), "grid caption: details back to plain: " + details[0].color)
+        // Fully lit, set by hand: the fade's hold is too short to catch on a stalled runner.
+        flash.opacity = 1
+        expect(Qt.colorEqual(names[0].color, Theme.highlightColor), "grid caption: name in ambience colour: " + names[0].color)
+        expect(Qt.colorEqual(details[0].color, Theme.secondaryHighlightColor),
+               "grid caption: details in ambience colour: " + details[0].color)
+        flash.opacity = 0
+    }
+
     function checkView(view, made, what) {
         checkFlash(view, function () { view.model.createFolder(made) }, [base + made], what)
     }
@@ -219,6 +241,7 @@ ApplicationWindow {
         view.model.setViewPrefs(JSON.stringify({ "viewMode": "grid" }))
         waitFor(function () { return view.gridMode }, "the grid")
         checkView(view, "zy", "grid")
+        checkGridCaption(view, base + "zy", "zy")
         pageStack.pop(null, PageStackAction.Immediate)
         checkPicker()
         reachedEnd = true
