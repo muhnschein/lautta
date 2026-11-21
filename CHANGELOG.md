@@ -14,6 +14,7 @@
 - Memory cards and USB drives without a label show as "Memory card" or "USB drive" instead of a string of letters and digits ([#123](https://github.com/muhnschein/lautta/issues/123)).
 - Code, logs and other monospaced text use JetBrains Mono, in the text viewer, in grid previews and in Markdown code.
 - The music player shows the cover and the title, artist, album, year and track number ([#111](https://github.com/muhnschein/lautta/issues/111)). The cover comes from the file, else from a cover.jpg, folder.jpg or front.jpg beside it. Audio files show their cover as thumbnail in folders too.
+- Sharing a file from a server shows "Getting …" while it downloads, then the share sheet. Before, nothing showed until the download was done, so a big file looked like the share was lost ([#126](https://github.com/muhnschein/lautta/issues/126)).
 
 ## 1.0.0
 
