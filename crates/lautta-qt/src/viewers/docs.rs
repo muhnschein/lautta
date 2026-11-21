@@ -5,6 +5,7 @@ use crate::runtime::core;
 use lautta_core::app_viewers::ViewedText;
 use lautta_core::org::recents::RecentKind;
 use lautta_core::preview::highlight::{ColourJob, ColouredText, Palette};
+use lautta_core::preview::markdown::{Block, Style};
 use lautta_core::preview::rows::TextRows;
 use lautta_core::Error;
 use qmetaobject::prelude::*;
@@ -184,19 +185,31 @@ impl TextDocument {
     }
 }
 
+/// Reading viewer's rich text: Markdown, or `.txt` as prose.
 #[derive(QObject, Default)]
 pub struct MarkdownDocument {
     base: qt_base_class!(trait QObject),
     uri: qt_property!(QString; WRITE setUri NOTIFY uriChanged),
     uriChanged: qt_signal!(),
+    /// [`Style`] spec: ambience colours and sizes (ReadingStyle.js).
+    colours: qt_property!(QString; WRITE setColours NOTIFY coloursChanged),
+    coloursChanged: qt_signal!(),
     loading: qt_property!(bool; NOTIFY stateChanged),
-    html: qt_property!(QString; NOTIFY stateChanged),
+    /// Rich-text blocks; view lays out only those on screen.
+    blockCount: qt_property!(i32; NOTIFY stateChanged),
     truncated: qt_property!(bool; NOTIFY stateChanged),
     errorKind: qt_property!(QString; NOTIFY stateChanged),
     errorMessage: qt_property!(QString; NOTIFY stateChanged),
     stateChanged: qt_signal!(),
     reload: qt_method!(fn(&mut self)),
+    /// Empty past the blocks.
+    block: qt_method!(fn(&self, index: i32) -> QString),
+    /// `text`, `heading`, `quote` or `code`: what the view draws around a block.
+    blockKind: qt_method!(fn(&self, index: i32) -> QString),
+    /// Next block continues this one: no gap between them.
+    blockJoined: qt_method!(fn(&self, index: i32) -> bool),
     generation: u64,
+    blocks: Vec<Block>,
 }
 
 impl MarkdownDocument {
@@ -209,12 +222,24 @@ impl MarkdownDocument {
         self.reload();
     }
 
+    fn setColours(&mut self, value: QString) {
+        if self.colours == value {
+            return;
+        }
+        self.colours = value;
+        self.coloursChanged();
+        if !self.uri.is_empty() {
+            self.reload();
+        }
+    }
+
     fn reload(&mut self) {
         self.generation += 1;
         let gen = self.generation;
         let (Some(core), Some(uri)) = (core(), parse_uri(&self.uri)) else {
             return;
         };
+        let style = Style::parse(&self.colours.to_string());
         self.loading = true;
         self.errorKind = QString::default();
         self.stateChanged();
@@ -222,7 +247,7 @@ impl MarkdownDocument {
         let c = core.clone();
         run_then(
             self,
-            async move { core.render_markdown(&uri).await },
+            async move { core.render_reading(&uri, style).await },
             move |me, res| {
                 if me.generation != gen {
                     return;
@@ -230,11 +255,14 @@ impl MarkdownDocument {
                 me.loading = false;
                 match res {
                     Ok(r) => {
-                        me.html = QString::from(r.html.as_str());
+                        me.blockCount = i32::try_from(r.blocks.len()).unwrap_or(i32::MAX);
+                        me.blocks = r.blocks;
                         me.truncated = r.truncated;
                         c.note_viewed(&seen, RecentKind::Previewed);
                     }
                     Err(e) => {
+                        me.blockCount = 0;
+                        me.blocks = Vec::new();
                         me.errorKind = qstr(e.kind.name());
                         me.errorMessage = qstr(&e.message);
                     }
@@ -242,5 +270,25 @@ impl MarkdownDocument {
                 me.stateChanged();
             },
         );
+    }
+}
+
+impl MarkdownDocument {
+    fn at(&self, index: i32) -> Option<&Block> {
+        usize::try_from(index).ok().and_then(|i| self.blocks.get(i))
+    }
+
+    fn block(&self, index: i32) -> QString {
+        self.at(index)
+            .map_or_else(QString::default, |b| QString::from(b.html.as_str()))
+    }
+
+    fn blockKind(&self, index: i32) -> QString {
+        self.at(index)
+            .map_or_else(QString::default, |b| QString::from(b.kind.name()))
+    }
+
+    fn blockJoined(&self, index: i32) -> bool {
+        self.at(index).is_some_and(|b| b.joined)
     }
 }

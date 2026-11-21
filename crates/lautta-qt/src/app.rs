@@ -4,10 +4,13 @@ use crate::json::{from_json, json_value_to_qvariant, to_json};
 use crate::runtime::{core, handle, spawn_then};
 use lautta_core::clipboard::{Clipboard, ClipboardMode};
 use lautta_core::entry::Capabilities;
-use lautta_core::mime::{category_of_name, extension_of, from_extension, viewer_for, FileCategory, Viewer};
+use lautta_core::mime::{
+    category_of_name, extension_of, from_extension, viewer_for_name, FileCategory, Viewer,
+};
 use lautta_core::settings::Settings;
 use lautta_core::transfer::scheduler::is_bridge_location;
 use lautta_core::trash::now_secs;
+use lautta_core::volumes::VolumeWords;
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
 use qmetaobject::{QPointer, QSingletonInit};
@@ -29,6 +32,8 @@ pub struct App {
     loadSettings: qt_method!(fn(&mut self, json: QString)),
     setting: qt_method!(fn(&self, key: QString) -> QVariant),
     setSetting: qt_method!(fn(&mut self, key: QString, value_json: QString) -> bool),
+    /// Names of volumes without label, translated.
+    setVolumeNames: qt_method!(fn(&self, card: QString, usb: QString)),
 
     childUri: qt_method!(fn(&self, parent: QString, name: QString) -> QString),
     parentUri: qt_method!(fn(&self, uri: QString) -> QString),
@@ -88,6 +93,7 @@ pub fn viewer_name(v: Viewer) -> &'static str {
         Viewer::Image => "image",
         Viewer::Text => "text",
         Viewer::Markdown => "markdown",
+        Viewer::Prose => "prose",
         Viewer::Audio => "audio",
         Viewer::Video => "video",
         Viewer::Archive => "archive",
@@ -115,6 +121,15 @@ impl App {
                 log::warn!("tidying the Trash failed: {e}");
             }
         });
+    }
+
+    fn setVolumeNames(&self, card: QString, usb: QString) {
+        if let Some(core) = core() {
+            core.locations.set_volume_words(VolumeWords {
+                card: card.to_string(),
+                usb: usb.to_string(),
+            });
+        }
     }
 
     fn publish_settings(&mut self) {
@@ -238,7 +253,7 @@ impl App {
         } else {
             category
         };
-        QString::from(viewer_name(viewer_for(category, &mime)))
+        QString::from(viewer_name(viewer_for_name(&name, category, &mime)))
     }
 
     fn set_clipboard(&mut self, mode: ClipboardMode, uris_json: QString) -> bool {

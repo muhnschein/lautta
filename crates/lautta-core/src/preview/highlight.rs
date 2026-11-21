@@ -286,7 +286,7 @@ impl Palette {
     }
 }
 
-fn is_hex_colour(s: &str) -> bool {
+pub(crate) fn is_hex_colour(s: &str) -> bool {
     s.strip_prefix('#')
         .is_some_and(|hex| matches!(hex.len(), 6 | 8) && hex.bytes().all(|b| b.is_ascii_hexdigit()))
 }
@@ -396,6 +396,20 @@ pub fn syntax_for(name: &[u8], first_line: &str) -> Option<&'static SyntaxRefere
     by_name
         .or_else(|| set.find_syntax_by_first_line(first_line))
         .filter(|s| s.scope != set.find_syntax_plain_text().scope)
+}
+
+/// Fenced code by its info word (`rust`, `sh`, `python`); plain without grammar or once
+/// `deadline` passed. Blocking.
+pub fn colour_fenced(language: &str, code: String, deadline: Instant) -> ColouredText {
+    let set = syntaxes();
+    let syntax = (!language.is_empty())
+        .then(|| set.find_syntax_by_token(language))
+        .flatten()
+        .filter(|s| s.scope != set.find_syntax_plain_text().scope);
+    match syntax {
+        Some(syntax) => colour_with(code, syntax, LIMITS.max_line_bytes, || Instant::now() >= deadline),
+        None => ColouredText::plain(code),
+    }
 }
 
 /// Blocking: run off GUI and runtime threads.

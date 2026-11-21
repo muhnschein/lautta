@@ -5,13 +5,14 @@
 //! clone (shared state); implements [`ProviderResolver`]; follow changes with
 //! [`LocationRegistry::subscribe`].
 
+use crate::bridge::DriveKind;
 use crate::entry::cap;
 use crate::error::{Error, ErrorKind, Result};
 use crate::paths::AppPaths;
 use crate::provider::local::{lexical_normalize, new_io_semaphore, LocalProvider};
 use crate::provider::{Provider, ProviderResolver};
 use crate::uri::{LocationId, Uri};
-use crate::volumes::{self, Volume, VolumeEvent, VolumeWatcher};
+use crate::volumes::{self, Volume, VolumeEvent, VolumeWatcher, VolumeWords};
 use crate::vpath::VPath;
 use percent_encoding::{percent_encode, AsciiSet, CONTROLS};
 use std::collections::BTreeMap;
@@ -178,6 +179,9 @@ struct State {
     extra: Vec<Slot>,
     /// URIs on them (clipboard, a page still open) are told apart from a missing item.
     gone: BTreeMap<String, String>,
+    /// What [`State::volumes`] was made from.
+    vols: Vec<Volume>,
+    words: VolumeWords,
 }
 
 impl State {
@@ -317,10 +321,18 @@ impl LocationRegistry {
     }
 
     fn apply_volumes_inner(&self, vols: Vec<Volume>) -> bool {
-        let locations = vols
-            .into_iter()
-            .map(|v| Location::local(v.location_id(), LocationKind::Volume, v.name, v.mount_path))
-            .collect();
+        let locations = {
+            let mut state = self.state();
+            let locations = vols
+                .iter()
+                .map(|v| {
+                    let name = state.words.name_of(v);
+                    Location::local(v.location_id(), LocationKind::Volume, name, v.mount_path.clone())
+                })
+                .collect();
+            state.vols = vols;
+            locations
+        };
         self.replace_slots(|s| &mut s.volumes, locations)
     }
 
@@ -333,26 +345,7 @@ impl LocationRegistry {
     }
 
     pub fn apply_volume_event(&self, event: &VolumeEvent) -> bool {
-        let mut current: Vec<Volume> = {
-            let state = self.state();
-            state
-                .volumes
-                .iter()
-                .filter_map(|s| {
-                    let root = s.location.local_root.clone()?;
-                    Some(Volume {
-                        id: s
-                            .location
-                            .id
-                            .strip_prefix("vol-")
-                            .unwrap_or(&s.location.id)
-                            .to_owned(),
-                        name: s.location.name.clone(),
-                        mount_path: root,
-                    })
-                })
-                .collect()
-        };
+        let mut current = self.state().vols.clone();
         match event {
             VolumeEvent::Appeared(v) => {
                 current.retain(|c| c.id != v.id);
@@ -365,6 +358,31 @@ impl LocationRegistry {
             self.notify();
         }
         changed
+    }
+
+    /// Words for volumes without label, in the UI's language.
+    pub fn set_volume_words(&self, words: VolumeWords) {
+        let vols = {
+            let mut state = self.state();
+            state.words = words;
+            state.vols.clone()
+        };
+        if self.apply_volumes_inner(vols) {
+            self.notify();
+        }
+    }
+
+    pub fn volume_words(&self) -> VolumeWords {
+        self.state().words.clone()
+    }
+
+    /// Kind of drive behind volume location `id`.
+    pub fn volume_kind(&self, id: &str) -> Option<DriveKind> {
+        self.state()
+            .vols
+            .iter()
+            .find(|v| v.location_id() == id)
+            .map(|v| v.kind)
     }
 
     pub fn watch_volumes(&self) -> Result<VolumeWatcher> {
@@ -676,6 +694,48 @@ mod tests {
     }
 
     #[test]
+    fn unlabelled_volumes_get_a_name_by_kind_and_keep_their_id() {
+        let e = env_with(&[]);
+        std::fs::create_dir(e.media.join("0A1B-2C3D")).unwrap();
+        std::fs::create_dir(e.media.join("STICK")).unwrap();
+        assert!(e.reg.refresh_volumes());
+        let unlabelled = e.reg.get("vol-0A1B-2C3D").unwrap();
+        assert_eq!(unlabelled.name, "USB drive");
+        assert_eq!(e.reg.name("vol-0A1B-2C3D").as_deref(), Some("USB drive"));
+        assert_eq!(e.reg.get("vol-STICK").unwrap().name, "STICK");
+        assert_eq!(e.reg.volume_kind("vol-0A1B-2C3D"), Some(DriveKind::Usb));
+        assert_eq!(e.reg.volume_kind("user-documents"), None);
+
+        let mut rx = e.reg.subscribe();
+        let words = VolumeWords {
+            card: "Muistikortti".into(),
+            usb: "USB-asema".into(),
+        };
+        e.reg.set_volume_words(words.clone());
+        assert!(rx.has_changed().unwrap());
+        assert_eq!(e.reg.volume_words(), words);
+        assert_eq!(e.reg.get("vol-0A1B-2C3D").unwrap().name, "USB-asema");
+        assert_eq!(e.reg.get("vol-STICK").unwrap().name, "STICK");
+        rx.borrow_and_update();
+        e.reg.set_volume_words(words);
+        assert!(!rx.has_changed().unwrap(), "same words, nothing signalled");
+
+        let card = Volume {
+            id: "1111-2222".into(),
+            name: "1111-2222".into(),
+            mount_path: e.media.join("STICK"),
+            kind: DriveKind::Card,
+        };
+        assert!(e.reg.apply_volume_event(&VolumeEvent::Appeared(card)));
+        assert_eq!(e.reg.get("vol-1111-2222").unwrap().name, "Muistikortti");
+        assert_eq!(
+            e.reg.get("vol-0A1B-2C3D").unwrap().name,
+            "USB-asema",
+            "others keep theirs"
+        );
+    }
+
+    #[test]
     fn changes_are_signalled_only_when_something_changed() {
         let e = env_with(&["Documents"]);
         let mut rx = e.reg.subscribe();
@@ -699,6 +759,7 @@ mod tests {
             id: "CARD".into(),
             name: "CARD".into(),
             mount_path: e.media.join("CARD"),
+            kind: DriveKind::Card,
         };
         std::fs::create_dir(&v.mount_path).unwrap();
         let rx = e.reg.subscribe();

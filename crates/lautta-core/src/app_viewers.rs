@@ -57,8 +57,9 @@ pub struct ViewedText {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderedMarkdown {
-    pub html: String,
+pub struct RenderedText {
+    /// Rich-text blocks, each laid out on its own.
+    pub blocks: Vec<markdown::Block>,
     pub truncated: bool,
 }
 
@@ -939,11 +940,22 @@ impl Core {
         })
     }
 
-    /// Only the first MiB is rendered.
-    pub async fn render_markdown(&self, uri: &Uri) -> Result<RenderedMarkdown> {
+    /// Reading viewer's rich text: `.txt` as prose, anything else as Markdown. Only the first MiB.
+    pub async fn render_reading(&self, uri: &Uri, style: markdown::Style) -> Result<RenderedText> {
         let loaded = self.load_text(uri).await?;
-        Ok(RenderedMarkdown {
-            html: markdown::render(&loaded.doc.text),
+        let prose = ptext::reads_as_prose(uri.path.name().unwrap_or_default());
+        let text = loaded.doc.text;
+        let blocks = tokio::task::spawn_blocking(move || {
+            if prose {
+                markdown::render_prose(&text)
+            } else {
+                markdown::render(&text, &style)
+            }
+        })
+        .await
+        .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))?;
+        Ok(RenderedText {
+            blocks,
             truncated: loaded.doc.truncated,
         })
     }

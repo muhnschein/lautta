@@ -2616,6 +2616,14 @@
         <source>On GitHub</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-browse-volume-card">
+        <source>Memory card</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-volume-usb">
+        <source>USB drive</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message id="lautta-viewers-media-track-of">
         <source>Track %1 of %2</source>
         <translation type="unfinished"></translation>
