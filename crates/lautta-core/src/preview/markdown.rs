@@ -478,7 +478,7 @@ impl<'s> Renderer<'s> {
                 if in_body > 0 {
                     body.push('\n');
                 }
-                push_coloured(&mut body, &coloured, index..index + 1, &self.style.syntax);
+                push_coloured(&mut body, &coloured, index, &self.style.syntax);
                 in_body += 1;
                 if body.len() >= half && !last {
                     self.code_panel(&std::mem::take(&mut body), false);
@@ -673,7 +673,6 @@ impl<'s> Renderer<'s> {
         match tag {
             Tag::Paragraph | Tag::FootnoteDefinition(_) => self.end_paragraph(),
             Tag::Heading(level, _, _) => self.out.push_str(&format!("</h{}>", heading_number(level))),
-            Tag::BlockQuote if self.top_level() => {}
             Tag::BlockQuote | Tag::Table(_) => self.pop_open(),
             Tag::CodeBlock(_) => self.end_code(),
             Tag::List(_) => self.end_list(),
@@ -747,7 +746,7 @@ impl<'s> Renderer<'s> {
     /// Top-level elements become blocks of their own.
     fn event(&mut self, event: Event<'_>, task_list: bool) {
         match &event {
-            Event::Start(tag) if is_block(tag) => {
+            Event::Start(tag) => {
                 if self.depth == 0 {
                     self.end_block(false);
                     self.kind = kind_of(tag);
@@ -755,7 +754,7 @@ impl<'s> Renderer<'s> {
                 self.depth += 1;
                 self.handle(event, task_list);
             }
-            Event::End(tag) if is_block(tag) => {
+            Event::End(_) => {
                 self.handle(event, task_list);
                 self.depth = self.depth.saturating_sub(1);
                 if self.depth == 0 {
@@ -792,43 +791,24 @@ impl<'s> Renderer<'s> {
     }
 }
 
-/// Lines of `doc`, escaped, coloured runs in `<span style="color: …">`; plain past its colours.
-fn push_coloured(out: &mut String, doc: &ColouredText, lines: std::ops::Range<usize>, palette: &Palette) {
-    let first = lines.start;
-    for index in lines {
-        if index > first {
-            out.push('\n');
-        }
-        let line = doc.line(index).unwrap_or_default();
-        let mut from = 0;
-        for span in doc.spans(index).unwrap_or_default() {
-            let to = (span.end as usize).clamp(from, line.len());
-            let piece = line.get(from..to).unwrap_or_default();
-            match palette.colour(span.class) {
-                Some(c) if !piece.is_empty() => {
-                    out.push_str(&format!("<span style=\"color: {c}\">"));
-                    push_escaped(out, piece);
-                    out.push_str("</span>");
-                }
-                _ => push_escaped(out, piece),
+/// Line `index` of `doc`, escaped, coloured runs in `<span style="color: …">`; plain past its colours.
+fn push_coloured(out: &mut String, doc: &ColouredText, index: usize, palette: &Palette) {
+    let line = doc.line(index).unwrap_or_default();
+    let mut from = 0;
+    for span in doc.spans(index).unwrap_or_default() {
+        let to = (span.end as usize).clamp(from, line.len());
+        let piece = line.get(from..to).unwrap_or_default();
+        match palette.colour(span.class) {
+            Some(c) => {
+                out.push_str(&format!("<span style=\"color: {c}\">"));
+                push_escaped(out, piece);
+                out.push_str("</span>");
             }
-            from = to;
+            None => push_escaped(out, piece),
         }
-        push_escaped(out, line.get(from..).unwrap_or_default());
+        from = to;
     }
-}
-
-fn is_block(tag: &Tag<'_>) -> bool {
-    matches!(
-        tag,
-        Tag::Paragraph
-            | Tag::Heading(..)
-            | Tag::BlockQuote
-            | Tag::CodeBlock(_)
-            | Tag::List(_)
-            | Tag::Table(_)
-            | Tag::FootnoteDefinition(_)
-    )
+    push_escaped(out, line.get(from..).unwrap_or_default());
 }
 
 fn kind_of(tag: &Tag<'_>) -> BlockKind {
@@ -853,8 +833,12 @@ fn pieces(text: &str, max: usize) -> impl Iterator<Item = &str> {
             end += 1;
         }
         if end < rest.len() {
-            if let Some(space) = rest[end / 2..end].rfind(char::is_whitespace) {
-                end = end / 2 + space + 1;
+            let mut half = end / 2;
+            while !rest.is_char_boundary(half) {
+                half += 1;
+            }
+            if let Some(space) = rest[half..end].rfind(char::is_whitespace) {
+                end = half + space + 1;
             }
         }
         let (piece, tail) = rest.split_at(end);
@@ -1265,7 +1249,7 @@ mod tests {
             "JaVaScRiPt:x",
         ] {
             let html = plain(&format!("[click]({bad})"));
-            assert!(!html.contains("href"), "{bad}: {html}");
+            assert!(!html.contains("href") && !html.contains("</a>"), "{bad}: {html}");
             assert!(html.contains("click"), "{bad}: {html}");
         }
     }
@@ -1527,6 +1511,46 @@ mod tests {
     }
 
     #[test]
+    fn pieces_cut_after_a_space_in_their_second_half_and_never_inside_a_char() {
+        let cut = |t, max| pieces(t, max).collect::<Vec<_>>();
+        assert_eq!(cut("aaaa bbbbbb", 8), ["aaaa ", "bbbbbb"]);
+        assert_eq!(
+            cut("a bbbbbbbbb", 8),
+            ["a bbbbbb", "bbb"],
+            "no space in second half"
+        );
+        assert_eq!(cut("a\u{e4}\u{20ac}b", 2), ["a\u{e4}", "\u{20ac}", "b"]);
+        assert_eq!(cut("\u{20ac}\u{20ac}", 1), ["\u{20ac}", "\u{20ac}"]);
+        let finnish = "\u{e4}\u{e4}\u{e4} ".repeat(3000);
+        assert_eq!(
+            cut(&finnish, BLOCK_BYTES).concat(),
+            finnish,
+            "long text of two-byte chars cuts cleanly"
+        );
+    }
+
+    #[test]
+    fn a_long_code_line_comes_in_parts_of_half_a_block() {
+        let blocks = render_in(
+            &format!("```\n{}\n```\n", "y".repeat(300)),
+            &Style::default(),
+            128,
+        );
+        let sizes: Vec<usize> = blocks.iter().map(|b| visible(&b.html).len()).collect();
+        assert_eq!(sizes, [64, 64, 64, 64, 44]);
+    }
+
+    #[test]
+    fn rules_are_blocks_of_their_own_at_top_level_only() {
+        assert_eq!(render("a\n\n---\n\n***\n", &Style::default()).len(), 3);
+        assert_eq!(
+            render("- a\n\n  ***\n- b\n", &Style::default()).len(),
+            1,
+            "a rule in a list stays in it"
+        );
+    }
+
+    #[test]
     fn a_list_under_the_block_size_stays_whole() {
         assert_eq!(render(&"- item\n".repeat(20), &Style::default()).len(), 1);
     }
@@ -1571,12 +1595,16 @@ mod tests {
             format!("- [ ] {long}\n"),
             format!("**{}**", long.trim_end()),
             format!("[{long}](https://e.org)"),
+            format!("- [ ] a\n\n  {long}\n\n  b\n"),
         ] {
             let blocks = render_in(&md, &Style::default(), 256);
             assert!(
                 blocks.iter().any(|b| b.html.contains(long.trim_end())),
                 "{md:.20} cut: {blocks:?}"
             );
+            for block in &blocks {
+                balanced(&block.html);
+            }
         }
         let blocks = render_in(&format!("{long}\n\nnext"), &Style::default(), 256);
         assert!(blocks.len() > 4, "plain paragraph text splits");
