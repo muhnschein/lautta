@@ -112,11 +112,27 @@ body{margin:0}
 .di-l{flex:1;text-align:right;color:var(--sec)}
 .di-v{flex:1;color:var(--pri);word-break:break-all}
 .note{background:rgba(20,30,40,.92);color:#fff;padding:12px 16px;display:flex;gap:12px;align-items:flex-start;border-radius:6px}
+
+.amb.tv{background:linear-gradient(rgba(0,0,0,.6),rgba(0,0,0,.6)),radial-gradient(130% 70% at 85% -5%,#2a4a63 0%,#13222f 45%,#0a1219 100%)}
+.amb.light.tv{background:linear-gradient(rgba(238,238,238,.6),rgba(238,238,238,.6)),radial-gradient(130% 70% at 85% -5%,#ffffff 0%,#e7eef3 50%,#d6e1e9 100%)}
+.amb{--syn-kw:#ff9be0;--syn-str:#a9f0a0;--syn-num:#ffd27a;--syn-cm:rgba(255,255,255,.5)}
+.amb.light{--syn-kw:#a1157a;--syn-str:#217a16;--syn-num:#8a5a00;--syn-cm:rgba(21,25,29,.55)}
+.md{padding:6px 18px 0;font-size:19px;line-height:1.38}
+.md p{margin:0 0 14px}
+.md .c{font-family:'Source Code Pro',monospace;font-size:16px}
+.md a{text-decoration:underline;color:var(--hl)}
+.md .pre{font-family:'Source Code Pro',monospace;font-size:15px;line-height:1.4;padding:10px 12px;margin:0 0 16px;white-space:pre-wrap}
+.md table{border-collapse:collapse;width:100%;margin:0 0 16px;font-size:17px}
+.md td,.md th{padding:6px 10px;text-align:left}
+.md ul{margin:0 0 14px;padding:0;list-style:none}
+.md li{display:flex;gap:12px;margin:0 0 4px}
+.q{display:flex;margin:0 0 16px}.q>i{flex:none;width:3px}.q>div{padding:2px 0 2px 14px}
+.prose{padding:6px 18px 0;font-size:19px;line-height:1.38;white-space:pre-wrap}
 </style>
 </helmet>
-<div class="amb {{amb}}" style="width: 400px; height: 860px">
-<div class="pull-ind"></div><div class="ind-back"><i></i><i></i></div><div class="hdr"><div class="hdr-t">notes.md</div><div class="hdr-d">Documents › Uni</div></div><div style="padding:14px 18px;font-size:19px;line-height:1.4"><div style="font-size:34px;font-weight:300;color:var(--hl);line-height:1.2;margin:6px 0 14px">Meeting notes</div><p style="margin:0 0 14px">Thursday, seminar room 2. We went through the data collection plan and agreed on next steps.</p><div style="margin:0 0 14px"><div style="display:flex;gap:12px;margin-bottom:4px"><span class="hl">•</span><span>Check the NAS backup schedule</span></div><div style="display:flex;gap:12px;margin-bottom:4px"><span class="hl">•</span><span>Move <span class="mono" style="font-size:16px;background:var(--hldim);padding:0 4px">thesis-v3.tex</span> to Uni</span></div><div style="display:flex;gap:12px;margin-bottom:4px"><span class="hl">•</span><span>Email Aino about the dataset</span></div></div><p style="margin:0 0 14px">Full plan in <span class="hl" style="text-decoration:underline">plan.md</span> and the references in <span class="hl" style="text-decoration:underline">references.bib</span>.</p><div style="border-left:3px solid var(--hl);padding-left:14px;margin:18px 0;color:var(--sec)">Remember: the deadline is 30 October. No extensions.</div><p style="margin:0">Next meeting on <span class="mono" style="font-size:16px;background:var(--hldim);padding:0 4px">2026-10-15</span>.</p></div>
-</div>
+<div class="amb tv {{amb}}" style="width: 400px; height: 860px; overflow:hidden">
+<div class="pull-ind"></div><div class="ind-back"><i></i><i></i></div><div class="hdr"><div class="hdr-t">lake-trip.md</div><div class="hdr-d">Documents › Trips</div></div>
+<div class="md"><div style="font-size:34px;font-weight:300;color:var(--hl);line-height:1.2;margin:4px 0 12px">Trip to Lautta island</div><p>Ferry leaves the harbour at <b>9:15</b>. Bring cash for the <i>café</i>, the card reader is <s>always</s> often down.</p><div style="font-size:26px;font-weight:300;color:var(--hl);margin:18px 0 8px">Packing</div><ul><li><span style="color:var(--hl)">☑</span><span style="color:var(--sec)">tent, stove, two pots</span></li><li><span style="color:var(--hl)">☑</span><span style="color:var(--sec)">life jackets</span></li><li><span style="color:var(--hl)">☐</span><span>spare batteries for <span class="c" style="background:var(--hldim);padding:0 3px">gps-01</span></span></li><li><span style="color:var(--hl)">☐</span><span>map of the lake</span></li></ul><div class="q"><i style="background:var(--hl)"></i><div style="color:var(--sec)">Ferries run every hour in summer. The last one back leaves at 21:40.</div></div><p>Timetable: <a>lautta.example/summer</a></p></div></div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":400,"height":860}}'>
 class Component extends DCLogic {

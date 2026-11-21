@@ -46,7 +46,8 @@ Item {
     function mimeForViewer(viewer) {
         switch (viewer) {
         case "image": return "image/*"
-        case "text": return "text/plain"
+        case "text":
+        case "prose": return "text/plain"
         case "markdown": return "text/markdown"
         case "audio": return "audio/*"
         case "video": return "video/*"

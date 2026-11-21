@@ -110,7 +110,7 @@ Features: F-VWR-05 Text viewer, F-VWR-06 Markdown viewer
 |---|---|---|
 | 1 | SCR-31 Text viewer | Text (first 1 MB) |
 | 2 | SCR-31 Text viewer | Code with syntax colours |
-| 3 | SCR-32 Markdown viewer | Markdown rendered |
+| 3 | SCR-32 Markdown viewer | Markdown rendered; `.txt` as prose |
 | 4 | SCR-32 Markdown viewer | Pull: View source, Share, Open with |
 | 5 | SCR-31 Text viewer | Markdown source |
 

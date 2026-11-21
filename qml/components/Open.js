@@ -5,6 +5,7 @@ var viewerPages = {
     "image": "../viewers/ImageViewer.qml",
     "text": "../viewers/TextViewer.qml",
     "markdown": "../viewers/MarkdownViewer.qml",
+    "prose": "../viewers/MarkdownViewer.qml",
     "audio": "../viewers/MediaPlayer.qml",
     "video": "../viewers/MediaPlayer.qml",
     "pdf": "../viewers/PdfViewer.qml"
