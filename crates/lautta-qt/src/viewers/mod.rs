@@ -2,6 +2,7 @@
 //! Viewers facades. Logic lives in `lautta_core::app_viewers`; these types only forward and
 //! publish.
 
+pub mod audio;
 pub mod docs;
 pub mod exif;
 pub mod images;
@@ -15,6 +16,7 @@ use qmetaobject::{QObject, QPointer, QString};
 use std::future::Future;
 
 pub fn register() {
+    audio::register();
     docs::register();
     exif::register();
     images::register();

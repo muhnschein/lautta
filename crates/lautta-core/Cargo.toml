@@ -31,6 +31,8 @@ hex = "0.4"
 notify = { version = "6", default-features = false }
 image = { version = "0.24", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 kamadak-exif = "0.5"
+# Audio tags and covers for the media player and audio thumbnails; pure Rust, fuzzed upstream.
+lofty = "0.25"
 pulldown-cmark = { version = "0.9", default-features = false }
 # Text viewer highlighting: parsing with the bundled grammars and the
 # pure-Rust regex engine only; no oniguruma (C), no theme or grammar loading.
