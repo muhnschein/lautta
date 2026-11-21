@@ -8,6 +8,7 @@
 //! sandbox mounts nothing itself: the bridge mounts and unmounts drives
 //! ([`crate::app::Core::mount_drive`]).
 
+use crate::bridge::DriveKind;
 use crate::error::Result;
 use crate::paths::AppPaths;
 use crate::watch::{lock, map_notify_error, raw_watcher, spawn_worker};
@@ -26,9 +27,110 @@ pub const VOLUME_DEBOUNCE: Duration = Duration::from_millis(300);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Volume {
     pub id: String,
-    /// Shown to the user: mount directory name (volume label, or UUID when none).
+    /// Mount folder name: label, or UUID when none ([`is_fallback_name`]).
     pub name: String,
     pub mount_path: PathBuf,
+    pub kind: DriveKind,
+}
+
+/// Shown for a volume without label.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VolumeWords {
+    pub card: String,
+    pub usb: String,
+}
+
+impl Default for VolumeWords {
+    fn default() -> VolumeWords {
+        VolumeWords {
+            card: "Memory card".to_owned(),
+            usb: "USB drive".to_owned(),
+        }
+    }
+}
+
+impl VolumeWords {
+    pub fn of(&self, kind: DriveKind) -> &str {
+        match kind {
+            DriveKind::Card => &self.card,
+            DriveKind::Usb => &self.usb,
+        }
+    }
+
+    /// Label, or word for its kind when the mount folder carries none.
+    pub fn name_of(&self, v: &Volume) -> String {
+        if is_fallback_name(&v.name) {
+            self.of(v.kind).to_owned()
+        } else {
+            v.name.clone()
+        }
+    }
+}
+
+/// Mount folder name udisks makes for a filesystem without label: its UUID (FAT and exFAT
+/// `XXXX-XXXX`, NTFS 16 hex digits, others RFC 4122), or `disk` without UUID either. Label
+/// that looks the same counts as none.
+pub fn is_fallback_name(name: &str) -> bool {
+    let hex = |s: &str, n: usize| s.len() == n && s.bytes().all(|b| b.is_ascii_hexdigit());
+    let groups: Vec<&str> = name.split('-').collect();
+    name == "disk"
+        || hex(name, 16)
+        || matches!(groups.as_slice(), [a, b] if hex(a, 4) && hex(b, 4))
+        || matches!(groups.as_slice(), [a, b, c, d, e]
+            if hex(a, 8) && hex(b, 4) && hex(c, 4) && hex(d, 4) && hex(e, 12))
+}
+
+/// Kind of drive mounted on `path`, from `mountinfo` (`/proc/self/mountinfo` text): memory card
+/// when its block device, or a device below it (unlocked LUKS), is `mmcblk*`. `sys` = `/sys`;
+/// unreadable there, mount source's name decides. Not found: USB, as bridge counts unknown kinds.
+pub fn kind_of(path: &Path, mountinfo: &str, sys: &Path) -> DriveKind {
+    let Some((dev, source)) = mountinfo.lines().rev().find_map(|line| {
+        let (fields, tail) = line.split_once(" - ")?;
+        let mut f = fields.split(' ');
+        let dev = f.nth(2)?;
+        (unescape_mount(f.nth(1)?) == path.as_os_str().as_bytes())
+            .then(|| (dev, tail.split(' ').nth(1).unwrap_or_default()))
+    }) else {
+        return DriveKind::Usb;
+    };
+    let block = sys.join("dev/block").join(dev);
+    let mut names: Vec<Vec<u8>> = std::fs::read_dir(block.join("slaves"))
+        .map(|rd| rd.flatten().map(|e| e.file_name().as_bytes().to_vec()).collect())
+        .unwrap_or_default();
+    if let Ok(real) = std::fs::canonicalize(&block) {
+        names.extend(real.file_name().map(|n| n.as_bytes().to_vec()));
+    }
+    if names.is_empty() {
+        names.extend(Path::new(source).file_name().map(|n| n.as_bytes().to_vec()));
+    }
+    if names.iter().any(|n| n.starts_with(b"mmcblk")) {
+        DriveKind::Card
+    } else {
+        DriveKind::Usb
+    }
+}
+
+/// Mount point field of `mountinfo`: space, tab, newline and backslash as `\ooo`.
+fn unescape_mount(field: &str) -> Vec<u8> {
+    let b = field.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        let oct = b
+            .get(i + 1..i + 4)
+            .filter(|o| b[i] == b'\\' && o.iter().all(|c| (b'0'..=b'7').contains(c)));
+        match oct {
+            Some(o) => {
+                out.push((o[0] - b'0') << 6 | (o[1] - b'0') << 3 | (o[2] - b'0'));
+                i += 4;
+            }
+            None => {
+                out.push(b[i]);
+                i += 1;
+            }
+        }
+    }
+    out
 }
 
 impl Volume {
@@ -82,6 +184,11 @@ pub fn media_root(paths: &AppPaths) -> PathBuf {
 /// Lists the mounted volumes below `root`: readable folders, not hidden,
 /// sorted by name. A missing root means no volumes.
 pub fn scan(root: &Path) -> Vec<Volume> {
+    let mountinfo = std::fs::read_to_string("/proc/self/mountinfo").unwrap_or_default();
+    scan_with(root, &mountinfo, Path::new("/sys"))
+}
+
+fn scan_with(root: &Path, mountinfo: &str, sys: &Path) -> Vec<Volume> {
     let Ok(rd) = std::fs::read_dir(root) else {
         return Vec::new();
     };
@@ -96,6 +203,7 @@ pub fn scan(root: &Path) -> Vec<Volume> {
             usable.then(|| Volume {
                 id: sanitize_id(&name),
                 name: name.to_string_lossy().into_owned(),
+                kind: kind_of(&path, mountinfo, sys),
                 mount_path: path,
             })
         })
@@ -235,6 +343,7 @@ mod tests {
             id: id.into(),
             name: id.into(),
             mount_path: PathBuf::from("/m").join(id),
+            kind: DriveKind::Usb,
         }
     }
 
@@ -271,6 +380,7 @@ mod tests {
                 id: sanitize_id(OsStr::new(name)),
                 name: name.into(),
                 mount_path: PathBuf::new(),
+                kind: DriveKind::Usb,
             };
             let u = crate::uri::Uri::parse(&format!("lautta://{}/", v.location_id())).unwrap();
             assert_eq!(u.location, v.location_id());
@@ -286,6 +396,159 @@ mod tests {
         assert_eq!(vols[0].id, "caf_e9");
         assert!(vols[0].name.contains('\u{fffd}'));
         assert!(vols[0].mount_path.ends_with(OsStr::from_bytes(b"caf\xe9")));
+    }
+
+    #[test]
+    fn udisks_fallback_names_are_told_from_labels() {
+        for name in [
+            "0123-4567",
+            "ABCD-ef01",
+            "0123456789ABCDEF",
+            "5c1e0a4f-1b2c-4d3e-8f90-a1b2c3d4e5f6",
+            "disk",
+        ] {
+            assert!(is_fallback_name(name), "{name}");
+        }
+        for name in [
+            "SDCARD",
+            "Disk",
+            "disk1",
+            "0123-456",
+            "0123-45678",
+            "0123-456G",
+            "0123-4567-89AB",
+            "0123456789ABCDE",
+            "0123456789ABCDEFA",
+            "0123456789ABCDEG",
+            "5c1e0a4f-1b2c-4d3e-8f90-a1b2c3d4e5f",
+            "5c1e0a4f-1b2c-4d3e-8f9-a1b2c3d4e5f60",
+            "5c1e0a4f-1b2c-4d3-e8f90-a1b2c3d4e5f6",
+            "5c1e0a4-f1b2c-4d3e-8f90-a1b2c3d4e5f6",
+            "5c1e0a4f-1b2-c4d3e-8f90-a1b2c3d4e5f6",
+            "5c1e0a4f-1b2c-4d3e-8f90-a1b2c3d4e5fg",
+            "",
+        ] {
+            assert!(!is_fallback_name(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn unlabelled_volumes_are_named_by_kind() {
+        let words = VolumeWords {
+            card: "Card".into(),
+            usb: "Stick".into(),
+        };
+        let mut v = vol("0123-4567");
+        assert_eq!(words.name_of(&v), "Stick");
+        v.kind = DriveKind::Card;
+        assert_eq!(words.name_of(&v), "Card");
+        assert_eq!(words.name_of(&vol("Holiday")), "Holiday");
+        assert_eq!(VolumeWords::default().of(DriveKind::Card), "Memory card");
+        assert_eq!(VolumeWords::default().of(DriveKind::Usb), "USB drive");
+    }
+
+    /// `/sys` with `dev/block/<dev>` links as the kernel makes them.
+    fn fake_sys(devs: &[(&str, &str, &[&str])]) -> tempfile::TempDir {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join("dev/block")).unwrap();
+        for (dev, device, slaves) in devs {
+            let real = d.path().join("devices").join(device);
+            std::fs::create_dir_all(real.join("slaves")).unwrap();
+            for s in *slaves {
+                std::fs::create_dir(real.join("slaves").join(s)).unwrap();
+            }
+            std::os::unix::fs::symlink(&real, d.path().join("dev/block").join(dev)).unwrap();
+        }
+        d
+    }
+
+    fn mount_line(id: u32, dev: &str, point: &str, source: &str) -> String {
+        format!("{id} 30 {dev} / {point} rw,nosuid shared:9 - vfat {source} rw,uid=100000\n")
+    }
+
+    #[test]
+    fn drive_kind_comes_from_the_block_device() {
+        let sys = fake_sys(&[
+            ("179:97", "platform/mmc1/block/mmcblk1/mmcblk1p1", &[]),
+            ("8:1", "platform/usb1/block/sda/sda1", &[]),
+            ("253:0", "virtual/block/dm-0", &["mmcblk1p2"]),
+            ("253:1", "virtual/block/dm-1", &["sdb1"]),
+            ("7:0", "virtual/block/loop0", &[]),
+        ]);
+        let info = [
+            mount_line(40, "179:97", "/run/media/u/0123-4567", "/dev/mmcblk1p1"),
+            mount_line(41, "8:1", "/run/media/u/My\\040Stick", "/dev/sda1"),
+            mount_line(42, "253:0", "/run/media/u/Vault", "/dev/mapper/luks-1"),
+            mount_line(43, "253:1", "/run/media/u/Safe", "/dev/mapper/luks-2"),
+            mount_line(44, "7:0", "/run/media/u/Loop", "/dev/loop0"),
+        ]
+        .concat();
+        let kind = |p: &str| kind_of(Path::new(p), &info, sys.path());
+        assert_eq!(kind("/run/media/u/0123-4567"), DriveKind::Card);
+        assert_eq!(kind("/run/media/u/My Stick"), DriveKind::Usb);
+        assert_eq!(kind("/run/media/u/Vault"), DriveKind::Card, "LUKS on a card");
+        assert_eq!(kind("/run/media/u/Safe"), DriveKind::Usb);
+        assert_eq!(kind("/run/media/u/Loop"), DriveKind::Usb);
+        assert_eq!(kind("/run/media/u/Missing"), DriveKind::Usb);
+    }
+
+    #[test]
+    fn drive_kind_without_sys_goes_by_mount_source() {
+        let nosys = tempfile::tempdir().unwrap();
+        let info = [
+            mount_line(40, "179:97", "/m/a", "/dev/mmcblk1p1"),
+            mount_line(41, "8:1", "/m/b", "/dev/sda1"),
+        ]
+        .concat();
+        assert_eq!(kind_of(Path::new("/m/a"), &info, nosys.path()), DriveKind::Card);
+        assert_eq!(kind_of(Path::new("/m/b"), &info, nosys.path()), DriveKind::Usb);
+    }
+
+    #[test]
+    fn the_last_mount_on_a_point_counts() {
+        let nosys = tempfile::tempdir().unwrap();
+        let info = [
+            mount_line(40, "8:1", "/m/a", "/dev/sda1"),
+            mount_line(41, "179:97", "/m/a", "/dev/mmcblk1p1"),
+        ]
+        .concat();
+        assert_eq!(kind_of(Path::new("/m/a"), &info, nosys.path()), DriveKind::Card);
+        let info = [
+            mount_line(40, "179:97", "/m/a", "/dev/mmcblk1p1"),
+            mount_line(41, "8:1", "/m/a", "/dev/sda1"),
+        ]
+        .concat();
+        assert_eq!(kind_of(Path::new("/m/a"), &info, nosys.path()), DriveKind::Usb);
+    }
+
+    #[test]
+    fn mount_points_are_unescaped() {
+        assert_eq!(unescape_mount("a\\040b\\011c\\012d\\134e"), b"a b\tc\nd\\e");
+        assert_eq!(unescape_mount("\\04"), b"\\04");
+        assert_eq!(unescape_mount("\\048x"), b"\\048x");
+        assert_eq!(unescape_mount("\\377"), b"\xff");
+        assert_eq!(unescape_mount("plain"), b"plain");
+    }
+
+    #[test]
+    fn scan_tells_cards_from_usb_drives() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir(d.path().join("0123-4567")).unwrap();
+        std::fs::create_dir(d.path().join("STICK")).unwrap();
+        let sys = fake_sys(&[("179:97", "mmc/mmcblk1p1", &[])]);
+        let point = d.path().join("0123-4567");
+        let info = mount_line(40, "179:97", point.to_str().unwrap(), "/dev/mmcblk1p1");
+        let kinds: Vec<_> = scan_with(d.path(), &info, sys.path())
+            .into_iter()
+            .map(|v| (v.name, v.kind))
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                ("0123-4567".to_owned(), DriveKind::Card),
+                ("STICK".to_owned(), DriveKind::Usb)
+            ]
+        );
     }
 
     #[test]
@@ -340,6 +603,7 @@ mod tests {
                 id: "CARD".into(),
                 name: "CARD".into(),
                 mount_path: root.join("CARD"),
+                kind: DriveKind::Usb,
             })
         );
         assert_eq!(w.current().len(), 2);

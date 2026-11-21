@@ -8,6 +8,7 @@
 - WebDAV and FTPS servers work like SFTP and SMB: accounts from *Settings › Accounts* show up as locations (needs netvfs with WebDAV and FTPS).
 - Lautta never takes a server address, password or one-time code any more: every server is an account in *Settings › Accounts*. *Connect to server* and its recent servers are gone. Tapping a server found nearby offers to set it up as an account. Needs netvfs 2.0.
 - Settings is tidier: no previews in *View options* and *Browse page*, and the Settings list shows names only. *About* shows the Lautta icon and no longer lists permissions ([#117](https://github.com/muhnschein/lautta/issues/117)).
+- Memory cards and USB drives without a label show as "Memory card" or "USB drive" instead of a string of letters and digits ([#123](https://github.com/muhnschein/lautta/issues/123)).
 
 ## 1.0.0
 

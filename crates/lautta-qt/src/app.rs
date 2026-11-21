@@ -8,6 +8,7 @@ use lautta_core::mime::{category_of_name, extension_of, from_extension, viewer_f
 use lautta_core::settings::Settings;
 use lautta_core::transfer::scheduler::is_bridge_location;
 use lautta_core::trash::now_secs;
+use lautta_core::volumes::VolumeWords;
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
 use qmetaobject::{QPointer, QSingletonInit};
@@ -28,6 +29,8 @@ pub struct App {
     loadSettings: qt_method!(fn(&mut self, json: QString)),
     setting: qt_method!(fn(&self, key: QString) -> QVariant),
     setSetting: qt_method!(fn(&mut self, key: QString, value_json: QString) -> bool),
+    /// Names of volumes without label, translated.
+    setVolumeNames: qt_method!(fn(&self, card: QString, usb: QString)),
 
     childUri: qt_method!(fn(&self, parent: QString, name: QString) -> QString),
     parentUri: qt_method!(fn(&self, uri: QString) -> QString),
@@ -113,6 +116,15 @@ impl App {
                 log::warn!("tidying the Trash failed: {e}");
             }
         });
+    }
+
+    fn setVolumeNames(&self, card: QString, usb: QString) {
+        if let Some(core) = core() {
+            core.locations.set_volume_words(VolumeWords {
+                card: card.to_string(),
+                usb: usb.to_string(),
+            });
+        }
     }
 
     fn publish_settings(&mut self) {

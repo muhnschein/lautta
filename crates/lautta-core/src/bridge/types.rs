@@ -218,7 +218,7 @@ impl Drive {
 
     /// Folder below the UDisks2 media folder, as Settings mounts it (udisks'
     /// `calculate_mount_point`): label with `/` as `_`, else UUID, else `disk`. Also the name shown
-    /// while unmounted.
+    /// while unmounted, when labelled.
     pub fn mount_name(&self) -> String {
         if !self.label.is_empty() {
             self.label.replace('/', "_")
