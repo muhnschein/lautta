@@ -435,6 +435,42 @@ async fn a_failing_sink_ends_the_run_with_its_error() {
     }
 }
 
+/// Accepts every byte; only the last flush fails, as a sink that commits on flush can.
+struct FailingFlush;
+
+impl Sink for FailingFlush {}
+
+impl Write for FailingFlush {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Err(io::Error::from(io::ErrorKind::BrokenPipe))
+    }
+}
+
+#[tokio::test]
+async fn a_failing_last_flush_fails_the_run() {
+    let f = fixture();
+    for kind in [
+        ArchiveKind::Zip,
+        ArchiveKind::SevenZ,
+        ArchiveKind::TarXz,
+        ArchiveKind::TarGz,
+    ] {
+        let err = compress(
+            &f.resolver,
+            &[uri("mem", "proj")],
+            FailingFlush,
+            &CompressOptions::new(kind),
+        )
+        .await
+        .err();
+        assert_eq!(err.map(|e| e.kind), Some(ErrorKind::Io), "{kind:?}");
+    }
+}
+
 #[test]
 fn zip_writer_handles_unknown_sizes_and_forced_zip64() {
     for force in [false, true] {
@@ -622,6 +658,18 @@ async fn sevenz_round_trips_with_folders_links_modes_and_times() {
     assert_eq!(st.mode, Some(0o644));
     let dir = p.stat(&vp("proj/src"), false, Lane::Bulk).await.unwrap();
     assert_eq!(dir.mode, Some(0o755));
+    // 7-Zip on Windows reads the directory attribute, not the unix mode.
+    let raw =
+        sevenz_rust2::Archive::read(&mut io::Cursor::new(&bytes), &sevenz_rust2::Password::empty()).unwrap();
+    for e in &raw.files {
+        assert_eq!(
+            e.windows_attributes & SEVENZ_DIRECTORY != 0,
+            e.is_directory,
+            "{}",
+            e.name
+        );
+    }
+    assert!(raw.files.iter().any(|e| e.is_directory));
 }
 
 #[tokio::test]
@@ -664,13 +712,14 @@ async fn a_pipe_is_no_seekable_file() {
 
 #[test]
 fn sevenz_dictionary_fits_the_file() {
-    assert_eq!(sevenz_dict(Some(0)), SEVENZ_DICT_MIN);
-    assert_eq!(sevenz_dict(Some(100)), SEVENZ_DICT_MIN);
-    assert_eq!(sevenz_dict(Some(65_537)), 128 * 1024);
+    assert_eq!(sevenz_dict(Some(0)), 64 << 10);
+    assert_eq!(sevenz_dict(Some(100)), 64 << 10);
+    assert_eq!(sevenz_dict(Some(65_537)), 128 << 10);
     assert_eq!(sevenz_dict(Some(1 << 20)), 1 << 20);
-    assert_eq!(sevenz_dict(Some(9 << 20)), SEVENZ_DICT_MAX);
-    assert_eq!(sevenz_dict(Some(u64::MAX)), SEVENZ_DICT_MAX);
-    assert_eq!(sevenz_dict(None), SEVENZ_DICT_MAX);
+    assert_eq!(sevenz_dict(Some(5 << 20)), 8 << 20);
+    assert_eq!(sevenz_dict(Some(9 << 20)), 8 << 20);
+    assert_eq!(sevenz_dict(Some(u64::MAX)), 8 << 20);
+    assert_eq!(sevenz_dict(None), 8 << 20);
 }
 
 #[test]

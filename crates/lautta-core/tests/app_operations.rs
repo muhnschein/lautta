@@ -12,7 +12,7 @@ use lautta_core::provider::memory::MemoryProvider;
 use lautta_core::provider::no_progress;
 use lautta_core::settings::Settings;
 use lautta_core::transfer::TransferState;
-use lautta_core::{ErrorKind, Uri};
+use lautta_core::{Error, ErrorKind, Uri};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -819,6 +819,47 @@ async fn extract_follows_the_macos_rule() {
         0,
         "nothing merges into a folder that was there"
     );
+}
+
+#[tokio::test]
+async fn extract_never_merges_into_a_folder_made_meanwhile() {
+    let h = home().await;
+    write(&h.root.join("Documents/one.txt"), b"one");
+    write(&h.root.join("Documents/two.txt"), b"two");
+    let mem = Arc::new(MemoryProvider::new(Capabilities::with(&[cap::WRITE])));
+    h.core.locations.register(
+        Location::remote(
+            "nas",
+            LocationKind::Server {
+                provider: "sftp".into(),
+            },
+            "NAS",
+            None,
+        ),
+        mem.clone(),
+    );
+    h.core
+        .compress_to(
+            &[
+                uri("lautta://user-documents/one.txt"),
+                uri("lautta://user-documents/two.txt"),
+            ],
+            &uri("lautta://user-documents/"),
+            "many",
+            ArchiveKind::Zip,
+            no_progress(),
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await
+        .unwrap();
+    let bytes = std::fs::read(h.root.join("Documents/many.zip")).unwrap();
+    mem.add_file("many.zip", &bytes, 1_700_000_000_000);
+    let zip = uri("lautta://nas/many.zip");
+    // Not listed yet, there by the time it is made: a race, or a name differing only in case.
+    mem.fail_next("make_dir", "many", Error::kind(ErrorKind::AlreadyExists));
+    let err = h.core.extract(&zip).await.err().map(|e| e.kind);
+    assert_eq!(err, Some(ErrorKind::AlreadyExists));
+    assert_eq!(mem.paths(), ["many.zip"], "nothing lands in the other folder");
 }
 
 #[tokio::test]

@@ -509,16 +509,13 @@ impl Core {
                 let name = archive_folder_name(&archive.name().map(display_name).unwrap_or_default());
                 let name = free_dir_name(name.as_bytes(), &taken);
                 let dest = folder.join(&name)?;
-                let made = match target.make_dir(&dest.path, true).await {
-                    Ok(()) => true,
-                    Err(e) if e.kind == ErrorKind::AlreadyExists => false,
-                    Err(e) => return Err(e),
-                };
+                // Exclusive: a folder made meanwhile fails the extract rather than merging.
+                target.make_dir(&dest.path, true).await?;
                 let sources = many
                     .iter()
                     .map(|e| root.join(&e.name))
                     .collect::<Result<Vec<_>>>()?;
-                (sources, dest, made)
+                (sources, dest, true)
             }
         };
         let planned = self.plan(OperationKind::Copy, sources, dest.clone()).await;
