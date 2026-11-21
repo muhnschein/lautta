@@ -305,8 +305,8 @@ ApplicationWindow {
                     docs.refresh()
                 if (pageStack.busy || pageStack.depth !== 1 || win.scan !== null || docs.nameKind("Contract.pdf") !== "file")
                     break
-                if (JSON.stringify(win.ended) !== "[true]")
-                    return win.fail("scan ended as saved, once: " + JSON.stringify(win.ended))
+                if (JSON.stringify(win.ended) !== JSON.stringify([win.folder + "Contract.pdf"]))
+                    return win.fail("scan ended as saved, once, with its file: " + JSON.stringify(win.ended))
                 doc.uri = win.folder + "Contract.pdf"
                 win.next()
                 break
@@ -353,7 +353,7 @@ ApplicationWindow {
                     return win.fail("says why it failed: " + win.dialog.failure)
                 if (named(win.dialog, "nameField").text !== "Lost" || win.scan === null || win.scan.count !== 1 || win.scan.saving)
                     return win.fail("name and pages kept for another try")
-                if (JSON.stringify(win.ended) !== "[true]" || pageStack.depth !== 2)
+                if (win.ended.length !== 1 || pageStack.depth !== 2)
                     return win.fail("scan goes on: " + JSON.stringify(win.ended))
                 pageStack.pop()
                 win.next()
@@ -361,7 +361,7 @@ ApplicationWindow {
             case 19:
                 if (pageStack.busy || pageStack.depth !== 1 || win.scan !== null)
                     break
-                if (JSON.stringify(win.ended) !== "[true,false]")
+                if (win.ended.length !== 2 || win.ended[1] !== false)
                     return win.fail("Cancel drops the scan, once: " + JSON.stringify(win.ended))
                 win.reachedEnd = true
                 win.scenarioRunning = false

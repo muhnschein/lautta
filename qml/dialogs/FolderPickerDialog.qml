@@ -3,6 +3,7 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components"
+import "../components/directory"
 import "../components/ErrorText.js" as ErrorText
 
 Dialog {
@@ -14,6 +15,9 @@ Dialog {
     property bool requireWrite: true
     property string currentUri: startUri
     readonly property string selectedUri: currentUri
+    property string madeUri
+
+    signal flashed(string itemUri)
 
     function rootStatus(status, attention, name) {
         if (attention === "auth-failed")
@@ -21,6 +25,19 @@ Dialog {
         if (attention === "server-identity-changed")
             return qsTrId("lautta-attention-identity-title")
         return status === "offline" ? ErrorText.message("NetworkUnreachable", { "location": name }) : ""
+    }
+
+    // Waits for listing that follows `created`, as DirectoryView does.
+    function revealMade() {
+        if (!madeUri || folders.loading)
+            return
+        var made = madeUri
+        madeUri = ""
+        var index = folders.indexOf(made)
+        if (index < 0)
+            return
+        list.positionViewAtIndex(index, ListView.Contain)
+        flashed(made)
     }
 
     allowedOrientations: Orientation.All
@@ -36,6 +53,8 @@ Dialog {
 
         uri: dialog.currentUri
         foldersOnly: true
+        onCreated: dialog.madeUri = uri
+        onStateChanged: dialog.revealMade()
     }
 
     PathModel {
@@ -154,6 +173,12 @@ Dialog {
             width: list.width
             height: Theme.itemSizeSmall
             onClicked: dialog.currentUri = model.uri
+
+            NewItemFlash {
+                anchors.fill: parent
+                owner: dialog
+                uri: model.uri
+            }
 
             Row {
                 anchors {

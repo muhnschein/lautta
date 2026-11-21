@@ -31,8 +31,12 @@ Item {
     property string undoingUri
     property Item moreActionsPage
     property var toMove: []
+    property var made: []
+    // Bottom of the view under clipboard, selection or activity panel.
+    readonly property real coveredHeight: panelSpace.height
 
     signal openFolder(string uri)
+    signal flashed(string itemUri)
 
     function setSelection(state) {
         selectionMode = state.selecting
@@ -81,10 +85,10 @@ Item {
     }
 
     // Scan left or saved: its photos go.
-    function endScan(scan, saved) {
+    function endScan(scan, savedUri) {
         scan.destroy()
-        if (saved)
-            dir.refresh()
+        if (savedUri)
+            landed([savedUri], true)
     }
 
     function rename(info) {
@@ -163,7 +167,44 @@ Item {
         if (index < 0)
             return
         renamed.revealed = true
-        flickable.positionViewAtIndex(gridMode ? GridRows.rowOf(index, grid.columns) : index, ListView.Contain)
+        showIndex(index)
+        flashed(renamed.uri)
+    }
+
+    function showIndex(index) {
+        var f = flickable
+        var row = gridMode ? GridRows.rowOf(index, grid.columns) : index
+        f.positionViewAtIndex(row, ListView.Contain)
+        // Panels cover the view's bottom; footer leaves room to scroll a row above them.
+        var covered = f.indexAt(f.width / 2, f.contentY + f.height - coveredHeight)
+        if (coveredHeight > 0 && covered >= 0 && row >= covered)
+            f.contentY = Math.min(f.contentY + coveredHeight, f.originY + f.contentHeight - f.height)
+    }
+
+    // New items of this folder light up once the listing that follows has them; rows made before
+    // it may not stay. `relist`: nothing lists them anew otherwise.
+    function landed(uris, relist) {
+        var bare = function (u) { return u.replace(/\/+$/, "") }
+        var here = uris.filter(function (u) { return bare(App.parentUri(u)) === bare(view.uri) })
+        if (here.length === 0)
+            return
+        made = made.concat(here)
+        if (relist)
+            dir.refresh()
+    }
+
+    function revealMade() {
+        if (made.length === 0 || dir.loading)
+            return
+        var found = made.filter(function (u) { return dir.indexOf(u) >= 0 })
+        made = []
+        if (found.length === 0)
+            return
+        var rows = found.map(function (u) { return dir.indexOf(u) })
+        // Last first: first new item stays in view, as many after it as fit.
+        showIndex(Math.max.apply(null, rows))
+        showIndex(Math.min.apply(null, rows))
+        found.forEach(function (u) { view.flashed(u) })
     }
 
     // Rows come and go at the end only: a new count as model would start grid anew at its top.
@@ -215,6 +256,7 @@ Item {
     }
 
     function folderMade(folderUri) {
+        landed([folderUri], false)
         var items = toMove
         toMove = []
         if (items.length > 0)
@@ -439,7 +481,10 @@ Item {
                 view.undoingUri = ""
             view.notifyFailure(kind, message, view.pendingName)
         }
-        onStateChanged: view.revealRenamed()
+        onStateChanged: {
+            view.revealRenamed()
+            view.revealMade()
+        }
         onCountChanged: view.fitGridRows()
         onCreated: view.folderMade(uri)
         onCreateFailed: {
@@ -485,7 +530,13 @@ Item {
     // Server folder not watched: relisted when a transfer ends.
     Connections {
         target: Transfers
+        onLanded: view.landed(JSON.parse(urisJson), true)
         onFinished: if (view.visible && Qt.application.state === Qt.ApplicationActive) dir.revisit()
+    }
+
+    Connections {
+        target: Operations
+        onJobFinished: if (ok && resultUri) view.landed([resultUri], true)
     }
 
     Connections {
@@ -571,6 +622,12 @@ Item {
             RenameRemorse {
                 owner: view
                 row: item
+                uri: model.uri
+            }
+
+            NewItemFlash {
+                anchors.fill: parent
+                owner: view
                 uri: model.uri
             }
 
@@ -757,6 +814,12 @@ Item {
                     previewMono: model.textPreviewMono
                     typeIcon: model.typeIcon
                     highlighted: cell.highlighted || model.selected
+                }
+
+                NewItemFlash {
+                    anchors.fill: parent
+                    owner: view
+                    uri: model.uri
                 }
             }
 

@@ -152,7 +152,7 @@ Retired, never reuse: F-SRV-08 Server question, F-SRV-09 Connect to server, F-SR
 
 ### 3.3 Folder page
 
-- **F-DIR-01 Folder listing** — list with name, size/date line; folders show item counts. *Code:* `DirectoryView.qml`, `app_directory.rs`.
+- **F-DIR-01 Folder listing** — list with name, size/date line; folders show item counts; new items (made, pasted, extracted, compressed, scanned, renamed) scroll into view and light up briefly. *Code:* `DirectoryView.qml`, `app_directory.rs`.
 - **F-DIR-02 Grid view** — 3/4 per row, captions, thumbnails (audio: cover), text thumbs. *Entry:* View options › View.
 - **F-DIR-03 Grid hint** — "Shown as grid because most items are photos", Use list.
 - **F-DIR-04 Sort and filter** — sort by Name/Size/Modified/Type, Descending, Folders first, Show hidden files. *Entry:* View options (folder pulley or Settings).

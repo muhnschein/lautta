@@ -40,7 +40,7 @@ Page {
         target: page.started ? page.scan : null
         onSaved: {
             page.handedOver = true
-            page.owner.endScan(page.scan, true)
+            page.owner.endScan(page.scan, uri)
             pageStack.pop()
         }
         onFailed: page.failed(kind)

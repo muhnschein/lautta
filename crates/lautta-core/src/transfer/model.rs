@@ -473,6 +473,21 @@ impl Transfer {
     pub fn questions(&self) -> impl Iterator<Item = &TransferItem> {
         self.items.iter().filter(|i| i.state == ItemState::NeedsAnswer)
     }
+
+    /// What it added to folders: items put straight into `dest`, plus `dest` itself for an extract
+    /// (may be a folder it made).
+    pub fn landed(&self) -> Vec<Uri> {
+        let mut out: Vec<Uri> = self
+            .items
+            .iter()
+            .filter(|i| i.state == ItemState::Done && i.plan.dst.parent().as_ref() == Some(&self.dest))
+            .map(|i| i.plan.dst.clone())
+            .collect();
+        if self.kind == OperationKind::Extract {
+            out.push(self.dest.clone());
+        }
+        out
+    }
 }
 
 fn default_title(kind: OperationKind, count: u64) -> String {
@@ -510,6 +525,39 @@ mod tests {
             Failed => to == Queued,
             Completed | Canceled => false,
         }
+    }
+
+    #[test]
+    fn landed_lists_done_items_straight_in_the_destination() {
+        let made = |kind: OperationKind| {
+            let items = vec![
+                plan_item("/a", "/new.txt", Kind::File, 1),
+                plan_item("/b", "/Sub", Kind::Dir, 0),
+                plan_item("/b/c", "/Sub/inner.txt", Kind::File, 1),
+                plan_item("/d", "/skipped.txt", Kind::File, 1),
+                plan_item("/e", "/failed.txt", Kind::File, 1),
+                plan_item("/f", "/pending.txt", Kind::File, 1),
+            ];
+            let mut t = Transfer::from_plan(1, plan(kind, items), "t", TransferOptions::default(), 0);
+            for (seq, state) in [(0, ItemState::Done), (1, ItemState::Done), (2, ItemState::Done)] {
+                t.set_item_state(seq, state);
+            }
+            t.set_item_state(3, ItemState::Skipped);
+            t.set_item_state(4, ItemState::Failed);
+            t.landed().iter().map(Uri::to_string).collect::<Vec<_>>()
+        };
+        assert_eq!(
+            made(OperationKind::Copy),
+            ["lautta://b/new.txt", "lautta://b/Sub"]
+        );
+        assert_eq!(
+            made(OperationKind::Move),
+            ["lautta://b/new.txt", "lautta://b/Sub"]
+        );
+        assert_eq!(
+            made(OperationKind::Extract),
+            ["lautta://b/new.txt", "lautta://b/Sub", "lautta://b/"]
+        );
     }
 
     #[test]
