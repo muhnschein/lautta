@@ -82,7 +82,7 @@ ApplicationWindow {
         if (!expect(label, category + ": its text label"))
             return
         expect(text(label.text), category + ": its first lines: " + JSON.stringify(label.text))
-        expect((label.font.family === "monospace") === mono && (label.wrapMode === Text.NoWrap) === mono,
+        expect((label.font.family === App.monoFont) === mono && (label.wrapMode === Text.NoWrap) === mono,
                category + ": font " + label.font.family + ", wrap " + label.wrapMode)
         expect(label.font.pixelSize === Theme.fontSizeTiny, category + ": at caption size")
         expect(!named(icon, "fileGlyph").visible, category + ": no glyph under the text")

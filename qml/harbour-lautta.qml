@@ -27,8 +27,13 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        if (App.ready)
-            App.loadSettings(settingsStore.value)
+        if (!App.ready)
+            return
+        //% "Memory card"
+        App.setVolumeNames(qsTrId("lautta-browse-volume-card"),
+                           //% "USB drive"
+                           qsTrId("lautta-browse-volume-usb"))
+        App.loadSettings(settingsStore.value)
     }
 
     BrowseHandlers { }

@@ -22,7 +22,7 @@ if [ "${1:-}" != --in-sdk ]; then
     git clone -q https://github.com/sailfishos/sdk-harbour-rpmvalidator.git "$work/.validator"
     git -C "$work/.validator" checkout -q "$VALIDATOR_COMMIT"
     # SDK runs as mersdk (uid 100000): world-writable copy.
-    (cd "$root" && cp -r --parents RPMS tests/qml tests/translations tools/ci doc/harbour-warnings.md "$work/")
+    (cd "$root" && cp -r --parents RPMS tests/qml tests/translations tests/fonts tools/ci doc/harbour-warnings.md "$work/")
     chmod -R a+rwX "$work"
     # shellcheck disable=SC2086
     docker run --rm ${DOCKER_ARGS:-} -e TARGET -e SDK_IMAGE -v "$work:/home/mersdk/src" -w /home/mersdk/src \
@@ -156,6 +156,13 @@ if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal \
         /usr/bin/harbour-lautta --qml-check -T /usr/share/harbour-lautta/translations \
         "$PWD/tests/translations/tst_english_plurals.qml"; then
     fail "English plural forms on the target"
+fi
+# Plain `minimal` has no font database: app fonts load only with `enable_fonts`. Page tests above
+# keep it off (their layouts expect it).
+if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal:enable_fonts \
+        /usr/bin/harbour-lautta --qml-check -F /usr/share/harbour-lautta/fonts \
+        "$PWD/tests/fonts/tst_bundled_font.qml"; then
+    fail "bundled font on the target"
 fi
 rm -rf "$work" "$home" "$share"
 exit $status

@@ -13,6 +13,7 @@ use lautta_core::locations::LocationRegistry;
 use lautta_core::org::{RecentKind, RecentsFilter};
 use lautta_core::paths::AppPaths;
 use lautta_core::settings::{LocationPrefs, Settings};
+use lautta_core::volumes::VolumeWords;
 use lautta_core::{ErrorKind, Uri};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -507,15 +508,48 @@ async fn drives_show_as_volumes_until_they_are_mounted() {
     assert_eq!(
         volumes(&rows),
         [
-            volume("1234-ABCD", "unmounted", "sda1", "vol-1234-ABCD"),
             volume("CARD", "unmounted", "mmcblk1p1", "vol-CARD"),
             volume("SD", "ready", "", "vol-SD"),
+            volume("USB drive", "unmounted", "sda1", "vol-1234-ABCD"),
         ]
     );
     let vols = of(&rows, "volumes");
-    assert_eq!(vols[0].icon, "image://theme/icon-m-usb");
-    assert_eq!(vols[1].icon, "image://theme/icon-m-sd-card");
-    assert_eq!((vols[1].uri.as_str(), vols[1].total, vols[1].free), ("", 64, -1));
+    assert_eq!(vols[2].icon, "image://theme/icon-m-usb");
+    assert_eq!(vols[0].icon, "image://theme/icon-m-sd-card");
+    assert_eq!((vols[0].uri.as_str(), vols[0].total, vols[0].free), ("", 64, -1));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_unlabelled_drive_is_named_by_kind_before_and_after_mounting() {
+    let (_fake, e) = drives_env().await;
+    let client = e.core.bridge.clone().unwrap();
+    e.core.locations.set_volume_words(VolumeWords {
+        card: "Card".into(),
+        usb: "Stick".into(),
+    });
+    let rows = e.core.browse_rows().await;
+    assert_eq!(
+        volumes(&rows)[2],
+        volume("Stick", "unmounted", "sda1", "vol-1234-ABCD")
+    );
+    let root = e.core.mount_drive("sda1").await.unwrap();
+    assert_eq!(
+        root.to_string(),
+        "lautta://vol-1234-ABCD/",
+        "id from the mount folder"
+    );
+    eventually("the mount", || client.drives()[0].mount_point.is_some()).await;
+    let rows = e.core.browse_rows().await;
+    assert_eq!(
+        volumes(&rows)[2],
+        volume("Stick", "ready", "sda1", "vol-1234-ABCD")
+    );
+    assert_eq!(of(&rows, "volumes")[2].icon, "image://theme/icon-m-usb");
+    assert_eq!(e.core.place_of(&root), "Stick");
+    assert_eq!(
+        e.core.place_of(&uri("lautta://vol-1234-ABCD/DCIM")),
+        "Stick › DCIM"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -528,10 +562,10 @@ async fn a_mounted_drive_opens_and_unmounts() {
     eventually("the mount", || client.drives()[1].mount_point.is_some()).await;
     let rows = e.core.browse_rows().await;
     assert_eq!(
-        volumes(&rows)[1],
+        volumes(&rows)[0],
         volume("CARD", "ready", "mmcblk1p1", "vol-CARD")
     );
-    let card = of(&rows, "volumes")[1];
+    let card = of(&rows, "volumes")[0];
     assert_eq!(card.uri, "lautta://vol-CARD/");
     assert!(card.total > 0, "the space of the mounted volume");
 
@@ -541,7 +575,7 @@ async fn a_mounted_drive_opens_and_unmounts() {
     eventually("the unmount", || client.drives()[1].mount_point.is_none()).await;
     let rows = e.core.browse_rows().await;
     assert_eq!(
-        volumes(&rows)[1],
+        volumes(&rows)[0],
         volume("CARD", "unmounted", "mmcblk1p1", "vol-CARD")
     );
 
@@ -565,10 +599,10 @@ async fn a_locked_drive_is_a_locked_volume_until_it_is_unlocked() {
     assert_eq!(
         volumes(&rows),
         [
-            volume("1234-ABCD", "unmounted", "sda1", "vol-1234-ABCD"),
-            volume("5c1e0a4f", "locked", "mmcblk1p2", "vol-5c1e0a4f"),
             volume("CARD", "unmounted", "mmcblk1p1", "vol-CARD"),
+            volume("Memory card", "locked", "mmcblk1p2", "vol-5c1e0a4f"),
             volume("SD", "ready", "", "vol-SD"),
+            volume("USB drive", "unmounted", "sda1", "vol-1234-ABCD"),
         ]
     );
     let vault = of(&rows, "volumes")[1];
@@ -589,10 +623,10 @@ async fn a_locked_drive_is_a_locked_volume_until_it_is_unlocked() {
     assert_eq!(
         volumes(&rows),
         [
-            volume("1234-ABCD", "unmounted", "sda1", "vol-1234-ABCD"),
             volume("CARD", "unmounted", "mmcblk1p1", "vol-CARD"),
             volume("SD", "ready", "", "vol-SD"),
             volume("SECRET", "unmounted", "dm_2d0", "vol-SECRET"),
+            volume("USB drive", "unmounted", "sda1", "vol-1234-ABCD"),
         ]
     );
 }
@@ -612,7 +646,8 @@ async fn without_drives_the_volumes_are_as_before() {
     for e in [standalone, older] {
         let rows = e.core.browse_rows().await;
         assert_eq!(volumes(&rows), [volume("SD", "ready", "", "vol-SD")]);
-        assert_eq!(of(&rows, "volumes")[0].icon, "image://theme/icon-m-sd-card");
+        // Test media folder is no mount: kind unknown.
+        assert_eq!(of(&rows, "volumes")[0].icon, "image://theme/icon-m-usb");
         assert!(e.core.mount_drive("mmcblk1p1").await.is_err());
     }
 }

@@ -2,6 +2,7 @@
 // `mimeType`.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import Lautta 1.0
 import Nemo.Thumbnailer 1.0
 import "FileIcons.js" as FileIcons
 
@@ -126,7 +127,7 @@ Item {
                 wrapMode: icon.previewMono ? Text.NoWrap : Text.Wrap
                 clip: true
                 font.pixelSize: Theme.fontSizeTiny
-                font.family: icon.previewMono ? "monospace" : Theme.fontFamily
+                font.family: icon.previewMono ? App.monoFont : Theme.fontFamily
                 color: icon.highlighted ? Theme.highlightColor : Theme.secondaryColor
             }
             OpacityRampEffect {

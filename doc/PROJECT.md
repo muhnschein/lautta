@@ -152,5 +152,6 @@ Lautta is LGPL-2.1-or-later. Bundled third-party parts keep their own licence an
 
 - `third_party/qttypes`: patched crate, changes in its `LAUTTA.md`.
 - `qml/components/viewers/gallery/`: Jolla Gallery's image viewer, BSD-3-Clause (`BSD-3-Clause.txt`, provenance in `LAUTTA.md`).
+- `fonts/`: JetBrains Mono, unmodified, SIL OFL 1.1 (`OFL.txt`, provenance in `README.md`); all monospace text.
 - `qml/icons/types/`: JetBrains IntelliJ Platform file-type icons, Apache-2.0 (`LICENSE-Apache-2.0.txt`, provenance in `README.md`); `rust.svg` is Lautta's own.
 - Text highlighting: `syntect` 5.3 (MIT, © Tristan Hume, Keith Hall, Google Inc and contributors) embeds its default grammar set (`default_newlines.packdump`), made from the Sublime Text grammars of github.com/sublimehq/Packages, which that repository licenses as "Permission to copy, use, modify, sell and distribute this software is granted. This software is provided "as is" without express or implied warranty, and with no claim as to its suitability for any purpose", except files that carry a licence of their own. Crates it links in: `fancy-regex`, `bincode` 1 (MIT), `regex-automata`, `regex-syntax`, `bit-set`, `bit-vec`, `fnv` (MIT or Apache-2.0).

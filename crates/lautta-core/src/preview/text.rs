@@ -159,12 +159,18 @@ pub fn text_kind(name: &[u8]) -> TextKind {
         return TextKind::Code(lang);
     }
     match ext {
-        "md" | "markdown" => TextKind::Markdown,
+        e if crate::mime::is_markdown_extension(e) => TextKind::Markdown,
         "log" => TextKind::Log,
         e if CONFIG.contains(&e) => TextKind::Config,
         e if DATA.contains(&e) => TextKind::Data,
         _ => TextKind::Plain,
     }
+}
+
+/// `.txt` other than build files: reading font, no line numbers.
+pub fn reads_as_prose(name: &[u8]) -> bool {
+    let lower = String::from_utf8_lossy(name).to_lowercase();
+    lower.ends_with(".txt") && text_kind(name) == TextKind::Plain
 }
 
 #[cfg(test)]
@@ -250,11 +256,21 @@ mod tests {
     }
 
     #[test]
+    fn only_txt_files_read_as_prose() {
+        assert!(reads_as_prose(b"notes.txt") && reads_as_prose(b"NOTES.TXT"));
+        assert!(!reads_as_prose(b"CMakeLists.txt"), "build file");
+        for name in [&b"notes.log"[..], b"README", b"a.md", b"a.txt.rs", b"txt"] {
+            assert!(!reads_as_prose(name), "{}", String::from_utf8_lossy(name));
+        }
+    }
+
+    #[test]
     fn kinds_by_name() {
         assert_eq!(text_kind(b"main.RS"), TextKind::Code("Rust"));
         assert_eq!(text_kind(b"Makefile"), TextKind::Code("Make"));
         assert_eq!(text_kind(b"notes.txt"), TextKind::Plain);
         assert_eq!(text_kind(b"README.md"), TextKind::Markdown);
+        assert_eq!(text_kind(b"notes.mdwn"), TextKind::Markdown);
         assert_eq!(text_kind(b"a.log"), TextKind::Log);
         assert_eq!(text_kind(b"a.yaml"), TextKind::Config);
         assert_eq!(text_kind(b"a.json"), TextKind::Data);
