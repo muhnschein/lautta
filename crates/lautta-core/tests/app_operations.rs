@@ -109,19 +109,15 @@ async fn compress_local_then_extract_round_trip() {
         .collect();
     assert!(parts.is_empty(), "no partial files stay");
 
-    let info = h.core.archive_info(&zip).await.unwrap();
-    assert_eq!((info.files, info.dirs, info.bytes), (2, 2, 9));
-    assert_eq!(info.folder_name, "bundle");
-
-    let into = uri("lautta://user-documents/bundle");
-    let started = h.core.extract(&zip, &into).await.unwrap();
+    let started = h.core.extract(&zip).await.unwrap();
     finish(&h, started).await;
     assert_eq!(
-        std::fs::read(h.root.join("Documents/bundle/src/a.txt")).unwrap(),
-        b"alpha"
+        std::fs::read(h.root.join("Downloads/src/a.txt")).unwrap(),
+        b"alpha",
+        "one top folder comes out as is, next to the archive"
     );
     assert_eq!(
-        std::fs::read(h.root.join("Documents/bundle/src/sub/b.txt")).unwrap(),
+        std::fs::read(h.root.join("Downloads/src/sub/b.txt")).unwrap(),
         b"beta"
     );
 }
@@ -617,10 +613,7 @@ async fn empty_archives_are_refused_and_display_paths() {
     write(&h.root.join("Documents/not-an-archive.zip"), b"junk");
     let err = h
         .core
-        .extract(
-            &uri("lautta://user-documents/not-an-archive.zip"),
-            &uri("lautta://user-documents/out"),
-        )
+        .extract(&uri("lautta://user-documents/not-an-archive.zip"))
         .await;
     assert!(err.is_err());
 }
@@ -647,12 +640,7 @@ async fn extract_runs_as_extract_titled_by_its_archive() {
         async move { core.engine.wait_for(id, |s| s.state.is_finished()).await.unwrap() }
     };
 
-    let Started::Transfer(id) = h
-        .core
-        .extract(&zip, &uri("lautta://user-documents/small"))
-        .await
-        .unwrap()
-    else {
+    let Started::Transfer(id) = h.core.extract(&zip).await.unwrap() else {
         panic!("a small extract starts at once");
     };
     let s = done(id).await;
@@ -661,12 +649,13 @@ async fn extract_runs_as_extract_titled_by_its_archive() {
         (TransferState::Completed, OperationKind::Extract, "bundle.zip")
     );
 
+    std::fs::create_dir(h.root.join("Documents/copied")).unwrap();
     let Started::Transfer(id) = h
         .core
         .copy_or_move(
             OperationKind::Copy,
             vec![uri("lautta://user-documents/src")],
-            uri("lautta://user-downloads/"),
+            uri("lautta://user-documents/copied"),
         )
         .await
         .unwrap()
@@ -679,23 +668,23 @@ async fn extract_runs_as_extract_titled_by_its_archive() {
         large_op_items: 1,
         ..Settings::default()
     });
-    let Started::NeedsSummary(plan) = h
-        .core
-        .extract(&zip, &uri("lautta://user-documents/large"))
-        .await
-        .unwrap()
-    else {
+    let Started::NeedsSummary(plan) = h.core.extract(&zip).await.unwrap() else {
         panic!("a large extract needs the summary");
     };
     assert_eq!(plan.kind, OperationKind::Extract);
     assert_eq!(h.core.plan_summary(&plan).await.kind, "extract");
+    assert_eq!(
+        h.core.plan_summary(&plan).await.conflicts,
+        0,
+        "a taken name is no question"
+    );
     let s = done(h.core.start_plan(*plan).await.unwrap()).await;
     assert_eq!(
         (s.state, s.kind, s.title.as_str()),
         (TransferState::Completed, OperationKind::Extract, "bundle.zip")
     );
     assert_eq!(
-        std::fs::read(h.root.join("Documents/large/src/b.txt")).unwrap(),
+        std::fs::read(h.root.join("Downloads/src 2/b.txt")).unwrap(),
         b"beta"
     );
 }
@@ -703,14 +692,16 @@ async fn extract_runs_as_extract_titled_by_its_archive() {
 #[tokio::test]
 async fn extract_summary_left_unstarted_leaves_no_folder() {
     let h = home().await;
-    write(&h.root.join("Documents/src/a.txt"), b"alpha");
-    write(&h.root.join("Documents/src/b.txt"), b"beta");
-    std::fs::create_dir_all(h.root.join("Documents/kept")).unwrap();
+    write(&h.root.join("Documents/a.txt"), b"alpha");
+    write(&h.root.join("Documents/b.txt"), b"beta");
     let zip = h
         .core
         .compress_to(
-            &[uri("lautta://user-documents/src")],
-            &uri("lautta://user-downloads/"),
+            &[
+                uri("lautta://user-documents/a.txt"),
+                uri("lautta://user-documents/b.txt"),
+            ],
+            &uri("lautta://user-documents/"),
             "bundle",
             ArchiveKind::Zip,
             no_progress(),
@@ -722,25 +713,21 @@ async fn extract_summary_left_unstarted_leaves_no_folder() {
         large_op_items: 1,
         ..Settings::default()
     });
-    let summary = |into: &'static str| {
+    let summary = || {
         let (core, zip) = (h.core.clone(), zip.clone());
         async move {
-            match core.extract(&zip, &uri(into)).await.unwrap() {
+            match core.extract(&zip).await.unwrap() {
                 Started::NeedsSummary(plan) => *plan,
                 Started::Transfer(_) => panic!("a large extract needs the summary"),
             }
         }
     };
 
-    let new_folder = summary("lautta://user-documents/bundle").await;
-    summary("lautta://user-documents/kept").await;
+    let new_folder = summary().await;
+    assert_eq!(new_folder.destination, uri("lautta://user-documents/bundle"));
     assert!(
         !h.root.join("Documents/bundle").exists(),
         "no folder while the summary is open, none after Cancel"
-    );
-    assert!(
-        h.root.join("Documents/kept").is_dir(),
-        "a folder that was there stays"
     );
     assert!(
         h.core.plan_summary(&new_folder).await.free_bytes.is_some(),
@@ -758,7 +745,7 @@ async fn extract_summary_left_unstarted_leaves_no_folder() {
         .unwrap();
     assert_eq!(s.state, TransferState::Completed, "{s:?}");
     assert_eq!(
-        std::fs::read(h.root.join("Documents/bundle/src/a.txt")).unwrap(),
+        std::fs::read(h.root.join("Documents/bundle/a.txt")).unwrap(),
         b"alpha"
     );
     let mut stale = false;
@@ -769,4 +756,145 @@ async fn extract_summary_left_unstarted_leaves_no_folder() {
         .await
         .unwrap();
     assert!(!stale, "cached listing of the parent shows the made folder");
+
+    let numbered = summary().await;
+    assert_eq!(numbered.destination, uri("lautta://user-documents/bundle 2"));
+    assert!(!h.root.join("Documents/bundle 2").exists());
+    assert_eq!(
+        std::fs::read(h.root.join("Documents/bundle/b.txt")).unwrap(),
+        b"beta",
+        "the folder that was there stays as it was"
+    );
+}
+
+#[tokio::test]
+async fn extract_follows_the_macos_rule() {
+    let h = home().await;
+    write(&h.root.join("Documents/one.txt"), b"one");
+    write(&h.root.join("Documents/two.txt"), b"two");
+    let docs = uri("lautta://user-documents/");
+    let pack = |sources: Vec<&'static str>, name: &'static str| {
+        let (core, docs) = (h.core.clone(), docs.clone());
+        async move {
+            let sources: Vec<Uri> = sources.into_iter().map(uri).collect();
+            core.compress_to(
+                &sources,
+                &docs,
+                name,
+                ArchiveKind::Zip,
+                no_progress(),
+                Arc::new(AtomicBool::new(false)),
+            )
+            .await
+            .unwrap()
+        }
+    };
+    let file_zip = pack(vec!["lautta://user-documents/one.txt"], "file").await;
+    let many_zip = pack(
+        vec![
+            "lautta://user-documents/one.txt",
+            "lautta://user-documents/two.txt",
+        ],
+        "many",
+    )
+    .await;
+
+    finish(&h, h.core.extract(&file_zip).await.unwrap()).await;
+    assert_eq!(
+        std::fs::read(h.root.join("Documents/one 2.txt")).unwrap(),
+        b"one",
+        "one top file comes out as is; taken name gets a number"
+    );
+    assert_eq!(std::fs::read(h.root.join("Documents/one.txt")).unwrap(), b"one");
+
+    std::fs::create_dir(h.root.join("Documents/many")).unwrap();
+    finish(&h, h.core.extract(&many_zip).await.unwrap()).await;
+    assert_eq!(
+        std::fs::read(h.root.join("Documents/many 2/two.txt")).unwrap(),
+        b"two",
+        "several top items go in a new folder named after the archive"
+    );
+    assert_eq!(
+        std::fs::read_dir(h.root.join("Documents/many")).unwrap().count(),
+        0,
+        "nothing merges into a folder that was there"
+    );
+}
+
+#[tokio::test]
+async fn extract_needs_a_folder_it_may_add_to() {
+    let h = home().await;
+    write(&h.root.join("Documents/inner/x.txt"), b"x");
+    let inner = h
+        .core
+        .compress_to(
+            &[uri("lautta://user-documents/inner")],
+            &uri("lautta://user-documents/"),
+            "inner",
+            ArchiveKind::Zip,
+            no_progress(),
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await
+        .unwrap();
+    let outer = h
+        .core
+        .compress_to(
+            &[inner],
+            &uri("lautta://user-documents/"),
+            "outer",
+            ArchiveKind::Zip,
+            no_progress(),
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await
+        .unwrap();
+    let location = h.core.open_archive(&outer).await.unwrap();
+    let nested = Uri::root(location).join(b"inner.zip").unwrap();
+    let err = h.core.extract(&nested).await.unwrap_err();
+    assert_eq!(err.kind, ErrorKind::ReadOnlyFilesystem, "{err:?}");
+}
+
+#[tokio::test]
+async fn compress_and_extract_need_a_folder_whose_permissions_allow_adding() {
+    use std::os::unix::fs::PermissionsExt;
+    let h = home().await;
+    write(&h.root.join("Documents/locked/a.txt"), b"a");
+    let locked = uri("lautta://user-documents/locked");
+    let zip = h
+        .core
+        .compress_to(
+            &[uri("lautta://user-documents/locked/a.txt")],
+            &locked,
+            "a",
+            ArchiveKind::Zip,
+            no_progress(),
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await
+        .unwrap();
+    let dir = h.root.join("Documents/locked");
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+    // root passes every permission check.
+    let allowed = lautta_core::sys::effective_ids().0 == 0;
+    let may_add = h.core.may_add_to(&locked);
+    let compressed = h
+        .core
+        .compress_to(
+            std::slice::from_ref(&zip),
+            &locked,
+            "b",
+            ArchiveKind::Zip,
+            no_progress(),
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await
+        .map_err(|e| e.kind);
+    let extracted = h.core.extract(&zip).await.map(|_| ()).map_err(|e| e.kind);
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(h.core.may_add_to(&uri("lautta://user-documents/")));
+    assert_eq!(may_add, allowed);
+    let refused = (!allowed).then_some(ErrorKind::ReadOnlyFilesystem);
+    assert_eq!(compressed.err(), refused);
+    assert_eq!(extracted.err(), refused);
 }

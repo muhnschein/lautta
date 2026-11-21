@@ -31,31 +31,50 @@ Item {
              "read-only folder, folder")
         same(ids(Actions.menu({ "isDir": true, "changeable": false, "readable": false })), ["more"],
              "add only: nothing to read; Add to favourites stays")
-        same(ids(Actions.more({ "isDir": true, "changeable": false, "readable": false })), ["favourite"],
+        same(ids(Actions.more({ "isDir": true, "changeable": false, "readable": false, "writable": true })), ["favourite"],
              "add only: no Compress")
         same(ids(Actions.menu({ "isDir": false, "changeable": true })),
              ["share", "copy", "cut", "rename", "delete", "more"], "readable unless said")
     }
 
     function testMore() {
-        var ctxs = [{ "isDir": false, "changeable": true }, { "isDir": true, "changeable": true },
-                    { "isDir": false, "changeable": false }, { "isDir": true, "changeable": false }]
+        var ctxs = [{ "isDir": false, "changeable": true, "writable": true }, { "isDir": true, "changeable": true, "writable": true },
+                    { "isDir": false, "changeable": false, "writable": true }, { "isDir": true, "changeable": false, "writable": false }]
+        var want = [["favourite", "compress", "moveToNewFolder"], ["favourite", "compress", "moveToNewFolder"],
+                    ["favourite", "compress"], ["favourite"]]
         for (var i = 0; i < ctxs.length; ++i) {
             var menu = ids(Actions.menu(ctxs[i]))
             check(menu[menu.length - 1] === "more", "More actions is the last row: " + JSON.stringify(ctxs[i]))
-            same(ids(Actions.more(ctxs[i])),
-                 ctxs[i].changeable ? ["favourite", "compress", "moveToNewFolder"] : ["favourite", "compress"],
-                 "More actions: " + JSON.stringify(ctxs[i]))
+            same(ids(Actions.more(ctxs[i])), want[i], "More actions: " + JSON.stringify(ctxs[i]))
         }
-        same(ids(Actions.more({ "isDir": false })), ["favourite", "compress"], "More actions of the image viewer")
+        same(ids(Actions.more({ "isDir": false, "writable": true })), ["favourite", "compress"], "More actions of the image viewer")
+        same(ids(Actions.more({ "isDir": false, "writable": false })), ["favourite"], "image viewer, folder takes no files")
+        same(ids(Actions.more({ "isDir": false })), ["favourite"], "no Compress unless the folder takes files")
+    }
+
+    function testExtract() {
+        var file = { "isDir": false, "changeable": true, "readable": true, "writable": true, "archive": true }
+        same(ids(Actions.more(file)), ["favourite", "extract", "compress", "moveToNewFolder"],
+             "a compressed file: Extract before Compress")
+        same(ids(Actions.menu(file)), ["share", "copy", "cut", "rename", "delete", "more"], "Extract only in More actions")
+        same(ids(Actions.more({ "isDir": false, "changeable": false, "readable": true, "writable": true, "archive": true })),
+             ["favourite", "extract", "compress"], "read and add: Extract stays")
+        same(ids(Actions.more({ "isDir": false, "changeable": false, "readable": true, "writable": false, "archive": true })),
+             ["favourite"], "folder takes no files: no Extract")
+        same(ids(Actions.more({ "isDir": false, "changeable": false, "readable": false, "writable": true, "archive": true })),
+             ["favourite"], "add only: nothing to read, no Extract")
+        same(ids(Actions.more({ "isDir": false, "changeable": true, "readable": true, "writable": true, "archive": false })),
+             ["favourite", "compress", "moveToNewFolder"], "other files: no Extract")
+        same(Actions.icon("extract"), "file-folder", "Extract: the folder glyph")
+        same(Actions.text("extract"), "lautta-dir-act-extract", "Extract")
     }
 
     function testIcons() {
         var favourite = "image://theme/icon-m-favorite"
-        same(Actions.more({ "isDir": false, "changeable": true }).map(function(r) { return r.icon }),
+        same(Actions.more({ "isDir": false, "changeable": true, "writable": true }).map(function(r) { return r.icon }),
              [favourite, "file-archive", "file-folder"], "More actions icons, writable folder")
-        same(Actions.more({ "isDir": true, "changeable": false }).map(function(r) { return r.icon }),
-             [favourite, "file-archive"], "More actions icons, read-only folder")
+        same(Actions.more({ "isDir": true, "changeable": false, "writable": true }).map(function(r) { return r.icon }),
+             [favourite, "file-archive"], "More actions icons, read and add")
         same(Actions.icon("moveToNewFolder"), "file-folder", "Move to new folder: the folder glyph")
         same(Actions.icon("favourite"), "image://theme/icon-m-favorite", "Add to favourites")
         same(Actions.icon("rename"), "image://theme/icon-m-edit", "Rename, a row for the selection's one item")
@@ -64,7 +83,8 @@ Item {
     }
 
     function testText() {
-        var entries = Actions.menu({ "isDir": false, "changeable": true }).concat(Actions.more({ "isDir": false, "changeable": true }))
+        var full = { "isDir": false, "changeable": true, "writable": true, "archive": true }
+        var entries = Actions.menu(full).concat(Actions.more(full))
         for (var i = 0; i < entries.length; ++i)
             check(entries[i].text.indexOf("lautta-dir-act-") === 0, entries[i].id + " has a translated text")
         same(Actions.text("more"), "lautta-dir-act-more", "More actions")
@@ -75,7 +95,7 @@ Item {
     }
 
     function testGone() {
-        var gone = ["info", "open_with", "copy_to", "move_to", "download", "upload_to", "extract", "open_remote", "select"]
+        var gone = ["info", "open_with", "copy_to", "move_to", "download", "upload_to", "open_remote", "select"]
         var ctxs = [{ "isDir": false, "changeable": true }, { "isDir": true, "changeable": true }]
         for (var i = 0; i < gone.length; ++i) {
             for (var j = 0; j < ctxs.length; ++j)
@@ -87,6 +107,7 @@ Item {
     Component.onCompleted: {
         testMenu()
         testMore()
+        testExtract()
         testIcons()
         testText()
         testGone()

@@ -47,8 +47,8 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-ITM-04 Rename | S | FL-11 | SCR-03, SCR-07, SCR-14 |
 | F-ITM-05 Delete | S | FL-06, FL-12 | SCR-03, SCR-07, SCR-15, SCR-27, SCR-28 |
 | F-ITM-06 Add to favourites | S | FL-03, FL-22 | SCR-01, SCR-03, SCR-05, SCR-40 |
-| F-ITM-07 Compress | S | FL-16 | SCR-07, SCR-08, SCR-16 |
-| F-ITM-08 Move to new folder | S | FL-16 | SCR-07, SCR-08, SCR-16 |
+| F-ITM-07 Compress | S | FL-16 | SCR-03, SCR-07, SCR-08, SCR-16 |
+| F-ITM-08 Move to new folder | S | FL-16 | SCR-03, SCR-07, SCR-08, SCR-16 |
 | F-ITM-09 Open with | S | FL-06, FL-24 | SCR-03, SCR-07, SCR-09, SCR-27, SCR-28, SCR-37 |
 | F-SEL-01 Selection mode | S | FL-15 | SCR-06, SCR-08, SCR-09 |
 | F-SEL-02 Drag-select | S | FL-15 | SCR-06, SCR-08, SCR-09 |
@@ -58,8 +58,8 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-OPS-02 Plan summary | S | FL-14 | SCR-03, SCR-06, SCR-07, SCR-10, SCR-19, SCR-20, SCR-23 |
 | F-OPS-03 Conflict resolution | S | FL-14, FL-37 | SCR-03, SCR-06, SCR-07, SCR-10, SCR-11, SCR-19, SCR-20, SCR-21, SCR-23 |
 | F-OPS-04 Not-enough-space check | S | FL-14 | SCR-03, SCR-06, SCR-07, SCR-10, SCR-19, SCR-20, SCR-23 |
-| F-OPS-05 Extract | S | FL-17 | SCR-03, SCR-11, SCR-17 |
-| F-OPS-06 Archive location | S | FL-17 | SCR-03, SCR-11, SCR-17 |
+| F-OPS-05 Extract | S | FL-17 | SCR-03, SCR-06, SCR-08 |
+| F-OPS-06 Archive location | S | FL-17 | SCR-03, SCR-06, SCR-08 |
 | F-OPS-07 Background notice | S | FL-13 | SCR-03, SCR-06, SCR-07, SCR-10 |
 | F-XFR-01 Activity page | S | FL-18 | SCR-06, SCR-21, SCR-22 |
 | F-XFR-02 Task row menu | S | FL-18 | SCR-06, SCR-21, SCR-22 |
@@ -115,21 +115,20 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 |---|---|
 | SCR-01 Browse | FL-01, FL-02, FL-22, FL-26, FL-27, FL-28, FL-29, FL-30, FL-33, FL-36 |
 | SCR-02 Start error | FL-01 |
-| SCR-03 Folder page (list) | FL-02, FL-03, FL-06, FL-10, FL-11, FL-12, FL-13, FL-14, FL-17, FL-23, FL-25, FL-29, FL-30, FL-37 |
+| SCR-03 Folder page (list) | FL-02, FL-03, FL-06, FL-10, FL-11, FL-12, FL-13, FL-14, FL-16, FL-17, FL-23, FL-25, FL-29, FL-30, FL-37 |
 | SCR-04 Folder page (grid) | FL-04, FL-32 |
 | SCR-05 Path menu | FL-03, FL-22 |
-| SCR-06 Folder pulley | FL-04, FL-10, FL-13, FL-14, FL-15, FL-18, FL-19, FL-32, FL-37 |
+| SCR-06 Folder pulley | FL-04, FL-10, FL-13, FL-14, FL-15, FL-17, FL-18, FL-19, FL-32, FL-37 |
 | SCR-07 Item context menu | FL-11, FL-12, FL-13, FL-14, FL-16, FL-24, FL-37 |
-| SCR-08 More actions | FL-15, FL-16 |
+| SCR-08 More actions | FL-15, FL-16, FL-17 |
 | SCR-09 Selection mode + selection bar | FL-15, FL-24 |
 | SCR-10 Clipboard panel | FL-13, FL-14, FL-32 |
-| SCR-11 Folder states (empty, no access, error, offline, large, grid hint, archive banner) | FL-05, FL-10, FL-17, FL-33, FL-37 |
+| SCR-11 Folder states (empty, no access, error, offline, large, grid hint) | FL-05, FL-10, FL-33, FL-37 |
 | SCR-12 Add | FL-10, FL-23 |
 | SCR-13 New folder | FL-10 |
 | SCR-14 Rename | FL-11 |
 | SCR-15 Delete permanently | FL-12 |
 | SCR-16 Compress | FL-16 |
-| SCR-17 Extract | FL-17 |
 | SCR-18 Folder picker | FL-25 |
 | SCR-19 Plan summary | FL-14 |
 | SCR-20 Conflict | FL-14, FL-35 |

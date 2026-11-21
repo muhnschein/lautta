@@ -117,6 +117,17 @@ impl Core {
         }
     }
 
+    /// Lautta may add files to folder `dir`: its place allows it and, on this device, so do the
+    /// folder's permissions.
+    pub fn may_add_to(&self, dir: &Uri) -> bool {
+        self.provider(&dir.location)
+            .is_ok_and(|p| p.capabilities().writable())
+            && self
+                .locations
+                .to_local_path(dir)
+                .is_none_or(|path| crate::sys::can_change(&path))
+    }
+
     pub fn path_steps(&self, uri: &Uri) -> Vec<PathStep> {
         let root_name = self.location(&uri.location).map(|l| l.name).unwrap_or_default();
         let mut steps = vec![PathStep {

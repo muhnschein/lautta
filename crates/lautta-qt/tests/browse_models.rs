@@ -12,6 +12,7 @@ use lautta_core::org::RecentKind;
 use lautta_core::paths::AppPaths;
 use lautta_core::Uri;
 use qmetaobject::*;
+use std::os::unix::fs::PermissionsExt;
 use std::sync::Mutex;
 
 static FAKE: Mutex<Option<FakeBridge>> = Mutex::new(None);
@@ -41,6 +42,7 @@ struct FakeWorld {
     addDrive: qt_method!(fn(&self, id: QString, label: QString, locked: bool)),
     record: qt_method!(fn(&self, uri: QString, name: QString, kind: QString)),
     putFile: qt_method!(fn(&self, location: QString, path: QString)),
+    superuser: qt_method!(fn(&self) -> bool),
 }
 
 impl FakeWorld {
@@ -122,6 +124,11 @@ impl FakeWorld {
     fn putFile(&self, location: QString, path: QString) {
         fake().put_file(&location.to_string(), path.to_string().as_bytes(), b"x");
     }
+
+    /// Root may add files to any folder whatever its permissions.
+    fn superuser(&self) -> bool {
+        lautta_core::sys::effective_ids().0 == 0
+    }
 }
 
 impl QSingletonInit for FakeWorld {
@@ -138,6 +145,12 @@ fn browse_models_follow_the_core_and_the_bridge() {
     }
     std::fs::write(home.path().join("Documents/a.txt"), "a").unwrap();
     std::fs::write(home.path().join("Documents/.hidden"), "h").unwrap();
+    let locked = home.path().join("Music/locked");
+    std::fs::create_dir(&locked).unwrap();
+    for f in ["x.txt", "y.txt"] {
+        std::fs::write(locked.join(f), f).unwrap();
+    }
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
     std::env::set_var("HOME", home.path());
     std::env::set_var("QT_QPA_PLATFORM", "offscreen");
 
@@ -169,9 +182,7 @@ fn browse_models_follow_the_core_and_the_bridge() {
     )
     .unwrap();
     // `qml_check` fails on any console.error: that is how a step fails.
-    assert_eq!(
-        lautta_qt::qml_check(&[file.display().to_string()]),
-        0,
-        "a step of the scenario failed (see output)"
-    );
+    let rc = lautta_qt::qml_check(&[file.display().to_string()]);
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(rc, 0, "a step of the scenario failed (see output)");
 }

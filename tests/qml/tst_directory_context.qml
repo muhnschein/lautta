@@ -270,7 +270,7 @@ ApplicationWindow {
                 if (JSON.stringify(compress.uris) !== JSON.stringify([win.file]))
                     return win.fail("Compress gets the file: " + JSON.stringify(compress.uris))
                 if (!compress.canAccept)
-                    return win.fail("the compress dialog can be accepted: into " + compress.destUri)
+                    return win.fail("the compress dialog can be accepted: into " + compress.folderUri)
                 compress.reject()
                 win.next()
                 break
