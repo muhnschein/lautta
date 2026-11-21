@@ -112,21 +112,21 @@ pub fn kind_of(path: &Path, mountinfo: &str, sys: &Path) -> DriveKind {
 
 /// Mount point field of `mountinfo`: space, tab, newline and backslash as `\ooo`.
 fn unescape_mount(field: &str) -> Vec<u8> {
-    let b = field.as_bytes();
-    let mut out = Vec::with_capacity(b.len());
-    let mut i = 0;
-    while i < b.len() {
-        let oct = b
-            .get(i + 1..i + 4)
-            .filter(|o| b[i] == b'\\' && o.iter().all(|c| (b'0'..=b'7').contains(c)));
-        match oct {
-            Some(o) => {
-                out.push((o[0] - b'0') << 6 | (o[1] - b'0') << 3 | (o[2] - b'0'));
-                i += 4;
+    let mut out = Vec::with_capacity(field.len());
+    let mut rest = field.as_bytes();
+    while let Some((&b, tail)) = rest.split_first() {
+        let code = tail
+            .get(..3)
+            .filter(|o| b == b'\\' && o.iter().all(u8::is_ascii_digit))
+            .and_then(|o| u8::from_str_radix(std::str::from_utf8(o).ok()?, 8).ok());
+        match code {
+            Some(c) => {
+                out.push(c);
+                rest = &tail[3..];
             }
             None => {
-                out.push(b[i]);
-                i += 1;
+                out.push(b);
+                rest = tail;
             }
         }
     }
@@ -527,6 +527,9 @@ mod tests {
         assert_eq!(unescape_mount("\\04"), b"\\04");
         assert_eq!(unescape_mount("\\048x"), b"\\048x");
         assert_eq!(unescape_mount("\\377"), b"\xff");
+        assert_eq!(unescape_mount("\\400"), b"\\400", "past a byte");
+        assert_eq!(unescape_mount("\\+12"), b"\\+12");
+        assert_eq!(unescape_mount("x\\"), b"x\\");
         assert_eq!(unescape_mount("plain"), b"plain");
     }
 
