@@ -24,6 +24,9 @@ They are copied, not imported: `Sailfish.Gallery`, `com.jolla.gallery` and
   navigation until it is zoomed out.
 - Images turn upright themselves (`autoTransform`); remote images come
   through `image://lautta-file/`.
+- Neighbours load only once the current image has (Qt's image thread takes
+  newest request first). The opened image goes through Qt's pixmap cache
+  (`openedUri`, `shareDecode`): the viewer's folder view reuses its decode.
 - The overlay's buttons are lautta's actions, signalled to the page
   (`../../../viewers/ImageViewer.qml`): details, Delete, Open with (where the
   Gallery's Edit is), Share, More (the app's own `qml/icons/more.svg`, a

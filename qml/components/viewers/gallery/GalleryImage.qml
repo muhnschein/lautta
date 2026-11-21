@@ -20,6 +20,8 @@ ZoomableFlickable {
     property alias placeholder: placeholderImage.source
 
     property bool active: true
+    // In Qt's pixmap cache: next item with same source and size gets this decode.
+    property bool shareDecode
     readonly property bool _active: active || viewMoving
     readonly property bool error: photo.status == Image.Error
 
@@ -76,7 +78,7 @@ ZoomableFlickable {
         visible: largePhoto.status !== Image.Ready
         asynchronous: true
         autoTransform: true
-        cache: false
+        cache: flickable.shareDecode
 
         onStatusChanged: {
             if (status == Image.Error) {

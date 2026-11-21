@@ -10,6 +10,8 @@
 // local files or through image://lautta-file/, and the overlay's actions
 // are the page's. A zoomed image takes the drags, so swipes wait until it
 // is zoomed out again, and while a delete waits for its remorse (`held`).
+// Neighbours load once the current image has: Qt's one image thread takes
+// newest request first.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -19,6 +21,9 @@ PagedView {
 
     property alias overlay: overlay
     property bool held
+    // Image viewer opened on: its folder view reuses this decode. Qt keeps cached pixmaps
+    // ~30 s after use, so this image only.
+    property string openedUri
     readonly property bool zoomed: currentItem !== null && currentItem.zoomed
 
     // What an image's Image item loads.
@@ -31,6 +36,10 @@ PagedView {
         return App.isLocal(uri) ? "" : "image://lautta-thumb/" + uri + "?size=1024&cached=1"
     }
 
+    readonly property bool currentSettled: currentItem !== null && currentItem.item !== null
+                                           && (currentItem.item.photo.status === Image.Ready
+                                               || currentItem.item.photo.status === Image.Error)
+
     interactive: count > 1 && !zoomed && !held
 
     delegate: Loader {
@@ -41,6 +50,11 @@ PagedView {
         readonly property bool isCurrentItem: PagedView.isCurrentItem
         readonly property bool error: item && item.error
         readonly property bool zoomed: item !== null && item.zoomed
+        readonly property bool wanted: isCurrentItem || root.currentSettled
+        property bool loadAllowed
+
+        onWantedChanged: if (wanted) loadAllowed = true
+        Component.onCompleted: if (wanted) loadAllowed = true
 
         width: root.width
         height: root.height
@@ -60,7 +74,8 @@ PagedView {
                     }
                 }
 
-                source: slot.source
+                source: slot.loadAllowed ? slot.source : ""
+                shareDecode: slot.imageUri === root.openedUri
                 placeholder: slot.imageUri.length > 0 ? root.placeholderOf(slot.imageUri) : ""
                 active: slot.isCurrentItem
                 viewMoving: root.moving

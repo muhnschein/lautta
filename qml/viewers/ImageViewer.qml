@@ -137,6 +137,7 @@ FullscreenContentPage {
         FlickableImageView {
             objectName: "flickableView"
             model: [page.uri]
+            openedUri: page.uri
             held: remorse.active
         }
     }
@@ -146,6 +147,7 @@ FullscreenContentPage {
         FlickableImageView {
             objectName: "flickableView"
             model: images
+            openedUri: page.uri
             held: remorse.active
             currentIndex: Math.max(0, images.indexOf(page.uri))
         }

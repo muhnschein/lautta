@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The image viewer shows the tapped picture sooner: it loads first and only once, before the pictures next to it ([#41](https://github.com/muhnschein/lautta/issues/41)).
 - New items scroll into view and light up briefly: folders you make (also in the folder picker), pasted or moved items, archives you compress, extracted files, scans and renamed items; in grid view the name and details light up too ([#113](https://github.com/muhnschein/lautta/issues/113)).
 - A folder listed again right after a change no longer shows as empty for a moment.
 - Videos from servers stream and seek instead of downloading first ([#100](https://github.com/muhnschein/lautta/issues/100)).
