@@ -12,6 +12,8 @@ Item {
     property int minLines
     property bool emphasised
     property bool pressed
+    // 0..1: new item's tint, ambience colour over the plain one.
+    property real glow
     readonly property var nameLines: visible && metrics ? metrics.nameLines(name, width) : []
     readonly property int captionLines: Math.max(captions.length, minLines)
 
@@ -30,7 +32,8 @@ Item {
         textFormat: Text.PlainText
         text: caption.nameLines.join("\n")
         font.pixelSize: Theme.fontSizeExtraSmall
-        color: caption.emphasised ? Theme.highlightColor : Theme.primaryColor
+        color: caption.emphasised ? Theme.highlightColor
+                                  : Qt.tint(Theme.primaryColor, Theme.rgba(Theme.highlightColor, caption.glow))
     }
     Repeater {
         model: caption.captionLines
@@ -45,7 +48,8 @@ Item {
             text: index < caption.captions.length ? caption.captions[index] : ""
             truncationMode: TruncationMode.Elide
             font.pixelSize: Theme.fontSizeTiny
-            color: caption.pressed ? Theme.secondaryHighlightColor : Theme.secondaryColor
+            color: caption.pressed ? Theme.secondaryHighlightColor
+                                   : Qt.tint(Theme.secondaryColor, Theme.rgba(Theme.secondaryHighlightColor, caption.glow))
         }
     }
 }

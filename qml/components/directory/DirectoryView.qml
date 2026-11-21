@@ -817,6 +817,8 @@ Item {
                 }
 
                 NewItemFlash {
+                    id: tileFlash
+
                     anchors.fill: parent
                     owner: view
                     uri: model.uri
@@ -838,6 +840,7 @@ Item {
                 minLines: cell.counting && !model.inaccessible ? 1 : 0
                 emphasised: cell.highlighted || model.selected
                 pressed: cell.highlighted
+                glow: tileFlash.opacity
             }
         }
     }
