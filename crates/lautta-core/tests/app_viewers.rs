@@ -1536,3 +1536,30 @@ async fn the_glow_is_a_small_soft_copy_of_the_cover() {
         .unwrap_err();
     assert_eq!(err.kind, ErrorKind::Unsupported, "covers are for audio files");
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn folder_pictures_up_to_the_limit_are_covers_larger_ones_are_not() {
+    // The promised 16 MiB, written out: the constant itself could drift with the code.
+    const LIMIT: u64 = 16 * 1024 * 1024;
+    let h = home().await;
+    let padded = |extra: u64| {
+        // Bytes after the JPEG's end marker are ignored by the decoder.
+        let mut jpg = audio_fixture::jpeg(32, blue());
+        jpg.resize((LIMIT + extra) as usize, 0);
+        jpg
+    };
+    h.nas.add_file("fit/a.mp3", &tagged(None), 1);
+    h.nas.add_file("fit/cover.jpg", &padded(0), 1);
+    h.nas.add_file("big/a.mp3", &tagged(None), 1);
+    h.nas.add_file("big/cover.jpg", &padded(1), 1);
+    let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
+    let fit = thumbnail(&h, &previews, "lautta://nv-nas/fit/a.mp3", 64)
+        .await
+        .unwrap();
+    assert!(near(tint(&fit), blue()), "exactly the limit: {:?}", tint(&fit));
+    let big = thumbnail(&h, &previews, "lautta://nv-nas/big/a.mp3", 64)
+        .await
+        .unwrap_err();
+    assert_eq!(big.kind, ErrorKind::NotFound);
+    assert_eq!(reads_of(&h.nas, "big/cover.jpg"), 0, "too large: never read");
+}
