@@ -17,7 +17,10 @@ use std::time::Instant;
 const SAFE_SCHEMES: [&str; 4] = ["http", "https", "mailto", "ftp"];
 
 /// Qt never breaks lines of plain `<pre>`; `pre-wrap` keeps spaces and breaks and wraps long lines.
-const PRE: &str = "<pre style=\"white-space: pre-wrap; margin: 0px; font-family: monospace";
+const PRE: &str = "<pre style=\"white-space: pre-wrap; margin: 0px; ";
+
+/// [`crate::fonts::MONO_FAMILY`], quoted: name has a space.
+const MONO: &str = "font-family: 'JetBrains Mono'";
 
 /// Bigger sizes in a style string are refused.
 const MAX_PX: u32 = 400;
@@ -513,7 +516,7 @@ impl<'s> Renderer<'s> {
                 .code_px
                 .map(|px| format!("; font-size: {px}px"))
                 .unwrap_or_default();
-            self.out.push_str(&format!("{PRE}{size}\">{body}</pre>"));
+            self.out.push_str(&format!("{PRE}{MONO}{size}\">{body}</pre>"));
             if !last {
                 self.end_block(true);
             }
@@ -527,7 +530,7 @@ impl<'s> Renderer<'s> {
             .map(|px| format!("; font-size: {px}px"))
             .unwrap_or_default();
         self.out.push_str(&format!(
-            "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"{}\"{} style=\"margin-bottom: {bottom}px\"><tr><td>{PRE}{size}\">{body}</pre></td></tr></table>",
+            "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"{}\"{} style=\"margin-bottom: {bottom}px\"><tr><td>{PRE}{MONO}{size}\">{body}</pre></td></tr></table>",
             gap / 2,
             bgcolor(&self.style.tint),
         ));
@@ -737,8 +740,7 @@ impl<'s> Renderer<'s> {
             .as_deref()
             .map(|t| format!("background-color: {t}; "))
             .unwrap_or_default();
-        self.out
-            .push_str(&format!("<code style=\"{tint}font-family: monospace\">"));
+        self.out.push_str(&format!("<code style=\"{tint}{MONO}\">"));
         push_escaped(&mut self.out, c);
         self.out.push_str("</code>");
     }
@@ -990,18 +992,23 @@ mod tests {
     }
 
     #[test]
+    fn code_asks_for_bundled_face() {
+        assert_eq!(MONO, format!("font-family: '{}'", crate::fonts::MONO_FAMILY));
+    }
+
+    #[test]
     fn inline_markup_and_code() {
         let html = styled("some *em* and **strong** and `a<b` and ~~gone~~");
         assert!(html.contains("<em>em</em>"));
         assert!(html.contains("<strong>strong</strong>"));
         assert!(
             html.contains(
-                "<code style=\"background-color: #44444444; font-family: monospace\">a&lt;b</code>"
+                "<code style=\"background-color: #44444444; font-family: 'JetBrains Mono'\">a&lt;b</code>"
             ),
             "{html}"
         );
         assert!(html.contains("<s>gone</s>"));
-        assert!(plain("`x`").contains("<code style=\"font-family: monospace\">x</code>"));
+        assert!(plain("`x`").contains("<code style=\"font-family: 'JetBrains Mono'\">x</code>"));
     }
 
     #[test]
@@ -1009,13 +1016,13 @@ mod tests {
         let html = styled("```\nfn main() { if a < b && c > d {} }\n```\n");
         assert_eq!(
             html,
-            "<pre style=\"white-space: pre-wrap; margin: 0px; font-family: monospace; font-size: 20px\">\
+            "<pre style=\"white-space: pre-wrap; margin: 0px; font-family: 'JetBrains Mono'; font-size: 20px\">\
              fn main() { if a &lt; b &amp;&amp; c &gt; d {} }</pre>",
             "the viewer draws the panel of a top-level block"
         );
         assert_eq!(
             plain("    x\n"),
-            "<pre style=\"white-space: pre-wrap; margin: 0px; font-family: monospace\">x</pre>"
+            "<pre style=\"white-space: pre-wrap; margin: 0px; font-family: 'JetBrains Mono'\">x</pre>"
         );
     }
 
@@ -1166,7 +1173,7 @@ mod tests {
         );
         assert_eq!(
             blocks[3].html,
-            "<pre style=\"white-space: pre-wrap; margin: 0px; font-family: monospace; font-size: 20px\">code</pre>",
+            "<pre style=\"white-space: pre-wrap; margin: 0px; font-family: 'JetBrains Mono'; font-size: 20px\">code</pre>",
             "top-level code: viewer draws the panel"
         );
         assert_eq!(blocks[5].html, "<hr/>");
@@ -1505,7 +1512,7 @@ mod tests {
             }
         }
         assert!(
-            plain("```\n```\n").contains("monospace\"></pre>"),
+            plain("```\n```\n").contains("Mono'\"></pre>"),
             "an empty code block still shows"
         );
     }
