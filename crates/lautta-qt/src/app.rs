@@ -21,6 +21,7 @@ pub struct App {
     ready_changed: qt_signal!(),
     startError: qt_property!(QString; NOTIFY ready_changed),
     version: qt_property!(QString; CONST),
+    monoFont: qt_property!(QString; CONST),
     settingsJson: qt_property!(QString; NOTIFY settingsJsonChanged),
     settingsJsonChanged: qt_signal!(),
     clipboardCount: qt_property!(i32; NOTIFY clipboard_changed),
@@ -62,6 +63,7 @@ pub struct App {
 impl QSingletonInit for App {
     fn init(&mut self) {
         self.version = QString::from(env!("CARGO_PKG_VERSION"));
+        self.monoFont = QString::from(lautta_core::fonts::MONO_FAMILY);
         match core() {
             Some(core) => {
                 self.ready = true;
