@@ -12,6 +12,7 @@ use crate::org::favourites::Favourite;
 use crate::org::{self, Recent, RecentsFilter};
 use crate::settings::LocationPrefs;
 use crate::uri::Uri;
+use crate::volumes::VolumeWords;
 use crate::vpath::{display_name, VPath};
 use crate::workcopy::blocking;
 use std::collections::{BTreeMap, BTreeSet};
@@ -424,8 +425,8 @@ impl Core {
             let mut row = Row::new("volumes", "volume");
             row.uri = uri.to_string();
             row.name = l.name.clone();
+            row.icon = drive_icon(self.locations.volume_kind(&l.id).unwrap_or(DriveKind::Usb)).to_owned();
             row.item_id = l.id.clone();
-            row.icon = drive_icon(DriveKind::Card).to_owned();
             if let Some(d) = drives
                 .iter()
                 .find(|d| d.mount_point.is_some() && d.mount_point == l.local_root)
@@ -440,11 +441,12 @@ impl Core {
             }
             rows.push(row);
         }
+        let words = self.locations.volume_words();
         rows.extend(
             drives
                 .iter()
                 .filter(|d| d.mount_point.is_none())
-                .map(unmounted_row),
+                .map(|d| unmounted_row(d, &words)),
         );
         rows.sort_by(|a, b| a.name.cmp(&b.name));
         rows
@@ -675,14 +677,16 @@ fn drive_icon(kind: DriveKind) -> &'static str {
     }
 }
 
-/// Locked drive is named by LUKS label or UUID: filesystem unknown before Settings › Storage
-/// unlocks it.
-fn unmounted_row(d: &Drive) -> Row {
-    let name = d.mount_name();
+/// Locked drive goes by its LUKS label: filesystem unknown before Settings › Storage unlocks it.
+fn unmounted_row(d: &Drive, words: &VolumeWords) -> Row {
     let mut row = Row::new("volumes", "volume");
     row.status = if d.locked { "locked" } else { "unmounted" };
-    row.item_id = crate::volumes::location_id_of(OsStr::new(&name));
-    row.name = name;
+    row.item_id = crate::volumes::location_id_of(OsStr::new(&d.mount_name()));
+    row.name = if d.label.is_empty() {
+        words.of(d.kind).to_owned()
+    } else {
+        d.mount_name()
+    };
     row.icon = drive_icon(d.kind).to_owned();
     row.total = d.size;
     row.drive = d.id.clone();
