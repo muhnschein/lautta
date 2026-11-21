@@ -29,7 +29,7 @@ QtQuick.Window {
         visible: false
         textFormat: Text.PlainText
         wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-        font.family: "monospace"
+        font.family: App.monoFont
         font.pixelSize: Theme.fontSizeExtraSmall
     }
 
@@ -61,7 +61,7 @@ QtQuick.Window {
         var lists = findAll(page, function(x) { return x.forceLayout !== undefined }, [])
         if (lists.length > 0)
             lists[0].forceLayout()
-        var labels = findAll(page, function(x) { return x.textFormat === Text.StyledText && x.font.family === "monospace" }, [])
+        var labels = findAll(page, function(x) { return x.textFormat === Text.StyledText && x.font.family === App.monoFont }, [])
         var out = {}
         for (var i = 0; i < labels.length; ++i) {
             var siblings = labels[i].parent.children
@@ -188,6 +188,8 @@ QtQuick.Window {
     }
 
     Component.onCompleted: {
+        if (!expect(Qt.fontFamilies().indexOf(App.monoFont) >= 0, "bundled font loaded: " + App.monoFont))
+            return
         tools.installFixture(Qt.resolvedUrl("host/fixtures/script.sh"), "lautta://user-documents/script.sh")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/markup.xyz"), "lautta://user-documents/markup.xyz")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/rows.sh"), "lautta://user-documents/rows.sh")

@@ -46,7 +46,7 @@ Page {
 
     TextMetrics {
         id: metrics
-        font.family: "monospace"
+        font.family: App.monoFont
         font.pixelSize: Theme.fontSizeExtraSmall
         text: "M"
     }
@@ -93,7 +93,7 @@ Page {
                 width: page.gutter - Theme.paddingLarge
                 horizontalAlignment: Text.AlignRight
                 text: doc.rowNumber(index) || ""
-                font.family: "monospace"
+                font.family: App.monoFont
                 font.pixelSize: Theme.fontSizeExtraSmall
                 color: Theme.secondaryColor
                 opacity: Theme.opacityHigh
@@ -106,7 +106,7 @@ Page {
                 // Row characters come back escaped from core with colours: file never read as
                 // markup.
                 text: doc.styledRow(index, doc.highlighted ? page.colours : "")
-                font.family: "monospace"
+                font.family: App.monoFont
                 font.pixelSize: Theme.fontSizeExtraSmall
                 wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                 textFormat: Text.StyledText

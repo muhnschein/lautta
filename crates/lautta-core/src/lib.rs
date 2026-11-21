@@ -14,6 +14,7 @@ pub mod app_viewers;
 pub mod db;
 pub mod entry;
 pub mod error;
+pub mod fonts;
 pub mod paths;
 pub mod provider;
 pub mod sys;

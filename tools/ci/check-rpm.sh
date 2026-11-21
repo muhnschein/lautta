@@ -117,7 +117,8 @@ qml_check() {
     shift
     mkdir -p "$h/Documents" "$h/Downloads" "$h/Pictures"
     sb2 -t "$TARGET" env HOME="$h" QT_QPA_PLATFORM=minimal \
-        /usr/bin/harbour-lautta --qml-check -I /usr/share/harbour-lautta/qml "$@"
+        /usr/bin/harbour-lautta --qml-check -I /usr/share/harbour-lautta/qml \
+        -F /usr/share/harbour-lautta/fonts "$@"
 }
 k=0
 while [ "$k" -lt "$jobs" ]; do
