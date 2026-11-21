@@ -202,6 +202,8 @@ pub struct DirectoryModel {
     thumb_settings: Option<ThumbSettings>,
     shown: usize,
     generation: u64,
+    /// Aborted listing's queued events still arrive: only current listing's count.
+    listing: u64,
     task: Option<AbortHandle>,
     pending: Option<Vec<Entry>>,
     dirty: bool,
@@ -302,9 +304,10 @@ impl DirectoryModel {
         };
         let me = QPointer::from(&*self);
         let generation = self.generation;
+        let listing = self.next_listing();
         let cb = queued_callback(move |ev: ListEvent| {
             if let Some(m) = me.as_pinned() {
-                m.borrow_mut().on_event(generation, ev);
+                m.borrow_mut().on_event(generation, listing, ev);
             }
         });
         let task = runtime::handle().spawn(async move {
@@ -313,6 +316,11 @@ impl DirectoryModel {
             tokio::join!(core.list_stream(&dir, use_cache, tx), forward);
         });
         self.task = Some(task.abort_handle());
+    }
+
+    fn next_listing(&mut self) -> u64 {
+        self.listing += 1;
+        self.listing
     }
 
     fn start_watch(&mut self) {
@@ -448,8 +456,8 @@ impl DirectoryModel {
         self.publish();
     }
 
-    fn on_event(&mut self, generation: u64, ev: ListEvent) {
-        if generation != self.generation {
+    fn on_event(&mut self, generation: u64, listing: u64, ev: ListEvent) {
+        if generation != self.generation || listing != self.listing {
             return;
         }
         match ev {
@@ -1154,5 +1162,21 @@ mod tests {
         assert_eq!(text_of(&m, b"a.txt"), Some((None, Some("hei"))), "answered once");
         m.previewed("text:3:b", b"b.txt", Some("b".into()));
         assert_eq!(text_of(&m, b"b.txt"), None, "never asked for");
+    }
+
+    #[test]
+    fn an_aborted_listing_does_not_end_the_one_after_it() {
+        let mut m = DirectoryModel::default();
+        let aborted = m.next_listing();
+        let current = m.next_listing();
+        m.loading = true;
+        m.pending = Some(Vec::new());
+        m.on_event(m.generation, aborted, ListEvent::Done(Ok(())));
+        assert!(m.loading && m.pending.is_some(), "old listing's Done dropped");
+        m.on_event(m.generation, current, ListEvent::Done(Ok(())));
+        assert!(
+            !m.loading && m.pending.is_none(),
+            "current listing's Done ends it"
+        );
     }
 }

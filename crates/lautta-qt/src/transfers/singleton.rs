@@ -39,6 +39,8 @@ pub struct Transfers {
     barChanged: qt_signal!(),
 
     finished: qt_signal!(id: i64, ok: bool, failures: i32),
+    /// JSON list of URIs a finished transfer added to folders (`Transfer::landed`).
+    landed: qt_signal!(urisJson: QString),
     needsAnswer: qt_signal!(id: i64, item: i32, conflictJson: QString),
     /// `kind` is an ErrorKind name.
     failed: qt_signal!(kind: QString, message: QString),
@@ -243,6 +245,14 @@ impl Transfers {
         self.bar.finished(id, s.state, SystemClock.now_ms());
         if s.state == TransferState::Canceled || !self.notified.insert(id) {
             return;
+        }
+        let landed: Vec<String> = core()
+            .map_or_else(Vec::new, |c| c.engine.landed(id))
+            .iter()
+            .map(Uri::to_string)
+            .collect();
+        if !landed.is_empty() {
+            self.landed(QString::from(to_json(&landed).as_str()));
         }
         let ok = s.state == TransferState::Completed && s.items_failed == 0;
         self.finished(id, ok, i32::try_from(s.items_failed).unwrap_or(i32::MAX));
