@@ -54,7 +54,7 @@ Phone frame 400×860 (portrait); landscape 860×400. A frame may be taller (e.g.
 <x-dc>
 <helmet>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600&amp;family=Source+Code+Pro:wght@400&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet">
 <style>
 ...PASTE THE CSS BELOW VERBATIM...
 </style>
@@ -98,7 +98,7 @@ body{margin:0}
 .ic.l{width:64px;height:64px;stroke-width:1}
 .hl{color:var(--hl)}.sec{color:var(--sec)}.hl2{color:var(--hl2)}.warn{color:var(--warn)}
 .small{font-size:15px}.xs{font-size:13px}.tiny{font-size:12px}.large{font-size:26px;font-weight:300}.xl{font-size:34px;font-weight:300}
-.mono{font-family:'Source Code Pro',monospace}
+.mono{font-family:'JetBrains Mono',monospace}
 /* page-stack indicators */
 .ind-back,.ind-fwd{position:absolute;top:14px;display:flex;gap:4px}
 .ind-back{left:10px}.ind-fwd{right:10px}

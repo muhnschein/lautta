@@ -22,6 +22,39 @@ use cpp::cpp;
 use std::os::raw::{c_char, c_int};
 
 cpp! {{
+    #include <QtCore/QCoreApplication>
+    #include <QtCore/QDir>
+    #include <QtCore/QLocale>
+    #include <QtCore/QTranslator>
+    #include <QtGui/QFontDatabase>
+
+    // Every `*.ttf` in `directory` for this process. False when none loads.
+    static bool lauttaLoadFonts(const QString &directory)
+    {
+        bool loaded = false;
+        const QDir dir(directory);
+        for (const QString &name : dir.entryList(QStringList(QStringLiteral("*.ttf")), QDir::Files))
+            loaded = QFontDatabase::addApplicationFont(dir.filePath(name)) >= 0 || loaded;
+        return loaded;
+    }
+
+    // Installs `directory`'s catalogues: engineering English first, then user's language. Last
+    // installed is asked first, so a missing message falls back to English (has plural forms).
+    // False when the catalogue is missing.
+    static bool lauttaInstallTranslations(QCoreApplication *app, const QString &directory)
+    {
+        QTranslator *english = new QTranslator(app);
+        const bool found = english->load(QStringLiteral("harbour-lautta"), directory);
+        if (found)
+            app->installTranslator(english);
+        QTranslator *local = new QTranslator(app);
+        if (local->load(QLocale(), QStringLiteral("harbour-lautta"), QStringLiteral("-"), directory))
+            app->installTranslator(local);
+        return found;
+    }
+}}
+
+cpp! {{
     #include <QtGui/QGuiApplication>
     #include <QtQuick/QQuickView>
     // Defined in viewers/images.rs (all cpp! blocks share one translation unit).
@@ -45,26 +78,12 @@ cpp! {{
     #include <sailfishapp.h>
 #endif
 
-    // Installs `directory`'s catalogues: engineering English first, then user's language. Last
-    // installed is asked first, so a missing message falls back to English (has plural forms).
-    // False when the catalogue is missing.
-    static bool lauttaInstallTranslations(QCoreApplication *app, const QString &directory)
-    {
-        QTranslator *english = new QTranslator(app);
-        const bool found = english->load(QStringLiteral("harbour-lautta"), directory);
-        if (found)
-            app->installTranslator(english);
-        QTranslator *local = new QTranslator(app);
-        if (local->load(QLocale(), QStringLiteral("harbour-lautta"), QStringLiteral("-"), directory))
-            app->installTranslator(local);
-        return found;
-    }
-
     // QML check mode: compiles and instantiates QML documents with this binary's engine (real
     // Silica, real Lautta types). Any error, any warning or console.error naming a checked
     // document, and any uncaught JS exception outside Qt's modules, fails. A `tst_*` document
     // fails unless its root `reachedEnd` is true at the end. `-T <directory>` installs that
-    // directory's catalogues first; without it qsTrId gives back the id.
+    // directory's catalogues first; without it qsTrId gives back the id. `-F <directory>` loads
+    // its fonts like the app.
     static QStringList *lauttaCheckProblems = nullptr;
     static QString lauttaCheckFile;
 
@@ -96,17 +115,24 @@ cpp! {{
         QStringList importPaths;
         QStringList files;
         QString translations;
+        QString fonts;
         const QStringList args = QCoreApplication::arguments().mid(2);
         for (int i = 0; i < args.size(); ++i) {
             if (args.at(i) == QLatin1String("-I") && i + 1 < args.size())
                 importPaths << args.at(++i);
             else if (args.at(i) == QLatin1String("-T") && i + 1 < args.size())
                 translations = args.at(++i);
+            else if (args.at(i) == QLatin1String("-F") && i + 1 < args.size())
+                fonts = args.at(++i);
             else
                 files << args.at(i);
         }
         if (!translations.isEmpty() && !lauttaInstallTranslations(&app, translations)) {
             std::printf("ERROR   no harbour-lautta.qm in %s\n", qPrintable(translations));
+            return 1;
+        }
+        if (!fonts.isEmpty() && !lauttaLoadFonts(fonts)) {
+            std::printf("ERROR   no font loads from %s\n", qPrintable(fonts));
             return 1;
         }
         int failures = 0;
@@ -184,6 +210,8 @@ pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
     #ifdef LAUTTA_SAILFISH
             QGuiApplication *app = SailfishApp::application(count, argv);
             lauttaInstallTranslations(app, SailfishApp::pathTo(QStringLiteral("translations")).toLocalFile());
+            if (!lauttaLoadFonts(SailfishApp::pathTo(QStringLiteral("fonts")).toLocalFile()))
+                qWarning("bundled fonts missing");
             QQuickView *view = SailfishApp::createView();
             lauttaRegisterImageProviders(view->engine());
             rust!(LauttaWaitCore [] { wait_core() });
@@ -248,7 +276,7 @@ pub fn cstr(s: &str) -> std::ffi::CString {
     std::ffi::CString::new(s).unwrap_or_default()
 }
 
-/// `-I <path>`, `-T <catalogue folder>` and files. Opens core from `$HOME` and registers types like
+/// `-I <path>`, `-T <catalogue folder>`, `-F <font folder>` and files. Opens core from `$HOME` and registers types like
 /// the app. For host QML tests.
 pub fn qml_check(args: &[String]) -> c_int {
     open_core();

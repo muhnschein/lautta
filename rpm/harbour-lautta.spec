@@ -7,7 +7,7 @@ Name:       harbour-lautta
 Summary:    A file manager for Sailfish OS
 Version:    1.0.0
 Release:    1
-License:    LGPLv2+ and ASL 2.0 and BSD
+License:    LGPLv2+ and ASL 2.0 and BSD and OFL
 URL:        https://github.com/muhnschein/lautta
 Source0:    %{name}-%{version}.tar.bz2
 ExclusiveArch: aarch64
@@ -52,6 +52,7 @@ install -d %{buildroot}%{_datadir}/%{name}/qml %{buildroot}%{_datadir}/%{name}/t
 cp -r qml/* %{buildroot}%{_datadir}/%{name}/qml/
 install -m 0644 translations/*.qm %{buildroot}%{_datadir}/%{name}/translations/
 install -m 0644 LICENSE %{buildroot}%{_datadir}/%{name}/LICENSE
+install -D -m 0644 -t %{buildroot}%{_datadir}/%{name}/fonts fonts/*.ttf fonts/OFL.txt
 for size in 86x86 108x108 128x128 172x172; do
     install -D -m 0644 icons/$size/%{name}.png %{buildroot}%{_datadir}/icons/hicolor/$size/apps/%{name}.png
 done

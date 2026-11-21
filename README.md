@@ -107,11 +107,12 @@ $ make check
   type icons of IntelliJ.
 * [hayro](https://github.com/LaurenzV/hayro), for reading PDFs in pure Rust.
 * [Inter](https://rsms.me/inter/), the typeface of the cover's lettering.
+* [JetBrains Mono](https://www.jetbrains.com/lp/mono/), the typeface of code and other monospaced text.
 
 ## License
 
 Licensed LGPL-2.1-or-later (text in `LICENSE`). The image viewer files adapted from Jolla are
-BSD-3-Clause, the JetBrains icons Apache-2.0. The cover's lettering is Inter,
-SIL Open Font License 1.1.
+BSD-3-Clause, the JetBrains icons Apache-2.0. The cover's lettering (Inter) and the
+monospaced font (JetBrains Mono) are SIL Open Font License 1.1.
 
 Copyright © Lautta contributors.

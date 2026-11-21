@@ -11,6 +11,7 @@ QtObject {
 
     Component.onCompleted: {
         check(App.ready, "core opened")
+        check(Qt.fontFamilies().indexOf(App.monoFont) >= 0, "bundled font loaded: " + App.monoFont)
         var docs = "lautta://user-documents/"
         var child = App.childUri(docs, "a b.txt")
         check(child === "lautta://user-documents/a%20b.txt", "childUri encodes: " + child)
