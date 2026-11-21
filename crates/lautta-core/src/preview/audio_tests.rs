@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-use super::*;
-use crate::entry::Entry;
+use super::{
+    clean, folder_cover, parse, read_audio, AudioTags, RangeReader, BLOCK, MAX_TEXT_CHARS, READ_BUDGET,
+};
+use crate::entry::{Entry, Kind};
+use std::io::{self, Cursor, Read, Seek, SeekFrom};
 #[path = "../../tests/fixtures/audio.rs"]
 #[allow(dead_code)]
 mod fixtures;
 use fixtures::{flac, jpeg, mp3};
-use std::io::Cursor;
 
 fn tagged_mp3(cover: Option<&[u8]>) -> Vec<u8> {
     mp3(
