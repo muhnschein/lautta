@@ -188,8 +188,6 @@ QtQuick.Window {
     }
 
     Component.onCompleted: {
-        if (!expect(Qt.fontFamilies().indexOf(App.monoFont) >= 0, "bundled font loaded: " + App.monoFont))
-            return
         tools.installFixture(Qt.resolvedUrl("host/fixtures/script.sh"), "lautta://user-documents/script.sh")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/markup.xyz"), "lautta://user-documents/markup.xyz")
         tools.installFixture(Qt.resolvedUrl("host/fixtures/rows.sh"), "lautta://user-documents/rows.sh")

@@ -116,10 +116,8 @@ qml_check() {
     h=$1
     shift
     mkdir -p "$h/Documents" "$h/Downloads" "$h/Pictures"
-    # Plain `minimal` has no font database: `-F` fonts would never load.
-    sb2 -t "$TARGET" env HOME="$h" QT_QPA_PLATFORM=minimal:enable_fonts \
-        /usr/bin/harbour-lautta --qml-check -I /usr/share/harbour-lautta/qml \
-        -F /usr/share/harbour-lautta/fonts "$@"
+    sb2 -t "$TARGET" env HOME="$h" QT_QPA_PLATFORM=minimal \
+        /usr/bin/harbour-lautta --qml-check -I /usr/share/harbour-lautta/qml "$@"
 }
 k=0
 while [ "$k" -lt "$jobs" ]; do
@@ -158,6 +156,13 @@ if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal \
         /usr/bin/harbour-lautta --qml-check -T /usr/share/harbour-lautta/translations \
         "$PWD/tests/translations/tst_english_plurals.qml"; then
     fail "English plural forms on the target"
+fi
+# Plain `minimal` has no font database: app fonts load only with `enable_fonts`. Page tests above
+# keep it off (their layouts expect it).
+if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal:enable_fonts \
+        /usr/bin/harbour-lautta --qml-check -F /usr/share/harbour-lautta/fonts \
+        "$PWD/tests/fonts/tst_bundled_font.qml"; then
+    fail "bundled font on the target"
 fi
 rm -rf "$work" "$home" "$share"
 exit $status
