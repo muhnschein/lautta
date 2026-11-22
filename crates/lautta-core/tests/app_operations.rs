@@ -935,6 +935,17 @@ async fn a_locked_archive_stays_open_while_held_and_forgets_its_password_after()
 }
 
 #[tokio::test]
+async fn a_hold_prints_and_compares_without_its_archive() {
+    let h = home().await;
+    let zip = locked_zip(&h, "pw").await;
+    let (_, held) = h.core.open_archive(&zip, pw("pw")).await.unwrap();
+    let none = ArchiveHold::default();
+    assert_eq!(format!("{held:?}"), "ArchiveHold(held)");
+    assert_eq!(format!("{none:?}"), "ArchiveHold(none)");
+    assert_eq!(held, none, "plans compare equal whatever they hold");
+}
+
+#[tokio::test]
 async fn an_unlocked_archive_stays_open_for_the_session() {
     let h = home().await;
     write(&h.root.join("Documents/src/a.txt"), b"alpha");
