@@ -118,11 +118,16 @@ ApplicationWindow {
         if (header.length !== 1 || header[0].title !== "report.md")
             return fail("the header names the file: " + (header.length ? header[0].title : "no header"))
         var rows = pageRows(page)
+        var ids = JSON.stringify(page.actions.map(function(a) { return a.id }))
+        if (ids !== JSON.stringify(["favourite", "compress", "checksums", "moveToNewFolder"]))
+            return fail("More actions: " + ids)
+        // Headless window shows the first rows only.
         var got = JSON.stringify(rows.map(function(r) { return [r.text, r.icon] }))
         var want = JSON.stringify([[Actions.text("favourite"), "image://theme/icon-m-favorite"],
                                    [Actions.text("compress"), glyph("archive")],
-                                   [Actions.text("moveToNewFolder"), glyph("folder")]])
-        if (got !== want)
+                                   [Actions.text("checksums"), String(Qt.resolvedUrl("../../qml/icons/checksum.svg"))],
+                                   [Actions.text("moveToNewFolder"), glyph("folder")]].slice(0, rows.length))
+        if (rows.length < 3 || got !== want)
             return fail("More actions rows: " + got + " != " + want)
         return rows
     }
@@ -270,7 +275,7 @@ ApplicationWindow {
                 if (JSON.stringify(compress.uris) !== JSON.stringify([win.file]))
                     return win.fail("Compress gets the file: " + JSON.stringify(compress.uris))
                 if (!compress.canAccept)
-                    return win.fail("the compress dialog can be accepted: into " + compress.destUri)
+                    return win.fail("the compress dialog can be accepted: into " + compress.folderUri)
                 compress.reject()
                 win.next()
                 break

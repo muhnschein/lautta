@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 use super::*;
 use crate::ops::{PlanItem, PlanTotals};
+use std::sync::Arc;
 
 fn uri(s: &str) -> Uri {
     Uri::parse(s).unwrap()
@@ -31,6 +32,7 @@ fn plan(items: Vec<PlanItem>) -> Plan {
         },
         items,
         needs_summary: false,
+        hold: Default::default(),
     }
 }
 
@@ -176,8 +178,13 @@ fn archive_names() {
     assert_eq!(archive_folder_name("noext"), "noext");
     assert_eq!(archive_folder_name(".zip"), ".zip");
     assert_eq!(ArchiveKind::parse("zip"), Some(ArchiveKind::Zip));
+    assert_eq!(ArchiveKind::parse("7z"), Some(ArchiveKind::SevenZ));
+    assert_eq!(ArchiveKind::parse("tar.xz"), Some(ArchiveKind::TarXz));
     assert_eq!(ArchiveKind::parse("tar.gz"), Some(ArchiveKind::TarGz));
     assert_eq!(ArchiveKind::parse("rar"), None);
+    assert_eq!(archive_file_name("a", ArchiveKind::TarXz), "a.tar.xz");
+    assert_eq!(archive_folder_name("logs.tar.xz"), "logs");
+    assert_eq!(archive_folder_name("photos.7z"), "photos");
 }
 
 #[test]

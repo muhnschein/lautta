@@ -2,7 +2,7 @@
 .pragma library
 .import "ContextActions.js" as Actions
 
-var endingActions = ["copy", "cut", "share", "compress", "rename", "favourite", "moveToNewFolder"]
+var endingActions = ["copy", "cut", "share", "extract", "compress", "rename", "favourite", "moveToNewFolder", "checksums", "verify"]
 
 function endsSelection(id) {
     return endingActions.indexOf(id) >= 0
@@ -36,7 +36,7 @@ function buttonIcon(id) {
 
 // What folder `model` allows, for the selection's files.
 function context(model) {
-    return { "isDir": false, "changeable": model.changeable, "readable": model.readable }
+    return { "isDir": false, "changeable": model.changeable, "readable": model.readable, "writable": model.writable }
 }
 
 function allowed(order, ctx) {

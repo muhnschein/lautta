@@ -7,6 +7,8 @@ import "../../qml/dialogs"
 ApplicationWindow {
     id: window
     property bool reachedEnd
+    property string fetchedUrl
+    readonly property string localFile: "lautta://user-documents/clip.md"
 
     ViewerTools { id: tools }
 
@@ -19,13 +21,30 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        var page = pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        waitFor(function () { return !page.working && page.errorKind !== "" }, "an unknown server's error")
+        var page = pageStack.push(pageComponent, { "uri": "lautta://nv-nas/docs/notes.md" }, PageStackAction.Immediate)
+        if (!waitFor(function () { return !page.working && page.errorKind !== "" }, "an unknown server's error"))
+            return
+
+        // Share: fetched file goes to the opener, then the page goes.
+        if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), localFile)) {
+            console.error("FAILED: fixture")
+            return
+        }
+        page = pageStack.push(pageComponent, { "uri": localFile, "share": true }, PageStackAction.Immediate)
+        page.fetched.connect(function (fileUrl) { window.fetchedUrl = fileUrl })
+        if (!waitFor(function () { return window.fetchedUrl !== "" }, "the shared file"))
+            return
+        if (fetchedUrl.indexOf("file://") !== 0 || fetchedUrl.slice(-"/Documents/clip.md".length) !== "/Documents/clip.md") {
+            console.error("FAILED: shared file url " + fetchedUrl)
+            return
+        }
+        if (!waitFor(function () { return pageStack.depth === 1 && !pageStack.busy }, "Getting page to close after share"))
+            return
         reachedEnd = true
     }
 
     Component {
         id: pageComponent
-        OpenRemoteDialog { uri: "lautta://nv-nas/docs/notes.md" }
+        OpenRemoteDialog { }
     }
 }

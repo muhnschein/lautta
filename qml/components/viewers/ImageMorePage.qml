@@ -10,6 +10,8 @@ Page {
 
     property string uri
     property bool changeable: true
+    // Folder takes new files: Compress.
+    property bool writable: true
 
     signal renameChosen()
 
@@ -26,6 +28,9 @@ Page {
         case "compress":
             pageStack.replace(Qt.resolvedUrl("../../dialogs/CompressDialog.qml"), { "uris": [page.uri] })
             break
+        case "checksums":
+            pageStack.replace(Qt.resolvedUrl("../../pages/ChecksumsPage.qml"), { "uri": page.uri })
+            break
         }
     }
 
@@ -34,7 +39,7 @@ Page {
         model: (page.changeable ? [
             //% "Rename"
             { "id": "rename", "text": qsTrId("lautta-viewers-more-rename") }
-        ] : []).concat(Actions.more({ "isDir": false }))
+        ] : []).concat(Actions.more({ "isDir": false, "writable": page.writable }))
 
         header: PageHeader {
             title: App.nameOf(page.uri)

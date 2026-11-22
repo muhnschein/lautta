@@ -37,12 +37,15 @@ pub enum ErrorKind {
     /// Disconnected or removed: items copied from it cannot be reached through it again.
     LocationGone,
     CrossesDevice,
+    /// Locked compressed file opened without its password.
+    PasswordRequired,
+    WrongPassword,
     Io,
     Internal,
 }
 
 impl ErrorKind {
-    pub const ALL: [ErrorKind; 29] = [
+    pub const ALL: [ErrorKind; 31] = [
         ErrorKind::NotFound,
         ErrorKind::AlreadyExists,
         ErrorKind::PermissionDenied,
@@ -70,6 +73,8 @@ impl ErrorKind {
         ErrorKind::Sandbox,
         ErrorKind::LocationGone,
         ErrorKind::CrossesDevice,
+        ErrorKind::PasswordRequired,
+        ErrorKind::WrongPassword,
         ErrorKind::Io,
         ErrorKind::Internal,
     ];
@@ -103,6 +108,8 @@ impl ErrorKind {
             ErrorKind::Sandbox => "Sandbox",
             ErrorKind::LocationGone => "LocationGone",
             ErrorKind::CrossesDevice => "CrossesDevice",
+            ErrorKind::PasswordRequired => "PasswordRequired",
+            ErrorKind::WrongPassword => "WrongPassword",
             ErrorKind::Io => "Io",
             ErrorKind::Internal => "Internal",
         }

@@ -24,9 +24,18 @@ function text(id) {
     case "favourite":
         //% "Add to favourites"
         return qsTrId("lautta-dir-act-favourite")
+    case "extract":
+        //% "Extract"
+        return qsTrId("lautta-dir-act-extract")
     case "compress":
         //% "Compress"
         return qsTrId("lautta-dir-act-compress")
+    case "checksums":
+        //% "Checksums"
+        return qsTrId("lautta-dir-act-checksums")
+    case "verify":
+        //% "Verify files"
+        return qsTrId("lautta-dir-act-verify")
     case "moveToNewFolder":
         //% "Move to new folder"
         return qsTrId("lautta-dir-act-move-new-folder")
@@ -38,13 +47,17 @@ function icon(id) {
     switch (id) {
     case "rename": return "image://theme/icon-m-edit"
     case "favourite": return "image://theme/icon-m-favorite"
+    case "extract": return "file-folder"
     case "compress": return "file-archive"
+    case "checksums": return "checksum"
+    case "verify": return "image://theme/icon-m-acknowledge"
     case "moveToNewFolder": return "file-folder"
     }
     return ""
 }
 
-// ctx: { isDir, changeable, readable }; readable unless false.
+// ctx: { isDir, changeable, readable, writable, archive, checksumList }; readable unless false. Compress and
+// Extract put their result beside the item: folder must be writable.
 function applicable(id, ctx) {
     var readable = ctx.readable !== false
     switch (id) {
@@ -55,14 +68,17 @@ function applicable(id, ctx) {
     case "delete": return ctx.changeable === true
     case "more": return more(ctx).length > 0
     case "favourite": return true
-    case "compress": return readable
+    case "extract": return readable && ctx.archive === true && ctx.writable === true
+    case "compress": return readable && ctx.writable === true
+    case "checksums": return readable && ctx.isDir === false
+    case "verify": return readable && ctx.checksumList === true
     case "moveToNewFolder": return ctx.changeable === true
     }
     return false
 }
 
 var menuOrder = ["share", "copy", "cut", "rename", "delete", "more"]
-var moreOrder = ["favourite", "compress", "moveToNewFolder"]
+var moreOrder = ["verify", "favourite", "extract", "compress", "checksums", "moveToNewFolder"]
 
 function pick(order, ctx) {
     var out = []

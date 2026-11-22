@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Photos open faster in the image viewer, big ones most: the picture starts loading as your finger touches it, loads at screen size and first, and shows the camera's preview while it loads. Pictures you swiped past come back at once ([#41](https://github.com/muhnschein/lautta/issues/41)).
-- New items scroll into view and light up briefly: folders you make (also in the folder picker), pasted or moved items, archives you compress, extracted files, scans and renamed items; in grid view the name and details light up too ([#113](https://github.com/muhnschein/lautta/issues/113)).
+- New items scroll into view and light up briefly: folders you make (also in the folder picker), pasted or moved items, files you compress, extracted files, scans and renamed items; in grid view the name and details light up too ([#113](https://github.com/muhnschein/lautta/issues/113)).
 - A folder listed again right after a change no longer shows as empty for a moment.
 - Videos from servers stream and seek instead of downloading first ([#100](https://github.com/muhnschein/lautta/issues/100)).
 - Streaming videos no longer freeze the screen every second or so, and start and seek faster.
@@ -14,7 +14,12 @@
 - Settings is tidier: no previews in *View options* and *Browse page*, and the Settings list shows names only. *About* shows the Lautta icon and no longer lists permissions ([#117](https://github.com/muhnschein/lautta/issues/117)).
 - Memory cards and USB drives without a label show as "Memory card" or "USB drive" instead of a string of letters and digits ([#123](https://github.com/muhnschein/lautta/issues/123)).
 - Code, logs and other monospaced text use JetBrains Mono, in the text viewer, in grid previews and in Markdown code.
+- Compress and Extract are simpler ([#115](https://github.com/muhnschein/lautta/issues/115), [#116](https://github.com/muhnschein/lautta/issues/116)). Compress asks only for a name and a format: Zip, 7z, tar.xz or tar.gz. Extract starts at once from *More actions* of a compressed file or from the pulley inside one. Results land in the same folder; one item comes out as is, several in a new folder named after the compressed file, and nothing is overwritten. Both show only where Lautta may add files.
+- Zip and 7z files can have a password (AES-256): Compress asks for it twice and says when it is easy to guess. 7z hides the file names too; Zip cannot. Locked Zip and 7z files open and extract after asking for the password on the same *Locked file* page that PDFs use. The password stays in memory only while the file is open, in use by a task or on the clipboard, and is never stored ([#115](https://github.com/muhnschein/lautta/issues/115), [#116](https://github.com/muhnschein/lautta/issues/116)). Zips locked the old way (ZipCrypto) still don't open.
 - The music player shows the cover and the title, artist, album, year and track number ([#111](https://github.com/muhnschein/lautta/issues/111)). The cover comes from the file, else from a cover.jpg, folder.jpg or front.jpg beside it. Audio files show their cover as thumbnail in folders too.
+- Sharing a file from a server shows "Getting …" while it downloads, then the share sheet. Before, nothing showed until the download was done, so a big file looked like the share was lost ([#126](https://github.com/muhnschein/lautta/issues/126)).
+- When a server goes away, the offline banner says when the folder shown was listed instead of "Showing the copy from ." A listing cut short by a lost connection shows its error instead of the offline banner ([#106](https://github.com/muhnschein/lautta/issues/106)).
+- *Checksums* in *More actions* of a file: SHA-256, MD5, SHA-1, SHA-512 and more (SHA-3, BLAKE2b, BLAKE3, CRC32, xxHash). Tap one to calculate it; tap the value to copy it. When a checksum list such as SHA256SUMS in the same folder names the file, Lautta says whether it matches. A checksum list itself offers *Verify files*: it checks every file the list names ([#40](https://github.com/muhnschein/lautta/issues/40)).
 
 ## 1.0.0
 

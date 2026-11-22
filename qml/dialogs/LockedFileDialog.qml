@@ -1,11 +1,10 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Password goes to PdfDocument.unlock; not kept.
+// SPDX-License-Identifier: LGPL-2.1-or-later Locked PDF or compressed file. Password goes to the caller; not kept.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
 Dialog {
     id: dialog
 
-    property string fileName
     property bool wrong
     readonly property string password: field.text
 
@@ -29,40 +28,24 @@ Dialog {
 
             DialogHeader {
                 //% "Unlock"
-                acceptText: qsTrId("lautta-viewers-pdf-unlock")
+                acceptText: qsTrId("lautta-locked-unlock")
             }
 
             Column {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * x
-                topPadding: Theme.paddingLarge * 2
-                bottomPadding: Theme.paddingLarge * 2
-                spacing: Theme.paddingMedium
-
-                HighlightImage {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    source: Qt.resolvedUrl("../icons/lock.svg")
-                    sourceSize.width: Theme.iconSizeLarge
-                    sourceSize.height: Theme.iconSizeLarge
-                    color: Theme.highlightColor
-                }
-
-                Label {
-                    width: parent.width
-                    horizontalAlignment: Text.AlignHCenter
-                    font.pixelSize: Theme.fontSizeExtraLarge
-                    font.family: Theme.fontFamilyHeading
-                    color: Theme.highlightColor
-                    //% "Locked PDF"
-                    text: qsTrId("lautta-viewers-pdf-locked")
-                }
+                topPadding: Theme.paddingLarge * 4
+                bottomPadding: Theme.paddingLarge * 4
 
                 Label {
                     width: parent.width
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
-                    font.pixelSize: Theme.fontSizeLarge
-                    text: dialog.fileName
+                    font.pixelSize: Theme.fontSizeExtraLarge
+                    font.family: Theme.fontFamilyHeading
+                    color: Theme.highlightColor
+                    //% "Locked file"
+                    text: qsTrId("lautta-locked-title")
                 }
             }
 
@@ -70,9 +53,9 @@ Dialog {
                 id: field
                 errorHighlight: dialog.wrong && text.length === 0
                 //% "Wrong password. Try again."
-                label: dialog.wrong ? qsTrId("lautta-viewers-pdf-wrong-password")
+                label: dialog.wrong ? qsTrId("lautta-locked-wrong")
                                     //% "Password"
-                                    : qsTrId("lautta-viewers-pdf-password")
+                                    : qsTrId("lautta-locked-password")
                 EnterKey.enabled: text.length > 0
                 EnterKey.iconSource: "image://theme/icon-m-enter-accept"
                 EnterKey.onClicked: dialog.accept()

@@ -80,6 +80,9 @@ pub struct Plan {
     pub totals: PlanTotals,
     /// Over 1 000 items or 1 GB (configurable) a summary sheet is shown.
     pub needs_summary: bool,
+    /// Locked archive an extract reads, open until the plan starts or is dropped.
+    #[serde(skip)]
+    pub hold: crate::app_archives::ArchiveHold,
 }
 
 pub mod uri_serde {

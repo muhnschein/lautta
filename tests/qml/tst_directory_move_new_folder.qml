@@ -21,7 +21,7 @@ ApplicationWindow {
 
     Connections {
         target: Operations
-        onJobFinished: if (ok) Operations.openArchive(resultUri)
+        onJobFinished: if (ok) Operations.openArchive(resultUri, "")
         onArchiveOpened: window.archiveRoot = rootUri
     }
 
@@ -213,7 +213,7 @@ ApplicationWindow {
     }
 
     function checkArchive() {
-        Operations.compress(JSON.stringify([base + "Pair"]), base, "pairs", "zip")
+        Operations.compress(JSON.stringify([base + "Pair"]), base, "pairs", "zip", "")
         waitFor(function () { return window.archiveRoot.length > 0 }, "the archive")
         var archivePage = pageStack.push(pageComponent, { "uri": window.archiveRoot }, PageStackAction.Immediate)
         var view
@@ -226,12 +226,14 @@ ApplicationWindow {
         view.model.selectAll()
         view.moreSelection()
         var ids = moreIds(view)
-        expect(ids.length > 0 && ids.indexOf("moveToNewFolder") < 0, "no row for a selection in an archive: " + JSON.stringify(ids))
+        expect(ids.length > 0 && ids.indexOf("moveToNewFolder") < 0 && ids.indexOf("compress") < 0,
+               "no Move to new folder or Compress for a selection in an archive: " + JSON.stringify(ids))
         pageStack.pop(archivePage, PageStackAction.Immediate)
         view.endSelection()
         view.moreActions({ "uri": view.model.uriAt(0), "isDir": true })
         ids = moreIds(view)
-        expect(ids.length > 0 && ids.indexOf("moveToNewFolder") < 0, "no row for an item in an archive: " + JSON.stringify(ids))
+        expect(ids.length > 0 && ids.indexOf("moveToNewFolder") < 0 && ids.indexOf("compress") < 0,
+               "no Move to new folder or Compress for an item in an archive: " + JSON.stringify(ids))
         pageStack.pop(folderPage, PageStackAction.Immediate)
     }
 

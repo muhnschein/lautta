@@ -10,6 +10,8 @@ PullDownMenu {
     readonly property bool selecting: owner ? owner.selecting : false
     readonly property bool writable: owner ? owner.model.writable : false
     readonly property bool readable: owner ? owner.model.readable : false
+    // Inside a compressed file: the file itself, else "".
+    readonly property string archiveUri: owner ? Operations.archiveSource(owner.uri) : ""
 
     MenuItem {
         visible: menu.selecting
@@ -61,5 +63,11 @@ PullDownMenu {
         //% "Add"
         text: qsTrId("lautta-dir-menu-add")
         onClicked: menu.owner.add()
+    }
+    MenuItem {
+        objectName: "folderMenuExtract"
+        visible: !menu.selecting && menu.archiveUri.length > 0 && App.canAddTo(App.parentUri(menu.archiveUri))
+        text: qsTrId("lautta-dir-act-extract")
+        onClicked: Operations.extract(menu.archiveUri, "")
     }
 }

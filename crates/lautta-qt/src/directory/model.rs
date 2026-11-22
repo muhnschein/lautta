@@ -10,7 +10,7 @@ use cpp::cpp;
 use lautta_core::app::Core;
 use lautta_core::app_directory::{file_url, forward_coalesced, ListEvent};
 use lautta_core::bridge::Level;
-use lautta_core::entry::{Capabilities, Entry, EntryFlags};
+use lautta_core::entry::{system_time_to_ms, Capabilities, Entry, EntryFlags};
 use lautta_core::error::ErrorKind;
 use lautta_core::filter::FilterOptions;
 use lautta_core::foldercount::FolderCount;
@@ -130,9 +130,10 @@ pub struct DirectoryModel {
     errorKind: qt_property!(QString; NOTIFY stateChanged),
     errorMessage: qt_property!(QString; NOTIFY stateChanged),
     count: qt_property!(i32; NOTIFY stateChanged),
+    /// When shown rows were listed (ms), -1 while unknown. `offline` only with a time.
     cachedAt: qt_property!(f64; NOTIFY stateChanged),
     capabilities: qt_property!(QVariantList; NOTIFY stateChanged),
-    /// New items can be added.
+    /// New items can be added: place and, on this device, folder permissions allow it.
     writable: qt_property!(bool; NOTIFY stateChanged),
     /// Existing items can be renamed, moved, replaced or deleted.
     changeable: qt_property!(bool; NOTIFY stateChanged),
@@ -198,6 +199,7 @@ pub struct DirectoryModel {
     prefs_set: bool,
     filter: FilterOptions,
     flags: Vec<String>,
+    adds: bool,
     /// None before the folder is open.
     thumb_settings: Option<ThumbSettings>,
     shown: usize,
@@ -208,6 +210,8 @@ pub struct DirectoryModel {
     pending: Option<Vec<Entry>>,
     dirty: bool,
     archive: bool,
+    /// Location was offline at open: its stored copy shows as offline.
+    location_offline: bool,
     watcher: Option<DirWatch>,
     settings_watch: Option<Guard>,
     level: Option<Level>,
@@ -246,6 +250,7 @@ impl DirectoryModel {
         }
         self.apply_prefs_state();
         self.flags = core.capability_flags(&dir.location);
+        self.adds = core.may_add_to(&dir);
         self.level = level_of(&core, &dir.location);
         if self.level_watch.is_none() {
             self.watch_level(&core);
@@ -254,7 +259,8 @@ impl DirectoryModel {
         self.folderCounts = self.local_dir.is_some();
         let location = core.location(&dir.location);
         self.archive = location.as_ref().is_some_and(|l| l.kind == LocationKind::Archive);
-        self.offline = location
+        self.offline = false;
+        self.location_offline = location
             .as_ref()
             .is_some_and(|l| l.status == LocationStatus::Offline);
         let location_name = location.map(|l| l.name).unwrap_or_default();
@@ -388,6 +394,7 @@ impl DirectoryModel {
         }
         self.level = level;
         self.flags = core.capability_flags(&dir.location);
+        self.adds = core.may_add_to(dir);
         self.refresh();
     }
 
@@ -465,6 +472,7 @@ impl DirectoryModel {
                 let changes = self.state.show_cached(entries);
                 self.apply(changes);
                 self.cachedAt = fetched_ms as f64;
+                self.offline = self.location_offline;
                 self.pending = Some(Vec::new());
                 // Grid from the start: a switch once fresh rows came rebuilt every delegate.
                 self.maybe_suggest_grid();
@@ -495,7 +503,7 @@ impl DirectoryModel {
         }
         self.loading = false;
         self.offline = false;
-        self.cachedAt = -1.0;
+        self.cachedAt = system_time_to_ms(std::time::SystemTime::now()) as f64;
         self.errorKind = QString::default();
         self.errorMessage = QString::default();
         self.maybe_suggest_grid();
@@ -519,7 +527,8 @@ impl DirectoryModel {
         self.pending = None;
         self.loading = false;
         self.state.finish();
-        if is_connectivity(e.kind) && self.state.total_len() > 0 {
+        // Rows of a listing cut short have no time: error banner, not offline.
+        if is_connectivity(e.kind) && self.state.total_len() > 0 && self.cachedAt >= 0.0 {
             self.offline = true;
             self.state.set_stale(true);
         }
@@ -603,7 +612,7 @@ impl DirectoryModel {
         self.large = self.state.is_large();
         let flags: Vec<&str> = self.flags.iter().map(String::as_str).collect();
         let caps = Capabilities::with(&flags);
-        self.writable = caps.writable();
+        self.writable = self.adds;
         self.changeable = caps.changeable();
         self.readable = caps.readable();
         self.access = qs(match self.level {
@@ -1128,6 +1137,7 @@ impl QAbstractListModel for DirectoryModel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lautta_core::entry::Kind;
 
     fn text_of<'a>(m: &'a DirectoryModel, name: &[u8]) -> Option<(Option<&'a str>, Option<&'a str>)> {
         m.previews
@@ -1177,6 +1187,109 @@ mod tests {
         assert!(
             !m.loading && m.pending.is_none(),
             "current listing's Done ends it"
+        );
+    }
+
+    fn lost() -> ListEvent {
+        ListEvent::Done(Err(Error::new(ErrorKind::ConnectionLost, "gone")))
+    }
+
+    fn now() -> f64 {
+        system_time_to_ms(std::time::SystemTime::now()) as f64
+    }
+
+    /// Model as `reset_state` leaves it.
+    fn opened() -> DirectoryModel {
+        DirectoryModel {
+            cachedAt: -1.0,
+            ..DirectoryModel::default()
+        }
+    }
+
+    /// Next listing as `refresh` starts it: rows stay until fresh ones arrive.
+    fn relist(m: &mut DirectoryModel) -> u64 {
+        m.loading = true;
+        m.pending = Some(Vec::new());
+        m.next_listing()
+    }
+
+    #[test]
+    fn a_folder_relisted_while_its_server_is_gone_says_when_its_rows_were_listed() {
+        let mut m = opened();
+        let first = m.next_listing();
+        m.loading = true;
+        m.on_event(
+            m.generation,
+            first,
+            ListEvent::Batch(vec![Entry::new(b"a.jpg", Kind::File)]),
+        );
+        let before = now();
+        m.on_event(m.generation, first, ListEvent::Done(Ok(())));
+        let listed = m.cachedAt;
+        assert!(before <= listed && listed <= now(), "listing time {listed}");
+        let again = relist(&mut m);
+        m.on_event(m.generation, again, lost());
+        assert!(m.offline, "rows stay, page offline");
+        assert_eq!(m.cachedAt, listed, "time of the rows shown");
+    }
+
+    #[test]
+    fn a_listing_cut_short_shows_its_error_not_offline() {
+        let mut m = opened();
+        let first = m.next_listing();
+        m.loading = true;
+        m.on_event(
+            m.generation,
+            first,
+            ListEvent::Batch(vec![Entry::new(b"a.jpg", Kind::File)]),
+        );
+        m.on_event(m.generation, first, lost());
+        assert_eq!(m.count, 1);
+        assert!(
+            !m.offline && m.cachedAt < 0.0,
+            "rows without a time are no stored copy"
+        );
+        assert_eq!(m.errorKind.to_string(), "ConnectionLost");
+    }
+
+    #[test]
+    fn a_folder_of_an_offline_server_is_offline_once_its_stored_copy_shows() {
+        let mut m = opened();
+        m.location_offline = true;
+        let first = relist(&mut m);
+        let copy = vec![Entry::new(b"a.jpg", Kind::File)];
+        m.on_event(
+            m.generation,
+            first,
+            ListEvent::Cached {
+                entries: copy,
+                fetched_ms: 1_700_000_000_000,
+            },
+        );
+        assert!(
+            m.offline && m.cachedAt == 1_700_000_000_000.0,
+            "stored copy with its time"
+        );
+        m.on_event(m.generation, first, lost());
+        assert!(
+            m.offline && m.cachedAt == 1_700_000_000_000.0,
+            "still the stored copy"
+        );
+
+        let mut online = opened();
+        let first = relist(&mut online);
+        let copy = vec![Entry::new(b"a.jpg", Kind::File)];
+        online.on_event(
+            online.generation,
+            first,
+            ListEvent::Cached {
+                entries: copy,
+                fetched_ms: 1,
+            },
+        );
+        assert!(
+            !online.offline,
+            "server online: stored copy shows until fresh rows come"
         );
     }
 }

@@ -188,14 +188,17 @@ ApplicationWindow {
         checkFlash(view, function () { Operations.copyTo(JSON.stringify([source + "zz-under-panel.md"]), base) },
                    [base + "zz-under-panel.md"], "paste under the clipboard panel")
         App.clearClipboard()
-        checkFlash(view, function () { Operations.compress(JSON.stringify([source + "zz-inner.md"]), base, "zz-packed", "zip") },
+        checkFlash(view, function () { Operations.compress(JSON.stringify([source + "zz-inner.md"]), base, "zz-packed", "zip", "") },
                    [base + "zz-packed.zip"], "compress")
-        var archive = finished(function () {
-            Operations.compress(JSON.stringify([source + "zz-inner.md"]), source, "unpack-me", "zip")
-        }, "the archive to extract")
-        checkFlash(view, function () { Operations.extract(archive, base + "zz-unpacked") },
-                   [base + "zz-unpacked"], "extract into a new folder")
-        checkFlash(view, function () { Operations.extract(archive, base) }, [base + "zz-inner.md"], "extract here")
+        // Extract lands beside the compressed file: one item as is, several in a new folder.
+        var one = finished(function () {
+            Operations.compress(JSON.stringify([source + "zz-inner.md"]), base, "zz-one", "zip", "")
+        }, "the compressed file of one item")
+        checkFlash(view, function () { Operations.extract(one, "") }, [base + "zz-inner.md"], "extract one item")
+        var two = finished(function () {
+            Operations.compress(JSON.stringify([source + "zz-inner.md", source + "zz-pasted.md"]), base, "zz-two", "zip", "")
+        }, "the compressed file of two items")
+        checkFlash(view, function () { Operations.extract(two, "") }, [base + "zz-two"], "extract into a new folder")
         // Scan says saved once its file is written.
         fixture(base + "zz-scan.pdf")
         waitFor(function () { return !view.model.loading && view.model.indexOf(base + "zz-scan.pdf") >= 0 }, "the scan file listed")

@@ -20,7 +20,7 @@ ApplicationWindow {
 
     Connections {
         target: Operations
-        onJobFinished: if (ok) Operations.openArchive(resultUri)
+        onJobFinished: if (ok) Operations.openArchive(resultUri, "")
         onArchiveOpened: window.archiveRoot = rootUri
     }
 
@@ -95,7 +95,7 @@ ApplicationWindow {
 
     function checkArchive() {
         Operations.compress(JSON.stringify([base + "readable.pdf", base + "secret.pdf"]), "lautta://user-documents/",
-                            "pdf-thumbnails", "zip")
+                            "pdf-thumbnails", "zip", "")
         if (!expect(until(function () { return window.archiveRoot.length > 0 }), "the archive opens"))
             return
         var view = push(window.archiveRoot)

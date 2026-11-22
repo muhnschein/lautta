@@ -224,8 +224,9 @@ ApplicationWindow {
              [[qsTrId("lautta-dir-act-rename"), "image://theme/icon-m-edit"],
               [qsTrId("lautta-dir-act-favourite"), "image://theme/icon-m-favorite"],
               [qsTrId("lautta-dir-act-compress"), "file-archive"],
+              [qsTrId("lautta-dir-act-checksums"), "checksum"],
               [qsTrId("lautta-dir-act-move-new-folder"), "file-folder"]],
-             "one item: Rename, Add to favourites, Compress, Move to new folder, each with its icon")
+             "one item: Rename, Add to favourites, Compress, Checksums, Move to new folder, each with its icon")
         pageStack.pop(null, PageStackAction.Immediate)
         waitFor(function () { return !pageStack.busy && view !== null }, "the folder again")
         expect(view.selecting && view.model.selectedCount === 1, "leaving the page keeps the selection")

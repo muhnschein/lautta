@@ -73,7 +73,8 @@ FullscreenContentPage {
 
     function showMore() {
         var more = pageStack.push(Qt.resolvedUrl("../components/viewers/ImageMorePage.qml"), {
-            "uri": page.currentUri, "changeable": App.canChange(page.currentUri)
+            "uri": page.currentUri, "changeable": App.canChange(page.currentUri),
+            "writable": App.canAddTo(App.parentUri(page.currentUri))
         })
         more.renameChosen.connect(page.askRename)
     }

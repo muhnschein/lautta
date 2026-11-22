@@ -40,7 +40,7 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | **viewer** | built-in page for image, video, audio, text, Markdown, PDF | "preview" (grid tile thumbnail) |
 | **thumbnail** | grid/list image of file; **text thumb** = first lines of text file | |
 | **working copy** | local copy of remote file for another app (`Downloads/Lautta/Opened`, 24 h) | "cache" |
-| **archive** | zip, tar(.gz/.bz2/.xz/.zst), 7z opened read-only as location | |
+| **archive** | zip, tar(.gz/.bz2/.xz/.zst), 7z opened read-only as location; on screen "compressed file" | "archive" on screen |
 | **scan** | camera → pages → one PDF | |
 | **share target** | Lautta in Sailfish share sheet: "Save to" page | share *out* = Share action |
 | **cover** | app cover: current folder, or task progress | |
@@ -61,14 +61,13 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | SCR-08 | More actions | `directory/MoreActionsPage.qml` | S | context menu, selection bar |
 | SCR-09 | Selection mode + selection bar | `directory/SelectionPanel.qml` | S | pulley Select, grid long-press |
 | SCR-10 | Clipboard panel | `directory/ClipboardPanel.qml` | S | after Copy/Cut |
-| SCR-11 | Folder states (empty, no access, error, offline, large, grid hint, archive banner) | `DirectoryView.qml`, `InfoBanner`, `ArchiveBanner` | S/B | folder page |
+| SCR-11 | Folder states (empty, no access, error, offline, large, grid hint) | `DirectoryView.qml`, `InfoBanner` | S/B | folder page |
 | SCR-12 | Add | `dialogs/AddDialog.qml` | S | pulley Add |
 | SCR-13 | New folder | `dialogs/NewItemDialog.qml` | S | Add, Move to new folder, folder picker pulley |
 | SCR-14 | Rename | `dialogs/RenameDialog.qml` | S | context menu, More actions, image viewer |
 | SCR-15 | Delete permanently | `dialogs/DeleteDialog.qml` | S | delete on volume, server, Trash off, Trash "Delete now" |
 | SCR-16 | Compress | `dialogs/CompressDialog.qml` | S | More actions, selection More, image More |
-| SCR-17 | Extract | `dialogs/ExtractDialog.qml` | S | archive banner "Extract all" |
-| SCR-18 | Folder picker | `dialogs/FolderPickerDialog.qml` | S | Compress/Extract "Save to", share target "Another folder…" |
+| SCR-18 | Folder picker | `dialogs/FolderPickerDialog.qml` | S | share target "Another folder…" |
 | SCR-19 | Plan summary | `dialogs/PlanSummaryDialog.qml` | S | large copy/move/extract |
 | SCR-20 | Conflict | `dialogs/ConflictDialog.qml` | S | plan summary, activity bar Answer, Activity row, notification |
 | SCR-21 | Activity | `pages/TransfersPage.qml` | S | Browse/folder pulley, activity bar Show, cover action, notification |
@@ -85,7 +84,7 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | SCR-32 | Markdown viewer | `viewers/MarkdownViewer.qml` | S | tap `.md` (`.markdown`, `.mkd`, `.mdown`, `.mdwn`, `.markdn`) or `.txt` |
 | SCR-33 | PDF viewer | `viewers/PdfViewer.qml` | S | tap PDF |
 | SCR-34 | PDF contents | `viewers/PdfContentsPage.qml` | S | PDF pulley "Contents and pages" |
-| SCR-35 | PDF password | `dialogs/PdfPasswordDialog.qml` | S | locked PDF, pulley Unlock |
+| SCR-35 | Locked file | `dialogs/LockedFileDialog.qml` | S | locked PDF, pulley Unlock; locked compressed file on open or Extract |
 | SCR-36 | PDF link | `dialogs/PdfLinkDialog.qml` | S | tap web link in PDF |
 | SCR-37 | Open remote (Getting file) | `dialogs/OpenRemoteDialog.qml` | B | open/share remote file without viewer |
 | SCR-38 | Recents | `pages/RecentsPage.qml` | S | Browse row Recents |
@@ -109,6 +108,10 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | SCR-58 | Cover (folder / tasks) | `cover/CoverPage.qml`, `cover/TransferCover.qml` | S | app in background |
 | SCR-59 | Notifications | `components/TransferNotifications.qml` | S | tasks in background |
 | SCR-60 | Nearby setup | `dialogs/NearbySetupDialog.qml` | B | tap Nearby row |
+| SCR-61 | Checksums | `pages/ChecksumsPage.qml` | S | More actions, image More |
+| SCR-62 | More algorithms | `pages/ChecksumsPage.qml` (group `more`) | S | Checksums › More algorithms |
+| SCR-63 | Checksum | `pages/ChecksumPage.qml` | S | tap algorithm |
+| SCR-64 | Verify files | `pages/VerifyFilesPage.qml` | S | More actions of checksum list |
 
 Retired, never reuse: SCR-49 Connect to server, SCR-50 Server question.
 
@@ -166,7 +169,7 @@ Retired, never reuse: F-SRV-08 Server question, F-SRV-09 Connect to server, F-SR
 
 ### 3.4 Item actions
 
-Context menu order (list long-press): Share (files) · Copy · Cut · Rename · Delete · More actions. More actions: Add to favourites · Compress · Move to new folder. Read-only location hides Cut, Rename, Delete, Move to new folder. *Code:* `ContextActions.js`.
+Context menu order (list long-press): Share (files) · Copy · Cut · Rename · Delete · More actions. More actions: Verify files (checksum list) · Add to favourites · Extract (compressed file) · Compress · Checksums (files) · Move to new folder. Read-only location hides Cut, Rename, Delete, Move to new folder; Extract and Compress only where folder takes new files (place and folder permissions allow adding). *Code:* `ContextActions.js`.
 
 - **F-ITM-01 Open item** — tap: folder → folder page; file → viewer by type (§3.8); archive → archive location; unknown → other app (local) or Open remote (server).
 - **F-ITM-02 Share (out)** — Sailfish share sheet; remote file first fetched (SCR-37).
@@ -174,16 +177,18 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-ITM-04 Rename** — dialog, then remorse "File renamed" with undo.
 - **F-ITM-05 Delete** — user folders with Trash on: remorse "Moving to trash"; volumes, servers, Trash off: SCR-15 "Delete permanently?".
 - **F-ITM-06 Add to favourites** — from context More, path menu, Browse row, image More. *Proof:* SCR-40 "Added to favourites".
-- **F-ITM-07 Compress** — name, format (Zip, tar.gz), Save to, size before. *Proof:* notice "Archive created", task in Activity.
+- **F-ITM-07 Compress** — Name, Format list (Zip, 7z, tar.xz, tar.gz, one line each, picked row lit), Password + Confirm password for Zip and 7z (AES-256; 7z hides names too; empty = none; mismatch greys Compress; guessable one: label "Weak password" in orange, never refused); file lands beside items, taken name gets " 2". *Proof:* notice "Compressed file created", new file lights up.
 - **F-ITM-08 Move to new folder** — new folder dialog, then move.
 - **F-ITM-09 Open with** — other app for local file (viewer pulley, image toolbar).
+- **F-ITM-10 Checksums** — one file: SCR-61 SHA-256, MD5, SHA-1, SHA-512, More algorithms (SCR-62: SHA-224, SHA-384, SHA3-256, SHA3-512, BLAKE2b, BLAKE3, CRC32, XXH64, XXH128). Tap one → SCR-63 progress, then value; nothing runs before tap; Back stops it. Checksum list in same folder naming file → "Matches X" / "Doesn't match X". *Proof:* value; tap → "Copied". *Code:* `checksum.rs`, `app_checksum.rs`.
+- **F-ITM-11 Verify files** — checksum list (`SHA256SUMS`, `x.sha256`, `.md5`, `.sfv`, BSD tags, clear-signed; signature not checked): SCR-64 row per listed file: Matches, Doesn't match, Missing, Not checked (outside folder, link, folder); problems first. *Proof:* rows. *Code:* `checksum/list.rs`.
 
 ### 3.5 Selection
 
 - **F-SEL-01 Selection mode** — pulley Select; header "N selected"; tap toggles. Hard to enter by accident; "Stop selecting" leaves.
 - **F-SEL-02 Drag-select** — long-press and drag across rows/tiles (grid: long-press starts it).
 - **F-SEL-03 Select all / Clear selection** — pulley in selection mode.
-- **F-SEL-04 Selection bar** — Share · Copy · Cut · Delete · More · Stop selecting. More: Rename (one item), Add to favourites, Compress, Move to new folder (many: Compress, Move to new folder).
+- **F-SEL-04 Selection bar** — Share · Copy · Cut · Delete · More · Stop selecting. More: Rename (one item), Verify files (one checksum list), Add to favourites, Extract (one compressed file), Compress, Checksums (one file), Move to new folder (many: Compress, Move to new folder).
 
 ### 3.6 Clipboard and operations
 
@@ -191,8 +196,8 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-OPS-02 Plan summary** — before ops over threshold (Settings › Transfers › Ask before large operations): items, size, free on destination, conflicts, names changed (Use suggested names for all), options (Keep modification times, Keep permissions, Verify with checksums), Start.
 - **F-OPS-03 Conflict resolution** — Merge (folders), Keep both ("Saves as …"), Skip, Replace, Replace if newer, Resume (unfinished copies); "Do this for the remaining N conflicts". Add only: Keep both only, "Lautta may only add files here."
 - **F-OPS-04 Not-enough-space check** — error names place and sizes.
-- **F-OPS-05 Extract** — archive banner Extract all: Contents, Size, Into (New folder "…" or the destination itself), Extract to, Open folder when done. *Proof:* folder page of result.
-- **F-OPS-06 Archive location** — archive opens read-only as folder, banner "Archive contents are read-only." *Code:* `provider/archive.rs`.
+- **F-OPS-05 Extract** — no page: task starts (locked file not open: SCR-35 asks first). One top item lands as is beside compressed file, several go into new folder named after it; taken name gets " 2", nothing merged or replaced. *Entry:* More actions of compressed file, pulley inside one. *Proof:* task in Activity, result lights up in folder.
+- **F-OPS-06 Archive location** — compressed file opens read-only as folder, header line "Compressed file · read only". Locked one (Zip AES, 7z AES): SCR-35 asks password, wrong one asks again; open while a page shows it, its items sit on clipboard or a task reads it, then closed and password gone (memory only, never stored). *Code:* `provider/archive.rs`, `app_archives.rs`.
 - **F-OPS-07 Background notice** — "Running in the background" when task starts.
 
 ### 3.7 Activity (tasks)
@@ -214,20 +219,20 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 
 - **F-VWR-01 Image viewer** — Jolla Gallery viewer: swipe for next/previous in folder, pinch zoom around fingers, swipe down to close; toolbar Delete, Open with, Share, More; (i) Details.
 - **F-VWR-02 Image details** — Camera, Lens, Exposure, Taken, Dimensions, Size, Location, Orientation (EXIF; "applied" rotation note).
-- **F-VWR-03 Image More** — Rename, Add to favourites, Compress.
+- **F-VWR-03 Image More** — Rename, Add to favourites, Compress (folder takes new files).
 - **F-VWR-04 Media player** — video and audio; play/pause, back to start, +30 s, seek bar, tap toggles controls; remote stream or download. Audio: cover (from file, else folder `cover`/`folder`/`front` .jpg/.png, else note icon) and title, artist, album · year, track; no title tag → file name; blurred cover behind; landscape cover left.
 - **F-VWR-05 Text viewer** — code, logs, config, data: syntax colours (syntect), read-only line "Read-only · type", first 1 MB, non-UTF-8 warning; pulley Open with, Share.
 - **F-VWR-06 Markdown viewer** — Markdown rendered in ambience colours (highlight headings, ☐/☑ tasks, quote bar, code on tinted panel with syntax colours, ruled tables), `.txt` as prose in reading font; text viewer's backdrop; shown in blocks, only those on screen laid out; pulley View source, Share, Open with; first 1 MB.
 - **F-VWR-07 PDF viewer** — pages, zoom, page count, reopen at last page, links (internal jump, web link dialog), Back to page n; pulley Unlock, Open with, Share, Search, Contents and pages.
 - **F-VWR-08 PDF search** — search field with up/down hits, "n of m · page p", "Not found in N pages".
 - **F-VWR-09 PDF contents / go to page** — outline list, "Go to page, 1 to N".
-- **F-VWR-10 PDF password** — "Locked PDF", wrong-password retry.
+- **F-VWR-10 PDF password** — SCR-35 "Locked file", wrong-password retry.
 - **F-VWR-11 External fallback** — unknown types open in other app; remote via working copy (F-SRV-16).
 
 ### 3.9 Search
 
 - **F-SRC-01 Search in folder** — from folder pulley; type part of name or pattern (`*.pdf`); live results "Searching… N results", Stop; result opens item.
-- **F-SRC-02 Search filters** — Name match Contains/Pattern, Type (Any, Folders, Images, Videos, Audio, Documents, Archives, Text files), Size, Modified, Include hidden files, Search depth on servers, Recent searches.
+- **F-SRC-02 Search filters** — Name match Contains/Pattern, Type (Any, Folders, Images, Videos, Audio, Documents, Compressed files, Text files), Size, Modified, Include hidden files, Search depth on servers, Recent searches.
 - **F-SRC-03 Server search depth** — Settings › Search ("N folders deep on servers"; device searches all).
 
 ### 3.10 Scan
@@ -272,7 +277,10 @@ AGENTS.md: feature reachable from several places → all of them. ✓ = offered,
 | Delete | ✓ | ✓ | — | — | — | ✓ | — | — |
 | Add to favourites | via More | via More | ✓ | ✓ | ✓ (folder, volume) | ✓ (More) | — | — |
 | Compress | via More | via More | ✓ | — | — | ✓ (More) | — | — |
+| Extract | via More | via More (1 item) | ✓ | — | — | — | — | — |
 | Move to new folder | via More | via More | ✓ | — | — | — | — | — |
+| Checksums | via More (files) | via More (1 file) | ✓ | — | — | ✓ (More) | — | — |
+| Verify files | via More (checksum list) | via More (1 list) | ✓ | — | — | — | — | — |
 | Open with | — | — | — | — | — | ✓ | ✓ | — |
 | Copy address | — | — | — | ✓ | ✓ | — | — | — |
 

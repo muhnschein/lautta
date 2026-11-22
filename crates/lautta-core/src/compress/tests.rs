@@ -30,6 +30,8 @@ impl Write for SharedBuf {
     }
 }
 
+impl Sink for SharedBuf {}
+
 impl SharedBuf {
     fn bytes(&self) -> Vec<u8> {
         self.0.lock().unwrap().clone()
@@ -40,6 +42,8 @@ struct BrokenPipe {
     limit: usize,
     written: usize,
 }
+
+impl Sink for BrokenPipe {}
 
 impl Write for BrokenPipe {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
@@ -98,14 +102,17 @@ async fn run(f: &Fixture, sources: &[Uri], kind: ArchiveKind) -> (Vec<u8>, Compr
 async fn reopen(name: &str, bytes: &[u8], cache: &Path) -> ArchiveProvider {
     let mem = MemoryProvider::default();
     mem.add_file(name, bytes, 0);
-    ArchiveProvider::open(Arc::new(mem), vp(name), cache.to_path_buf())
+    ArchiveProvider::open(Arc::new(mem), vp(name), cache.to_path_buf(), None)
         .await
         .unwrap()
 }
 
 fn tar_members(bytes: &[u8]) -> Vec<(String, tar::EntryType, Vec<u8>, Option<String>)> {
-    let gz = flate2::read::GzDecoder::new(bytes);
-    let mut archive = tar::Archive::new(gz);
+    tar_members_of(flate2::read::GzDecoder::new(bytes))
+}
+
+fn tar_members_of(r: impl Read) -> Vec<(String, tar::EntryType, Vec<u8>, Option<String>)> {
+    let mut archive = tar::Archive::new(r);
     let mut out = Vec::new();
     for entry in archive.entries().unwrap() {
         let mut e = entry.unwrap();
@@ -404,7 +411,12 @@ async fn source_errors_propagate_with_their_kind() {
 #[tokio::test]
 async fn a_failing_sink_ends_the_run_with_its_error() {
     let f = fixture();
-    for kind in [ArchiveKind::Zip, ArchiveKind::TarGz] {
+    for kind in [
+        ArchiveKind::Zip,
+        ArchiveKind::SevenZ,
+        ArchiveKind::TarXz,
+        ArchiveKind::TarGz,
+    ] {
         let sink = BrokenPipe {
             limit: 100_000,
             written: 0,
@@ -423,11 +435,47 @@ async fn a_failing_sink_ends_the_run_with_its_error() {
     }
 }
 
+/// Accepts every byte; only the last flush fails, as a sink that commits on flush can.
+struct FailingFlush;
+
+impl Sink for FailingFlush {}
+
+impl Write for FailingFlush {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Err(io::Error::from(io::ErrorKind::BrokenPipe))
+    }
+}
+
+#[tokio::test]
+async fn a_failing_last_flush_fails_the_run() {
+    let f = fixture();
+    for kind in [
+        ArchiveKind::Zip,
+        ArchiveKind::SevenZ,
+        ArchiveKind::TarXz,
+        ArchiveKind::TarGz,
+    ] {
+        let err = compress(
+            &f.resolver,
+            &[uri("mem", "proj")],
+            FailingFlush,
+            &CompressOptions::new(kind),
+        )
+        .await
+        .err();
+        assert_eq!(err.map(|e| e.kind), Some(ErrorKind::Io), "{kind:?}");
+    }
+}
+
 #[test]
 fn zip_writer_handles_unknown_sizes_and_forced_zip64() {
     for force in [false, true] {
         let sink = SharedBuf::default();
-        let mut zip = ZipStream::new(sink.clone(), 6);
+        let mut zip = ZipStream::new(sink.clone(), 6, None);
         if force {
             zip = zip.with_forced_zip64();
         }
@@ -464,13 +512,33 @@ fn zip_writer_handles_unknown_sizes_and_forced_zip64() {
             Some(0o640)
         );
         assert!(z.by_name("d/").unwrap().is_dir());
+        let zip64 = |name: &[u8], want: bool| {
+            assert_eq!(
+                version_needed(&sink.bytes(), name),
+                if want { 45 } else { 20 },
+                "force={force}"
+            );
+        };
+        zip64(b"unknown.bin", true);
+        zip64(b"known.txt", force);
+        zip64(b"d/", false);
     }
+}
+
+/// "Version needed to extract" of central entry `name`.
+fn version_needed(zip: &[u8], name: &[u8]) -> u16 {
+    let u16_at = |at: usize| u16::from_le_bytes([zip[at], zip[at + 1]]);
+    (0..zip.len() - 46)
+        .filter(|&at| zip[at..at + 4] == *b"PK\x01\x02")
+        .find(|&at| zip.get(at + 46..at + 46 + usize::from(u16_at(at + 28))) == Some(name))
+        .map(|at| u16_at(at + 6))
+        .expect("central entry")
 }
 
 #[tokio::test]
 async fn forced_zip64_archives_open_with_our_reader_too() {
     let sink = SharedBuf::default();
-    let mut w: Box<dyn MemberWriter> = Box::new(ZipStream::new(sink.clone(), 1).with_forced_zip64());
+    let mut w: Box<dyn MemberWriter> = Box::new(ZipStream::new(sink.clone(), 1, None).with_forced_zip64());
     let meta = EntryMeta {
         path: b"a.txt".to_vec(),
         kind: Kind::File,
@@ -549,3 +617,162 @@ async fn extract_plan_lists_parents_first_with_relative_paths() {
     );
     assert!(extract_plan(&p, &vp("proj/empty")).unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn tar_xz_is_readable_by_the_tar_and_xz_crates() {
+    let f = fixture();
+    let (bytes, stats) = run(&f, &[uri("mem", "proj")], ArchiveKind::TarXz).await;
+    assert_eq!((stats.files, stats.dirs, stats.symlinks), (5, 4, 1));
+    assert_eq!(&bytes[..6], b"\xfd7zXZ\0", "xz stream");
+    let members = tar_members_of(xz2::read::XzDecoder::new(&bytes[..]));
+    let paths: Vec<&str> = members.iter().map(|m| m.0.trim_end_matches('/')).collect();
+    assert_eq!(paths, EXPECTED_ORDER);
+    let find = |p: &str| members.iter().find(|m| m.0.trim_end_matches('/') == p).unwrap();
+    assert_eq!(find("proj/data/big.bin").2, f.big);
+    assert_eq!(find("proj/link").3.as_deref(), Some("src/main.rs"));
+
+    let tmp = tempfile::tempdir().unwrap();
+    let p = reopen("out.tar.xz", &bytes, tmp.path()).await;
+    assert_eq!(
+        p.format(),
+        ArchiveFormat::Tar(crate::provider::archive::Compression::Xz)
+    );
+    let h = p.open_read(&vp("proj/readme.txt"), Lane::Bulk).await.unwrap();
+    assert_eq!(read_all(h.as_ref(), 1 << 20).await.unwrap(), b"hello zip and tar");
+}
+
+#[tokio::test]
+async fn sevenz_round_trips_with_folders_links_modes_and_times() {
+    let f = fixture();
+    let (bytes, stats) = run(&f, &[uri("mem", "proj")], ArchiveKind::SevenZ).await;
+    assert_eq!((stats.files, stats.dirs, stats.symlinks), (5, 4, 1));
+    assert_eq!(&bytes[..6], b"7z\xbc\xaf\x27\x1c", "7z signature");
+    let tmp = tempfile::tempdir().unwrap();
+    let p = reopen("out.7z", &bytes, tmp.path()).await;
+    assert_eq!(p.format(), ArchiveFormat::SevenZ);
+    let all = p.entries();
+    let mut paths: Vec<String> = all
+        .iter()
+        .map(|e| String::from_utf8_lossy(e.path.as_bytes()).into_owned())
+        .collect();
+    paths.sort();
+    assert_eq!(paths, EXPECTED_ORDER);
+    for (path, data) in [
+        ("proj/data/big.bin", f.big.clone()),
+        ("proj/readme.txt", b"hello zip and tar".to_vec()),
+        ("proj/src/lib.rs", Vec::new()),
+        ("proj/ünï cödé.txt", b"unicode".to_vec()),
+    ] {
+        let h = p.open_read(&vp(path), Lane::Bulk).await.unwrap();
+        assert_eq!(read_all(h.as_ref(), 1 << 20).await.unwrap(), data, "{path}");
+    }
+    let kind = |path: &str| all.iter().find(|e| e.path == vp(path)).unwrap().kind;
+    assert_eq!(kind("proj/empty"), Kind::Dir);
+    assert_eq!(kind("proj/link"), Kind::Symlink);
+    assert_eq!(p.read_link(&vp("proj/link")).await.unwrap(), b"src/main.rs");
+    let st = p.stat(&vp("proj/readme.txt"), false, Lane::Bulk).await.unwrap();
+    assert_eq!(
+        st.modified.map(crate::entry::system_time_to_ms),
+        Some(1_709_642_096_000)
+    );
+    assert_eq!(st.mode, Some(0o644));
+    let dir = p.stat(&vp("proj/src"), false, Lane::Bulk).await.unwrap();
+    assert_eq!(dir.mode, Some(0o755));
+    // 7-Zip on Windows reads the directory attribute, not the unix mode.
+    let raw =
+        sevenz_rust2::Archive::read(&mut io::Cursor::new(&bytes), &sevenz_rust2::Password::empty()).unwrap();
+    for e in &raw.files {
+        assert_eq!(
+            e.windows_attributes & SEVENZ_DIRECTORY != 0,
+            e.is_directory,
+            "{}",
+            e.name
+        );
+    }
+    assert!(raw.files.iter().any(|e| e.is_directory));
+}
+
+#[tokio::test]
+async fn sevenz_goes_straight_into_a_file_and_spools_for_a_pipe() {
+    let f = fixture();
+    let tmp = tempfile::tempdir().unwrap();
+    let mut opts = CompressOptions::new(ArchiveKind::SevenZ);
+    opts.spool_dir = Some(tmp.path().join("spool"));
+
+    let file = std::fs::File::create(tmp.path().join("direct.7z")).unwrap();
+    compress(&f.resolver, &[uri("mem", "single.txt")], file, &opts)
+        .await
+        .unwrap();
+    assert!(!tmp.path().join("spool").exists(), "a file needs no spool");
+    let direct = std::fs::read(tmp.path().join("direct.7z")).unwrap();
+
+    let sink = SharedBuf::default();
+    compress(&f.resolver, &[uri("mem", "single.txt")], sink.clone(), &opts)
+        .await
+        .unwrap();
+    assert!(tmp.path().join("spool").is_dir(), "a pipe is spooled");
+    assert_eq!(
+        std::fs::read_dir(tmp.path().join("spool")).unwrap().count(),
+        0,
+        "spool file leaves nothing"
+    );
+    assert_eq!(sink.bytes(), direct, "same archive either way");
+    let p = reopen("s.7z", &direct, tmp.path()).await;
+    let h = p.open_read(&vp("single.txt"), Lane::Bulk).await.unwrap();
+    assert_eq!(read_all(h.as_ref(), 1 << 20).await.unwrap(), b"just one");
+}
+
+#[tokio::test]
+async fn a_pipe_is_no_seekable_file() {
+    let (_read, write) = rustix::pipe::pipe().unwrap();
+    assert!(std::fs::File::from(write).into_file().is_err());
+    let tmp = tempfile::tempfile().unwrap();
+    assert!(tmp.into_file().is_ok());
+}
+
+#[test]
+fn sevenz_dictionary_fits_the_file() {
+    assert_eq!(sevenz_dict(Some(0)), 64 << 10);
+    assert_eq!(sevenz_dict(Some(100)), 64 << 10);
+    assert_eq!(sevenz_dict(Some(65_537)), 128 << 10);
+    assert_eq!(sevenz_dict(Some(1 << 20)), 1 << 20);
+    assert_eq!(sevenz_dict(Some(5 << 20)), 8 << 20);
+    assert_eq!(sevenz_dict(Some(9 << 20)), 8 << 20);
+    assert_eq!(sevenz_dict(Some(u64::MAX)), 8 << 20);
+    assert_eq!(sevenz_dict(None), 8 << 20);
+}
+
+#[test]
+fn only_tar_needs_sizes_up_front() {
+    assert!(ArchiveKind::TarGz.needs_size());
+    assert!(ArchiveKind::TarXz.needs_size());
+    assert!(!ArchiveKind::Zip.needs_size());
+    assert!(!ArchiveKind::SevenZ.needs_size());
+}
+
+#[tokio::test]
+async fn tar_streams_files_of_known_size_in_chunks() {
+    let f = fixture();
+    for kind in [ArchiveKind::TarXz, ArchiveKind::TarGz] {
+        let calls = Arc::new(Mutex::new(0usize));
+        let mut opts = CompressOptions::new(kind);
+        opts.progress = {
+            let calls = Arc::clone(&calls);
+            Arc::new(move |_, _| *calls.lock().unwrap() += 1)
+        };
+        compress(
+            &f.resolver,
+            &[uri("mem", "proj/data/big.bin")],
+            SharedBuf::default(),
+            &opts,
+        )
+        .await
+        .unwrap();
+        assert!(
+            *calls.lock().unwrap() >= 3,
+            "{kind:?}: read in chunks, not spooled"
+        );
+    }
+}
+
+mod passwords;

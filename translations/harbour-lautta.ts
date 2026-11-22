@@ -211,7 +211,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-filters-type-archive">
-        <source>Archives</source>
+        <source>Compressed files</source>
+        <oldsource>Archives</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-filters-type-text">
@@ -527,36 +528,18 @@
         <source>About Lautta</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-archive-readonly">
-        <source>Archive contents are read-only.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-archive-extract-all">
-        <source>Extract all</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-ops-background">
         <source>Running in the background</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-ops-archive-created">
-        <source>Archive created</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-compress-default-name">
-        <source>Archive</source>
+        <source>Compressed</source>
+        <oldsource>Archive</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-compress-accept">
         <source>Compress</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-compress-count" numerus="yes">
-        <source>Compress %n items</source>
-        <translation>
-            <numerusform>Compress %n item</numerusform>
-            <numerusform>Compress %n items</numerusform>
-        </translation>
     </message>
     <message id="lautta-compress-name">
         <source>Name</source>
@@ -564,22 +547,6 @@
     </message>
     <message id="lautta-compress-format">
         <source>Format</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-compress-save-to">
-        <source>Save to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-compress-pick">
-        <source>Save archive to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-compress-pick-accept">
-        <source>Select</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-compress-size">
-        <source>Size before compression</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-conflict-merge">
@@ -665,73 +632,6 @@
             <numerusform>Do this for the remaining %n conflict</numerusform>
             <numerusform>Do this for the remaining %n conflicts</numerusform>
         </translation>
-    </message>
-    <message id="lautta-extract-files" numerus="yes">
-        <source>%n files</source>
-        <translation>
-            <numerusform>%n file</numerusform>
-            <numerusform>%n files</numerusform>
-        </translation>
-    </message>
-    <message id="lautta-extract-folders" numerus="yes">
-        <source>%n folders</source>
-        <translation>
-            <numerusform>%n folder</numerusform>
-            <numerusform>%n folders</numerusform>
-        </translation>
-    </message>
-    <message id="lautta-extract-contents">
-        <source>%1, %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-accept">
-        <source>Extract</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-title">
-        <source>Extract %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-contents-label">
-        <source>Contents</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-size">
-        <source>Size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-uncompressed">
-        <source>%1 uncompressed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-into">
-        <source>Into</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-new-folder">
-        <source>New folder “%1”</source>
-        <oldsource>New folder &apos;%1&apos;</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-here">
-        <source>The destination itself</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-pick">
-        <source>Extract to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-pick-accept">
-        <source>Select</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-destination">
-        <source>Destination</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-extract-open">
-        <source>Open folder when done</source>
-        <translation type="unfinished"></translation>
     </message>
     <message id="lautta-plan-move-to">
         <source>Move to %1</source>
@@ -1401,8 +1301,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-xfr-empty-hint">
-        <source>Copies, moves, deletes and archives you start show up here.</source>
-        <oldsource>Copies, moves and uploads you start show up here.</oldsource>
+        <source>Copies, moves, deletes and extracts you start show up here.</source>
+        <oldsource>Copies, moves, deletes and archives you start show up here.</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-browse-section-favourites">
@@ -2057,19 +1957,6 @@
         <source>Unlock</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-viewers-pdf-locked">
-        <source>Locked PDF</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-pdf-wrong-password">
-        <source>Wrong password. Try again.</source>
-        <oldsource>Wrong password, try again</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-pdf-password">
-        <source>Password</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-viewers-pdf-unlocking">
         <source>Unlocking</source>
         <translation type="unfinished"></translation>
@@ -2630,6 +2517,134 @@
     </message>
     <message id="lautta-viewers-media-track">
         <source>Track %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-extract">
+        <source>Extract</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-compressed-readonly">
+        <source>Compressed file · read only</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-ops-compressed-created">
+        <source>Compressed file created</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-zip-line">
+        <source>Opens on every phone and computer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-7z-line">
+        <source>Smaller. Some phones and computers need an app</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-tarxz-line">
+        <source>Smallest. Made for Linux and Mac</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-targz-line">
+        <source>Fast. Made for Linux and Mac</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-password-required">
+        <source>%1 is locked. Open it and enter its password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-password-required-unnamed">
+        <source>The file is locked. Open it and enter its password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-wrong-password">
+        <source>Wrong password for %1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-wrong-password-unnamed">
+        <source>Wrong password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-password-section">
+        <source>Password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-weak-password">
+        <source>Weak password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-password">
+        <source>Password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-passwords-differ">
+        <source>Passwords don&apos;t match</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-confirm-password">
+        <source>Confirm password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-locked-unlock">
+        <source>Unlock</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-locked-title">
+        <source>Locked file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-locked-wrong">
+        <source>Wrong password. Try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-locked-password">
+        <source>Password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-checksums">
+        <source>Checksums</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-verify">
+        <source>Verify files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-checksum-copied">
+        <source>Copied</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-checksum-matches">
+        <source>Matches %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-checksum-differs">
+        <source>Doesn&apos;t match %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-checksum-more">
+        <source>More algorithms</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-checksum-title">
+        <source>Checksums</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-verify-matches">
+        <source>Matches</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-verify-differs">
+        <source>Doesn&apos;t match</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-verify-missing">
+        <source>Missing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-verify-not-checked">
+        <source>Not checked</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-verify-empty">
+        <source>No files listed</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

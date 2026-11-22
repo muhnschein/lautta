@@ -19,7 +19,10 @@ Page {
     readonly property var ctx: ({
         "isDir": info.isDir,
         "changeable": owner ? owner.model.changeable : false,
-        "readable": owner ? owner.model.readable : false
+        "readable": owner ? owner.model.readable : false,
+        "writable": owner ? owner.model.writable : false,
+        "archive": count === 1 && info.isDir === false && App.viewerFor(info.uri || "", info.mimeType || "") === "archive",
+        "checksumList": count === 1 && info.isDir === false && App.isChecksumList(info.uri || "")
     })
     readonly property var actions: selection ? Selection.moreRows(count, ctx) : Actions.more(ctx)
 

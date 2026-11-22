@@ -93,6 +93,7 @@ pub(crate) mod testutil {
             items,
             totals: PlanTotals::default(),
             needs_summary: false,
+            hold: Default::default(),
         }
     }
 }

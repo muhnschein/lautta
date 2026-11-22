@@ -45,9 +45,13 @@ pub struct App {
     isRemote: qt_method!(fn(&self, uri: QString) -> bool),
     /// Items there can be renamed or deleted: false where netvfs grants less than full access.
     canChange: qt_method!(fn(&self, uri: QString) -> bool),
+    canAddTo: qt_method!(fn(&self, folder_uri: QString) -> bool),
     localUrl: qt_method!(fn(&self, uri: QString) -> QString),
     categoryOf: qt_method!(fn(&self, name_or_uri: QString) -> QString),
     viewerFor: qt_method!(fn(&self, name_or_uri: QString, mime: QString) -> QString),
+    /// `[{ id, label }]` JSON of `common` or `more` checksum algorithms.
+    checksumAlgorithms: qt_method!(fn(&self, group: QString) -> QString),
+    isChecksumList: qt_method!(fn(&self, name_or_uri: QString) -> bool),
 
     copy: qt_method!(fn(&mut self, uris_json: QString) -> bool),
     cut: qt_method!(fn(&mut self, uris_json: QString) -> bool),
@@ -61,6 +65,8 @@ pub struct App {
     externalFailed: qt_signal!(uri: QString, kind: QString, message: QString),
 
     clipboard: Clipboard,
+    /// Items copied from a locked archive keep it open.
+    clipboard_hold: lautta_core::app_archives::ArchiveHold,
 }
 
 impl QSingletonInit for App {
@@ -222,6 +228,10 @@ impl App {
         Capabilities::with(&flags).changeable()
     }
 
+    fn canAddTo(&self, folder_uri: QString) -> bool {
+        matches!((core(), parse_uri(&folder_uri)), (Some(c), Some(u)) if c.may_add_to(&u))
+    }
+
     fn localUrl(&self, uri: QString) -> QString {
         match (core(), parse_uri(&uri)) {
             (Some(c), Some(u)) => c
@@ -235,6 +245,14 @@ impl App {
 
     fn categoryOf(&self, name_or_uri: QString) -> QString {
         QString::from(category_of_name(&name_part(&name_or_uri.to_string())).icon_name())
+    }
+
+    fn checksumAlgorithms(&self, group: QString) -> QString {
+        QString::from(crate::checksum::algorithms_json(&group.to_string()).as_str())
+    }
+
+    fn isChecksumList(&self, name_or_uri: QString) -> bool {
+        crate::checksum::is_checksum_list(&name_or_uri.to_string())
     }
 
     fn viewerFor(&self, name_or_uri: QString, mime: QString) -> QString {
@@ -266,6 +284,14 @@ impl App {
     }
 
     fn publish_clipboard(&mut self) {
+        let source = self.clipboard.contents().map(|c| c.source.location.clone());
+        self.clipboard_hold = match (core(), source) {
+            (Some(core), Some(location)) => {
+                let _runtime = handle().enter();
+                core.hold_archive(&location)
+            }
+            _ => Default::default(),
+        };
         let (count, cut) = match self.clipboard.contents() {
             Some(c) => (c.items.len() as i32, c.mode == ClipboardMode::Cut),
             None => (0, false),

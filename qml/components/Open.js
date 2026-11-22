@@ -18,7 +18,7 @@ function open(pageStack, app, operations, uri, isDir, mimeType, folderUri) {
     }
     var viewer = app.viewerFor(uri, mimeType || "")
     if (viewer === "archive") {
-        operations.openArchive(uri)
+        operations.openArchive(uri, "")
         return viewer
     }
     var page = viewerPages[viewer]

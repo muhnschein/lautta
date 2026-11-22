@@ -9,22 +9,23 @@ use crate::entry::{cap, Entry, Kind};
 use crate::error::{Error, ErrorKind, Result};
 use crate::mime;
 use crate::ops::conflict as conflict_ops;
-use crate::ops::names::{keep_both_name, split_extension};
+use crate::ops::names::{keep_both_dir_name, keep_both_name, split_extension};
 use crate::ops::{Conflict, ConflictChoice, OperationKind, Plan};
-use crate::provider::{list_all, Disposition, Lane, ProgressSink, Provider, WriteOptions};
+use crate::password::Password;
+use crate::provider::{list_all, Disposition, Lane, Provider, WriteOptions};
 use crate::settings::Settings;
 use crate::sys;
 use crate::thumbs::{thumbnail_source, ThumbSettings, ThumbSource};
 use crate::transfer::TransferId;
 use crate::trash::TrashItem;
 use crate::uri::Uri;
-use crate::vpath::{display_name, validate_name, VPath};
+use crate::vpath::{display_name, validate_name};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 
 const CRUMB: &str = " › ";
 const SUMMARY_RENAMES: usize = 50;
@@ -248,22 +249,12 @@ pub struct Measure {
     pub bytes: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ArchiveInfo {
-    pub location: String,
-    pub root_uri: String,
-    pub name: String,
-    pub folder_name: String,
-    pub files: u64,
-    pub dirs: u64,
-    pub bytes: u64,
-}
-
 impl ArchiveKind {
     pub fn parse(text: &str) -> Option<ArchiveKind> {
         match text {
             "zip" => Some(ArchiveKind::Zip),
+            "7z" => Some(ArchiveKind::SevenZ),
+            "tar.xz" => Some(ArchiveKind::TarXz),
             "tar.gz" | "targz" | "tgz" => Some(ArchiveKind::TarGz),
             _ => None,
         }
@@ -272,6 +263,8 @@ impl ArchiveKind {
     pub fn extension(self) -> &'static str {
         match self {
             ArchiveKind::Zip => ".zip",
+            ArchiveKind::SevenZ => ".7z",
+            ArchiveKind::TarXz => ".tar.xz",
             ArchiveKind::TarGz => ".tar.gz",
         }
     }
@@ -490,53 +483,42 @@ impl Core {
         })
     }
 
-    pub async fn archive_info(&self, archive: &Uri) -> Result<ArchiveInfo> {
-        let location = self.open_archive(archive).await?;
-        let provider = self.provider(&location)?;
-        let mut info = ArchiveInfo {
-            location: location.clone(),
-            root_uri: Uri::root(location).to_string(),
-            name: String::new(),
-            folder_name: String::new(),
-            files: 0,
-            dirs: 0,
-            bytes: 0,
-        };
-        let name = archive.name().map(display_name).unwrap_or_default();
-        info.folder_name = archive_folder_name(&name);
-        info.name = name;
-        let mut pending = vec![VPath::root()];
-        while let Some(dir) = pending.pop() {
-            for e in list_all(provider.as_ref(), &dir, Lane::Interactive).await? {
-                if e.kind == Kind::Dir {
-                    info.dirs += 1;
-                    pending.push(dir.join(&e.name)?);
-                } else {
-                    info.files += 1;
-                    info.bytes += e.size.unwrap_or(0);
-                }
-            }
+    /// Next to the archive, as macOS does: a single top item (folder or file) comes out as is,
+    /// anything else in a new folder named after the archive. Taken name gets a number: nothing
+    /// merges, nothing is replaced.
+    /// `password` only for a locked archive not open yet.
+    pub async fn extract(&self, archive: &Uri, password: Option<Password>) -> Result<Started> {
+        let folder = archive
+            .parent()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "archive is no file"))?;
+        let target = self.provider(&folder.location)?;
+        if !self.may_add_to(&folder) {
+            return Err(Error::kind(ErrorKind::ReadOnlyFilesystem));
         }
-        Ok(info)
-    }
-
-    pub async fn extract(&self, archive: &Uri, dest: &Uri) -> Result<Started> {
-        let location = self.open_archive(archive).await?;
+        let (location, hold) = self.open_archive(archive, password).await?;
         let root = Uri::root(location.clone());
         let source = self.provider(&location)?;
         let children = list_all(source.as_ref(), &root.path, Lane::Interactive).await?;
-        if children.is_empty() {
-            return Err(Error::new(ErrorKind::InvalidArgument, "the archive is empty"));
-        }
-        let sources = children
-            .iter()
-            .map(|e| root.join(&e.name))
-            .collect::<Result<Vec<_>>>()?;
-        let target = self.provider(&dest.location)?;
-        let made = match target.make_dir(&dest.path, true).await {
-            Ok(()) => true,
-            Err(e) if e.kind == ErrorKind::AlreadyExists => false,
-            Err(e) => return Err(e),
+        let (sources, dest, made) = match children.as_slice() {
+            [] => return Err(Error::new(ErrorKind::InvalidArgument, "the archive is empty")),
+            [only] => (vec![root.join(&only.name)?], folder.clone(), false),
+            many => {
+                let taken: HashSet<Vec<u8>> = list_all(target.as_ref(), &folder.path, Lane::Interactive)
+                    .await?
+                    .into_iter()
+                    .map(|e| e.name)
+                    .collect();
+                let name = archive_folder_name(&archive.name().map(display_name).unwrap_or_default());
+                let name = free_dir_name(name.as_bytes(), &taken);
+                let dest = folder.join(&name)?;
+                // Exclusive: a folder made meanwhile fails the extract rather than merging.
+                target.make_dir(&dest.path, true).await?;
+                let sources = many
+                    .iter()
+                    .map(|e| root.join(&e.name))
+                    .collect::<Result<Vec<_>>>()?;
+                (sources, dest, true)
+            }
         };
         let planned = self.plan(OperationKind::Copy, sources, dest.clone()).await;
         // Planner needs the folder; start_plan makes it again, so an unstarted summary leaves none.
@@ -544,32 +526,34 @@ impl Core {
         if made {
             let _ = target.remove_dir(&dest.path).await;
         }
-        if let Some(parent) = dest.parent() {
-            self.invalidate(&parent);
-        }
+        self.invalidate(&folder);
         let mut plan = planned?;
+        if dest == folder && plan.items.first().is_some_and(|it| it.conflict.is_some()) {
+            conflict_ops::resolve(&mut plan, 0, ConflictChoice::KeepBoth, false, &self.locations).await?;
+            plan.totals.conflicts = conflict_ops::unresolved(&plan).len() as u64;
+        }
         plan.kind = OperationKind::Extract;
+        plan.hold = hold;
         if plan.needs_summary {
             return Ok(Started::NeedsSummary(Box::new(plan)));
         }
         self.start_plan(plan).await.map(Started::Transfer)
     }
 
-    /// Failed or canceled run leaves no partial file.
+    /// Failed or canceled run leaves no partial file. `opts`: kind, password, progress, cancel; the
+    /// rest is filled here.
     pub async fn compress_to(
         &self,
         sources: &[Uri],
         dest_dir: &Uri,
         name: &str,
-        kind: ArchiveKind,
-        progress: ProgressSink,
-        cancel: Arc<AtomicBool>,
+        mut opts: CompressOptions,
     ) -> Result<Uri> {
         let provider = self.provider(&dest_dir.location)?;
-        if !provider.capabilities().writable() {
+        if !self.may_add_to(dest_dir) {
             return Err(Error::kind(ErrorKind::ReadOnlyFilesystem));
         }
-        let file_name = archive_file_name(name.trim(), kind);
+        let file_name = archive_file_name(name.trim(), opts.kind);
         validate_name(file_name.as_bytes())?;
         let taken: HashSet<Vec<u8>> = list_all(provider.as_ref(), &dest_dir.path, Lane::Interactive)
             .await?
@@ -578,10 +562,8 @@ impl Core {
             .collect();
         let final_name = free_name(file_name.as_bytes(), &taken);
         let target = dest_dir.join(&final_name)?;
-        let mut opts = CompressOptions::new(kind);
-        opts.progress = progress;
-        opts.cancel = cancel;
         opts.total_hint = self.measure(sources).await.ok().map(|m| m.bytes);
+        opts.spool_dir = Some(self.paths.cache_dir());
         match self.locations.to_local_path(&target) {
             Some(path) => self.compress_local(sources, &path, &opts).await?,
             None => compress_remote(self, sources, provider.as_ref(), &target, &opts).await?,
@@ -703,6 +685,14 @@ impl Core {
                 kind: location_kind_name(&l.kind).to_owned(),
             })
             .collect()
+    }
+}
+
+fn free_dir_name(name: &[u8], taken: &HashSet<Vec<u8>>) -> Vec<u8> {
+    if taken.contains(name) {
+        keep_both_dir_name(name, &|n| taken.contains(n))
+    } else {
+        name.to_vec()
     }
 }
 
