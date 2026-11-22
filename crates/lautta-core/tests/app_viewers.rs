@@ -226,6 +226,62 @@ async fn the_folders_images_come_in_the_folders_order() {
     assert!(list[0].size.is_some());
 }
 
+/// `exif_jpeg` plus an IFD1 thumbnail, then `image` (its SOI dropped).
+fn camera_jpeg(orientation: u16, thumb: &[u8], image: &[u8]) -> Vec<u8> {
+    let mut tiff = vec![b'I', b'I', 0x2a, 0, 8, 0, 0, 0, 1, 0];
+    tiff.extend_from_slice(&[0x12, 0x01, 3, 0, 1, 0, 0, 0]);
+    tiff.extend_from_slice(&orientation.to_le_bytes());
+    tiff.extend_from_slice(&[0, 0, 26, 0, 0, 0]);
+    tiff.extend_from_slice(&[2, 0, 0x01, 0x02, 4, 0, 1, 0, 0, 0, 56, 0, 0, 0]);
+    tiff.extend_from_slice(&[0x02, 0x02, 4, 0, 1, 0, 0, 0]);
+    tiff.extend_from_slice(&u32::try_from(thumb.len()).unwrap().to_le_bytes());
+    tiff.extend_from_slice(&[0, 0, 0, 0]);
+    tiff.extend_from_slice(thumb);
+    let mut out = vec![0xff, 0xd8, 0xff, 0xe1];
+    out.extend_from_slice(&u16::try_from(2 + 6 + tiff.len()).unwrap().to_be_bytes());
+    out.extend_from_slice(b"Exif\0\0");
+    out.extend_from_slice(&tiff);
+    out.extend_from_slice(&image[2..]);
+    out
+}
+
+fn dims(bytes: &[u8]) -> (u32, u32) {
+    let img = image::load_from_memory(bytes).unwrap();
+    (img.width(), img.height())
+}
+
+#[tokio::test]
+async fn embedded_thumbnails_come_upright_and_at_most_the_size_asked() {
+    let h = home().await;
+    let mut file = camera_jpeg(6, &jpeg(40, 30), &jpeg(8, 8));
+    file.extend(vec![0u8; 2_000_000]);
+    std::fs::write(h.root.join("Pictures/cam.jpg"), &file).unwrap();
+    let u = uri("lautta://user-pictures/cam.jpg");
+    assert_eq!(
+        dims(&h.core.embedded_thumbnail(&u, 1024).await.unwrap()),
+        (30, 40)
+    );
+    assert_eq!(dims(&h.core.embedded_thumbnail(&u, 16).await.unwrap()), (12, 16));
+}
+
+#[tokio::test]
+async fn images_without_an_embedded_thumbnail_have_none() {
+    let h = home().await;
+    std::fs::write(h.root.join("Pictures/plain.jpg"), jpeg(64, 48)).unwrap();
+    std::fs::write(h.root.join("Pictures/exif.jpg"), exif_jpeg(6)).unwrap();
+    for name in ["plain.jpg", "exif.jpg"] {
+        let u = uri(&format!("lautta://user-pictures/{name}"));
+        let err = h.core.embedded_thumbnail(&u, 1024).await.unwrap_err();
+        assert_eq!(err.kind, ErrorKind::Unsupported, "{name}");
+    }
+    let err = h
+        .core
+        .embedded_thumbnail(&uri("lautta://user-pictures/none.jpg"), 1024)
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, ErrorKind::NotFound);
+}
+
 #[tokio::test]
 async fn full_images_carry_their_orientation() {
     let h = home().await;

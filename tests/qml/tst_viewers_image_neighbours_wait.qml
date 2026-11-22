@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Engine without incubation controller makes the neighbours' slots at once: right after the view
-// is made, the shown image is still loading and the neighbours exist. Same view again: decodes
-// again (pictures not kept). Broken image shown: neighbours load after its error.
+// is made, the shown image is still loading and the neighbours exist. Same view again: shown
+// image ready at once (kept in Qt's cache). Broken image shown: neighbours load after its error.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -20,6 +20,7 @@ ApplicationWindow {
     property var neighbours: []
     readonly property string folder: "lautta://user-pictures/ViewerNeighboursWait/"
     readonly property var opens: [2, 2, 7]
+    readonly property var kept: [false, true, false]
 
     ViewerTools { id: tools }
     DirectoryModel {
@@ -53,13 +54,14 @@ ApplicationWindow {
             view.destroy()
         view = viewComponent.createObject(window.contentItem, { "currentIndex": index })
         current = view.currentItem ? view.currentItem.item.photo : null
-        if (!current || current.status !== Image.Loading)
-            return fail("open " + step + ": shown image loading right after the view is made: "
-                        + (current ? current.status : "none"))
+        var expected = kept[step] ? Image.Ready : Image.Loading
+        if (!current || current.status !== expected)
+            return fail("open " + step + ": shown image " + (kept[step] ? "kept" : "loading")
+                        + " right after the view is made: " + (current ? current.status : "none"))
         neighbours = photos(view, []).filter(function (p) { return p !== current })
         if (neighbours.length < 2)
             return fail("open " + step + ": neighbours made with the view: " + neighbours.length)
-        for (var k = 0; k < neighbours.length; ++k)
+        for (var k = 0; k < neighbours.length && !kept[step]; ++k)
             if (neighbours[k].status !== Image.Null)
                 return fail("open " + step + ": neighbour loads before the shown image: status " + neighbours[k].status)
     }

@@ -6,34 +6,26 @@
 //
 // jolla-gallery's src/pages/FlickableImageView.qml, adapted for lautta
 // (PRV-4, see LAUTTA.md): images only (the video player goes), items are
-// lautta URIs (the model's `uri` role, or the items of an array) shown as
-// local files or through image://lautta-file/, and the overlay's actions
-// are the page's. A zoomed image takes the drags, so swipes wait until it
-// is zoomed out again, and while a delete waits for its remorse (`held`).
-// Neighbours load once the current image has: Qt's one image thread takes
-// newest request first.
+// lautta URIs (the model's `uri` role, or the items of an array) shown
+// through image://lautta-file/, and the overlay's actions are the page's.
+// A zoomed image takes the drags, so swipes wait until it is zoomed out
+// again, and while a delete waits for its remorse (`held`). Neighbours load
+// once the current image has, so it gets the cores first.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../ViewerImage.js" as ViewerImage
 
 PagedView {
     id: root
 
     property alias overlay: overlay
     property bool held
-    // Image viewer opened on: its folder view reuses this decode. Qt keeps cached pixmaps
-    // ~30 s after use, so this image only.
-    property string openedUri
     readonly property bool zoomed: currentItem !== null && currentItem.zoomed
 
     // What an image's Image item loads.
     function sourceOf(uri) {
-        return App.isLocal(uri) ? App.localUrl(uri) : "image://lautta-file/" + uri
-    }
-
-    // Server image's cached grid thumbnail while the file loads; local files decode fast.
-    function placeholderOf(uri) {
-        return App.isLocal(uri) ? "" : "image://lautta-thumb/" + uri + "?size=1024&cached=1"
+        return ViewerImage.source(uri)
     }
 
     readonly property bool currentSettled: currentItem !== null && currentItem.item !== null
@@ -75,8 +67,7 @@ PagedView {
                 }
 
                 source: slot.loadAllowed ? slot.source : ""
-                shareDecode: slot.imageUri === root.openedUri
-                placeholder: slot.imageUri.length > 0 ? root.placeholderOf(slot.imageUri) : ""
+                placeholder: slot.imageUri.length > 0 ? ViewerImage.placeholder(App, slot.imageUri) : ""
                 active: slot.isCurrentItem
                 viewMoving: root.moving
             }

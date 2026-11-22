@@ -11,7 +11,7 @@
 use super::{parse_uri, qstr, run_then};
 use crate::runtime::{core, handle};
 use cpp::cpp;
-use lautta_core::app_viewers::{parse_image_uri, parse_thumb_id, ImageItem, PreviewKind};
+use lautta_core::app_viewers::{parse_image_uri, parse_thumb_id, viewer_decode_size, ImageItem, PreviewKind};
 use qmetaobject::prelude::*;
 use qmetaobject::qml_register_type;
 use std::collections::HashMap;
@@ -187,9 +187,11 @@ cpp! {{
     };
 
     // Called by the Rust job: decodes `data` (or records `err`), finishes the response unless
-    // cancelled. Takes over `handle`.
+    // cancelled. `exact`: `w` x `h` is the decode size in the file's orientation (0: as is), else
+    // the shown size to fit. Takes over `handle`.
     static void lauttaImageDone(void *handle, const char *data, size_t len, int w, int h,
-                                int orientation, bool transform, const char *err, size_t errLen)
+                                int orientation, bool transform, bool exact, const char *err,
+                                size_t errLen)
     {
         std::unique_ptr<std::shared_ptr<LauttaImageState>> owner(
             static_cast<std::shared_ptr<LauttaImageState> *>(handle));
@@ -205,7 +207,10 @@ cpp! {{
             QImageReader reader(&buffer);
             reader.setAutoTransform(transform);
             QSize size = reader.size();
-            if (size.isValid() && (w > 0 || h > 0)) {
+            if (exact) {
+                if (w > 0 && h > 0)
+                    reader.setScaledSize(QSize(w, h));
+            } else if (size.isValid() && (w > 0 || h > 0)) {
                 // Request is for the displayed (rotated) size: decode scaled down, never up, keep
                 // aspect ratio.
                 QSize shown = (transform && orientation >= 5) ? size.transposed() : size;
@@ -316,15 +321,15 @@ pub(crate) struct Reply(*mut c_void);
 unsafe impl Send for Reply {}
 
 impl Reply {
-    fn done(self, bytes: &[u8], w: i32, h: i32, orientation: u8, transform: bool) {
+    fn done(self, bytes: &[u8], (w, h): (i32, i32), orientation: u8, transform: bool, exact: bool) {
         let handle = self.take();
         let (data, len) = (bytes.as_ptr(), bytes.len());
         let orientation = i32::from(orientation);
         // SAFETY: `handle` came from `requestImageResponse`, consumed here.
         unsafe {
             cpp!([handle as "void*", data as "const char*", len as "size_t", w as "int", h as "int",
-                  orientation as "int", transform as "bool"] {
-                lauttaImageDone(handle, data, len, w, h, orientation, transform, nullptr, 0);
+                  orientation as "int", transform as "bool", exact as "bool"] {
+                lauttaImageDone(handle, data, len, w, h, orientation, transform, exact, nullptr, 0);
             })
         }
     }
@@ -353,7 +358,7 @@ impl Reply {
         // SAFETY: as in `done`.
         unsafe {
             cpp!([handle as "void*", data as "const char*", len as "size_t"] {
-                lauttaImageDone(handle, nullptr, 0, 0, 0, 1, false, data, len);
+                lauttaImageDone(handle, nullptr, 0, 0, 0, 1, false, false, data, len);
             })
         }
     }
@@ -419,6 +424,19 @@ fn thumb_request(
         return;
     };
     let rt = handle();
+    if thumb.embedded {
+        let task = rt.spawn(async move {
+            let res = core.embedded_thumbnail(&thumb.uri, thumb.size).await;
+            cancellers().get_or_insert_with(HashMap::new).remove(&req);
+            match res {
+                Ok(bytes) => reply.done(&bytes, shown, 1, false, false),
+                Err(e) => reply.fail(&format!("{}: {}", e.kind.name(), e.message)),
+            }
+        });
+        let abort = task.abort_handle();
+        on_cancel(req, Box::new(move || abort.abort()));
+        return;
+    }
     let previews = match core.previews(&rt) {
         Ok(p) => p,
         Err(e) => return finish_error(reply, req, &e),
@@ -437,7 +455,7 @@ fn thumb_request(
         let res = rx.await;
         cancellers().get_or_insert_with(HashMap::new).remove(&req);
         match res {
-            Ok(Ok(bytes)) => reply.done(&bytes, shown.0, shown.1, 1, false),
+            Ok(Ok(bytes)) => reply.done(&bytes, shown, 1, false, false),
             Ok(Err(e)) => reply.fail(&format!("{}: {}", e.kind.name(), e.message)),
             Err(_) => reply.fail("canceled"),
         }
@@ -471,8 +489,9 @@ fn file_request(
         cancellers().get_or_insert_with(HashMap::new).remove(&req);
         match res {
             Ok(img) => {
-                let _ = tokio::task::spawn_blocking(move || {
-                    reply.done(&img.bytes, size.0, size.1, img.orientation, true)
+                let _ = tokio::task::spawn_blocking(move || match screen_decode_size(&img.bytes, size) {
+                    Some(decode) => reply.done(&img.bytes, decode, img.orientation, true, true),
+                    None => reply.done(&img.bytes, size, img.orientation, true, false),
                 })
                 .await;
             }
@@ -483,6 +502,17 @@ fn file_request(
     cancellers()
         .get_or_insert_with(HashMap::new)
         .insert(req, Box::new(move || abort.abort()));
+}
+
+/// Size asked with both sides = the screen: decode size for it ((0, 0): as is). `None`: fit the
+/// size asked.
+fn screen_decode_size(bytes: &[u8], (w, h): (i32, i32)) -> Option<(i32, i32)> {
+    let screen = (u32::try_from(w).ok()?, u32::try_from(h).ok()?);
+    if screen.0 == 0 || screen.1 == 0 {
+        return None;
+    }
+    let side = |v: u32| i32::try_from(v).unwrap_or(0);
+    Some(viewer_decode_size(bytes, screen).map_or((0, 0), |(dw, dh)| (side(dw), side(dh))))
 }
 
 fn cancel(id: u64) {
@@ -529,14 +559,14 @@ mod tests {
             return error.isEmpty() && size.isEmpty() ? QStringLiteral("timeout") : error;
         }
 
-        static QByteArray lauttaTestJpeg(int w, int h)
+        static QByteArray lauttaTestImage(int w, int h, const char *format)
         {
             QImage img(w, h, QImage::Format_RGB32);
             img.fill(Qt::red);
             QByteArray out;
             QBuffer buffer(&out);
             buffer.open(QIODevice::WriteOnly);
-            img.save(&buffer, "JPEG");
+            img.save(&buffer, format);
             return out;
         }
     }}
@@ -557,18 +587,41 @@ mod tests {
         (err.to_string(), w, h)
     }
 
-    fn test_jpeg(w: i32, h: i32) -> Vec<u8> {
-        let bytes = cpp!(unsafe [w as "int", h as "int"] -> QByteArray as "QByteArray" {
-            return lauttaTestJpeg(w, h);
+    fn test_image(w: i32, h: i32, format: &str) -> Vec<u8> {
+        let format = std::ffi::CString::new(format).unwrap();
+        let f = format.as_ptr();
+        let bytes = cpp!(unsafe [w as "int", h as "int", f as "const char*"] -> QByteArray as "QByteArray" {
+            return lauttaTestImage(w, h, f);
         });
         bytes.to_slice().to_vec()
     }
 
+    fn test_jpeg(w: i32, h: i32) -> Vec<u8> {
+        test_image(w, h, "JPEG")
+    }
+
     fn with_orientation(jpeg: &[u8], orientation: u16) -> Vec<u8> {
+        with_exif(jpeg, orientation, None)
+    }
+
+    /// EXIF with orientation and, in IFD1, an embedded `thumb`.
+    fn with_exif(jpeg: &[u8], orientation: u16, thumb: Option<&[u8]>) -> Vec<u8> {
         let mut tiff = vec![b'I', b'I', 0x2a, 0, 8, 0, 0, 0, 1, 0];
         tiff.extend_from_slice(&[0x12, 0x01, 3, 0, 1, 0, 0, 0]);
         tiff.extend_from_slice(&orientation.to_le_bytes());
-        tiff.extend_from_slice(&[0, 0, 0, 0, 0, 0]);
+        tiff.extend_from_slice(&[0, 0]);
+        match thumb {
+            None => tiff.extend_from_slice(&[0, 0, 0, 0]),
+            Some(t) => {
+                tiff.extend_from_slice(&26u32.to_le_bytes());
+                tiff.extend_from_slice(&[2, 0, 0x01, 0x02, 4, 0, 1, 0, 0, 0]);
+                tiff.extend_from_slice(&56u32.to_le_bytes());
+                tiff.extend_from_slice(&[0x02, 0x02, 4, 0, 1, 0, 0, 0]);
+                tiff.extend_from_slice(&u32::try_from(t.len()).unwrap().to_le_bytes());
+                tiff.extend_from_slice(&[0, 0, 0, 0]);
+                tiff.extend_from_slice(t);
+            }
+        }
         let mut out = vec![0xff, 0xd8, 0xff, 0xe1];
         out.extend_from_slice(&u16::try_from(2 + 6 + tiff.len()).unwrap().to_be_bytes());
         out.extend_from_slice(b"Exif\0\0");
@@ -589,6 +642,11 @@ mod tests {
         nas.add_file("p/rot.jpg", &with_orientation(&test_jpeg(40, 20), 6), 1);
         nas.add_file("p/big.jpg", &test_jpeg(400, 200), 1);
         nas.add_file("p/not.jpg", b"this is not an image", 1);
+        nas.add_file("p/photo.jpg", &test_jpeg(800, 600), 1);
+        nas.add_file("p/photo-rot.jpg", &with_orientation(&test_jpeg(800, 600), 6), 1);
+        nas.add_file("p/photo.png", &test_image(800, 600, "PNG"), 1);
+        let thumb = test_jpeg(40, 30);
+        nas.add_file("p/cam.jpg", &with_exif(&test_jpeg(800, 600), 6, Some(&thumb)), 1);
         let loc = Location::remote(
             "nv-qt-images",
             LocationKind::Server {
@@ -637,6 +695,35 @@ mod tests {
 
         let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/big.jpg", (4000, 4000));
         assert_eq!((e.as_str(), w, h), ("", 400, 200), "never scaled up");
+
+        // 4:3 on a 108 x 228 screen shows at 144 x 108 turned.
+        let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/photo.jpg", (108, 228));
+        assert_eq!(
+            (e.as_str(), w, h),
+            ("", 200, 150),
+            "JPEG at the quarter step covering it"
+        );
+        let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/photo-rot.jpg", (108, 228));
+        assert_eq!((e.as_str(), w, h), ("", 150, 200), "step, then turned upright");
+        let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/photo.png", (108, 228));
+        assert_eq!((e.as_str(), w, h), ("", 144, 108), "other formats at the fit");
+
+        let (e, w, h) = probe(
+            "lautta-thumb",
+            "lautta://nv-qt-images/p/cam.jpg?size=1024&embedded=1",
+            (0, 0),
+        );
+        assert_eq!(
+            (e.as_str(), w, h),
+            ("", 30, 40),
+            "embedded thumbnail, turned upright"
+        );
+        let (e, ..) = probe(
+            "lautta-thumb",
+            "lautta://nv-qt-images/p/photo.jpg?size=1024&embedded=1",
+            (0, 0),
+        );
+        assert!(e.contains("no embedded thumbnail"), "{e}");
 
         let (e, ..) = probe("lautta-file", "lautta://nv-qt-images/p/missing.jpg", (0, 0));
         assert!(e.starts_with("NotFound"), "{e}");

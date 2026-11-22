@@ -22,11 +22,13 @@ They are copied, not imported: `Sailfish.Gallery`, `com.jolla.gallery` and
   `../ZoomMath.js`), with a double tap besides the pinch. Its drag detector
   is private C++, so a zoomed image holds the swipes and the page's back
   navigation until it is zoomed out.
-- Images turn upright themselves (`autoTransform`); remote images come
-  through `image://lautta-file/`.
-- Neighbours load only once the current image has (Qt's image thread takes
-  newest request first). The opened image goes through Qt's pixmap cache
-  (`openedUri`, `shareDecode`): the viewer's folder view reuses its decode.
+- Images come through `image://lautta-file/`, upright, decoded in
+  parallel at the size they show at (the screen asked as `sourceSize`), and
+  stay in Qt's pixmap cache: `../ViewerPrefetch.qml` starts the opened one
+  at finger down, swipes back reuse them. The placeholder is the camera's
+  EXIF thumbnail (server images: the cached grid thumbnail).
+- Neighbours load only once the current image has, so it gets the cores
+  first.
 - The overlay's buttons are lautta's actions, signalled to the page
   (`../../../viewers/ImageViewer.qml`): details, Delete, Open with (where the
   Gallery's Edit is), Share, More (the app's own `qml/icons/more.svg`, a

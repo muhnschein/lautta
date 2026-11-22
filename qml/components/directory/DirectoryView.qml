@@ -6,6 +6,7 @@ import Sailfish.Share 1.0
 import Lautta 1.0
 import "../"
 import "../transfers"
+import "../viewers"
 import "../Open.js" as Open
 import "../ErrorText.js" as ErrorText
 import "../Access.js" as Access
@@ -50,6 +51,12 @@ Item {
     function endSelection() {
         setSelection({ "selecting": false, "waiting": false })
         dir.clearSelection()
+    }
+
+    // Finger down on a file: an image starts decoding for the viewer. Not while selecting.
+    function itemPressed(itemUri, isDir, mimeType) {
+        if (!selecting && !isDir)
+            prefetch.start(itemUri, mimeType)
     }
 
     function openItem(itemUri, isDir, mimeType) {
@@ -557,6 +564,8 @@ Item {
         }
     }
 
+    ViewerPrefetch { id: prefetch }
+
     Component {
         id: scanMaker
 
@@ -590,6 +599,7 @@ Item {
             menu: view.selecting || model.inaccessible ? null : contextMenu
             enabled: !model.inaccessible
             opacity: model.inaccessible ? Theme.opacityLow : 1
+            onPressed: view.itemPressed(model.uri, model.isDir, model.mimeType)
             onClicked: {
                 if (view.selecting)
                     dir.toggle(model.uri)
@@ -597,6 +607,7 @@ Item {
                     view.openItem(model.uri, model.isDir, model.mimeType)
             }
             onPressAndHold: {
+                prefetch.stop()
                 if (!view.selecting)
                     return
                 DelegateModel.inPersistedItems = true
@@ -604,7 +615,10 @@ Item {
             }
             onPositionChanged: if (dragSelect.holder === item) dragSelect.move(mouse.x, mouse.y)
             onReleased: item.letGo()
-            onCanceled: item.letGo()
+            onCanceled: {
+                prefetch.stop()
+                item.letGo()
+            }
 
             function letGo() {
                 if (dragSelect.holder !== item)
@@ -748,6 +762,7 @@ Item {
                 if (previewAsked)
                     dir.cancelPreview(previewAsked)
             }
+            onPressed: view.itemPressed(model.uri, model.isDir, model.mimeType)
             onClicked: {
                 if (view.selecting)
                     dir.toggle(model.uri)
@@ -755,10 +770,17 @@ Item {
                     view.openItem(model.uri, model.isDir, model.mimeType)
             }
             // Add only: no Select, as in the pulley.
-            onPressAndHold: if (dir.readable) dragSelect.begin(cell, index, mouse.x, mouse.y)
+            onPressAndHold: {
+                prefetch.stop()
+                if (dir.readable)
+                    dragSelect.begin(cell, index, mouse.x, mouse.y)
+            }
             onPositionChanged: if (dragSelect.holder === cell) dragSelect.move(mouse.x, mouse.y)
             onReleased: cell.letGo()
-            onCanceled: cell.letGo()
+            onCanceled: {
+                prefetch.stop()
+                cell.letGo()
+            }
 
             function countItems() {
                 if (counting)

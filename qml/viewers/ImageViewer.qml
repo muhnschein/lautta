@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Remote images via image://lautta-file/ (EXIF
+// SPDX-License-Identifier: LGPL-2.1-or-later Images via image://lautta-file/ (EXIF
 // orientation applied by provider).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -137,7 +137,6 @@ FullscreenContentPage {
         FlickableImageView {
             objectName: "flickableView"
             model: [page.uri]
-            openedUri: page.uri
             held: remorse.active
         }
     }
@@ -147,7 +146,6 @@ FullscreenContentPage {
         FlickableImageView {
             objectName: "flickableView"
             model: images
-            openedUri: page.uri
             held: remorse.active
             currentIndex: Math.max(0, images.indexOf(page.uri))
         }

@@ -6,9 +6,9 @@
 //
 // sailfish-components-gallery's src/ImageViewer.qml, adapted for lautta
 // (PRV-4, see LAUTTA.md): it zooms with lautta's ZoomableFlickable, which
-// also has the tap area (and a double tap), the image turns itself upright
-// (autoTransform; remote images come upright from image://lautta-file/)
-// instead of through ImageMetadata, and the error text is lautta's.
+// also has the tap area (and a double tap), images come upright from
+// image://lautta-file/ instead of through ImageMetadata, and the error
+// text is lautta's.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import ".."
@@ -20,8 +20,6 @@ ZoomableFlickable {
     property alias placeholder: placeholderImage.source
 
     property bool active: true
-    // In Qt's pixmap cache: next item with same source and size gets this decode.
-    property bool shareDecode
     readonly property bool _active: active || viewMoving
     readonly property bool error: photo.status == Image.Error
 
@@ -73,12 +71,14 @@ ZoomableFlickable {
 
         anchors.fill: parent
         smooth: !(movingVertically || movingHorizontally)
-        sourceSize.width: Screen.height
+        // The screen: provider decodes at the size shown either way up. Same as ViewerPrefetch,
+        // which starts it; kept in Qt's cache for swipes back.
+        sourceSize.width: Screen.width
+        sourceSize.height: Screen.height
         fillMode: Image.PreserveAspectFit
         visible: largePhoto.status !== Image.Ready
         asynchronous: true
         autoTransform: true
-        cache: flickable.shareDecode
 
         onStatusChanged: {
             if (status == Image.Error) {
