@@ -50,8 +50,8 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-ITM-07 Compress | S | FL-16 | SCR-03, SCR-07, SCR-08, SCR-16 |
 | F-ITM-08 Move to new folder | S | FL-16 | SCR-03, SCR-07, SCR-08, SCR-16 |
 | F-ITM-09 Open with | S | FL-06, FL-24 | SCR-03, SCR-07, SCR-09, SCR-27, SCR-28, SCR-37 |
-| F-ITM-10 Checksums | S | FL-38 | SCR-07, SCR-08, SCR-61, SCR-62, SCR-63, SCR-64 |
-| F-ITM-11 Verify files | S | FL-38 | SCR-07, SCR-08, SCR-61, SCR-62, SCR-63, SCR-64 |
+| F-ITM-10 Checksums | S | FL-38 | SCR-07, SCR-08, SCR-61, SCR-63, SCR-64 |
+| F-ITM-11 Verify files | S | FL-38 | SCR-07, SCR-08, SCR-61, SCR-63, SCR-64 |
 | F-SEL-01 Selection mode | S | FL-15 | SCR-06, SCR-08, SCR-09 |
 | F-SEL-02 Drag-select | S | FL-15 | SCR-06, SCR-08, SCR-09 |
 | F-SEL-03 Select all / Clear selection | S | FL-15 | SCR-06, SCR-08, SCR-09 |
@@ -173,7 +173,6 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-59 Notifications | FL-28, FL-34, FL-35 |
 | SCR-60 Nearby setup | FL-36 |
 | SCR-61 Checksums | FL-38 |
-| SCR-62 More algorithms | FL-38 |
 | SCR-63 Checksum | FL-38 |
 | SCR-64 Verify files | FL-38 |
 

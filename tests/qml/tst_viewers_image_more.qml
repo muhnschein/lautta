@@ -97,10 +97,10 @@ ApplicationWindow {
                 win.step++
                 break
             case 5:
-                if (pageStack.busy || !page || page.group === undefined)
+                if (pageStack.busy || !page || page.rows === undefined)
                     break
-                if (page.uri !== win.file || page.group !== "common")
-                    return win.fail("Checksums gets the image: " + page.uri + " " + page.group)
+                if (page.uri !== win.file || page.rows.length !== 13)
+                    return win.fail("Checksums gets the image: " + page.uri + " " + page.rows.length)
                 if (pageStack.depth !== 2)
                     return win.fail("Checksums takes More's place: depth " + pageStack.depth)
                 win.reachedEnd = true
