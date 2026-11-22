@@ -18,6 +18,8 @@ ZoomableFlickable {
 
     property alias source: photo.source
     property alias placeholder: placeholderImage.source
+    property alias tile: tileImage.source
+    property int tileSize
 
     property bool active: true
     readonly property bool _active: active || viewMoving
@@ -61,6 +63,24 @@ ZoomableFlickable {
         asynchronous: true
         cache: false
         visible: status === Image.Ready && photo.opacity < 1 && photo.status !== Image.Error
+    }
+
+    Image {
+        id: tileImage
+
+        objectName: "tileImage"
+        // Square crop of the photo's middle, under a camera preview: the shorter side of the
+        // placeholder's shape.
+        parent: flickable
+        z: -2
+        anchors.centerIn: parent
+        width: Math.min(placeholderImage.paintedWidth, placeholderImage.paintedHeight)
+        height: width
+        sourceSize.width: flickable.tileSize
+        sourceSize.height: flickable.tileSize
+        asynchronous: true
+        cache: false
+        visible: placeholderImage.visible && status === Image.Ready
     }
 
     Image {

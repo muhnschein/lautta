@@ -139,6 +139,46 @@ fn decode_size((w, h): (u32, u32), (sw, sh): (u32, u32), jpeg: bool) -> Option<(
     Some(need)
 }
 
+/// Longer side of [`Core::viewer_preview`]'s clear shape: aspect kept within half a percent.
+const SHAPE_SIDE: u32 = 256;
+/// JPEG segments walked before giving up on the frame header.
+const MAX_JPEG_SEGMENTS: usize = 256;
+
+fn clear_shape((w, h): (u32, u32), side: u32) -> image::DynamicImage {
+    let long = u64::from(w.max(h).max(1));
+    let side = u64::from(side).min(long);
+    let scaled = |v: u32| ((u64::from(v) * side + long / 2) / long).max(1) as u32;
+    image::DynamicImage::ImageRgba8(image::RgbaImage::new(scaled(w), scaled(h)))
+}
+
+/// Width and height in the file's orientation. JPEG: segment headers read one by one up to the
+/// frame header, which EXIF, ICC and XMP segments may push past `head`.
+async fn image_dimensions(handle: &dyn ReadHandle, head: &[u8]) -> Option<(u32, u32)> {
+    if !head.starts_with(&[0xff, 0xd8]) {
+        let reader = image::io::Reader::new(std::io::Cursor::new(head))
+            .with_guessed_format()
+            .ok()?;
+        return reader.into_dimensions().ok();
+    }
+    let mut at = 2u64;
+    for _ in 0..MAX_JPEG_SEGMENTS {
+        let seg = handle.read_at(at, 9).await.ok()?;
+        match seg.as_slice() {
+            [0xff, 0xff, ..] => at += 1,
+            [0xff, 0xc0..=0xcf, _, _, _, h0, h1, w0, w1] if !matches!(seg[1], 0xc4 | 0xc8 | 0xcc) => {
+                return Some((
+                    u16::from_be_bytes([*w0, *w1]).into(),
+                    u16::from_be_bytes([*h0, *h1]).into(),
+                ));
+            }
+            [0xff, 0xda, ..] => return None,
+            [0xff, _, l0, l1, ..] => at += 2 + u64::from(u16::from_be_bytes([*l0, *l1])),
+            _ => return None,
+        }
+    }
+    None
+}
+
 /// Server images kept after reading: the viewer's zoom and its neighbours ask again.
 pub const SHOWN_IMAGES: usize = 3;
 pub const SHOWN_IMAGES_BYTES: usize = 64 * 1000 * 1000;
@@ -1081,16 +1121,21 @@ impl Core {
             .collect()
     }
 
-    /// Thumbnail the camera stored in the image's EXIF, oriented, at most `size`: a stand-in while
-    /// the image decodes. Reads the file's head only.
-    pub async fn embedded_thumbnail(&self, uri: &Uri, size: u32) -> Result<Vec<u8>> {
+    /// Image viewer's stand-in while the image decodes: the camera's EXIF thumbnail, oriented, at
+    /// most `size`. Without one, a clear image of the photo's upright shape: the grid tile drawn
+    /// under it takes its place from that. Reads the file's head (and JPEG segment headers) only.
+    pub async fn viewer_preview(&self, uri: &Uri, size: u32) -> Result<Vec<u8>> {
         let provider = self.provider(&uri.location)?;
         let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
         let head = read_all(handle.as_ref(), crate::thumbs::HEAD_BYTES).await?;
-        let Some(thumb) = exif::exif_thumbnail(&head) else {
-            return Err(Error::new(ErrorKind::Unsupported, "no embedded thumbnail"));
-        };
         let orientation = exif::orientation(&head);
+        let Some(thumb) = exif::exif_thumbnail(&head) else {
+            let Some((w, h)) = image_dimensions(handle.as_ref(), &head).await else {
+                return Err(Error::new(ErrorKind::Unsupported, "image size unknown"));
+            };
+            let upright = if orientation >= 5 { (h, w) } else { (w, h) };
+            return crate::thumbs::encode(&clear_shape(upright, size.min(SHAPE_SIDE)));
+        };
         tokio::task::spawn_blocking(move || render_thumbnail(&thumb, size, orientation))
             .await
             .map_err(|e| Error::new(ErrorKind::Internal, format!("thumbnail worker failed: {e}")))?

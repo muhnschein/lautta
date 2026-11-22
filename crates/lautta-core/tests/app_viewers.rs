@@ -251,32 +251,102 @@ fn dims(bytes: &[u8]) -> (u32, u32) {
 }
 
 #[tokio::test]
-async fn embedded_thumbnails_come_upright_and_at_most_the_size_asked() {
+async fn camera_thumbnails_come_upright_and_at_most_the_size_asked() {
     let h = home().await;
     let mut file = camera_jpeg(6, &jpeg(40, 30), &jpeg(8, 8));
     file.extend(vec![0u8; 2_000_000]);
     std::fs::write(h.root.join("Pictures/cam.jpg"), &file).unwrap();
     let u = uri("lautta://user-pictures/cam.jpg");
-    assert_eq!(
-        dims(&h.core.embedded_thumbnail(&u, 1024).await.unwrap()),
-        (30, 40)
-    );
-    assert_eq!(dims(&h.core.embedded_thumbnail(&u, 16).await.unwrap()), (12, 16));
+    assert_eq!(dims(&h.core.viewer_preview(&u, 1024).await.unwrap()), (30, 40));
+    assert_eq!(dims(&h.core.viewer_preview(&u, 16).await.unwrap()), (12, 16));
+}
+
+fn png(w: u32, h: u32) -> Vec<u8> {
+    let img = image::DynamicImage::ImageRgba8(image::RgbaImage::new(w, h));
+    let mut out = std::io::Cursor::new(Vec::new());
+    img.write_to(&mut out, image::ImageOutputFormat::Png).unwrap();
+    out.into_inner()
+}
+
+/// `image` behind an EXIF segment with `orientation` and no thumbnail.
+fn exif_photo(orientation: u16, image: &[u8]) -> Vec<u8> {
+    let mut out = exif_jpeg(orientation);
+    out.truncate(out.len() - 2);
+    out.extend_from_slice(&image[2..]);
+    out
+}
+
+/// `segments` put right after the image's SOI.
+fn with_segments(image: &[u8], segments: &[u8]) -> Vec<u8> {
+    let mut out = image[..2].to_vec();
+    out.extend_from_slice(segments);
+    out.extend_from_slice(&image[2..]);
+    out
+}
+
+/// Clear image's size; panics unless every pixel is clear.
+fn clear_dims(bytes: &[u8]) -> (u32, u32) {
+    let img = image::load_from_memory(bytes).unwrap().to_rgba8();
+    assert!(img.pixels().all(|p| p.0[3] == 0), "not clear");
+    img.dimensions()
 }
 
 #[tokio::test]
-async fn images_without_an_embedded_thumbnail_have_none() {
+async fn without_a_camera_thumbnail_the_preview_is_a_clear_image_of_the_upright_shape() {
     let h = home().await;
-    std::fs::write(h.root.join("Pictures/plain.jpg"), jpeg(64, 48)).unwrap();
-    std::fs::write(h.root.join("Pictures/exif.jpg"), exif_jpeg(6)).unwrap();
-    for name in ["plain.jpg", "exif.jpg"] {
+    let pics = h.root.join("Pictures");
+    let mut app2 = Vec::new();
+    for _ in 0..2 {
+        app2.extend_from_slice(&[0xff, 0xe2, 0xff, 0xff]);
+        app2.extend(vec![0u8; 0xfffd]);
+    }
+    let files = [
+        ("plain.jpg", jpeg(64, 48), 1024, (64, 48)),
+        ("small.jpg", jpeg(64, 48), 16, (16, 12)),
+        ("wide.jpg", jpeg(1000, 499), 1024, (256, 128)),
+        ("line.jpg", jpeg(1000, 3), 1024, (256, 1)),
+        ("turned.jpg", exif_photo(6, &jpeg(40, 30)), 1024, (30, 40)),
+        ("transposed.jpg", exif_photo(5, &jpeg(40, 30)), 1024, (30, 40)),
+        ("upright.jpg", exif_photo(1, &jpeg(40, 30)), 1024, (40, 30)),
+        ("icc.jpg", with_segments(&jpeg(40, 30), &app2), 1024, (40, 30)),
+        ("fill.jpg", with_segments(&jpeg(40, 30), &[0xff]), 1024, (40, 30)),
+        (
+            "huffman-first.jpg",
+            with_segments(&jpeg(40, 30), &[0xff, 0xc4, 0, 7, 1, 2, 3, 4, 5]),
+            1024,
+            (40, 30),
+        ),
+        ("tall.png", png(30, 60), 1024, (30, 60)),
+    ];
+    for (name, bytes, size, want) in files {
+        std::fs::write(pics.join(name), bytes).unwrap();
         let u = uri(&format!("lautta://user-pictures/{name}"));
-        let err = h.core.embedded_thumbnail(&u, 1024).await.unwrap_err();
+        let got = clear_dims(&h.core.viewer_preview(&u, size).await.unwrap());
+        assert_eq!(got, want, "{name}");
+    }
+}
+
+#[tokio::test]
+async fn images_of_unknown_size_have_no_preview() {
+    let h = home().await;
+    let pics = h.root.join("Pictures");
+    let scan_first = [0xff, 0xd8, 0xff, 0xda, 0, 8, 1, 2, 3, 4, 5, 6, 0xff, 0xd9];
+    let cut = [0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46];
+    let files: [(&str, &[u8]); 4] = [
+        ("exif.jpg", &exif_jpeg(6)),
+        ("scan.jpg", &scan_first),
+        ("cut.jpg", &cut),
+        ("notes.jpg", b"not an image at all"),
+    ];
+    for (name, bytes) in files {
+        std::fs::write(pics.join(name), bytes).unwrap();
+        let u = uri(&format!("lautta://user-pictures/{name}"));
+        let err = h.core.viewer_preview(&u, 1024).await.unwrap_err();
         assert_eq!(err.kind, ErrorKind::Unsupported, "{name}");
     }
     let err = h
         .core
-        .embedded_thumbnail(&uri("lautta://user-pictures/none.jpg"), 1024)
+        .viewer_preview(&uri("lautta://user-pictures/none.jpg"), 1024)
         .await
         .unwrap_err();
     assert_eq!(err.kind, ErrorKind::NotFound);

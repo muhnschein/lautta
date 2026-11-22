@@ -12,6 +12,8 @@ FullscreenContentPage {
 
     property string uri
     property string folderUri: App.parentUri(uri)
+    // Opener's thumbnail size: its cached tile shows while a photo decodes.
+    property int tileSize
 
     property bool listed
     // indexOf is a method: images.count makes the binding follow the listing.
@@ -139,6 +141,7 @@ FullscreenContentPage {
             objectName: "flickableView"
             model: [page.uri]
             held: remorse.active
+            tileSize: page.tileSize
         }
     }
 
@@ -148,6 +151,7 @@ FullscreenContentPage {
             objectName: "flickableView"
             model: images
             held: remorse.active
+            tileSize: page.tileSize
             currentIndex: Math.max(0, images.indexOf(page.uri))
         }
     }

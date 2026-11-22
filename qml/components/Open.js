@@ -11,7 +11,8 @@ var viewerPages = {
     "pdf": "../viewers/PdfViewer.qml"
 }
 
-function open(pageStack, app, operations, uri, isDir, mimeType, folderUri) {
+// tileSize: size the opener showed the image's thumbnail at, 0 for none.
+function open(pageStack, app, operations, uri, isDir, mimeType, folderUri, tileSize) {
     if (isDir) {
         pageStack.push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": uri })
         return "folder"
@@ -24,8 +25,10 @@ function open(pageStack, app, operations, uri, isDir, mimeType, folderUri) {
     var page = viewerPages[viewer]
     if (page) {
         var props = { "uri": uri }
-        if (viewer === "image")
+        if (viewer === "image") {
             props.folderUri = folderUri || app.parentUri(uri)
+            props.tileSize = tileSize || 0
+        }
         if (viewer === "audio" || viewer === "video")
             props.video = viewer === "video"
         pageStack.push(Qt.resolvedUrl(page), props)

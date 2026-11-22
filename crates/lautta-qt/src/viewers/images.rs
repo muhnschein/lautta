@@ -426,7 +426,7 @@ fn thumb_request(
     let rt = handle();
     if thumb.embedded {
         let task = rt.spawn(async move {
-            let res = core.embedded_thumbnail(&thumb.uri, thumb.size).await;
+            let res = core.viewer_preview(&thumb.uri, thumb.size).await;
             cancellers().get_or_insert_with(HashMap::new).remove(&req);
             match res {
                 Ok(bytes) => reply.done(&bytes, shown, 1, false, false),
@@ -720,12 +720,16 @@ mod tests {
             ("", 30, 40),
             "embedded thumbnail, turned upright"
         );
-        let (e, ..) = probe(
+        let (e, w, h) = probe(
             "lautta-thumb",
-            "lautta://nv-qt-images/p/photo.jpg?size=1024&embedded=1",
+            "lautta://nv-qt-images/p/photo-rot.jpg?size=1024&embedded=1",
             (0, 0),
         );
-        assert!(e.contains("no embedded thumbnail"), "{e}");
+        assert_eq!(
+            (e.as_str(), w, h),
+            ("", 192, 256),
+            "no camera thumbnail: the upright shape"
+        );
 
         let (e, ..) = probe("lautta-file", "lautta://nv-qt-images/p/missing.jpg", (0, 0));
         assert!(e.starts_with("NotFound"), "{e}");

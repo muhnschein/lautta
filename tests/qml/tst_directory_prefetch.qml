@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Finger down on an image, list and grid: its decode for the viewer starts. Not for other files,
 // not for folders named like images, not while selecting. Hold, scroll or finger let go off the
-// item: dropped.
+// item: dropped. Tap opens the viewer with the size the thumbnail shows at, for its cached tile.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -147,6 +147,29 @@ ApplicationWindow {
         view.endSelection()
     }
 
+    function fileIcon(item) {
+        if (item.thumbnailSource !== undefined)
+            return item
+        var kids = item.children || []
+        for (var i = 0; i < kids.length; ++i) {
+            var found = fileIcon(kids[i])
+            if (found)
+                return found
+        }
+        return null
+    }
+
+    function checkOpen(mode) {
+        var c = press(photo())
+        var icon = fileIcon(c)
+        tools.mouse(c, "release", c.width / 2, c.height / 2)
+        waitFor(function () { return pageStack.depth === 2 && !pageStack.busy }, mode + ": the viewer")
+        expect(icon !== null && icon.size > 0 && pageStack.currentPage.tileSize === Math.round(icon.size),
+               mode + ": viewer gets the thumbnail's size " + (icon ? icon.size : "none") + ": " + pageStack.currentPage.tileSize)
+        pageStack.pop(undefined, PageStackAction.Immediate)
+        waitFor(function () { return pageStack.depth === 1 && !pageStack.busy }, mode + ": back in the folder")
+    }
+
     Component.onCompleted: {
         pictures.createFolder("DirPrefetch")
         waitFor(function () { return pictures.indexOf(folder.slice(0, -1)) >= 0 }, "the folder")
@@ -170,6 +193,7 @@ ApplicationWindow {
             if (!expect(prefetch !== null && view.gridMode === (mode === "grid"), mode + ": the view has a prefetch"))
                 return
             check(mode)
+            checkOpen(mode)
         }
         reachedEnd = true
     }

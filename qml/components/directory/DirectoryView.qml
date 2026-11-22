@@ -58,11 +58,11 @@ Item {
             prefetch.start(itemUri, mimeType)
     }
 
-    function openItem(itemUri, isDir, mimeType) {
+    function openItem(itemUri, isDir, mimeType, tileSize) {
         if (isDir)
             openFolder(itemUri)
         else
-            Open.open(pageStack, App, Operations, itemUri, false, mimeType, uri)
+            Open.open(pageStack, App, Operations, itemUri, false, mimeType, uri, tileSize)
     }
 
     function newFolder(moving) {
@@ -592,7 +592,7 @@ Item {
                 if (view.selecting)
                     dir.toggle(model.uri)
                 else
-                    view.openItem(model.uri, model.isDir, model.mimeType)
+                    view.openItem(model.uri, model.isDir, model.mimeType, icon.size)
             }
             onPressAndHold: {
                 prefetch.stop()
@@ -755,7 +755,7 @@ Item {
                 if (view.selecting)
                     dir.toggle(model.uri)
                 else
-                    view.openItem(model.uri, model.isDir, model.mimeType)
+                    view.openItem(model.uri, model.isDir, model.mimeType, Math.round(tileIcon.width))
             }
             // Add only: no Select, as in the pulley.
             onPressAndHold: {

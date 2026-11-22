@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // ViewerPrefetch decodes an image for the viewer, then lets go; viewer's photo made afterwards is
 // ready at once (Qt's pixmap cache, same request). Photo not fetched first still loads. Not for
-// other files; `stop()` drops a running one. Placeholder = camera's EXIF thumbnail, none without.
+// other files; `stop()` drops a running one. Placeholder = camera's EXIF thumbnail, else clear
+// image of the photo's upright shape.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -101,7 +102,9 @@ ApplicationWindow {
         waitFor(function () { return camThumb.status === Image.Ready }, "the camera's thumbnail")
         expect(camThumb.implicitWidth === 80 && camThumb.implicitHeight === 60,
                "placeholder is the camera's thumbnail: " + camThumb.implicitWidth + "x" + camThumb.implicitHeight)
-        waitFor(function () { return plainThumb.status === Image.Error }, "no thumbnail in a plain photo")
+        waitFor(function () { return plainThumb.status === Image.Ready }, "the plain photo's shape")
+        expect(plainThumb.implicitWidth === 32 && plainThumb.implicitHeight === 64,
+               "plain photo: clear image of its upright shape, " + plainThumb.implicitWidth + "x" + plainThumb.implicitHeight)
         cam.destroy()
         plain.destroy()
     }

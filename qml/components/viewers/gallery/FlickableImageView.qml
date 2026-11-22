@@ -21,6 +21,7 @@ PagedView {
 
     property alias overlay: overlay
     property bool held
+    property int tileSize
     readonly property bool zoomed: currentItem !== null && currentItem.zoomed
 
     // What an image's Image item loads.
@@ -68,6 +69,8 @@ PagedView {
 
                 source: slot.loadAllowed ? slot.source : ""
                 placeholder: slot.imageUri.length > 0 ? ViewerImage.placeholder(App, slot.imageUri) : ""
+                tile: slot.imageUri.length > 0 ? ViewerImage.tile(App, slot.imageUri, root.tileSize) : ""
+                tileSize: root.tileSize
                 active: slot.isCurrentItem
                 viewMoving: root.moving
             }
