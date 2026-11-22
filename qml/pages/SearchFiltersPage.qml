@@ -143,7 +143,7 @@ Dialog {
                         text: qsTrId("lautta-filters-type-document")
                     }
                     MenuItem {
-                        //% "Archives"
+                        //% "Compressed files"
                         text: qsTrId("lautta-filters-type-archive")
                     }
                     MenuItem {

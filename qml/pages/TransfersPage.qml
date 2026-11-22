@@ -169,7 +169,7 @@ Page {
             enabled: list.count === 0
             //% "No activity"
             text: qsTrId("lautta-xfr-empty")
-            //% "Copies, moves, deletes and archives you start show up here."
+            //% "Copies, moves, deletes and extracts you start show up here."
             hintText: qsTrId("lautta-xfr-empty-hint")
         }
 

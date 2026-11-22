@@ -68,7 +68,7 @@ Features: F-DIR-08 Large folder
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint, archive banner) | Large folder banner: name order, thumbnails off, Stop |
+| 1 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint) | Large folder banner: name order, thumbnails off, Stop |
 
 ## View
 
@@ -152,7 +152,7 @@ Features: F-DIR-07 Folder states
 | 4 | SCR-13 New folder | Name it |
 | 5 | SCR-13 New folder | New name typed |
 | 6 | SCR-03 Folder page (list) | Folder made, scrolled into view, briefly highlighted |
-| 7 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint, archive banner) | Empty folder state |
+| 7 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint) | Empty folder state |
 
 ### FL-11 Rename (standalone)
 
@@ -231,7 +231,7 @@ Features: F-SEL-01 Selection mode, F-SEL-02 Drag-select, F-SEL-03 Select all / C
 
 ### FL-16 Compress (standalone)
 
-Pack items into Zip or tar.gz.
+Pack items into one compressed file beside them.
 
 Features: F-ITM-07 Compress, F-ITM-08 Move to new folder
 
@@ -239,20 +239,21 @@ Features: F-ITM-07 Compress, F-ITM-08 Move to new folder
 |---|---|---|
 | 1 | SCR-07 Item context menu | Long-press file |
 | 2 | SCR-08 More actions | More actions: Add to favourites, Compress, Move to new folder |
-| 3 | SCR-16 Compress | Compress: name, format, Save to |
+| 3 | SCR-16 Compress | Compress: Name, Format (Zip, 7z, tar.xz, tar.gz) |
+| 4 | SCR-03 Folder page (list) | Compressed file lights up beside the item |
 
-### FL-17 Open an archive and extract (standalone)
+### FL-17 Open a compressed file and extract (standalone)
 
-Look inside an archive, extract all.
+Look inside a compressed file, extract it beside itself.
 
 Features: F-OPS-05 Extract, F-OPS-06 Archive location
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint, archive banner) | Archive as read-only folder, Extract all |
-| 2 | SCR-17 Extract | Extract: contents, into, destination |
-| 3 | SCR-17 Extract | Options |
-| 4 | SCR-03 Folder page (list) | Extracted folder opens |
+| 1 | SCR-08 More actions | More actions of a compressed file: Extract |
+| 2 | SCR-03 Folder page (list) | Compressed file opens read-only: "Compressed file · read only" |
+| 3 | SCR-06 Folder pulley | Pulley: Extract |
+| 4 | SCR-03 Folder page (list) | Result lights up beside the compressed file |
 
 ## Tasks
 
@@ -473,7 +474,7 @@ Features: F-SRV-12 Offline listing, F-SRV-13 Reconnect
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint, archive banner) | Offline banner: stored copy, Retry |
+| 1 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint) | Offline banner: stored copy, Retry |
 | 2 | SCR-01 Browse | Server row after drop |
 
 ### FL-36 Set up a nearby server (bridge)
@@ -499,8 +500,8 @@ Features: F-SRV-17 Access levels, F-DIR-07 Folder states, F-OPS-03 Conflict reso
 | 1 | SCR-03 Folder page (list) | Read only: lock and Read only under header |
 | 2 | SCR-06 Folder pulley | Read only: pulley has no Paste, no Add |
 | 3 | SCR-07 Item context menu | Read and add: long-press has no Cut, Rename, Delete |
-| 4 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint, archive banner) | Add only: folders listed, Files here are hidden |
-| 5 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint, archive banner) | Paste a file whose name is taken: no question, upload done, server keeps both (readme 2.txt) |
+| 4 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint) | Add only: folders listed, Files here are hidden |
+| 5 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint) | Paste a file whose name is taken: no question, upload done, server keeps both (readme 2.txt) |
 | 6 | SCR-03 Folder page (list) | Full access: 1 GB upload running |
 | 7 | SCR-03 Folder page (list) | Level narrowed to Read only meanwhile: lock shows, upload Failed |
 | 8 | SCR-21 Activity | Activity: upload Failed, Retry failed |

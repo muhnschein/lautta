@@ -35,12 +35,10 @@ QtObject {
         Operations.compress(JSON.stringify(["lautta://user-documents/a"]), "lautta://user-downloads/", "x", "rar")
         check(failures.length === 4 && lastFailure() === "InvalidArgument", "compress refuses unknown formats")
         check(Operations.jobsActive === 0, "a refused compress starts no job")
-        Operations.extract("nope", "lautta://user-downloads/")
+        Operations.extract("nope")
         check(failures.length === 5, "extract refuses bad uris")
         Operations.openArchive("nope")
         check(failures.length === 6, "openArchive refuses bad uris")
-        Operations.measure("[1]")
-        check(failures.length === 7, "measure refuses bad uris")
 
         Operations.resolveConflict(999, 0, "KeepBoth", false)
         check(lastFailure() === "NotFound", "unknown plan has no conflicts to answer")

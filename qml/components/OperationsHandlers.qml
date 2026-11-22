@@ -59,12 +59,8 @@ Item {
         onJobStarted: handlers.background()
         onJobFinished: {
             if (ok)
-                //% "Archive created"
-                handlers.show(qsTrId("lautta-ops-archive-created"))
-        }
-        onExtractFinished: {
-            if (ok)
-                pages.push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": destUri })
+                //% "Compressed file created"
+                handlers.show(qsTrId("lautta-ops-compressed-created"))
         }
     }
 
