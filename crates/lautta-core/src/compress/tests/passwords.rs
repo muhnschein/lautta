@@ -151,6 +151,22 @@ async fn locked_entries_need_aes_to_extract_and_folders_do_not() {
 }
 
 #[tokio::test]
+async fn an_aes_entry_without_the_encrypted_flag_is_not_decrypted() {
+    let f = fixture();
+    let tmp = tempfile::tempdir().unwrap();
+    let mut bytes = run_locked(&f, &[uri("mem", "proj")], ArchiveKind::Zip, "pass").await;
+    let p = open("a.zip", &bytes, tmp.path(), Some("pass")).await.unwrap();
+    assert_eq!(read(&p, "proj/readme.txt").await.unwrap(), b"hello zip and tar");
+    let at = central_of(&bytes, b"proj/readme.txt");
+    bytes[at + 8] &= !1;
+    let p = open("b.zip", &bytes, tmp.path(), Some("pass")).await.unwrap();
+    assert_eq!(
+        kind_of(read(&p, "proj/readme.txt").await),
+        Some(ErrorKind::Unsupported)
+    );
+}
+
+#[tokio::test]
 async fn a_lowered_size_in_a_locked_zip_fails_its_read() {
     let f = fixture();
     let tmp = tempfile::tempdir().unwrap();
