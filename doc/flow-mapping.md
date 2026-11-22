@@ -50,6 +50,8 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-ITM-07 Compress | S | FL-16 | SCR-03, SCR-07, SCR-08, SCR-16 |
 | F-ITM-08 Move to new folder | S | FL-16 | SCR-03, SCR-07, SCR-08, SCR-16 |
 | F-ITM-09 Open with | S | FL-06, FL-24 | SCR-03, SCR-07, SCR-09, SCR-27, SCR-28, SCR-37 |
+| F-ITM-10 Checksums | S | FL-38 | SCR-07, SCR-08, SCR-61, SCR-62, SCR-63, SCR-64 |
+| F-ITM-11 Verify files | S | FL-38 | SCR-07, SCR-08, SCR-61, SCR-62, SCR-63, SCR-64 |
 | F-SEL-01 Selection mode | S | FL-15 | SCR-06, SCR-08, SCR-09 |
 | F-SEL-02 Drag-select | S | FL-15 | SCR-06, SCR-08, SCR-09 |
 | F-SEL-03 Select all / Clear selection | S | FL-15 | SCR-06, SCR-08, SCR-09 |
@@ -119,8 +121,8 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-04 Folder page (grid) | FL-04, FL-32 |
 | SCR-05 Path menu | FL-03, FL-22 |
 | SCR-06 Folder pulley | FL-04, FL-10, FL-13, FL-14, FL-15, FL-17, FL-18, FL-19, FL-32, FL-37 |
-| SCR-07 Item context menu | FL-11, FL-12, FL-13, FL-14, FL-16, FL-24, FL-37 |
-| SCR-08 More actions | FL-15, FL-16, FL-17 |
+| SCR-07 Item context menu | FL-11, FL-12, FL-13, FL-14, FL-16, FL-24, FL-37, FL-38 |
+| SCR-08 More actions | FL-15, FL-16, FL-17, FL-38 |
 | SCR-09 Selection mode + selection bar | FL-15, FL-24 |
 | SCR-10 Clipboard panel | FL-13, FL-14, FL-32 |
 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint) | FL-05, FL-10, FL-33, FL-37 |
@@ -170,6 +172,10 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-58 Cover (folder / tasks) | FL-34 |
 | SCR-59 Notifications | FL-28, FL-34, FL-35 |
 | SCR-60 Nearby setup | FL-36 |
+| SCR-61 Checksums | FL-38 |
+| SCR-62 More algorithms | FL-38 |
+| SCR-63 Checksum | FL-38 |
+| SCR-64 Verify files | FL-38 |
 
 Features in no flow: background behaviour, nothing to tap (F-BRW-09, F-SRV-03, F-DIR-09, F-XFR-07, F-VWR-11, F-APP-06).
 Screens in no flow: reached only from states flows don't set up (SCR-29).

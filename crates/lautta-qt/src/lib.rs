@@ -9,6 +9,7 @@
 
 pub mod app;
 pub mod browse;
+pub mod checksum;
 pub mod directory;
 pub mod json;
 pub mod operations;
@@ -259,6 +260,7 @@ fn open_core() {
 pub fn register_types() {
     qmetaobject::qml_register_singleton_type::<app::App>(&qml_uri(), 1, 0, &cstr("App"));
     browse::register();
+    checksum::register();
     directory::register();
     operations::register();
     scan::register();

@@ -255,6 +255,22 @@ Features: F-OPS-05 Extract, F-OPS-06 Archive location
 | 3 | SCR-06 Folder pulley | Pulley: Extract |
 | 4 | SCR-03 Folder page (list) | Result lights up beside the compressed file |
 
+### FL-38 Check files with checksums (standalone)
+
+Calculate one checksum of a file; check every file a checksum list names.
+
+Features: F-ITM-10 Checksums, F-ITM-11 Verify files
+
+| # | Screen | Step |
+|---|---|---|
+| 1 | SCR-07 Item context menu | Long-press file |
+| 2 | SCR-08 More actions | More actions: Checksums |
+| 3 | SCR-61 Checksums | SHA-256, MD5, SHA-1, SHA-512, More algorithms |
+| 4 | SCR-62 More algorithms | SHA-224, SHA-384, SHA3-256, SHA3-512, BLAKE2b, BLAKE3, CRC32, XXH64, XXH128 |
+| 5 | SCR-63 Checksum | Progress, then value; list beside file: "Matches SHA256SUMS"; tap value: "Copied" |
+| 6 | SCR-08 More actions | More actions of a checksum list: Verify files first |
+| 7 | SCR-64 Verify files | Row per listed file: Matches, Doesn't match, Missing, Not checked; problems first |
+
 ## Tasks
 
 ### FL-18 Watch and steer tasks (standalone)

@@ -40,39 +40,55 @@ Item {
     function testMore() {
         var ctxs = [{ "isDir": false, "changeable": true, "writable": true }, { "isDir": true, "changeable": true, "writable": true },
                     { "isDir": false, "changeable": false, "writable": true }, { "isDir": true, "changeable": false, "writable": false }]
-        var want = [["favourite", "compress", "moveToNewFolder"], ["favourite", "compress", "moveToNewFolder"],
-                    ["favourite", "compress"], ["favourite"]]
+        var want = [["favourite", "compress", "checksums", "moveToNewFolder"], ["favourite", "compress", "moveToNewFolder"],
+                    ["favourite", "compress", "checksums"], ["favourite"]]
         for (var i = 0; i < ctxs.length; ++i) {
             var menu = ids(Actions.menu(ctxs[i]))
             check(menu[menu.length - 1] === "more", "More actions is the last row: " + JSON.stringify(ctxs[i]))
             same(ids(Actions.more(ctxs[i])), want[i], "More actions: " + JSON.stringify(ctxs[i]))
         }
-        same(ids(Actions.more({ "isDir": false, "writable": true })), ["favourite", "compress"], "More actions of the image viewer")
-        same(ids(Actions.more({ "isDir": false, "writable": false })), ["favourite"], "image viewer, folder takes no files")
-        same(ids(Actions.more({ "isDir": false })), ["favourite"], "no Compress unless the folder takes files")
+        same(ids(Actions.more({ "isDir": false, "writable": true })), ["favourite", "compress", "checksums"], "More actions of the image viewer")
+        same(ids(Actions.more({ "isDir": false, "writable": false })), ["favourite", "checksums"], "image viewer, folder takes no files")
+        same(ids(Actions.more({ "isDir": false })), ["favourite", "checksums"], "no Compress unless the folder takes files")
     }
 
     function testExtract() {
         var file = { "isDir": false, "changeable": true, "readable": true, "writable": true, "archive": true }
-        same(ids(Actions.more(file)), ["favourite", "extract", "compress", "moveToNewFolder"],
+        same(ids(Actions.more(file)), ["favourite", "extract", "compress", "checksums", "moveToNewFolder"],
              "a compressed file: Extract before Compress")
         same(ids(Actions.menu(file)), ["share", "copy", "cut", "rename", "delete", "more"], "Extract only in More actions")
         same(ids(Actions.more({ "isDir": false, "changeable": false, "readable": true, "writable": true, "archive": true })),
-             ["favourite", "extract", "compress"], "read and add: Extract stays")
+             ["favourite", "extract", "compress", "checksums"], "read and add: Extract stays")
         same(ids(Actions.more({ "isDir": false, "changeable": false, "readable": true, "writable": false, "archive": true })),
-             ["favourite"], "folder takes no files: no Extract")
+             ["favourite", "checksums"], "folder takes no files: no Extract")
         same(ids(Actions.more({ "isDir": false, "changeable": false, "readable": false, "writable": true, "archive": true })),
              ["favourite"], "add only: nothing to read, no Extract")
         same(ids(Actions.more({ "isDir": false, "changeable": true, "readable": true, "writable": true, "archive": false })),
-             ["favourite", "compress", "moveToNewFolder"], "other files: no Extract")
+             ["favourite", "compress", "checksums", "moveToNewFolder"], "other files: no Extract")
         same(Actions.icon("extract"), "file-folder", "Extract: the folder glyph")
         same(Actions.text("extract"), "lautta-dir-act-extract", "Extract")
+    }
+
+    function testChecksums() {
+        var list = { "isDir": false, "changeable": true, "readable": true, "writable": true, "checksumList": true }
+        same(ids(Actions.more(list)), ["verify", "favourite", "compress", "checksums", "moveToNewFolder"],
+             "a checksum list: Verify files first")
+        same(ids(Actions.more({ "isDir": false, "readable": false, "checksumList": true })), ["favourite"],
+             "add only: nothing to read, no Checksums or Verify files")
+        same(ids(Actions.more({ "isDir": true, "changeable": true, "writable": true, "checksumList": true })),
+             ["verify", "favourite", "compress", "moveToNewFolder"], "a folder: no Checksums")
+        check(!Actions.applicable("verify", { "isDir": false }), "other files: no Verify files")
+        same(ids(Actions.menu(list)), ["share", "copy", "cut", "rename", "delete", "more"], "both only in More actions")
+        same(Actions.icon("checksums"), "checksum", "Checksums: the hash glyph")
+        same(Actions.icon("verify"), "image://theme/icon-m-acknowledge", "Verify files: the tick")
+        same(Actions.text("checksums"), "lautta-dir-act-checksums", "Checksums")
+        same(Actions.text("verify"), "lautta-dir-act-verify", "Verify files")
     }
 
     function testIcons() {
         var favourite = "image://theme/icon-m-favorite"
         same(Actions.more({ "isDir": false, "changeable": true, "writable": true }).map(function(r) { return r.icon }),
-             [favourite, "file-archive", "file-folder"], "More actions icons, writable folder")
+             [favourite, "file-archive", "checksum", "file-folder"], "More actions icons, writable folder")
         same(Actions.more({ "isDir": true, "changeable": false, "writable": true }).map(function(r) { return r.icon }),
              [favourite, "file-archive"], "More actions icons, read and add")
         same(Actions.icon("moveToNewFolder"), "file-folder", "Move to new folder: the folder glyph")
@@ -108,6 +124,7 @@ Item {
         testMenu()
         testMore()
         testExtract()
+        testChecksums()
         testIcons()
         testText()
         testGone()

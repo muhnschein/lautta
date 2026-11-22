@@ -34,7 +34,8 @@ Item {
     }
 
     function testSelectionActions() {
-        var ending = ["copy", "cut", "share", "extract", "compress", "rename", "favourite", "moveToNewFolder"]
+        var ending = ["copy", "cut", "share", "extract", "compress", "rename", "favourite", "moveToNewFolder", "checksums",
+                      "verify"]
         for (var i = 0; i < ending.length; ++i)
             check(Selection.endsSelection(ending[i]), ending[i] + " ends selection")
         check(!Selection.endsSelection("delete"), "delete ends it only after the remorse timer")
@@ -73,16 +74,20 @@ Item {
 
     function testMoreRows() {
         var file = { "isDir": false, "changeable": true, "readable": true, "writable": true }
-        same(ids(Selection.moreRows(1, file)), ["rename", "favourite", "compress", "moveToNewFolder"],
+        same(ids(Selection.moreRows(1, file)), ["rename", "favourite", "compress", "checksums", "moveToNewFolder"],
              "one item: Rename, then its own More actions page")
         same(ids(Selection.moreRows(1, { "isDir": true, "changeable": true, "readable": true, "writable": true })),
              ["rename", "favourite", "compress", "moveToNewFolder"], "one folder")
         same(ids(Selection.moreRows(1, { "isDir": false, "changeable": false, "readable": true, "writable": true })),
-             ["favourite", "compress"], "no Rename in a read-and-add folder")
+             ["favourite", "compress", "checksums"], "no Rename in a read-and-add folder")
         same(ids(Selection.moreRows(1, { "isDir": false, "changeable": false, "readable": true, "writable": false })),
-             ["favourite"], "no Compress in a read-only folder")
+             ["favourite", "checksums"], "no Compress in a read-only folder")
         same(ids(Selection.moreRows(1, { "isDir": false, "changeable": true, "readable": true, "writable": true, "archive": true })),
-             ["rename", "favourite", "extract", "compress", "moveToNewFolder"], "one compressed file: Extract")
+             ["rename", "favourite", "extract", "compress", "checksums", "moveToNewFolder"], "one compressed file: Extract")
+        same(ids(Selection.moreRows(1, { "isDir": false, "changeable": false, "readable": true, "checksumList": true })),
+             ["verify", "favourite", "checksums"], "one checksum list: Verify files")
+        same(ids(Selection.moreRows(2, { "isDir": false, "changeable": true, "readable": true, "checksumList": true })),
+             ["moveToNewFolder"], "several: no Checksums or Verify files")
         same(ids(Selection.moreRows(2, file)), ["compress", "moveToNewFolder"],
              "several items: only what works on several")
         same(ids(Selection.moreRows(2, { "isDir": false, "changeable": true, "readable": true, "writable": true, "archive": true })),
@@ -91,12 +96,13 @@ Item {
              "several, read and add: no Move to new folder")
         same(Selection.moreRows(0, file), [], "nothing selected")
         same(Selection.moreRows(1, file).map(function (r) { return r.icon }),
-             ["image://theme/icon-m-edit", "image://theme/icon-m-favorite", "file-archive", "file-folder"], "icons")
+             ["image://theme/icon-m-edit", "image://theme/icon-m-favorite", "file-archive", "checksum", "file-folder"], "icons")
         same(Selection.moreRows(2, file).map(function (r) { return r.icon }), ["file-archive", "file-folder"],
              "Compress shows the glyph compressed files show")
         check(Selection.moreRows(1, file)[0].text === Actions.text("rename"), "menu texts")
         check(Selection.moreRows(1, file)[2].text === Actions.text("compress"), "menu texts, second")
-        check(Selection.moreRows(1, file)[3].text === Actions.text("moveToNewFolder"), "menu texts, third")
+        check(Selection.moreRows(1, file)[3].text === Actions.text("checksums"), "menu texts, third")
+        check(Selection.moreRows(1, file)[4].text === Actions.text("moveToNewFolder"), "menu texts, fourth")
         check(Selection.endsSelection("extract") && Selection.endsSelection("compress"), "Extract and Compress end selecting")
     }
 
@@ -105,7 +111,8 @@ Item {
                         { "isDir": true, "changeable": true, "readable": true, "writable": true },
                         { "isDir": false, "changeable": false, "readable": true, "writable": true },
                         { "isDir": true, "changeable": false, "readable": true, "writable": false },
-                        { "isDir": false, "changeable": true, "readable": true, "writable": true, "archive": true }]
+                        { "isDir": false, "changeable": true, "readable": true, "writable": true, "archive": true },
+                        { "isDir": false, "changeable": true, "readable": true, "writable": true, "checksumList": true }]
         for (var c = 0; c < contexts.length; ++c) {
             var ctx = contexts[c]
             var offered = ids(Selection.panelButtons(1, ctx)).concat(ids(Selection.moreRows(1, ctx)))

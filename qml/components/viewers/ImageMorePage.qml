@@ -28,6 +28,9 @@ Page {
         case "compress":
             pageStack.replace(Qt.resolvedUrl("../../dialogs/CompressDialog.qml"), { "uris": [page.uri] })
             break
+        case "checksums":
+            pageStack.replace(Qt.resolvedUrl("../../pages/ChecksumsPage.qml"), { "uri": page.uri })
+            break
         }
     }
 

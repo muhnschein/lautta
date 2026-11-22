@@ -2,7 +2,7 @@
 .pragma library
 .import "ContextActions.js" as Actions
 
-var endingActions = ["copy", "cut", "share", "extract", "compress", "rename", "favourite", "moveToNewFolder"]
+var endingActions = ["copy", "cut", "share", "extract", "compress", "rename", "favourite", "moveToNewFolder", "checksums", "verify"]
 
 function endsSelection(id) {
     return endingActions.indexOf(id) >= 0

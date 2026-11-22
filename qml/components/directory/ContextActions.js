@@ -30,6 +30,12 @@ function text(id) {
     case "compress":
         //% "Compress"
         return qsTrId("lautta-dir-act-compress")
+    case "checksums":
+        //% "Checksums"
+        return qsTrId("lautta-dir-act-checksums")
+    case "verify":
+        //% "Verify files"
+        return qsTrId("lautta-dir-act-verify")
     case "moveToNewFolder":
         //% "Move to new folder"
         return qsTrId("lautta-dir-act-move-new-folder")
@@ -43,12 +49,14 @@ function icon(id) {
     case "favourite": return "image://theme/icon-m-favorite"
     case "extract": return "file-folder"
     case "compress": return "file-archive"
+    case "checksums": return "checksum"
+    case "verify": return "image://theme/icon-m-acknowledge"
     case "moveToNewFolder": return "file-folder"
     }
     return ""
 }
 
-// ctx: { isDir, changeable, readable, writable, archive }; readable unless false. Compress and
+// ctx: { isDir, changeable, readable, writable, archive, checksumList }; readable unless false. Compress and
 // Extract put their result beside the item: folder must be writable.
 function applicable(id, ctx) {
     var readable = ctx.readable !== false
@@ -62,13 +70,15 @@ function applicable(id, ctx) {
     case "favourite": return true
     case "extract": return readable && ctx.archive === true && ctx.writable === true
     case "compress": return readable && ctx.writable === true
+    case "checksums": return readable && ctx.isDir === false
+    case "verify": return readable && ctx.checksumList === true
     case "moveToNewFolder": return ctx.changeable === true
     }
     return false
 }
 
 var menuOrder = ["share", "copy", "cut", "rename", "delete", "more"]
-var moreOrder = ["favourite", "extract", "compress", "moveToNewFolder"]
+var moreOrder = ["verify", "favourite", "extract", "compress", "checksums", "moveToNewFolder"]
 
 function pick(order, ctx) {
     var out = []
