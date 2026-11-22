@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Zip central directory parser and entry reader. The `zip` crate reads every entry's local header
 //! on open, touching the whole file just to list it. This reads end-of-central-directory and
-//! central directory (2-3 ranged reads), local header only on open.
+//! central directory (2-3 ranged reads), local header only on open. WinZip AES entries open with
+//! the password ([`crate::zipaes`]); legacy ZipCrypto ones not at all.
 
 use super::blocks::{from_io, BlockReader, BlockSource};
 use super::{Loc, RawEntry};
 use crate::entry::Kind;
 use crate::error::{Error, ErrorKind, Result};
+use crate::password::Password;
+use crate::zipaes::{self, AesField, Decryptor};
 use std::io::{self, Read, Seek, SeekFrom};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime};
 
 const EOCD_SIG: [u8; 4] = [0x50, 0x4b, 0x05, 0x06];
@@ -29,6 +32,17 @@ pub struct ZipLoc {
     pub compressed: u64,
     pub size: u64,
     pub header_offset: u64,
+    pub aes: Option<AesField>,
+}
+
+const FLAG_ENCRYPTED: u16 = 0x0001;
+
+impl ZipLoc {
+    /// WinZip AES: opens with the password.
+    pub fn aes(&self) -> Option<AesField> {
+        self.aes
+            .filter(|_| self.flags & FLAG_ENCRYPTED != 0 && self.method == zipaes::METHOD)
+    }
 }
 
 fn corrupt(what: &str) -> Error {
@@ -156,10 +170,12 @@ fn parse_central_entry(b: &[u8], at: usize) -> Result<(RawEntry, usize)> {
         return Err(bad());
     }
     let mut mtime = Some(dos_to_time(dos_date, dos_time));
+    let mut aes = None;
     for (id, data) in extra_fields(extra) {
         match id {
             0x0001 => apply_zip64(data, &mut size, &mut compressed, &mut header_offset),
             0x5455 => mtime = unix_mtime(data).or(mtime),
+            zipaes::EXTRA_ID => aes = AesField::parse(data),
             _ => {}
         }
     }
@@ -171,6 +187,7 @@ fn parse_central_entry(b: &[u8], at: usize) -> Result<(RawEntry, usize)> {
         compressed,
         size,
         header_offset,
+        aes,
     };
     let entry = RawEntry {
         name: name.to_vec(),
@@ -265,10 +282,8 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     era * 146_097 + doe - 719_468
 }
 
-pub fn open_entry(src: &Arc<BlockSource>, loc: &ZipLoc) -> Result<Box<dyn Read + Send>> {
-    if loc.flags & 1 != 0 {
-        return Err(Error::new(ErrorKind::Unsupported, "encrypted zip entry"));
-    }
+/// Positioned at the entry's stored bytes, `loc.compressed` of them.
+fn stored_data(src: &Arc<BlockSource>, loc: &ZipLoc) -> Result<io::Take<BlockReader>> {
     let mut reader = src.reader();
     let head = reader.read_exact_at(loc.header_offset, 30).map_err(from_io)?;
     if le32(&head, 0) != Some(LOCAL_SIG) {
@@ -281,30 +296,94 @@ pub fn open_entry(src: &Arc<BlockSource>, loc: &ZipLoc) -> Result<Box<dyn Read +
         return Err(corrupt("entry data out of range"));
     }
     reader.seek(SeekFrom::Start(data_at)).map_err(from_io)?;
-    let raw = reader.take(loc.compressed);
-    let stream: Box<dyn Read + Send> = match loc.method {
-        0 => Box::new(raw),
-        8 => Box::new(flate2::read::DeflateDecoder::new(raw)),
-        m => return Err(Error::new(ErrorKind::Unsupported, format!("zip method {m}"))),
-    };
-    Ok(Box::new(Checked::new(stream, loc)))
+    Ok(reader.take(loc.compressed))
 }
 
-/// Bounds output to declared size, verifies CRC-32: bombs and corrupt entries cannot pass.
+fn needs_password(password: Option<&Password>) -> Result<&Password> {
+    password.ok_or_else(|| Error::kind(ErrorKind::PasswordRequired))
+}
+
+/// First AES entry decides: `PasswordRequired` without a password, `WrongPassword` with a wrong one.
+/// Archives without one take no password.
+pub fn check_password(
+    src: &Arc<BlockSource>,
+    entries: &[RawEntry],
+    password: Option<&Password>,
+) -> Result<bool> {
+    let locked = entries.iter().find_map(|e| match &e.loc {
+        Loc::Zip(z) => z.aes().map(|aes| (z, aes)),
+        _ => None,
+    });
+    let Some((loc, aes)) = locked else {
+        return Ok(false);
+    };
+    Decryptor::new(
+        stored_data(src, loc)?,
+        loc.compressed,
+        needs_password(password)?,
+        aes.strength,
+    )?;
+    Ok(true)
+}
+
+struct Shared<R: Read>(Arc<Mutex<Decryptor<R>>>);
+
+impl<R: Read> Read for Shared<R> {
+    fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).read(out)
+    }
+}
+
+type Finish = Box<dyn FnMut() -> io::Result<()> + Send>;
+
+pub fn open_entry(
+    src: &Arc<BlockSource>,
+    loc: &ZipLoc,
+    password: Option<&Password>,
+) -> Result<Box<dyn Read + Send>> {
+    if loc.flags & FLAG_ENCRYPTED != 0 && loc.aes().is_none() {
+        return Err(Error::new(ErrorKind::Unsupported, "zip entry uses ZipCrypto"));
+    }
+    let raw = stored_data(src, loc)?;
+    let (method, data, finish): (u16, Box<dyn Read + Send>, Option<Finish>) = match loc.aes() {
+        Some(aes) => {
+            let dec = Decryptor::new(raw, loc.compressed, needs_password(password)?, aes.strength)?;
+            let dec = Arc::new(Mutex::new(dec));
+            let tail = Arc::clone(&dec);
+            let finish: Finish =
+                Box::new(move || tail.lock().unwrap_or_else(PoisonError::into_inner).finish());
+            (aes.method, Box::new(Shared(dec)), Some(finish))
+        }
+        None => (loc.method, Box::new(raw), None),
+    };
+    let stream: Box<dyn Read + Send> = match method {
+        0 => data,
+        8 => Box::new(flate2::read::DeflateDecoder::new(data)),
+        m => return Err(Error::new(ErrorKind::Unsupported, format!("zip method {m}"))),
+    };
+    Ok(Box::new(Checked::new(stream, loc, finish)))
+}
+
+/// Bounds output to declared size, verifies CRC-32 (AE-2: the AES tag instead): bombs and corrupt
+/// entries cannot pass.
 struct Checked {
     inner: io::Take<Box<dyn Read + Send>>,
     crc: flate2::Crc,
-    expect_crc: u32,
+    /// `None`: AE-2 stores no CRC.
+    expect_crc: Option<u32>,
     expect_len: u64,
+    /// Checks the AES tag even when decompression stops before the last stored byte.
+    finish: Option<Finish>,
 }
 
 impl Checked {
-    fn new(inner: Box<dyn Read + Send>, loc: &ZipLoc) -> Checked {
+    fn new(inner: Box<dyn Read + Send>, loc: &ZipLoc, finish: Option<Finish>) -> Checked {
         Checked {
             inner: inner.take(loc.size),
             crc: flate2::Crc::new(),
-            expect_crc: loc.crc,
+            expect_crc: loc.aes().is_none_or(|a| a.has_crc()).then_some(loc.crc),
             expect_len: loc.size,
+            finish,
         }
     }
 }
@@ -316,7 +395,11 @@ impl Read for Checked {
             self.crc.update(&out[..n]);
             return Ok(n);
         }
-        if self.crc.amount() as u64 != self.expect_len || self.crc.sum() != self.expect_crc {
+        if let Some(finish) = self.finish.as_mut() {
+            finish()?;
+        }
+        let crc_ok = self.expect_crc.is_none_or(|c| c == self.crc.sum());
+        if self.crc.amount() as u64 != self.expect_len || !crc_ok {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "zip entry checksum mismatch",

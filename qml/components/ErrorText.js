@@ -95,6 +95,18 @@ function message(kind, context) {
                      qsTrId("lautta-err-location-gone"),
                      //% "The server is no longer connected."
                      qsTrId("lautta-err-location-gone-unnamed"))
+    case "PasswordRequired":
+        return _pick(item,
+                     //% "%1 is locked. Open it and enter its password."
+                     qsTrId("lautta-err-password-required"),
+                     //% "The file is locked. Open it and enter its password."
+                     qsTrId("lautta-err-password-required-unnamed"))
+    case "WrongPassword":
+        return _pick(item,
+                     //% "Wrong password for %1."
+                     qsTrId("lautta-err-wrong-password"),
+                     //% "Wrong password."
+                     qsTrId("lautta-err-wrong-password-unnamed"))
     case "Sandbox":
         //% "Lautta isn't allowed to read this file."
         return qsTrId("lautta-err-sandbox")

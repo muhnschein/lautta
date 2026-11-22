@@ -132,8 +132,8 @@ Features: F-VWR-07 PDF viewer, F-VWR-08 PDF search, F-VWR-09 PDF contents / go t
 | 7 | SCR-36 PDF link | Tap web link: Link to a website, Open, Copy link |
 | 8 | SCR-34 PDF contents | Contents: outline entries with page numbers, Go to page |
 | 9 | SCR-33 PDF viewer | Tap outline entry: jumps to page 2 |
-| 10 | SCR-35 PDF password | Locked PDF: password asked on open |
-| 11 | SCR-35 PDF password | Wrong password. Try again. |
+| 10 | SCR-35 Locked file | Locked PDF: password asked on open |
+| 11 | SCR-35 Locked file | Wrong password. Try again. |
 | 12 | SCR-33 PDF viewer | Unlocked |
 
 ## Organise
@@ -240,7 +240,9 @@ Features: F-ITM-07 Compress, F-ITM-08 Move to new folder
 | 1 | SCR-07 Item context menu | Long-press file |
 | 2 | SCR-08 More actions | More actions: Add to favourites, Compress, Move to new folder |
 | 3 | SCR-16 Compress | Compress: Name, Format (Zip, 7z, tar.xz, tar.gz) |
-| 4 | SCR-03 Folder page (list) | Compressed file lights up beside the item |
+| 4 | SCR-16 Compress | Zip or 7z: Password, Confirm password; guessable one says "Weak password" |
+| 5 | SCR-16 Compress | Passwords don't match: Compress greyed |
+| 6 | SCR-03 Folder page (list) | Compressed file lights up beside the item |
 
 ### FL-17 Open a compressed file and extract (standalone)
 
@@ -251,9 +253,10 @@ Features: F-OPS-05 Extract, F-OPS-06 Archive location
 | # | Screen | Step |
 |---|---|---|
 | 1 | SCR-08 More actions | More actions of a compressed file: Extract |
-| 2 | SCR-03 Folder page (list) | Compressed file opens read-only: "Compressed file · read only" |
-| 3 | SCR-06 Folder pulley | Pulley: Extract |
-| 4 | SCR-03 Folder page (list) | Result lights up beside the compressed file |
+| 2 | SCR-35 Locked file | Locked compressed file: password asked on open or Extract |
+| 3 | SCR-03 Folder page (list) | Compressed file opens read-only: "Compressed file · read only" |
+| 4 | SCR-06 Folder pulley | Pulley: Extract |
+| 5 | SCR-03 Folder page (list) | Result lights up beside the compressed file |
 
 ## Tasks
 

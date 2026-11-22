@@ -84,7 +84,7 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | SCR-32 | Markdown viewer | `viewers/MarkdownViewer.qml` | S | tap `.md` (`.markdown`, `.mkd`, `.mdown`, `.mdwn`, `.markdn`) or `.txt` |
 | SCR-33 | PDF viewer | `viewers/PdfViewer.qml` | S | tap PDF |
 | SCR-34 | PDF contents | `viewers/PdfContentsPage.qml` | S | PDF pulley "Contents and pages" |
-| SCR-35 | PDF password | `dialogs/PdfPasswordDialog.qml` | S | locked PDF, pulley Unlock |
+| SCR-35 | Locked file | `dialogs/LockedFileDialog.qml` | S | locked PDF, pulley Unlock; locked compressed file on open or Extract |
 | SCR-36 | PDF link | `dialogs/PdfLinkDialog.qml` | S | tap web link in PDF |
 | SCR-37 | Open remote (Getting file) | `dialogs/OpenRemoteDialog.qml` | B | open/share remote file without viewer |
 | SCR-38 | Recents | `pages/RecentsPage.qml` | S | Browse row Recents |
@@ -173,7 +173,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-ITM-04 Rename** — dialog, then remorse "File renamed" with undo.
 - **F-ITM-05 Delete** — user folders with Trash on: remorse "Moving to trash"; volumes, servers, Trash off: SCR-15 "Delete permanently?".
 - **F-ITM-06 Add to favourites** — from context More, path menu, Browse row, image More. *Proof:* SCR-40 "Added to favourites".
-- **F-ITM-07 Compress** — Name, Format list (Zip, 7z, tar.xz, tar.gz, one line each, picked row lit); file lands beside items, taken name gets " 2". *Proof:* notice "Compressed file created", new file lights up.
+- **F-ITM-07 Compress** — Name, Format list (Zip, 7z, tar.xz, tar.gz, one line each, picked row lit), Password + Confirm password for Zip and 7z (AES-256; 7z hides names too; empty = none; mismatch greys Compress; guessable one: label "Weak password" in orange, never refused); file lands beside items, taken name gets " 2". *Proof:* notice "Compressed file created", new file lights up.
 - **F-ITM-08 Move to new folder** — new folder dialog, then move.
 - **F-ITM-09 Open with** — other app for local file (viewer pulley, image toolbar).
 
@@ -190,8 +190,8 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-OPS-02 Plan summary** — before ops over threshold (Settings › Transfers › Ask before large operations): items, size, free on destination, conflicts, names changed (Use suggested names for all), options (Keep modification times, Keep permissions, Verify with checksums), Start.
 - **F-OPS-03 Conflict resolution** — Merge (folders), Keep both ("Saves as …"), Skip, Replace, Replace if newer, Resume (unfinished copies); "Do this for the remaining N conflicts". Add only: Keep both only, "Lautta may only add files here."
 - **F-OPS-04 Not-enough-space check** — error names place and sizes.
-- **F-OPS-05 Extract** — no page: task starts. One top item lands as is beside compressed file, several go into new folder named after it; taken name gets " 2", nothing merged or replaced. *Entry:* More actions of compressed file, pulley inside one. *Proof:* task in Activity, result lights up in folder.
-- **F-OPS-06 Archive location** — compressed file opens read-only as folder, header line "Compressed file · read only". *Code:* `provider/archive.rs`.
+- **F-OPS-05 Extract** — no page: task starts (locked file not open: SCR-35 asks first). One top item lands as is beside compressed file, several go into new folder named after it; taken name gets " 2", nothing merged or replaced. *Entry:* More actions of compressed file, pulley inside one. *Proof:* task in Activity, result lights up in folder.
+- **F-OPS-06 Archive location** — compressed file opens read-only as folder, header line "Compressed file · read only". Locked one (Zip AES, 7z AES): SCR-35 asks password, wrong one asks again; open while a page shows it, its items sit on clipboard or a task reads it, then closed and password gone (memory only, never stored). *Code:* `provider/archive.rs`, `app_archives.rs`.
 - **F-OPS-07 Background notice** — "Running in the background" when task starts.
 
 ### 3.7 Activity (tasks)
@@ -220,7 +220,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-VWR-07 PDF viewer** — pages, zoom, page count, reopen at last page, links (internal jump, web link dialog), Back to page n; pulley Unlock, Open with, Share, Search, Contents and pages.
 - **F-VWR-08 PDF search** — search field with up/down hits, "n of m · page p", "Not found in N pages".
 - **F-VWR-09 PDF contents / go to page** — outline list, "Go to page, 1 to N".
-- **F-VWR-10 PDF password** — "Locked PDF", wrong-password retry.
+- **F-VWR-10 PDF password** — SCR-35 "Locked file", wrong-password retry.
 - **F-VWR-11 External fallback** — unknown types open in other app; remote via working copy (F-SRV-16).
 
 ### 3.9 Search

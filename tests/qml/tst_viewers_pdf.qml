@@ -119,7 +119,7 @@ ApplicationWindow {
         }
         dialog.wrong = true
         var fields = findAll(dialog, function(x) { return x.errorHighlight !== undefined && x.label !== undefined }, [])
-        expect(fields.length === 1 && fields[0].label === qsTrId("lautta-viewers-pdf-wrong-password") && fields[0].errorHighlight,
+        expect(fields.length === 1 && fields[0].label === qsTrId("lautta-locked-wrong") && fields[0].errorHighlight,
                "a wrong password is said in the field: " + (fields.length ? fields[0].label : fields.length))
         dialog.reject()
         back(locked)

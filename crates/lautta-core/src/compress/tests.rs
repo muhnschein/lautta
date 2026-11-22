@@ -102,7 +102,7 @@ async fn run(f: &Fixture, sources: &[Uri], kind: ArchiveKind) -> (Vec<u8>, Compr
 async fn reopen(name: &str, bytes: &[u8], cache: &Path) -> ArchiveProvider {
     let mem = MemoryProvider::default();
     mem.add_file(name, bytes, 0);
-    ArchiveProvider::open(Arc::new(mem), vp(name), cache.to_path_buf())
+    ArchiveProvider::open(Arc::new(mem), vp(name), cache.to_path_buf(), None)
         .await
         .unwrap()
 }
@@ -475,7 +475,7 @@ async fn a_failing_last_flush_fails_the_run() {
 fn zip_writer_handles_unknown_sizes_and_forced_zip64() {
     for force in [false, true] {
         let sink = SharedBuf::default();
-        let mut zip = ZipStream::new(sink.clone(), 6);
+        let mut zip = ZipStream::new(sink.clone(), 6, None);
         if force {
             zip = zip.with_forced_zip64();
         }
@@ -518,7 +518,7 @@ fn zip_writer_handles_unknown_sizes_and_forced_zip64() {
 #[tokio::test]
 async fn forced_zip64_archives_open_with_our_reader_too() {
     let sink = SharedBuf::default();
-    let mut w: Box<dyn MemberWriter> = Box::new(ZipStream::new(sink.clone(), 1).with_forced_zip64());
+    let mut w: Box<dyn MemberWriter> = Box::new(ZipStream::new(sink.clone(), 1, None).with_forced_zip64());
     let meta = EntryMeta {
         path: b"a.txt".to_vec(),
         kind: Kind::File,
@@ -754,3 +754,5 @@ async fn tar_streams_files_of_known_size_in_chunks() {
         );
     }
 }
+
+mod passwords;

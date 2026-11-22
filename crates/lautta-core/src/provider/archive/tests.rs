@@ -101,7 +101,7 @@ fn sevenz_bytes(files: &[(&str, &[u8])]) -> Vec<u8> {
 async fn open_named(name: &str, data: &[u8], cache: &Path) -> Result<ArchiveProvider> {
     let mem = MemoryProvider::default();
     mem.add_file(name, data, 0);
-    ArchiveProvider::open(Arc::new(mem), vp(name), cache.to_path_buf()).await
+    ArchiveProvider::open(Arc::new(mem), vp(name), cache.to_path_buf(), None).await
 }
 
 async fn read_entry(p: &ArchiveProvider, path: &str) -> Vec<u8> {

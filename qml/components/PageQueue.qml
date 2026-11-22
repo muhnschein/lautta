@@ -13,8 +13,9 @@ Item {
         return __silica_applicationwindow_instance.pageStack
     }
 
-    function push(url, props) {
-        pending = pending.concat([{ "url": url, "props": props }])
+    // `pushed(page)`, if given, once the page is on the stack.
+    function push(url, props, pushed) {
+        pending = pending.concat([{ "url": url, "props": props, "pushed": pushed }])
         next()
     }
 
@@ -23,7 +24,9 @@ Item {
             return
         var entry = pending[0]
         pending = pending.slice(1)
-        stack().push(entry.url, entry.props)
+        var page = stack().push(entry.url, entry.props)
+        if (entry.pushed)
+            entry.pushed(page)
     }
 
     Connections {

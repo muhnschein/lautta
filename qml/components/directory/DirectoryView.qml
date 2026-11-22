@@ -351,7 +351,7 @@ Item {
         case "moveToNewFolder": newFolder(uris); break
         // CompressDialog takes the list itself, not its JSON text.
         case "compress": openDialog("../../dialogs/CompressDialog.qml", { "uris": uris }); break
-        case "extract": Operations.extract(uris[0]); break
+        case "extract": Operations.extract(uris[0], ""); break
         case "favourite":
             openDialog("../../pages/FavouritePage.qml", { "uri": uris[0], "isDir": info.isDir !== false })
             break

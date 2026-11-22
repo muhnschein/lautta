@@ -6,9 +6,11 @@ use super::{error_parts, parse_uri, parse_uris};
 use crate::json::{from_json, to_json};
 use crate::runtime::{core, spawn_then};
 use lautta_core::app::{Core, Started};
+use lautta_core::app_archives::ArchiveHold;
 use lautta_core::app_operations::{parse_choice, ConflictEntry, PendingPlans, StartOptions};
-use lautta_core::compress::ArchiveKind;
+use lautta_core::compress::{ArchiveKind, CompressOptions};
 use lautta_core::ops::{OperationKind, Plan};
+use lautta_core::password::{self, Password};
 use lautta_core::{Error, ErrorKind, Result, Uri};
 use qmetaobject::prelude::*;
 use qmetaobject::{QPointer, QSingletonInit};
@@ -28,6 +30,10 @@ enum Launched {
 #[derive(Default)]
 struct State {
     jobs: HashMap<i64, Arc<AtomicBool>>,
+    /// Archive location → holds of the pages showing it.
+    pages: HashMap<String, Vec<ArchiveHold>>,
+    /// Archive location → hold from opening it, until its page holds it.
+    opened: HashMap<String, ArchiveHold>,
 }
 
 #[derive(QObject, Default)]
@@ -45,11 +51,18 @@ pub struct Operations {
     resolveConflict: qt_method!(fn(&self, plan_id: i32, index: i32, choice: QString, apply_to_all: bool)),
     remove: qt_method!(fn(&self, uris_json: QString)),
     deletesPermanently: qt_method!(fn(&self, uris_json: QString) -> bool),
-    compress: qt_method!(fn(&self, uris_json: QString, dest_uri: QString, name: QString, kind: QString)),
+    /// Empty `password`: none.
+    compress: qt_method!(
+        fn(&self, uris_json: QString, dest_uri: QString, name: QString, kind: QString, password: QString)
+    ),
+    weakPassword: qt_method!(fn(&self, text: QString) -> bool),
     cancelJob: qt_method!(fn(&self, job_id: i32)),
     /// Into the archive's folder: one top item as is, else a new folder named after it.
-    extract: qt_method!(fn(&self, archive_uri: QString)),
-    openArchive: qt_method!(fn(&self, uri: QString)),
+    extract: qt_method!(fn(&self, archive_uri: QString, password: QString)),
+    openArchive: qt_method!(fn(&self, uri: QString, password: QString)),
+    /// A page shows `uri`: a locked archive stays open until the page lets go.
+    holdArchive: qt_method!(fn(&self, uri: QString)),
+    releaseArchive: qt_method!(fn(&self, uri: QString)),
     isArchive: qt_method!(fn(&self, uri: QString) -> bool),
     archiveSource: qt_method!(fn(&self, uri: QString) -> QString),
     displayPath: qt_method!(fn(&self, uri: QString) -> QString),
@@ -66,6 +79,8 @@ pub struct Operations {
     jobProgress: qt_signal!(jobId: i32, done: i64, total: i64),
     jobFinished: qt_signal!(jobId: i32, ok: bool, resultUri: QString),
     archiveOpened: qt_signal!(uri: QString, rootUri: QString),
+    /// Archive `uri` needs its password for `action` ("open" or "extract"); `wrong`: one was wrong.
+    locked: qt_signal!(uri: QString, action: QString, wrong: bool),
 
     pending: Arc<PendingPlans>,
     next_job: Cell<i32>,
@@ -89,6 +104,19 @@ async fn launch(core: &Core, started: Result<Started>) -> Result<Launched> {
             Launched::Summary(plan, summary)
         }
     })
+}
+
+fn password_of(text: &QString) -> Option<Password> {
+    Password::from_text(text.to_string())
+}
+
+/// `Some(wrong)` for a password question.
+fn asks_password(e: &Error) -> Option<bool> {
+    match e.kind {
+        ErrorKind::PasswordRequired => Some(false),
+        ErrorKind::WrongPassword => Some(true),
+        _ => None,
+    }
 }
 
 fn bad_arguments() -> Error {
@@ -292,7 +320,14 @@ impl Operations {
         }
     }
 
-    fn compress(&self, uris_json: QString, dest_uri: QString, name: QString, kind: QString) {
+    fn compress(
+        &self,
+        uris_json: QString,
+        dest_uri: QString,
+        name: QString,
+        kind: QString,
+        password: QString,
+    ) {
         let (Some(core), Some(sources), Some(dest), Some(kind)) = (
             core(),
             parse_uris(&uris_json),
@@ -311,13 +346,15 @@ impl Operations {
         self.change_jobs(1);
         self.jobStarted(job);
         let me = QPointer::from(self);
-        let progress = self.progress_sink(job);
+        let opts = CompressOptions {
+            progress: self.progress_sink(job),
+            cancel,
+            password: password_of(&password),
+            ..CompressOptions::new(kind)
+        };
         let name = name.to_string();
         spawn_then(
-            async move {
-                core.compress_to(&sources, &dest, &name, kind, progress, cancel)
-                    .await
-            },
+            async move { core.compress_to(&sources, &dest, &name, opts).await },
             move |res| {
                 let Some(p) = me.as_pinned() else { return };
                 let this = p.borrow();
@@ -365,37 +402,84 @@ impl Operations {
         }
     }
 
-    fn extract(&self, archive_uri: QString) {
+    fn weakPassword(&self, text: QString) -> bool {
+        password::is_weak(&text.to_string())
+    }
+
+    fn extract(&self, archive_uri: QString, password: QString) {
         let (Some(core), Some(archive)) = (core(), parse_uri(&archive_uri)) else {
             return self.emit_failed(&bad_arguments());
         };
+        let password = password_of(&password);
         let me = QPointer::from(self);
         spawn_then(
-            async move { launch(&core, core.extract(&archive).await).await },
+            async move { launch(&core, core.extract(&archive, password).await).await },
             move |res| {
-                if let Some(p) = me.as_pinned() {
-                    p.borrow().arrived(res);
+                let Some(p) = me.as_pinned() else { return };
+                let this = p.borrow();
+                match res.as_ref().err().and_then(asks_password) {
+                    Some(wrong) => this.locked(archive_uri, QString::from("extract"), wrong),
+                    None => this.arrived(res),
                 }
             },
         );
     }
 
-    fn openArchive(&self, uri: QString) {
+    fn openArchive(&self, uri: QString, password: QString) {
         let (Some(core), Some(archive)) = (core(), parse_uri(&uri)) else {
             return self.emit_failed(&bad_arguments());
         };
+        let password = password_of(&password);
         let me = QPointer::from(self);
-        spawn_then(async move { core.open_archive(&archive).await }, move |res| {
-            let Some(p) = me.as_pinned() else { return };
-            let this = p.borrow();
-            match res {
-                Ok(location) => {
-                    let root = Uri::root(location).to_string();
-                    this.archiveOpened(uri, QString::from(root.as_str()));
+        spawn_then(
+            async move { core.open_archive(&archive, password).await },
+            move |res| {
+                let Some(p) = me.as_pinned() else { return };
+                let this = p.borrow();
+                match res {
+                    Ok((location, hold)) => {
+                        let root = Uri::root(location.clone()).to_string();
+                        let replaced = this.state.borrow_mut().opened.insert(location, hold);
+                        drop(replaced);
+                        this.archiveOpened(uri, QString::from(root.as_str()));
+                    }
+                    Err(e) => match asks_password(&e) {
+                        Some(wrong) => this.locked(uri, QString::from("open"), wrong),
+                        None => this.emit_failed(&e),
+                    },
                 }
-                Err(e) => this.emit_failed(&e),
+            },
+        );
+    }
+
+    fn holdArchive(&self, uri: QString) {
+        let (Some(core), Some(u)) = (core(), parse_uri(&uri)) else {
+            return;
+        };
+        let hold = {
+            let _runtime = crate::runtime::handle().enter();
+            core.hold_archive(&u.location)
+        };
+        let opener = {
+            let mut state = self.state.borrow_mut();
+            state.pages.entry(u.location.clone()).or_default().push(hold);
+            state.opened.remove(&u.location)
+        };
+        drop(opener);
+    }
+
+    fn releaseArchive(&self, uri: QString) {
+        let Some(u) = parse_uri(&uri) else { return };
+        let hold = {
+            let mut state = self.state.borrow_mut();
+            let pages = state.pages.get_mut(&u.location);
+            let hold = pages.and_then(Vec::pop);
+            if state.pages.get(&u.location).is_some_and(Vec::is_empty) {
+                state.pages.remove(&u.location);
             }
-        });
+            hold
+        };
+        drop(hold);
     }
 
     fn isArchive(&self, uri: QString) -> bool {

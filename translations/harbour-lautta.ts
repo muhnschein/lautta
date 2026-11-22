@@ -1957,19 +1957,6 @@
         <source>Unlock</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-viewers-pdf-locked">
-        <source>Locked PDF</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-pdf-wrong-password">
-        <source>Wrong password. Try again.</source>
-        <oldsource>Wrong password, try again</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-pdf-password">
-        <source>Password</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-viewers-pdf-unlocking">
         <source>Unlocking</source>
         <translation type="unfinished"></translation>
@@ -2558,6 +2545,58 @@
     </message>
     <message id="lautta-compress-targz-line">
         <source>Fast. Made for Linux and Mac</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-password-required">
+        <source>%1 is locked. Open it and enter its password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-password-required-unnamed">
+        <source>The file is locked. Open it and enter its password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-wrong-password">
+        <source>Wrong password for %1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-wrong-password-unnamed">
+        <source>Wrong password.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-password-section">
+        <source>Password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-weak-password">
+        <source>Weak password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-password">
+        <source>Password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-passwords-differ">
+        <source>Passwords don&apos;t match</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-compress-confirm-password">
+        <source>Confirm password</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-locked-unlock">
+        <source>Unlock</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-locked-title">
+        <source>Locked file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-locked-wrong">
+        <source>Wrong password. Try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-locked-password">
+        <source>Password</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

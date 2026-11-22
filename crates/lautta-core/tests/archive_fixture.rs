@@ -15,7 +15,7 @@ async fn sevenz_fixture_lists_and_reads() {
     let mem = MemoryProvider::default();
     mem.add_file("sample.7z", FIXTURE, 0);
     let path = VPath::parse(b"sample.7z").unwrap();
-    let p = ArchiveProvider::open(Arc::new(mem), path, tmp.path().to_path_buf())
+    let p = ArchiveProvider::open(Arc::new(mem), path, tmp.path().to_path_buf(), None)
         .await
         .unwrap();
     assert_eq!(p.format(), ArchiveFormat::SevenZ);

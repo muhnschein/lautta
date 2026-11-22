@@ -58,8 +58,8 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-OPS-02 Plan summary | S | FL-14 | SCR-03, SCR-06, SCR-07, SCR-10, SCR-19, SCR-20, SCR-23 |
 | F-OPS-03 Conflict resolution | S | FL-14, FL-37 | SCR-03, SCR-06, SCR-07, SCR-10, SCR-11, SCR-19, SCR-20, SCR-21, SCR-23 |
 | F-OPS-04 Not-enough-space check | S | FL-14 | SCR-03, SCR-06, SCR-07, SCR-10, SCR-19, SCR-20, SCR-23 |
-| F-OPS-05 Extract | S | FL-17 | SCR-03, SCR-06, SCR-08 |
-| F-OPS-06 Archive location | S | FL-17 | SCR-03, SCR-06, SCR-08 |
+| F-OPS-05 Extract | S | FL-17 | SCR-03, SCR-06, SCR-08, SCR-35 |
+| F-OPS-06 Archive location | S | FL-17 | SCR-03, SCR-06, SCR-08, SCR-35 |
 | F-OPS-07 Background notice | S | FL-13 | SCR-03, SCR-06, SCR-07, SCR-10 |
 | F-XFR-01 Activity page | S | FL-18 | SCR-06, SCR-21, SCR-22 |
 | F-XFR-02 Task row menu | S | FL-18 | SCR-06, SCR-21, SCR-22 |
@@ -146,7 +146,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-32 Markdown viewer | FL-08 |
 | SCR-33 PDF viewer | FL-09 |
 | SCR-34 PDF contents | FL-09 |
-| SCR-35 PDF password | FL-09 |
+| SCR-35 Locked file | FL-09, FL-17 |
 | SCR-36 PDF link | FL-09 |
 | SCR-37 Open remote (Getting file) | FL-24 |
 | SCR-38 Recents | FL-21 |

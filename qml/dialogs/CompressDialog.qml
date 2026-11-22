@@ -4,13 +4,18 @@ import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/operations/Json.js" as Json
 
-// Compressed file lands beside the items.
+// Compressed file lands beside the items. Password goes to Operations.compress; not kept.
 Dialog {
     id: dialog
 
     property var uris: []
     property string format: "zip"
     readonly property string folderUri: uris.length > 0 ? App.parentUri(uris[0]) : ""
+    readonly property bool takesPassword: format === "zip" || format === "7z"
+    readonly property string password: takesPassword ? passwordField.text : ""
+    readonly property bool passwordsMatch: !takesPassword || passwordField.text === confirmField.text
+    // A hint only: nothing is refused.
+    readonly property bool weakPassword: takesPassword && Operations.weakPassword(passwordField.text)
 
     readonly property var formats: [
         //% "Opens on every phone and computer"
@@ -33,11 +38,20 @@ Dialog {
         return folder.length > 0 ? folder : qsTrId("lautta-compress-default-name")
     }
 
-    canAccept: nameField.text.trim().length > 0 && folderUri.length > 0
+    function forget() {
+        passwordField.text = ""
+        confirmField.text = ""
+    }
 
-    onAccepted: Operations.compress(JSON.stringify(uris), folderUri, nameField.text.trim(), format)
+    canAccept: nameField.text.trim().length > 0 && folderUri.length > 0 && passwordsMatch
+
+    onAccepted: {
+        Operations.compress(JSON.stringify(uris), folderUri, nameField.text.trim(), format, password)
+        forget()
+    }
     // Set once: bound, Silica reports a canAccept binding loop.
     Component.onCompleted: nameField.text = defaultName()
+    Component.onDestruction: forget()
 
     SilicaFlickable {
         anchors.fill: parent
@@ -99,6 +113,48 @@ Dialog {
                             color: row.picked || row.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
                         }
                     }
+                }
+            }
+
+            Column {
+                width: parent.width
+                visible: dialog.takesPassword
+
+                SectionHeader {
+                    //% "Password"
+                    text: qsTrId("lautta-compress-password-section")
+                }
+
+                PasswordField {
+                    id: passwordField
+                    objectName: "compressPassword"
+                    //% "Weak password"
+                    label: dialog.weakPassword ? qsTrId("lautta-compress-weak-password")
+                                               //% "Password"
+                                               : qsTrId("lautta-compress-password")
+                    labelComponent: Component {
+                        TextEditorLabel {
+                            width: parent.width
+                            editor: passwordField
+                            // Silica's orange (Away presence), as row warnings.
+                            color: dialog.weakPassword ? Theme.presenceColor(Theme.PresenceAway)
+                                                       : highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
+                        }
+                    }
+                    EnterKey.iconSource: "image://theme/icon-m-enter-next"
+                    EnterKey.onClicked: confirmField.focus = true
+                }
+
+                PasswordField {
+                    id: confirmField
+                    objectName: "compressConfirm"
+                    errorHighlight: text.length > 0 && !dialog.passwordsMatch
+                    //% "Passwords don't match"
+                    label: errorHighlight ? qsTrId("lautta-compress-passwords-differ")
+                                          //% "Confirm password"
+                                          : qsTrId("lautta-compress-confirm-password")
+                    EnterKey.iconSource: "image://theme/icon-m-enter-close"
+                    EnterKey.onClicked: focus = false
                 }
             }
         }

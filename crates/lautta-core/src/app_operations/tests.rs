@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 use super::*;
 use crate::ops::{PlanItem, PlanTotals};
+use std::sync::Arc;
 
 fn uri(s: &str) -> Uri {
     Uri::parse(s).unwrap()
@@ -31,6 +32,7 @@ fn plan(items: Vec<PlanItem>) -> Plan {
         },
         items,
         needs_summary: false,
+        hold: Default::default(),
     }
 }
 
