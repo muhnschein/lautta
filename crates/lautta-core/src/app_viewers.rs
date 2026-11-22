@@ -99,6 +99,86 @@ pub struct FullImage {
     pub orientation: u8,
 }
 
+/// Decode size for the image viewer, in the file's own orientation: the image shown whole on a
+/// `screen` (portrait width, height) turned either way. JPEG: libjpeg's 1/2, 1/4 or 1/8 step that
+/// still covers that, so the decoder scales in its IDCT; else the fit itself. `None`: as is (never
+/// scaled up).
+pub fn viewer_decode_size(bytes: &[u8], screen: (u32, u32)) -> Option<(u32, u32)> {
+    let reader = image::io::Reader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?;
+    let jpeg = reader.format() == Some(image::ImageFormat::Jpeg);
+    decode_size(reader.into_dimensions().ok()?, screen, jpeg)
+}
+
+fn decode_size((w, h): (u32, u32), (sw, sh): (u32, u32), jpeg: bool) -> Option<(u32, u32)> {
+    // Zero width needs no check: it never needs scaling down.
+    if h == 0 || sw == 0 || sh == 0 {
+        return None;
+    }
+    let (w64, h64) = (u64::from(w), u64::from(h));
+    // Whole image in a `bw` x `bh` box, sides rounded up.
+    let fit = |bw: u64, bh: u64| {
+        if bw * h64 <= bh * w64 {
+            (bw, (h64 * bw).div_ceil(w64))
+        } else {
+            ((w64 * bh).div_ceil(h64), bh)
+        }
+    };
+    let (a, b) = (fit(sw.into(), sh.into()), fit(sh.into(), sw.into()));
+    let need = if a.0 >= b.0 { a } else { b };
+    if need.0 >= w64 || need.1 >= h64 {
+        return None;
+    }
+    let need = (need.0 as u32, need.1 as u32);
+    if jpeg {
+        if let Some(d) = [8, 4, 2].into_iter().find(|d| w / d >= need.0 && h / d >= need.1) {
+            return Some((w / d, h / d));
+        }
+    }
+    Some(need)
+}
+
+/// Longer side of [`Core::viewer_preview`]'s clear shape: aspect kept within half a percent.
+const SHAPE_SIDE: u32 = 256;
+/// JPEG segments walked before giving up on the frame header.
+const MAX_JPEG_SEGMENTS: usize = 256;
+
+fn clear_shape((w, h): (u32, u32), side: u32) -> image::DynamicImage {
+    let long = u64::from(w.max(h).max(1));
+    let side = u64::from(side).min(long);
+    let scaled = |v: u32| ((u64::from(v) * side + long / 2) / long).max(1) as u32;
+    image::DynamicImage::ImageRgba8(image::RgbaImage::new(scaled(w), scaled(h)))
+}
+
+/// Width and height in the file's orientation. JPEG: segment headers read one by one up to the
+/// frame header, which EXIF, ICC and XMP segments may push past `head`.
+async fn image_dimensions(handle: &dyn ReadHandle, head: &[u8]) -> Option<(u32, u32)> {
+    if !head.starts_with(&[0xff, 0xd8]) {
+        let reader = image::io::Reader::new(std::io::Cursor::new(head))
+            .with_guessed_format()
+            .ok()?;
+        return reader.into_dimensions().ok();
+    }
+    let mut at = 2u64;
+    for _ in 0..MAX_JPEG_SEGMENTS {
+        let seg = handle.read_at(at, 9).await.ok()?;
+        match seg.as_slice() {
+            [0xff, 0xff, ..] => at += 1,
+            [0xff, 0xc0..=0xcf, _, _, _, h0, h1, w0, w1] if !matches!(seg[1], 0xc4 | 0xc8 | 0xcc) => {
+                return Some((
+                    u16::from_be_bytes([*w0, *w1]).into(),
+                    u16::from_be_bytes([*h0, *h1]).into(),
+                ));
+            }
+            [0xff, 0xda, ..] => return None,
+            [0xff, _, l0, l1, ..] => at += 2 + u64::from(u16::from_be_bytes([*l0, *l1])),
+            _ => return None,
+        }
+    }
+    None
+}
+
 /// Server images kept after reading: the viewer's zoom and its neighbours ask again.
 pub const SHOWN_IMAGES: usize = 3;
 pub const SHOWN_IMAGES_BYTES: usize = 64 * 1000 * 1000;
@@ -143,22 +223,26 @@ pub struct ThumbId {
     pub size: u32,
     /// Only what the cache holds, any size: a stand-in while the real one loads.
     pub cached: bool,
+    /// The image's EXIF thumbnail only: a stand-in while the image decodes.
+    pub embedded: bool,
 }
 
-/// `<uri>?size=N[&cached=1]`. Size is clamped. URI may arrive percent-encoded once more (QML
-/// helpers).
+/// `<uri>?size=N[&cached=1|&embedded=1]`. Size is clamped. URI may arrive percent-encoded once
+/// more (QML helpers).
 pub fn parse_thumb_id(id: &str) -> Option<ThumbId> {
     let (uri_part, query) = id.rsplit_once('?')?;
-    let (size, cached) = match query.split_once('&') {
-        Some((size, "cached=1")) => (size, true),
+    let (size, cached, embedded) = match query.split_once('&') {
+        Some((size, "cached=1")) => (size, true, false),
+        Some((size, "embedded=1")) => (size, false, true),
         Some(_) => return None,
-        None => (query, false),
+        None => (query, false, false),
     };
     let size: u32 = size.strip_prefix("size=")?.parse().ok()?;
     Some(ThumbId {
         uri: parse_image_uri(uri_part)?,
         size: size.clamp(MIN_THUMB, MAX_THUMB),
         cached,
+        embedded,
     })
 }
 
@@ -1037,6 +1121,26 @@ impl Core {
             .collect()
     }
 
+    /// Image viewer's stand-in while the image decodes: the camera's EXIF thumbnail, oriented, at
+    /// most `size`. Without one, a clear image of the photo's upright shape: the grid tile drawn
+    /// under it takes its place from that. Reads the file's head (and JPEG segment headers) only.
+    pub async fn viewer_preview(&self, uri: &Uri, size: u32) -> Result<Vec<u8>> {
+        let provider = self.provider(&uri.location)?;
+        let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
+        let head = read_all(handle.as_ref(), crate::thumbs::HEAD_BYTES).await?;
+        let orientation = exif::orientation(&head);
+        let Some(thumb) = exif::exif_thumbnail(&head) else {
+            let Some((w, h)) = image_dimensions(handle.as_ref(), &head).await else {
+                return Err(Error::new(ErrorKind::Unsupported, "image size unknown"));
+            };
+            let upright = if orientation >= 5 { (h, w) } else { (w, h) };
+            return crate::thumbs::encode(&clear_shape(upright, size.min(SHAPE_SIDE)));
+        };
+        tokio::task::spawn_blocking(move || render_thumbnail(&thumb, size, orientation))
+            .await
+            .map_err(|e| Error::new(ErrorKind::Internal, format!("thumbnail worker failed: {e}")))?
+    }
+
     /// Kept in [`ShownImages`] while its file keeps its size.
     pub async fn full_image(&self, uri: &Uri) -> Result<FullImage> {
         let provider = self.provider(&uri.location)?;
@@ -1494,10 +1598,127 @@ mod tests {
     #[test]
     fn thumb_ids_may_ask_for_the_cache_only() {
         let t = parse_thumb_id("lautta://nv-a/x.jpg?size=1024&cached=1").unwrap();
-        assert_eq!((t.size, t.cached), (1024, true));
+        assert_eq!((t.size, t.cached, t.embedded), (1024, true, false));
+        let plain = parse_thumb_id("lautta://nv-a/x.jpg?size=64").unwrap();
+        assert_eq!((plain.cached, plain.embedded), (false, false));
         assert!(parse_thumb_id("lautta://nv-a/x.jpg?size=64&cached=0").is_none());
         assert!(parse_thumb_id("lautta://nv-a/x.jpg?size=64&other=1").is_none());
         assert!(parse_thumb_id("lautta://nv-a/x.jpg?cached=1&size=64").is_none());
+    }
+
+    #[test]
+    fn thumb_ids_may_ask_for_the_embedded_thumbnail_only() {
+        let t = parse_thumb_id("lautta://nv-a/x.jpg?size=1024&embedded=1").unwrap();
+        assert_eq!((t.size, t.cached, t.embedded), (1024, false, true));
+        assert!(parse_thumb_id("lautta://nv-a/x.jpg?size=64&embedded=0").is_none());
+    }
+
+    const SCREEN: (u32, u32) = (1080, 2280);
+
+    #[test]
+    fn viewer_decodes_jpegs_at_the_libjpeg_step_that_covers_the_screen() {
+        // 4:3 shows widest turned: 1440x1080.
+        assert_eq!(
+            decode_size((4000, 3000), SCREEN, true),
+            Some((2000, 1500)),
+            "12 MP: half"
+        );
+        assert_eq!(
+            decode_size((3000, 4000), SCREEN, true),
+            Some((1500, 2000)),
+            "portrait file"
+        );
+        assert_eq!(
+            decode_size((8160, 6120), SCREEN, true),
+            Some((2040, 1530)),
+            "50 MP: quarter"
+        );
+        assert_eq!(
+            decode_size((12000, 9000), SCREEN, true),
+            Some((1500, 1125)),
+            "108 MP: eighth"
+        );
+        assert_eq!(
+            decode_size((11520, 8640), SCREEN, true),
+            Some((1440, 1080)),
+            "eighth just covers"
+        );
+        assert_eq!(
+            decode_size((11519, 8639), SCREEN, true),
+            Some((2879, 2159)),
+            "eighth too small"
+        );
+        assert_eq!(
+            decode_size((11523, 8640), SCREEN, true),
+            Some((2880, 2160)),
+            "eighth one column short"
+        );
+        assert_eq!(
+            decode_size((18240, 8001), SCREEN, true),
+            Some((4560, 2000)),
+            "eighth one row short"
+        );
+        // 16:9 shows 1920x1080 turned.
+        assert_eq!(decode_size((4000, 2250), SCREEN, true), Some((2000, 1125)));
+        // Panorama fills the long side: 2280 wide.
+        assert_eq!(decode_size((8000, 2000), SCREEN, true), Some((4000, 1000)));
+    }
+
+    #[test]
+    fn viewer_decodes_at_the_fit_when_no_step_covers_it_or_not_jpeg() {
+        assert_eq!(
+            decode_size((3000, 4000), SCREEN, false),
+            Some((1080, 1440)),
+            "portrait fits the width"
+        );
+        assert_eq!(
+            decode_size((1000, 8000), SCREEN, false),
+            Some((285, 2280)),
+            "tall panorama fits the height"
+        );
+        assert_eq!(
+            decode_size((2000, 1500), SCREEN, true),
+            Some((1440, 1080)),
+            "half too small"
+        );
+        assert_eq!(
+            decode_size((4000, 3000), SCREEN, false),
+            Some((1440, 1080)),
+            "PNG scales after"
+        );
+        assert_eq!(
+            decode_size((4001, 3000), SCREEN, false),
+            Some((1441, 1080)),
+            "rounded up"
+        );
+    }
+
+    #[test]
+    fn viewer_never_scales_images_up() {
+        assert_eq!(decode_size((1440, 1080), SCREEN, true), None, "exact fit");
+        assert_eq!(decode_size((800, 600), SCREEN, true), None);
+        assert_eq!(decode_size((0, 600), SCREEN, true), None);
+        assert_eq!(decode_size((800, 0), SCREEN, true), None);
+        assert_eq!(decode_size((4000, 2), SCREEN, false), None, "fit needs every row");
+        assert_eq!(decode_size((800, 600), (0, 2280), true), None);
+        assert_eq!(decode_size((800, 600), (1080, 0), true), None);
+    }
+
+    fn encoded(w: u32, h: u32, format: image::ImageOutputFormat) -> Vec<u8> {
+        let img = image::DynamicImage::ImageRgb8(image::RgbImage::new(w, h));
+        let mut out = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut out, format).unwrap();
+        out.into_inner()
+    }
+
+    #[test]
+    fn viewer_decode_size_reads_dimensions_and_format_from_the_file() {
+        let screen = (108, 228);
+        let jpeg = encoded(800, 600, image::ImageOutputFormat::Jpeg(80));
+        assert_eq!(viewer_decode_size(&jpeg, screen), Some((200, 150)));
+        let png = encoded(800, 600, image::ImageOutputFormat::Png);
+        assert_eq!(viewer_decode_size(&png, screen), Some((144, 108)));
+        assert_eq!(viewer_decode_size(b"not an image", screen), None);
     }
 
     #[test]

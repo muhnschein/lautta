@@ -36,14 +36,14 @@ pub enum Algorithm {
 }
 
 impl Algorithm {
-    /// Offered first, most used first.
+    /// Section Common, most used first.
     pub const COMMON: [Algorithm; 4] = [
         Algorithm::Sha256,
         Algorithm::Md5,
         Algorithm::Sha1,
         Algorithm::Sha512,
     ];
-    /// Behind "More algorithms".
+    /// Section More.
     pub const MORE: [Algorithm; 9] = [
         Algorithm::Sha224,
         Algorithm::Sha384,

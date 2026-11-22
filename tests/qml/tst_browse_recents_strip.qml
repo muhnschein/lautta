@@ -5,11 +5,15 @@ import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../../qml/pages"
 import "../../qml/components/browse/BrowseText.js" as BrowseText
+import "../../qml/components/viewers/ViewerImage.js" as ViewerImage
 
 ApplicationWindow {
     id: win
 
     readonly property string file: "lautta://user-documents/strip-notes.md"
+    readonly property string photo: "lautta://user-pictures/IMG_2041.jpg"
+    property var prefetch: null
+    property var fetched: []
     property bool scenarioRunning: true
     property bool reachedEnd
     property int step: 0
@@ -18,6 +22,11 @@ ApplicationWindow {
     property var removed: []
 
     ViewerTools { id: tools }
+
+    Connections {
+        target: win.prefetch
+        onSourceChanged: win.fetched.push(String(win.prefetch.source))
+    }
 
     QtObject {
         id: store
@@ -36,7 +45,7 @@ ApplicationWindow {
             deviceFree: 42000000000
             deviceTotal: 128000000000
             listModel: ListModel {
-                ListElement { section: "recents"; uri: ""; name: ""; kind: "recent-strip"; icon: ""; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: ""; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: ""; drive: ""; tiles: "[{\"id\":7,\"uri\":\"lautta://user-pictures/IMG_2041.jpg\",\"name\":\"a\",\"kind\":\"previewed\",\"category\":\"image\",\"mimeType\":\"image/jpeg\",\"thumbnailSource\":\"\"},{\"id\":8,\"uri\":\"lautta://user-documents/strip-notes.md\",\"name\":\"strip-notes.md\",\"kind\":\"opened\",\"category\":\"text\",\"mimeType\":\"text/markdown\",\"thumbnailSource\":\"\"},{\"id\":9,\"uri\":\"lautta://user-documents/strip-notes.md\",\"name\":\"A name far too long for one tile.zip\",\"kind\":\"transferred\",\"category\":\"archive\",\"mimeType\":\"application/zip\",\"thumbnailSource\":\"\"}]" }
+                ListElement { section: "recents"; uri: ""; name: ""; kind: "recent-strip"; icon: ""; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: ""; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: ""; drive: ""; tiles: "[{\"id\":7,\"uri\":\"lautta://user-pictures/IMG_2041.jpg\",\"name\":\"a\",\"kind\":\"previewed\",\"category\":\"image\",\"mimeType\":\"image/jpeg\",\"thumbnailSource\":\"\"},{\"id\":8,\"uri\":\"lautta://user-documents/strip-notes.md\",\"name\":\"strip-notes.md\",\"kind\":\"opened\",\"category\":\"text\",\"mimeType\":\"text/markdown\",\"thumbnailSource\":\"\"},{\"id\":9,\"uri\":\"lautta://user-pictures/sent.jpg\",\"name\":\"A name far too long for one tile.jpg\",\"kind\":\"transferred\",\"category\":\"image\",\"mimeType\":\"image/jpeg\",\"thumbnailSource\":\"\"}]" }
                 ListElement { section: "favourites"; uri: "lautta://user-documents/Uni"; name: "Thesis"; kind: "favourite"; icon: "image://theme/icon-m-favorite"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "1"; place: "Documents › Uni"; provider: ""; host: ""; free: -1; total: -1; fs: ""; drive: ""; tiles: "" }
                 ListElement { section: "device"; uri: "lautta://user-documents/"; name: "Documents"; kind: "folder"; icon: "file-folder"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "user-documents"; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: ""; drive: ""; tiles: "" }
                 ListElement { section: "volumes"; uri: "lautta://vol-SD/"; name: "SD card"; kind: "volume"; icon: "image://theme/icon-m-sd-card"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "vol-SD"; place: ""; provider: ""; host: ""; free: 62500000000; total: 128000000000; fs: "exFAT"; drive: ""; tiles: "" }
@@ -106,7 +115,7 @@ ApplicationWindow {
     function checkTiles(row) {
         var tiles = named(row, "recentTile")
         var names = named(row, "recentTileName").map(function(x) { return x.text }).join("|")
-        if (!expect(tiles.length === 3 && names === "a|strip-notes.md|A name far too long for one tile.zip",
+        if (!expect(tiles.length === 3 && names === "a|strip-notes.md|A name far too long for one tile.jpg",
                     "three tiles with their names: " + tiles.length + " " + names))
             return
         var all = named(row, "allRecents")
@@ -130,7 +139,7 @@ ApplicationWindow {
         expect(shortName.implicitWidth <= shortName.width && shortName.horizontalAlignment === Text.AlignHCenter, "a short name sits in the middle")
         var glyphs = tiles.map(function(t) { return named(t, "fileGlyph")[0] })
         expect(glyphs.every(function(g) { return g && g.visible && g.status === Image.Ready })
-               && String(glyphs[0].source) !== String(glyphs[2].source),
+               && String(glyphs[0].source) !== String(glyphs[1].source),
                "without thumbnail a tile draws its type's glyph: " + glyphs.map(function(g) { return g ? g.source : "none" }).join(", "))
         expect(row.menu !== null && !row.plain, "the tiles row is no plain row")
         var depth = pageStack.depth
@@ -179,10 +188,50 @@ ApplicationWindow {
         return named(row, "recentTile").map(function(t) { return t.lit ? t.tile.id : 0 }).join(",")
     }
 
+    // Finger down on a photo's tile starts its decode for the viewer, as rows of SCR-38 do.
+    function checkPrefetch(row) {
+        var tiles = named(row, "recentTile")
+        prefetch = named(browse, "viewerPrefetch")[0] || null
+        if (!expect(prefetch !== null, "Browse has a prefetch"))
+            return
+        touch(tiles[2], false)
+        expect(fetched.length === 0, "a transferred photo's tile starts no decode: " + JSON.stringify(fetched))
+        touch(tiles[0], false)
+        expect(fetched.length === 2 && fetched[0] === String(ViewerImage.source(photo)) && fetched[1] === "",
+               "finger down on a photo's tile starts its decode, a scroll drops it: " + JSON.stringify(fetched))
+        fetched = []
+        touch(tiles[0], true)
+    }
+
+    // Finger down on a tile; scrolls away unless it stays.
+    function touch(tile, stay) {
+        tools.mouse(tile, "press", tile.width / 2, tile.height / 2)
+        if (!stay)
+            letGo(tile)
+    }
+
+    // Dragged along the list: it takes the finger, the tile's press is cancelled.
+    function letGo(tile) {
+        var view = list()
+        var at = view.contentY
+        var y = tile.height / 2
+        for (var i = 1; i <= 4; ++i)
+            tools.mouse(tile, "move", tile.width / 2, y + i * Theme.startDragDistance)
+        tools.mouse(tile, "release", tile.width / 2, y + 4 * Theme.startDragDistance)
+        // Next press would only stop the flick.
+        view.cancelFlick()
+        view.contentY = at
+    }
+
     function holdTile(row) {
         var tiles = named(row, "recentTile")
         expect(lit(row) === "0,0,0", "no tile is lit at rest: " + lit(row))
         tiles[1].pressAndHold(null)
+        expect(fetched.length === 2 && fetched[1] === "" && prefetch.status !== Image.Ready,
+               "a hold drops the decode: " + JSON.stringify(fetched))
+        // Finger off the tile, then up: no tap. Open menu holds the list still, so no scroll takes the press.
+        tools.mouse(tiles[0], "move", -Theme.paddingSmall, tiles[0].height / 2)
+        tools.mouse(tiles[0], "release", -Theme.paddingSmall, tiles[0].height / 2)
         if (!expect(row.menuOpen, "a long press on a tile opens a menu"))
             return
         var items = findAll(row.openMenu(), function(x) { return x.__silica_menuitem !== undefined && x.visible }, [])
@@ -206,18 +255,21 @@ ApplicationWindow {
         running: win.scenarioRunning
         onTriggered: {
             if (++win.waited > 100)
-                return win.fail("step " + win.step + " timed out")
+                return win.fail("step " + win.step + " timed out: depth " + pageStack.depth + (pageStack.busy ? ", busy" : "")
+                                + ", page " + pageStack.currentPage)
             var row = win.browse && win.browse.status === PageStatus.Active && !pageStack.busy ? win.rowAt(0) : null
             var page = pageStack.currentPage
             switch (win.step) {
             case 0:
                 if (!row || !row.strip || win.named(row, "recentTile").length === 0)
                     break
-                if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), win.file))
+                if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), win.file)
+                        || !tools.installFixture(Qt.resolvedUrl("host/fixtures/camera.jpg"), win.photo))
                     return win.fail("fixture")
                 win.checkTiles(row)
                 win.checkSections()
                 win.checkSpace()
+                win.checkPrefetch(row)
                 win.holdTile(row)
                 win.next()
                 break
@@ -242,7 +294,7 @@ ApplicationWindow {
                 win.next()
                 break
             case 4:
-                if (pageStack.busy || !page || page.uri !== App.parentUri(win.file))
+                if (pageStack.busy || !page || page.uri !== App.parentUri(win.photo))
                     break
                 win.expect(String(page).indexOf("DirectoryPage") === 0, "a transferred file's tile opens its folder: " + page)
                 pageStack.pop(null, PageStackAction.Immediate)

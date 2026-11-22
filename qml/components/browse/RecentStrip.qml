@@ -19,6 +19,9 @@ Item {
                                                  - (cells - 1) * gap) / cells)
     readonly property real cellHeight: tileSize + Theme.paddingSmall / 2 + captionFont.lineSpacing
 
+    // Finger down on a tile; let go elsewhere.
+    signal touched(var tile)
+    signal letGo()
     signal opened(var tile)
     signal held(var tile)
     signal allOpened()
@@ -55,6 +58,8 @@ Item {
                 objectName: "recentTile"
                 width: strip.tileSize
                 height: strip.cellHeight
+                onPressed: strip.touched(tile)
+                onCanceled: strip.letGo()
                 onClicked: strip.opened(tile)
                 onPressAndHold: strip.held(tile)
 

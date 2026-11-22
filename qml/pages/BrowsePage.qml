@@ -5,6 +5,7 @@ import Lautta 1.0
 import "../components"
 import "../components/browse"
 import "../components/transfers"
+import "../components/viewers"
 import "../components/ErrorText.js" as ErrorText
 import "../components/FileIcons.js" as FileIcons
 import "../components/Open.js" as Open
@@ -130,6 +131,8 @@ Page {
         id: recents
     }
 
+    ViewerPrefetch { id: prefetch }
+
     SilicaListView {
         id: list
 
@@ -225,7 +228,10 @@ Page {
             menu: strip ? tileMenu : (hasMenu ? contextMenu : null)
             enabled: true
 
+            onPressed: if (kind === "favourite" && model.isFile) prefetch.start(model.uri, "")
             onClicked: if (plain) page.openRow(model)
+            onPressAndHold: prefetch.stop()
+            onCanceled: prefetch.stop()
 
             Loader {
                 id: stripLoader
@@ -236,8 +242,11 @@ Page {
                     RecentStrip {
                         tiles: JSON.parse(model.tiles)
                         heldId: row.menuOpen ? row.heldId : -1
+                        onTouched: if (tile.kind !== "transferred") prefetch.start(tile.uri, tile.mimeType)
+                        onLetGo: prefetch.stop()
                         onOpened: page.openRecent(tile)
                         onHeld: {
+                            prefetch.stop()
                             row.heldId = tile.id
                             row.openMenu()
                         }

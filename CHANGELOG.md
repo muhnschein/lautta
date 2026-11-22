@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Photos open faster in the image viewer, big ones most: the picture starts loading as your finger touches it, loads at screen size and first, and shows the camera's preview while it loads, or the folder's thumbnail when the photo has none. Pictures you swiped past come back at once ([#41](https://github.com/muhnschein/lautta/issues/41)).
+- PDF thumbnails of files on this device show the top of the first page, not its middle.
 - New items scroll into view and light up briefly: folders you make (also in the folder picker), pasted or moved items, files you compress, extracted files, scans and renamed items; in grid view the name and details light up too ([#113](https://github.com/muhnschein/lautta/issues/113)).
 - A folder listed again right after a change no longer shows as empty for a moment.
 - Videos from servers stream and seek instead of downloading first ([#100](https://github.com/muhnschein/lautta/issues/100)).

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Remote images via image://lautta-file/ (EXIF
+// SPDX-License-Identifier: LGPL-2.1-or-later Images via image://lautta-file/ (EXIF
 // orientation applied by provider).
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -12,6 +12,9 @@ FullscreenContentPage {
 
     property string uri
     property string folderUri: App.parentUri(uri)
+    // Size the opener showed this image's thumbnail at, 0 for none: that cached tile shows while
+    // it decodes.
+    property int tileSize
 
     property bool listed
     // indexOf is a method: images.count makes the binding follow the listing.
@@ -139,6 +142,8 @@ FullscreenContentPage {
             objectName: "flickableView"
             model: [page.uri]
             held: remorse.active
+            tileUri: page.uri
+            tileSize: page.tileSize
         }
     }
 
@@ -148,6 +153,8 @@ FullscreenContentPage {
             objectName: "flickableView"
             model: images
             held: remorse.active
+            tileUri: page.uri
+            tileSize: page.tileSize
             currentIndex: Math.max(0, images.indexOf(page.uri))
         }
     }

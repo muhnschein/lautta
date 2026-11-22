@@ -60,7 +60,7 @@ Item {
     function testApp() {
         same(ids("common"), ["sha256", "md5", "sha1", "sha512"], "the most used four")
         same(ids("more"), ["sha224", "sha384", "sha3-256", "sha3-512", "blake2b", "blake3", "crc32", "xxh64", "xxh128"],
-             "More algorithms")
+             "section More")
         check(App.isChecksumList(root.docs + "SHA256SUMS"), "SHA256SUMS is a list")
         check(App.isChecksumList(root.docs + "image.iso.sha256"), "x.sha256 is a list")
         check(!App.isChecksumList(root.docs + "photo.jpg"), "a photo is not")
