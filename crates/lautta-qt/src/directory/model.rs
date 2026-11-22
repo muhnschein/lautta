@@ -133,7 +133,7 @@ pub struct DirectoryModel {
     /// When shown rows were listed (ms), -1 while unknown. `offline` only with a time.
     cachedAt: qt_property!(f64; NOTIFY stateChanged),
     capabilities: qt_property!(QVariantList; NOTIFY stateChanged),
-    /// New items can be added.
+    /// New items can be added: place and, on this device, folder permissions allow it.
     writable: qt_property!(bool; NOTIFY stateChanged),
     /// Existing items can be renamed, moved, replaced or deleted.
     changeable: qt_property!(bool; NOTIFY stateChanged),
@@ -199,6 +199,7 @@ pub struct DirectoryModel {
     prefs_set: bool,
     filter: FilterOptions,
     flags: Vec<String>,
+    adds: bool,
     /// None before the folder is open.
     thumb_settings: Option<ThumbSettings>,
     shown: usize,
@@ -249,6 +250,7 @@ impl DirectoryModel {
         }
         self.apply_prefs_state();
         self.flags = core.capability_flags(&dir.location);
+        self.adds = core.may_add_to(&dir);
         self.level = level_of(&core, &dir.location);
         if self.level_watch.is_none() {
             self.watch_level(&core);
@@ -392,6 +394,7 @@ impl DirectoryModel {
         }
         self.level = level;
         self.flags = core.capability_flags(&dir.location);
+        self.adds = core.may_add_to(dir);
         self.refresh();
     }
 
@@ -609,7 +612,7 @@ impl DirectoryModel {
         self.large = self.state.is_large();
         let flags: Vec<&str> = self.flags.iter().map(String::as_str).collect();
         let caps = Capabilities::with(&flags);
-        self.writable = caps.writable();
+        self.writable = self.adds;
         self.changeable = caps.changeable();
         self.readable = caps.readable();
         self.access = qs(match self.level {

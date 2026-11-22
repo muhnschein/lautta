@@ -522,13 +522,19 @@ Item {
              })
         step("a local folder lists",
              function() { localDir.uri = docs },
-             function() { return !localDir.loading && localDir.count === 1 })
+             function() { return !localDir.loading && localDir.count === 1 && localDir.writable })
         step("coming back to a watched local folder does not list it again",
              function() {
                  localDir.revisit()
                  root.relisted = localDir.loading
              },
              function() { return !root.relisted })
+        step("a local folder whose permissions forbid adding takes nothing, but for root",
+             function() { localDir.uri = "lautta://user-music/locked/" },
+             function() {
+                 return !localDir.loading && localDir.count === 2 && localDir.writable === FakeWorld.superuser()
+                        && localDir.readable
+             })
 
         step("add a favourite",
              function() { favs.add(docs, "Docs", "#e7a33c") },

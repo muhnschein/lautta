@@ -27,6 +27,18 @@ ApplicationWindow {
         Page { }
     }
 
+    function rowIds(page) {
+        var lists = []
+        var walk = function (item) {
+            if (item.model !== undefined && item.count !== undefined && item.contentItem !== undefined)
+                lists.push(item)
+            for (var i = 0; i < item.children.length; ++i)
+                walk(item.children[i])
+        }
+        walk(page)
+        return lists.length === 1 ? lists[0].model.map(function (row) { return row.id }) : ["lists: " + lists.length]
+    }
+
     function fail(what) {
         console.error("FAILED: " + what)
         scenarioRunning = false
@@ -66,9 +78,19 @@ ApplicationWindow {
                 if (JSON.stringify(page.uris) !== JSON.stringify([win.file]))
                     return win.fail("Compress gets the image: " + JSON.stringify(page.uris))
                 if (!page.canAccept)
-                    return win.fail("the compress dialog can be accepted: into " + page.destUri)
+                    return win.fail("the compress dialog can be accepted: into " + page.folderUri)
                 if (pageStack.depth !== 2)
                     return win.fail("the dialog takes More's place: depth " + pageStack.depth)
+                pageStack.replace(Qt.resolvedUrl("../../qml/components/viewers/ImageMorePage.qml"),
+                                  { "uri": win.file, "writable": false })
+                win.step++
+                break
+            case 4:
+                if (pageStack.busy || !page || page.choose === undefined || page.status !== PageStatus.Active)
+                    break
+                var ids = win.rowIds(page)
+                if (ids.indexOf("favourite") < 0 || ids.indexOf("compress") >= 0)
+                    return win.fail("no Compress where the folder takes no files: " + JSON.stringify(ids))
                 win.reachedEnd = true
                 win.scenarioRunning = false
                 break
