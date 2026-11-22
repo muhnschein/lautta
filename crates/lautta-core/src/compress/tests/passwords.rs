@@ -143,6 +143,14 @@ fn central_of(bytes: &[u8], name: &[u8]) -> usize {
 }
 
 #[tokio::test]
+async fn locked_entries_need_aes_to_extract_and_folders_do_not() {
+    let f = fixture();
+    let bytes = run_locked(&f, &[uri("mem", "proj")], ArchiveKind::Zip, "pass").await;
+    assert_eq!(version_needed(&bytes, b"proj/readme.txt"), 51);
+    assert_eq!(version_needed(&bytes, b"proj/"), 20);
+}
+
+#[tokio::test]
 async fn a_lowered_size_in_a_locked_zip_fails_its_read() {
     let f = fixture();
     let tmp = tempfile::tempdir().unwrap();

@@ -512,7 +512,27 @@ fn zip_writer_handles_unknown_sizes_and_forced_zip64() {
             Some(0o640)
         );
         assert!(z.by_name("d/").unwrap().is_dir());
+        let zip64 = |name: &[u8], want: bool| {
+            assert_eq!(
+                version_needed(&sink.bytes(), name),
+                if want { 45 } else { 20 },
+                "force={force}"
+            );
+        };
+        zip64(b"unknown.bin", true);
+        zip64(b"known.txt", force);
+        zip64(b"d/", false);
     }
+}
+
+/// "Version needed to extract" of central entry `name`.
+fn version_needed(zip: &[u8], name: &[u8]) -> u16 {
+    let u16_at = |at: usize| u16::from_le_bytes([zip[at], zip[at + 1]]);
+    (0..zip.len() - 46)
+        .filter(|&at| zip[at..at + 4] == *b"PK\x01\x02")
+        .find(|&at| zip.get(at + 46..at + 46 + usize::from(u16_at(at + 28))) == Some(name))
+        .map(|at| u16_at(at + 6))
+        .expect("central entry")
 }
 
 #[tokio::test]
