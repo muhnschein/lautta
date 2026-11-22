@@ -268,13 +268,12 @@ Features: F-ITM-10 Checksums, F-ITM-11 Verify files
 |---|---|---|
 | 1 | SCR-07 Item context menu | Long-press file |
 | 2 | SCR-08 More actions | More actions: Checksums |
-| 3 | SCR-61 Checksums | SHA-256, MD5, SHA-1, SHA-512, More algorithms |
-| 4 | SCR-62 More algorithms | SHA-224, SHA-384, SHA3-256, SHA3-512, BLAKE2b, BLAKE3, CRC32, XXH64, XXH128 |
-| 5 | SCR-63 Checksum | Tap one: progress while it reads; Back stops it |
-| 6 | SCR-63 Checksum | Value; list beside file names it: "Matches SHA256SUMS" |
-| 7 | SCR-63 Checksum | Tap value: "Copied" |
-| 8 | SCR-08 More actions | More actions of a checksum list: Verify files first |
-| 9 | SCR-64 Verify files | Row per listed file: Matches, Doesn't match, Missing, Not checked; problems first |
+| 3 | SCR-61 Checksums | Common: SHA-256, MD5, SHA-1, SHA-512; More: SHA-224, SHA-384, SHA3-256, SHA3-512, BLAKE2b, BLAKE3, CRC32, XXH64, XXH128 |
+| 4 | SCR-63 Checksum | Tap one: progress while it reads; Back stops it |
+| 5 | SCR-63 Checksum | Value; list beside file names it: "Matches SHA256SUMS" |
+| 6 | SCR-63 Checksum | Tap value: "Copied" |
+| 7 | SCR-08 More actions | More actions of a checksum list: Verify files first |
+| 8 | SCR-64 Verify files | Row per listed file: Matches, Doesn't match, Missing, Not checked; problems first |
 
 ## Tasks
 

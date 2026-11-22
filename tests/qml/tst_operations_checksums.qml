@@ -96,6 +96,29 @@ ApplicationWindow {
             rows[0].clicked(null)
     }
 
+    function isPicker(p) {
+        return p.rows !== undefined && p.uri !== undefined && p.algorithm === undefined
+    }
+
+    // Header reading `text` sits right above row `index`: below row `index - 1`, if any.
+    function sectionShown(page, index, text) {
+        var list = findAll(page, function (x) { return x.positionViewAtIndex !== undefined }, [])[0]
+        list.positionViewAtIndex(index, ListView.Contain)
+        layOut()
+        function rowY(i) {
+            var label = page.rows[i].label
+            var rows = named(list, "algorithmRow").filter(function (r) {
+                return findAll(r, function (y) { return y.truncationMode !== undefined && y.text === label }, []).length > 0
+            })
+            return rows.length === 1 ? rows[0].y : NaN
+        }
+        var top = index > 0 ? rowY(index - 1) : -Infinity
+        var bottom = rowY(index)
+        return named(list, "checksumSection").filter(function (x) {
+            return x.visible && x.text === text && x.y > top && x.y < bottom
+        }).length === 1
+    }
+
     // Headless window shows a few rows: scroll the list until the row is made.
     function tapAlgorithm(page, id) {
         var label = page.rows.filter(function (r) { return r.id === id })[0].label
@@ -135,11 +158,15 @@ ApplicationWindow {
         var ids = moreIds(view)
         expect(ids.indexOf("checksums") >= 0 && ids.indexOf("verify") < 0, "a photo: Checksums, no Verify files: " + JSON.stringify(ids))
         tapMore(view, "checksums")
-        var picker = settled(function (p) { return p.group === "common" }, "the Checksums page")
+        var picker = settled(isPicker, "the Checksums page")
         expect(pageStack.depth === 2, "Checksums takes More's place: depth " + pageStack.depth)
         expect(picker.uri === base + "photo.jpg", "for the photo: " + picker.uri)
-        expect(JSON.stringify(picker.rows.map(function (r) { return r.id })) === JSON.stringify(["sha256", "md5", "sha1", "sha512", "more"]),
-               "four algorithms, then More algorithms")
+        expect(JSON.stringify(picker.rows.map(function (r) { return r.id + ":" + r.section })) === JSON.stringify(
+                   ["sha256:common", "md5:common", "sha1:common", "sha512:common", "sha224:more", "sha384:more",
+                    "sha3-256:more", "sha3-512:more", "blake2b:more", "blake3:more", "crc32:more", "xxh64:more", "xxh128:more"]),
+               "four Common, then nine More, on one page")
+        expect(sectionShown(picker, 0, qsTrId("lautta-checksum-common"))
+               && sectionShown(picker, 4, qsTrId("lautta-checksum-section-more")), "section headers Common and More")
         tapAlgorithm(picker, "sha256")
         var result = settled(function (p) { return p.algorithm !== undefined && p.model !== undefined }, "the SHA-256 result")
         expect(result.algorithm === "sha256", "SHA-256 chosen: " + result.algorithm)
@@ -153,10 +180,7 @@ ApplicationWindow {
         expect(Clipboard.text === photoSha256, "tap copies the value: " + Clipboard.text)
 
         pageStack.pop(picker, PageStackAction.Immediate)
-        tapAlgorithm(picker, "more")
-        var more = settled(function (p) { return p.group === "more" }, "More algorithms")
-        expect(more.rows.length === 9 && more.rows[0].id === "sha224", "nine more: " + more.rows.length)
-        tapAlgorithm(more, "blake3")
+        tapAlgorithm(picker, "blake3")
         result = settled(function (p) { return p.algorithm === "blake3" }, "the BLAKE3 result")
         waitFor(function () { return !result.model.running }, "BLAKE3")
         expect(result.model.hex.length === 64 && !named(result, "checksumVerdict")[0].visible,
@@ -198,7 +222,7 @@ ApplicationWindow {
         var ids = moreIds(view)
         expect(ids.indexOf("checksums") >= 0, "one selected file: Checksums: " + JSON.stringify(ids))
         tapMore(view, "checksums")
-        var picker = settled(function (p) { return p.group === "common" }, "Checksums from the selection")
+        var picker = settled(isPicker, "Checksums from the selection")
         expect(picker.uri === base + "photo.jpg", "for the selected photo: " + picker.uri)
         waitFor(function () { return !view.selecting }, "selection ends")
         pageStack.pop(folderPage, PageStackAction.Immediate)
