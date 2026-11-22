@@ -167,3 +167,21 @@ fn every_strength_has_its_sizes() {
     }
     assert_eq!(Strength::from_code(0), None);
 }
+
+#[test]
+fn flush_reaches_the_inner_writer() {
+    struct Counting(usize);
+    impl Write for Counting {
+        fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+            Ok(data.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            self.0 += 1;
+            Ok(())
+        }
+    }
+    let mut enc = Encryptor::new(Counting(0), &pw("pw")).expect("encryptor");
+    enc.write_all(b"data").expect("write");
+    enc.flush().expect("flush");
+    assert_eq!(enc.finish().expect("finish").0, 1);
+}
