@@ -6,6 +6,7 @@ import Sailfish.Share 1.0
 import Lautta 1.0
 import "../"
 import "../transfers"
+import "../viewers"
 import "../Open.js" as Open
 import "../ErrorText.js" as ErrorText
 import "../Access.js" as Access
@@ -51,11 +52,19 @@ Item {
         dir.clearSelection()
     }
 
-    function openItem(itemUri, isDir, mimeType) {
+    // Finger down on a file: an image starts decoding for the viewer. Not while selecting.
+    function itemPressed(itemUri, isDir, mimeType) {
+        if (!selecting && !isDir)
+            prefetch.start(itemUri, mimeType)
+    }
+
+    // tileSize: size the item's thumbnail shows at, 0 while it shows none (thumbnailer cache
+    // has none yet).
+    function openItem(itemUri, isDir, mimeType, tileSize) {
         if (isDir)
             openFolder(itemUri)
         else
-            Open.open(pageStack, App, Operations, itemUri, false, mimeType, uri)
+            Open.open(pageStack, App, Operations, itemUri, false, mimeType, uri, tileSize)
     }
 
     function newFolder(moving) {
@@ -545,6 +554,8 @@ Item {
         onJobFinished: if (ok && resultUri) view.landed([resultUri], true)
     }
 
+    ViewerPrefetch { id: prefetch }
+
     Component {
         id: scanMaker
 
@@ -578,13 +589,15 @@ Item {
             menu: view.selecting || model.inaccessible ? null : contextMenu
             enabled: !model.inaccessible
             opacity: model.inaccessible ? Theme.opacityLow : 1
+            onPressed: view.itemPressed(model.uri, model.isDir, model.mimeType)
             onClicked: {
                 if (view.selecting)
                     dir.toggle(model.uri)
                 else
-                    view.openItem(model.uri, model.isDir, model.mimeType)
+                    view.openItem(model.uri, model.isDir, model.mimeType, icon.thumbnailReady ? icon.size : 0)
             }
             onPressAndHold: {
+                prefetch.stop()
                 if (!view.selecting)
                     return
                 DelegateModel.inPersistedItems = true
@@ -592,7 +605,10 @@ Item {
             }
             onPositionChanged: if (dragSelect.holder === item) dragSelect.move(mouse.x, mouse.y)
             onReleased: item.letGo()
-            onCanceled: item.letGo()
+            onCanceled: {
+                prefetch.stop()
+                item.letGo()
+            }
 
             function letGo() {
                 if (dragSelect.holder !== item)
@@ -736,17 +752,25 @@ Item {
                 if (previewAsked)
                     dir.cancelPreview(previewAsked)
             }
+            onPressed: view.itemPressed(model.uri, model.isDir, model.mimeType)
             onClicked: {
                 if (view.selecting)
                     dir.toggle(model.uri)
                 else
-                    view.openItem(model.uri, model.isDir, model.mimeType)
+                    view.openItem(model.uri, model.isDir, model.mimeType, tileIcon.thumbnailReady ? Math.round(tileIcon.width) : 0)
             }
             // Add only: no Select, as in the pulley.
-            onPressAndHold: if (dir.readable) dragSelect.begin(cell, index, mouse.x, mouse.y)
+            onPressAndHold: {
+                prefetch.stop()
+                if (dir.readable)
+                    dragSelect.begin(cell, index, mouse.x, mouse.y)
+            }
             onPositionChanged: if (dragSelect.holder === cell) dragSelect.move(mouse.x, mouse.y)
             onReleased: cell.letGo()
-            onCanceled: cell.letGo()
+            onCanceled: {
+                prefetch.stop()
+                cell.letGo()
+            }
 
             function countItems() {
                 if (counting)
