@@ -10,11 +10,15 @@ Page {
     id: page
 
     property string uri
+    // Share: file goes to fetched() for opener's share sheet; no app opened.
+    property bool share
 
     readonly property string fileName: App.nameOf(uri)
     property bool working: true
     property string errorKind
     property string errorMessage
+
+    signal fetched(string fileUrl)
 
     function start() {
         working = true
@@ -24,9 +28,13 @@ Page {
 
     function finish(fileUrl) {
         working = false
-        tools.noteOpened(uri)
         hint.value = true
-        Qt.openUrlExternally(fileUrl)
+        if (share) {
+            fetched(fileUrl)
+        } else {
+            tools.noteOpened(uri)
+            Qt.openUrlExternally(fileUrl)
+        }
         pageStack.pop()
     }
 

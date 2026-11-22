@@ -79,6 +79,7 @@ ApplicationWindow {
 
     function checkFormats() {
         documents.createFolder("CompressPage")
+        waitFor(function () { return documents.indexOf(base.replace(/\/$/, "")) >= 0 }, "the folder")
         expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + "notes.md"), "fixture")
         var dialog = pageStack.push(dialogComponent, { "uris": [ base + "notes.md" ] }, PageStackAction.Immediate)
         var list = rows(dialog)
