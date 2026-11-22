@@ -24,7 +24,6 @@ Item {
     readonly property bool selecting: selectionMode
     readonly property bool gridMode: dir.viewMode === "grid"
     property string pendingName
-    property string pendingShare
     readonly property Item flickable: gridMode ? grid : list
     property var renamed: null
     property bool renamingDir
@@ -322,8 +321,12 @@ Item {
 
     function share(uris, mimeType) {
         if (uris.length === 1 && !App.isLocal(uris[0])) {
-            pendingShare = uris[0]
-            App.prepareExternal(uris[0])
+            var getting = openDialog("../../dialogs/OpenRemoteDialog.qml", { "uri": uris[0], "share": true })
+            getting.fetched.connect(function (fileUrl) {
+                shareAction.resources = [fileUrl]
+                shareAction.mimeType = "*/*"
+                shareAction.trigger()
+            })
             return
         }
         var urls = []
@@ -538,24 +541,6 @@ Item {
     Connections {
         target: Operations
         onJobFinished: if (ok && resultUri) view.landed([resultUri], true)
-    }
-
-    Connections {
-        target: App
-        onExternalReady: {
-            if (uri === view.pendingShare) {
-                view.pendingShare = ""
-                shareAction.resources = [fileUrl]
-                shareAction.mimeType = "*/*"
-                shareAction.trigger()
-            }
-        }
-        onExternalFailed: {
-            if (uri === view.pendingShare) {
-                view.pendingShare = ""
-                view.notifyFailure(kind, message, App.nameOf(uri))
-            }
-        }
     }
 
     Component {

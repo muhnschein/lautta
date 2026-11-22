@@ -15,6 +15,7 @@
 - Code, logs and other monospaced text use JetBrains Mono, in the text viewer, in grid previews and in Markdown code.
 - Compress and Extract are simpler ([#115](https://github.com/muhnschein/lautta/issues/115), [#116](https://github.com/muhnschein/lautta/issues/116)). Compress asks only for a name and a format: Zip, 7z, tar.xz or tar.gz. Extract starts at once from *More actions* of a compressed file or from the pulley inside one. Results land in the same folder; one item comes out as is, several in a new folder named after the compressed file, and nothing is overwritten. Both show only where Lautta may add files.
 - The music player shows the cover and the title, artist, album, year and track number ([#111](https://github.com/muhnschein/lautta/issues/111)). The cover comes from the file, else from a cover.jpg, folder.jpg or front.jpg beside it. Audio files show their cover as thumbnail in folders too.
+- Sharing a file from a server shows "Getting …" while it downloads, then the share sheet. Before, nothing showed until the download was done, so a big file looked like the share was lost ([#126](https://github.com/muhnschein/lautta/issues/126)).
 
 ## 1.0.0
 
