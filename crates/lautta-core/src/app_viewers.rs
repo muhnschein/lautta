@@ -1603,6 +1603,16 @@ mod tests {
             Some((2879, 2159)),
             "eighth too small"
         );
+        assert_eq!(
+            decode_size((11523, 8640), SCREEN, true),
+            Some((2880, 2160)),
+            "eighth one column short"
+        );
+        assert_eq!(
+            decode_size((18240, 8001), SCREEN, true),
+            Some((4560, 2000)),
+            "eighth one row short"
+        );
         // 16:9 shows 1920x1080 turned.
         assert_eq!(decode_size((4000, 2250), SCREEN, true), Some((2000, 1125)));
         // Panorama fills the long side: 2280 wide.
@@ -1611,6 +1621,16 @@ mod tests {
 
     #[test]
     fn viewer_decodes_at_the_fit_when_no_step_covers_it_or_not_jpeg() {
+        assert_eq!(
+            decode_size((3000, 4000), SCREEN, false),
+            Some((1080, 1440)),
+            "portrait fits the width"
+        );
+        assert_eq!(
+            decode_size((1000, 8000), SCREEN, false),
+            Some((285, 2280)),
+            "tall panorama fits the height"
+        );
         assert_eq!(
             decode_size((2000, 1500), SCREEN, true),
             Some((1440, 1080)),
@@ -1634,6 +1654,7 @@ mod tests {
         assert_eq!(decode_size((800, 600), SCREEN, true), None);
         assert_eq!(decode_size((0, 600), SCREEN, true), None);
         assert_eq!(decode_size((800, 0), SCREEN, true), None);
+        assert_eq!(decode_size((4000, 2), SCREEN, false), None, "fit needs every row");
         assert_eq!(decode_size((800, 600), (0, 2280), true), None);
         assert_eq!(decode_size((800, 600), (1080, 0), true), None);
     }
