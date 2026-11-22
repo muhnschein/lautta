@@ -408,11 +408,16 @@ mod tests {
         let mut stmt = conn
             .prepare("SELECT section, item, hidden, position FROM browse_layout ORDER BY section, item")
             .unwrap();
-        let out = stmt
-            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
-            .unwrap()
-            .collect::<std::result::Result<Vec<_>, _>>()
-            .unwrap();
+        let mut rows = stmt.query([]).unwrap();
+        let mut out = Vec::new();
+        while let Some(r) = rows.next().unwrap() {
+            out.push((
+                r.get(0).unwrap(),
+                r.get(1).unwrap(),
+                r.get(2).unwrap(),
+                r.get(3).unwrap(),
+            ));
+        }
         out
     }
 
