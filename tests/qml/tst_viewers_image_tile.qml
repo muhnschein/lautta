@@ -2,7 +2,7 @@
 // Photo without camera thumbnail: placeholder = clear image of its upright shape, grid tile (system
 // thumbnailer, square crop) under it, centred, side = shorter side the photo shows at; both go once
 // the photo shows. Camera thumbnail drawn over the tile. Tile URL percent-encoded, none for size 0
-// or an image not on the device. Viewer hands the opener's tile size to its photos.
+// or an image not on the device. Viewer shows the opener's tile for the opened photo only.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 // Registers image://nemoThumbnail, as the folder grid's thumbnails do in the app.
@@ -123,6 +123,17 @@ ApplicationWindow {
         g.destroy()
     }
 
+    function allTiles(item, out) {
+        if (item.objectName === "tileImage" && out.indexOf(item) < 0)
+            out.push(item)
+        var kids = item.children || []
+        for (var i = 0; i < kids.length; ++i)
+            allTiles(kids[i], out)
+        if (item.contentItem && item.contentItem !== item)
+            allTiles(item.contentItem, out)
+        return out
+    }
+
     function shownTile(viewer) {
         var slot = viewer.slideshow ? viewer.slideshow.currentItem : null
         return slot && slot.item ? named(slot.item, "tileImage") : null
@@ -141,6 +152,9 @@ ApplicationWindow {
         waitFor(function () { tile = shownTile(viewer); return tile !== null && tile.status === Image.Ready }, "the folder view's tile")
         expect(String(tile.source) === want && tile.sourceSize.width === 170,
                "folder's view: the opener's tile, " + tile.source + " at " + tile.sourceSize.width)
+        var asked = allTiles(viewer.slideshow, []).filter(function (t) { return String(t.source) !== "" })
+        expect(allTiles(viewer.slideshow, []).length > 1 && asked.length === 1,
+               "neighbours ask no tile: " + asked.map(function (t) { return t.source }).join(" "))
         pageStack.pop(undefined, PageStackAction.Immediate)
     }
 

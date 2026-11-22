@@ -21,6 +21,9 @@ PagedView {
 
     property alias overlay: overlay
     property bool held
+    // Opened image and size its opener showed its thumbnail at: that cached tile shows while it
+    // decodes. Only that one: the thumbnailer makes a missing tile on Qt's one image thread.
+    property string tileUri
     property int tileSize
     readonly property bool zoomed: currentItem !== null && currentItem.zoomed
 
@@ -69,7 +72,7 @@ PagedView {
 
                 source: slot.loadAllowed ? slot.source : ""
                 placeholder: slot.imageUri.length > 0 ? ViewerImage.placeholder(App, slot.imageUri) : ""
-                tile: slot.imageUri.length > 0 ? ViewerImage.tile(App, slot.imageUri, root.tileSize) : ""
+                tile: slot.imageUri === root.tileUri ? ViewerImage.tile(App, slot.imageUri, root.tileSize) : ""
                 tileSize: root.tileSize
                 active: slot.isCurrentItem
                 viewMoving: root.moving

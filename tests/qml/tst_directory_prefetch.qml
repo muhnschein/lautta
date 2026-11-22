@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Finger down on an image, list and grid: its decode for the viewer starts. Not for other files,
 // not for folders named like images, not while selecting. Hold, scroll or finger let go off the
-// item: dropped. Tap opens the viewer with the size the thumbnail shows at, for its cached tile.
+// item: dropped. Tap opens the viewer with the size the thumbnail shows at, for its cached tile;
+// none while it shows none.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -159,15 +160,42 @@ ApplicationWindow {
         return null
     }
 
-    function checkOpen(mode) {
-        var c = press(photo())
-        var icon = fileIcon(c)
+    // Stand-in for an icon's thumbnail still loading.
+    Component {
+        id: loadingThumbnail
+        Item {
+            readonly property bool ready: false
+            readonly property bool failed: false
+        }
+    }
+
+    function freshPage(mode) {
+        pageStack.replace(pageComponent, {}, PageStackAction.Immediate)
+        waitFor(function () { return !view.model.loading && view.model.count === 42 }, mode + ": the folder again")
+        view.model.setViewPrefs(JSON.stringify({ "viewMode": mode }))
+        waitFor(function () { return cell("notes.md") !== null && view.gridMode === (mode === "grid") }, "the " + mode + " again")
+    }
+
+    function checkOpen(mode, shown) {
+        var name = photo()
+        view.showIndex(view.model.indexOf(folder + name))
+        var icon = fileIcon(cell(name))
+        for (var i = 0; !shown && i < icon.children.length; ++i) {
+            if (icon.children[i].sourceComponent !== undefined) {
+                icon.children[i].sourceComponent = loadingThumbnail
+                break
+            }
+        }
+        waitFor(function () { return icon.thumbnailReady === shown }, mode + ": thumbnail shown " + shown)
+        var c = press(name)
         tools.mouse(c, "release", c.width / 2, c.height / 2)
         waitFor(function () { return pageStack.depth === 2 && !pageStack.busy }, mode + ": the viewer")
-        expect(icon !== null && icon.size > 0 && pageStack.currentPage.tileSize === Math.round(icon.size),
-               mode + ": viewer gets the thumbnail's size " + (icon ? icon.size : "none") + ": " + pageStack.currentPage.tileSize)
+        var want = shown ? Math.round(icon.size) : 0
+        expect(icon.size > 0 && pageStack.currentPage.tileSize === want,
+               mode + ": viewer gets size " + want + " (thumbnail shown " + shown + "): " + pageStack.currentPage.tileSize)
         pageStack.pop(undefined, PageStackAction.Immediate)
-        waitFor(function () { return pageStack.depth === 1 && !pageStack.busy }, mode + ": back in the folder")
+        waitFor(function () { return pageStack.depth === 1 && pageStack.currentPage.status === PageStatus.Active },
+                mode + ": back in the folder")
     }
 
     Component.onCompleted: {
@@ -194,13 +222,13 @@ ApplicationWindow {
                 return
             check(mode)
         }
-        // Last: the viewer also decodes neighbours, which checks above need cold.
-        checkOpen("grid")
-        pageStack.replace(pageComponent, {}, PageStackAction.Immediate)
-        waitFor(function () { return !view.model.loading && view.model.count === 42 }, "the folder again")
-        view.model.setViewPrefs(JSON.stringify({ "viewMode": "list" }))
-        waitFor(function () { return cell("notes.md") !== null && !view.gridMode }, "the list again")
-        checkOpen("list")
+        // Last: the viewer also decodes neighbours, which checks above need cold. Each open from a
+        // fresh page: a second press on the grid after the viewer's pop does not arrive headless.
+        var opens = [["grid", false], ["grid", true], ["list", false], ["list", true]]
+        for (var o = 0; o < opens.length; ++o) {
+            freshPage(opens[o][0])
+            checkOpen(opens[o][0], opens[o][1])
+        }
         reachedEnd = true
     }
 

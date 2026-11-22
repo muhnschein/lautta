@@ -58,6 +58,8 @@ Item {
             prefetch.start(itemUri, mimeType)
     }
 
+    // tileSize: size the item's thumbnail shows at, 0 while it shows none (thumbnailer cache
+    // has none yet).
     function openItem(itemUri, isDir, mimeType, tileSize) {
         if (isDir)
             openFolder(itemUri)
@@ -592,7 +594,7 @@ Item {
                 if (view.selecting)
                     dir.toggle(model.uri)
                 else
-                    view.openItem(model.uri, model.isDir, model.mimeType, icon.size)
+                    view.openItem(model.uri, model.isDir, model.mimeType, icon.thumbnailReady ? icon.size : 0)
             }
             onPressAndHold: {
                 prefetch.stop()
@@ -755,7 +757,7 @@ Item {
                 if (view.selecting)
                     dir.toggle(model.uri)
                 else
-                    view.openItem(model.uri, model.isDir, model.mimeType, Math.round(tileIcon.width))
+                    view.openItem(model.uri, model.isDir, model.mimeType, tileIcon.thumbnailReady ? Math.round(tileIcon.width) : 0)
             }
             // Add only: no Select, as in the pulley.
             onPressAndHold: {
