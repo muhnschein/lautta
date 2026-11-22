@@ -45,6 +45,7 @@ pub struct App {
     isRemote: qt_method!(fn(&self, uri: QString) -> bool),
     /// Items there can be renamed or deleted: false where netvfs grants less than full access.
     canChange: qt_method!(fn(&self, uri: QString) -> bool),
+    canAddTo: qt_method!(fn(&self, folder_uri: QString) -> bool),
     localUrl: qt_method!(fn(&self, uri: QString) -> QString),
     categoryOf: qt_method!(fn(&self, name_or_uri: QString) -> QString),
     viewerFor: qt_method!(fn(&self, name_or_uri: QString, mime: QString) -> QString),
@@ -220,6 +221,10 @@ impl App {
         let flags = c.capability_flags(&u.location);
         let flags: Vec<&str> = flags.iter().map(String::as_str).collect();
         Capabilities::with(&flags).changeable()
+    }
+
+    fn canAddTo(&self, folder_uri: QString) -> bool {
+        matches!((core(), parse_uri(&folder_uri)), (Some(c), Some(u)) if c.may_add_to(&u))
     }
 
     fn localUrl(&self, uri: QString) -> QString {

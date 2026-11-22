@@ -348,6 +348,7 @@ Item {
         case "moveToNewFolder": newFolder(uris); break
         // CompressDialog takes the list itself, not its JSON text.
         case "compress": openDialog("../../dialogs/CompressDialog.qml", { "uris": uris }); break
+        case "extract": Operations.extract(uris[0]); break
         case "favourite":
             openDialog("../../pages/FavouritePage.qml", { "uri": uris[0], "isDir": info.isDir !== false })
             break
@@ -957,6 +958,10 @@ Item {
                            //% "%n selected"
                            ? qsTrId("lautta-dir-selected", dir.selectedCount)
                            : dir.title
+                    description: !view.selecting && Operations.isArchive(view.uri)
+                                 //% "Compressed file · read only"
+                                 ? qsTrId("lautta-dir-compressed-readonly")
+                                 : ""
                 }
                 MouseArea {
                     anchors.fill: parent
@@ -1054,18 +1059,10 @@ Item {
                 onAction: dir.setViewPrefs(JSON.stringify({ "viewMode": "list" }))
             }
 
-            ArchiveBanner {
-                id: archiveNotice
-
-                objectName: "folderArchiveBanner"
-                anchors.top: gridNotice.bottom
-                uri: view.uri
-            }
-
             InfoBanner {
                 id: errorNotice
 
-                anchors.top: archiveNotice.bottom
+                anchors.top: gridNotice.bottom
                 visible: dir.errorKind.length > 0 && dir.count > 0 && !dir.offline
                 height: visible ? implicitHeight : 0
                 text: ErrorText.message(dir.errorKind, { "location": dir.locationName, "item": dir.title, "open": true })

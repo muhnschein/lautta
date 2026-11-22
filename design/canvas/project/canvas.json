@@ -170,14 +170,6 @@
       "x": 480,
       "y": 14440
     },
-    "Extract.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Extract archive",
-      "w": 400,
-      "x": 3360,
-      "y": 4860
-    },
     "FavouriteEdit.dc.html": {
       "h": 860,
       "is_interactive": true,
@@ -920,7 +912,6 @@
     "PlanSummary.dc.html",
     "Conflict.dc.html",
     "Compress.dc.html",
-    "Extract.dc.html",
     "RecentlyDeleted.dc.html",
     "Transfers.dc.html",
     "TransfersPulley.dc.html",

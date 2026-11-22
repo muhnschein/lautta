@@ -226,12 +226,14 @@ ApplicationWindow {
         view.model.selectAll()
         view.moreSelection()
         var ids = moreIds(view)
-        expect(ids.length > 0 && ids.indexOf("moveToNewFolder") < 0, "no row for a selection in an archive: " + JSON.stringify(ids))
+        expect(ids.length > 0 && ids.indexOf("moveToNewFolder") < 0 && ids.indexOf("compress") < 0,
+               "no Move to new folder or Compress for a selection in an archive: " + JSON.stringify(ids))
         pageStack.pop(archivePage, PageStackAction.Immediate)
         view.endSelection()
         view.moreActions({ "uri": view.model.uriAt(0), "isDir": true })
         ids = moreIds(view)
-        expect(ids.length > 0 && ids.indexOf("moveToNewFolder") < 0, "no row for an item in an archive: " + JSON.stringify(ids))
+        expect(ids.length > 0 && ids.indexOf("moveToNewFolder") < 0 && ids.indexOf("compress") < 0,
+               "no Move to new folder or Compress for an item in an archive: " + JSON.stringify(ids))
         pageStack.pop(folderPage, PageStackAction.Immediate)
     }
 

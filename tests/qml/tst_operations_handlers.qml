@@ -44,32 +44,20 @@ ApplicationWindow {
         return expect(done(), "timed out waiting for " + what)
     }
 
-    // An extract that ends while a page still moves, e.g. the extract dialog closing.
-    function checkFolderAfterTransition() {
-        var dest = "lautta://user-documents/"
-        pageStack.push(plainPage)
-        if (!expect(pageStack.busy, "the push animates"))
-            return
-        Operations.extractFinished(1, true, dest)
-        waitFor(function () {
-            return !pageStack.busy && pageStack.currentPage.uri === dest
-        }, "the extracted folder to open, current page: " + pageStack.currentPage)
-        expect(pageStack.depth === 3, "opened once: depth " + pageStack.depth)
-    }
-
-    // A large extract's plan summary that arrives while the extract dialog closes.
+    // A large copy's plan summary that arrives while a dialog closes.
     function checkSummaryWhileDialogCloses() {
+        var depth = pageStack.depth
         var dialog = pageStack.push(plainDialog)
         if (!waitFor(function () { return !pageStack.busy }, "the dialog to open"))
             return
         dialog.accept()
         if (!expect(pageStack.busy, "the dialog closes"))
             return
-        Operations.needsSummary(7, JSON.stringify({ "kind": "extract", "files": 1500 }))
+        Operations.needsSummary(7, JSON.stringify({ "kind": "copy", "files": 1500 }))
         waitFor(function () {
             return !pageStack.busy && pageStack.currentPage.planId === 7
         }, "the plan summary to open, current page: " + pageStack.currentPage)
-        expect(pageStack.depth === 4, "summary once: depth " + pageStack.depth)
+        expect(pageStack.depth === depth + 1, "summary once: depth " + pageStack.depth)
     }
 
     function checkSummaryWhenIdle() {
@@ -99,7 +87,6 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        checkFolderAfterTransition()
         checkSummaryWhileDialogCloses()
         checkSummaryWhenIdle()
         checkShareWhileDialogCloses()

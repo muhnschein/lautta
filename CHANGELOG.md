@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- New items scroll into view and light up briefly: folders you make (also in the folder picker), pasted or moved items, archives you compress, extracted files, scans and renamed items; in grid view the name and details light up too ([#113](https://github.com/muhnschein/lautta/issues/113)).
+- New items scroll into view and light up briefly: folders you make (also in the folder picker), pasted or moved items, files you compress, extracted files, scans and renamed items; in grid view the name and details light up too ([#113](https://github.com/muhnschein/lautta/issues/113)).
 - A folder listed again right after a change no longer shows as empty for a moment.
 - Videos from servers stream and seek instead of downloading first ([#100](https://github.com/muhnschein/lautta/issues/100)).
 - Streaming videos no longer freeze the screen every second or so, and start and seek faster.
@@ -13,6 +13,7 @@
 - Settings is tidier: no previews in *View options* and *Browse page*, and the Settings list shows names only. *About* shows the Lautta icon and no longer lists permissions ([#117](https://github.com/muhnschein/lautta/issues/117)).
 - Memory cards and USB drives without a label show as "Memory card" or "USB drive" instead of a string of letters and digits ([#123](https://github.com/muhnschein/lautta/issues/123)).
 - Code, logs and other monospaced text use JetBrains Mono, in the text viewer, in grid previews and in Markdown code.
+- Compress and Extract are simpler ([#115](https://github.com/muhnschein/lautta/issues/115), [#116](https://github.com/muhnschein/lautta/issues/116)). Compress asks only for a name and a format: Zip, 7z, tar.xz or tar.gz. Extract starts at once from *More actions* of a compressed file or from the pulley inside one. Results land in the same folder; one item comes out as is, several in a new folder named after the compressed file, and nothing is overwritten. Both show only where Lautta may add files.
 - The music player shows the cover and the title, artist, album, year and track number ([#111](https://github.com/muhnschein/lautta/issues/111)). The cover comes from the file, else from a cover.jpg, folder.jpg or front.jpg beside it. Audio files show their cover as thumbnail in folders too.
 
 ## 1.0.0
