@@ -155,4 +155,61 @@ mod tests {
         assert_eq!(classify(Some(0x10), true), (Kind::Dir, None));
         assert_eq!(classify(None, false), (Kind::File, None));
     }
+
+    /// One file, a.txt; header encrypted too when locked.
+    fn archive(dir: &std::path::Path, password: Option<&str>) -> File {
+        let path = dir.join("a.7z");
+        let mut w = sevenz_rust2::ArchiveWriter::new(File::create(&path).unwrap()).unwrap();
+        let lzma = sevenz_rust2::encoder_options::Lzma2Options::from_level(1);
+        w.set_content_methods(match password {
+            Some(p) => vec![
+                sevenz_rust2::encoder_options::AesEncoderOptions::new(p.into()).into(),
+                lzma.into(),
+            ],
+            None => vec![lzma.into()],
+        });
+        w.push_archive_entry(sevenz_rust2::ArchiveEntry::new_file("a.txt"), Some(&b"alpha"[..]))
+            .unwrap();
+        w.finish().unwrap();
+        File::open(path).unwrap()
+    }
+
+    struct Failing(io::ErrorKind);
+
+    impl Write for Failing {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            Err(self.0.into())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// A failing writer stands in for data that fails to decode: both reach `copy_entry` as one
+    /// `io::Error`.
+    #[test]
+    fn only_data_failing_under_a_password_reads_as_a_wrong_password() {
+        let dir = tempfile::tempdir().unwrap();
+        let pw = Password::new("pw");
+        let kind = |password: Option<&str>, err: io::ErrorKind| {
+            let file = archive(dir.path(), password);
+            let given = password.and(pw.as_ref());
+            copy_entry(file, "a.txt", &mut Failing(err), given)
+                .err()
+                .map(|e| e.kind)
+        };
+        let itself = |err: io::ErrorKind| Some(from_io(err.into()).kind);
+        assert_eq!(
+            kind(Some("pw"), io::ErrorKind::InvalidData),
+            Some(ErrorKind::WrongPassword)
+        );
+        assert_eq!(
+            kind(Some("pw"), io::ErrorKind::BrokenPipe),
+            itself(io::ErrorKind::BrokenPipe)
+        );
+        assert_eq!(
+            kind(None, io::ErrorKind::InvalidData),
+            itself(io::ErrorKind::InvalidData)
+        );
+    }
 }
