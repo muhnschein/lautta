@@ -21,7 +21,7 @@ ApplicationWindow {
 
     Connections {
         target: Operations
-        onJobFinished: if (ok) Operations.openArchive(resultUri)
+        onJobFinished: if (ok) Operations.openArchive(resultUri, "")
         onArchiveOpened: window.archiveRoot = rootUri
         onFailed: console.error("FAILED: " + kind + " " + message)
     }
@@ -112,7 +112,7 @@ ApplicationWindow {
         here.createFolder("Inner")
         listed(here, "Inner", "folder")
         expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), base + "Inner/a.md"), "fixture a.md")
-        Operations.compress(JSON.stringify([base + "Inner"]), base, "pack", "zip")
+        Operations.compress(JSON.stringify([base + "Inner"]), base, "pack", "zip", "")
         waitFor(function () { return window.archiveRoot.length > 0 }, "the compressed file")
     }
 

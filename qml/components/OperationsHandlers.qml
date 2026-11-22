@@ -29,6 +29,19 @@ Item {
         pages.push(Qt.resolvedUrl("../pages/ShareTargetPage.qml"), { "resources": resources })
     }
 
+    // Password goes straight on to `action`; the page forgets it.
+    function askPassword(uri, action, wrong) {
+        pages.push(Qt.resolvedUrl("../dialogs/LockedFileDialog.qml"), { "wrong": wrong }, function (dialog) {
+            dialog.accepted.connect(function () {
+                if (action === "extract")
+                    Operations.extract(uri, dialog.password)
+                else
+                    Operations.openArchive(uri, dialog.password)
+                dialog.forget()
+            })
+        })
+    }
+
     function background() {
         //% "Running in the background"
         show(qsTrId("lautta-ops-background"))
@@ -53,7 +66,8 @@ Item {
             "planId": planId,
             "summary": JSON.parse(summaryJson)
         })
-        onArchiveOpened: pages.stack().push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": rootUri })
+        onArchiveOpened: pages.push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": rootUri })
+        onLocked: handlers.askPassword(uri, action, wrong)
         onFailed: handlers.show(ErrorText.message(kind, handlers.context(subject)))
         onStarted: handlers.background()
         onJobStarted: handlers.background()

@@ -13,7 +13,6 @@ use crate::ops::{OperationKind, Plan};
 use crate::org::favourites::Favourites;
 use crate::org::recents::Recents;
 use crate::paths::AppPaths;
-use crate::provider::archive::{archive_location_id, ArchiveProvider};
 use crate::provider::{list_all, Lane, Provider, ProviderResolver, RenameMode};
 use crate::search::RecentSearches;
 use crate::settings::{LocationPrefsStore, Settings};
@@ -65,6 +64,7 @@ pub struct Core {
     /// System battery saving: server thumbnails come only from cache or EXIF.
     power_save: AtomicBool,
     pub(crate) shown_images: crate::app_viewers::ShownImages,
+    pub(crate) locked_archives: crate::app_archives::LockedArchives,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -155,6 +155,7 @@ impl Core {
             dir_watcher: Mutex::default(),
             power_save: AtomicBool::new(false),
             shown_images: Default::default(),
+            locked_archives: Default::default(),
             paths,
             db,
             locations,
@@ -322,7 +323,9 @@ impl Core {
         self.start_plan(plan).await.map(Started::Transfer)
     }
 
-    pub async fn start_plan(&self, plan: Plan) -> Result<TransferId> {
+    pub async fn start_plan(&self, mut plan: Plan) -> Result<TransferId> {
+        // Dropped once the transfer is in the engine, which then keeps the archive open.
+        let hold = std::mem::take(&mut plan.hold);
         let settings = self.settings();
         if plan.kind == OperationKind::Extract {
             let dest = &plan.destination;
@@ -347,7 +350,9 @@ impl Core {
         };
         let title = self.plan_title(&plan);
         self.invalidate(&plan.destination);
-        self.engine.add(plan, &title, options).await
+        let id = self.engine.add(plan, &title, options).await;
+        drop(hold);
+        id
     }
 
     pub async fn restore(&self, id: i64) -> Result<Uri> {
@@ -365,25 +370,6 @@ impl Core {
             self.invalidate(&p);
         }
         Ok(uri)
-    }
-
-    pub async fn open_archive(&self, uri: &Uri) -> Result<String> {
-        let id = archive_location_id(uri);
-        if self.locations.get(&id).is_some() {
-            return Ok(id);
-        }
-        let source = self.provider(&uri.location)?;
-        let cache = self.paths.cache_dir().join("archives");
-        tokio::fs::create_dir_all(&cache).await?;
-        let provider = ArchiveProvider::open(source, uri.path.clone(), cache).await?;
-        let name = uri
-            .path
-            .name()
-            .map(crate::vpath::display_name)
-            .unwrap_or_default();
-        let location = Location::remote(id.clone(), LocationKind::Archive, name, Some(uri.to_string()));
-        self.locations.register(location, Arc::new(provider));
-        Ok(id)
     }
 
     /// Extract is titled by its archive, the name of the archive's location.

@@ -30,7 +30,7 @@ ApplicationWindow {
 
     Connections {
         target: Operations
-        onJobFinished: if (ok) Operations.openArchive(resultUri)
+        onJobFinished: if (ok) Operations.openArchive(resultUri, "")
         onArchiveOpened: window.archiveRoot = rootUri
     }
 
@@ -205,7 +205,7 @@ ApplicationWindow {
         App.setSetting("thumbnails_local", JSON.stringify(true))
         window.archiveRoot = ""
         Operations.compress(JSON.stringify([pdfs + "readable.pdf", pdfs + "secret.pdf"]), "lautta://user-downloads/",
-                            "grid-captions-pdf", "zip")
+                            "grid-captions-pdf", "zip", "")
         waitFor(function () { return window.archiveRoot.length > 0 }, "the archive of PDFs")
         var view = push(window.archiveRoot)
         window.archiveRoot = ""
@@ -283,7 +283,7 @@ ApplicationWindow {
     }
 
     function checkArchive() {
-        Operations.compress(JSON.stringify([base + "Inner"]), "lautta://user-downloads/", "grid-captions", "zip")
+        Operations.compress(JSON.stringify([base + "Inner"]), "lautta://user-downloads/", "grid-captions", "zip", "")
         waitFor(function () { return window.archiveRoot.length > 0 }, "the archive")
         var view = push(window.archiveRoot)
         expect(!view.model.folderCounts, "an archive has no item counts")

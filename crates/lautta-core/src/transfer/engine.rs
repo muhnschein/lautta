@@ -1417,6 +1417,7 @@ mod tests {
             items: vec![file_item("f", "/Out/f")],
             totals: PlanTotals::default(),
             needs_summary: false,
+            hold: Default::default(),
         };
         let id = engine.add(plan, "", TransferOptions::default()).await.unwrap();
         assert_eq!(engine.landed(id), [dest]);
@@ -1441,6 +1442,7 @@ mod tests {
             items: vec![file_item("f", "f")],
             totals: PlanTotals::default(),
             needs_summary: false,
+            hold: Default::default(),
         };
         let id = engine.add(plan, "", TransferOptions::default()).await.unwrap();
         let before = engine.get(id).unwrap().state;

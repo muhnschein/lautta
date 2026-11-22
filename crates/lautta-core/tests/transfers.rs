@@ -51,6 +51,7 @@ fn plan(kind: OperationKind, dest: &str, items: Vec<PlanItem>) -> Plan {
         items,
         totals: PlanTotals::default(),
         needs_summary: false,
+        hold: Default::default(),
     }
 }
 

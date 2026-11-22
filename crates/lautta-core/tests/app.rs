@@ -331,17 +331,18 @@ async fn archives_open_as_locations() {
         std::io::Write::write_all(&mut zip, b"hello").unwrap();
         zip.finish().unwrap();
     }
-    let id = h
+    let (id, _) = h
         .core
-        .open_archive(&uri("lautta://user-documents/a.zip"))
+        .open_archive(&uri("lautta://user-documents/a.zip"), None)
         .await
         .unwrap();
     assert!(id.starts_with("arc-"));
     assert_eq!(
         h.core
-            .open_archive(&uri("lautta://user-documents/a.zip"))
+            .open_archive(&uri("lautta://user-documents/a.zip"), None)
             .await
-            .unwrap(),
+            .unwrap()
+            .0,
         id
     );
     let inner = h

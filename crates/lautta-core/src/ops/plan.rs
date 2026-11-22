@@ -121,6 +121,7 @@ fn finish(
         items,
         totals,
         needs_summary,
+        hold: Default::default(),
     }
 }
 

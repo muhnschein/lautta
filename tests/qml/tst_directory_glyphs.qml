@@ -27,7 +27,7 @@ ApplicationWindow {
 
     Connections {
         target: Operations
-        onJobFinished: if (ok) Operations.openArchive(resultUri)
+        onJobFinished: if (ok) Operations.openArchive(resultUri, "")
         onArchiveOpened: window.archiveRoot = rootUri
     }
 
@@ -194,7 +194,7 @@ ApplicationWindow {
     }
 
     function checkBadge() {
-        Operations.compress(JSON.stringify([base + "Sub/page.pdf"]), "lautta://user-documents/", "glyphs-check", "zip")
+        Operations.compress(JSON.stringify([base + "Sub/page.pdf"]), "lautta://user-documents/", "glyphs-check", "zip", "")
         if (!waitFor(function () { return window.archiveRoot.length > 0 }, "the archive"))
             return
         var root = window.archiveRoot.charAt(window.archiveRoot.length - 1) === "/" ? window.archiveRoot : window.archiveRoot + "/"

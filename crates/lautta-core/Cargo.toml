@@ -24,9 +24,18 @@ rustix = { version = "0.38", features = ["fs", "process", "pipe", "net"] }
 rusqlite = { version = "0.31", features = ["blob"] }
 unicode-normalization = "0.1"
 percent-encoding = "2"
-sha2 = "0.10"
-md-5 = "0.10"
-sha1 = "0.10"
+sha2 = "0.11"
+md-5 = "0.11"
+sha1 = "0.11"
+# WinZip AES for zip entries (`zipaes.rs`); RustCrypto primitives, as 7z AES in sevenz-rust2.
+aes = "0.9"
+ctr = "0.10"
+hmac = "0.13"
+pbkdf2 = { version = "0.13", default-features = false, features = ["hmac"] }
+getrandom = "0.4"
+zeroize = "1"
+# Weak-password hint on the Compress page; pure Rust, port of Dropbox's zxcvbn.
+zxcvbn = { version = "3", default-features = false }
 hex = "0.4"
 notify = { version = "6", default-features = false }
 image = { version = "0.24", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
@@ -42,7 +51,7 @@ tar = "0.4"
 xz2 = "0.1"
 bzip2 = "0.4"
 zstd = { version = "0.14", default-features = false }
-sevenz-rust2 = { version = "0.24", default-features = false, features = ["compress"] }
+sevenz-rust2 = { version = "0.24", default-features = false, features = ["compress", "aes256"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -50,7 +59,7 @@ glob = "0.3"
 tempfile = "3"
 
 [dev-dependencies]
-zip = { version = "9", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate", "aes-crypto"] }
 tokio = { version = "1", features = ["test-util"] }
 rustix = { version = "0.38", features = ["time"] }
 lautta-bridge-proto = { path = "../lautta-bridge-proto", features = ["fake"] }

@@ -9,11 +9,13 @@
 //! * Special files (devices, sockets) are skipped and counted.
 //! * The zip writer is our own: the `zip` crate cannot write to a pipe.
 //! * A file that changes size while read aborts the run rather than writing a corrupt tar entry.
+//! * Password: zip and 7z only, AES-256. 7z hides names too; zip cannot. tar has no encryption.
 
 mod zipstream;
 
 use crate::entry::{Entry, Kind};
 use crate::error::{Error, ErrorKind, Result};
+use crate::password::Password;
 use crate::provider::archive::ArchiveProvider;
 use crate::provider::{no_progress, Lane, ProgressSink, Provider, ProviderResolver};
 use crate::uri::Uri;
@@ -44,6 +46,11 @@ impl ArchiveKind {
     /// tar headers carry the size before the data.
     fn needs_size(self) -> bool {
         matches!(self, ArchiveKind::TarXz | ArchiveKind::TarGz)
+    }
+
+    /// tar has no encryption.
+    pub fn takes_password(self) -> bool {
+        matches!(self, ArchiveKind::Zip | ArchiveKind::SevenZ)
     }
 }
 
@@ -77,6 +84,8 @@ pub struct CompressOptions {
     pub spool_dir: Option<std::path::PathBuf>,
     pub progress: ProgressSink,
     pub cancel: Arc<AtomicBool>,
+    /// Zip and 7z only.
+    pub password: Option<Password>,
 }
 
 impl CompressOptions {
@@ -86,6 +95,7 @@ impl CompressOptions {
             level: 6,
             total_hint: None,
             spool_dir: None,
+            password: None,
             progress: no_progress(),
             cancel: Arc::new(AtomicBool::new(false)),
         }
@@ -213,6 +223,8 @@ const SEVENZ_DIRECTORY: u32 = 0x10;
 /// small files does not set up 8 MiB match tables per file.
 const SEVENZ_DICT_MAX: u32 = 8 * 1024 * 1024;
 const SEVENZ_DICT_MIN: u32 = 64 * 1024;
+/// Key from 2^19 SHA-256 rounds, as 7-Zip makes it; the crate's default of 2^8 is far weaker.
+const SEVENZ_KEY_ROUNDS_POWER: u8 = 19;
 
 fn sevenz_dict(size: Option<u64>) -> u32 {
     match size {
@@ -235,10 +247,12 @@ struct SevenZ<W: Sink> {
     level: u32,
     /// Unseekable sink: archive goes to a spool file, copied here at the end.
     forward: Option<W>,
+    /// One salt for the archive (one key, derived once); every entry gets its own IV.
+    aes: Option<sevenz_rust2::encoder_options::AesEncoderOptions>,
 }
 
 impl<W: Sink> SevenZ<W> {
-    fn new(sink: W, level: u32, spool_dir: Option<&Path>) -> io::Result<Self> {
+    fn new(sink: W, level: u32, spool_dir: Option<&Path>, password: Option<&Password>) -> io::Result<Self> {
         let (file, forward) = match sink.into_file() {
             Ok(file) => (file, None),
             Err(sink) => {
@@ -248,11 +262,30 @@ impl<W: Sink> SevenZ<W> {
             }
         };
         let archive = sevenz_rust2::ArchiveWriter::new(file).map_err(sevenz_err)?;
+        let aes = password.map(|p| {
+            let mut o = sevenz_rust2::encoder_options::AesEncoderOptions::new(p.as_str().into());
+            o.num_cycles_power = SEVENZ_KEY_ROUNDS_POWER;
+            o
+        });
         Ok(SevenZ {
             archive,
             level,
             forward,
+            aes,
         })
+    }
+
+    /// AES first, as 7-Zip orders them; the header is then encrypted with it too.
+    fn methods(
+        &self,
+        lzma: sevenz_rust2::encoder_options::Lzma2Options,
+    ) -> io::Result<Vec<sevenz_rust2::EncoderConfiguration>> {
+        let Some(base) = &self.aes else {
+            return Ok(vec![lzma.into()]);
+        };
+        let mut aes = base.clone();
+        getrandom::fill(&mut aes.iv).map_err(|e| io::Error::other(format!("no random IV: {e}")))?;
+        Ok(vec![aes.into(), lzma.into()])
     }
 
     fn entry(meta: &EntryMeta) -> io::Result<sevenz_rust2::ArchiveEntry> {
@@ -285,7 +318,8 @@ impl<W: Sink> MemberWriter for SevenZ<W> {
         let entry = Self::entry(meta)?;
         let mut options = sevenz_rust2::encoder_options::Lzma2Options::from_level(self.level);
         options.set_dictionary_size(sevenz_dict(meta.size));
-        self.archive.set_content_methods(vec![options.into()]);
+        let methods = self.methods(options)?;
+        self.archive.set_content_methods(methods);
         let pushed = match meta.kind {
             Kind::Dir => self.archive.push_archive_entry::<&[u8]>(entry, None),
             Kind::Symlink => {
@@ -313,8 +347,13 @@ impl<W: Sink> MemberWriter for SevenZ<W> {
 fn new_writer<W: Sink>(opts: &CompressOptions, sink: W) -> io::Result<Box<dyn MemberWriter>> {
     let level = opts.level.min(9);
     Ok(match opts.kind {
-        ArchiveKind::Zip => Box::new(zipstream::ZipStream::new(sink, level)),
-        ArchiveKind::SevenZ => Box::new(SevenZ::new(sink, level, opts.spool_dir.as_deref())?),
+        ArchiveKind::Zip => Box::new(zipstream::ZipStream::new(sink, level, opts.password.clone())),
+        ArchiveKind::SevenZ => Box::new(SevenZ::new(
+            sink,
+            level,
+            opts.spool_dir.as_deref(),
+            opts.password.as_ref(),
+        )?),
         ArchiveKind::TarXz => Box::new(Tar {
             builder: tar::Builder::new(xz2::write::XzEncoder::new(sink, level)),
             close: |e| e.finish()?.flush(),
@@ -564,6 +603,12 @@ pub async fn compress<W: Sink>(
 ) -> Result<CompressStats> {
     if sources.is_empty() {
         return Err(Error::new(ErrorKind::InvalidArgument, "nothing to compress"));
+    }
+    if opts.password.is_some() && !opts.kind.takes_password() {
+        return Err(Error::new(
+            ErrorKind::InvalidArgument,
+            "tar files cannot have a password",
+        ));
     }
     let names = top_level_names(sources)?;
     let (tx, rx) = mpsc::channel(QUEUE);

@@ -80,7 +80,7 @@ Page {
     function askPassword() {
         asked = true
         wantPassword = false
-        var dialog = pageStack.push(passwordDialog, { "fileName": fileName, "wrong": doc.wrongPassword })
+        var dialog = pageStack.push(passwordDialog, { "wrong": doc.wrongPassword })
         dialog.accepted.connect(function() {
             unlocking = true
             doc.unlock(dialog.password)
@@ -219,7 +219,7 @@ Page {
 
     Component {
         id: passwordDialog
-        PdfPasswordDialog { }
+        LockedFileDialog { }
     }
 
     Component {

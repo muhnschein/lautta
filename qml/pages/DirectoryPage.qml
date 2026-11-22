@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import Lautta 1.0
 import "../components/directory"
 
 Page {
@@ -10,6 +11,10 @@ Page {
     property bool shown
 
     allowedOrientations: Orientation.All
+
+    // A locked compressed file stays open, its password in memory, while a page shows it.
+    Component.onCompleted: Operations.holdArchive(uri)
+    Component.onDestruction: Operations.releaseArchive(uri)
 
     onStatusChanged: {
         if (status !== PageStatus.Active)
