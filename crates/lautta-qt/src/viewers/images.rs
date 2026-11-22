@@ -695,6 +695,8 @@ mod tests {
 
         let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/big.jpg", (4000, 4000));
         assert_eq!((e.as_str(), w, h), ("", 400, 200), "never scaled up");
+        let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/big.jpg", (100, 0));
+        assert_eq!((e.as_str(), w, h), ("", 100, 50), "width alone: fit to it");
 
         // 4:3 on a 108 x 228 screen shows at 144 x 108 turned.
         let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/photo.jpg", (108, 228));
