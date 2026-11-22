@@ -65,6 +65,8 @@ pub struct App {
     externalFailed: qt_signal!(uri: QString, kind: QString, message: QString),
 
     clipboard: Clipboard,
+    /// Items copied from a locked archive keep it open.
+    clipboard_hold: lautta_core::app_archives::ArchiveHold,
 }
 
 impl QSingletonInit for App {
@@ -282,6 +284,14 @@ impl App {
     }
 
     fn publish_clipboard(&mut self) {
+        let source = self.clipboard.contents().map(|c| c.source.location.clone());
+        self.clipboard_hold = match (core(), source) {
+            (Some(core), Some(location)) => {
+                let _runtime = handle().enter();
+                core.hold_archive(&location)
+            }
+            _ => Default::default(),
+        };
         let (count, cut) = match self.clipboard.contents() {
             Some(c) => (c.items.len() as i32, c.mode == ClipboardMode::Cut),
             None => (0, false),

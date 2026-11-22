@@ -43,19 +43,19 @@ Item {
         Operations.started.connect(function(id) {
             root.ids = root.ids.concat([id])
             if (root.ids.length === 1)
-                Operations.extract("lautta://user-documents/bad.zip")
+                Operations.extract("lautta://user-documents/bad.zip", "")
         })
         Operations.jobFinished.connect(function(job, ok, uri) {
             if (!ok)
                 console.error("FAILED: compress")
-            Operations.extract(uri)
+            Operations.extract(uri, "")
         })
         // First change after creating Transfers: its start has loaded stored tasks.
         Transfers.changed.connect(function() {
             if (root.begun)
                 return
             root.begun = true
-            Operations.compress(JSON.stringify(["lautta://user-documents/src"]), "lautta://user-documents/", "pack", "zip")
+            Operations.compress(JSON.stringify(["lautta://user-documents/src"]), "lautta://user-documents/", "pack", "zip", "")
         })
     }
 }

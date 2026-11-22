@@ -130,6 +130,8 @@ fn text_for_other(kind: ErrorKind, ctx: &MessageContext) -> String {
         ErrorKind::RateLimited => format!("{loc} asked Lautta to slow down. Trying again shortly."),
         ErrorKind::CrossesDevice => format!("{it} can't be moved to {loc} directly."),
         ErrorKind::LocationGone => format!("{loc} is no longer connected."),
+        ErrorKind::PasswordRequired => format!("{it} is locked. Open it and enter its password."),
+        ErrorKind::WrongPassword => format!("Wrong password for {it}."),
         ErrorKind::Io => format!("Something went wrong while accessing {it}."),
         ErrorKind::Internal => "Something went wrong inside Lautta.".to_owned(),
         // Handled by `text_for`; kept total for safety.

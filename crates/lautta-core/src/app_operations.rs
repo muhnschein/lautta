@@ -11,7 +11,8 @@ use crate::mime;
 use crate::ops::conflict as conflict_ops;
 use crate::ops::names::{keep_both_dir_name, keep_both_name, split_extension};
 use crate::ops::{Conflict, ConflictChoice, OperationKind, Plan};
-use crate::provider::{list_all, Disposition, Lane, ProgressSink, Provider, WriteOptions};
+use crate::password::Password;
+use crate::provider::{list_all, Disposition, Lane, Provider, WriteOptions};
 use crate::settings::Settings;
 use crate::sys;
 use crate::thumbs::{thumbnail_source, ThumbSettings, ThumbSource};
@@ -23,8 +24,8 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 
 const CRUMB: &str = " › ";
 const SUMMARY_RENAMES: usize = 50;
@@ -485,7 +486,8 @@ impl Core {
     /// Next to the archive, as macOS does: a single top item (folder or file) comes out as is,
     /// anything else in a new folder named after the archive. Taken name gets a number: nothing
     /// merges, nothing is replaced.
-    pub async fn extract(&self, archive: &Uri) -> Result<Started> {
+    /// `password` only for a locked archive not open yet.
+    pub async fn extract(&self, archive: &Uri, password: Option<Password>) -> Result<Started> {
         let folder = archive
             .parent()
             .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "archive is no file"))?;
@@ -493,7 +495,7 @@ impl Core {
         if !self.may_add_to(&folder) {
             return Err(Error::kind(ErrorKind::ReadOnlyFilesystem));
         }
-        let location = self.open_archive(archive).await?;
+        let (location, hold) = self.open_archive(archive, password).await?;
         let root = Uri::root(location.clone());
         let source = self.provider(&location)?;
         let children = list_all(source.as_ref(), &root.path, Lane::Interactive).await?;
@@ -531,27 +533,27 @@ impl Core {
             plan.totals.conflicts = conflict_ops::unresolved(&plan).len() as u64;
         }
         plan.kind = OperationKind::Extract;
+        plan.hold = hold;
         if plan.needs_summary {
             return Ok(Started::NeedsSummary(Box::new(plan)));
         }
         self.start_plan(plan).await.map(Started::Transfer)
     }
 
-    /// Failed or canceled run leaves no partial file.
+    /// Failed or canceled run leaves no partial file. `opts`: kind, password, progress, cancel; the
+    /// rest is filled here.
     pub async fn compress_to(
         &self,
         sources: &[Uri],
         dest_dir: &Uri,
         name: &str,
-        kind: ArchiveKind,
-        progress: ProgressSink,
-        cancel: Arc<AtomicBool>,
+        mut opts: CompressOptions,
     ) -> Result<Uri> {
         let provider = self.provider(&dest_dir.location)?;
         if !self.may_add_to(dest_dir) {
             return Err(Error::kind(ErrorKind::ReadOnlyFilesystem));
         }
-        let file_name = archive_file_name(name.trim(), kind);
+        let file_name = archive_file_name(name.trim(), opts.kind);
         validate_name(file_name.as_bytes())?;
         let taken: HashSet<Vec<u8>> = list_all(provider.as_ref(), &dest_dir.path, Lane::Interactive)
             .await?
@@ -560,9 +562,6 @@ impl Core {
             .collect();
         let final_name = free_name(file_name.as_bytes(), &taken);
         let target = dest_dir.join(&final_name)?;
-        let mut opts = CompressOptions::new(kind);
-        opts.progress = progress;
-        opts.cancel = cancel;
         opts.total_hint = self.measure(sources).await.ok().map(|m| m.bytes);
         opts.spool_dir = Some(self.paths.cache_dir());
         match self.locations.to_local_path(&target) {

@@ -8,6 +8,8 @@
 //!
 //! Names that could leave the archive (`..`, absolute, drive letters, NUL) are never indexed;
 //! counted by [`ArchiveProvider::skipped_entries`].
+//!
+//! Locked (AES zip or 7z): opens only with the password, held here until the provider drops.
 
 mod blocks;
 mod sevenz;
@@ -18,6 +20,7 @@ mod zipdir;
 
 use crate::entry::{cap, Capabilities, Entry, EntryFlags, Kind};
 use crate::error::{Error, ErrorKind, Result};
+use crate::password::Password;
 use crate::provider::{
     AttributeChanges, CopyOptions, Lane, ProgressSink, Provider, ReadHandle, ReadOptions, RenameMode,
     SpaceInfo, WriteOptions,
@@ -300,6 +303,8 @@ impl Drop for CacheFile {
 
 struct Inner {
     format: ArchiveFormat,
+    /// Only while the archive needs it.
+    password: Option<Password>,
     index: Index,
     blocks: Option<Arc<BlockSource>>,
     cache: Option<CacheFile>,
@@ -346,7 +351,7 @@ impl Inner {
         match &node.loc {
             Loc::Implicit => Err(Error::kind(ErrorKind::IsADirectory)),
             Loc::Zip(z) => {
-                let mut r = zipdir::open_entry(self.block_source()?, z)?;
+                let mut r = zipdir::open_entry(self.block_source()?, z, self.password.as_ref())?;
                 io::copy(&mut r, out).map_err(from_io)?;
                 Ok(())
             }
@@ -383,7 +388,7 @@ impl Inner {
                     Err(Error::new(ErrorKind::ProtocolError, "tar entry is truncated"))
                 }
             }
-            Loc::SevenZ(name) => sevenz::copy_entry(self.cache_file()?, name, out),
+            Loc::SevenZ(name) => sevenz::copy_entry(self.cache_file()?, name, out, self.password.as_ref()),
         }
     }
 
@@ -452,7 +457,14 @@ pub struct ArchiveProvider {
 
 impl ArchiveProvider {
     /// `cache_dir` receives the downloaded copy of non-zip archives and large extracted entries.
-    pub async fn open(source: Arc<dyn Provider>, path: VPath, cache_dir: PathBuf) -> Result<ArchiveProvider> {
+    /// Locked archive: `PasswordRequired` without `password`, `WrongPassword` with a wrong one.
+    /// Unlocked one drops `password`.
+    pub async fn open(
+        source: Arc<dyn Provider>,
+        path: VPath,
+        cache_dir: PathBuf,
+        password: Option<Password>,
+    ) -> Result<ArchiveProvider> {
         let handle: Arc<dyn ReadHandle> = Arc::from(source.open_read(&path, Lane::Interactive).await?);
         let head = read_block(handle.as_ref(), 0, BLOCK as usize).await?;
         let format = detect_format(&head, path.name().unwrap_or_default())
@@ -468,11 +480,11 @@ impl ArchiveProvider {
                         .unwrap_or(0),
                 };
                 let src = BlockSource::new(handle, tokio::runtime::Handle::current(), size, Some(head));
-                index_ranged(format, src, cache_dir).await?
+                index_ranged(format, src, cache_dir, password).await?
             }
             _ => {
                 let cache = download_to_cache(source.as_ref(), &path, &cache_dir).await?;
-                index_cached(format, cache, cache_dir).await?
+                index_cached(format, cache, cache_dir, password).await?
             }
         };
         Ok(ArchiveProvider {
@@ -482,6 +494,11 @@ impl ArchiveProvider {
 
     pub fn format(&self) -> ArchiveFormat {
         self.inner.format
+    }
+
+    /// Opened with its password.
+    pub fn locked(&self) -> bool {
+        self.inner.password.is_some()
     }
 
     /// Never listed, never extractable (includes names colliding with a folder).
@@ -534,16 +551,28 @@ async fn read_block(handle: &dyn ReadHandle, offset: u64, want: usize) -> Result
     Ok(data)
 }
 
-async fn index_ranged(format: ArchiveFormat, src: Arc<BlockSource>, cache_dir: PathBuf) -> Result<Inner> {
+async fn index_ranged(
+    format: ArchiveFormat,
+    src: Arc<BlockSource>,
+    cache_dir: PathBuf,
+    password: Option<Password>,
+) -> Result<Inner> {
     let reader_src = Arc::clone(&src);
-    let raw = tokio::task::spawn_blocking(move || match format {
-        ArchiveFormat::Zip => zipdir::read_entries(&mut reader_src.reader()),
-        _ => tarfmt::index_seek(reader_src.reader()),
+    let (raw, password) = tokio::task::spawn_blocking(move || -> Result<_> {
+        match format {
+            ArchiveFormat::Zip => {
+                let raw = zipdir::read_entries(&mut reader_src.reader())?;
+                let locked = zipdir::check_password(&reader_src, &raw, password.as_ref())?;
+                Ok((raw, password.filter(|_| locked)))
+            }
+            _ => Ok((tarfmt::index_seek(reader_src.reader())?, None)),
+        }
     })
     .await
     .map_err(join_err)??;
     Ok(Inner {
         format,
+        password,
         index: Index::build(raw),
         blocks: Some(src),
         cache: None,
@@ -552,21 +581,31 @@ async fn index_ranged(format: ArchiveFormat, src: Arc<BlockSource>, cache_dir: P
     })
 }
 
-async fn index_cached(format: ArchiveFormat, cache: CacheFile, cache_dir: PathBuf) -> Result<Inner> {
+async fn index_cached(
+    format: ArchiveFormat,
+    cache: CacheFile,
+    cache_dir: PathBuf,
+    password: Option<Password>,
+) -> Result<Inner> {
     let path = cache.0.clone();
-    let raw = tokio::task::spawn_blocking(move || {
+    let (raw, password) = tokio::task::spawn_blocking(move || -> Result<_> {
         let file = File::open(&path)?;
         match format {
-            ArchiveFormat::Tar(comp) => {
-                tarfmt::index_stream(tarfmt::decoder(comp, io::BufReader::new(file))?)
+            ArchiveFormat::Tar(comp) => Ok((
+                tarfmt::index_stream(tarfmt::decoder(comp, io::BufReader::new(file))?)?,
+                None,
+            )),
+            _ => {
+                let (raw, locked) = sevenz::index(file, password.as_ref())?;
+                Ok((raw, password.filter(|_| locked)))
             }
-            _ => sevenz::index(file),
         }
     })
     .await
     .map_err(join_err)??;
     Ok(Inner {
         format,
+        password,
         index: Index::build(raw),
         blocks: None,
         cache: Some(cache),

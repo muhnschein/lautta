@@ -68,6 +68,6 @@ PullDownMenu {
         objectName: "folderMenuExtract"
         visible: !menu.selecting && menu.archiveUri.length > 0 && App.canAddTo(App.parentUri(menu.archiveUri))
         text: qsTrId("lautta-dir-act-extract")
-        onClicked: Operations.extract(menu.archiveUri)
+        onClicked: Operations.extract(menu.archiveUri, "")
     }
 }

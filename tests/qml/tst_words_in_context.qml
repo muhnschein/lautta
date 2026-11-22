@@ -28,6 +28,17 @@ ApplicationWindow {
              qsTrId("lautta-err-permission-unnamed"), "change unnamed says change")
     }
 
+    function checkPasswords() {
+        same(ErrorText.message("PasswordRequired", { "item": "a.zip" }),
+             qsTrId("lautta-err-password-required").arg("a.zip"), "locked names the file")
+        same(ErrorText.message("PasswordRequired", {}),
+             qsTrId("lautta-err-password-required-unnamed"), "locked unnamed")
+        same(ErrorText.message("WrongPassword", { "item": "a.7z" }),
+             qsTrId("lautta-err-wrong-password").arg("a.7z"), "wrong password names the file")
+        same(ErrorText.message("WrongPassword", {}),
+             qsTrId("lautta-err-wrong-password-unnamed"), "wrong password unnamed")
+    }
+
     function checkItemStates() {
         var cases = [
             ["copy", "", "lautta-xfr-item-copying"],
@@ -101,6 +112,7 @@ ApplicationWindow {
             startUri: "lautta://user-documents/"
             Component.onCompleted: {
                 test.checkPermission()
+                test.checkPasswords()
                 test.checkItemStates()
                 test.checkCanceledItems()
                 test.checkPending()

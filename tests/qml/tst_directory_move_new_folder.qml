@@ -21,7 +21,7 @@ ApplicationWindow {
 
     Connections {
         target: Operations
-        onJobFinished: if (ok) Operations.openArchive(resultUri)
+        onJobFinished: if (ok) Operations.openArchive(resultUri, "")
         onArchiveOpened: window.archiveRoot = rootUri
     }
 
@@ -213,7 +213,7 @@ ApplicationWindow {
     }
 
     function checkArchive() {
-        Operations.compress(JSON.stringify([base + "Pair"]), base, "pairs", "zip")
+        Operations.compress(JSON.stringify([base + "Pair"]), base, "pairs", "zip", "")
         waitFor(function () { return window.archiveRoot.length > 0 }, "the archive")
         var archivePage = pageStack.push(pageComponent, { "uri": window.archiveRoot }, PageStackAction.Immediate)
         var view

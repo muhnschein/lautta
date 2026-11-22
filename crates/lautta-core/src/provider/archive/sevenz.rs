@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! 7z: indexed and extracted from the downloaded cache file.
+//! 7z: indexed and extracted from the downloaded cache file. AES-256 ones open with the password;
+//! a wrong one fails at open.
 
 use super::blocks::from_io;
 use super::{Loc, RawEntry};
 use crate::entry::Kind;
 use crate::error::{Error, ErrorKind, Result};
-use sevenz_rust2::{ArchiveReader, Password};
+use crate::password::Password;
+use sevenz_rust2::{ArchiveReader, EncoderMethod};
 use std::fs::File;
 use std::io::{self, Write};
 use std::time::SystemTime;
@@ -14,12 +16,28 @@ use std::time::SystemTime;
 /// (`FILE_ATTRIBUTE_UNIX_EXTENSION`) is set.
 const UNIX_EXTENSION: u32 = 0x8000;
 
-fn open(file: File) -> Result<ArchiveReader<File>> {
-    ArchiveReader::new(file, Password::empty()).map_err(map_err)
+fn open(file: File, password: Option<&Password>) -> Result<ArchiveReader<File>> {
+    let key = password.map_or_else(sevenz_rust2::Password::empty, |p| p.as_str().into());
+    ArchiveReader::new(file, key).map_err(map_err)
 }
 
+/// Data that fails to decode under a password reads as a wrong password: 7z has no check value for
+/// it, 7-Zip says the same ("Wrong password?"). sevenz-rust2 raises it only with a password given.
 fn map_err(err: sevenz_rust2::Error) -> Error {
-    Error::new(ErrorKind::ProtocolError, format!("7z: {err}"))
+    match err {
+        sevenz_rust2::Error::PasswordRequired => Error::kind(ErrorKind::PasswordRequired),
+        sevenz_rust2::Error::MaybeBadPassword(_) => Error::kind(ErrorKind::WrongPassword),
+        other => Error::new(ErrorKind::ProtocolError, format!("7z: {other}")),
+    }
+}
+
+fn locked(reader: &ArchiveReader<File>) -> bool {
+    let aes = EncoderMethod::AES256_SHA256.id();
+    reader
+        .archive()
+        .blocks
+        .iter()
+        .any(|b| b.coders.iter().any(|c| c.encoder_method_id() == aes))
 }
 
 fn classify(attrs: Option<u32>, is_dir: bool) -> (Kind, Option<u32>) {
@@ -45,8 +63,33 @@ fn classify(attrs: Option<u32>, is_dir: bool) -> (Kind, Option<u32>) {
     }
 }
 
-pub fn index(file: File) -> Result<Vec<RawEntry>> {
-    let reader = open(file)?;
+/// Readable names prove no password: decodes the start of the first file.
+fn check_password(reader: &mut ArchiveReader<File>) -> Result<()> {
+    let mut failed = false;
+    let res = reader.for_each_entries(|entry, data| {
+        if !entry.has_stream() {
+            return Ok(true);
+        }
+        failed = data.read(&mut [0u8; 4096]).is_err();
+        Ok(false)
+    });
+    if failed || res.is_err() {
+        return Err(Error::kind(ErrorKind::WrongPassword));
+    }
+    Ok(())
+}
+
+/// Entries, and whether any data is encrypted. Locked: `PasswordRequired` without `password`,
+/// `WrongPassword` with a wrong one.
+pub fn index(file: File, password: Option<&Password>) -> Result<(Vec<RawEntry>, bool)> {
+    let mut reader = open(file, password)?;
+    let locked = locked(&reader);
+    if locked {
+        if password.is_none() {
+            return Err(Error::kind(ErrorKind::PasswordRequired));
+        }
+        check_password(&mut reader)?;
+    }
     let mut out = Vec::new();
     for e in &reader.archive().files {
         if e.is_anti_item() {
@@ -67,12 +110,12 @@ pub fn index(file: File) -> Result<Vec<RawEntry>> {
             loc: Loc::SevenZ(e.name().to_owned()),
         });
     }
-    Ok(out)
+    Ok((out, locked))
 }
 
 /// Solid archives decode the preceding entries of the block too: inherent to 7z.
-pub fn copy_entry(file: File, name: &str, out: &mut dyn Write) -> Result<()> {
-    let mut reader = open(file)?;
+pub fn copy_entry(file: File, name: &str, out: &mut dyn Write, password: Option<&Password>) -> Result<()> {
+    let mut reader = open(file, password)?;
     let mut found = false;
     let mut failure: Option<io::Error> = None;
     let res = reader.for_each_entries(|entry, data| {
@@ -86,6 +129,9 @@ pub fn copy_entry(file: File, name: &str, out: &mut dyn Write) -> Result<()> {
         Ok(false)
     });
     if let Some(e) = failure {
+        if password.is_some() && e.kind() == io::ErrorKind::InvalidData {
+            return Err(Error::kind(ErrorKind::WrongPassword));
+        }
         return Err(from_io(e));
     }
     res.map_err(map_err)?;
@@ -108,5 +154,62 @@ mod tests {
         assert_eq!(classify(Some(reg), false), (Kind::File, Some(0o600)));
         assert_eq!(classify(Some(0x10), true), (Kind::Dir, None));
         assert_eq!(classify(None, false), (Kind::File, None));
+    }
+
+    /// One file, a.txt; header encrypted too when locked.
+    fn archive(dir: &std::path::Path, password: Option<&str>) -> File {
+        let path = dir.join("a.7z");
+        let mut w = sevenz_rust2::ArchiveWriter::new(File::create(&path).unwrap()).unwrap();
+        let lzma = sevenz_rust2::encoder_options::Lzma2Options::from_level(1);
+        w.set_content_methods(match password {
+            Some(p) => vec![
+                sevenz_rust2::encoder_options::AesEncoderOptions::new(p.into()).into(),
+                lzma.into(),
+            ],
+            None => vec![lzma.into()],
+        });
+        w.push_archive_entry(sevenz_rust2::ArchiveEntry::new_file("a.txt"), Some(&b"alpha"[..]))
+            .unwrap();
+        w.finish().unwrap();
+        File::open(path).unwrap()
+    }
+
+    struct Failing(io::ErrorKind);
+
+    impl Write for Failing {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            Err(self.0.into())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// A failing writer stands in for data that fails to decode: both reach `copy_entry` as one
+    /// `io::Error`.
+    #[test]
+    fn only_data_failing_under_a_password_reads_as_a_wrong_password() {
+        let dir = tempfile::tempdir().unwrap();
+        let pw = Password::new("pw");
+        let kind = |password: Option<&str>, err: io::ErrorKind| {
+            let file = archive(dir.path(), password);
+            let given = password.and(pw.as_ref());
+            copy_entry(file, "a.txt", &mut Failing(err), given)
+                .err()
+                .map(|e| e.kind)
+        };
+        let itself = |err: io::ErrorKind| Some(from_io(err.into()).kind);
+        assert_eq!(
+            kind(Some("pw"), io::ErrorKind::InvalidData),
+            Some(ErrorKind::WrongPassword)
+        );
+        assert_eq!(
+            kind(Some("pw"), io::ErrorKind::BrokenPipe),
+            itself(io::ErrorKind::BrokenPipe)
+        );
+        assert_eq!(
+            kind(None, io::ErrorKind::InvalidData),
+            itself(io::ErrorKind::InvalidData)
+        );
     }
 }

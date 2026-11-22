@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Zip writer needing only `Write` (no `Seek`), so archives go straight into a pipe. Data
-//! descriptors; zip64 when a size is unknown or ≥ 4 GiB.
+//! descriptors; zip64 when a size is unknown or ≥ 4 GiB. With a password every file and link is
+//! WinZip AES-256 (AE-2); folders carry no data. Names stay readable: zip cannot hide them.
 
 use super::{EntryMeta, MemberWriter};
 use crate::entry::Kind;
+use crate::password::Password;
+use crate::zipaes::{self, AesField, Encryptor};
 use std::io::{self, Read, Write};
 use std::time::{Duration, SystemTime};
 
@@ -13,6 +16,7 @@ const CENTRAL_SIG: u32 = 0x0201_4b50;
 const EOCD_SIG: u32 = 0x0605_4b50;
 const EOCD64_SIG: u32 = 0x0606_4b50;
 const LOCATOR64_SIG: u32 = 0x0706_4b50;
+const FLAG_ENCRYPTED: u16 = 0x0001;
 const FLAG_DESCRIPTOR: u16 = 0x0008;
 const FLAG_UTF8: u16 = 0x0800;
 const METHOD_STORED: u16 = 0;
@@ -41,6 +45,7 @@ struct Member {
     name: Vec<u8>,
     flags: u16,
     method: u16,
+    aes: Option<AesField>,
     dos: (u16, u16),
     unix_mtime: Option<u32>,
     crc: u32,
@@ -54,19 +59,21 @@ struct Member {
 pub(crate) struct ZipStream<W: Write> {
     out: Counting<W>,
     level: u32,
+    password: Option<Password>,
     members: Vec<Member>,
     /// Test knob: write every file entry as zip64.
     force_zip64: bool,
 }
 
 impl<W: Write> ZipStream<W> {
-    pub fn new(sink: W, level: u32) -> ZipStream<W> {
+    pub fn new(sink: W, level: u32, password: Option<Password>) -> ZipStream<W> {
         ZipStream {
             out: Counting {
                 inner: sink,
                 count: 0,
             },
             level,
+            password,
             members: Vec::new(),
             force_zip64: false,
         }
@@ -148,9 +155,43 @@ fn io_invalid(msg: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, msg.to_owned())
 }
 
+/// Version needed to extract: 2.0 plain, 4.5 zip64, 5.1 AES.
+fn version_needed(m: &Member, zip64: bool) -> u16 {
+    if m.aes.is_some() {
+        51
+    } else if zip64 {
+        45
+    } else {
+        20
+    }
+}
+
+fn extras(m: &Member) -> Vec<u8> {
+    let mut extra = timestamp_extra(m.unix_mtime);
+    if let Some(aes) = m.aes {
+        extra.extend_from_slice(&aes.record());
+    }
+    extra
+}
+
+/// Deflates `data` into `out`; returns `out` for what comes after.
+fn deflate_into<O: Write>(out: O, level: u32, data: &mut dyn Read, crc: &mut flate2::Crc) -> io::Result<O> {
+    let mut enc = flate2::write::DeflateEncoder::new(out, flate2::Compression::new(level));
+    let mut buf = vec![0u8; 64 * 1024];
+    loop {
+        let n = data.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        crc.update(&buf[..n]);
+        enc.write_all(&buf[..n])?;
+    }
+    enc.finish()
+}
+
 impl<W: Write> ZipStream<W> {
     fn local_header(&mut self, m: &Member, descriptor: bool) -> io::Result<()> {
-        let mut extra = timestamp_extra(m.unix_mtime);
+        let mut extra = extras(m);
         if m.local_zip64 {
             extra.extend_from_slice(&[1, 0, 16, 0]);
             extra.extend_from_slice(&[0u8; 16]);
@@ -162,7 +203,7 @@ impl<W: Write> ZipStream<W> {
             (true, true) => (0, U32_MAX as u32, U32_MAX as u32),
         };
         self.put32(LOCAL_SIG)?;
-        self.put16(if m.local_zip64 { 45 } else { 20 })?;
+        self.put16(version_needed(m, m.local_zip64))?;
         self.put16(m.flags)?;
         self.put16(m.method)?;
         self.put16(m.dos.1)?;
@@ -176,6 +217,7 @@ impl<W: Write> ZipStream<W> {
         self.out.write_all(&extra)
     }
 
+    /// Data of `method`; behind AES when there is a password and data.
     fn new_member(&mut self, meta: &EntryMeta, name: Vec<u8>, method: u16, descriptor: bool) -> Member {
         let mut flags = if std::str::from_utf8(&name).is_ok() {
             FLAG_UTF8
@@ -185,6 +227,10 @@ impl<W: Write> ZipStream<W> {
         if descriptor {
             flags |= FLAG_DESCRIPTOR;
         }
+        let aes = (self.password.is_some() && meta.kind != Kind::Dir).then(|| AesField::written(method));
+        if aes.is_some() {
+            flags |= FLAG_ENCRYPTED;
+        }
         let large = meta.size.is_none_or(|s| s >= U32_MAX);
         let mtime = meta
             .mtime
@@ -192,7 +238,8 @@ impl<W: Write> ZipStream<W> {
         Member {
             name,
             flags,
-            method,
+            method: if aes.is_some() { zipaes::METHOD } else { method },
+            aes,
             dos: dos_datetime(mtime),
             unix_mtime: unix_secs(meta.mtime),
             crc: 0,
@@ -208,11 +255,24 @@ impl<W: Write> ZipStream<W> {
         let mut m = self.new_member(meta, name, METHOD_STORED, false);
         let mut crc = flate2::Crc::new();
         crc.update(body);
-        m.crc = crc.sum();
         m.size = body.len() as u64;
-        m.compressed = body.len() as u64;
+        let password = self.password.clone().filter(|_| m.aes.is_some());
+        match &password {
+            Some(_) => m.compressed = m.size + zipaes::Strength::Aes256.overhead(),
+            None => {
+                m.crc = crc.sum();
+                m.compressed = m.size;
+            }
+        }
         self.local_header(&m, false)?;
-        self.out.write_all(body)?;
+        match password {
+            Some(pw) => {
+                let mut enc = Encryptor::new(&mut self.out, &pw)?;
+                enc.write_all(body)?;
+                enc.finish()?;
+            }
+            None => self.out.write_all(body)?,
+        }
         self.members.push(m);
         Ok(())
     }
@@ -221,19 +281,18 @@ impl<W: Write> ZipStream<W> {
         let mut m = self.new_member(meta, meta.path.clone(), METHOD_DEFLATE, true);
         self.local_header(&m, true)?;
         let start = self.out.count;
-        let mut enc = flate2::write::DeflateEncoder::new(&mut self.out, flate2::Compression::new(self.level));
         let mut crc = flate2::Crc::new();
-        let mut buf = vec![0u8; 64 * 1024];
-        loop {
-            let n = data.read(&mut buf)?;
-            if n == 0 {
-                break;
+        let level = self.level;
+        match self.password.clone() {
+            Some(pw) => {
+                let enc = Encryptor::new(&mut self.out, &pw)?;
+                deflate_into(enc, level, data, &mut crc)?.finish()?;
             }
-            crc.update(&buf[..n]);
-            enc.write_all(&buf[..n])?;
+            None => {
+                deflate_into(&mut self.out, level, data, &mut crc)?;
+                m.crc = crc.sum();
+            }
         }
-        enc.finish()?;
-        m.crc = crc.sum();
         m.size = u64::from(crc.amount());
         m.compressed = self.out.count - start;
         if !m.local_zip64 && (m.size >= U32_MAX || m.compressed >= U32_MAX) {
@@ -264,7 +323,7 @@ impl<W: Write> ZipStream<W> {
                 zip64.extend_from_slice(&v.to_le_bytes());
             }
         }
-        let mut extra = timestamp_extra(m.unix_mtime);
+        let mut extra = extras(m);
         if !zip64.is_empty() {
             extra.extend_from_slice(&[1, 0]);
             extra.extend_from_slice(&(zip64.len() as u16).to_le_bytes());
@@ -273,11 +332,7 @@ impl<W: Write> ZipStream<W> {
         let clamp = |v: u64| if big(v) { U32_MAX as u32 } else { v as u32 };
         self.put32(CENTRAL_SIG)?;
         self.put16(VERSION_MADE_BY)?;
-        self.put16(if m.local_zip64 || !zip64.is_empty() {
-            45
-        } else {
-            20
-        })?;
+        self.put16(version_needed(m, m.local_zip64 || !zip64.is_empty()))?;
         self.put16(m.flags)?;
         self.put16(m.method)?;
         self.put16(m.dos.1)?;
