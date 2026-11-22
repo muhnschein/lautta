@@ -44,16 +44,30 @@ Item {
     Component {
         id: localThumbnail
 
-        Thumbnail {
-            readonly property bool ready: status === Thumbnail.Ready
-            readonly property bool failed: status === Thumbnail.Error
+        Item {
+            readonly property bool ready: thumbnail.status === Thumbnail.Ready
+            readonly property bool failed: thumbnail.status === Thumbnail.Error
 
-            source: icon.thumbnailSource
-            mimeType: icon.mimeType
-            sourceSize.width: icon.width
-            sourceSize.height: icon.height
-            fillMode: Thumbnail.PreserveAspectCrop
-            visible: ready
+            clip: thumbnail.page
+
+            // Nemo's crop keeps the middle. A page shows from its top: asked whole, as wide as the
+            // icon (pages up to twice as tall as wide), cut here; a shorter page sits in the middle.
+            Thumbnail {
+                id: thumbnail
+
+                readonly property bool page: icon.mimeType === "application/pdf"
+
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: page ? Math.max(0, (parent.height - height) / 2) : 0
+                width: page ? implicitWidth : parent.width
+                height: page ? implicitHeight : parent.height
+                source: icon.thumbnailSource
+                mimeType: icon.mimeType
+                sourceSize.width: icon.width
+                sourceSize.height: page ? 2 * icon.height : icon.height
+                fillMode: page ? Thumbnail.PreserveAspectFit : Thumbnail.PreserveAspectCrop
+                visible: parent.ready
+            }
         }
     }
 
