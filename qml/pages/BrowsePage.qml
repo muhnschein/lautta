@@ -5,6 +5,7 @@ import Lautta 1.0
 import "../components"
 import "../components/browse"
 import "../components/transfers"
+import "../components/viewers"
 import "../components/ErrorText.js" as ErrorText
 import "../components/FileIcons.js" as FileIcons
 import "../components/Open.js" as Open
@@ -113,6 +114,8 @@ Page {
         id: favourites
     }
 
+    ViewerPrefetch { id: prefetch }
+
     SilicaListView {
         id: list
 
@@ -185,7 +188,10 @@ Page {
             menu: hasMenu ? contextMenu : null
             enabled: true
 
+            onPressed: if (kind === "favourite" && model.isFile) prefetch.start(model.uri, "")
             onClicked: if (!banner) page.openRow(model)
+            onPressAndHold: prefetch.stop()
+            onCanceled: prefetch.stop()
 
             AppIcon {
                 visible: !row.banner

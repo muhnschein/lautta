@@ -6,9 +6,9 @@
 //
 // sailfish-components-gallery's src/ImageViewer.qml, adapted for lautta
 // (PRV-4, see LAUTTA.md): it zooms with lautta's ZoomableFlickable, which
-// also has the tap area (and a double tap), the image turns itself upright
-// (autoTransform; remote images come upright from image://lautta-file/)
-// instead of through ImageMetadata, and the error text is lautta's.
+// also has the tap area (and a double tap), images come upright from
+// image://lautta-file/ instead of through ImageMetadata, and the error
+// text is lautta's.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import ".."
@@ -18,6 +18,8 @@ ZoomableFlickable {
 
     property alias source: photo.source
     property alias placeholder: placeholderImage.source
+    property alias tile: tileImage.source
+    property int tileSize
 
     property bool active: true
     readonly property bool _active: active || viewMoving
@@ -64,6 +66,24 @@ ZoomableFlickable {
     }
 
     Image {
+        id: tileImage
+
+        objectName: "tileImage"
+        // Square crop of the photo's middle, under a camera preview: the shorter side of the
+        // placeholder's shape.
+        parent: flickable
+        z: -2
+        anchors.centerIn: parent
+        width: Math.min(placeholderImage.paintedWidth, placeholderImage.paintedHeight)
+        height: width
+        sourceSize.width: flickable.tileSize
+        sourceSize.height: flickable.tileSize
+        asynchronous: true
+        cache: false
+        visible: placeholderImage.visible && status === Image.Ready
+    }
+
+    Image {
         id: photo
 
         property var errorLabel
@@ -71,12 +91,14 @@ ZoomableFlickable {
 
         anchors.fill: parent
         smooth: !(movingVertically || movingHorizontally)
-        sourceSize.width: Screen.height
+        // The screen: provider decodes at the size shown either way up. Same as ViewerPrefetch,
+        // which starts it; kept in Qt's cache for swipes back.
+        sourceSize.width: Screen.width
+        sourceSize.height: Screen.height
         fillMode: Image.PreserveAspectFit
         visible: largePhoto.status !== Image.Ready
         asynchronous: true
         autoTransform: true
-        cache: false
 
         onStatusChanged: {
             if (status == Image.Error) {

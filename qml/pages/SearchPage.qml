@@ -4,6 +4,7 @@ import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components"
 import "../components/search"
+import "../components/viewers"
 import "../components/Open.js" as Open
 import "../components/ErrorText.js" as ErrorText
 import "../components/search/SearchText.js" as SearchText
@@ -134,6 +135,8 @@ Page {
         }
     }
 
+    ViewerPrefetch { id: prefetch }
+
     SilicaListView {
         id: list
 
@@ -176,8 +179,11 @@ Page {
             id: item
 
             contentHeight: Theme.itemSizeSmall
+            onPressed: if (!model.isDir) prefetch.start(model.uri, "")
             onClicked: Open.open(pageStack, App, typeof Operations !== "undefined" ? Operations : null,
                                  model.uri, model.isDir, "", model.folderUri)
+            onPressAndHold: prefetch.stop()
+            onCanceled: prefetch.stop()
 
             ResultIcon {
                 id: icon

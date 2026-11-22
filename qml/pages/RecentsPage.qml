@@ -5,6 +5,7 @@ import Lautta 1.0
 import "../components"
 import "../components/Open.js" as Open
 import "../components/browse"
+import "../components/viewers"
 
 Page {
     id: page
@@ -25,6 +26,8 @@ Page {
         else
             Open.open(pageStack, App, Operations, row.uri, false, "", "")
     }
+
+    ViewerPrefetch { id: prefetch }
 
     RecentsModel {
         id: recents
@@ -76,7 +79,10 @@ Page {
                     }
                 }
             }
+            onPressed: if (model.kind !== "transferred") prefetch.start(model.uri, "")
             onClicked: page.openRecent(model)
+            onPressAndHold: prefetch.stop()
+            onCanceled: prefetch.stop()
 
             ItemIcon {
                 anchors {
