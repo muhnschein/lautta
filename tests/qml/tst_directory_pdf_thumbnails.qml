@@ -2,6 +2,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import Nemo.Thumbnailer 1.0
 import "../../qml/components/directory"
 
 ApplicationWindow {
@@ -87,10 +88,40 @@ ApplicationWindow {
                 continue
             expect(String(system.source) === icon.thumbnailSource && system.mimeType === "application/pdf",
                    "for that file, with the PDF type: " + system.source + " " + system.mimeType)
+            expect(system.fillMode === Thumbnail.PreserveAspectFit, "the whole page, not Nemo's middle crop")
             expect(system.sourceSize.width > 0 && Math.abs(system.sourceSize.width - icon.width) < 1
-                   && system.sourceSize.height === system.sourceSize.width,
-                   "at the icon's size: " + system.sourceSize + ", icon " + icon.width)
+                   && system.sourceSize.height === 2 * system.sourceSize.width,
+                   "as wide as the icon, up to twice as tall: " + system.sourceSize + ", icon " + icon.width)
+            checkPageFrame(icon, system)
         }
+    }
+
+    function checkPhoto(view) {
+        until(function () { return iconOf(view, "image", "photo.jpg") })
+        var icon = iconOf(view, "image", "photo.jpg")
+        var system = icon ? systemThumbnailOf(icon) : null
+        if (expect(system, "a photo asks the system thumbnailer"))
+            expect(system.fillMode === Thumbnail.PreserveAspectCrop && system.sourceSize.height === system.sourceSize.width
+                   && Math.abs(system.height - icon.height) < 1 && system.y === 0 && !system.parent.clip,
+                   "a photo stays cropped to the tile: " + system.sourceSize + " " + system.height)
+    }
+
+    // No page drawn here: sizes stand in for what Nemo returns.
+    function checkPageFrame(icon, system) {
+        var w = Math.round(icon.width)
+        var frame = system.parent
+        system.implicitWidth = w
+        system.implicitHeight = Math.round(w * 842 / 595)
+        expect(frame.clip && Math.abs(frame.height - icon.height) < 1, "the tile cuts the page: " + frame.height)
+        expect(system.y === 0 && system.height === system.implicitHeight && system.width === w,
+               "a portrait page shows from its top, unscaled: " + system.y + " " + system.width + "x" + system.height)
+        system.implicitHeight = Math.round(w / 2)
+        expect(Math.abs(system.y - (frame.height - system.height) / 2) < 1 && system.y > 0,
+               "a landscape page sits whole in the middle: " + system.y)
+        system.implicitWidth = Math.round(w / 2)
+        system.implicitHeight = 2 * w
+        expect(system.y === 0 && Math.abs(system.x + system.width / 2 - frame.width / 2) < 1 && system.x > 0,
+               "a page over twice as tall as wide, narrower than the tile, is centred across: " + system.x)
     }
 
     function checkArchive() {
@@ -114,13 +145,15 @@ ApplicationWindow {
         documents.createFolder("PdfThumbnails")
         expect(until(function () { return documents.indexOf(base.replace(/\/$/, "")) >= 0 }), "the folder is made")
         expect(tools.installFixture(Qt.resolvedUrl("host/fixtures/two-pages.pdf"), base + "readable.pdf")
-               && tools.installFixture(Qt.resolvedUrl("host/fixtures/secret.pdf"), base + "secret.pdf"), "fixtures installed")
+               && tools.installFixture(Qt.resolvedUrl("host/fixtures/secret.pdf"), base + "secret.pdf")
+               && tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), base + "photo.jpg"), "fixtures installed")
         App.setSetting("view_mode", JSON.stringify("grid"))
         App.setSetting("thumbnails_remote", JSON.stringify(true))
         var view = push(base)
         expect(view.gridMode, "a grid")
 
         checkLocal(view)
+        checkPhoto(view)
         App.setSetting("view_mode", JSON.stringify("list"))
         expect(until(function () { return !view.gridMode }), "a list")
         checkLocal(view)
