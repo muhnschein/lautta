@@ -2619,10 +2619,6 @@
         <source>Doesn&apos;t match %1</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-checksum-more">
-        <source>More algorithms</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-checksum-title">
         <source>Checksums</source>
         <translation type="unfinished"></translation>
@@ -2645,6 +2641,14 @@
     </message>
     <message id="lautta-verify-empty">
         <source>No files listed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-checksum-common">
+        <source>Common</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-checksum-section-more">
+        <source>More</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

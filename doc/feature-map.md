@@ -109,7 +109,6 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | SCR-59 | Notifications | `components/TransferNotifications.qml` | S | tasks in background |
 | SCR-60 | Nearby setup | `dialogs/NearbySetupDialog.qml` | B | tap Nearby row |
 | SCR-61 | Checksums | `pages/ChecksumsPage.qml` | S | More actions, image More |
-| SCR-62 | More algorithms | `pages/ChecksumsPage.qml` (group `more`) | S | Checksums › More algorithms |
 | SCR-63 | Checksum | `pages/ChecksumPage.qml` | S | tap algorithm |
 | SCR-64 | Verify files | `pages/VerifyFilesPage.qml` | S | More actions of checksum list |
 
@@ -180,7 +179,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-ITM-07 Compress** — Name, Format list (Zip, 7z, tar.xz, tar.gz, one line each, picked row lit), Password + Confirm password for Zip and 7z (AES-256; 7z hides names too; empty = none; mismatch greys Compress; guessable one: label "Weak password" in orange, never refused); file lands beside items, taken name gets " 2". *Proof:* notice "Compressed file created", new file lights up.
 - **F-ITM-08 Move to new folder** — new folder dialog, then move.
 - **F-ITM-09 Open with** — other app for local file (viewer pulley, image toolbar).
-- **F-ITM-10 Checksums** — one file: SCR-61 SHA-256, MD5, SHA-1, SHA-512, More algorithms (SCR-62: SHA-224, SHA-384, SHA3-256, SHA3-512, BLAKE2b, BLAKE3, CRC32, XXH64, XXH128). Tap one → SCR-63 progress, then value; nothing runs before tap; Back stops it. Checksum list in same folder naming file → "Matches X" / "Doesn't match X". *Proof:* value; tap → "Copied". *Code:* `checksum.rs`, `app_checksum.rs`.
+- **F-ITM-10 Checksums** — one file: SCR-61 sections Common (SHA-256, MD5, SHA-1, SHA-512) and More (SHA-224, SHA-384, SHA3-256, SHA3-512, BLAKE2b, BLAKE3, CRC32, XXH64, XXH128). Tap one → SCR-63 progress, then value; nothing runs before tap; Back stops it. Checksum list in same folder naming file → "Matches X" / "Doesn't match X". *Proof:* value; tap → "Copied". *Code:* `checksum.rs`, `app_checksum.rs`.
 - **F-ITM-11 Verify files** — checksum list (`SHA256SUMS`, `x.sha256`, `.md5`, `.sfv`, BSD tags, clear-signed; signature not checked): SCR-64 row per listed file: Matches, Doesn't match, Missing, Not checked (outside folder, link, folder); problems first. *Proof:* rows. *Code:* `checksum/list.rs`.
 
 ### 3.5 Selection

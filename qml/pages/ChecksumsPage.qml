@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Checksums (SCR-61) and More algorithms (SCR-62): tap one algorithm to calculate it. Nothing runs
+// Checksums (SCR-61): sections Common and More; tap one algorithm to calculate it. Nothing runs
 // before the tap.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -10,45 +10,52 @@ Page {
     id: page
 
     property string uri
-    // `common`, or `more` for More algorithms.
-    property string group: "common"
 
+    // `[{ id, label, section }]`, Common first.
     readonly property var rows: {
-        var list = Json.value(App.checksumAlgorithms(group), [])
-        if (group === "common")
-            //% "More algorithms"
-            list.push({ "id": "more", "label": qsTrId("lautta-checksum-more") })
-        return list
-    }
-
-    function choose(id) {
-        if (id === "more")
-            pageStack.push(Qt.resolvedUrl("ChecksumsPage.qml"), { "uri": page.uri, "group": "more" })
-        else
-            pageStack.push(Qt.resolvedUrl("ChecksumPage.qml"), { "uri": page.uri, "algorithm": id })
+        var out = []
+        var groups = ["common", "more"]
+        for (var g = 0; g < groups.length; ++g) {
+            var list = Json.value(App.checksumAlgorithms(groups[g]), [])
+            for (var i = 0; i < list.length; ++i)
+                out.push({ "id": list[i].id, "label": list[i].label, "section": groups[g] })
+        }
+        return out
     }
 
     allowedOrientations: Orientation.All
 
+    // ListView sections need a role: a JS array has none.
+    ListModel { id: rowModel }
+    Component.onCompleted: rows.forEach(function (r) { rowModel.append(r) })
+
     SilicaListView {
         anchors.fill: parent
-        model: page.rows
+        model: rowModel
 
         header: PageHeader {
-            title: page.group === "more" ? qsTrId("lautta-checksum-more")
-                                           //% "Checksums"
-                                         : qsTrId("lautta-checksum-title")
+            //% "Checksums"
+            title: qsTrId("lautta-checksum-title")
+        }
+
+        section.property: "section"
+        section.delegate: SectionHeader {
+            objectName: "checksumSection"
+            //% "Common"
+            text: section === "common" ? qsTrId("lautta-checksum-common")
+                                         //% "More"
+                                       : qsTrId("lautta-checksum-section-more")
         }
 
         delegate: BackgroundItem {
             objectName: "algorithmRow"
-            onClicked: page.choose(modelData.id)
+            onClicked: pageStack.push(Qt.resolvedUrl("ChecksumPage.qml"), { "uri": page.uri, "algorithm": model.id })
 
             Label {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 anchors.verticalCenter: parent.verticalCenter
-                text: modelData.label
+                text: model.label
                 truncationMode: TruncationMode.Fade
                 color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
             }
