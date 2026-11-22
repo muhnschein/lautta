@@ -18,15 +18,15 @@ const UNIX_EXTENSION: u32 = 0x8000;
 
 fn open(file: File, password: Option<&Password>) -> Result<ArchiveReader<File>> {
     let key = password.map_or_else(sevenz_rust2::Password::empty, |p| p.as_str().into());
-    ArchiveReader::new(file, key).map_err(|e| map_err(e, password.is_some()))
+    ArchiveReader::new(file, key).map_err(map_err)
 }
 
-/// With a password given, data that fails to decode reads as a wrong password: 7z has no check
-/// value for it, 7-Zip says the same ("Wrong password?").
-fn map_err(err: sevenz_rust2::Error, with_password: bool) -> Error {
+/// Data that fails to decode under a password reads as a wrong password: 7z has no check value for
+/// it, 7-Zip says the same ("Wrong password?"). sevenz-rust2 raises it only with a password given.
+fn map_err(err: sevenz_rust2::Error) -> Error {
     match err {
         sevenz_rust2::Error::PasswordRequired => Error::kind(ErrorKind::PasswordRequired),
-        sevenz_rust2::Error::MaybeBadPassword(_) if with_password => Error::kind(ErrorKind::WrongPassword),
+        sevenz_rust2::Error::MaybeBadPassword(_) => Error::kind(ErrorKind::WrongPassword),
         other => Error::new(ErrorKind::ProtocolError, format!("7z: {other}")),
     }
 }
@@ -134,7 +134,7 @@ pub fn copy_entry(file: File, name: &str, out: &mut dyn Write, password: Option<
         }
         return Err(from_io(e));
     }
-    res.map_err(|e| map_err(e, password.is_some()))?;
+    res.map_err(map_err)?;
     if found {
         Ok(())
     } else {
