@@ -330,7 +330,11 @@ async fn without_a_camera_thumbnail_the_preview_is_a_clear_image_of_the_upright_
 async fn images_of_unknown_size_have_no_preview() {
     let h = home().await;
     let pics = h.root.join("Pictures");
-    let scan_first = [0xff, 0xd8, 0xff, 0xda, 0, 8, 1, 2, 3, 4, 5, 6, 0xff, 0xd9];
+    // Frame header after the scan sits in entropy data: not read.
+    let scan_first = [
+        0xff, 0xd8, 0xff, 0xda, 0, 8, 1, 2, 3, 4, 5, 6, 0xff, 0xc0, 0, 17, 8, 0, 30, 0, 40, 3, 1, 0x22, 0, 2,
+        0x11, 1, 3, 0x11, 1, 0xff, 0xd9,
+    ];
     let cut = [0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46];
     let files: [(&str, &[u8]); 4] = [
         ("exif.jpg", &exif_jpeg(6)),

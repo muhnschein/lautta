@@ -87,6 +87,7 @@ ApplicationWindow {
         var g = gallery("a%20b%23c.jpg", 170)
         var shape = named(g, "placeholderImage")
         var tile = named(g, "tileImage")
+        expect(tile.status === Image.Loading, "tile loads off the GUI thread: status " + tile.status)
         waitFor(function () { return shape.status === Image.Ready && tile.status === Image.Ready }, "the portrait's tile")
         expect(shape.implicitWidth === 32 && shape.implicitHeight === 64,
                "placeholder: the upright shape, " + shape.implicitWidth + "x" + shape.implicitHeight)
@@ -103,9 +104,12 @@ ApplicationWindow {
     // large-photo.jpg: 1280x960.
     function checkLandscape() {
         var g = gallery("wide.jpg", 340)
+        var shape = named(g, "placeholderImage")
         var tile = named(g, "tileImage")
-        waitFor(function () { return tile.status === Image.Ready }, "the landscape's tile")
-        expect(tile.visible && tile.x === 67.5 && tile.y === 277.5 && tile.width === 405 && tile.height === 405,
+        waitFor(function () { return shape.status === Image.Ready && tile.status === Image.Ready }, "the landscape's tile")
+        // Centring snaps to whole pixels.
+        expect(tile.visible && Math.abs(tile.x - 67.5) <= 0.5 && Math.abs(tile.y - 277.5) <= 0.5
+               && tile.width === 405 && tile.height === 405,
                "landscape's tile: its middle, " + describe(tile))
         g.destroy()
     }
@@ -126,7 +130,8 @@ ApplicationWindow {
 
     // Photo alone until the folder's listing comes, then the folder's view: both have the tile.
     function checkViewerHandsSize() {
-        var want = ViewerImage.tile(App, folder + "a.jpg", 170)
+        // As a url: Qt lowercases the provider's name.
+        var want = String(Qt.resolvedUrl(ViewerImage.tile(App, folder + "a.jpg", 170)))
         var viewer = pageStack.push(viewerMaker, { "uri": folder + "a.jpg", "folderUri": folder, "tileSize": 170 },
                                     PageStackAction.Immediate)
         var tile = shownTile(viewer)

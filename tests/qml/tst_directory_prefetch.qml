@@ -193,8 +193,14 @@ ApplicationWindow {
             if (!expect(prefetch !== null && view.gridMode === (mode === "grid"), mode + ": the view has a prefetch"))
                 return
             check(mode)
-            checkOpen(mode)
         }
+        // Last: the viewer also decodes neighbours, which checks above need cold.
+        checkOpen("grid")
+        pageStack.replace(pageComponent, {}, PageStackAction.Immediate)
+        waitFor(function () { return !view.model.loading && view.model.count === 42 }, "the folder again")
+        view.model.setViewPrefs(JSON.stringify({ "viewMode": "list" }))
+        waitFor(function () { return cell("notes.md") !== null && !view.gridMode }, "the list again")
+        checkOpen("list")
         reachedEnd = true
     }
 
