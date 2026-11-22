@@ -901,6 +901,18 @@ fn pw(text: &str) -> Option<Password> {
     Password::new(text)
 }
 
+/// Closing takes milliseconds; the timeout only guards against a hang.
+async fn until_closed(h: &Home, id: &str, mut changed: tokio::sync::watch::Receiver<u64>) {
+    let closed = async {
+        while h.core.location(id).is_some() {
+            changed.changed().await.unwrap();
+        }
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(10), closed)
+        .await
+        .expect("archive closes");
+}
+
 #[tokio::test]
 async fn a_locked_archive_stays_open_while_held_and_forgets_its_password_after() {
     let h = home().await;
@@ -988,7 +1000,7 @@ async fn a_locked_archive_stays_open_until_a_transfer_from_it_ends() {
         .wait_for(t, |s| s.state == TransferState::Waiting(WaitReason::Question))
         .await
         .unwrap();
-    let mut changed = h.core.locations.subscribe();
+    let changed = h.core.locations.subscribe();
     drop(hold);
     assert!(h.core.location(&id).is_some(), "the waiting copy still reads it");
     h.core.answer_question(t, 0, "Replace", false).unwrap();
@@ -1000,9 +1012,7 @@ async fn a_locked_archive_stays_open_until_a_transfer_from_it_ends() {
         .unwrap();
     assert_eq!(s.state, TransferState::Completed);
     assert_eq!(std::fs::read(h.root.join("Downloads/a.txt")).unwrap(), b"alpha");
-    while h.core.location(&id).is_some() {
-        changed.changed().await.unwrap();
-    }
+    until_closed(&h, &id, changed).await;
 }
 
 #[tokio::test]
@@ -1019,15 +1029,13 @@ async fn extract_of_a_locked_archive_takes_its_password_then_closes_it() {
         Some(ErrorKind::WrongPassword)
     );
     let id = lautta_core::provider::archive::archive_location_id(&zip);
-    let mut changed = h.core.locations.subscribe();
+    let changed = h.core.locations.subscribe();
     finish(&h, h.core.extract(&zip, pw("pw")).await.unwrap()).await;
     assert_eq!(
         std::fs::read(h.root.join("Documents/src 2/b.txt")).unwrap(),
         b"beta"
     );
-    while h.core.location(&id).is_some() {
-        changed.changed().await.unwrap();
-    }
+    until_closed(&h, &id, changed).await;
 }
 
 #[tokio::test]
@@ -1049,13 +1057,11 @@ async fn a_locked_extract_waiting_for_its_summary_keeps_the_archive_open() {
     let Started::NeedsSummary(plan) = h.core.extract(&zip, pw("pw")).await.unwrap() else {
         panic!("a large extract needs the summary");
     };
-    let mut changed = h.core.locations.subscribe();
+    let changed = h.core.locations.subscribe();
     finish(&h, Started::Transfer(h.core.start_plan(*plan).await.unwrap())).await;
     assert_eq!(
         std::fs::read(h.root.join("Documents/src 2/a.txt")).unwrap(),
         b"alpha"
     );
-    while h.core.location(&id).is_some() {
-        changed.changed().await.unwrap();
-    }
+    until_closed(&h, &id, changed).await;
 }
