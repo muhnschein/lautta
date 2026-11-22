@@ -2647,5 +2647,13 @@
         <source>No files listed</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-browse-layout-recents">
+        <source>Newest recents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-browse-all-recents">
+        <source>All recents</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

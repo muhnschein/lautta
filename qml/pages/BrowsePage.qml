@@ -15,8 +15,12 @@ Page {
     id: page
 
     property var listModel: locations
+    // Tests set it.
+    property var recentsStore: recents
     // Sandbox cannot open Settings › Storage; netvfs can. Tests set it.
     property bool storageSettings: Bridge.storageSettings
+    property real deviceFree: locations.deviceFree
+    property real deviceTotal: locations.deviceTotal
     readonly property bool discovering: status === PageStatus.Active
                                         && Qt.application.state === Qt.ApplicationActive && Bridge.ready
 
@@ -49,9 +53,6 @@ Page {
                 Open.open(pageStack, App, Operations, row.uri, false, "", "")
             else
                 openDirectory(row.uri)
-            break
-        case "recents":
-            pageStack.push(Qt.resolvedUrl("RecentsPage.qml"))
             break
         case "deleted":
             pageStack.push(Qt.resolvedUrl("TrashPage.qml"))
@@ -86,6 +87,18 @@ Page {
         }
     }
 
+    function openAllRecents() {
+        pageStack.push(Qt.resolvedUrl("RecentsPage.qml"))
+    }
+
+    // As SCR-38 Recents: a transferred file opens its folder.
+    function openRecent(tile) {
+        if (tile.kind === "transferred")
+            openDirectory(App.parentUri(tile.uri))
+        else
+            Open.open(pageStack, App, Operations, tile.uri, false, "", "")
+    }
+
     function openFavourite(uri) {
         pageStack.push(Qt.resolvedUrl("FavouritePage.qml"), { "uri": uri })
     }
@@ -113,6 +126,10 @@ Page {
         id: favourites
     }
 
+    RecentsModel {
+        id: recents
+    }
+
     SilicaListView {
         id: list
 
@@ -126,8 +143,26 @@ Page {
 
         section.property: "section"
         section.criteria: ViewSection.FullString
-        section.delegate: SectionHeader {
-            text: BrowseText.sectionTitle(section)
+        section.delegate: Item {
+            width: list.width
+            height: sectionHeader.height
+
+            SectionHeader {
+                id: sectionHeader
+
+                text: BrowseText.sectionTitle(section)
+            }
+            Label {
+                objectName: "deviceSpace"
+                visible: section === "device" && text.length > 0
+                anchors.baseline: sectionHeader.baseline
+                x: Theme.horizontalPageMargin
+                width: sectionHeader.width - sectionHeader.contentWidth - Theme.paddingLarge
+                truncationMode: TruncationMode.Fade
+                text: BrowseText.deviceLine(page.deviceFree, page.deviceTotal)
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.secondaryColor
+            }
         }
 
         PullDownMenu {
@@ -157,10 +192,14 @@ Page {
 
             readonly property string kind: model.kind
             readonly property bool banner: kind === "consent" || kind === "unavailable"
+            readonly property bool strip: kind === "recent-strip"
+            readonly property bool plain: !banner && !strip
             readonly property bool unmounted: kind === "volume" && model.status === "unmounted"
             readonly property bool locked: kind === "volume" && model.status === "locked"
             readonly property bool notMounted: unmounted || locked
             readonly property string drive: model.drive || ""
+            // Tile whose menu is open.
+            property int heldId: -1
             readonly property string subtitle: {
                 switch (kind) {
                 case "favourite":
@@ -180,15 +219,35 @@ Page {
                                             || (kind === "volume" && (!locked || page.storageSettings))
                                             || kind === "account"
 
-            contentHeight: banner ? bannerContent.height + 2 * Theme.paddingMedium
-                                  : (subtitle.length > 0 ? Theme.itemSizeMedium : Theme.itemSizeSmall)
-            menu: hasMenu ? contextMenu : null
+            contentHeight: strip ? stripLoader.height
+                                 : banner ? bannerContent.height + 2 * Theme.paddingMedium
+                                          : (subtitle.length > 0 ? Theme.itemSizeMedium : Theme.itemSizeSmall)
+            menu: strip ? tileMenu : (hasMenu ? contextMenu : null)
             enabled: true
 
-            onClicked: if (!banner) page.openRow(model)
+            onClicked: if (plain) page.openRow(model)
+
+            Loader {
+                id: stripLoader
+
+                width: parent.width
+                active: row.strip
+                sourceComponent: Component {
+                    RecentStrip {
+                        tiles: JSON.parse(model.tiles)
+                        heldId: row.menuOpen ? row.heldId : -1
+                        onOpened: page.openRecent(tile)
+                        onHeld: {
+                            row.heldId = tile.id
+                            row.openMenu()
+                        }
+                        onAllOpened: page.openAllRecents()
+                    }
+                }
+            }
 
             AppIcon {
-                visible: !row.banner
+                visible: row.plain
                 opacity: row.notMounted ? Theme.opacityHigh : 1.0
                 anchors {
                     left: parent.left
@@ -201,7 +260,7 @@ Page {
             }
 
             Column {
-                visible: !row.banner
+                visible: row.plain
                 opacity: row.notMounted ? Theme.opacityHigh : 1.0
                 anchors {
                     left: parent.left
@@ -270,6 +329,18 @@ Page {
                             Bridge.requestConsent()
                         else
                             Bridge.poke()
+                    }
+                }
+            }
+
+            Component {
+                id: tileMenu
+
+                ContextMenu {
+                    MenuItem {
+                        //% "Remove from recents"
+                        text: qsTrId("lautta-recents-remove")
+                        onClicked: page.recentsStore.remove(row.heldId)
                     }
                 }
             }

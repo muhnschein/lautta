@@ -88,7 +88,7 @@ QtQuick.Window {
     function deviceFolder(layout) {
         for (var i = 0; i < layout.count; ++i) {
             var item = layout.itemAt(i)
-            if (layout.sectionAt(i) === "device" && item !== "deleted" && item !== "recents")
+            if (layout.sectionAt(i) === "device" && item !== "deleted")
                 return item
         }
         return ""
@@ -173,9 +173,16 @@ QtQuick.Window {
         var layout = page.layoutModel
         rows = shownRows(layout)
         folder = deviceFolder(layout)
-        if (!expect(folder !== "" && firstDeviceRow(layout) === "recents",
-                    "Recents is the first row of On this device: " + describe(layout)))
+        if (!expect(folder !== "" && firstDeviceRow(layout) === folder && rowOf(layout, "recents") === -1,
+                    "a folder is the first row of On this device, Recents is no row: " + describe(layout)))
             return
+        var recents = switchOf("recents")
+        if (!expect(recents !== null && layout.sectionAt(0) === "recents" && sectionRows(layout, "recents") === 1,
+                    "Recents leads with its switch and nothing else: " + describe(layout)))
+            return
+        expect(recents.title === "lautta-browse-layout-recents" && named(recents, "layoutSwitch").checked
+               && layout.placeAt(0) === -1 && !recents.layoutMovable,
+               "the Recents switch is on, named by its own text and not movable: " + recents.title)
         expect(page.listView.footer === null, "no preview below the rows")
         folderRow = delegateOf(folder)
         var toggle = named(folderRow, "layoutSwitch")
@@ -258,7 +265,7 @@ QtQuick.Window {
             case 3:
                 var back = window.delegateOf(window.folder)
                 var restored = back ? window.named(back, "layoutSwitch") : null
-                if (!restored || !restored.checked || window.firstDeviceRow(layout) !== "recents")
+                if (!restored || !restored.checked || window.firstDeviceRow(layout) !== window.folder)
                     return
                 window.listed = layout.count
                 favourites.add("lautta://user-music/", "Tunes", "")

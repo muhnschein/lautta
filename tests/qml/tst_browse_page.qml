@@ -31,9 +31,9 @@ ApplicationWindow {
         BrowsePage {
             storageSettings: true
             listModel: ListModel {
+        ListElement { section: "recents"; uri: ""; name: ""; kind: "recent-strip"; icon: ""; status: "ready"; attention: ""; colour: ""; itemId: ""; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: ""; tiles: "[{\"id\":7,\"uri\":\"lautta://user-pictures/IMG_2041.jpg\",\"name\":\"IMG_2041.jpg\",\"kind\":\"previewed\",\"category\":\"image\",\"mimeType\":\"image/jpeg\",\"thumbnailSource\":\"\"}]" }
         ListElement { section: "favourites"; uri: "lautta://user-documents/Uni"; name: "Thesis"; kind: "favourite"; icon: "image://theme/icon-m-favorite"; status: "ready"; attention: ""; colour: "#e7a33c"; itemId: "1"; place: "Documents › Uni"; provider: ""; host: ""; free: -1; total: -1; fs: "" }
         ListElement { section: "device"; uri: "lautta://user-documents/"; name: "Documents"; kind: "folder"; icon: "image://theme/icon-m-file-folder"; status: "ready"; attention: ""; colour: ""; itemId: "user-documents"; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: "" }
-        ListElement { section: "device"; uri: ""; name: ""; kind: "recents"; icon: "image://theme/icon-m-history"; status: "ready"; attention: ""; colour: ""; itemId: ""; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: "" }
         ListElement { section: "device"; uri: ""; name: ""; kind: "deleted"; icon: "image://theme/icon-m-delete"; status: "ready"; attention: ""; colour: ""; itemId: ""; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: "" }
         ListElement { section: "android"; uri: "lautta://android-dcim/"; name: "DCIM"; kind: "folder"; icon: "image://theme/icon-m-file-folder"; status: "ready"; attention: ""; colour: ""; itemId: "android-dcim"; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: "" }
         ListElement { section: "volumes"; uri: "lautta://vol-SD/"; name: "SD card"; kind: "volume"; icon: "image://theme/icon-m-sd-card"; status: "ready"; attention: ""; colour: ""; itemId: "vol-SD"; place: ""; provider: ""; host: ""; free: 62500000000; total: 128000000000; fs: "exFAT" }
@@ -175,12 +175,15 @@ ApplicationWindow {
             fail("tapping VAULT without storage settings opened a page or mounted it")
     }
 
-    function checkRecentsRow(list) {
-        var row = rowOf(list, "", "recents")
-        var label = row ? findAll(row, function(x) { return x.text === "lautta-browse-recents" }, []) : []
-        if (label.length !== 1)
-            return fail("the Recents row is named " + (row ? texts(findAll(row, function(x) { return x.text !== undefined && x.text !== "" }, [])) : "nothing"))
-        row.clicked(null)
+    function checkAllRecents(list) {
+        var row = rowOf(list, "", "recent-strip")
+        var all = row ? findAll(row, function(x) { return x.objectName === "allRecents" }, []) : []
+        if (all.length !== 1)
+            return fail("the Recents tiles have " + all.length + " All recents tiles")
+        var named = findAll(list, function(x) { return x.visible && x.text === "lautta-browse-recents" }, [])
+        if (named.length !== 1)
+            return fail("Recents is named by its section alone: " + named.length)
+        all[0].clicked(null)
     }
 
     // Tapping a server found nearby offers to set it up as an account; nothing connects.
@@ -231,7 +234,7 @@ ApplicationWindow {
                 win.checkNearbyDialog()
                 var browse = win.browseList()
                 if (win.scenarioRunning && browse)
-                    win.checkRecentsRow(browse)
+                    win.checkAllRecents(browse)
                 win.step = 2
                 return
             }

@@ -151,6 +151,14 @@ const MIGRATIONS: &[&str] = &[
     DELETE FROM recent_searches WHERE location_id LIKE 'nv-adhoc:%';
     DELETE FROM reading_positions WHERE location_id LIKE 'nv-adhoc:%';
     "#,
+    // 9: Recents row of On this device became section Recents with a switch; a hidden row keeps
+    // it off.
+    r#"
+    INSERT OR REPLACE INTO browse_layout(section, item, hidden)
+        SELECT 'recents', 'section', 1 FROM browse_layout
+        WHERE section = 'device' AND item = 'recents' AND hidden = 1;
+    DELETE FROM browse_layout WHERE section = 'device' AND item = 'recents';
+    "#,
 ];
 
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -382,6 +390,57 @@ mod tests {
         let reopened = crate::org::favourites::Favourites::new(Db::open(&path).unwrap());
         let again = reopened.get_by_uri(&uni).unwrap().unwrap();
         assert_eq!(again.icon.as_deref(), Some("home"), "the icon is stored");
+    }
+
+    fn layout_after_schema_8(rows: &str) -> Vec<(String, String, i64, Option<i64>)> {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v8.db");
+        {
+            let c = Connection::open(&path).unwrap();
+            for sql in &MIGRATIONS[..8] {
+                c.execute_batch(sql).unwrap();
+            }
+            c.pragma_update(None, "user_version", 8).unwrap();
+            c.execute_batch(rows).unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        let conn = db.lock();
+        let mut stmt = conn
+            .prepare("SELECT section, item, hidden, position FROM browse_layout ORDER BY section, item")
+            .unwrap();
+        let out = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+            .unwrap()
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .unwrap();
+        out
+    }
+
+    #[test]
+    fn a_hidden_recents_row_becomes_the_recents_section_switched_off() {
+        let left = layout_after_schema_8(
+            "INSERT INTO browse_layout VALUES ('device', 'recents', 1, 2); \
+             INSERT INTO browse_layout VALUES ('device', 'deleted', 1, 3); \
+             INSERT INTO browse_layout VALUES ('servers', 'section', 1, NULL);",
+        );
+        let row = |s: &str, i: &str, p: Option<i64>| (s.to_owned(), i.to_owned(), 1, p);
+        assert_eq!(
+            left,
+            [
+                row("device", "deleted", Some(3)),
+                row("recents", "section", None),
+                row("servers", "section", None),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_shown_recents_row_leaves_the_recents_section_on() {
+        let left = layout_after_schema_8(
+            "INSERT INTO browse_layout VALUES ('device', 'recents', 0, 1); \
+             INSERT INTO browse_layout VALUES ('device', 'user-music', 0, 0);",
+        );
+        assert_eq!(left, [("device".to_owned(), "user-music".to_owned(), 0, Some(0))]);
     }
 
     #[test]

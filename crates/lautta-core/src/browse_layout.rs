@@ -2,8 +2,8 @@
 //! Browse page layout: rows the user hid and the order they gave a section's rows. Sections keep a
 //! fixed order; favourites keep their own.
 //!
-//! A row is named by section and item: location id, `recents`, `deleted`, `nearby` (all nearby
-//! servers). *Volumes* and *Servers* have a section switch, stored as hidden flag of item
+//! A row is named by section and item: location id, `deleted`, `nearby` (all nearby servers).
+//! *Recents*, *Volumes* and *Servers* have a section switch, stored as hidden flag of item
 //! `section`; its rows' flags stay while it is off. Blocking: call from `spawn_blocking`.
 
 use crate::db::Db;
@@ -12,16 +12,14 @@ use rusqlite::params;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const DELETED_ITEM: &str = "deleted";
-pub const RECENTS_ITEM: &str = "recents";
 pub const NEARBY_ITEM: &str = "nearby";
 /// No location id is called this.
 pub const SECTION_ITEM: &str = "section";
-pub const SWITCHED_SECTIONS: [&str; 2] = ["volumes", "servers"];
+pub const SWITCHED_SECTIONS: [&str; 3] = ["recents", "volumes", "servers"];
 
 pub fn layout_item(kind: &str, item_id: &str) -> Option<String> {
     match kind {
         "deleted" => Some(DELETED_ITEM.to_owned()),
-        "recents" => Some(RECENTS_ITEM.to_owned()),
         "nearby" => Some(NEARBY_ITEM.to_owned()),
         "folder" | "volume" | "account" => Some(item_id.to_owned()),
         _ => None,
@@ -194,12 +192,11 @@ mod tests {
     #[test]
     fn items_of_rows() {
         assert_eq!(layout_item("deleted", "").as_deref(), Some("deleted"));
-        assert_eq!(layout_item("recents", "").as_deref(), Some("recents"));
         assert_eq!(layout_item("nearby", "3").as_deref(), Some("nearby"));
         for kind in ["folder", "volume", "account"] {
             assert_eq!(layout_item(kind, "x").as_deref(), Some("x"), "{kind}");
         }
-        for kind in ["favourite", "consent", "unavailable", "adhoc", ""] {
+        for kind in ["favourite", "recent-strip", "consent", "unavailable", ""] {
             assert_eq!(layout_item(kind, "x"), None, "{kind}");
         }
     }
@@ -298,7 +295,7 @@ mod tests {
     }
 
     #[test]
-    fn only_volumes_and_servers_have_a_switch() {
+    fn only_recents_volumes_and_servers_have_a_switch() {
         let s = store();
         let others = ["device", "android", "favourites", "nearby"];
         for section in others {
@@ -313,11 +310,11 @@ mod tests {
             s.set_hidden(section, SECTION_ITEM, true).unwrap();
         }
         let l = s.load().unwrap();
-        assert!(!l.section_shown("volumes") && !l.section_shown("servers"));
+        assert!(!l.section_shown("recents") && !l.section_shown("volumes") && !l.section_shown("servers"));
         s.reset().unwrap();
         let l = s.load().unwrap();
         assert!(
-            l.section_shown("volumes") && l.section_shown("servers"),
+            l.section_shown("recents") && l.section_shown("volumes") && l.section_shown("servers"),
             "defaults: on"
         );
     }

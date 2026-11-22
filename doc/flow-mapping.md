@@ -16,6 +16,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-BRW-08 Copy address | S | FL-03 | SCR-03, SCR-05 |
 | F-BRW-09 Rescan volumes | S | — | — |
 | F-BRW-10 Activity from Browse | S | FL-18 | SCR-06, SCR-21, SCR-22 |
+| F-BRW-11 Phone free space | S | FL-21 | SCR-01, SCR-38 |
 | F-SRV-01 Bridge detection | B | FL-01, FL-28 | SCR-01, SCR-02, SCR-48, SCR-59 |
 | F-SRV-02 Consent banner | B | FL-28 | SCR-01, SCR-48, SCR-59 |
 | F-SRV-03 Bridge unavailable banner | B | — | — |
@@ -97,7 +98,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-FAV-02 Edit favourite | S | FL-22 | SCR-01, SCR-05, SCR-40 |
 | F-FAV-03 Remove favourite | S | FL-22 | SCR-01, SCR-05, SCR-40 |
 | F-FAV-04 Reorder favourites | S | FL-22, FL-26 | SCR-01, SCR-05, SCR-24, SCR-40, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
-| F-RCT-01 Recents | S | FL-21 | SCR-38 |
+| F-RCT-01 Recents | S | FL-21 | SCR-01, SCR-38 |
 | F-RCT-02 Recents off | S | FL-26 | SCR-01, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
 | F-TRH-01 Trash | S | FL-20 | SCR-39 |
 | F-TRH-02 Restore / Delete now / Show original folder | S | FL-20 | SCR-39 |
@@ -115,7 +116,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 
 | Screen | Flows |
 |---|---|
-| SCR-01 Browse | FL-01, FL-02, FL-22, FL-26, FL-27, FL-28, FL-29, FL-30, FL-33, FL-36 |
+| SCR-01 Browse | FL-01, FL-02, FL-21, FL-22, FL-26, FL-27, FL-28, FL-29, FL-30, FL-33, FL-36 |
 | SCR-02 Start error | FL-01 |
 | SCR-03 Folder page (list) | FL-02, FL-03, FL-06, FL-10, FL-11, FL-12, FL-13, FL-14, FL-16, FL-17, FL-23, FL-25, FL-29, FL-30, FL-37 |
 | SCR-04 Folder page (grid) | FL-04, FL-32 |

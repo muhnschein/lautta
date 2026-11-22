@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`, `colour`, `itemId`,
 //! `place`, `provider`, `host`, `free`, `total`, `fs`, `connection`, `connectionError`, `isFile`,
-//! `drive` (values: `lautta_core::app_browse::Row`).
+//! `drive`, `tiles` (values: `lautta_core::app_browse::Row`; `tiles`: JSON array of `RecentTile`).
 
 use super::{cell_data, role_names, watch_sources, Cell, Guard};
+use crate::json::to_json;
 use crate::runtime::{core, spawn_then};
 use lautta_core::app_browse::Row;
+use lautta_core::provider::SpaceInfo;
 use qmetaobject::prelude::*;
 use qmetaobject::QPointer;
 use std::collections::HashMap;
 
-const COLUMNS: [&str; 19] = [
+const COLUMNS: [&str; 20] = [
     "section",
     "uri",
     "name",
@@ -30,6 +32,7 @@ const COLUMNS: [&str; 19] = [
     "connectionError",
     "isFile",
     "drive",
+    "tiles",
 ];
 
 fn cells(r: &Row) -> Vec<Cell> {
@@ -53,7 +56,17 @@ fn cells(r: &Row) -> Vec<Cell> {
         Cell::s(&r.connection_error),
         Cell::Bool(r.is_file),
         Cell::s(&r.drive),
+        Cell::Str(if r.tiles.is_empty() {
+            String::new()
+        } else {
+            to_json(&r.tiles)
+        }),
     ]
+}
+
+fn space_cells(space: Option<SpaceInfo>) -> (i64, i64) {
+    let cell = |v: u64| i64::try_from(v).unwrap_or(i64::MAX);
+    space.map_or((-1, -1), |s| (cell(s.free), cell(s.total)))
 }
 
 fn key_of(r: &Row) -> String {
@@ -67,6 +80,10 @@ pub struct LocationsModel {
     count: qt_property!(i32; NOTIFY countChanged),
     nearbyCount: qt_property!(i32; NOTIFY countChanged),
     countChanged: qt_signal!(),
+    /// Space where user folders live; -1: unknown.
+    deviceFree: qt_property!(i64; NOTIFY deviceSpaceChanged),
+    deviceTotal: qt_property!(i64; NOTIFY deviceSpaceChanged),
+    deviceSpaceChanged: qt_signal!(),
     refresh: qt_method!(fn(&mut self)),
     sectionCount: qt_method!(fn(&self, section: QString) -> i32),
 
@@ -88,14 +105,27 @@ impl LocationsModel {
         self.generation += 1;
         let generation = self.generation;
         let me = QPointer::from(&*self);
-        spawn_then(async move { core.browse_rows().await }, move |rows| {
-            if let Some(model) = me.as_pinned() {
-                let mut model = model.borrow_mut();
-                if model.generation == generation {
-                    model.apply(rows);
+        spawn_then(
+            async move { (core.browse_rows().await, core.device_space().await) },
+            move |(rows, space)| {
+                if let Some(model) = me.as_pinned() {
+                    let mut model = model.borrow_mut();
+                    if model.generation == generation {
+                        model.apply(rows);
+                        model.apply_space(space);
+                    }
                 }
-            }
-        });
+            },
+        );
+    }
+
+    fn apply_space(&mut self, space: Option<SpaceInfo>) {
+        let (free, total) = space_cells(space);
+        if (self.deviceFree, self.deviceTotal) != (free, total) {
+            self.deviceFree = free;
+            self.deviceTotal = total;
+            self.deviceSpaceChanged();
+        }
     }
 
     fn sectionCount(&self, section: QString) -> i32 {
@@ -166,6 +196,7 @@ impl QAbstractListModel for LocationsModel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lautta_core::app_browse::RecentTile;
 
     #[test]
     fn cells_match_the_columns() {
@@ -205,6 +236,58 @@ mod tests {
         let at = |name: &str| &cells[COLUMNS.iter().position(|c| *c == name).unwrap()];
         assert_eq!(at("drive"), &Cell::s("mmcblk1p1"));
         assert_eq!(at("status"), &Cell::s("unmounted"));
+    }
+
+    #[test]
+    fn a_recents_row_carries_its_tiles_as_json() {
+        let at = |cells: &[Cell], name: &str| cells[COLUMNS.iter().position(|c| *c == name).unwrap()].clone();
+        let row = Row {
+            kind: "recent-strip",
+            tiles: vec![RecentTile {
+                id: 7,
+                uri: "lautta://user-pictures/a.jpg".into(),
+                name: "a.jpg".into(),
+                kind: "previewed",
+                category: "image",
+                mime_type: "image/jpeg".into(),
+                thumbnail_source: "file:///p/a.jpg".into(),
+            }],
+            ..Row::default()
+        };
+        let Cell::Str(json) = at(&cells(&row), "tiles") else {
+            panic!("tiles are text")
+        };
+        let tiles: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            tiles,
+            serde_json::json!([{
+                "id": 7,
+                "uri": "lautta://user-pictures/a.jpg",
+                "name": "a.jpg",
+                "kind": "previewed",
+                "category": "image",
+                "mimeType": "image/jpeg",
+                "thumbnailSource": "file:///p/a.jpg"
+            }])
+        );
+        assert_eq!(at(&cells(&Row::default()), "tiles"), Cell::s(""));
+    }
+
+    #[test]
+    fn unknown_device_space_is_minus_one() {
+        assert_eq!(space_cells(None), (-1, -1));
+        let space = SpaceInfo {
+            free: 42,
+            total: 128,
+            used: 86,
+        };
+        assert_eq!(space_cells(Some(space)), (42, 128));
+        let huge = SpaceInfo {
+            free: u64::MAX,
+            total: u64::MAX,
+            used: 0,
+        };
+        assert_eq!(space_cells(Some(huge)), (i64::MAX, i64::MAX));
     }
 
     fn keys(names: &[&str]) -> Vec<String> {

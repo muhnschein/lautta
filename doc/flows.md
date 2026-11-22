@@ -324,12 +324,14 @@ Features: F-TRH-01 Trash, F-TRH-02 Restore / Delete now / Show original folder, 
 
 Open something used lately.
 
-Features: F-RCT-01 Recents
+Features: F-RCT-01 Recents, F-RCT-03 Recents on Browse, F-BRW-11 Phone free space
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-38 Recents | Recents |
-| 2 | SCR-38 Recents | Menu: Remove from recents |
+| 1 | SCR-01 Browse | Recents tiles on top, free space beside On this device |
+| 2 | SCR-01 Browse | Long press on a tile: Remove from recents |
+| 3 | SCR-38 Recents | Tile All recents: Recents |
+| 4 | SCR-38 Recents | Menu: Remove from recents |
 
 ### FL-22 Favourites (standalone)
 

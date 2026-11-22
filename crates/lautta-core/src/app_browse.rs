@@ -3,18 +3,24 @@
 //! to model rows.
 
 use crate::app::Core;
+use crate::app_directory::file_url;
 use crate::bridge::{BridgeClient, BridgeStatus, Drive, DriveKind, NearbyServer};
 use crate::browse_layout::{layout_item, Layout, NEARBY_ITEM, SECTION_ITEM, SWITCHED_SECTIONS};
 use crate::date_group::DateGroup;
+use crate::entry::{Entry, Kind};
 use crate::error::{Error, ErrorKind, Result};
 use crate::locations::{Location, LocationKind, LocationStatus};
+use crate::mime::{category_of, mime_of};
 use crate::org::favourites::Favourite;
 use crate::org::{self, Recent, RecentsFilter};
-use crate::settings::LocationPrefs;
+use crate::provider::SpaceInfo;
+use crate::settings::{LocationPrefs, Settings};
+use crate::thumbs::{app_thumbnail_url, thumbnail_source, ThumbSettings, ThumbSource};
 use crate::uri::Uri;
 use crate::volumes::VolumeWords;
 use crate::vpath::{display_name, VPath};
 use crate::workcopy::blocking;
+use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
 use std::path::Path;
@@ -30,9 +36,9 @@ const MOUNT_LOOK_EVERY: Duration = Duration::from_millis(200);
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Row {
-    /// `favourites`, `device`, `android`, `volumes`, `servers`, `nearby`.
+    /// `recents`, `favourites`, `device`, `android`, `volumes`, `servers`, `nearby`.
     pub section: &'static str,
-    /// `favourite`, `folder`, `recents`, `deleted`, `volume`, `account`,
+    /// `recent-strip`, `favourite`, `folder`, `deleted`, `volume`, `account`,
     /// `consent`, `unavailable`, `nearby`.
     pub kind: &'static str,
     pub uri: String,
@@ -57,6 +63,26 @@ pub struct Row {
     pub fs: String,
     pub is_file: bool,
     pub drive: String,
+    /// Of a `recent-strip` row.
+    pub tiles: Vec<RecentTile>,
+}
+
+/// Newest recents shown as tiles on Browse.
+pub const STRIP_TILES: usize = 3;
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentTile {
+    pub id: i64,
+    pub uri: String,
+    pub name: String,
+    /// `opened`, `previewed`, `transferred`.
+    pub kind: &'static str,
+    /// [`FileCategory::icon_name`].
+    pub category: &'static str,
+    pub mime_type: String,
+    /// `file://` URL for the system thumbnailer, `image://lautta-thumb/…`, or empty: glyph.
+    pub thumbnail_source: String,
 }
 
 impl Row {
@@ -78,13 +104,13 @@ impl Row {
 
 pub const SECTION_KIND: &str = "section";
 
-const SECTIONS: [&str; 5] = ["favourites", "device", "android", "volumes", "servers"];
+const SECTIONS: [&str; 6] = ["recents", "favourites", "device", "android", "volumes", "servers"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LayoutRow {
     pub section: &'static str,
     /// `nearby` stands for every nearby server, [`SECTION_KIND`] for the switch of
-    /// *Volumes* or *Servers*.
+    /// *Recents*, *Volumes* or *Servers*.
     pub kind: &'static str,
     pub item: String,
     pub name: String,
@@ -109,17 +135,25 @@ fn layout_row(layout: &Layout, row: &Row) -> Option<LayoutRow> {
     })
 }
 
-/// Switch is always there so an empty section can be switched. No Servers switch standalone.
+/// What decides which section switches Settings › Browse page offers.
+#[derive(Debug, Clone, Copy)]
+struct Offered {
+    bridge_there: bool,
+    recents_on: bool,
+}
+
+/// Switch is always there so an empty section can be switched. No Servers switch standalone, no
+/// Recents switch while recents are off.
 fn section_rows(
     section: &'static str,
     rows: Vec<LayoutRow>,
     layout: &Layout,
-    bridge_there: bool,
+    offered: Offered,
 ) -> Vec<LayoutRow> {
     if !SWITCHED_SECTIONS.contains(&section) {
         return rows;
     }
-    if section == "servers" && !bridge_there {
+    if (section == "servers" && !offered.bridge_there) || (section == "recents" && !offered.recents_on) {
         return Vec::new();
     }
     let shown = layout.section_shown(section);
@@ -283,11 +317,15 @@ impl Core {
             .filter(|r| r.kind != "nearby")
             .filter_map(|r| layout_row(&layout, r))
             .collect();
+        let offered = Offered {
+            bridge_there,
+            recents_on: self.settings().recents_enabled,
+        };
         let mut out: Vec<LayoutRow> = SECTIONS
             .into_iter()
             .flat_map(|section| {
                 let own = items.iter().filter(|r| r.section == section).cloned().collect();
-                section_rows(section, own, &layout, bridge_there)
+                section_rows(section, own, &layout, offered)
             })
             .collect();
         if bridge_there {
@@ -334,7 +372,8 @@ impl Core {
         })
         .await
         .unwrap_or_default();
-        let mut rows = blocking.favourites;
+        let mut rows = blocking.recents;
+        rows.extend(blocking.favourites);
         rows.extend(blocking.device);
         rows.extend(blocking.android);
         rows.extend(self.volume_rows().await);
@@ -354,25 +393,78 @@ impl Core {
             .map(|p| (p.location_id.clone(), p))
             .collect();
         let settings = self.settings();
-        let mut device = Vec::new();
-        if settings.recents_enabled {
-            let mut row = Row::new("device", "recents");
-            row.icon = "image://theme/icon-m-history".to_owned();
-            device.push(row);
-        }
-        device.extend(self.folder_rows("device", &LocationKind::UserFolder, &prefs));
+        let mut device = self.folder_rows("device", &LocationKind::UserFolder, &prefs);
         if settings.recently_deleted {
             let mut row = Row::new("device", "deleted");
             row.icon = "image://theme/icon-m-delete".to_owned();
             device.push(row);
         }
         LocalRows {
+            recents: self.strip_rows(&settings),
             favourites: self.favourite_rows(),
             device,
             android: self.folder_rows("android", &LocationKind::Android, &prefs),
             prefs,
             layout: self.browse_layout.load().unwrap_or_default(),
         }
+    }
+
+    /// One row, or none while recents are off or empty.
+    fn strip_rows(&self, settings: &Settings) -> Vec<Row> {
+        if !settings.recents_enabled {
+            return Vec::new();
+        }
+        let tiles = self.recent_tiles(STRIP_TILES, settings).unwrap_or_default();
+        if tiles.is_empty() {
+            return Vec::new();
+        }
+        let mut row = Row::new("recents", "recent-strip");
+        row.tiles = tiles;
+        vec![row]
+    }
+
+    /// Newest first, each file once whatever was done with it.
+    pub fn recent_tiles(&self, limit: usize, settings: &Settings) -> Result<Vec<RecentTile>> {
+        let thumbs = ThumbSettings::new(settings);
+        let mut seen = BTreeSet::new();
+        Ok(self
+            .recents
+            .list(&RecentsFilter::default())?
+            .into_iter()
+            .filter(|r| seen.insert(r.uri.to_string()))
+            .take(limit)
+            .map(|r| self.recent_tile(r, settings.thumbnails_local, &thumbs))
+            .collect())
+    }
+
+    fn recent_tile(&self, r: Recent, shown: bool, thumbs: &ThumbSettings) -> RecentTile {
+        let entry = Entry::new(r.uri.name().unwrap_or_default(), Kind::File);
+        let local = self.locations.to_local_path(&r.uri);
+        let thumbnail_source = match (thumbnail_source(&entry, local.is_some(), shown, thumbs), local) {
+            (ThumbSource::System, Some(path)) => file_url(&path),
+            (ThumbSource::App, _) => app_thumbnail_url(&r.uri),
+            _ => String::new(),
+        };
+        RecentTile {
+            id: r.id,
+            uri: r.uri.to_string(),
+            name: r.name,
+            kind: r.kind.as_str(),
+            category: category_of(&entry).icon_name(),
+            mime_type: mime_of(&entry).unwrap_or_default(),
+            thumbnail_source,
+        }
+    }
+
+    /// Space of the file system user folders are on. `None`: no user folder, or it can't tell.
+    pub async fn device_space(&self) -> Option<SpaceInfo> {
+        let folder = self
+            .locations
+            .locations()
+            .into_iter()
+            .find(|l| l.kind == LocationKind::UserFolder)?;
+        let provider = self.provider(&folder.id).ok()?;
+        provider.space(&VPath::root()).await.ok()
     }
 
     fn folder_rows(
@@ -663,6 +755,7 @@ impl Core {
 
 #[derive(Default)]
 struct LocalRows {
+    recents: Vec<Row>,
     favourites: Vec<Row>,
     device: Vec<Row>,
     android: Vec<Row>,

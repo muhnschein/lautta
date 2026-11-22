@@ -5,7 +5,7 @@ mod bridge_support;
 use bridge_support::{config, eventually};
 use lautta_bridge_proto::fake::{Consent, FakeBridge, FakeDrive, Listener};
 use lautta_core::app::Core;
-use lautta_core::app_browse::{LayoutRow, Row, SECTION_KIND};
+use lautta_core::app_browse::{LayoutRow, RecentTile, Row, SECTION_KIND};
 use lautta_core::bridge::{feature, BridgeStatus, Level};
 use lautta_core::browse_layout::SECTION_ITEM;
 use lautta_core::date_group::DateGroup;
@@ -80,15 +80,14 @@ async fn standalone_shows_no_trace_of_the_bridge() {
     assert!(of(&rows, "servers").is_empty());
     assert!(of(&rows, "nearby").is_empty());
     let device = of(&rows, "device");
-    assert_eq!(device[0].kind, "recents");
-    assert_eq!(device[1].name, "Documents");
-    assert_eq!(device[1].uri, "lautta://user-documents/");
-    assert_eq!(device[2].name, "Music");
+    assert_eq!(device[0].name, "Documents");
+    assert_eq!(device[0].uri, "lautta://user-documents/");
+    assert_eq!(device[1].name, "Music");
     let deleted = device.last().unwrap();
     assert_eq!(deleted.kind, "deleted");
     assert_eq!(of(&rows, "android")[0].name, "DCIM");
     assert_eq!(
-        (device[1].icon.as_str(), of(&rows, "android")[0].icon.as_str()),
+        (device[0].icon.as_str(), of(&rows, "android")[0].icon.as_str()),
         ("file-folder", "file-folder")
     );
 }
@@ -103,7 +102,7 @@ fn layout_of(rows: &[LayoutRow], section: &str) -> Vec<(String, bool)> {
         .map(|r| {
             (
                 match r.kind {
-                    "deleted" | "recents" => r.kind.to_owned(),
+                    "deleted" => r.kind.to_owned(),
                     _ => r.name.clone(),
                 },
                 r.hidden,
@@ -128,17 +127,12 @@ async fn hidden_rows_leave_browse_but_not_its_settings() {
         .set_hidden("device", "deleted", true)
         .unwrap();
     let rows = e.core.browse_rows().await;
-    assert_eq!(
-        names(&rows, "device"),
-        ["", "Documents", "Pictures"],
-        "Recents and the folders"
-    );
+    assert_eq!(names(&rows, "device"), ["Documents", "Pictures"]);
     assert_eq!(names(&rows, "favourites"), ["Docs"]);
     let layout = e.core.browse_layout_rows().await;
     assert_eq!(
         layout_of(&layout, "device"),
         [
-            ("recents".to_owned(), false),
             ("Documents".to_owned(), false),
             ("Pictures".to_owned(), false),
             ("Music".to_owned(), true),
@@ -156,7 +150,7 @@ async fn hidden_rows_leave_browse_but_not_its_settings() {
         .unwrap();
     assert_eq!(
         names(&e.core.browse_rows().await, "device"),
-        ["", "Documents", "Pictures", "Music"]
+        ["Documents", "Pictures", "Music"]
     );
 }
 
@@ -174,7 +168,7 @@ async fn rows_move_within_their_section() {
     assert_eq!(of(&rows, "device")[1].kind, "deleted");
     assert_eq!(
         names(&rows, "device")[2..],
-        [String::new(), "Documents".to_owned(), "Music".to_owned()]
+        ["Documents".to_owned(), "Music".to_owned()]
     );
     core.move_browse_row("device", "user-pictures", 99).await.unwrap();
     assert_eq!(
@@ -205,7 +199,7 @@ async fn rows_move_within_their_section() {
     }
     core.browse_layout.reset().unwrap();
     let rows = core.browse_rows().await;
-    assert_eq!(names(&rows, "device")[..3], ["", "Documents", "Pictures"]);
+    assert_eq!(names(&rows, "device")[..2], ["Documents", "Pictures"]);
     assert_eq!(
         names(&rows, "favourites"),
         ["B", "A"],
@@ -217,79 +211,150 @@ fn kinds(rows: &[Row], section: &str) -> Vec<&'static str> {
     of(rows, section).iter().map(|r| r.kind).collect()
 }
 
+fn record(core: &Core, name: &str, kind: RecentKind, at_ms: i64) {
+    let at = uri(&format!("lautta://user-documents/{name}"));
+    core.recents.record_at(&at, name, kind, at_ms).unwrap();
+}
+
+fn strip(rows: &[Row]) -> Vec<RecentTile> {
+    match of(rows, "recents").as_slice() {
+        [] => Vec::new(),
+        [row] => {
+            assert_eq!(row.kind, "recent-strip");
+            row.tiles.clone()
+        }
+        more => panic!("one strip, not {}", more.len()),
+    }
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn recents_is_a_device_row_while_recents_are_remembered() {
+async fn the_newest_recents_lead_browse_as_tiles() {
     let e = env(None, &["Documents"]).await;
     let core = &e.core;
-    let rows = core.browse_rows().await;
-    assert_eq!(kinds(&rows, "device"), ["recents", "folder", "deleted"]);
-    let recents = of(&rows, "device")[0];
-    assert_eq!(recents.icon, "image://theme/icon-m-history");
-    assert_eq!(recents.uri, "");
-
-    core.browse_layout.set_hidden("device", "recents", true).unwrap();
-    assert_eq!(kinds(&core.browse_rows().await, "device"), ["folder", "deleted"]);
-    assert_eq!(
-        layout_of(&core.browse_layout_rows().await, "device")[0],
-        ("recents".to_owned(), true),
-        "hidden, it stays in the settings"
+    assert!(
+        strip(&core.browse_rows().await).is_empty(),
+        "nothing recent: no section"
     );
-    core.browse_layout.set_hidden("device", "recents", false).unwrap();
-    core.move_browse_row("device", "recents", 1).await.unwrap();
+
+    record(core, "old.txt", RecentKind::Opened, 1);
+    record(core, "a.jpg", RecentKind::Opened, 2);
+    record(core, "b.pdf", RecentKind::Previewed, 3);
+    record(core, "a.jpg", RecentKind::Transferred, 4);
+    record(core, "c.ogg", RecentKind::Opened, 5);
+    let rows = core.browse_rows().await;
+    assert_eq!(rows[0].section, "recents", "above favourites and folders");
+    let tiles = strip(&rows);
+    let told: Vec<(&str, &str, &str, &str)> = tiles
+        .iter()
+        .map(|t| (t.name.as_str(), t.kind, t.category, t.mime_type.as_str()))
+        .collect();
+    assert_eq!(
+        told,
+        [
+            ("c.ogg", "opened", "audio", "audio/ogg"),
+            ("a.jpg", "transferred", "image", "image/jpeg"),
+            ("b.pdf", "previewed", "pdf", "application/pdf"),
+        ],
+        "three newest, a file once however often it was used"
+    );
+    assert_eq!(tiles[1].uri, "lautta://user-documents/a.jpg");
+    assert!(tiles.iter().all(|t| t.id > 0));
+    let ids: std::collections::BTreeSet<i64> = tiles.iter().map(|t| t.id).collect();
+    assert_eq!(ids.len(), 3);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn tiles_get_thumbnails_as_folders_do() {
+    let e = env(None, &["Documents"]).await;
+    let core = &e.core;
+    let remote = uri("lautta://nv-account:1/far.jpg");
+    core.recents
+        .record_at(&remote, "far.jpg", RecentKind::Opened, 1)
+        .unwrap();
+    record(core, "note.txt", RecentKind::Opened, 2);
+    record(core, "a b.jpg", RecentKind::Opened, 3);
+    record(core, "c.ogg", RecentKind::Opened, 4);
+    let sources = |settings: &Settings| -> Vec<String> {
+        core.recent_tiles(9, settings)
+            .unwrap()
+            .into_iter()
+            .map(|t| t.thumbnail_source)
+            .collect()
+    };
+    let local = format!("file://{}/Documents/a%20b.jpg", e.home.path().display());
+    assert_eq!(
+        sources(&Settings::default()),
+        [
+            "image://lautta-thumb/lautta://user-documents/c.ogg",
+            local.as_str(),
+            "",
+            "image://lautta-thumb/lautta://nv-account:1/far.jpg",
+        ],
+        "audio: app; local picture: system thumbnailer; text: glyph; server picture: app"
+    );
+    let no_remote = Settings {
+        thumbnails_remote: false,
+        ..Settings::default()
+    };
+    assert_eq!(sources(&no_remote)[3], "", "Thumbnails from servers off");
+    assert_eq!(sources(&no_remote)[1], local);
+    let none = Settings {
+        thumbnails_local: false,
+        ..Settings::default()
+    };
+    assert_eq!(sources(&none), ["", "", "", ""], "Show thumbnails off");
+    assert_eq!(core.recent_tiles(2, &Settings::default()).unwrap().len(), 2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_recents_section_follows_its_switch_and_the_recents_setting() {
+    let e = env(None, &["Documents"]).await;
+    let core = &e.core;
+    record(core, "a.jpg", RecentKind::Opened, 1);
+    assert_eq!(strip(&core.browse_rows().await).len(), 1);
     assert_eq!(
         kinds(&core.browse_rows().await, "device"),
-        ["folder", "recents", "deleted"]
+        ["folder", "deleted"],
+        "no Recents row among the folders"
     );
+    let layout = core.browse_layout_rows().await;
+    assert_eq!(layout[0].section, "recents", "first in Settings › Browse page");
+    assert_eq!(
+        section_of(&layout, "recents"),
+        [switch(true)],
+        "the strip is no row to hide or move"
+    );
+
+    set_section(core, "recents", false);
+    assert!(strip(&core.browse_rows().await).is_empty());
+    assert_eq!(
+        section_of(&core.browse_layout_rows().await, "recents"),
+        [switch(false)]
+    );
+    set_section(core, "recents", true);
+    assert_eq!(strip(&core.browse_rows().await).len(), 1);
 
     core.apply_settings(Settings {
         recents_enabled: false,
         ..Settings::default()
     });
-    assert_eq!(kinds(&core.browse_rows().await, "device"), ["folder", "deleted"]);
     assert!(
-        layout_of(&core.browse_layout_rows().await, "device")
-            .iter()
-            .all(|(name, _)| name != "recents"),
+        strip(&core.browse_rows().await).is_empty(),
+        "kept rows stay out of sight"
+    );
+    assert!(
+        section_of(&core.browse_layout_rows().await, "recents").is_empty(),
         "nothing to switch while recents are off"
     );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn recents_comes_first_until_the_user_orders_the_rows() {
-    let e = env(None, &["Documents", "Music"]).await;
-    let core = &e.core;
-    let device = |rows: &[Row]| -> Vec<String> {
-        of(rows, "device")
-            .iter()
-            .map(|r| {
-                if r.name.is_empty() {
-                    r.kind.to_owned()
-                } else {
-                    r.name.clone()
-                }
-            })
-            .collect()
-    };
-    let natural = ["recents", "Documents", "Music", "deleted"];
-    assert_eq!(device(&core.browse_rows().await), natural);
-    assert_eq!(
-        layout_of(&core.browse_layout_rows().await, "device")[0],
-        ("recents".to_owned(), false),
-        "and first in Settings › Browse page"
-    );
-
-    let order: Vec<String> = ["user-documents", "user-music", "recents", "deleted"]
-        .iter()
-        .map(ToString::to_string)
-        .collect();
-    core.browse_layout.set_order("device", &order).unwrap();
-    assert_eq!(
-        device(&core.browse_rows().await),
-        ["Documents", "Music", "recents", "deleted"],
-        "a saved order stays"
-    );
-    core.browse_layout.reset().unwrap();
-    assert_eq!(device(&core.browse_rows().await), natural);
+async fn the_device_tells_its_space_when_it_has_user_folders() {
+    let e = env(None, &["Documents"]).await;
+    let space = e.core.device_space().await.unwrap();
+    assert!(space.total > 0 && space.free <= space.total, "{space:?}");
+    let android_only = env(None, &["android_storage/DCIM"]).await;
+    assert_eq!(android_only.core.device_space().await, None);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -381,7 +446,7 @@ async fn location_display_names_apply() {
     prefs.display_name = Some("Papers".into());
     e.core.location_prefs.set(&prefs).unwrap();
     let rows = e.core.browse_rows().await;
-    assert_eq!(of(&rows, "device")[1].name, "Papers");
+    assert_eq!(of(&rows, "device")[0].name, "Papers");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1128,7 +1193,15 @@ async fn the_settings_list_keeps_the_sections_in_browse_order() {
     order.dedup();
     assert_eq!(
         order,
-        ["favourites", "device", "android", "volumes", "servers", "nearby"]
+        [
+            "recents",
+            "favourites",
+            "device",
+            "android",
+            "volumes",
+            "servers",
+            "nearby"
+        ]
     );
     set_section(&e.core, "volumes", false);
     set_section(&e.core, "servers", false);
@@ -1142,7 +1215,15 @@ async fn the_settings_list_keeps_the_sections_in_browse_order() {
     order.dedup();
     assert_eq!(
         order,
-        ["favourites", "device", "android", "volumes", "servers", "nearby"]
+        [
+            "recents",
+            "favourites",
+            "device",
+            "android",
+            "volumes",
+            "servers",
+            "nearby"
+        ]
     );
 }
 
