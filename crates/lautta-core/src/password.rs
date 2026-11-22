@@ -63,7 +63,7 @@ mod tests {
     #[test]
     fn debug_hides_the_text() {
         let p = Password::new("hunter2").expect("password");
-        assert!(!format!("{p:?}").contains("hunter2"));
+        assert_eq!(format!("{p:?}"), "Password(..)");
     }
 
     #[test]
