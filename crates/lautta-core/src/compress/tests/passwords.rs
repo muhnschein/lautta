@@ -132,6 +132,47 @@ async fn a_changed_byte_in_a_locked_zip_fails_its_read() {
     );
 }
 
+/// Central directory entry of `name`, found from the end record: no match inside ciphertext.
+fn central_of(bytes: &[u8], name: &[u8]) -> usize {
+    let end = bytes.len() - 22;
+    assert_eq!(bytes[end..end + 4], [0x50, 0x4b, 0x05, 0x06]);
+    let start = u32::from_le_bytes(bytes[end + 16..end + 20].try_into().unwrap()) as usize;
+    let at = find(bytes, name, start) - 46;
+    assert_eq!(bytes[at..at + 4], [0x50, 0x4b, 0x01, 0x02]);
+    at
+}
+
+#[tokio::test]
+async fn a_lowered_size_in_a_locked_zip_fails_its_read() {
+    let f = fixture();
+    let tmp = tempfile::tempdir().unwrap();
+    let bytes = run_locked(&f, &[uri("mem", "proj")], ArchiveKind::Zip, "pass").await;
+    // AE-2 tag covers neither size: readme.txt is deflated, link stored.
+    let shorter = |name: &[u8]| {
+        let mut b = bytes.clone();
+        let at = central_of(&b, name) + 24;
+        let size = u32::from_le_bytes(b[at..at + 4].try_into().unwrap());
+        b[at..at + 4].copy_from_slice(&(size - 3).to_le_bytes());
+        b
+    };
+    let p = open("d.zip", &shorter(b"proj/readme.txt"), tmp.path(), Some("pass"))
+        .await
+        .unwrap();
+    assert!(
+        read(&p, "proj/readme.txt").await.is_err(),
+        "deflated entry cut short"
+    );
+    let p = open("s.zip", &shorter(b"proj/link"), tmp.path(), Some("pass"))
+        .await
+        .unwrap();
+    assert!(
+        p.read_link(&vp("proj/link")).await.is_err(),
+        "stored entry cut short"
+    );
+    let p = open("l.zip", &bytes, tmp.path(), Some("pass")).await.unwrap();
+    assert_eq!(read(&p, "proj/readme.txt").await.unwrap(), b"hello zip and tar");
+}
+
 fn zip_crate_locked(mode: zip::AesMode) -> Vec<u8> {
     let mut w = zip::ZipWriter::new(io::Cursor::new(Vec::new()));
     let deflated = SimpleFileOptions::default().with_aes_encryption(mode, "pw");

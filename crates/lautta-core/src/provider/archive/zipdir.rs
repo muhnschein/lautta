@@ -364,8 +364,9 @@ pub fn open_entry(
     Ok(Box::new(Checked::new(stream, loc, finish)))
 }
 
-/// Bounds output to declared size, verifies CRC-32 (AE-2: the AES tag instead): bombs and corrupt
-/// entries cannot pass.
+/// Bounds output to declared size and requires data to end there, verifies CRC-32 (AE-2: the AES
+/// tag instead): bombs and corrupt entries cannot pass. AE-2 sizes are not under its tag: lowered
+/// size must fail, not cut entry short.
 struct Checked {
     inner: io::Take<Box<dyn Read + Send>>,
     crc: flate2::Crc,
@@ -395,11 +396,12 @@ impl Read for Checked {
             self.crc.update(&out[..n]);
             return Ok(n);
         }
+        let more = self.inner.limit() == 0 && self.inner.get_mut().read(&mut [0u8; 1])? > 0;
         if let Some(finish) = self.finish.as_mut() {
             finish()?;
         }
         let crc_ok = self.expect_crc.is_none_or(|c| c == self.crc.sum());
-        if self.crc.amount() as u64 != self.expect_len || !crc_ok {
+        if more || self.crc.amount() as u64 != self.expect_len || !crc_ok {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "zip entry checksum mismatch",
