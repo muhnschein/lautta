@@ -91,6 +91,18 @@ ApplicationWindow {
                 var ids = win.rowIds(page)
                 if (ids.indexOf("favourite") < 0 || ids.indexOf("compress") >= 0)
                     return win.fail("no Compress where the folder takes no files: " + JSON.stringify(ids))
+                if (ids.indexOf("checksums") < 0 || ids.indexOf("verify") >= 0)
+                    return win.fail("Checksums, no Verify files: " + JSON.stringify(ids))
+                page.choose("checksums")
+                win.step++
+                break
+            case 5:
+                if (pageStack.busy || !page || page.group === undefined)
+                    break
+                if (page.uri !== win.file || page.group !== "common")
+                    return win.fail("Checksums gets the image: " + page.uri + " " + page.group)
+                if (pageStack.depth !== 2)
+                    return win.fail("Checksums takes More's place: depth " + pageStack.depth)
                 win.reachedEnd = true
                 win.scenarioRunning = false
                 break

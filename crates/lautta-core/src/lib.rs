@@ -5,6 +5,7 @@
 pub mod app;
 pub mod app_archives;
 pub mod app_browse;
+pub mod app_checksum;
 pub mod app_directory;
 pub mod app_operations;
 pub mod app_pdf;
@@ -44,6 +45,7 @@ pub mod activity;
 pub mod transfer;
 pub mod workcopy;
 
+pub mod checksum;
 pub mod compress;
 pub mod password;
 pub mod preview;

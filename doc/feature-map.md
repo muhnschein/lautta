@@ -108,6 +108,10 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | SCR-58 | Cover (folder / tasks) | `cover/CoverPage.qml`, `cover/TransferCover.qml` | S | app in background |
 | SCR-59 | Notifications | `components/TransferNotifications.qml` | S | tasks in background |
 | SCR-60 | Nearby setup | `dialogs/NearbySetupDialog.qml` | B | tap Nearby row |
+| SCR-61 | Checksums | `pages/ChecksumsPage.qml` | S | More actions, image More |
+| SCR-62 | More algorithms | `pages/ChecksumsPage.qml` (group `more`) | S | Checksums › More algorithms |
+| SCR-63 | Checksum | `pages/ChecksumPage.qml` | S | tap algorithm |
+| SCR-64 | Verify files | `pages/VerifyFilesPage.qml` | S | More actions of checksum list |
 
 Retired, never reuse: SCR-49 Connect to server, SCR-50 Server question.
 
@@ -165,7 +169,7 @@ Retired, never reuse: F-SRV-08 Server question, F-SRV-09 Connect to server, F-SR
 
 ### 3.4 Item actions
 
-Context menu order (list long-press): Share (files) · Copy · Cut · Rename · Delete · More actions. More actions: Add to favourites · Extract (compressed file) · Compress · Move to new folder. Read-only location hides Cut, Rename, Delete, Move to new folder; Extract and Compress only where folder takes new files (place and folder permissions allow adding). *Code:* `ContextActions.js`.
+Context menu order (list long-press): Share (files) · Copy · Cut · Rename · Delete · More actions. More actions: Verify files (checksum list) · Add to favourites · Extract (compressed file) · Compress · Checksums (files) · Move to new folder. Read-only location hides Cut, Rename, Delete, Move to new folder; Extract and Compress only where folder takes new files (place and folder permissions allow adding). *Code:* `ContextActions.js`.
 
 - **F-ITM-01 Open item** — tap: folder → folder page; file → viewer by type (§3.8); archive → archive location; unknown → other app (local) or Open remote (server).
 - **F-ITM-02 Share (out)** — Sailfish share sheet; remote file first fetched (SCR-37).
@@ -176,13 +180,15 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-ITM-07 Compress** — Name, Format list (Zip, 7z, tar.xz, tar.gz, one line each, picked row lit), Password + Confirm password for Zip and 7z (AES-256; 7z hides names too; empty = none; mismatch greys Compress; guessable one: label "Weak password" in orange, never refused); file lands beside items, taken name gets " 2". *Proof:* notice "Compressed file created", new file lights up.
 - **F-ITM-08 Move to new folder** — new folder dialog, then move.
 - **F-ITM-09 Open with** — other app for local file (viewer pulley, image toolbar).
+- **F-ITM-10 Checksums** — one file: SCR-61 SHA-256, MD5, SHA-1, SHA-512, More algorithms (SCR-62: SHA-224, SHA-384, SHA3-256, SHA3-512, BLAKE2b, BLAKE3, CRC32, XXH64, XXH128). Tap one → SCR-63 progress, then value; nothing runs before tap; Back stops it. Checksum list in same folder naming file → "Matches X" / "Doesn't match X". *Proof:* value; tap → "Copied". *Code:* `checksum.rs`, `app_checksum.rs`.
+- **F-ITM-11 Verify files** — checksum list (`SHA256SUMS`, `x.sha256`, `.md5`, `.sfv`, BSD tags, clear-signed; signature not checked): SCR-64 row per listed file: Matches, Doesn't match, Missing, Not checked (outside folder, link, folder); problems first. *Proof:* rows. *Code:* `checksum/list.rs`.
 
 ### 3.5 Selection
 
 - **F-SEL-01 Selection mode** — pulley Select; header "N selected"; tap toggles. Hard to enter by accident; "Stop selecting" leaves.
 - **F-SEL-02 Drag-select** — long-press and drag across rows/tiles (grid: long-press starts it).
 - **F-SEL-03 Select all / Clear selection** — pulley in selection mode.
-- **F-SEL-04 Selection bar** — Share · Copy · Cut · Delete · More · Stop selecting. More: Rename (one item), Add to favourites, Extract (one compressed file), Compress, Move to new folder (many: Compress, Move to new folder).
+- **F-SEL-04 Selection bar** — Share · Copy · Cut · Delete · More · Stop selecting. More: Rename (one item), Verify files (one checksum list), Add to favourites, Extract (one compressed file), Compress, Checksums (one file), Move to new folder (many: Compress, Move to new folder).
 
 ### 3.6 Clipboard and operations
 
@@ -273,6 +279,8 @@ AGENTS.md: feature reachable from several places → all of them. ✓ = offered,
 | Compress | via More | via More | ✓ | — | — | ✓ (More) | — | — |
 | Extract | via More | via More (1 item) | ✓ | — | — | — | — | — |
 | Move to new folder | via More | via More | ✓ | — | — | — | — | — |
+| Checksums | via More (files) | via More (1 file) | ✓ | — | — | ✓ (More) | — | — |
+| Verify files | via More (checksum list) | via More (1 list) | ✓ | — | — | — | — | — |
 | Open with | — | — | — | — | — | ✓ | ✓ | — |
 | Copy address | — | — | — | ✓ | ✓ | — | — | — |
 

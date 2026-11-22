@@ -2599,5 +2599,53 @@
         <source>Password</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-dir-act-checksums">
+        <source>Checksums</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-verify">
+        <source>Verify files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-checksum-copied">
+        <source>Copied</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-checksum-matches">
+        <source>Matches %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-checksum-differs">
+        <source>Doesn&apos;t match %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-checksum-more">
+        <source>More algorithms</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-checksum-title">
+        <source>Checksums</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-verify-matches">
+        <source>Matches</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-verify-differs">
+        <source>Doesn&apos;t match</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-verify-missing">
+        <source>Missing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-verify-not-checked">
+        <source>Not checked</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-verify-empty">
+        <source>No files listed</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

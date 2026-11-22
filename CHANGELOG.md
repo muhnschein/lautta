@@ -18,6 +18,7 @@
 - The music player shows the cover and the title, artist, album, year and track number ([#111](https://github.com/muhnschein/lautta/issues/111)). The cover comes from the file, else from a cover.jpg, folder.jpg or front.jpg beside it. Audio files show their cover as thumbnail in folders too.
 - Sharing a file from a server shows "Getting …" while it downloads, then the share sheet. Before, nothing showed until the download was done, so a big file looked like the share was lost ([#126](https://github.com/muhnschein/lautta/issues/126)).
 - When a server goes away, the offline banner says when the folder shown was listed instead of "Showing the copy from ." A listing cut short by a lost connection shows its error instead of the offline banner ([#106](https://github.com/muhnschein/lautta/issues/106)).
+- *Checksums* in *More actions* of a file: SHA-256, MD5, SHA-1, SHA-512 and more (SHA-3, BLAKE2b, BLAKE3, CRC32, xxHash). Tap one to calculate it; tap the value to copy it. When a checksum list such as SHA256SUMS in the same folder names the file, Lautta says whether it matches. A checksum list itself offers *Verify files*: it checks every file the list names ([#40](https://github.com/muhnschein/lautta/issues/40)).
 
 ## 1.0.0
 

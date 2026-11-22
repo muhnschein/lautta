@@ -125,7 +125,7 @@ ApplicationWindow {
         view.moreActions({ "uri": base + "pack.zip", "isDir": false, "mimeType": "" })
         waitFor(function () { return pageStack.currentPage === view.moreActionsPage && !pageStack.busy }, "More actions")
         var ids = view.moreActionsPage.actions.map(function (a) { return a.id })
-        expect(JSON.stringify(ids) === JSON.stringify(["favourite", "extract", "compress", "moveToNewFolder"]),
+        expect(JSON.stringify(ids) === JSON.stringify(["favourite", "extract", "compress", "checksums", "moveToNewFolder"]),
                "a compressed file offers Extract: " + JSON.stringify(ids))
         pageStack.pop(page, PageStackAction.Immediate)
         view.moreActions({ "uri": base + "Inner", "isDir": true, "mimeType": "" })

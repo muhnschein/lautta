@@ -27,6 +27,11 @@ percent-encoding = "2"
 sha2 = "0.11"
 md-5 = "0.11"
 sha1 = "0.11"
+sha3 = "0.11"
+blake2 = "0.11"
+blake3 = { version = "1", default-features = false, features = ["std"] }
+crc32fast = "1"
+xxhash-rust = { version = "0.8", features = ["xxh64", "xxh3"] }
 # WinZip AES for zip entries (`zipaes.rs`); RustCrypto primitives, as 7z AES in sevenz-rust2.
 aes = "0.9"
 ctr = "0.10"

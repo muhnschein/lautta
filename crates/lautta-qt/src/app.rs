@@ -49,6 +49,9 @@ pub struct App {
     localUrl: qt_method!(fn(&self, uri: QString) -> QString),
     categoryOf: qt_method!(fn(&self, name_or_uri: QString) -> QString),
     viewerFor: qt_method!(fn(&self, name_or_uri: QString, mime: QString) -> QString),
+    /// `[{ id, label }]` JSON of `common` or `more` checksum algorithms.
+    checksumAlgorithms: qt_method!(fn(&self, group: QString) -> QString),
+    isChecksumList: qt_method!(fn(&self, name_or_uri: QString) -> bool),
 
     copy: qt_method!(fn(&mut self, uris_json: QString) -> bool),
     cut: qt_method!(fn(&mut self, uris_json: QString) -> bool),
@@ -242,6 +245,14 @@ impl App {
 
     fn categoryOf(&self, name_or_uri: QString) -> QString {
         QString::from(category_of_name(&name_part(&name_or_uri.to_string())).icon_name())
+    }
+
+    fn checksumAlgorithms(&self, group: QString) -> QString {
+        QString::from(crate::checksum::algorithms_json(&group.to_string()).as_str())
+    }
+
+    fn isChecksumList(&self, name_or_uri: QString) -> bool {
+        crate::checksum::is_checksum_list(&name_or_uri.to_string())
     }
 
     fn viewerFor(&self, name_or_uri: QString, mime: QString) -> QString {

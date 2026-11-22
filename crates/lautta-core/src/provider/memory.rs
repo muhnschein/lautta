@@ -41,6 +41,8 @@ struct State {
     /// Keyed by path and operation name (`"list"`, `"stat"`, …).
     failures: HashMap<(String, VPath), Vec<Error>>,
     calls: Vec<String>,
+    /// `checksum` answers these instead of hashing: a server that lies.
+    checksums: HashMap<VPath, Vec<u8>>,
     holds: HashMap<(String, VPath), (oneshot::Sender<()>, oneshot::Receiver<()>)>,
     /// Where the location sits on its server: absolute link targets below it resolve into the tree,
     /// others point outside (empty: `/`).
@@ -171,6 +173,11 @@ impl MemoryProvider {
             .filter(|p| !p.is_root())
             .map(VPath::display)
             .collect()
+    }
+
+    /// `checksum` of `path` answers `digest`, whatever the algorithm.
+    pub fn answer_checksum(&self, path: &str, digest: &[u8]) {
+        self.lock().checksums.insert(Self::vp(path), digest.to_vec());
     }
 
     /// Queued, consumed in order.
@@ -720,6 +727,9 @@ impl Provider for MemoryProvider {
         }
         let data = {
             let st = self.lock();
+            if let Some(d) = st.checksums.get(path) {
+                return Ok(d.clone());
+            }
             match st.nodes.get(&canonical(&st, path, true)) {
                 Some(Node::File { data, .. }) => data.clone(),
                 _ => return Err(Error::kind(ErrorKind::NotFound)),
