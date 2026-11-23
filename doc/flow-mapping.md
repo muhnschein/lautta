@@ -103,7 +103,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-TRH-02 Restore / Delete now / Show original folder | S | FL-20 | SCR-39 |
 | F-TRH-03 Empty trash | S | FL-20 | SCR-39 |
 | F-TRH-04 Trash settings | S | FL-12, FL-26 | SCR-01, SCR-03, SCR-07, SCR-15, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
-| F-SHR-01 Share target | S | FL-25 | SCR-03, SCR-18, SCR-52 |
+| F-SHR-01 Share target | S | FL-25 | SCR-03, SCR-13, SCR-18, SCR-52 |
 | F-APP-01 Cover | S | FL-34, FL-35 | SCR-20, SCR-21, SCR-23, SCR-58, SCR-59 |
 | F-APP-02 Start error | S | FL-01 | SCR-01, SCR-02 |
 | F-APP-03 Settings | S | FL-26 | SCR-01, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
@@ -127,11 +127,11 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-10 Clipboard panel | FL-13, FL-14, FL-32 |
 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint) | FL-05, FL-10, FL-33, FL-37 |
 | SCR-12 Add | FL-10, FL-23 |
-| SCR-13 New folder | FL-10 |
+| SCR-13 New folder | FL-10, FL-25 |
 | SCR-14 Rename | FL-11 |
 | SCR-15 Delete permanently | FL-12 |
 | SCR-16 Compress | FL-16 |
-| SCR-18 Folder picker | FL-25 |
+| SCR-18 Share target: Locations | FL-25 |
 | SCR-19 Plan summary | FL-14 |
 | SCR-20 Conflict | FL-14, FL-35 |
 | SCR-21 Activity | FL-18, FL-34, FL-37 |
@@ -163,7 +163,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-47 Settings › Storage | FL-26 |
 | SCR-48 About | FL-26, FL-28 |
 | SCR-51 Server attention | FL-30 |
-| SCR-52 Share target ("Save to") | FL-25 |
+| SCR-52 Share target ("Save here") | FL-25 |
 | SCR-53 Scan camera | FL-23 |
 | SCR-54 Scan page view | FL-23 |
 | SCR-55 Scan adjust (crop, turn) | FL-23 |

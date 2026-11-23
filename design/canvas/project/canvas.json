@@ -178,22 +178,6 @@
       "x": 4320,
       "y": 0
     },
-    "FolderPicker.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Copy to\u2026 picker",
-      "w": 400,
-      "x": 0,
-      "y": 4860
-    },
-    "FolderPickerPulley.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Picker \u00b7 new folder",
-      "w": 400,
-      "x": 2880,
-      "y": 14440
-    },
     "GridIcons.dc.html": {
       "h": 2250,
       "is_interactive": true,
@@ -761,6 +745,22 @@
       "w": 400,
       "x": 4320,
       "y": 8200
+    },
+    "ShareLocations.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Share target \u00b7 Locations",
+      "w": 400,
+      "x": 0,
+      "y": 4860
+    },
+    "SharePulley.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Share target \u00b7 new folder",
+      "w": 400,
+      "x": 2880,
+      "y": 14440
     }
   },
   "createdOnFiles": {
@@ -908,7 +908,7 @@
     "StateIdentity.dc.html",
     "StateLarge.dc.html",
     "StateReconnecting.dc.html",
-    "FolderPicker.dc.html",
+    "ShareLocations.dc.html",
     "PlanSummary.dc.html",
     "Conflict.dc.html",
     "Compress.dc.html",
@@ -938,7 +938,7 @@
     "DirectorySelectPulley.dc.html",
     "RecentsPulley.dc.html",
     "RecentlyDeletedEmpty.dc.html",
-    "FolderPickerPulley.dc.html",
+    "SharePulley.dc.html",
     "TransferDetailsPulley.dc.html",
     "TextViewerPulley.dc.html",
     "ImageDeleteRemote.dc.html",

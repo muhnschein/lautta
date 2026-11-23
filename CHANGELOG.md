@@ -2,11 +2,12 @@
 
 ## Unreleased
 
+- Saving files shared to Lautta works like a folder in the app: *Save here* on top, what gets saved below it, then the folder with its path to tap your way up, or to *Locations* by the house. Folders open in place; files show dimmed, so you see what is there already. It opens where you saved last (Downloads the first time), *Locations* lists the last three folders you saved to, and the pulley makes a new folder. *Save here* is off where Lautta may not add files ([#95](https://github.com/muhnschein/lautta/issues/95)).
 - The folder header shows the path: a house for the Home page, then the folders above, then the folder's name. Tap a folder to go straight back to it, tap the house to go home. Folders that don't fit hide behind "…"; tap it to list them. *Add to favourites* for the open folder moved to the pulley menu. *Edit path* and *Copy address* are gone ([#38](https://github.com/muhnschein/lautta/issues/38)).
 - Recents show thumbnails, and show as a grid when *View options* say Grid, with each day group starting its own row. Text files on the Home page's Recents tiles and in the Recents grid show their first lines, as in folders ([#60](https://github.com/muhnschein/lautta/issues/60)).
 - Photos open faster in the image viewer, big ones most: the picture starts loading as your finger touches it, loads at screen size and first, and shows the camera's preview while it loads, or the folder's thumbnail when the photo has none. Pictures you swiped past come back at once ([#41](https://github.com/muhnschein/lautta/issues/41)).
 - PDF thumbnails of files on this device show the top of the first page, not its middle.
-- New items scroll into view and light up briefly: folders you make (also in the folder picker), pasted or moved items, files you compress, extracted files, scans and renamed items; in grid view the name and details light up too ([#113](https://github.com/muhnschein/lautta/issues/113)).
+- New items scroll into view and light up briefly: folders you make (also when saving shared files), pasted or moved items, files you compress, extracted files, scans and renamed items; in grid view the name and details light up too ([#113](https://github.com/muhnschein/lautta/issues/113)).
 - A folder listed again right after a change no longer shows as empty for a moment.
 - Videos from servers stream and seek instead of downloading first ([#100](https://github.com/muhnschein/lautta/issues/100)).
 - Streaming videos no longer freeze the screen every second or so, and start and seek faster.

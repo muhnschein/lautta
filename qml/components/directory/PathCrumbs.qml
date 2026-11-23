@@ -8,6 +8,8 @@ Item {
 
     property var pathModel
     property real titleTop
+    property int titlePixelSize: Theme.fontSizeLarge
+    property string titleFamily: Theme.fontFamilyHeading
     property Item menuHost
     property int menuMost
     property var widths: []
@@ -48,8 +50,8 @@ Item {
     FontMetrics {
         id: heading
 
-        font.pixelSize: Theme.fontSizeLarge
-        font.family: Theme.fontFamilyHeading
+        font.pixelSize: crumbs.titlePixelSize
+        font.family: crumbs.titleFamily
     }
 
     Item {

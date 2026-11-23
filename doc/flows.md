@@ -386,15 +386,17 @@ Features: F-ITM-02 Share (out), F-ITM-09 Open with, F-SRV-16 Open remote in othe
 
 ### FL-25 Save files shared to Lautta (standalone)
 
-Pick Lautta in a share sheet, choose a folder.
+Pick Lautta in a share sheet, browse to a folder, save there.
 
 Features: F-SHR-01 Share target
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-52 Share target ("Save to") | Save to: suggested folders |
-| 2 | SCR-18 Folder picker | Another folder…: folder picker |
-| 3 | SCR-03 Folder page (list) | Saved |
+| 1 | SCR-52 Share target ("Save here") | Opens folder saved to last, first time Downloads |
+| 2 | SCR-18 Share target: Locations | Tap house: folders saved to lately, places |
+| 3 | SCR-52 Share target ("Save here") | Tap a place or folder: opens in place |
+| 4 | SCR-13 New folder | Pull: New folder |
+| 5 | SCR-03 Folder page (list) | Save here: saved |
 
 ## Settings
 

@@ -54,11 +54,6 @@ QtObject {
         check(shown === "Documents \u203a Uni \u203a x.txt", "display path: " + shown)
         check(Operations.displayPath("junk") === "", "display path of junk")
 
-        var dest = JSON.parse(Operations.destinationsJson())
-        var names = dest.map(function(d) { return d.name })
-        check((names.indexOf("Documents") >= 0 && names.indexOf("Downloads") >= 0), "destinations: " + names)
-        check((dest[0].kind === "device" && dest[0].uri.indexOf("lautta://") === 0), "destination shape")
-
         var probed = JSON.parse(Operations.probeShared(JSON.stringify([
             "file:///nonexistent/shared%20file.jpg", "/also/missing.txt"])))
         check(probed.length === 2 && !probed[0].readable && !probed[1].readable, "unreadable shares are flagged")

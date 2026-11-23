@@ -21,6 +21,7 @@ const GB: u64 = 1_000_000_000;
 
 pub const SORT_KEYS: [&str; 4] = ["name", "size", "modified", "type"];
 pub const VIEW_MODES: [&str; 2] = ["list", "grid"];
+pub const SHARE_FOLDERS_MAX: usize = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -59,6 +60,8 @@ pub struct Settings {
     pub recents_enabled: bool,
     /// Depth limit of remote searches.
     pub search_remote_depth: u32,
+
+    pub share_folders: Vec<String>,
 }
 
 impl Default for Settings {
@@ -88,6 +91,7 @@ impl Default for Settings {
             large_op_bytes: GB,
             recents_enabled: true,
             search_remote_depth: 8,
+            share_folders: Vec::new(),
         }
     }
 }
@@ -118,6 +122,13 @@ impl Settings {
         self.large_op_items = self.large_op_items.max(1);
         self.large_op_bytes = self.large_op_bytes.max(MB);
         self.search_remote_depth = self.search_remote_depth.clamp(1, 64);
+        let mut kept: Vec<String> = Vec::new();
+        for folder in self.share_folders.drain(..) {
+            if kept.len() < SHARE_FOLDERS_MAX && !kept.contains(&folder) {
+                kept.push(folder);
+            }
+        }
+        self.share_folders = kept;
     }
 
     pub fn thumbnail_max_remote_bytes(&self) -> u64 {
@@ -473,6 +484,17 @@ mod tests {
         assert!(!s.set("remorse_seconds", json!("x")));
         assert_eq!(s.remorse_seconds, 10);
         assert!(!s.set("nope", json!(1)));
+    }
+
+    #[test]
+    fn share_folders_keep_the_latest_three_once_each() {
+        let mut s = Settings::default();
+        assert!(s.share_folders.is_empty());
+        assert!(s.set("share_folders", json!(["a", "b", "a", "c", "d"])));
+        assert_eq!(s.share_folders, ["a", "b", "c"]);
+        assert!(!s.set("share_folders", json!("a")));
+        assert_eq!(s.share_folders, ["a", "b", "c"]);
+        assert_eq!(Settings::from_json(&s.to_json()), s);
     }
 
     fn store() -> LocationPrefsStore {
