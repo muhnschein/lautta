@@ -69,8 +69,8 @@ ZoomableFlickable {
         id: tileImage
 
         objectName: "tileImage"
-        // Square crop of the photo's middle, under a camera preview: the shorter side of the
-        // placeholder's shape.
+        // Square crop of the photo's middle, at its place: the shorter side of the placeholder's
+        // shape. Drawn by tileFill only.
         parent: flickable
         z: -2
         anchors.centerIn: parent
@@ -81,6 +81,18 @@ ZoomableFlickable {
         asynchronous: true
         cache: false
         visible: placeholderImage.visible && status === Image.Ready
+    }
+
+    // Under a camera preview: fills the placeholder's shape from the tile.
+    TileFill {
+        objectName: "tileFill"
+        parent: flickable
+        z: -2
+        anchors.centerIn: parent
+        width: placeholderImage.paintedWidth
+        height: placeholderImage.paintedHeight
+        tile: tileImage
+        visible: tileImage.visible
     }
 
     Image {
