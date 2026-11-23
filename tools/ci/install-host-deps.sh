@@ -16,7 +16,7 @@ cargo_tool() {
 for tool in "$@"; do
     case $tool in
         nextest) cargo_tool cargo-nextest 0.9.148 ;;
-        coverage) cargo_tool cargo-llvm-cov 0.6.16 ;;
+        coverage) cargo_tool cargo-llvm-cov 0.6.16; sudo apt-get install -y -q --no-install-recommends python3-coverage ;;
         mutants) cargo_tool cargo-mutants 25.0.1 ;;
         cross) sudo apt-get install -y -q --no-install-recommends libc6-i386 ;;
         *) echo "unknown tool $tool" >&2; exit 2 ;;

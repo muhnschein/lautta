@@ -35,6 +35,8 @@ test:
 coverage:
 	mkdir -p coverage
 	QT_QPA_PLATFORM=offscreen $(CARGO) llvm-cov --workspace $(HOST_FEATURES) --lcov --output-path coverage/lcov.info
+	python3 -m coverage run --data-file=coverage/python.data --include='tools/*' tools/no_comments_test.py
+	python3 -m coverage xml --data-file=coverage/python.data -o coverage/python.xml
 
 clippy-report:
 	mkdir -p coverage
