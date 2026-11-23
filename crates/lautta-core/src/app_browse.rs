@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Browse area actions on `Core`. Blocking work runs in `spawn_blocking`; Qt layer only maps values
-//! to model rows.
 
 use crate::app::Core;
 use crate::app_directory::file_url;
@@ -30,28 +28,19 @@ use std::time::Duration;
 const PLACE_SEPARATOR: &str = " › ";
 const SERVER_ICON: &str = "server";
 
-/// Drive mounted by bridge takes time to show in sandbox: this many looks, this far apart.
 const MOUNT_LOOKS: u32 = 10;
 const MOUNT_LOOK_EVERY: Duration = Duration::from_millis(200);
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Row {
-    /// `recents`, `favourites`, `device`, `android`, `volumes`, `servers`, `nearby`.
     pub section: &'static str,
-    /// `recent-strip`, `favourite`, `folder`, `deleted`, `volume`, `account`,
-    /// `consent`, `unavailable`, `nearby`.
     pub kind: &'static str,
     pub uri: String,
     pub name: String,
     pub icon: String,
-    /// `ready`, `connecting`, `offline`, `attention`; `unmounted` for a mountable
-    /// volume, `locked` for one Settings › Storage unlocks first.
     pub status: &'static str,
-    /// `auth-failed`, `server-identity-changed` or empty.
     pub attention: String,
-    /// `connected`, `connecting`, `disconnected`, `failed`, or empty.
     pub connection: &'static str,
-    /// netvfs error name of a `failed` connection (`AuthFailed`, `Timeout`, …).
     pub connection_error: String,
     pub colour: String,
     pub item_id: String,
@@ -63,11 +52,9 @@ pub struct Row {
     pub fs: String,
     pub is_file: bool,
     pub drive: String,
-    /// Of a `recent-strip` row.
     pub tiles: Vec<RecentTile>,
 }
 
-/// Newest recents shown as tiles on Browse.
 pub const STRIP_TILES: usize = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
@@ -76,12 +63,9 @@ pub struct RecentTile {
     pub id: i64,
     pub uri: String,
     pub name: String,
-    /// `opened`, `previewed`, `transferred`.
     pub kind: &'static str,
-    /// [`FileCategory::icon_name`].
     pub category: &'static str,
     pub mime_type: String,
-    /// `file://` URL for the system thumbnailer, `image://lautta-thumb/…`, or empty: glyph.
     pub thumbnail_source: String,
 }
 
@@ -109,8 +93,6 @@ const SECTIONS: [&str; 6] = ["recents", "favourites", "device", "android", "volu
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LayoutRow {
     pub section: &'static str,
-    /// `nearby` stands for every nearby server, [`SECTION_KIND`] for the switch of
-    /// *Recents*, *Volumes* or *Servers*.
     pub kind: &'static str,
     pub item: String,
     pub name: String,
@@ -135,15 +117,12 @@ fn layout_row(layout: &Layout, row: &Row) -> Option<LayoutRow> {
     })
 }
 
-/// What decides which section switches Settings › Browse page offers.
 #[derive(Debug, Clone, Copy)]
 struct Offered {
     bridge_there: bool,
     recents_on: bool,
 }
 
-/// Switch is always there so an empty section can be switched. No Servers switch standalone, no
-/// Recents switch while recents are off.
 fn section_rows(
     section: &'static str,
     rows: Vec<LayoutRow>,
@@ -363,7 +342,6 @@ impl Core {
         blocking(move || core.browse_layout.set_order(&section, &items)).await
     }
 
-    /// Rescans local locations first: inotify can miss mounts inside the sandbox's mount namespace.
     async fn arranged_rows(self: &Arc<Self>) -> (Vec<Row>, Layout) {
         let core = self.clone();
         let blocking = tokio::task::spawn_blocking(move || {
@@ -409,7 +387,6 @@ impl Core {
         }
     }
 
-    /// One row, or none while recents are off or empty.
     fn strip_rows(&self, settings: &Settings) -> Vec<Row> {
         if !settings.recents_enabled {
             return Vec::new();
@@ -423,7 +400,6 @@ impl Core {
         vec![row]
     }
 
-    /// Newest first, each file once whatever was done with it.
     pub fn recent_tiles(&self, limit: usize, settings: &Settings) -> Result<Vec<RecentTile>> {
         let thumbs = ThumbSettings::new(settings);
         let mut seen = BTreeSet::new();
@@ -456,7 +432,6 @@ impl Core {
         }
     }
 
-    /// Space of the file system user folders are on. `None`: no user folder, or it can't tell.
     pub async fn device_space(&self) -> Option<SpaceInfo> {
         let folder = self
             .locations
@@ -696,7 +671,6 @@ impl Core {
         Ok(found)
     }
 
-    /// Empty list from withdrawn consent or absent bridge never purges. Needs tokio runtime.
     pub fn spawn_account_purge(self: &Arc<Self>, on_purged: impl Fn() + Send + Sync + 'static) {
         let Some(client) = self.bridge.clone() else {
             return;
@@ -735,7 +709,6 @@ impl Core {
 
     fn recent_row(&self, r: Recent, now: i64) -> RecentRow {
         let folder = r.uri.parent().unwrap_or_else(|| r.uri.clone());
-        // Transfers record the location, not the folder.
         let place = if r.kind == org::RecentKind::Transferred {
             self.location(&r.uri.location).map(|l| l.name).unwrap_or_default()
         } else {
@@ -770,7 +743,6 @@ fn drive_icon(kind: DriveKind) -> &'static str {
     }
 }
 
-/// Locked drive goes by its LUKS label: filesystem unknown before Settings › Storage unlocks it.
 fn unmounted_row(d: &Drive, words: &VolumeWords) -> Row {
     let mut row = Row::new("volumes", "volume");
     row.status = if d.locked { "locked" } else { "unmounted" };

@@ -1,11 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Model behind a directory page, Qt-free. Every mutation returns [`ListChange`]s that, applied in
-//! order to a mirror of the previous visible list, reproduce the new one; unchanged rows keep their
-//! place, so scroll position and selection survive a revalidation.
-//!
-//! Removals come first in descending index order, then inserts and updates in ascending order of
-//! final index (matches Qt's `begin*Rows`). `Insert { index, count }` refers to rows
-//! `index..index + count` of the new visible list, `Update { index }` to row `index`.
 
 use crate::entry::Entry;
 use crate::filter::FilterOptions;
@@ -13,7 +6,6 @@ use crate::sort::{compare_entries, sort_indices, SortKey, SortOptions, SortRecor
 use crate::viewprefs::ViewPrefs;
 use std::collections::{HashMap, HashSet};
 
-/// Above this many entries: name order, no sections, no thumbnails.
 pub const LARGE_FOLDER_THRESHOLD: usize = 20_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -142,7 +134,6 @@ impl ListingState {
         self.loading
     }
 
-    /// An entry with a name already present replaces it.
     pub fn apply_batch(&mut self, batch: Vec<Entry>) -> Vec<ListChange> {
         let was_large = self.is_large();
         let first_new = self.raw.len();
@@ -159,8 +150,6 @@ impl ListingState {
         self.reconcile(old_visible, was_large, &changed)
     }
 
-    /// Entries from `first_new` on are new and nothing else changed: sorts only them and merges
-    /// into the visible list, O(n) instead of a full re-sort per streamed batch.
     fn merge_new(&mut self, first_new: usize) -> Vec<ListChange> {
         let mut fresh: Vec<u32> = (first_new as u32..self.raw.len() as u32)
             .filter(|&i| self.filter.matches(&self.raw[i as usize]))
@@ -213,7 +202,6 @@ impl ListingState {
         changes
     }
 
-    /// Matched by name, so surviving rows stay put; selection of vanished names is dropped.
     pub fn replace_with_fresh(&mut self, fresh: Vec<Entry>) -> Vec<ListChange> {
         if self.same_entries(&fresh) {
             self.stale = false;
@@ -226,7 +214,6 @@ impl ListingState {
         let old_by_name = std::mem::take(&mut self.by_name);
         let mut old_records = std::mem::take(&mut self.records);
         for entry in fresh {
-            // Unchanged entry keeps its record: folding names is most of a rebuild's cost.
             let kept = match old_by_name.get(&entry.name) {
                 Some(&o) if old_raw[o as usize] == entry && !self.by_name.contains_key(&entry.name) => Some(
                     std::mem::replace(&mut old_records[o as usize], SortRecord::empty()),
@@ -334,8 +321,6 @@ impl ListingState {
         changes
     }
 
-    /// Visible ones in display order, then selected entries currently hidden by the filter in byte
-    /// order.
     pub fn selected_names(&self) -> Vec<Vec<u8>> {
         let mut out: Vec<Vec<u8>> = self
             .visible_entries()
@@ -354,7 +339,6 @@ impl ListingState {
         out
     }
 
-    /// `fresh` holds exactly the entries already listed, each unchanged.
     fn same_entries(&self, fresh: &[Entry]) -> bool {
         if fresh.len() != self.raw.len() {
             return false;
@@ -423,7 +407,6 @@ impl ListingState {
     }
 }
 
-/// Those rows stay put.
 fn lis_mask(mapping: &[Option<usize>]) -> Vec<bool> {
     let items: Vec<(usize, usize)> = mapping
         .iter()
@@ -450,7 +433,6 @@ fn lis_mask(mapping: &[Option<usize>]) -> Vec<bool> {
     mask
 }
 
-/// Last run first so earlier indices stay valid.
 fn removal_runs(kept_old: &[bool]) -> Vec<ListChange> {
     let mut runs = Vec::new();
     let mut start: Option<usize> = None;
@@ -508,7 +490,6 @@ fn inserts_and_updates(
     out
 }
 
-/// `mapping[j]` is the old visible position of new row `j` (None when not shown before).
 fn diff_from_mapping(
     old_len: usize,
     mapping: &[Option<usize>],

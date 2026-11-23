@@ -37,7 +37,6 @@ ApplicationWindow {
         return null
     }
 
-    // AudioInfo is no Item: in the page's data, not its children.
     function infoOf(page) {
         for (var i = 0; i < page.data.length; ++i)
             if (page.data[i].trackTotal !== undefined)

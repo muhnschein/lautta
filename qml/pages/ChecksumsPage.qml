@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Checksums (SCR-61): sections Common and More; tap one algorithm to calculate it. Nothing runs
-// before the tap.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -11,7 +9,6 @@ Page {
 
     property string uri
 
-    // `[{ id, label, section }]`, Common first.
     readonly property var rows: {
         var out = []
         var groups = ["common", "more"]
@@ -25,7 +22,6 @@ Page {
 
     allowedOrientations: Orientation.All
 
-    // ListView sections need a role: a JS array has none.
     ListModel { id: rowModel }
     Component.onCompleted: rows.forEach(function (r) { rowModel.append(r) })
 

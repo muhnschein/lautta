@@ -1,15 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The *Trash*: what is deleted from this device's folders waits in `AppPaths::trash_dir` until
-//! restored, deleted or purged. Volumes and servers delete permanently.
-//!
-//! Each item gets a unique stored name and a `trash_items` row remembering where it came from. It
-//! moves in by `rename` where it can. Sailjail bind-mounts every permitted folder and the app data
-//! folder separately, so `rename(2)` between them fails with `EXDEV` even on one filesystem; then
-//! the item is copied in (folders, symlinks, modes, mtimes) and removed from its folder only once
-//! copy and row are in place. A failed copy leaves it where it was. Restore goes back the same way.
-//!
-//! All calls block: run in `spawn_blocking`. Calls that move or remove items take turns, so
-//! restore, empty and purge never work on one item at once.
 
 use crate::db::Db;
 use crate::error::{Error, ErrorKind, Result};
@@ -24,10 +13,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Items are purged after this many days.
 pub const DEFAULT_RETENTION_DAYS: u32 = 30;
-/// A copy on its way into place has a name starting so; one that an
-/// interruption left in the trash folder goes at the next [`Trash::tidy`].
 const PARTIAL_PREFIX: &str = ".lautta-partial-";
 const SECS_PER_DAY: i64 = 86_400;
 const NAME_ATTEMPTS: usize = 8;
@@ -37,11 +23,9 @@ const ITEM_COLUMNS: &str = "id, original_uri, trashed_at, stored_name, is_dir, s
 pub struct TrashItem {
     pub id: i64,
     pub original_uri: Uri,
-    /// Unix seconds.
     pub trashed_at: i64,
     pub stored_name: String,
     pub is_dir: bool,
-    /// Recursive for folders.
     pub size: Option<u64>,
     pub dir: PathBuf,
 }
@@ -54,21 +38,16 @@ impl TrashItem {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Moved {
-    /// On one mount: the item is gone from where it was.
     Renamed,
-    /// Across mounts: the original is still there, for the caller to remove.
     Copied,
 }
 
-/// The rename that moves an item between folders. Tests swap in one that
-/// fails as between two mounts.
 type RenameFn = fn(&Path, &Path) -> Result<()>;
 
 #[derive(Clone)]
 pub struct Trash {
     dir: PathBuf,
     db: Db,
-    /// Held by every call that moves or removes items.
     turn: Arc<Mutex<()>>,
     rename: RenameFn,
 }
@@ -79,7 +58,6 @@ pub fn now_secs() -> i64 {
         .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
 }
 
-/// A name no other process or thread picks: time, process and a counter.
 fn unique_name(prefix: &str) -> String {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let ms = SystemTime::now()
@@ -89,7 +67,6 @@ fn unique_name(prefix: &str) -> String {
     format!("{prefix}{ms:013x}-{:x}-{n:x}", std::process::id())
 }
 
-/// True for a real folder, not a symlink to one.
 fn is_real_dir(path: &Path) -> bool {
     sys::stat(path, false).is_ok_and(|st| st.is_dir())
 }
@@ -99,7 +76,6 @@ fn exists(path: &Path) -> bool {
 }
 
 impl Trash {
-    /// `dir` is the trash folder, made 0700 on the first delete.
     pub fn new(dir: PathBuf, db: Db) -> Trash {
         Trash {
             dir,
@@ -117,7 +93,6 @@ impl Trash {
         self.turn.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Refuses to trash the trash folder, or what is in or holds it.
     fn guard(&self, path: &Path) -> Result<()> {
         if path.starts_with(&self.dir) || self.dir.starts_with(path) {
             return Err(Error::new(
@@ -128,9 +103,6 @@ impl Trash {
         Ok(())
     }
 
-    /// Never follows `path`. Across mounts the item is copied in and removed from its folder once
-    /// its row is written; if removal fails, the error is returned and the item stays in the trash
-    /// too, so nothing is lost.
     pub fn trash(&self, path: &Path, original_uri: &Uri) -> Result<TrashItem> {
         let st = sys::stat(path, false)?;
         self.guard(path)?;
@@ -152,7 +124,6 @@ impl Trash {
         let id = match self.insert_row(&item) {
             Ok(id) => id,
             Err(e) => {
-                // Without its row the item would be lost: undo the move.
                 let _ = match moved {
                     Moved::Renamed => std::fs::rename(item.stored_path(), path).map_err(Into::into),
                     Moved::Copied => remove_tree(&item.stored_path()),
@@ -178,9 +149,6 @@ impl Trash {
         Err(Error::new(ErrorKind::Internal, "no unique trash name"))
     }
 
-    /// `to` must not exist: rename on one mount, else copy under a temp name next to `to`, renamed
-    /// into place. `from` must be removable by this process afterwards. A failed copy leaves `from`
-    /// as it was and nothing at `to`.
     fn put(&self, from: &Path, to: &Path) -> Result<Moved> {
         match (self.rename)(from, to) {
             Err(e) if e.kind == ErrorKind::CrossesDevice => {}
@@ -219,7 +187,6 @@ impl Trash {
         Ok(conn.last_insert_rowid())
     }
 
-    /// All items, newest first. Rows whose URI cannot be parsed are skipped.
     pub fn list(&self) -> Result<Vec<TrashItem>> {
         let conn = self.db.lock();
         let mut stmt = conn.prepare(&format!(
@@ -258,10 +225,6 @@ impl Trash {
         Ok(())
     }
 
-    /// Restores to the original location, which `resolve` maps from the
-    /// recorded URI to a local path (`None` when that location is gone).
-    /// `AlreadyExists` if the name is taken: the caller picks another name
-    /// and uses [`Trash::restore_to`].
     pub fn restore(&self, id: i64, resolve: &dyn Fn(&Uri) -> Option<PathBuf>) -> Result<PathBuf> {
         let item = self.get(id)?;
         let dest = resolve(&item.original_uri)
@@ -270,14 +233,11 @@ impl Trash {
         Ok(dest)
     }
 
-    /// Creates missing parent folders. Never replaces. Rename on one mount, else a copy that is
-    /// removed from the trash once in place.
     pub fn restore_to(&self, id: i64, dest: &Path) -> Result<()> {
         let _turn = self.turn();
         let item = self.get(id)?;
         let stored = item.stored_path();
         if !exists(&stored) {
-            // The file vanished behind our back; forget the stale row.
             self.delete_row(id)?;
             return Err(Error::new(ErrorKind::NotFound, "the trashed item is gone"));
         }
@@ -287,8 +247,6 @@ impl Trash {
         let moved = self.put(&stored, dest)?;
         self.delete_row(id)?;
         if moved == Moved::Copied {
-            // The item is back: a copy left over is a stray that emptying
-            // the trash removes.
             if let Err(e) = remove_tree(&stored) {
                 log::warn!("a restored trash item stays in the trash folder: {e}");
             }
@@ -307,8 +265,6 @@ impl Trash {
         self.delete_row(id)
     }
 
-    /// Deletes everything, and the strays without a row (left by a crash)
-    /// in the trash folder. Returns the number of items removed.
     pub fn empty(&self) -> Result<usize> {
         let _turn = self.turn();
         let mut first_error = None;
@@ -346,7 +302,6 @@ impl Trash {
         self.purge_before(now_secs() - i64::from(days) * SECS_PER_DAY)
     }
 
-    /// Default 30-day purge.
     pub fn purge_expired(&self) -> Result<usize> {
         self.purge_older_than(DEFAULT_RETENTION_DAYS)
     }
@@ -361,8 +316,6 @@ impl Trash {
     }
 }
 
-/// Removes the copies an interruption left on their way into `dir`. Called
-/// with the turn held, so no copy is under way.
 fn remove_partials(dir: &Path) -> Result<()> {
     let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
@@ -382,8 +335,6 @@ fn remove_partials(dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Removes what is in `dir` but not in `known`. A folder that is not a real
-/// one is left alone: never sweep through a symlink.
 fn remove_strays(dir: &Path, known: &HashSet<PathBuf>) -> Result<()> {
     if !is_real_dir(dir) {
         return Ok(());
@@ -431,8 +382,6 @@ fn row_to_raw(r: &rusqlite::Row<'_>) -> rusqlite::Result<RawRow> {
     })
 }
 
-/// Rename that never replaces; on filesystems without `RENAME_NOREPLACE`
-/// it falls back to an exists-check. `CrossesDevice` between two mounts.
 fn move_without_replace(from: &Path, to: &Path) -> Result<()> {
     match sys::rename_noreplace(from, to) {
         Ok(()) => Ok(()),
@@ -446,8 +395,6 @@ fn move_without_replace(from: &Path, to: &Path) -> Result<()> {
     }
 }
 
-/// Copies a file, a symlink (as a link) or a folder tree, with permission
-/// bits and modification times. Other kinds of files are refused.
 fn copy_tree(from: &Path, to: &Path) -> Result<()> {
     let st = sys::stat(from, false)?;
     if st.is_symlink() {
@@ -462,15 +409,11 @@ fn copy_tree(from: &Path, to: &Path) -> Result<()> {
     } else {
         return Err(Error::new(ErrorKind::Unsupported, "not a regular file"));
     }
-    // Folders get their mode only now: a read-only one could not be filled.
     std::fs::set_permissions(to, std::fs::Permissions::from_mode(st.permissions()))?;
     sys::set_mtime(to, st.mtime)?;
     Ok(())
 }
 
-/// Copies what the folder `from` holds into `to`. A folder with something
-/// in it must be one this process can empty: the copy is a step of a move,
-/// and an original that could not be removed would stay half deleted.
 fn copy_children(from: &Path, to: &Path) -> Result<()> {
     let mut entries = std::fs::read_dir(from)?.peekable();
     if entries.peek().is_some() && !sys::can_change(from) {
@@ -486,8 +429,6 @@ fn copy_children(from: &Path, to: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Bytes of regular files below `path` (or of `path` itself). Symlinks are
-/// counted by their own size and never followed; unreadable parts are skipped.
 fn tree_size(path: &Path) -> Option<u64> {
     let top = sys::stat(path, false).ok()?;
     if !top.is_dir() {
@@ -520,7 +461,6 @@ pub fn remove_tree(path: &Path) -> Result<()> {
         Err(e) => return Err(e.into()),
     };
     if st.is_dir() {
-        // std's remove_dir_all unlinks symlinks instead of descending into them.
         std::fs::remove_dir_all(path)?;
     } else {
         std::fs::remove_file(path)?;

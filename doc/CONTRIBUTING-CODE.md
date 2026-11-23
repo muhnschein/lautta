@@ -11,15 +11,15 @@ What Lautta is: `PROJECT.md`. UI: design canvas in `../design` (one `.dc.html` a
 ## Rules
 
 - `make check` passes: `cargo fmt --check`, clippy with all of `clippy::all` denied, host tests.
-- No `unwrap()`/`expect()`/`panic!` outside tests unless comment proves it cannot fire. Return `lautta_core::Error` (`crate::error`) with right `ErrorKind`.
+- No `unwrap()`/`expect()`/`panic!` outside tests unless it cannot fire; new ones as `expect()` whose message says why. Return `lautta_core::Error` (`crate::error`) with right `ErrorKind`.
 - `unsafe` only in `lautta-core::sys` and `lautta-qt`.
 - Unit tests in `#[cfg(test)] mod tests`; cross-module behaviour in `crates/<crate>/tests/`. Tests bite: CI runs `cargo-mutants` on core modules (changed lines per PR, all weekly; `make mutants-diff MUTANTS_DIFF=<file>` locally). New code ≥ 90 % line coverage (Sonar gates 80 %).
-- Sonar gates: cognitive complexity ≤ 15, no duplicated blocks, no commented-out code, no TODO, no empty function without comment.
+- Sonar gates: cognitive complexity ≤ 15, no duplicated blocks, no commented-out code, no TODO, no empty function.
 - CodeQL (`codeql.yml`) scans shipped code only: no `cfg(test)`, default features, no `crates/*/tests`, no `third_party` (`.github/codeql/codeql-config.yml`, `codeql-config-rust.yml`). `rust/access-invalid-pointer` is our copy (`.github/codeql/rust-queries`): silent on `#[derive(QObject)]` signal offsets (`&(*null).field`, reads no memory); its query test (`rust-queries-tests`, planted bugs) runs in same job. Finding → fix, or dismiss with reason.
 - Paths and names are bytes (`VPath`, `Vec<u8>`); lossy decoding only at display edge. Never log secrets or file contents; paths and host names only at `debug`.
 - Blocking file system calls in `tokio::task::spawn_blocking`. Database only through `crate::db::Db` (`Mutex<rusqlite::Connection>`), only from blocking contexts.
-- SPDX `// SPDX-License-Identifier: LGPL-2.1-or-later` on every source file. Third-party code keeps own licence and headers: `third_party/` (crates), `qml/components/viewers/gallery/` (Jolla Gallery viewer, BSD-3-Clause); `LAUTTA.md` beside it says origin and changes.
-- Comments: AGENTS.md "Comments and docs".
+- SPDX `// SPDX-License-Identifier: LGPL-2.1-or-later` as line 1 of every source file (`#` in shell, Python, Makefile, YAML, TOML; line 2 after a shebang). Third-party code keeps own licence and headers: `third_party/` (crates), `qml/components/viewers/gallery/` (Jolla Gallery viewer, BSD-3-Clause); `LAUTTA.md` beside it says origin and changes.
+- No code comments: AGENTS.md "Comments and docs".
 - Strings: `qsTrId("lautta-…")` with `//%` engineering English. Count in text = one plural string with `%n`, called `qsTrId(id, n)`: never "(s)", never separate id for "1 item". `make translations` refreshes `translations/harbour-lautta.ts`, adds English singular of new plurals: read printed pairs, write singular by hand where it cannot tell. `make check` fails on gap.
 
 ## Layout

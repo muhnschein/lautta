@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `status`: `absent`, `connecting`, `consentUnknown`, `ready`, `reconnecting`.
 
 use super::{error_parts, Guard};
 use crate::runtime::{core, handle, spawn_then};
@@ -22,10 +21,8 @@ pub fn status_name(s: BridgeStatus) -> &'static str {
     }
 }
 
-/// Provider preselected by *Add server*.
 const DEFAULT_PROVIDER: &str = "sftp";
 
-/// One entry per call: two calls on one drive keep it busy until both ended.
 #[derive(Default)]
 struct Busy(Vec<String>);
 
@@ -56,7 +53,6 @@ pub struct Bridge {
     version: qt_property!(QString; NOTIFY statusChanged),
     ready: qt_property!(bool; NOTIFY statusChanged),
     storageSettings: qt_property!(bool; NOTIFY statusChanged),
-    /// One entry per call. Browse rows pulse.
     busyDrives: qt_property!(QVariantList; NOTIFY statusChanged),
 
     requestConsent: qt_method!(fn(&mut self)),
@@ -69,9 +65,7 @@ pub struct Bridge {
     setForeground: qt_method!(fn(&mut self, foreground: bool)),
     poke: qt_method!(fn(&mut self)),
 
-    /// A drive mounted: its folder to open.
     mounted: qt_signal!(locationUri: QString),
-    /// `subject` names what it was about (server, address).
     failed: qt_signal!(kind: QString, message: QString, subject: QString),
 
     guard: Guard,
@@ -148,7 +142,6 @@ impl Bridge {
         });
     }
 
-    /// `drive` is in `busyDrives` until the call ends.
     fn drive_call<F>(&mut self, drive: String, subject: String, f: impl FnOnce(Arc<Core>) -> F)
     where
         F: std::future::Future<Output = lautta_core::Result<Option<Uri>>> + Send + 'static,

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Transfers area on `Core`: transfer list with live progress, start-up restore. Qt-free.
 
 use crate::app::Core;
 use crate::date_group::DateGroup;
@@ -91,7 +90,6 @@ pub fn direction_of(locations: &LocationRegistry, kind: OperationKind, src: &Uri
     }
 }
 
-/// Splits an item error `"Kind: message"` as the engine stores it; the UI translates the kind.
 pub fn split_error(text: &str) -> (String, String) {
     let (head, tail) = text.split_once(": ").unwrap_or((text, ""));
     if ErrorKind::ALL.iter().any(|k| k.name() == head) {
@@ -125,7 +123,6 @@ pub fn parse_choice(name: &str) -> Option<ConflictChoice> {
     .find(|c| choice_name(*c) == name)
 }
 
-/// Fields are snake_case, as the shared ConflictDialog reads them.
 pub fn conflict_json(id: TransferId, item: u32, name: &str, c: &Conflict) -> serde_json::Value {
     serde_json::json!({
         "transferId": id,
@@ -143,7 +140,6 @@ pub fn conflict_json(id: TransferId, item: u32, name: &str, c: &Conflict) -> ser
     })
 }
 
-/// Fed by `TransferEvent::Progress` (at most 4 a second).
 #[derive(Debug, Default)]
 pub struct ProgressBook {
     live: HashMap<TransferId, Live>,
@@ -184,8 +180,6 @@ impl ProgressBook {
         self.live.retain(|id, _| ids.contains(id));
     }
 
-    /// Bytes done is the larger of stored and live value; once finished, the stored one (cancel
-    /// drops partial files). Only running transfers have a rate.
     pub fn of(&self, s: &TransferSummary) -> (u64, u64, Option<u64>) {
         let group = group_of(s.state);
         let live = self
@@ -245,7 +239,6 @@ impl TransferRow {
 
 #[derive(Debug, Clone, Default)]
 pub struct StartReport {
-    /// Paused unless auto-resumed.
     pub restored: usize,
     pub paused: usize,
 }
@@ -254,7 +247,6 @@ fn ended_ms(s: &TransferSummary) -> i64 {
     s.finished_ms.unwrap_or(s.created_ms)
 }
 
-/// Every unended task is in progress; ended ones go by the day they ended.
 pub fn date_group_of(s: &TransferSummary, now_ms: i64) -> DateGroup {
     if s.state.is_finished() {
         DateGroup::at(ended_ms(s), now_ms)
@@ -263,7 +255,6 @@ pub fn date_group_of(s: &TransferSummary, now_ms: i64) -> DateGroup {
     }
 }
 
-/// Each date section is one run of rows.
 fn order_rows(rows: &mut [TransferRow]) {
     rows.sort_by_key(|r| {
         let s = &r.summary;
@@ -278,8 +269,6 @@ fn order_rows(rows: &mut [TransferRow]) {
 }
 
 impl Core {
-    /// `auto_resume` is the setting AND the bridge being reachable; otherwise transfers wait
-    /// paused.
     pub async fn start_transfers(&self, auto_resume: bool) -> Result<StartReport> {
         let restored = self.engine.load(auto_resume).await?;
         let paused = self
@@ -538,7 +527,6 @@ mod tests {
     fn unfinished_transfers_are_in_progress_and_ended_ones_go_by_their_end() {
         use TransferState::*;
         let day = 86_400_000;
-        // No time zone puts it within an hour of midnight, so "a minute ago" is today everywhere.
         let now = 1_800_000_000_000;
         let unfinished = [
             Queued,

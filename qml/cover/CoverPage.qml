@@ -38,7 +38,6 @@ CoverBackground {
         AppIcon {
             visible: cover.folderUri.length > 0
             anchors.horizontalCenter: parent.horizontalCenter
-            // Multiple of 28 px: glyph's sharp set.
             iconSize: FileIcons.snap(Theme.iconSizeLarge)
             icon: FileIcons.glyph("folder", true, iconSize)
             color: Theme.highlightColor

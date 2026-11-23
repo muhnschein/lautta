@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Instant filter: substring match ignoring case and diacritics, plus hidden-files toggle (dot
-//! names and hidden attribute). The folder picker also hides files.
 
 use crate::entry::Entry;
 use unicode_normalization::char::is_combining_mark;

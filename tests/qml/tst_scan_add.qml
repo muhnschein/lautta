@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Add from the folder pulley: a choice of folder or
-// scan, nothing preset; scan opens the camera page and a scan left there is dropped.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -17,7 +16,6 @@ ApplicationWindow {
     property var view
     property var dialog
     property var camera
-    // Null once the scan is destroyed.
     property QtObject scan
 
     DirectoryModel {
@@ -114,7 +112,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 2:
-                // Silica has the page for the choice ready before it lets the dialog go on.
                 if (!win.dialog.acceptDestinationInstance || win.dialog.acceptDestinationInstance.itemName === undefined)
                     break
                 win.dialog.accept()
@@ -156,7 +153,6 @@ ApplicationWindow {
             case 7:
                 if (!win.dialog.acceptDestinationInstance || win.dialog.acceptDestinationInstance.photoTaken === undefined)
                     break
-                // Silica has the camera page built already; the camera itself must wait.
                 if (named(win.dialog.acceptDestinationInstance, "finderLoader").active)
                     return win.fail("no camera before its page shows")
                 win.dialog.accept()
@@ -173,7 +169,6 @@ ApplicationWindow {
                     return win.fail("camera page knows its scan, folder view and folder")
                 if (win.scan.count !== 0 || win.camera.retakeOnly)
                     return win.fail("a new, empty scan")
-                // No camera where the tests run.
                 var placeholder = named(win.camera, "cameraPlaceholder")
                 if (!placeholder || !placeholder.enabled
                         || !text(placeholder.text, "Camera not available", "lautta-scan-no-camera")

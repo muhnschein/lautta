@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Nemo.Thumbnailer draws a PDF or video only when given
-// `mimeType`.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -50,8 +49,6 @@ Item {
 
             clip: thumbnail.page
 
-            // Nemo's crop keeps the middle. A page shows from its top: asked whole, as wide as the
-            // icon (pages up to twice as tall as wide), cut here; a shorter page sits in the middle.
             Thumbnail {
                 id: thumbnail
 
@@ -125,7 +122,6 @@ Item {
         Item {
             id: textTile
 
-            // `icon` inside AppIcon is its own property, not this file's id.
             readonly property Item fileIcon: icon
 
             Label {

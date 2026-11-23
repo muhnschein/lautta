@@ -136,7 +136,6 @@ Page {
             }
         }
 
-        // Every entry needs a task in the list.
         PullDownMenu {
             visible: list.count > 0
 

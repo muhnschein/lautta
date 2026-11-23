@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Roles: `section`, `uri`, `name`, `kind`, `icon`, `status`, `attention`, `colour`, `itemId`,
-//! `place`, `provider`, `host`, `free`, `total`, `fs`, `connection`, `connectionError`, `isFile`,
-//! `drive`, `tiles` (values: `lautta_core::app_browse::Row`; `tiles`: JSON array of `RecentTile`).
 
 use super::{cell_data, role_names, watch_sources, Cell, Guard};
 use crate::json::to_json;
@@ -80,7 +77,6 @@ pub struct LocationsModel {
     count: qt_property!(i32; NOTIFY countChanged),
     nearbyCount: qt_property!(i32; NOTIFY countChanged),
     countChanged: qt_signal!(),
-    /// Space where user folders live; -1: unknown.
     deviceFree: qt_property!(i64; NOTIFY deviceSpaceChanged),
     deviceTotal: qt_property!(i64; NOTIFY deviceSpaceChanged),
     deviceSpaceChanged: qt_signal!(),
@@ -133,8 +129,6 @@ impl LocationsModel {
         self.sections.iter().filter(|s| **s == section).count() as i32
     }
 
-    /// Rows keeping identity stay (open context menu or remorse survives); only rows between the
-    /// unchanged start and end are replaced.
     fn apply(&mut self, rows: Vec<Row>) {
         let keys: Vec<String> = rows.iter().map(key_of).collect();
         let mut cells: Vec<Vec<Cell>> = rows.iter().map(cells).collect();

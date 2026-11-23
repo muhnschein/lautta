@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Favourites: any folder or file, local or remote, with label, colour and icon, reorderable.
-//! Whether it is a folder is stored with it, so Browse can show and open a favourite without asking
-//! its location.
 
 use super::{location_prefix, move_to, next_position, parse_uri, renumber, rewrite_uris};
 use crate::db::Db;
@@ -10,9 +7,6 @@ use crate::mime::{category_of_name, FileCategory};
 use crate::uri::Uri;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
-/// `file-…` icons are the app's own file-type glyphs, the others theme icons
-/// (`image://theme/icon-m-<name>`, Sailfish OS 5.2 theme). The first, the star, is what a folder
-/// favourite shows until another is chosen.
 pub const ICONS: [&str; 24] = [
     "favorite",
     "home",
@@ -40,7 +34,6 @@ pub const ICONS: [&str; 24] = [
     "android",
 ];
 
-/// Anything else (unknown name, a typo) is no choice: default icon, not an empty square.
 fn known_icon(icon: Option<&str>) -> Option<&str> {
     icon.filter(|i| ICONS.contains(i))
 }
@@ -57,8 +50,6 @@ pub struct Favourite {
 }
 
 impl Favourite {
-    /// A theme icon's URL, or the token of an own glyph (`file-folder`), which QML sizes
-    /// (`FileIcons.sized`).
     pub fn icon_source(&self) -> String {
         match known_icon(self.icon.as_deref()) {
             Some(icon) if icon.starts_with("file-") => icon.to_owned(),
@@ -67,7 +58,6 @@ impl Favourite {
         }
     }
 
-    /// The star for a folder, the glyph of the file's kind for a file (`FileIcons.kind`).
     pub fn default_icon(&self) -> &'static str {
         if self.is_dir {
             return "image://theme/icon-m-favorite";
@@ -156,7 +146,6 @@ impl Favourites {
         Favourites { db }
     }
 
-    /// An item can be a favourite once (`AlreadyExists`); an empty label is `InvalidArgument`.
     pub fn add(&self, uri: &Uri, label: &str, colour: Option<&str>, is_dir: bool) -> Result<Favourite> {
         let label = clean_label(label)?;
         let conn = self.db.lock();
@@ -171,9 +160,6 @@ impl Favourites {
         read(&conn, id)
     }
 
-    /// Adds, or changes label, colour and icon of the existing one, which keeps what it was stored
-    /// as: lets the favourite page save on every change without tracking ids. An icon not in
-    /// [`ICONS`] is stored as no choice.
     pub fn save(
         &self,
         uri: &Uri,
@@ -412,7 +398,6 @@ mod tests {
         );
         let got = f.get_by_uri(&u("lautta://x/Uni/thesis.pdf")).unwrap().unwrap();
         assert!(!got.is_dir);
-        // The dialog relabels without knowing what the favourite is.
         let again = f
             .save(&u("lautta://x/Uni/thesis.pdf"), "Final", None, None, true)
             .unwrap();
@@ -521,7 +506,6 @@ mod tests {
 
     #[test]
     fn every_glyph_token_has_its_svgs() {
-        // QML sizes a token into qml/icons/<token>-<set>.svg (FileIcons.js).
         let icons = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../qml/icons");
         let f = store();
         let mut tokens: Vec<String> = ICONS
@@ -548,7 +532,6 @@ mod tests {
         let docs = u("lautta://x/Docs");
         let saved = f.save(&docs, "Docs", None, Some("no-such-icon"), true).unwrap();
         assert_eq!(saved.icon, None, "an unknown icon is not stored");
-        // One stored by something else reads as none.
         f.db.lock()
             .execute("UPDATE favourites SET icon = 'heart' WHERE id = ?1", [saved.id])
             .unwrap();
@@ -564,7 +547,6 @@ mod tests {
 
     #[test]
     fn every_icon_is_in_the_theme_once() {
-        // The theme of the Sailfish OS 5.2 target.
         let theme = include_str!("../../../../doc/theme-icons.txt");
         for name in ICONS {
             let icon = format!("icon-m-{name}");

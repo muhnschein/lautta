@@ -78,7 +78,6 @@ ApplicationWindow {
         return x.__silica_menuitem !== undefined
     }
 
-    // No render loop headless: lay out by hand.
     function browseList() {
         var views = findAll(pageStack.currentPage, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         if (views.length > 0)
@@ -186,7 +185,6 @@ ApplicationWindow {
         all[0].clicked(null)
     }
 
-    // Tapping a server found nearby offers to set it up as an account; nothing connects.
     function checkNearbyRow(list) {
         var row = rowOf(list, "raspberrypi", "nearby")
         if (!row)

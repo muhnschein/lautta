@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later context: { location, item, needed, free, open }; sizes
-// in bytes, any may be absent. `open`: failure came from reading (listing, viewing, playing), not change.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 .pragma library
 .import Sailfish.Silica 1.0 as Silica
 
@@ -7,7 +6,6 @@ function _size(bytes) {
     return Silica.Format.formatFileSize(bytes)
 }
 
-// `named` with subject filled in, `unnamed` when none: no message reads " no longer exists.".
 function _pick(subject, named, unnamed) {
     return subject ? named.arg(subject) : unnamed
 }

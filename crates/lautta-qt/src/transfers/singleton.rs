@@ -26,12 +26,9 @@ pub struct Transfers {
     bytesDone: qt_property!(i64; NOTIFY changed),
     bytesTotal: qt_property!(i64; NOTIFY changed),
     rate: qt_property!(i64; NOTIFY changed),
-    /// -1 when unknown.
     eta: qt_property!(i64; NOTIFY changed),
-    /// Came back paused at start, until resumed or dismissed.
     pendingAtStart: qt_property!(i32; NOTIFY changed),
     closing: qt_property!(bool; NOTIFY changed),
-    /// A `BarMode` name, the transfer it names (0 when hidden), count of unfinished transfers.
     barMode: qt_property!(QString; NOTIFY barChanged),
     barTransferId: qt_property!(i64; NOTIFY barChanged),
     barUnfinished: qt_property!(i32; NOTIFY barChanged),
@@ -39,10 +36,8 @@ pub struct Transfers {
     barChanged: qt_signal!(),
 
     finished: qt_signal!(id: i64, ok: bool, failures: i32),
-    /// JSON list of URIs a finished transfer added to folders (`Transfer::landed`).
     landed: qt_signal!(urisJson: QString),
     needsAnswer: qt_signal!(id: i64, item: i32, conflictJson: QString),
-    /// `kind` is an ErrorKind name.
     failed: qt_signal!(kind: QString, message: QString),
     queued: qt_signal!(id: i64),
     showRequested: qt_signal!(),
@@ -88,8 +83,6 @@ impl QSingletonInit for Transfers {
         });
         self.barMode = QString::from(BarMode::Hidden.name());
         self.recompute();
-        // Window loads persisted settings when its creation is done: start one event-loop turn
-        // later.
         let me = QPointer::from(&*self);
         qmetaobject::single_shot(Duration::from_millis(0), move || {
             if let Some(p) = me.as_pinned() {
@@ -278,8 +271,6 @@ impl Transfers {
         }
     }
 
-    /// Engine loads with auto-resume when the setting is on; it parks bridge transfers until the
-    /// bridge is ready.
     fn start(&mut self) {
         if self.started {
             return;
@@ -395,8 +386,6 @@ impl Transfers {
         self.showRequested();
     }
 
-    /// Asks nothing (large plans start at once). Serves tests and the cover; browse and operations
-    /// have their own entry points.
     fn queueCopy(&self, uris_json: QString, dest: QString) {
         let Some(core) = core() else { return };
         let uris: Vec<Uri> = crate::json::from_json::<Vec<String>>(&uris_json.to_string())

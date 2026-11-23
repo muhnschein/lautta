@@ -44,7 +44,6 @@ ApplicationWindow {
         return out
     }
 
-    // No render loop headless: lay out by hand.
     function layOut(view) {
         var flicks = findAll(view, function (x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < flicks.length; ++i)
@@ -106,7 +105,6 @@ ApplicationWindow {
                    "a photo stays cropped to the tile: " + system.sourceSize + " " + system.height)
     }
 
-    // No page drawn here: sizes stand in for what Nemo returns.
     function checkPageFrame(icon, system) {
         var w = Math.round(icon.width)
         var frame = system.parent

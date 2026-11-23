@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Location-relative paths as raw bytes. Names may contain non-UTF-8 bytes; display uses lossy
-//! decoding.
 
 use crate::error::{Error, ErrorKind, Result};
 use std::fmt;
 
-/// A normalised path inside a location: no leading or trailing `/`, no empty,
-/// `.` or `..` components. The root is the empty path.
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct VPath(Vec<u8>);
 
@@ -15,8 +11,6 @@ impl VPath {
         VPath(Vec::new())
     }
 
-    /// Splits on `/`, drops empty and `.` components, rejects `..` and NUL (a path never escapes
-    /// its location).
     pub fn parse(raw: &[u8]) -> Result<VPath> {
         let mut out: Vec<u8> = Vec::with_capacity(raw.len());
         for comp in raw.split(|b| *b == b'/') {
@@ -122,7 +116,6 @@ impl VPath {
         Some(VPath(self.0[base.0.len() + 1..].to_vec()))
     }
 
-    /// Ancestors from the root down to the parent (for the path menu).
     pub fn ancestors(&self) -> Vec<VPath> {
         let mut out = vec![VPath::root()];
         let mut cur = VPath::root();
@@ -150,7 +143,6 @@ impl VPath {
     }
 }
 
-/// A single name is valid when non-empty, not `.`/`..`, and has no `/` or NUL.
 pub fn validate_name(name: &[u8]) -> Result<()> {
     if name.is_empty() || name == b"." || name == b".." || name.contains(&b'/') || name.contains(&0) {
         return Err(Error::new(ErrorKind::InvalidName, "invalid name"));

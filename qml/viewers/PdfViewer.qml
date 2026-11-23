@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Pages from image://lautta-pdf/ (Rust, hayro). Forms
-// drawn, inert.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -13,7 +12,6 @@ Page {
     id: page
 
     property string uri
-    // Multiple of fitted width; pages re-rendered at `renderZoom` once pinch settles.
     property real zoom: 1
     property real renderZoom: 1
     readonly property real maxZoom: 4
@@ -24,7 +22,6 @@ Page {
         var item = view.itemAt(view.contentX + view.width / 2, view.contentY + view.height / 2)
         return item ? item.pageIndex + 1 : 1
     }
-    // Page at view top: reopening puts it at top again. Middle page is often a later one.
     readonly property int topPage: {
         var x = view.contentX + view.width / 2
         var y = Math.max(0, view.contentY)
@@ -189,14 +186,11 @@ Page {
         onTriggered: view.positionViewAtIndex(doc.lastPage, ListView.Beginning)
     }
 
-    // Pushing waits until this page is shown.
     property bool asked
     property bool wantPassword
     property bool unlocking
-    // Page (from 1) before following a link; 0 none.
     property int backPage
     onStatusChanged: if (status === PageStatus.Active && wantPassword) askLater.restart()
-    // Page stack still moving: push would be lost, retry.
     Timer {
         id: askLater
         interval: 50
@@ -330,8 +324,6 @@ Page {
                 width: view.width
                 x: view.contentX
                 title: page.fileName
-                // List at top when pages arrive; ListView keeps contentY when header grows, so
-                // description line is there, blank, from the start.
                 description: doc.loaded ? PdfText.summary(doc.pageCount) : " "
             }
 
@@ -343,7 +335,6 @@ Page {
                 height: doc.heightFor(index, view.contentWidth)
                 fitWidth: view.width
                 zoom: page.renderZoom
-                // Re-evaluated when doc.hitsRevision changes.
                 hits: page.searchMode && doc.hitsRevision >= 0 ? JSON.parse(doc.hitsJson(index)) : []
                 onDoubleTapped: {
                     var at = mapToItem(view, tapX, tapY)

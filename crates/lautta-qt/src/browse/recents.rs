@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Roles: `itemId`, `uri`, `name`, `kind`, `place`, `at` (ms since epoch), `dateGroup` (`today`,
-//! `yesterday`, `last7Days`, `last30Days`, `older`).
 
 use super::{cell_data, error_parts, role_names, store_changed, Cell};
 use crate::runtime::{blocking_then, core};

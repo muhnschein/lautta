@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host has no GStreamer backend: wiring and download
-// fallback only, not playback.
 import QtQuick 2.6
 import Lautta 1.0
 

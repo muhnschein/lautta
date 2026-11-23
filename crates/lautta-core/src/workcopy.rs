@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Working copies: remote files opened in other apps.
-//!
-//! A working copy is a local copy under `~/Downloads/Lautta/Opened/`, readable by other apps while
-//! it exists, so every copy expires. The table row keeps size and mtime of the local file right
-//! after the download, so a copy another app changed is not removed under it.
 
 use crate::db::Db;
 use crate::entry::{system_time_to_ms, Kind};
@@ -19,7 +14,6 @@ use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-/// Copies are removed this long after they were last downloaded.
 pub const EXPIRY_MS: i64 = 24 * 60 * 60 * 1000;
 
 pub type WorkingCopyId = i64;
@@ -87,8 +81,6 @@ impl WorkingCopies {
         WorkingCopies { db, paths, clock }
     }
 
-    /// Copy for another app in `~/Downloads/Lautta/Opened/<unique>/name`. An existing copy of the
-    /// same file is downloaded again in place.
     pub async fn open_for_view(&self, provider: &dyn Provider, remote: &Uri) -> Result<WorkingCopy> {
         if let Some(existing) = self.reuse(remote).await? {
             return self.refresh(provider, existing).await;
@@ -103,7 +95,7 @@ impl WorkingCopies {
         let (path, file) = blocking(move || {
             let dir = unique_dir(&base, now)?;
             let path = dir.join(OsStr::from_bytes(&name));
-            let file = std::fs::OpenOptions::new() // NOSONAR: runs on the blocking pool
+            let file = std::fs::OpenOptions::new() // NOSONAR
                 .write(true)
                 .create_new(true)
                 .open(&path)?;
@@ -133,7 +125,7 @@ impl WorkingCopies {
         let entry = provider.stat(&c.remote.path, true, Lane::Interactive).await?;
         let path = c.local_path.clone();
         let file = blocking(move || {
-            Ok(std::fs::OpenOptions::new() // NOSONAR: runs on the blocking pool
+            Ok(std::fs::OpenOptions::new() // NOSONAR
                 .write(true)
                 .truncate(true)
                 .open(path)?)
@@ -162,7 +154,6 @@ impl WorkingCopies {
         blocking(move || query_all(&db.lock())).await
     }
 
-    /// Copies another app changed stay. Returns what was removed.
     pub async fn expire(&self) -> Result<Vec<WorkingCopy>> {
         let now = self.clock.now_ms();
         let mut gone = Vec::new();
@@ -186,17 +177,16 @@ impl WorkingCopies {
         self.delete_row(id).await
     }
 
-    /// Only inside the app's own Downloads folder.
     async fn discard_files(&self, file: &Path) {
         let (file, root) = (file.to_owned(), self.paths.opened_dir());
         let removed = blocking(move || {
             let dir = file.parent().map(Path::to_owned);
             match dir {
                 Some(d) if d.parent() == Some(root.as_path()) => {
-                    std::fs::remove_dir_all(d)?; // NOSONAR: runs on the blocking pool
+                    std::fs::remove_dir_all(d)?; // NOSONAR
                 }
                 _ => {
-                    let _ = std::fs::remove_file(&file); // NOSONAR: runs on the blocking pool
+                    let _ = std::fs::remove_file(&file); // NOSONAR
                 }
             }
             Ok(())
@@ -234,7 +224,6 @@ impl WorkingCopies {
         .await
     }
 
-    /// Records the local file as it is now; the expiry clock starts again.
     async fn refetched(&self, id: WorkingCopyId) -> Result<WorkingCopy> {
         let c = self.get(id).await?;
         let path = c.local_path.clone();

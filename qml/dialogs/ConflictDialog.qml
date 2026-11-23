@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Default never Replace. Conflict before run: `planId`
-// (Operations); during run: `transferId` (Transfers).
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -43,7 +42,6 @@ Dialog {
         return parts.join(" · ")
     }
 
-    // Merge only for folders.
     function rows() {
         var list = []
         if (offered("Merge"))

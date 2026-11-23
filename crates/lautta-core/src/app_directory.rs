@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Directory area actions on `Core`: streaming listings, path menu, folder picker locations.
 
 use crate::app::Core;
 use crate::entry::Entry;
@@ -33,8 +32,6 @@ pub struct PathStep {
 
 const BATCH_QUEUE: usize = 8;
 
-/// Hands `rx`'s events to `emit`: first batch at once, later batches joined so at most one
-/// reaches `emit` per `every`. Each batch costs the GUI a merge and a row insert signal.
 pub async fn forward_coalesced(
     mut rx: UnboundedReceiver<ListEvent>,
     every: Duration,
@@ -117,8 +114,6 @@ impl Core {
         }
     }
 
-    /// Lautta may add files to folder `dir`: its place allows it and, on this device, so do the
-    /// folder's permissions.
     pub fn may_add_to(&self, dir: &Uri) -> bool {
         self.provider(&dir.location)
             .is_ok_and(|p| p.capabilities().writable())
@@ -154,8 +149,6 @@ impl Core {
         }
     }
 
-    /// Local absolute paths, `~/…`, `file://` and `lautta://` work everywhere;
-    /// `/…` is a path inside `base`'s location when that is remote.
     pub fn resolve_address(&self, text: &str, base: &Uri) -> Option<Uri> {
         let text = text.trim();
         if text.starts_with("lautta://") {
@@ -211,8 +204,6 @@ impl Core {
             .collect()
     }
 
-    /// Local folders only: `None` for servers and archives (counting would list over the network)
-    /// and unreadable folders.
     pub async fn count_folder(&self, uri: &Uri, show_hidden: bool) -> Option<FolderCount> {
         let path = self.locations.to_local_path(uri)?;
         let permit = self.locations.io_semaphore().acquire_owned().await.ok()?;
@@ -225,8 +216,6 @@ impl Core {
         .flatten()
     }
 
-    /// Includes locations needing the user (sign-in, offline) so the picker can show why they are
-    /// not selectable.
     pub fn picker_locations(&self) -> Vec<Location> {
         self.locations.locations()
     }
@@ -247,7 +236,6 @@ const URL_SET: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
     .remove(b'.')
     .remove(b'~');
 
-/// Safe for QML `url` properties when the name holds `%`, `#`, `?` or spaces.
 pub fn file_url(path: &Path) -> String {
     format!(
         "file://{}",

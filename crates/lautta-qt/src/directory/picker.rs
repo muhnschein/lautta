@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Locations the folder picker starts from; plain list of `core.locations.locations()`.
 
 use crate::runtime::core;
 use cpp::cpp;
@@ -33,7 +32,6 @@ struct Root {
     kind: &'static str,
     status: &'static str,
     attention: String,
-    /// False where the access level netvfs grants adds nothing.
     writable: bool,
 }
 
@@ -42,7 +40,6 @@ pub struct PickerRootsModel {
     base: qt_base_class!(trait QAbstractListModel),
     refresh: qt_method!(fn(&mut self)),
     hasRemote: qt_method!(fn(&self) -> bool),
-    /// Test aid: pumps the Qt event loop so async results arrive inside a synchronous QML test.
     pump: qt_method!(fn(&self, ms: i32)),
     rows: RefCell<Option<Vec<Root>>>,
 }
@@ -103,7 +100,6 @@ impl PickerRootsModel {
     }
 
     fn pump(&self, ms: i32) {
-        // SAFETY: plain Qt calls on the GUI thread without Rust pointers.
         unsafe {
             cpp!([ms as "int"] {
                 QElapsedTimer timer;

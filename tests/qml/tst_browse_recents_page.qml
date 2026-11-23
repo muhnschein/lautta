@@ -68,7 +68,6 @@ ApplicationWindow {
     }
 
     function sections() {
-        // No render loop headless: lay out by hand.
         var views = findAll(win.page, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined })
         for (var i = 0; i < views.length; ++i) {
             views[i].cacheBuffer = 100000

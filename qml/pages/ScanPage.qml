@@ -1,6 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Camera of a scan: each shot becomes a page.
-// Portrait only: photo's turn then needs no sensor. `retakeOnly`: one shot for one page, then
-// back.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -11,21 +9,16 @@ FullscreenContentPage {
     id: page
 
     property string parentUri
-    // Folder view the scan belongs to; told when the scan is left.
     property Item owner
     property QtObject scan
-    // Name typed in the save dialog before more pages were asked for.
     property string name
     property bool retakeOnly
-    // Page the next shot replaces, -1: next shot is a new page.
     property int retakeIndex: -1
-    // Silica builds this page ahead of showing it: no camera until it is in front.
     property bool shown
     property bool handedOver
     property bool flashOn
     property bool taking
     property bool cameraFailed
-    // Qt lists no camera before one was opened: known once the viewfinder is built.
     readonly property bool cameraUsable: !cameraFailed && (!finderLoader.item || finderLoader.item.available)
     readonly property bool live: status === PageStatus.Active && Qt.application.state === Qt.ApplicationActive
     readonly property bool working: taking || (scan !== null && scan.busy)
@@ -56,7 +49,6 @@ FullscreenContentPage {
         notice.show()
     }
 
-    // New page flies from the whole screen into the pages button.
     function fly(index) {
         var shown = JSON.parse(scan.pageJson(index))
         if (!shown)
@@ -78,7 +70,6 @@ FullscreenContentPage {
     }
 
     allowedOrientations: Orientation.Portrait
-    // Pages taken: no swipe drops them, only the close button.
     backNavigation: retakeOnly || pages === 0
 
     onStatusChanged: {
@@ -136,7 +127,6 @@ FullscreenContentPage {
         PageHeader {
             //% "Scan"
             title: qsTrId("lautta-scan-title")
-            // Clear of the close button.
             rightMargin: Theme.horizontalPageMargin + Theme.itemSizeSmall
         }
 

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! App context: `Core` wires stores, location registry and transfer engine. Qt-free.
 
 use crate::bridge::{Attention, BridgeClient, BridgeConfig, BridgeStatus, RemoteLocation};
 use crate::browse_layout::BrowseLayout;
@@ -53,15 +52,11 @@ pub struct Core {
     pub location_prefs: LocationPrefsStore,
     pub browse_layout: BrowseLayout,
     pub working_copies: WorkingCopies,
-    /// `None` only in tests.
     pub bridge: Option<BridgeClient>,
     settings: Mutex<Settings>,
     settings_changed: watch::Sender<u64>,
-    /// Follows removable-media root; `None` without inotify, Browse then rescans on refresh.
     _volume_watch: Option<VolumeWatcher>,
-    /// Made on first use, again after a failed start.
     dir_watcher: Mutex<Option<DirWatcher>>,
-    /// System battery saving: server thumbnails come only from cache or EXIF.
     power_save: AtomicBool,
     pub(crate) shown_images: crate::app_viewers::ShownImages,
     pub(crate) locked_archives: crate::app_archives::LockedArchives,
@@ -90,7 +85,6 @@ impl Trasher for LocalTrasher {
 }
 
 async fn trash_one(locations: &LocationRegistry, trash: &Trash, uri: &Uri) -> Result<()> {
-    // Unknown or vanished location is an error, not a permanent delete.
     locations.provider(&uri.location)?;
     let path = locations
         .to_local_path(uri)
@@ -198,8 +192,6 @@ impl Core {
         self.settings_changed.subscribe()
     }
 
-    /// Changes of local folder `dir` after [`DIR_DEBOUNCE`] of quiet; every folder shares one
-    /// watcher.
     pub fn watch_dir(&self, dir: &Path) -> Result<(DirWatch, UnboundedReceiver<WatchEvent>)> {
         let watcher = {
             let mut slot = lock(&self.dir_watcher);
@@ -266,7 +258,6 @@ impl Core {
         let _ = self.favourites.on_moved(from, to);
     }
 
-    /// The one place that decides; [`Core::delete`] follows it.
     pub fn deletes_to_trash(&self, uri: &Uri) -> bool {
         self.settings().recently_deleted && self.locations.keeps_trash(&uri.location)
     }
@@ -324,7 +315,6 @@ impl Core {
     }
 
     pub async fn start_plan(&self, mut plan: Plan) -> Result<TransferId> {
-        // Dropped once the transfer is in the engine, which then keeps the archive open.
         let hold = std::mem::take(&mut plan.hold);
         let settings = self.settings();
         if plan.kind == OperationKind::Extract {
@@ -372,7 +362,6 @@ impl Core {
         Ok(uri)
     }
 
-    /// Extract is titled by its archive, the name of the archive's location.
     fn plan_title(&self, plan: &Plan) -> String {
         let first = plan.items.first();
         if plan.kind == OperationKind::Extract {
@@ -442,7 +431,6 @@ fn remote_entries(
                 provider: r.provider.clone(),
             };
             let mut location = Location::remote(r.id.clone(), kind, r.name.clone(), r.url.clone());
-            // Last list's states are stale while bridge is away.
             location.connection = match status {
                 BridgeStatus::Reconnecting => ConnectionState::Connecting,
                 _ => r.connection.clone(),

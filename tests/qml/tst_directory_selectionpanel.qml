@@ -101,7 +101,6 @@ ApplicationWindow {
     }
 
     function pageRows(page) {
-        // No render loop headless: lay out by hand.
         findAll(page, function (x) { return x.forceLayout !== undefined }).forEach(function (v) { v.forceLayout() })
         var rows = named(page, "moreRow").sort(function (a, b) { return a.y - b.y })
         return rows.map(function (row) {
@@ -301,7 +300,6 @@ ApplicationWindow {
     }
 
     function checkArchiveIcons() {
-        // No render loop headless: lay out by hand.
         findAll(view, function (x) { return x.forceLayout !== undefined }).forEach(function (v) { v.forceLayout() })
         var rows = findAll(view, function (x) { return x.category === "archive" && x.thumbnailReady !== undefined })
         var archive = glyph("archive")

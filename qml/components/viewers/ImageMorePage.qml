@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Rename goes back to viewer (renameChosen):
-// RenameDialog only asks, viewer does the rename.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -10,7 +9,6 @@ Page {
 
     property string uri
     property bool changeable: true
-    // Folder takes new files: Compress.
     property bool writable: true
 
     signal renameChosen()

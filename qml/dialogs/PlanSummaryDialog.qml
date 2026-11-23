@@ -74,8 +74,6 @@ Dialog {
     canAccept: planId >= 0
 
     onAccepted: Operations.startPlanWith(planId, optionsJson())
-    // Silica emits done() before accepted(), result already set: only a non-accepted dialog drops
-    // its plan.
     onDone: {
         if (result !== DialogResult.Accepted)
             Operations.discardPlan(planId)

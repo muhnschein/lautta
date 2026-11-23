@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Qt 5.6 elides middle of a single line only: cut
-// measured here. `measure(text)` = width of a line (FontMetrics in app, fixed pitch in host test).
+// SPDX-License-Identifier: LGPL-2.1-or-later
 .pragma library
 
 var ELLIPSIS = "…"

@@ -111,7 +111,6 @@ fn a_damaged_cross_reference_table_is_repaired() {
 
 #[test]
 fn password_protected_documents_are_named_as_such() {
-    // standard security handler rev 3, /O and /U matching no password
     let mut bytes = build(&[page(100, 100, RED_SQUARE)]);
     let at = bytes.windows(7).position(|w| w == b"trailer").unwrap();
     let tail = String::from_utf8(bytes.split_off(at)).unwrap();
@@ -200,7 +199,6 @@ fn encrypted_documents_open_with_their_password() {
             "decrypted content"
         );
     }
-    // hayro checks the owner password of AES-256 documents only.
     let doc = PdfDocument::open_with_password(LOCKED_AES256.to_vec(), LOCKED_OWNER_PASSWORD).unwrap();
     assert_eq!(doc.page_count(), 2);
 }

@@ -11,7 +11,6 @@ var viewerPages = {
     "pdf": "../viewers/PdfViewer.qml"
 }
 
-// tileSize: size the opener showed the image's thumbnail at, 0 for none.
 function open(pageStack, app, operations, uri, isDir, mimeType, folderUri, tileSize) {
     if (isDir) {
         pageStack.push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": uri })

@@ -1,8 +1,5 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-2.1-or-later
-# Host build dependencies (Ubuntu 24.04): Qt 5, pinned Rust toolchain, optional tools:
-#   install-host-deps.sh [nextest] [coverage] [mutants] [cross]
-# Cargo tool already at pinned version is kept: CI installs prebuilt ones first.
 set -eu
 sudo apt-get update -q
 sudo apt-get install -y -q --no-install-recommends \
@@ -21,7 +18,6 @@ for tool in "$@"; do
         nextest) cargo_tool cargo-nextest 0.9.148 ;;
         coverage) cargo_tool cargo-llvm-cov 0.6.16 ;;
         mutants) cargo_tool cargo-mutants 25.0.1 ;;
-        # SDK's cross compiler is an i386 program.
         cross) sudo apt-get install -y -q --no-install-recommends libc6-i386 ;;
         *) echo "unknown tool $tool" >&2; exit 2 ;;
     esac

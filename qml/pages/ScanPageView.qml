@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Pages of a scan one at a time, as the image viewer
-// shows pictures; all page actions live here.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -11,7 +10,6 @@ FullscreenContentPage {
     id: page
 
     property QtObject scan
-    // Page shown first.
     property int index
     readonly property int pages: scan ? scan.count : 0
     readonly property int current: paged.currentIndex
@@ -49,7 +47,6 @@ FullscreenContentPage {
     allowedOrientations: Orientation.All
     backNavigation: !zoomed
 
-    // Last page removed: nothing left to show.
     onPagesChanged: {
         if (pages === 0 && status === PageStatus.Active)
             pageStack.pop()
@@ -71,7 +68,6 @@ FullscreenContentPage {
         objectName: "pagedView"
         anchors.fill: parent
         model: page.scan
-        // Binding at creation: set later, the view slides there.
         currentIndex: page.index
         interactive: count > 1 && !page.zoomed && !remorse.active
 

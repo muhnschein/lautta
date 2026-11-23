@@ -33,7 +33,6 @@ ApplicationWindow {
         return expect(done(), "timed out waiting for " + what)
     }
 
-    // Accepts a dialog and leaves its closing transition running.
     function closeDialog() {
         var dialog = pageStack.push(plainDialog)
         if (!waitFor(function () { return !pageStack.busy }, "the dialog to open"))
@@ -42,7 +41,6 @@ ApplicationWindow {
         return expect(pageStack.busy, "the dialog closes")
     }
 
-    // A drive mounts while a dialog closes.
     function checkFolderWhileDialogCloses() {
         var dest = "lautta://user-documents/"
         if (!closeDialog())

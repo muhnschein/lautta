@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Local file copy: `FICLONE`, then `copy_file_range`, then buffered loop. Each falls back to the
-//! next on any error; the last reports the real error.
 
 use crate::provider::ProgressSink;
 use crate::sys;
@@ -10,8 +8,6 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 const BUF: usize = 256 * 1024;
 
-/// Set once the caller stopped waiting (its future dropped: task aborted). Loops end at next chunk;
-/// [`Stop::commit`] steps never start after it, so cleanup that runs later sees every file made.
 #[derive(Default)]
 pub struct Stop(Mutex<bool>);
 
@@ -32,7 +28,6 @@ impl Stop {
         }
     }
 
-    /// Runs `f` unless stopped; stopping waits for a running `f`.
     pub fn commit<T, E: From<io::Error>>(&self, f: impl FnOnce() -> Result<T, E>) -> Result<T, E> {
         let stopped = self.lock();
         if *stopped {
@@ -46,7 +41,6 @@ impl Stop {
     }
 }
 
-/// Sets its [`Stop`] when dropped.
 pub struct StopOnDrop(pub Arc<Stop>);
 
 impl Drop for StopOnDrop {
@@ -55,9 +49,6 @@ impl Drop for StopOnDrop {
     }
 }
 
-/// Copies between current positions. `base` bytes already in `dst` (resume) only shift progress;
-/// `total` is final size if known. `try_clone` allows whole-file reflink, valid only when both
-/// positions are 0. Returns bytes written.
 pub fn copy_fd(
     src: &File,
     dst: &File,
@@ -92,7 +83,6 @@ pub fn copy_fd(
     Ok(done + rest)
 }
 
-/// `progress` gets bytes so far; its error ends the copy.
 pub fn copy_buffered(
     mut src: &File,
     mut dst: &File,

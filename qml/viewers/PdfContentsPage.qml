@@ -7,7 +7,6 @@ Page {
     id: page
 
     property string fileName
-    // [{title, level, page}] (PdfDocument.outline, parsed).
     property var outline: []
     property int pageCount
     property int currentPage

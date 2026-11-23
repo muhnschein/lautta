@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! uid/gid to name by parsing `/etc/passwd` and `/etc/group`. No NSS: sandbox sees only the plain
-//! files; unknown ids fall back to the number.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -57,7 +55,6 @@ impl Names {
     }
 }
 
-/// Both files are `name:x:id:...`; the first entry for an id wins.
 fn parse_ids(path: &Path) -> HashMap<u32, String> {
     let mut map = HashMap::new();
     let Ok(text) = std::fs::read_to_string(path) else {

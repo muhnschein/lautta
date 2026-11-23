@@ -20,7 +20,6 @@ fn desk() -> Desk {
     Desk { home, session }
 }
 
-/// Sheet in the middle of a dark table; the sheet's top left quarter is red.
 fn sheet_photo(w: u32, h: u32) -> RgbImage {
     RgbImage::from_fn(w, h, |x, y| {
         let (fx, fy) = (x as f32 / w as f32, y as f32 / h as f32);
@@ -37,7 +36,6 @@ fn jpeg_bytes(img: &RgbImage) -> Vec<u8> {
 }
 
 impl Desk {
-    /// Photo outside the session, as picked from a folder.
     fn file(&self, name: &str, bytes: &[u8]) -> PathBuf {
         let path = self.home.path().join(name);
         std::fs::write(&path, bytes).unwrap();
@@ -203,7 +201,6 @@ fn broken_photo_adds_nothing_and_leaves_no_files() {
 #[test]
 fn oversized_picture_is_refused() {
     let mut d = desk();
-    // PNG of 20000 × 6000 pixels up to the start of its pixel data: enough to read the size.
     let mut png = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
     let mut chunk = |kind: &[u8; 4], data: &[u8]| {
         png.extend_from_slice(&(data.len() as u32).to_be_bytes());
@@ -232,7 +229,6 @@ fn exif_orientation_turns_the_photo_upright() {
         thumbnail: None,
         gps: false,
     };
-    // Stored lying on its left side: red quarter bottom left turns to top left.
     let lying = image::imageops::rotate270(&sheet_photo(800, 600));
     let photo = d.file("lying.jpg", &testutil::with_exif(&jpeg_bytes(&lying), &spec));
     d.session.add(&photo).unwrap();
@@ -461,7 +457,6 @@ fn pdf_has_every_page_in_order_as_shown() {
         .iter()
         .map(|s| (s.width.round() as i32, s.height.round() as i32))
         .collect();
-    // Sheet of 4:3 with the long side of A4; the turned one stands upright.
     assert!(sizes[0].0 == 842 && (sizes[0].1 - 631).abs() <= 12, "{sizes:?}");
     assert!(sizes[1].1 == 842 && (sizes[1].0 - 631).abs() <= 12, "{sizes:?}");
     assert_eq!(sizes[2], sizes[0]);
@@ -495,7 +490,6 @@ fn saved_page_is_cut_from_the_full_photo_up_to_a4_at_200_dpi() {
     assert_eq!(d.view(0).dimensions(), (1600, 800));
     let text = String::from_utf8_lossy(&d.pdf()).into_owned();
     assert!(text.contains("/Width 2339 /Height 1170 "), "capped page");
-    // Sheet covers 60 % of each side of the 2000 px photo: more than the working picture has.
     let width: u32 = text
         .rsplit("/Width ")
         .next()

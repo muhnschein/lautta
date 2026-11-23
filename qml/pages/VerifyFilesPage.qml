@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Verify files (SCR-64): every file a checksum list names. Problems move to the top as found.
-// Leaving the page stops it.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-// Named MediaPlayer: QtMultimedia types via `MM` prefix.
 import QtMultimedia 5.6 as MM
 import Nemo.KeepAlive 1.2
 import Lautta 1.0
@@ -22,12 +21,10 @@ Page {
     readonly property real duration: local ? localPlayer.duration : remote.duration
     readonly property string errorKind: local ? remote.playerErrorKind(localPlayer.error) : remote.errorKind
     property bool chrome: true
-    // Audio in landscape: cover left, the rest right.
     readonly property bool sideBySide: !video && isLandscape
     readonly property real paneX: sideBySide ? width / 2 : 0
     readonly property real paneWidth: sideBySide ? width / 2 : width
     readonly property string coverUrl: !video && info.cover !== "" ? "image://lautta-cover/" + uri : ""
-    // No title tag: file name without its extension.
     readonly property string trackTitle: {
         if (info.title !== "")
             return info.title
@@ -94,7 +91,6 @@ Page {
         color: page.video ? "black" : "transparent"
     }
 
-    // Glow: blurred, tiny copy of the cover stretched over the page, dimmed so text stays legible.
     Image {
         id: glow
 
@@ -149,7 +145,6 @@ Page {
         Behavior on opacity { FadeAnimation { } }
     }
 
-    // Space between header and controls; portrait centres cover and track info in it as one block.
     Item {
         id: stage
         x: page.paneX

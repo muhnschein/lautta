@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Silica window sits in a Qt Quick window so the list
-// has a size and lays out rows.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import QtQuick.Window 2.2 as QtQuick
 import Sailfish.Silica 1.0
@@ -21,7 +20,6 @@ QtQuick.Window {
 
     ViewerTools { id: tools }
     TextDocument { id: warmUp }
-    // Same file as the page: plain lines to lay out beside its rows (fixtures here have no tabs).
     TextDocument { id: shownFile; uri: window.page ? window.page.uri : "" }
 
     Label {

@@ -1,11 +1,5 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-2.1-or-later
-# Lifts from the SDK image what a host cargo needs to cross-build: aarch64 gcc and
-# binutils (/opt/cross, i486), the host libraries they load, the target sysroot. Adds what
-# the image leaves to scratchbox2: binutils under gcc's names, sysroot compiler wrappers,
-# link names and pkg-config files for target libraries without -devel packages.
-# Host needs libc6-i386.
-# Usage: lift-sdk.sh <image> <target name> <dir>
 set -eu
 image=$1
 target=$2
@@ -16,7 +10,6 @@ mkdir -p "$dir/hostlib" "$dir/bin" "$dir/linklib/pkgconfig"
 dir=$(cd "$dir" && pwd)
 cid=$(docker create "$image" /bin/true)
 trap 'docker rm "$cid" > /dev/null' EXIT
-# Through tar: unprivileged unpack, no device nodes, no ownership.
 lift() {
     from=$1
     to=$2
@@ -29,7 +22,6 @@ lift "/srv/mer/targets/$target" "$dir/sysroot"
 for lib in libmpc.so.3 libmpfr.so.6 libgmp.so.10 libz.so.1 libzstd.so.1; do
     docker cp -L "$cid:/usr/lib/$lib" "$dir/hostlib/$lib"
 done
-# gcc runs as and ld from <prefix>/<triple>/bin; sb2 maps them in the SDK.
 mkdir -p "$dir/cross/$triple/bin"
 for tool in as ld ld.bfd ar nm objcopy objdump ranlib readelf strip; do
     if [ -e "$dir/cross/bin/$triple-$tool" ]; then
@@ -45,7 +37,6 @@ LD_LIBRARY_PATH="$dir/hostlib" exec "$dir/cross/bin/$triple-$tool" $sysroot "\$@
 WRAP
     chmod +x "$dir/bin/$triple-$tool"
 done
-# Crates ship their own bindings: no headers needed.
 link() {
     lib=$1
     soname=$2

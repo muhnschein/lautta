@@ -1,12 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `ImageListModel` (folder's images, for swiping) and QML image providers for remote files,
-//! `image://lautta-thumb/<uri>?size=N`, `image://lautta-file/<uri>` and the media player's
-//! `image://lautta-cover/<uri>?size=N[&glow=1]`.
-//!
-//! Local images, videos and PDFs never come here for thumbnails (`Nemo.Thumbnailer`). Providers are
-//! asynchronous (`QQuickAsyncImageProvider`): request returns at once, tokio runtime fetches, a
-//! worker decodes, response is finished from there. Engine must be given the providers once:
-//! [`register_image_providers`].
 
 use super::{parse_uri, qstr, run_then};
 use crate::runtime::{core, handle};
@@ -42,7 +34,6 @@ pub struct ImageListModel {
     generation: u64,
 }
 
-/// One lives as long as its image viewer.
 impl Drop for ImageListModel {
     fn drop(&mut self) {
         if let Some(core) = core() {
@@ -147,7 +138,6 @@ cpp! {{
     #include <QtCore/QMetaObject>
     #include <memory>
 
-    // Shared by the response (GUI/reader thread) and the Rust job.
     struct LauttaImageState {
         QMutex mutex;
         QImage image;
@@ -186,9 +176,6 @@ cpp! {{
         }
     };
 
-    // Called by the Rust job: decodes `data` (or records `err`), finishes the response unless
-    // cancelled. `exact`: `w` x `h` is the decode size in the file's orientation (0: as is), else
-    // the shown size to fit. Takes over `handle`.
     static void lauttaImageDone(void *handle, const char *data, size_t len, int w, int h,
                                 int orientation, bool transform, bool exact, const char *err,
                                 size_t errLen)
@@ -211,8 +198,6 @@ cpp! {{
                 if (w > 0 && h > 0)
                     reader.setScaledSize(QSize(w, h));
             } else if (size.isValid() && (w > 0 || h > 0)) {
-                // Request is for the displayed (rotated) size: decode scaled down, never up, keep
-                // aspect ratio.
                 QSize shown = (transform && orientation >= 5) ? size.transposed() : size;
                 qreal rw = w > 0 ? qreal(w) / shown.width() : 1e9;
                 qreal rh = h > 0 ? qreal(h) / shown.height() : 1e9;
@@ -233,8 +218,6 @@ cpp! {{
             QMetaObject::invokeMethod(s->response, "finished", Qt::QueuedConnection);
     }
 
-    // Called by the Rust job: premultiplied RGBA `w` x `h`, copied before return. Takes over
-    // `handle`.
     static void lauttaImageDoneRgba(void *handle, const uchar *data, int w, int h)
     {
         std::unique_ptr<std::shared_ptr<LauttaImageState>> owner(
@@ -292,9 +275,6 @@ cpp! {{
     }
 }}
 
-/// Adds `lautta-thumb`, `lautta-file`, `lautta-pdf` and `lautta-cover` providers to a `QQmlEngine` (engine takes
-/// ownership). Once per engine.
-///
 /// # Safety
 /// `engine` must point to a live `QQmlEngine`.
 pub unsafe fn register_image_providers(engine: *mut c_void) {
@@ -317,7 +297,6 @@ fn cancellers() -> std::sync::MutexGuard<'static, Option<HashMap<u64, Canceller>
 
 pub(crate) struct Reply(*mut c_void);
 
-// SAFETY: owning handle, only used to call `lauttaImageDone` once, which locks internally.
 unsafe impl Send for Reply {}
 
 impl Reply {
@@ -325,7 +304,6 @@ impl Reply {
         let handle = self.take();
         let (data, len) = (bytes.as_ptr(), bytes.len());
         let orientation = i32::from(orientation);
-        // SAFETY: `handle` came from `requestImageResponse`, consumed here.
         unsafe {
             cpp!([handle as "void*", data as "const char*", len as "size_t", w as "int", h as "int",
                   orientation as "int", transform as "bool", exact as "bool"] {
@@ -343,8 +321,6 @@ impl Reply {
         }
         let handle = self.take();
         let data = rgba.as_ptr();
-        // SAFETY: `handle` came from `requestImageResponse`, consumed here; `data` holds `w * h *
-        // 4` bytes (checked above), C++ copies before return.
         unsafe {
             cpp!([handle as "void*", data as "const uchar*", w as "int", h as "int"] {
                 lauttaImageDoneRgba(handle, data, w, h);
@@ -355,7 +331,6 @@ impl Reply {
     pub(crate) fn fail(self, message: &str) {
         let handle = self.take();
         let (data, len) = (message.as_ptr(), message.len());
-        // SAFETY: as in `done`.
         unsafe {
             cpp!([handle as "void*", data as "const char*", len as "size_t"] {
                 lauttaImageDone(handle, nullptr, 0, 0, 0, 1, false, false, data, len);
@@ -393,7 +368,6 @@ fn finish_error(reply: Reply, id: u64, e: &lautta_core::Error) {
 
 fn request(kind: i32, id_data: *const u8, id_len: usize, w: i32, h: i32, req: u64, handle: *mut c_void) {
     let reply = Reply(handle);
-    // SAFETY: the C++ caller keeps the UTF-8 bytes alive during this call.
     let id = unsafe { std::slice::from_raw_parts(id_data, id_len) };
     let id = String::from_utf8_lossy(id).into_owned();
     let Some(core) = core() else {
@@ -409,7 +383,6 @@ fn request(kind: i32, id_data: *const u8, id_len: usize, w: i32, h: i32, req: u6
     }
 }
 
-/// Cached thumbnail is one of `THUMB_SIZES`; decoded at the delegate's size.
 fn thumb_request(
     core: std::sync::Arc<lautta_core::app::Core>,
     id: &str,
@@ -462,7 +435,6 @@ fn thumb_request(
     });
 }
 
-/// Cover provider: `&glow=1` asks for the backdrop.
 fn preview_kind(id: &str, kind: i32) -> (&str, PreviewKind) {
     if kind != KIND_COVER {
         return (id, PreviewKind::Thumb);
@@ -504,8 +476,6 @@ fn file_request(
         .insert(req, Box::new(move || abort.abort()));
 }
 
-/// Size asked with both sides = the screen: decode size for it ((0, 0): as is). `None`: fit the
-/// size asked.
 fn screen_decode_size(bytes: &[u8], (w, h): (i32, i32)) -> Option<(i32, i32)> {
     let screen = (u32::try_from(w).ok()?, u32::try_from(h).ok()?);
     if screen.0 == 0 || screen.1 == 0 {
@@ -604,7 +574,6 @@ mod tests {
         with_exif(jpeg, orientation, None)
     }
 
-    /// EXIF with orientation and, in IFD1, an embedded `thumb`.
     fn with_exif(jpeg: &[u8], orientation: u16, thumb: Option<&[u8]>) -> Vec<u8> {
         let mut tiff = vec![b'I', b'I', 0x2a, 0, 8, 0, 0, 0, 1, 0];
         tiff.extend_from_slice(&[0x12, 0x01, 3, 0, 1, 0, 0, 0]);
@@ -630,7 +599,6 @@ mod tests {
         out
     }
 
-    /// Qt allows one application object per process.
     #[test]
     fn providers_serve_remote_images() {
         std::env::set_var("QT_QPA_PLATFORM", "offscreen");
@@ -698,7 +666,6 @@ mod tests {
         let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/big.jpg", (100, 0));
         assert_eq!((e.as_str(), w, h), ("", 100, 50), "width alone: fit to it");
 
-        // 4:3 on a 108 x 228 screen shows at 144 x 108 turned.
         let (e, w, h) = probe("lautta-file", "lautta://nv-qt-images/p/photo.jpg", (108, 228));
         assert_eq!(
             (e.as_str(), w, h),
@@ -800,7 +767,6 @@ mod tests {
         assert!(e.contains("bad thumbnail id"), "{e}");
     }
 
-    /// ID3v2.4 with one front cover, then silent MPEG frames.
     fn mp3_with_cover(jpeg: &[u8]) -> Vec<u8> {
         let safe = |n: usize| {
             [

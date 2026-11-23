@@ -79,7 +79,6 @@ ApplicationWindow {
         return String(Qt.resolvedUrl("../../qml/icons/file-" + kind + "-" + set + ".svg"))
     }
 
-    // No render loop headless: lay out by hand.
     function icons(view) {
         view.flickable.forceLayout()
         var out = {}

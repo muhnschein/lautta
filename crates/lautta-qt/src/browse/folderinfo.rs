@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Item count of the cover's folder, from the cached listing the Directory page made: cover never
-//! lists a remote folder.
 
 use crate::runtime::{blocking_then, core};
 use lautta_core::Uri;

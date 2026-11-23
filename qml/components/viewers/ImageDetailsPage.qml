@@ -28,7 +28,6 @@ Page {
         source: page.imageSource
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
-        // Viewer photo's request (ViewerImage.js): its decode comes from Qt's pixmap cache.
         autoTransform: true
         sourceSize.width: Screen.width
         sourceSize.height: Screen.height

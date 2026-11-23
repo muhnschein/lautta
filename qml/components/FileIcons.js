@@ -17,8 +17,6 @@ function kind(category, isDir) {
     return "document"
 }
 
-// 28-unit set at multiples of 28, 32-unit at multiples of 32, 80 px set at 80; elsewhere 28-unit,
-// soft edges.
 function setFor(px) {
     var side = Math.round(px)
     if (side % 28 === 0)

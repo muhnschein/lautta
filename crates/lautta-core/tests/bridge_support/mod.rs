@@ -18,8 +18,6 @@ pub struct Rig {
     pub home: TempDir,
 }
 
-/// App defaults without polling and handshake timeout (a paused clock would fire it at the first
-/// idle moment).
 pub fn config(paths: &AppPaths) -> BridgeConfig {
     BridgeConfig {
         poll_interval: None,
@@ -88,7 +86,6 @@ impl Rig {
     }
 }
 
-/// Polls on the (possibly virtual) clock, up to 30 s: loaded runners are slow.
 pub async fn eventually(what: &str, mut cond: impl FnMut() -> bool) {
     for _ in 0..3000 {
         if cond() {

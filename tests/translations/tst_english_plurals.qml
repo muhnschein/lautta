@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Run with `--qml-check -T <folder>` by
-// crates/lautta-qt/tests/translations.rs (host) and tools/ci/check-rpm.sh (target).
 import QtQuick 2.6
 
 QtObject {
-    // Only the first difference is reported: a wrong catalogue is wrong in many places.
     property bool failed: false
     property bool reachedEnd
 

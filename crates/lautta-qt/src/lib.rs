@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Qt glue: exposes `lautta-core` to QML through qmetaobject models and QObject facades. No
-//! business logic.
-// C++ blocks are large for the `cpp!` macro expansion.
 #![recursion_limit = "1024"]
 #![allow(non_snake_case)]
-// qmetaobject derives expand to transmutes clippy flags.
 #![allow(clippy::useless_transmute)]
 
 pub mod app;
@@ -29,7 +25,6 @@ cpp! {{
     #include <QtCore/QTranslator>
     #include <QtGui/QFontDatabase>
 
-    // Every `*.ttf` in `directory` for this process. False when none loads.
     static bool lauttaLoadFonts(const QString &directory)
     {
         bool loaded = false;
@@ -39,9 +34,6 @@ cpp! {{
         return loaded;
     }
 
-    // Installs `directory`'s catalogues: engineering English first, then user's language. Last
-    // installed is asked first, so a missing message falls back to English (has plural forms).
-    // False when the catalogue is missing.
     static bool lauttaInstallTranslations(QCoreApplication *app, const QString &directory)
     {
         QTranslator *english = new QTranslator(app);
@@ -58,7 +50,6 @@ cpp! {{
 cpp! {{
     #include <QtGui/QGuiApplication>
     #include <QtQuick/QQuickView>
-    // Defined in viewers/images.rs (all cpp! blocks share one translation unit).
     static void lauttaRegisterImageProviders(QQmlEngine *engine);
     #include <QtQml/QQmlEngine>
     #include <QtQml/QQmlContext>
@@ -79,12 +70,6 @@ cpp! {{
     #include <sailfishapp.h>
 #endif
 
-    // QML check mode: compiles and instantiates QML documents with this binary's engine (real
-    // Silica, real Lautta types). Any error, any warning or console.error naming a checked
-    // document, and any uncaught JS exception outside Qt's modules, fails. A `tst_*` document
-    // fails unless its root `reachedEnd` is true at the end. `-T <directory>` installs that
-    // directory's catalogues first; without it qsTrId gives back the id. `-F <directory>` loads
-    // its fonts like the app.
     static QStringList *lauttaCheckProblems = nullptr;
     static QString lauttaCheckFile;
 
@@ -98,9 +83,6 @@ cpp! {{
             std::fprintf(stderr, "note    %s\n", qPrintable(msg));
     }
 
-    // Uncaught JS exception outside Qt's QML modules, e.g. from a `.js` library a checked document
-    // uses. Engine names throw site, not caller: file name alone misses it. Silica (a Qt module)
-    // throws on pages loaded without ApplicationWindow: not ours.
     static bool lauttaThrown(const QQmlError &e)
     {
         static const QRegularExpression thrown(QStringLiteral("^[A-Za-z]*Error: "));
@@ -160,7 +142,6 @@ cpp! {{
             std::unique_ptr<QObject> object(component.isReady() ? component.create() : nullptr);
             for (int spin = 0; spin < 10; ++spin)
                 QCoreApplication::processEvents();
-            // `scenarioRunning` stays true until the steps are done; failure = logged error.
             if (object && object->property("scenarioRunning").isValid()) {
                 QElapsedTimer clock;
                 clock.start();
@@ -191,14 +172,10 @@ cpp! {{
     }
 }}
 
-/// `argv` from the exported C `main`. Panics abort, apart from PDF drawing's; tests starting the
-/// QML engine via [`qml_check`] keep the default hook.
-///
 /// # Safety
 /// `argc`/`argv` must be the process arguments as passed to `main`.
 pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
     lautta_core::panics::abort_outside_catch();
-    // Core (database, locations, bridge) opens while Qt starts; QML waits for it, not Qt.
     *lock_opening() = Some(std::thread::spawn(open_core));
     register_types();
     cpp!([argc as "int", argv as "char**"] -> c_int as "int" {
@@ -249,7 +226,6 @@ fn wait_core() {
     }
 }
 
-/// Failure to open core is shown by the start page via `App.startError`.
 fn open_core() {
     let paths = lautta_core::paths::AppPaths::from_env();
     if let Err(e) = runtime::init(paths) {
@@ -273,13 +249,10 @@ pub fn qml_uri() -> std::ffi::CString {
     cstr(QML_URI)
 }
 
-/// No interior NUL in our names.
 pub fn cstr(s: &str) -> std::ffi::CString {
     std::ffi::CString::new(s).unwrap_or_default()
 }
 
-/// `-I <path>`, `-T <catalogue folder>`, `-F <font folder>` and files. Opens core from `$HOME` and registers types like
-/// the app. For host QML tests.
 pub fn qml_check(args: &[String]) -> c_int {
     open_core();
     register_types();
@@ -289,7 +262,6 @@ pub fn qml_check(args: &[String]) -> c_int {
     ptrs.push(std::ptr::null_mut());
     let argc = c_int::try_from(owned.len()).unwrap_or(c_int::MAX);
     let argv = ptrs.as_mut_ptr();
-    // SAFETY: argv points to NUL-terminated strings that outlive the call.
     unsafe {
         cpp!([argc as "int", argv as "char**"] -> c_int as "int" { return lauttaQmlCheck(argc, argv); })
     }

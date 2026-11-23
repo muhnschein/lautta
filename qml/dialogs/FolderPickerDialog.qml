@@ -27,7 +27,6 @@ Dialog {
         return status === "offline" ? ErrorText.message("NetworkUnreachable", { "location": name }) : ""
     }
 
-    // Waits for listing that follows `created`, as DirectoryView does.
     function revealMade() {
         if (!madeUri || folders.loading)
             return

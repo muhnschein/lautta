@@ -32,7 +32,6 @@ ApplicationWindow {
     }
 
     function waitFor(done, what) {
-        // Hang guard only: emulated target under load is slow.
         for (var i = 0; i < 1200 && !done(); ++i)
             tools.pump(50)
         return expect(done(), "timed out waiting for " + what)
@@ -53,7 +52,6 @@ ApplicationWindow {
         return out
     }
 
-    // No render loop headless: lay out by hand.
     function layOut(root) {
         var views = findAll(root, function (x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < views.length; ++i)
@@ -93,8 +91,6 @@ ApplicationWindow {
         }, "the filler folders")
     }
 
-    // Names sort last: new items start out of view at the bottom.
-    // `firstOnly`: items far apart; only the first in list order must be in view.
     function checkFlash(view, act, uris, what, firstOnly) {
         flashes = []
         view.flickable.positionViewAtBeginning()
@@ -105,7 +101,6 @@ ApplicationWindow {
                what + ": one flash per new item: " + JSON.stringify(flashes))
         var first = Math.min.apply(null, uris.map(view.model.indexOf))
         for (var i = 0; i < uris.length; ++i) {
-            // Out of view far below: no row made for it.
             if (firstOnly && view.model.indexOf(uris[i]) !== first)
                 continue
             var flash = flashOf(view.flickable, uris[i])
@@ -118,7 +113,6 @@ ApplicationWindow {
         expect(others.length === 0, what + ": no other row lights up: " + others.length)
     }
 
-    // Tile's name and details take ambience colours with its highlight, then return to plain.
     function checkGridCaption(view, uri, name) {
         var flash = flashOf(view.flickable, uri)
         var names = findAll(view.flickable, function (x) { return x.objectName === "gridName" && x.text === name }, [])
@@ -132,7 +126,6 @@ ApplicationWindow {
             return
         expect(Qt.colorEqual(names[0].color, Theme.primaryColor), "grid caption: name back to plain: " + names[0].color)
         expect(Qt.colorEqual(details[0].color, Theme.secondaryColor), "grid caption: details back to plain: " + details[0].color)
-        // Fully lit, set by hand: the fade's hold is too short to catch on a stalled runner.
         flash.opacity = 1
         expect(Qt.colorEqual(names[0].color, Theme.highlightColor), "grid caption: name in ambience colour: " + names[0].color)
         expect(Qt.colorEqual(details[0].color, Theme.secondaryHighlightColor),
@@ -164,7 +157,6 @@ ApplicationWindow {
         fixture(source + "zz-pasted-2.md")
         checkFlash(view, function () { Operations.copyTo(JSON.stringify([source + "zz-pasted.md", source + "zz-pasted-2.md"]), base) },
                    [base + "zz-pasted.md", base + "zz-pasted-2.md"], "paste two")
-        // Folders list first: a folder named "a…" sits at the top, a file "zz…" at the bottom.
         sources.uri = source
         sources.createFolder("aa-top")
         waitFor(function () {
@@ -177,11 +169,9 @@ ApplicationWindow {
             view.flickable.positionViewAtEnd()
             Operations.copyTo(JSON.stringify([source + "aa-top", source + "zz-bottom.md"]), base)
         }, [base + "aa-top", base + "zz-bottom.md"], "paste far apart", true)
-        // Word of it after the folder's own relisting saw the file: still lights up.
         fixture(base + "zz-late.md")
         waitFor(function () { return !view.model.loading && view.model.indexOf(base + "zz-late.md") >= 0 }, "the late file listed")
         checkFlash(view, function () { view.landed([base + "zz-late.md"], true) }, [base + "zz-late.md"], "late word")
-        // Clipboard panel covers the list's bottom: new last row scrolls above it.
         fixture(source + "zz-under-panel.md")
         expect(App.copy(JSON.stringify([source + "zz-under-panel.md"])), "copy for the panel")
         waitFor(function () { return view.coveredHeight >= Theme.itemSizeLarge }, "the clipboard panel's room")
@@ -190,7 +180,6 @@ ApplicationWindow {
         App.clearClipboard()
         checkFlash(view, function () { Operations.compress(JSON.stringify([source + "zz-inner.md"]), base, "zz-packed", "zip", "") },
                    [base + "zz-packed.zip"], "compress")
-        // Extract lands beside the compressed file: one item as is, several in a new folder.
         var one = finished(function () {
             Operations.compress(JSON.stringify([source + "zz-inner.md"]), base, "zz-one", "zip", "")
         }, "the compressed file of one item")
@@ -199,7 +188,6 @@ ApplicationWindow {
             Operations.compress(JSON.stringify([source + "zz-inner.md", source + "zz-pasted.md"]), base, "zz-two", "zip", "")
         }, "the compressed file of two items")
         checkFlash(view, function () { Operations.extract(two, "") }, [base + "zz-two"], "extract into a new folder")
-        // Scan says saved once its file is written.
         fixture(base + "zz-scan.pdf")
         waitFor(function () { return !view.model.loading && view.model.indexOf(base + "zz-scan.pdf") >= 0 }, "the scan file listed")
         checkFlash(view, function () { view.endScan(Qt.createQmlObject("import QtQuick 2.6; QtObject {}", window), base + "zz-scan.pdf") },
@@ -258,7 +246,6 @@ ApplicationWindow {
 
             DirectoryView {
                 id: folder
-                // Phone-like height: test window leaves less than a row above the panels.
                 width: parent.width
                 height: 1000
                 uri: window.base

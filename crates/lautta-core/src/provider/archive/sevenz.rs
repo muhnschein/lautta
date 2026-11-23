@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! 7z: indexed and extracted from the downloaded cache file. AES-256 ones open with the password;
-//! a wrong one fails at open.
 
 use super::blocks::from_io;
 use super::{Loc, RawEntry};
@@ -12,8 +10,6 @@ use std::fs::File;
 use std::io::{self, Write};
 use std::time::SystemTime;
 
-/// 7z stores unix mode bits in the high half of the attributes when bit 15
-/// (`FILE_ATTRIBUTE_UNIX_EXTENSION`) is set.
 const UNIX_EXTENSION: u32 = 0x8000;
 
 fn open(file: File, password: Option<&Password>) -> Result<ArchiveReader<File>> {
@@ -21,8 +17,6 @@ fn open(file: File, password: Option<&Password>) -> Result<ArchiveReader<File>> 
     ArchiveReader::new(file, key).map_err(map_err)
 }
 
-/// Data that fails to decode under a password reads as a wrong password: 7z has no check value for
-/// it, 7-Zip says the same ("Wrong password?"). sevenz-rust2 raises it only with a password given.
 fn map_err(err: sevenz_rust2::Error) -> Error {
     match err {
         sevenz_rust2::Error::PasswordRequired => Error::kind(ErrorKind::PasswordRequired),
@@ -63,7 +57,6 @@ fn classify(attrs: Option<u32>, is_dir: bool) -> (Kind, Option<u32>) {
     }
 }
 
-/// Readable names prove no password: decodes the start of the first file.
 fn check_password(reader: &mut ArchiveReader<File>) -> Result<()> {
     let mut failed = false;
     let res = reader.for_each_entries(|entry, data| {
@@ -79,8 +72,6 @@ fn check_password(reader: &mut ArchiveReader<File>) -> Result<()> {
     Ok(())
 }
 
-/// Entries, and whether any data is encrypted. Locked: `PasswordRequired` without `password`,
-/// `WrongPassword` with a wrong one.
 pub fn index(file: File, password: Option<&Password>) -> Result<(Vec<RawEntry>, bool)> {
     let mut reader = open(file, password)?;
     let locked = locked(&reader);
@@ -113,7 +104,6 @@ pub fn index(file: File, password: Option<&Password>) -> Result<(Vec<RawEntry>, 
     Ok((out, locked))
 }
 
-/// Solid archives decode the preceding entries of the block too: inherent to 7z.
 pub fn copy_entry(file: File, name: &str, out: &mut dyn Write, password: Option<&Password>) -> Result<()> {
     let mut reader = open(file, password)?;
     let mut found = false;
@@ -156,7 +146,6 @@ mod tests {
         assert_eq!(classify(None, false), (Kind::File, None));
     }
 
-    /// One file, a.txt; header encrypted too when locked.
     fn archive(dir: &std::path::Path, password: Option<&str>) -> File {
         let path = dir.join("a.7z");
         let mut w = sevenz_rust2::ArchiveWriter::new(File::create(&path).unwrap()).unwrap();
@@ -185,8 +174,6 @@ mod tests {
         }
     }
 
-    /// A failing writer stands in for data that fails to decode: both reach `copy_entry` as one
-    /// `io::Error`.
     #[test]
     fn only_data_failing_under_a_password_reads_as_a_wrong_password() {
         let dir = tempfile::tempdir().unwrap();

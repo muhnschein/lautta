@@ -1,10 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Browse page layout: rows the user hid and the order they gave a section's rows. Sections keep a
-//! fixed order; favourites keep their own.
-//!
-//! A row is named by section and item: location id, `deleted`, `nearby` (all nearby servers).
-//! *Recents*, *Volumes* and *Servers* have a section switch, stored as hidden flag of item
-//! `section`; its rows' flags stay while it is off. Blocking: call from `spawn_blocking`.
 
 use crate::db::Db;
 use crate::error::Result;
@@ -13,7 +7,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub const DELETED_ITEM: &str = "deleted";
 pub const NEARBY_ITEM: &str = "nearby";
-/// No location id is called this.
 pub const SECTION_ITEM: &str = "section";
 pub const SWITCHED_SECTIONS: [&str; 3] = ["recents", "volumes", "servers"];
 
@@ -47,8 +40,6 @@ impl Layout {
             .copied()
     }
 
-    /// Rows with a stored place first, by place; others after, in arrival order. `None` from `key`:
-    /// keep it where it is among the unplaced rows.
     pub fn arrange<T>(&self, rows: Vec<T>, key: impl Fn(&T) -> (String, Option<String>)) -> Vec<T> {
         let mut out: Vec<T> = Vec::with_capacity(rows.len());
         let mut group: Vec<(Option<i64>, usize, T)> = Vec::new();
@@ -119,7 +110,6 @@ impl BrowseLayout {
         tidy(&conn)
     }
 
-    /// Rows not in `items` lose their place.
     pub fn set_order(&self, section: &str, items: &[String]) -> Result<()> {
         let mut conn = self.db.lock();
         let tx = conn.transaction()?;
@@ -152,7 +142,6 @@ impl BrowseLayout {
     }
 }
 
-/// Rows that say nothing (shown, no place) are not kept.
 fn tidy(conn: &rusqlite::Connection) -> Result<()> {
     conn.execute(
         "DELETE FROM browse_layout WHERE hidden = 0 AND position IS NULL",

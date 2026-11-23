@@ -26,21 +26,18 @@ Page {
         uri: page.uri
     }
 
-    // Same backdrop as text viewer: long text readable over any wallpaper.
     Rectangle {
         objectName: "readingBackdrop"
         anchors.fill: parent
         color: Theme.rgba(palette.overlayBackgroundColor, Theme.opacityHigh)
     }
 
-    // One Label per block, made only near screen: one rich text of a big file blocks GUI thread.
     SilicaListView {
         id: view
 
         objectName: "readingView"
         anchors.fill: parent
         model: doc.blockCount
-        // Never sideways: sideways-flickable list keeps swipe-back from page stack.
         flickableDirection: Flickable.VerticalFlick
 
         PullDownMenu {
@@ -66,7 +63,6 @@ Page {
             title: page.fileName
         }
 
-        // Viewer draws quote bar and code panel: Qt rich text paints cell backgrounds only behind text.
         delegate: Item {
             id: block
 

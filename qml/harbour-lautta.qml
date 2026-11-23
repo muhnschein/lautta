@@ -11,8 +11,6 @@ ApplicationWindow {
     initialPage: App.ready ? Qt.resolvedUrl("pages/BrowsePage.qml") : Qt.resolvedUrl("pages/StartErrorPage.qml")
     cover: Qt.resolvedUrl("cover/CoverPage.qml")
     allowedOrientations: defaultAllowedOrientations
-    // Plain text everywhere: names, paths, server prompts, errors are untrusted. Silica default is
-    // auto rich text. Coloured labels set StyledText of escaped text themselves.
     _defaultLabelFormat: Text.PlainText
 
     ConfigurationValue {

@@ -8,7 +8,6 @@ import "../components/transfers/TransferText.js" as TransferText
 Item {
     id: root
 
-    // "transferring", "paused", "pending" or "idle".
     readonly property string mode: Transfers.closing && Transfers.pendingCount > 0
         ? "pending"
         : (Transfers.activeCount > 0 ? "transferring" : (Transfers.pausedCount > 0 ? "paused" : "idle"))

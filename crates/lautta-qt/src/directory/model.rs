@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Folder listing on `lautta_core::listing::ListingState`: streamed from core (cached copy first),
-//! diffs become row inserts/removes/updates, local folders watched, view settings are the global
-//! ones, followed while open.
 
 use crate::browse::Guard;
 use crate::json::from_json;
@@ -36,9 +33,7 @@ cpp! {{
 }}
 use tokio::task::AbortHandle;
 
-/// Streamed rows reach the view at most this often after the first batch.
 const BATCH_EVERY: std::time::Duration = std::time::Duration::from_millis(120);
-/// Streamed rows in directory order are a fair sample: this many decide grid before the end.
 const SUGGEST_SAMPLE: usize = 64;
 const ROLE_BASE: i32 = 0x0100;
 const ROLES: [&str; 26] = [
@@ -70,7 +65,6 @@ const ROLES: [&str; 26] = [
     "typeIcon",
 ];
 
-/// "Can't reach it right now": cached copy stays visible, page says offline.
 fn is_connectivity(kind: ErrorKind) -> bool {
     matches!(
         kind,
@@ -81,7 +75,6 @@ fn is_connectivity(kind: ErrorKind) -> bool {
     )
 }
 
-/// `None`: not a netvfs location, or no longer listed.
 fn level_of(core: &Core, location: &str) -> Option<Level> {
     core.bridge.as_ref()?.access(location)
 }
@@ -90,14 +83,12 @@ fn qs(s: &str) -> QString {
     QString::from(s)
 }
 
-/// Counted again when folder mtime changed or hidden files were switched.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct CountStamp {
     modified: Option<i64>,
     show_hidden: bool,
 }
 
-/// `result` `None` until made or when the folder cannot be read.
 struct CountSlot {
     stamp: CountStamp,
     result: Option<FolderCount>,
@@ -109,7 +100,6 @@ struct PreviewStamp {
     size: Option<u64>,
 }
 
-/// `key` while made, then `text`; `None` when the file has none.
 struct PreviewSlot {
     stamp: PreviewStamp,
     key: Option<String>,
@@ -130,20 +120,14 @@ pub struct DirectoryModel {
     errorKind: qt_property!(QString; NOTIFY stateChanged),
     errorMessage: qt_property!(QString; NOTIFY stateChanged),
     count: qt_property!(i32; NOTIFY stateChanged),
-    /// When shown rows were listed (ms), -1 while unknown. `offline` only with a time.
     cachedAt: qt_property!(f64; NOTIFY stateChanged),
     capabilities: qt_property!(QVariantList; NOTIFY stateChanged),
-    /// New items can be added: place and, on this device, folder permissions allow it.
     writable: qt_property!(bool; NOTIFY stateChanged),
-    /// Existing items can be renamed, moved, replaced or deleted.
     changeable: qt_property!(bool; NOTIFY stateChanged),
-    /// Files can be seen and read.
     readable: qt_property!(bool; NOTIFY stateChanged),
-    /// Level netvfs grants here when less than full (`read`, `read-add`, `add`), else "".
     access: qt_property!(QString; NOTIFY stateChanged),
     locationName: qt_property!(QString; NOTIFY stateChanged),
     title: qt_property!(QString; NOTIFY stateChanged),
-    /// Folder is on this device or a drive, not a server or archive.
     folderCounts: qt_property!(bool; NOTIFY stateChanged),
     stateChanged: qt_signal!(),
 
@@ -177,9 +161,7 @@ pub struct DirectoryModel {
     hasCapability: qt_method!(fn(&self, flag: QString) -> bool),
     nameKind: qt_method!(fn(&self, name: QString) -> QString),
     kindOf: qt_method!(fn(&self, uri: QString) -> QString),
-    /// Off the GUI thread; asks again only when the folder changed.
     requestCount: qt_method!(fn(&mut self, uri: QString)),
-    /// In the thumbnail jobs; asks again only when the file changed.
     requestPreview: qt_method!(fn(&mut self, uri: QString)),
     cancelPreview: qt_method!(fn(&mut self, uri: QString)),
     setTransferState: qt_method!(fn(&mut self, uri: QString, state: QString)),
@@ -195,22 +177,18 @@ pub struct DirectoryModel {
     state: ListingState,
     prefs: ViewPrefs,
     global: ViewPrefs,
-    /// Set here (`setViewPrefs`) or for every folder since open: no grid suggestion.
     prefs_set: bool,
     filter: FilterOptions,
     flags: Vec<String>,
     adds: bool,
-    /// None before the folder is open.
     thumb_settings: Option<ThumbSettings>,
     shown: usize,
     generation: u64,
-    /// Aborted listing's queued events still arrive: only current listing's count.
     listing: u64,
     task: Option<AbortHandle>,
     pending: Option<Vec<Entry>>,
     dirty: bool,
     archive: bool,
-    /// Location was offline at open: its stored copy shows as offline.
     location_offline: bool,
     watcher: Option<DirWatch>,
     settings_watch: Option<Guard>,
@@ -336,7 +314,6 @@ impl DirectoryModel {
         let (watcher, mut rx) = match core.watch_dir(&path) {
             Ok(w) => w,
             Err(e) => {
-                // `revisit` lists it again instead.
                 if e.kind != ErrorKind::NotFound {
                     log::warn!("folder does not update live: {e}");
                 }
@@ -358,7 +335,6 @@ impl DirectoryModel {
         self.watcher = Some(watcher);
     }
 
-    /// Level the user changes in Settings shows at once: actions, notice, and what is listed.
     fn watch_level(&mut self, core: &Core) {
         let Some(mut changes) = core.bridge.as_ref().map(|c| c.watch_locations()) else {
             return;
@@ -398,7 +374,6 @@ impl DirectoryModel {
         self.refresh();
     }
 
-    /// Change on another page shows here at once, not only on reopen.
     fn watch_settings(&mut self, core: &Core) {
         let guard = Guard::default();
         let mut stop = guard.subscribe();
@@ -446,7 +421,6 @@ impl DirectoryModel {
         self.publish();
     }
 
-    /// Folder nobody watches is listed again, cached rows stay until fresh ones arrive.
     fn revisit(&mut self) {
         if self.watcher.is_none() && !self.archive && !self.loading {
             self.refresh();
@@ -474,7 +448,6 @@ impl DirectoryModel {
                 self.cachedAt = fetched_ms as f64;
                 self.offline = self.location_offline;
                 self.pending = Some(Vec::new());
-                // Grid from the start: a switch once fresh rows came rebuilt every delegate.
                 self.maybe_suggest_grid();
             }
             ListEvent::Batch(batch) => match self.pending.as_mut() {
@@ -527,7 +500,6 @@ impl DirectoryModel {
         self.pending = None;
         self.loading = false;
         self.state.finish();
-        // Rows of a listing cut short have no time: error banner, not offline.
         if is_connectivity(e.kind) && self.state.total_len() > 0 && self.cachedAt >= 0.0 {
             self.offline = true;
             self.state.set_stale(true);
@@ -541,9 +513,7 @@ impl DirectoryModel {
         self.apply_roles(changes, &[]);
     }
 
-    /// Updated rows told as changed in `roles` only (empty: all).
     fn apply_roles(&mut self, changes: Vec<ListChange>, roles: &[&str]) {
-        // Neighbouring row updates go out as one range (select all: one signal, not one per row).
         let mut updated: Option<(usize, usize)> = None;
         for change in changes {
             if let ListChange::Update { index } = change {
@@ -578,8 +548,6 @@ impl DirectoryModel {
         }
     }
 
-    /// Delegates re-read only bindings on named `roles`: a full re-read lays out a grid caption
-    /// anew, about a frame each on phone.
     fn rows_changed(&mut self, range: Option<(usize, usize)>, roles: &[&str]) {
         let Some((first, last)) = range else { return };
         let (a, b) = (self.row_index(first as i32), self.row_index(last as i32));
@@ -589,7 +557,6 @@ impl DirectoryModel {
             .map(|i| ROLE_BASE + i as i32)
             .collect();
         let (ids, len, obj) = (ids.as_ptr(), ids.len(), self.get_cpp_object());
-        // SAFETY: `obj` is this model's live C++ object; `ids` holds `len` ints for the call.
         cpp!(unsafe [obj as "QAbstractItemModel*", a as "QModelIndex", b as "QModelIndex",
                      ids as "const int*", len as "size_t"] {
             QVector<int> roles;
@@ -670,7 +637,6 @@ impl DirectoryModel {
         }
     }
 
-    /// Empty while made or with thumbnails off.
     fn preview_of(&self, e: &Entry) -> &str {
         if self.thumb_source(e) != ThumbSource::Text {
             return "";
@@ -689,7 +655,6 @@ impl DirectoryModel {
         }
     }
 
-    /// None while being made again after a change.
     fn count_of(&self, e: &Entry) -> Option<FolderCount> {
         let slot = self.counts.get(&e.name)?;
         if slot.stamp == self.stamp_of(e) {
@@ -752,7 +717,6 @@ impl DirectoryModel {
         self.prefsChanged();
     }
 
-    /// Storing for every folder is `App.setSetting`'s job.
     fn setViewPrefs(&mut self, prefs_json: QString) -> bool {
         if self.dir.is_none() {
             return false;
@@ -790,7 +754,6 @@ impl DirectoryModel {
         true
     }
 
-    /// What was set for this folder alone and did not change stays.
     fn follow_settings(&mut self) {
         let Some(core) = core() else { return };
         let global = core.view_prefs();
@@ -807,7 +770,6 @@ impl DirectoryModel {
         self.show_prefs(prefs);
     }
 
-    /// Replaces a suggested grid; no other is suggested.
     fn view_chosen(&mut self) {
         self.prefs_set = true;
         self.suggestGrid = false;
@@ -913,7 +875,6 @@ impl DirectoryModel {
         qs(kind_of(self.state.entry_named(name.to_string().as_bytes())))
     }
 
-    /// By uri, so non-UTF-8 names are found too.
     fn kindOf(&self, uri: QString) -> QString {
         let name = self.name_of(&uri).unwrap_or_default();
         qs(kind_of(self.state.entry_named(&name)))
@@ -950,7 +911,6 @@ impl DirectoryModel {
         );
     }
 
-    /// Count for an older state of the folder, or another folder, is dropped: the cell asks again.
     fn counted(&mut self, generation: u64, name: &[u8], stamp: CountStamp, result: Option<FolderCount>) {
         if generation != self.generation {
             return;
@@ -1002,7 +962,6 @@ impl DirectoryModel {
         });
     }
 
-    /// Only the slot's pending request counts: keys are never reused.
     fn previewed(&mut self, key: &str, name: &[u8], text: Option<String>) {
         let Some(slot) = self
             .previews
@@ -1198,7 +1157,6 @@ mod tests {
         system_time_to_ms(std::time::SystemTime::now()) as f64
     }
 
-    /// Model as `reset_state` leaves it.
     fn opened() -> DirectoryModel {
         DirectoryModel {
             cachedAt: -1.0,
@@ -1206,7 +1164,6 @@ mod tests {
         }
     }
 
-    /// Next listing as `refresh` starts it: rows stay until fresh ones arrive.
     fn relist(m: &mut DirectoryModel) -> u64 {
         m.loading = true;
         m.pending = Some(Vec::new());

@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Locked zip and 7z: written by us, read by the `zip` and `sevenz-rust2` crates and by us; zips
-//! locked by the `zip` crate read by us.
 
 use super::*;
 use crate::password::Password;
@@ -109,7 +107,6 @@ async fn unlocked_zip_drops_the_password() {
     assert_eq!(read(&p, "single.txt").await.unwrap(), b"just one");
 }
 
-/// Bytes of `needle`'s first match from `from`.
 fn find(hay: &[u8], needle: &[u8], from: usize) -> usize {
     from + hay[from..]
         .windows(needle.len())
@@ -122,7 +119,6 @@ async fn a_changed_byte_in_a_locked_zip_fails_its_read() {
     let f = fixture();
     let tmp = tempfile::tempdir().unwrap();
     let mut bytes = run_locked(&f, &[uri("mem", "proj/data")], ArchiveKind::Zip, "pass").await;
-    // Name in big.bin's local header; 5000 bytes on is well inside its ciphertext.
     let name = find(&bytes, b"data/big.bin", 0);
     bytes[name + 5000] ^= 1;
     let p = open("c.zip", &bytes, tmp.path(), Some("pass")).await.unwrap();
@@ -132,7 +128,6 @@ async fn a_changed_byte_in_a_locked_zip_fails_its_read() {
     );
 }
 
-/// Central directory entry of `name`, found from the end record: no match inside ciphertext.
 fn central_of(bytes: &[u8], name: &[u8]) -> usize {
     let end = bytes.len() - 22;
     assert_eq!(bytes[end..end + 4], [0x50, 0x4b, 0x05, 0x06]);
@@ -171,7 +166,6 @@ async fn a_lowered_size_in_a_locked_zip_fails_its_read() {
     let f = fixture();
     let tmp = tempfile::tempdir().unwrap();
     let bytes = run_locked(&f, &[uri("mem", "proj")], ArchiveKind::Zip, "pass").await;
-    // AE-2 tag covers neither size: readme.txt is deflated, link stored.
     let shorter = |name: &[u8]| {
         let mut b = bytes.clone();
         let at = central_of(&b, name) + 24;
@@ -242,7 +236,6 @@ async fn zips_locked_by_the_zip_crate_open_with_every_aes_strength() {
     }
 }
 
-/// One-entry zip with its AES version and CRC set in both headers.
 fn with_ae(mut bytes: Vec<u8>, version: u8, crc: u32) -> Vec<u8> {
     let field = [0x01, 0x99, 0x07, 0x00];
     let local = find(&bytes, &[0x50, 0x4b, 0x03, 0x04], 0);
@@ -298,7 +291,6 @@ async fn zipcrypto_entries_stay_unsupported() {
     w.start_file("old.txt", SimpleFileOptions::default()).unwrap();
     w.write_all(b"legacy").unwrap();
     let mut bytes = w.finish().unwrap().into_inner();
-    // Encrypted flag without the AES field: ZipCrypto.
     let local = find(&bytes, &[0x50, 0x4b, 0x03, 0x04], 0);
     let central = find(&bytes, &[0x50, 0x4b, 0x01, 0x02], 0);
     bytes[local + 6] |= 1;
@@ -351,7 +343,6 @@ async fn locked_7z_hides_its_names_and_needs_its_password() {
     assert_eq!(ivs.len(), raw.blocks.len(), "every block has its own IV");
 }
 
-/// As 7-Zip makes it by default: data locked, names readable.
 fn sevenz_with_names_shown(password: &str) -> Vec<u8> {
     use sevenz_rust2::encoder_options::{AesEncoderOptions, Lzma2Options};
     let mut w = sevenz_rust2::ArchiveWriter::new(io::Cursor::new(Vec::new())).unwrap();

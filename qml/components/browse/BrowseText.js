@@ -48,7 +48,6 @@ function rowName(kind, name) {
     return name
 }
 
-// Empty until space is known.
 function deviceLine(free, total) {
     return total > 0 ? volumeLine(free, total, "") : ""
 }

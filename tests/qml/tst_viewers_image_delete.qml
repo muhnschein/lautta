@@ -131,12 +131,10 @@ ApplicationWindow {
                     return win.fail("the remorse says where the image goes: " + popup.text)
                 popup.cancel()
                 App.setSetting("recently_deleted", JSON.stringify(false))
-                // Longer than a step may take: a wrong remorse leaves the image there.
                 App.setSetting("remorse_seconds", JSON.stringify(60))
                 win.next()
                 break
             case 4:
-                // The cancelled remorse had 3 s.
                 if (win.waited < 60)
                     break
                 images.refresh()

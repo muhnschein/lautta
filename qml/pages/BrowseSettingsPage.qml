@@ -17,7 +17,6 @@ Page {
         id: layout
 
         Component.onCompleted: reload()
-        // Rows coming or going shift rows under a carried one.
         onRowsInserted: list.dropCarried()
         onRowsRemoved: list.dropCarried()
         onModelReset: list.dropCarried()

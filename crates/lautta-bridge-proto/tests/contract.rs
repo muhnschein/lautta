@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Golden sequences replay against the fake; the fake serves the interface the XML describes.
 #![cfg(feature = "fake")]
 
 use lautta_bridge_proto::fake::replay;
