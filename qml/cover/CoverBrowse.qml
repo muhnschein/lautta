@@ -135,9 +135,7 @@ Item {
             top: lines.bottom
             topMargin: Theme.paddingMedium
             left: parent.left
-            leftMargin: Theme.paddingMedium
             right: parent.right
-            rightMargin: Theme.paddingMedium
             bottom: parent.bottom
         }
         model: root.recents.length > 0 ? root.recents : root.places

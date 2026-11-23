@@ -83,9 +83,7 @@ CoverBackground {
                     top: header.bottom
                     topMargin: Theme.paddingSmall
                     left: parent.left
-                    leftMargin: Theme.paddingMedium
                     right: parent.right
-                    rightMargin: Theme.paddingMedium
                     bottom: parent.bottom
                 }
                 model: cover.told("coverModel", null)

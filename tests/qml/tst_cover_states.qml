@@ -219,10 +219,10 @@ ApplicationWindow {
             return
         expect(Math.round(grid.mapToItem(frame, 0, 0).y) >= Math.round(lines[1].mapToItem(frame, 0, lines[1].height).y + Theme.paddingMedium),
                "tiles start below the lines")
-        var side = Math.floor((width - 2 * Theme.paddingSmall) / 3)
+        var side = Math.floor((frame.width - 2 * Theme.paddingSmall) / 3)
         expect(tiles.every(function (t) { return t.width === side && t.height === side }) && side > 0,
-               "three tiles fill the cover between its margins: " + tiles[0].width + ", not " + side)
-        var x = Math.round(Theme.paddingMedium)
+               "three tiles fill the cover from edge to edge: " + tiles[0].width + ", not " + side)
+        var x = 0
         var y = Math.round(grid.mapToItem(frame, 0, 0).y)
         var step = side + Math.round(Theme.paddingSmall)
         expect(tiles.map(at).join(" ") === [x + "," + y, (x + step) + "," + y, (x + 2 * step) + "," + y,
@@ -262,6 +262,10 @@ ApplicationWindow {
         expect(tiles.every(function (t) { return t.placeIcon === "" }) && named(frame, "placeGlyph").length === 0
                && named(frame, "fileGlyph").length >= 9,
                "a folder's tiles draw file glyphs, none a place's")
+        var wide = Math.floor((frame.width - 2 * Theme.paddingSmall) / 3)
+        expect(Math.round(tiles[0].mapToItem(frame, 0, 0).x) === 0 && tiles[0].width === wide
+               && Math.round(tiles[2].mapToItem(frame, 0, 0).x + tiles[2].width) >= Math.round(frame.width) - 2,
+               "a folder's tiles run from edge to edge: " + tiles[0].width + ", not " + wide)
         expect(named(frame, "fileGlyph").every(function (g) { return !g.highlighted }),
                "folders in the same plain colour as files")
         var header = named(frame, "coverHeader")[0]
