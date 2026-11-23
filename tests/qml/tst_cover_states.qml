@@ -200,18 +200,22 @@ ApplicationWindow {
         expect(named(frame, "storageFree").map(function (x) { return x.amount }).join("|") === "39 GB|30 GB",
                "in whole numbers while there is plenty: " + named(frame, "storageFree").map(function (x) { return x.amount }).join("|"))
         var lines = named(frame, "storageLine")
-        var used = named(frame, "storageUsed")
-        var width = frame.width - 2 * Theme.paddingMedium
-        if (!expect(lines.length === 2 && used.length === 2, "two lines with a bar each"))
+        var width = frame.width - 2 * Theme.paddingLarge
+        if (!expect(lines.length === 2, "two lines"))
             return
         expect(lines[0].width === width && width > 0, "a line spans the cover between its margins: " + lines[0].width)
-        expect(used[0].width === Math.round(width * 86 / 128) && used[1].width === Math.round(width * 96 / 128),
-               "a bar fills by the space used: " + used[0].width + ", " + used[1].width + " of " + width)
         var name = named(lines[0], "storageName")[0]
         var free = named(lines[0], "storageFree")[0]
+        expect(lines[0].height === name.height && lines[0].children.length === 2,
+               "a line is its two texts, no bar: " + lines[0].height + ", " + lines[0].children.length)
         expect(name.mapToItem(frame, 0, 0).x + name.width <= free.mapToItem(frame, 0, 0).x
-               && Math.round(free.mapToItem(frame, 0, 0).x + free.width) === Math.round(frame.width - Theme.paddingMedium),
-               "free space ends at the right margin, the name before it")
+               && Math.round(name.mapToItem(frame, 0, 0).x) === Math.round(Theme.paddingLarge)
+               && Math.round(free.mapToItem(frame, 0, 0).x + free.width) === Math.round(frame.width - Theme.paddingLarge),
+               "name starts at the left margin, free space ends at the right one")
+        var title = named(frame, "coverHeader")[0]
+        expect(Math.round(title.x) === Math.round(Theme.paddingLarge) && Math.round(title.y) === Math.round(Theme.paddingLarge)
+               && Math.round(title.x + title.width) === Math.round(frame.width - Theme.paddingLarge),
+               "header keeps a large padding from top and both sides: " + title.x + ", " + title.y + ", " + title.width)
 
         var grid = named(frame, "coverGrid")[0]
         var tiles = named(frame, "coverTile")
@@ -272,7 +276,7 @@ ApplicationWindow {
         expect(Math.round(tiles[0].mapToItem(frame, 0, 0).y) === Math.round(header.mapToItem(frame, 0, header.height).y + Theme.paddingSmall),
                "tiles start under the header")
         expect(named(frame, "coverEmpty").length === 0, "no empty text beside tiles")
-        frame.width = header.implicitWidth + 4 * Theme.paddingMedium
+        frame.width = header.implicitWidth + 4 * Theme.paddingLarge
         expect(header.implicitWidth < header.width && header.horizontalAlignment === Text.AlignRight, "a name that fits stands at the right")
         frame.width = Theme.paddingMedium * 4
         expect(header.implicitWidth > header.width && header.horizontalAlignment === Text.AlignLeft, "a long one is cut at its end, not its start")

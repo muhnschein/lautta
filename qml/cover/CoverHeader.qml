@@ -6,8 +6,9 @@ Label {
     id: header
 
     objectName: "coverHeader"
-    x: Theme.paddingMedium
-    y: Theme.paddingMedium
+    // Where Jolla's covers (Calendar) put their text.
+    x: Theme.paddingLarge
+    y: Theme.paddingLarge
     width: parent ? parent.width - 2 * x : 0
     // Too long: its start shows, end fades. Measured apart: own width follows alignment.
     horizontalAlignment: metrics.width > width ? Text.AlignLeft : Text.AlignRight

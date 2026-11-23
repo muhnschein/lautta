@@ -70,11 +70,10 @@ Item {
             top: header.bottom
             topMargin: Theme.paddingSmall
             left: parent.left
-            leftMargin: Theme.paddingMedium
+            leftMargin: Theme.paddingLarge
             right: parent.right
-            rightMargin: Theme.paddingMedium
+            rightMargin: Theme.paddingLarge
         }
-        spacing: Theme.paddingSmall
 
         Repeater {
             model: root.storage
@@ -82,7 +81,7 @@ Item {
             Item {
                 objectName: "storageLine"
                 width: lines.width
-                height: name.height + Theme.paddingSmall / 2 + bar.height
+                height: name.height
 
                 Label {
                     id: free
@@ -109,21 +108,6 @@ Item {
                     textFormat: Text.PlainText
                     text: modelData.name
                     font.pixelSize: Theme.fontSizeTiny
-                }
-                Rectangle {
-                    id: bar
-
-                    anchors.bottom: parent.bottom
-                    width: parent.width
-                    height: Math.max(2, Math.round(Theme.paddingSmall / 3))
-                    color: Theme.rgba(Theme.primaryColor, Theme.opacityFaint)
-
-                    Rectangle {
-                        objectName: "storageUsed"
-                        width: Math.round(parent.width * (modelData.total - modelData.free) / modelData.total)
-                        height: parent.height
-                        color: Theme.highlightColor
-                    }
                 }
             }
         }
