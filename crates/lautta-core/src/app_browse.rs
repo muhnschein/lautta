@@ -71,6 +71,8 @@ pub struct Row {
 /// Newest recents a Browse row carries: Browse shows the first three, its cover up to four rows.
 pub const ROW_TILES: usize = 12;
 
+pub const STRIP_MIN_TILES: usize = 3;
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecentTile {
@@ -420,13 +422,13 @@ impl Core {
         }
     }
 
-    /// One row, or none while recents are off or empty.
+    /// One row, or none while recents are off or fewer than [`STRIP_MIN_TILES`].
     fn strip_rows(&self, settings: &Settings) -> Vec<Row> {
         if !settings.recents_enabled {
             return Vec::new();
         }
         let tiles = self.recent_tiles(ROW_TILES, settings).unwrap_or_default();
-        if tiles.is_empty() {
+        if tiles.len() < STRIP_MIN_TILES {
             return Vec::new();
         }
         let mut row = Row::new("recents", "recent-strip");
