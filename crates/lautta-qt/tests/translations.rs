@@ -411,6 +411,7 @@ fn without_english(ts: &str) -> Vec<String> {
 #[test]
 fn every_message_has_its_english() {
     assert_eq!(without_english(&catalogue()), Vec::<String>::new());
-    let broken = "<message id=\"a\"><source>A</source></message><message id=\"b\"><source></source></message>";
+    let broken =
+        "<message id=\"a\"><source>A</source></message><message id=\"b\"><source></source></message>";
     assert_eq!(without_english(broken), ["b"]);
 }
