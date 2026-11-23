@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Photo without camera thumbnail: placeholder = clear image of its upright shape, grid tile (system
-// thumbnailer, square crop) under it, centred, side = shorter side the photo shows at; both go once
-// the photo shows. Camera thumbnail drawn over the tile. Tile URL percent-encoded, none for size 0
-// or an image not on the device. Viewer shows the opener's tile for the opened photo only.
+// thumbnailer, square crop) under it, centred, side = shorter side the photo shows at, drawn only by
+// tile fill over the whole shape; all go once the photo shows. Camera thumbnail drawn over tile and
+// fill. Tile URL percent-encoded, none for size 0 or an image not on the device. Viewer shows the
+// opener's tile for the opened photo only.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 // Registers image://nemoThumbnail, as the folder grid's thumbnails do in the app.
@@ -95,9 +96,19 @@ ApplicationWindow {
                "tile asked at the grid's size: " + tile.sourceSize.width + "x" + tile.sourceSize.height)
         expect(tile.visible && tile.x === 30 && tile.y === 240 && tile.width === 480 && tile.height === 480,
                "portrait's tile: its middle, " + describe(tile))
+        var fill = named(g, "tileFill")
+        expect(fill.visible && fill.x === 30 && fill.y === 0 && fill.width === 480 && fill.height === 960,
+               "portrait's tile fill: the whole shape, " + describe(fill))
+        expect(fill.extent.width === 1 && fill.extent.height === 2 && fill.pixels === 480,
+               "portrait's tile fill: shape two tiles high, " + fill.extent + " of " + fill.pixels + " px")
+        expect(fill.source.sourceItem === tile && fill.source.hideSource,
+               "tile drawn by its fill only: " + fill.source.sourceItem + " hidden " + fill.source.hideSource)
+        // GLES 2 mipmaps power-of-two textures only.
+        expect(fill.source.mipmap && fill.source.textureSize.width === 256 && fill.source.textureSize.height === 256,
+               "tile fill blurs from mipmaps: " + fill.source.mipmap + " " + fill.source.textureSize)
         g.source = ViewerImage.source(folder + "a%20b%23c.jpg")
         waitFor(function () { return g.photo.status === Image.Ready && g.photo.opacity === 1 }, "the photo")
-        expect(!tile.visible && !shape.visible, "photo shown: tile goes, " + describe(tile))
+        expect(!tile.visible && !fill.visible && !shape.visible, "photo shown: tile and its fill go, " + describe(fill))
         g.destroy()
     }
 
@@ -111,6 +122,11 @@ ApplicationWindow {
         expect(tile.visible && Math.abs(tile.x - 67.5) <= 0.5 && Math.abs(tile.y - 277.5) <= 0.5
                && tile.width === 405 && tile.height === 405,
                "landscape's tile: its middle, " + describe(tile))
+        var fill = named(g, "tileFill")
+        expect(fill.visible && fill.x === 0 && Math.abs(fill.y - 277.5) <= 0.5 && fill.width === 540 && fill.height === 405,
+               "landscape's tile fill: the whole shape, " + describe(fill))
+        expect(Math.abs(fill.extent.width - 4 / 3) < 0.001 && fill.extent.height === 1 && fill.pixels === 405,
+               "landscape's tile fill: shape 4/3 tiles wide, " + fill.extent + " of " + fill.pixels + " px")
         g.destroy()
     }
 
@@ -119,7 +135,9 @@ ApplicationWindow {
         var thumb = named(g, "placeholderImage")
         var tile = named(g, "tileImage")
         waitFor(function () { return thumb.status === Image.Ready && tile.status === Image.Ready }, "the camera photo's tile")
-        expect(thumb.implicitWidth === 80 && tile.z < thumb.z, "camera thumbnail over the tile: z " + tile.z + " under " + thumb.z)
+        var fill = named(g, "tileFill")
+        expect(thumb.implicitWidth === 80 && tile.z < thumb.z && fill.z < thumb.z,
+               "camera thumbnail over the tile and its fill: z " + tile.z + ", " + fill.z + " under " + thumb.z)
         g.destroy()
     }
 
