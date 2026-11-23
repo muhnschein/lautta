@@ -598,23 +598,12 @@
         <source>Apply</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-conflict-progress" numerus="yes">
-        <source>%n conflicts · %1 of %2</source>
-        <translation>
-            <numerusform>%n conflict · %1 of %2</numerusform>
-            <numerusform>%n conflicts · %1 of %2</numerusform>
-        </translation>
-    </message>
     <message id="lautta-conflict-moving">
         <source>Moving</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-conflict-copying">
         <source>Copying</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-conflict-already-in">
-        <source>Already in %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-conflict-resolution">
@@ -633,18 +622,6 @@
             <numerusform>Do this for the remaining %n conflicts</numerusform>
         </translation>
     </message>
-    <message id="lautta-plan-move-to">
-        <source>Move to %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-plan-extract-to">
-        <source>Extract to %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-plan-copy-to">
-        <source>Copy to %1</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-plan-files" numerus="yes">
         <source>%n files</source>
         <translation>
@@ -652,39 +629,8 @@
             <numerusform>%n files</numerusform>
         </translation>
     </message>
-    <message id="lautta-plan-folders" numerus="yes">
-        <source>%n folders</source>
-        <translation>
-            <numerusform>%n folder</numerusform>
-            <numerusform>%n folders</numerusform>
-        </translation>
-    </message>
-    <message id="lautta-plan-items">
-        <source>%1 in %2</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-plan-start">
         <source>Start</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-plan-items-label">
-        <source>Items</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-plan-size">
-        <source>Size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-plan-free">
-        <source>Free on destination</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-plan-conflicts">
-        <source>Conflicts</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-plan-renamed">
-        <source>Names changed</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-plan-names">
@@ -693,26 +639,6 @@
     </message>
     <message id="lautta-plan-use-suggested">
         <source>Use suggested names for all</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-plan-options">
-        <source>Options</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-plan-keep-mtime">
-        <source>Keep modification times</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-plan-keep-mode">
-        <source>Keep permissions</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-plan-keep-mode-hint">
-        <source>Both sides support it</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-plan-verify">
-        <source>Verify with checksums</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-trash-restored">
@@ -2658,6 +2584,81 @@
     <message id="lautta-browse-all-recents">
         <source>All recents</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-newer">
+        <source>Newer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-position">
+        <source>Conflict %1 of %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-one">
+        <source>Conflict</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-already-there">
+        <source>Already there</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-conflict-further">
+        <source>Further conflicts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-origin-more" numerus="yes">
+        <source>%1 and %n more</source>
+        <translation>
+            <numerusform>%1 and %n more</numerusform>
+            <numerusform>%1 and %n more</numerusform>
+        </translation>
+    </message>
+    <message id="lautta-plan-in-folders" numerus="yes">
+        <source>in %n folders</source>
+        <translation>
+            <numerusform>in %n folder</numerusform>
+            <numerusform>in %n folders</numerusform>
+        </translation>
+    </message>
+    <message id="lautta-plan-origin">
+        <source>Origin</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-destination">
+        <source>Destination</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-in-total">
+        <source>in total</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-free-there">
+        <source>free there</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-conflict-count" numerus="yes">
+        <source>%n conflicts</source>
+        <translation>
+            <numerusform>%n conflict</numerusform>
+            <numerusform>%n conflicts</numerusform>
+        </translation>
+    </message>
+    <message id="lautta-plan-conflicts-resolved" numerus="yes">
+        <source>Conflicts resolved</source>
+        <translation>
+            <numerusform>Conflict resolved</numerusform>
+            <numerusform>Conflicts resolved</numerusform>
+        </translation>
+    </message>
+    <message id="lautta-plan-conflicts-tap">
+        <source>Tap to choose what happens</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-plan-conflicts-chosen" numerus="yes">
+        <source>You chose for all %n</source>
+        <translation>
+            <numerusform>You chose for it</numerusform>
+            <numerusform>You chose for all %n</numerusform>
+        </translation>
     </message>
 </context>
 </TS>

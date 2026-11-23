@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The conflict and plan summary screens are clearer ([#114](https://github.com/muhnschein/lautta/issues/114)). A conflict shows both items side by side as tiles with their names and thumbnails, the choices as a list where only one can be picked, and which conflict of how many it is. The plan summary shows where items come from and go to, the number of files, the size and the free space, and lists names that need changing as old → new. It no longer asks about modification times, permissions or checksums: *Settings › Transfers* sets them. Conflicts asked about while a copy runs now show the item's name.
 - Recents show thumbnails, and show as a grid when *View options* say Grid, with each day group starting its own row. Text files on the Home page's Recents tiles and in the Recents grid show their first lines, as in folders ([#60](https://github.com/muhnschein/lautta/issues/60)).
 - Photos open faster in the image viewer, big ones most: the picture starts loading as your finger touches it, loads at screen size and first, and shows the camera's preview while it loads, or the folder's thumbnail when the photo has none. Pictures you swiped past come back at once ([#41](https://github.com/muhnschein/lautta/issues/41)).
 - PDF thumbnails of files on this device show the top of the first page, not its middle.

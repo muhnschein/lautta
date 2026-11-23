@@ -308,6 +308,107 @@ async fn summary_conflicts_and_start_with_options() {
 }
 
 #[tokio::test]
+async fn summary_shows_origin_and_destination_as_tiles() {
+    let h = home().await;
+    write(&h.root.join("Documents/pics/pic.jpg"), b"new");
+    write(&h.root.join("Documents/pics/deep/more.txt"), b"m");
+    write(&h.root.join("Documents/notes.txt"), b"n");
+    write(&h.root.join("Downloads/in/pic.jpg"), b"old");
+    write(&h.root.join("Downloads/in/deep/x.txt"), b"x");
+
+    let one = h
+        .core
+        .plan(
+            OperationKind::Copy,
+            vec![uri("lautta://user-documents/pics/pic.jpg")],
+            uri("lautta://user-downloads/in"),
+        )
+        .await
+        .unwrap();
+    let summary = h.core.plan_summary(&one).await;
+    assert_eq!(
+        (
+            summary.destination_name.as_str(),
+            summary.destination_folder.as_str()
+        ),
+        ("in", "Downloads")
+    );
+    let origin = summary.origin.expect("a copy has an origin");
+    assert_eq!(
+        (
+            origin.name.as_str(),
+            origin.folder.as_str(),
+            origin.more,
+            origin.is_dir
+        ),
+        ("pic.jpg", "pics", 0, false)
+    );
+    assert_eq!(origin.uri, "lautta://user-documents/pics/pic.jpg");
+    assert_eq!(origin.look.category, "image");
+    assert!(origin.look.thumbnail_source.starts_with("file://"));
+    assert!(origin.look.thumbnail_source.ends_with("/Documents/pics/pic.jpg"));
+
+    let list = h.core.unresolved_conflicts(&one);
+    assert_eq!(list.len(), 1);
+    assert!(list[0]
+        .source_look
+        .thumbnail_source
+        .ends_with("/Documents/pics/pic.jpg"));
+    assert!(list[0]
+        .destination_look
+        .thumbnail_source
+        .ends_with("/Downloads/in/pic.jpg"));
+
+    let many = h
+        .core
+        .plan(
+            OperationKind::Copy,
+            vec![
+                uri("lautta://user-documents/pics"),
+                uri("lautta://user-documents/notes.txt"),
+            ],
+            uri("lautta://user-downloads/"),
+        )
+        .await
+        .unwrap();
+    let summary = h.core.plan_summary(&many).await;
+    assert_eq!(
+        (
+            summary.destination_name.as_str(),
+            summary.destination_folder.as_str()
+        ),
+        ("Downloads", "")
+    );
+    let origin = summary.origin.expect("a copy has an origin");
+    assert_eq!(
+        (
+            origin.name.as_str(),
+            origin.folder.as_str(),
+            origin.more,
+            origin.is_dir
+        ),
+        ("pics", "Documents", 1, true),
+        "items inside a copied folder are not counted as more"
+    );
+    assert_eq!(origin.look, Default::default(), "a folder shows its glyph");
+
+    std::fs::create_dir_all(h.root.join("Downloads/pics/deep")).unwrap();
+    let dirs = h
+        .core
+        .plan(
+            OperationKind::Copy,
+            vec![uri("lautta://user-documents/pics")],
+            uri("lautta://user-downloads/"),
+        )
+        .await
+        .unwrap();
+    let list = h.core.unresolved_conflicts(&dirs);
+    assert!(list[0].conflict.dst_is_dir);
+    assert_eq!(list[0].source_look, Default::default());
+    assert_eq!(list[0].destination_look, Default::default());
+}
+
+#[tokio::test]
 async fn recently_deleted_entries_restore_and_empty() {
     let h = home().await;
     write(&h.root.join("Documents/Uni/old.txt"), b"1");
@@ -631,7 +732,20 @@ async fn extract_runs_as_extract_titled_by_its_archive() {
         panic!("a large extract needs the summary");
     };
     assert_eq!(plan.kind, OperationKind::Extract);
-    assert_eq!(h.core.plan_summary(&plan).await.kind, "extract");
+    let summary = h.core.plan_summary(&plan).await;
+    assert_eq!(summary.kind, "extract");
+    let origin = summary.origin.expect("an extract has its archive as origin");
+    assert_eq!(
+        (
+            origin.name.as_str(),
+            origin.folder.as_str(),
+            origin.more,
+            origin.is_dir
+        ),
+        ("bundle.zip", "Downloads", 0, false)
+    );
+    assert_eq!(origin.uri, zip.to_string());
+    assert_eq!(origin.look.category, "archive");
     assert_eq!(
         h.core.plan_summary(&plan).await.conflicts,
         0,

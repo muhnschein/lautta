@@ -463,6 +463,13 @@ impl Core {
         }
     }
 
+    pub fn item_look(&self, uri: &Uri, is_dir: bool, settings: &Settings) -> RecentLook {
+        if is_dir {
+            return RecentLook::default();
+        }
+        self.recent_look(uri, settings.thumbnails_local, &ThumbSettings::new(settings))
+    }
+
     /// `shown`: *Show thumbnails*.
     fn recent_look(&self, uri: &Uri, shown: bool, thumbs: &ThumbSettings) -> RecentLook {
         let name = uri.name().unwrap_or_default();
