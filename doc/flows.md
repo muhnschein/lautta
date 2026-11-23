@@ -539,13 +539,13 @@ Features: F-APP-01 Cover, F-XFR-10 Transfer cover, F-XFR-09 Notifications
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-58 Cover (folder / tasks) | Cover on Browse page: Lautta |
-| 2 | SCR-58 Cover (folder / tasks) | Cover in a folder: name, item count |
-| 3 | SCR-58 Cover (folder / tasks) | Task running: count, percent, rate; actions Pause all, Activity |
+| 1 | SCR-58 Cover (page / tasks) | Cover on Browse page: free space, newest recents as tiles |
+| 2 | SCR-58 Cover (page / tasks) | Cover in a folder: name, first items as tiles |
+| 3 | SCR-58 Cover (page / tasks) | Task running: count, percent, rate, cover fills from the left; actions Pause all, Activity |
 | 4 | SCR-21 Activity | Activity pulley: Pause all |
-| 5 | SCR-58 Cover (folder / tasks) | Tasks paused: n paused, action Resume all |
+| 5 | SCR-58 Cover (page / tasks) | Tasks paused: n paused, action Resume all |
 | 6 | SCR-21 Activity | Tap cover: back in Activity |
-| 7 | SCR-58 Cover (folder / tasks) | Long-press Home: close Lautta while a task runs |
+| 7 | SCR-58 Cover (page / tasks) | Long-press Home: close Lautta while a task runs |
 | 8 | SCR-59 Notifications | Closed with a task running: pop-up "1 task stopped", resumes on next open |
 
 ### FL-35 Follow tasks from Events (standalone)
