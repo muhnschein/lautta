@@ -692,12 +692,13 @@ Item {
         step("recents come newest first with places",
              function() {
                  FakeWorld.record(a, "a.txt", "opened")
+                 FakeWorld.record(docs + "b.txt", "b.txt", "opened")
                  FakeWorld.record(docs + "c.txt", "c.txt", "previewed")
                  FakeWorld.record(docs + "d.zip", "d.zip", "transferred")
                  recents.reload()
              },
              function() {
-                 return recents.loaded && recents.enabled && recents.count === 3 && recentRows.count === 3
+                 return recents.loaded && recents.enabled && recents.count === 4 && recentRows.count === 4
                         && recentRows.itemAt(0).rname === "d.zip" && recentRows.itemAt(0).rplace === "Documents"
                         && recentRows.itemAt(0).rgroup === "today"
              })
@@ -707,22 +708,25 @@ Item {
                  var first = rows.itemAt(0)
                  var t = tiles()
                  return first !== null && first.rkind === "recent-strip" && first.rsection === "recents"
-                        && tileNames() === "d.zip,c.txt,a.txt" && t[0].kind === "transferred"
+                        && tileNames() === "d.zip,c.txt,b.txt,a.txt" && t[0].kind === "transferred"
                         && t[0].category === "archive" && t[0].uri === docs + "d.zip"
                         && t[0].id === recentRows.itemAt(0).rid && row("folder", "Documents").rtiles === ""
              })
         step("remove one recent",
              function() { recents.remove(recentRows.itemAt(0).rid) },
-             function() { return recents.count === 2 && recentRows.itemAt(0).rname === "c.txt" })
+             function() { return recents.count === 3 && recentRows.itemAt(0).rname === "c.txt" })
         step("and its tile goes without a refresh",
              null,
-             function() { return tileNames() === "c.txt,a.txt" })
+             function() { return tileNames() === "c.txt,b.txt,a.txt" })
         step("the Recents switch takes the tiles off Browse",
              function() { layout.setHidden("recents", "section", true) },
              function() { return !has("recent-strip") && layoutRow("recents", "section").lhidden })
         step("and puts them back",
              function() { layout.setHidden("recents", "section", false) },
-             function() { return tileNames() === "c.txt,a.txt" && !layoutRow("recents", "section").lhidden })
+             function() { return tileNames() === "c.txt,b.txt,a.txt" && !layoutRow("recents", "section").lhidden })
+        step("with two recents left the tiles leave Browse",
+             function() { recents.remove(recentRows.itemAt(0).rid) },
+             function() { return recents.count === 2 && !has("recent-strip") && !layoutRow("recents", "section").lhidden })
         step("turn recents off through the setting",
              function() {
                  App.setSetting("recents_enabled", JSON.stringify(false))

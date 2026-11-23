@@ -238,8 +238,17 @@ async fn the_newest_recents_lead_browse_as_tiles() {
 
     record(core, "old.txt", RecentKind::Opened, 1);
     record(core, "a.jpg", RecentKind::Opened, 2);
-    record(core, "b.pdf", RecentKind::Previewed, 3);
     record(core, "a.jpg", RecentKind::Transferred, 4);
+    assert!(
+        strip(&core.browse_rows().await).is_empty(),
+        "two files, one used twice: still no section"
+    );
+    record(core, "b.pdf", RecentKind::Previewed, 3);
+    assert_eq!(
+        strip(&core.browse_rows().await).len(),
+        3,
+        "three files fill the tiles"
+    );
     record(core, "c.ogg", RecentKind::Opened, 5);
     let rows = core.browse_rows().await;
     assert_eq!(rows[0].section, "recents", "above favourites and folders");
@@ -445,7 +454,9 @@ async fn the_recents_section_follows_its_switch_and_the_recents_setting() {
     let e = env(None, &["Documents"]).await;
     let core = &e.core;
     record(core, "a.jpg", RecentKind::Opened, 1);
-    assert_eq!(strip(&core.browse_rows().await).len(), 1);
+    record(core, "b.jpg", RecentKind::Opened, 2);
+    record(core, "c.jpg", RecentKind::Opened, 3);
+    assert_eq!(strip(&core.browse_rows().await).len(), 3);
     assert_eq!(
         kinds(&core.browse_rows().await, "device"),
         ["folder", "deleted"],
@@ -466,7 +477,7 @@ async fn the_recents_section_follows_its_switch_and_the_recents_setting() {
         [switch(false)]
     );
     set_section(core, "recents", true);
-    assert_eq!(strip(&core.browse_rows().await).len(), 1);
+    assert_eq!(strip(&core.browse_rows().await).len(), 3);
 
     core.apply_settings(Settings {
         recents_enabled: false,
