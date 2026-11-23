@@ -11,6 +11,8 @@ FullscreenContentPage {
     id: page
 
     property string uri
+    readonly property string coverKind: "file"
+    readonly property string coverUri: currentUri
     property string folderUri: App.parentUri(uri)
     // Size the opener showed this image's thumbnail at, 0 for none: that cached tile shows while
     // it decodes.
