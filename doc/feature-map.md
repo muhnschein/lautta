@@ -250,7 +250,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-FAV-04 Reorder favourites** — Settings › Browse page drag.
 - **F-RCT-01 Recents** — files opened, edited, transferred, under date groups; thumbnails as folders have them; list or grid as View options' View, in grid each date group starts its own row of tiles (name, place). Tap opens (transferred → its folder); menu Remove from recents; pulley Clear recents.
 - **F-RCT-02 Recents off** — Settings › Recents "Remember recent files"; Browse tiles hide.
-- **F-RCT-03 Recents on Browse** — section Recents above Favourites: three newest files as tiles (thumbnail, a text file's first lines, or type glyph; name), fourth tile "All recents" opens SCR-38. Tap opens (transferred → its folder); long press: Remove from recents. No section while Recents are off or empty; switch "Newest recents" in Settings › Browse page. *Code:* `RecentStrip.qml`, `app_browse.rs` (`recent_tiles`).
+- **F-RCT-03 Recents on Browse** — section Recents above Favourites: three newest files as tiles (thumbnail, a text file's first lines, or type glyph; name), fourth tile "All recents" opens SCR-38. Tap opens (transferred → its folder); long press: Remove from recents. No section while Recents are off or hold fewer than three files; switch "Newest recents" in Settings › Browse page. *Code:* `RecentStrip.qml`, `app_browse.rs` (`recent_tiles`).
 - **F-TRH-01 Trash** — items from user folders, "Kept for N days", "N days left", "From folder".
 - **F-TRH-02 Restore / Delete now / Show original folder** — row menu.
 - **F-TRH-03 Empty trash** — pulley, remorse.
@@ -259,7 +259,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 ### 3.12 Share in, cover, notifications, app
 
 - **F-SHR-01 Share target** — Lautta in share sheet; "Save N files" to suggested folders or Another folder…; unreadable files skipped. *Code:* `ShareTargetPage.qml`, `OperationsHandlers.qml`.
-- **F-APP-01 Cover** — shows what a tap opens: page on top, else nearest page below that tells a cover. Browse: no name; free space of phone and mounted volumes (four at most) as icon with "N GB free", two to a row, phone alone on one centred line; below, newest recents as tiles (none: places). Folder, Trash, Recents: F-DIR-11. Viewer: file fills cover, name on dark fade; no picture: type glyph. Built only while cover shows; no timers. Transfer cover while tasks run. *Code:* `CoverPage.qml`, `CoverBrowse.qml`, `CoverFile.qml`.
+- **F-APP-01 Cover** — shows what a tap opens: page on top, else nearest page below that tells a cover. Browse: no name; free space of phone and mounted volumes (four at most) as icon with "N GB free", two to a row, phone alone on one centred line; below, newest recents as tiles (fewer than three: places). Folder, Trash, Recents: F-DIR-11. Viewer: file fills cover, name on dark fade; no picture: type glyph. Built only while cover shows; no timers. Transfer cover while tasks run. *Code:* `CoverPage.qml`, `CoverBrowse.qml`, `CoverFile.qml`.
 - **F-APP-02 Start error** — "Lautta can't open its data".
 - **F-APP-03 Settings** — Browsing (Browse page, View options, Search, Recents), Files (Deleting, Transfers, Storage), About Lautta.
 - **F-APP-04 Storage** — Keep stored listings, Clear cache, Clear app data ("Removes queue, history, favourites and everything in Trash"; refuses while tasks run).
