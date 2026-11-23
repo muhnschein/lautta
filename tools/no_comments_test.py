@@ -32,6 +32,9 @@ class Rust(unittest.TestCase):
         text = "a(); // NOSONAR\nb(); // NOSONAR: why\n"
         self.assertEqual(found("a.rs", text), ["// NOSONAR: why"])
 
+    def test_safety_section_is_rust_only(self):
+        self.assertEqual(found("a.js", "/// # Safety\n/// x\npub unsafe fn f() {}\n"), ["/// # Safety", "/// x"])
+
     def test_safety_section_kept_only_above_pub_unsafe_fn(self):
         kept = "/// # Safety\n/// `p` is live.\npub unsafe fn f(p: *mut u8) {}\n"
         self.assertEqual(found("a.rs", kept), [])
@@ -51,6 +54,12 @@ class Qml(unittest.TestCase):
         self.assertEqual(found("a.js", text), ["// half"])
         self.assertEqual(found("a.js", "var r = s.split(/\\/\\//)\n"), [])
 
+    def test_escaped_quote_stays_in_string(self):
+        self.assertEqual(found("a.js", 'var s = "a\\" // no"; // yes\n'), ["// yes"])
+
+    def test_slashes_in_regex_class(self):
+        self.assertEqual(found("a.js", "var r = /[///]/\n"), [])
+
     def test_single_quotes_are_strings_in_js(self):
         self.assertEqual(found("a.js", "var u = 'http://x'\n"), [])
 
@@ -63,8 +72,11 @@ class Hash(unittest.TestCase):
         text = '#!/bin/sh\n# SPDX-License-Identifier: LGPL-2.1-or-later\necho "a # b" $# ${#x} # tail\n# full\n'
         self.assertEqual(found("a.sh", text), ["# tail", "# full"])
 
+    def test_shell_escaped_quote(self):
+        self.assertEqual(found("a.sh", "echo \\' # x\n"), ["# x"])
+
     def test_shell_heredoc_body_is_data(self):
-        text = "cat <<EOF\n# not a comment\nEOF\n# comment\n"
+        text = "cat <<EOF\na\n# not a comment\nEOF\n# comment\n"
         self.assertEqual(found("a.sh", text), ["# comment"])
 
     def test_shebang_only_on_first_line(self):
@@ -74,6 +86,7 @@ class Hash(unittest.TestCase):
         text = 'a: "x # y"\nb: c#d\nuses: x@abc # v1\n'
         self.assertEqual(found("w.yml", text), ["# v1"])
         self.assertEqual(found("C.toml", "# top\nk = 'a # b'\n"), ["# top"])
+        self.assertEqual(found("C.toml", 'k = "a \\" # b"\n'), [])
 
     def test_makefile(self):
         self.assertEqual(found("Makefile", "a:\n\techo $$# x\n# note\n"), ["# note"])
@@ -90,6 +103,16 @@ class Strip(unittest.TestCase):
     def test_comment_lines_go_without_leaving_gaps(self):
         text = "fn a() {\n    // why\n    b();\n}\n\n// about c\n\nfn c() {} // tail\n"
         self.assertEqual(nc.strip("a.rs", text), "fn a() {\n    b();\n}\n\nfn c() {}\n")
+
+    def test_no_blank_line_left_at_block_edges(self):
+        self.assertEqual(nc.strip("a.rs", "fn a() {\n    // x\n\n    b();\n}\n"), "fn a() {\n    b();\n}\n")
+        self.assertEqual(nc.strip("a.rs", "fn a() {\n    b();\n\n    // x\n}\n"), "fn a() {\n    b();\n}\n")
+
+    def test_blank_lines_away_from_comments_stay(self):
+        self.assertEqual(nc.strip("a.rs", "fn a() {\n\n    b(); // x\n}\n"), "fn a() {\n\n    b();\n}\n")
+
+    def test_trailing_blank_lines_collapse(self):
+        self.assertEqual(nc.strip("a.rs", "x(); // c\n\n\n"), "x();\n")
 
     def test_block_comment_with_code_after_it(self):
         self.assertEqual(nc.strip("a.rs", "x(/* one */);\n/* two\n   lines */ y();\n"), "x();\n y();\n")
