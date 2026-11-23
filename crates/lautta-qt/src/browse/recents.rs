@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Roles: `itemId`, `uri`, `name`, `kind`, `place`, `at` (ms since epoch), `dateGroup` (`today`,
-//! `yesterday`, `last7Days`, `last30Days`, `older`).
+//! `yesterday`, `last7Days`, `last30Days`, `older`), `category`, `mimeType`, `thumbnailSource`,
+//! `textThumb`, `textMono`, `typeIcon` (`lautta_core::app_browse::RecentLook`).
 
 use super::{cell_data, error_parts, role_names, store_changed, Cell};
 use crate::runtime::{blocking_then, core};
@@ -11,7 +12,21 @@ use qmetaobject::prelude::*;
 use qmetaobject::QPointer;
 use std::collections::HashMap;
 
-const COLUMNS: [&str; 7] = ["itemId", "uri", "name", "kind", "place", "at", "dateGroup"];
+const COLUMNS: [&str; 13] = [
+    "itemId",
+    "uri",
+    "name",
+    "kind",
+    "place",
+    "at",
+    "dateGroup",
+    "category",
+    "mimeType",
+    "thumbnailSource",
+    "textThumb",
+    "textMono",
+    "typeIcon",
+];
 
 fn cells(r: RecentRow) -> Vec<Cell> {
     vec![
@@ -22,6 +37,12 @@ fn cells(r: RecentRow) -> Vec<Cell> {
         Cell::Str(r.place),
         Cell::Int(r.at_ms),
         Cell::s(r.date_group.name()),
+        Cell::s(r.look.category),
+        Cell::Str(r.look.mime_type),
+        Cell::Str(r.look.thumbnail_source),
+        Cell::Bool(r.look.text_thumb),
+        Cell::Bool(r.look.text_mono),
+        Cell::s(r.look.type_icon),
     ]
 }
 
@@ -124,6 +145,7 @@ impl QAbstractListModel for RecentsModel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lautta_core::app_browse::RecentLook;
     use lautta_core::date_group::DateGroup;
 
     #[test]
@@ -136,13 +158,29 @@ mod tests {
             place: "A".into(),
             at_ms: 5,
             date_group: DateGroup::LastThirtyDays,
+            look: RecentLook {
+                category: "image",
+                mime_type: "image/jpeg".into(),
+                thumbnail_source: "file:///p/b.jpg".into(),
+                text_thumb: true,
+                text_mono: true,
+                type_icon: "types/json",
+            },
         };
         let rows = vec![cells(row)];
         assert_eq!(rows[0].len(), COLUMNS.len());
-        let (role, _) = role_names(&COLUMNS)
-            .into_iter()
-            .find(|(_, name)| name.to_string() == "dateGroup")
-            .unwrap();
-        assert_eq!(cell_data(&rows, 0, role).to_qstring().to_string(), "last30Days");
+        let roles = role_names(&COLUMNS);
+        let value = |column: &str| {
+            let (role, _) = roles.iter().find(|(_, name)| name.to_string() == column).unwrap();
+            cell_data(&rows, 0, *role).to_qstring().to_string()
+        };
+        assert_eq!(value("dateGroup"), "last30Days");
+        assert_eq!(value("category"), "image");
+        assert_eq!(value("mimeType"), "image/jpeg");
+        assert_eq!(value("thumbnailSource"), "file:///p/b.jpg");
+        assert_eq!(
+            (value("textThumb"), value("textMono"), value("typeIcon")),
+            ("true".into(), "true".into(), "types/json".into())
+        );
     }
 }

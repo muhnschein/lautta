@@ -5,7 +5,7 @@ mod bridge_support;
 use bridge_support::{config, eventually};
 use lautta_bridge_proto::fake::{Consent, FakeBridge, FakeDrive, Listener};
 use lautta_core::app::Core;
-use lautta_core::app_browse::{LayoutRow, RecentTile, Row, SECTION_KIND};
+use lautta_core::app_browse::{LayoutRow, RecentLook, RecentTile, Row, SECTION_KIND};
 use lautta_core::bridge::{feature, BridgeStatus, Level};
 use lautta_core::browse_layout::SECTION_ITEM;
 use lautta_core::date_group::DateGroup;
@@ -246,7 +246,14 @@ async fn the_newest_recents_lead_browse_as_tiles() {
     let tiles = strip(&rows);
     let told: Vec<(&str, &str, &str, &str)> = tiles
         .iter()
-        .map(|t| (t.name.as_str(), t.kind, t.category, t.mime_type.as_str()))
+        .map(|t| {
+            (
+                t.name.as_str(),
+                t.kind,
+                t.look.category,
+                t.look.mime_type.as_str(),
+            )
+        })
         .collect();
     assert_eq!(
         told,
@@ -282,14 +289,14 @@ async fn a_file_tile_is_what_a_recent_tile_shows() {
             tile.id,
             tile.kind,
             tile.name.as_str(),
-            tile.category,
-            tile.mime_type.as_str()
+            tile.look.category,
+            tile.look.mime_type.as_str()
         ),
         (0, "", "a b.jpg", "image", "image/jpeg")
     );
     assert_eq!(tile.uri, "lautta://user-documents/a%20b.jpg");
     assert_eq!(
-        tile.thumbnail_source,
+        tile.look.thumbnail_source,
         format!("file://{}/Documents/a%20b.jpg", e.home.path().display())
     );
     let none = Settings {
@@ -298,14 +305,17 @@ async fn a_file_tile_is_what_a_recent_tile_shows() {
     };
     assert_eq!(
         core.file_tile(&uri("lautta://user-documents/a b.jpg"), &none)
+            .look
             .thumbnail_source,
         ""
     );
     let far = core.file_tile(&uri("lautta://nv-account:1/far.jpg"), &Settings::default());
     assert_eq!(
-        far.thumbnail_source,
+        far.look.thumbnail_source,
         "image://lautta-thumb/lautta://nv-account:1/far.jpg"
     );
+    let note = core.file_tile(&uri("lautta://user-documents/run.sh"), &Settings::default());
+    assert!(note.look.text_thumb && note.look.text_mono && !tile.look.text_thumb);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -323,7 +333,7 @@ async fn tiles_get_thumbnails_as_folders_do() {
         core.recent_tiles(9, settings)
             .unwrap()
             .into_iter()
-            .map(|t| t.thumbnail_source)
+            .map(|t| t.look.thumbnail_source)
             .collect()
     };
     let local = format!("file://{}/Documents/a%20b.jpg", e.home.path().display());
@@ -349,6 +359,85 @@ async fn tiles_get_thumbnails_as_folders_do() {
     };
     assert_eq!(sources(&none), ["", "", "", ""], "Show thumbnails off");
     assert_eq!(core.recent_tiles(2, &Settings::default()).unwrap().len(), 2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn recents_rows_look_as_their_tiles_under_the_thumbnail_settings() {
+    let e = env(None, &["Documents"]).await;
+    let core = &e.core;
+    let remote = uri("lautta://nv-account:1/far.jpg");
+    core.recents
+        .record_at(&remote, "far.jpg", RecentKind::Transferred, 1)
+        .unwrap();
+    let remote_text = uri("lautta://nv-account:1/run.sh");
+    core.recents
+        .record_at(&remote_text, "run.sh", RecentKind::Opened, 2)
+        .unwrap();
+    record(core, "note.txt", RecentKind::Opened, 3);
+    record(core, "a b.jpg", RecentKind::Previewed, 4);
+    let local = format!("file://{}/Documents/a%20b.jpg", e.home.path().display());
+    let looks = |settings: Settings| {
+        core.apply_settings(settings.clone());
+        let rows: Vec<RecentLook> = core
+            .recent_rows(&RecentsFilter::default())
+            .unwrap()
+            .into_iter()
+            .map(|r| r.look)
+            .collect();
+        let tiles: Vec<RecentLook> = core
+            .recent_tiles(9, &settings)
+            .unwrap()
+            .into_iter()
+            .map(|t| t.look)
+            .collect();
+        assert_eq!(rows, tiles, "a row looks as its tile on Browse");
+        rows.into_iter()
+            .map(|l| (l.thumbnail_source, l.text_thumb))
+            .collect::<Vec<_>>()
+    };
+    let server = "image://lautta-thumb/lautta://nv-account:1/far.jpg".to_owned();
+    let none = || (String::new(), false);
+    let text = || (String::new(), true);
+    assert_eq!(
+        looks(Settings::default()),
+        [(local.clone(), false), text(), text(), (server, false)],
+        "local picture: system thumbnailer; text: first lines, also from a server; server picture: app"
+    );
+    let no_remote = Settings {
+        thumbnails_remote: false,
+        ..Settings::default()
+    };
+    assert_eq!(
+        looks(no_remote),
+        [(local, false), text(), none(), none()],
+        "Thumbnails from servers off"
+    );
+    let off = Settings {
+        thumbnails_local: false,
+        ..Settings::default()
+    };
+    assert_eq!(
+        looks(off),
+        [none(), none(), none(), none()],
+        "Show thumbnails off"
+    );
+    let rows = core.recent_rows(&RecentsFilter::default()).unwrap();
+    assert_eq!(
+        rows.iter()
+            .map(|r| (
+                r.look.category,
+                r.look.mime_type.as_str(),
+                r.look.text_mono,
+                r.look.type_icon
+            ))
+            .collect::<Vec<_>>(),
+        [
+            ("image", "image/jpeg", false, "types/text"),
+            ("text", "text/plain", false, "types/text"),
+            ("code", "application/x-shellscript", true, "types/shell"),
+            ("image", "image/jpeg", false, "types/text"),
+        ]
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

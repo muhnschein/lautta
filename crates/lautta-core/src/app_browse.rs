@@ -16,6 +16,7 @@ use crate::org::{self, Recent, RecentsFilter};
 use crate::provider::SpaceInfo;
 use crate::settings::{LocationPrefs, Settings};
 use crate::thumbs::{app_thumbnail_url, thumbnail_source, ThumbSettings, ThumbSource};
+use crate::thumbs_text::{thumb_monospace, type_icon};
 use crate::uri::Uri;
 use crate::volumes::VolumeWords;
 use crate::vpath::{display_name, VPath};
@@ -78,11 +79,8 @@ pub struct RecentTile {
     pub name: String,
     /// `opened`, `previewed`, `transferred`.
     pub kind: &'static str,
-    /// [`FileCategory::icon_name`].
-    pub category: &'static str,
-    pub mime_type: String,
-    /// `file://` URL for the system thumbnailer, `image://lautta-thumb/…`, or empty: glyph.
-    pub thumbnail_source: String,
+    #[serde(flatten)]
+    pub look: RecentLook,
 }
 
 impl Row {
@@ -187,6 +185,24 @@ pub struct RecentRow {
     pub place: String,
     pub at_ms: i64,
     pub date_group: DateGroup,
+    pub look: RecentLook,
+}
+
+/// Glyph and thumbnail of a recent file, as on Browse tiles.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentLook {
+    /// [`FileCategory::icon_name`](crate::mime::FileCategory::icon_name).
+    pub category: &'static str,
+    pub mime_type: String,
+    /// `file://` URL for the system thumbnailer, `image://lautta-thumb/…`, or empty: glyph.
+    pub thumbnail_source: String,
+    /// First lines drawn on the tile ([`crate::thumbs_text`]), asked by the tile.
+    pub text_thumb: bool,
+    /// Of a text thumbnail.
+    pub text_mono: bool,
+    /// Of a text thumbnail: [`crate::thumbs_text::type_icon`].
+    pub type_icon: &'static str,
 }
 
 pub fn fs_kind_name(magic: u64) -> &'static str {
@@ -433,34 +449,46 @@ impl Core {
     }
 
     fn recent_tile(&self, r: Recent, shown: bool, thumbs: &ThumbSettings) -> RecentTile {
-        let mut tile = self.tile(&r.uri, shown, thumbs);
-        tile.id = r.id;
-        tile.name = r.name;
-        tile.kind = r.kind.as_str();
-        tile
+        RecentTile {
+            look: self.recent_look(&r.uri, shown, thumbs),
+            id: r.id,
+            uri: r.uri.to_string(),
+            name: r.name,
+            kind: r.kind.as_str(),
+        }
     }
 
     /// File at `uri` as folders show it: category, type, thumbnail. `id` 0, `kind` empty.
     pub fn file_tile(&self, uri: &Uri, settings: &Settings) -> RecentTile {
-        self.tile(uri, settings.thumbnails_local, &ThumbSettings::new(settings))
-    }
-
-    fn tile(&self, uri: &Uri, shown: bool, thumbs: &ThumbSettings) -> RecentTile {
         let entry = Entry::new(uri.name().unwrap_or_default(), Kind::File);
-        let local = self.locations.to_local_path(uri);
-        let thumbnail_source = match (thumbnail_source(&entry, local.is_some(), shown, thumbs), local) {
-            (ThumbSource::System, Some(path)) => file_url(&path),
-            (ThumbSource::App, _) => app_thumbnail_url(uri),
-            _ => String::new(),
-        };
         RecentTile {
+            look: self.recent_look(uri, settings.thumbnails_local, &ThumbSettings::new(settings)),
             id: 0,
             uri: uri.to_string(),
             name: display_name(&entry.name),
             kind: "",
+        }
+    }
+
+    /// `shown`: *Show thumbnails*.
+    fn recent_look(&self, uri: &Uri, shown: bool, thumbs: &ThumbSettings) -> RecentLook {
+        let name = uri.name().unwrap_or_default();
+        let entry = Entry::new(name, Kind::File);
+        let local = self.locations.to_local_path(uri);
+        let source = thumbnail_source(&entry, local.is_some(), shown, thumbs);
+        let text_thumb = source == ThumbSource::Text;
+        let thumbnail_source = match (source, local) {
+            (ThumbSource::System, Some(path)) => file_url(&path),
+            (ThumbSource::App, _) => app_thumbnail_url(uri),
+            _ => String::new(),
+        };
+        RecentLook {
             category: category_of(&entry).icon_name(),
             mime_type: mime_of(&entry).unwrap_or_default(),
             thumbnail_source,
+            text_thumb,
+            text_mono: thumb_monospace(name),
+            type_icon: type_icon(name),
         }
     }
 
@@ -733,15 +761,17 @@ impl Core {
 
     pub fn recent_rows(&self, filter: &RecentsFilter) -> Result<Vec<RecentRow>> {
         let now = now_ms();
+        let settings = self.settings();
+        let thumbs = ThumbSettings::new(&settings);
         Ok(self
             .recents
             .list(filter)?
             .into_iter()
-            .map(|r| self.recent_row(r, now))
+            .map(|r| self.recent_row(r, now, settings.thumbnails_local, &thumbs))
             .collect())
     }
 
-    fn recent_row(&self, r: Recent, now: i64) -> RecentRow {
+    fn recent_row(&self, r: Recent, now: i64, shown: bool, thumbs: &ThumbSettings) -> RecentRow {
         let folder = r.uri.parent().unwrap_or_else(|| r.uri.clone());
         // Transfers record the location, not the folder.
         let place = if r.kind == org::RecentKind::Transferred {
@@ -757,6 +787,7 @@ impl Core {
             place,
             at_ms: r.at_ms,
             date_group: DateGroup::at(r.at_ms, now),
+            look: self.recent_look(&r.uri, shown, thumbs),
         }
     }
 }

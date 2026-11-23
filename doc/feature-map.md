@@ -248,9 +248,9 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-FAV-02 Edit favourite** — Label, Folder, Colour (Amber, Green, Red, Blue, Lime, Purple, Pink, Grey), Icon.
 - **F-FAV-03 Remove favourite** — row menu, remorse "Removing favourite".
 - **F-FAV-04 Reorder favourites** — Settings › Browse page drag.
-- **F-RCT-01 Recents** — files opened, edited, transferred; tap opens (transferred → its folder); menu Remove from recents; pulley Clear recents.
+- **F-RCT-01 Recents** — files opened, edited, transferred, under date groups; thumbnails as folders have them; list or grid as View options' View, in grid each date group starts its own row of tiles (name, place). Tap opens (transferred → its folder); menu Remove from recents; pulley Clear recents.
 - **F-RCT-02 Recents off** — Settings › Recents "Remember recent files"; Browse tiles hide.
-- **F-RCT-03 Recents on Browse** — section Recents above Favourites: three newest files as tiles (thumbnail or type glyph, name), fourth tile "All recents" opens SCR-38. Tap opens (transferred → its folder); long press: Remove from recents. No section while Recents are off or empty; switch "Newest recents" in Settings › Browse page. *Code:* `RecentStrip.qml`, `app_browse.rs` (`recent_tiles`).
+- **F-RCT-03 Recents on Browse** — section Recents above Favourites: three newest files as tiles (thumbnail, a text file's first lines, or type glyph; name), fourth tile "All recents" opens SCR-38. Tap opens (transferred → its folder); long press: Remove from recents. No section while Recents are off or empty; switch "Newest recents" in Settings › Browse page. *Code:* `RecentStrip.qml`, `app_browse.rs` (`recent_tiles`).
 - **F-TRH-01 Trash** — items from user folders, "Kept for N days", "N days left", "From folder".
 - **F-TRH-02 Restore / Delete now / Show original folder** — row menu.
 - **F-TRH-03 Empty trash** — pulley, remorse.

@@ -2,6 +2,7 @@
 // F-RCT-03: newest Recents as tiles, last tile opens SCR-38 Recents.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import Lautta 1.0
 import "../"
 import "../FileIcons.js" as FileIcons
 
@@ -69,6 +70,11 @@ Item {
                     visible: !tileIcon.thumbnailReady
                     color: Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity / 3)
                 }
+                TextThumb {
+                    id: lines
+
+                    uri: cell.tile.textThumb ? cell.tile.uri : ""
+                }
                 FileIcon {
                     id: tileIcon
 
@@ -77,6 +83,9 @@ Item {
                     category: cell.tile.category
                     thumbnailSource: cell.tile.thumbnailSource
                     mimeType: cell.tile.mimeType
+                    previewText: lines.text
+                    previewMono: cell.tile.textMono
+                    typeIcon: cell.tile.typeIcon
                     highlighted: cell.lit
                 }
                 Label {

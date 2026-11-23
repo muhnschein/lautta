@@ -1092,7 +1092,7 @@ impl DirectoryModel {
     }
 }
 
-fn cancel_text(key: &str) {
+pub(crate) fn cancel_text(key: &str) {
     if let Some(previews) = core().and_then(|core| core.previews(&runtime::handle()).ok()) {
         previews.cancel_text(key);
     }
