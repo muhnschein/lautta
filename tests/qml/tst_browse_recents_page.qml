@@ -10,6 +10,7 @@ ApplicationWindow {
     property bool reachedEnd
     property int step: 0
     property int waited: 0
+    property int pageWidth
     property var page
     readonly property var expected: [
         ["lautta-date-today", "Today"],
@@ -30,6 +31,7 @@ ApplicationWindow {
         ListElement { itemId: 4; uri: "lautta://user-documents/README.md"; name: "README.md"; kind: "previewed"; place: "Documents"; at: 4; dateGroup: "last7Days"; category: "markdown"; mimeType: "text/markdown"; thumbnailSource: ""; textThumb: false; textMono: false; typeIcon: "types/text" }
         ListElement { itemId: 5; uri: "lautta://user-documents/budget.csv"; name: "budget.csv"; kind: "opened"; place: "Documents"; at: 5; dateGroup: "last30Days"; category: "text"; mimeType: "text/csv"; thumbnailSource: ""; textThumb: false; textMono: false; typeIcon: "types/text" }
         ListElement { itemId: 6; uri: "lautta://user-documents/old.csv"; name: "old.csv"; kind: "opened"; place: ""; at: 6; dateGroup: "older"; category: "text"; mimeType: "text/csv"; thumbnailSource: ""; textThumb: false; textMono: false; typeIcon: "types/text" }
+        ListElement { itemId: 9; uri: "lautta://user-documents/letter.pdf"; name: "letter.pdf"; kind: "opened"; place: "Documents"; at: 9; dateGroup: "older"; category: "pdf"; mimeType: "application/pdf"; thumbnailSource: "file:///nowhere/letter.pdf"; textThumb: false; textMono: false; typeIcon: "types/text" }
     }
 
     ViewerTools { id: tools }
@@ -152,9 +154,11 @@ ApplicationWindow {
         for (var i = 0; i < tiles.length; ++i) {
             var name = tiles[i].itemName
             var row = null
-            for (var r = 0; r < rows.count; ++r) {
+            var inGroup = 0
+            for (var r = 0; r < rows.count && !row; ++r) {
+                inGroup = r > 0 && rows.get(r - 1).dateGroup === rows.get(r).dateGroup ? inGroup + 1 : 0
                 if (rows.get(r).name === name)
-                    row = { "index": r, "group": rows.get(r).dateGroup }
+                    row = { "index": inGroup, "group": rows.get(r).dateGroup }
             }
             var g = win.expected.map(function(e) { return e[0] }).indexOf("lautta-date-" + {
                 "today": "today", "yesterday": "yesterday", "last7Days": "last-7-days",
@@ -162,7 +166,7 @@ ApplicationWindow {
             var y = top(tiles[i])
             if (y < top(headers[g]) + headers[g].height || (g + 1 < headers.length && y >= top(headers[g + 1])))
                 return fail(name + " is not under its date group's header")
-            var column = row.index < 4 ? row.index % columns : 0
+            var column = row.index % columns
             if (Math.abs(tiles[i].mapToItem(win.page, 0, 0).x - column * win.page.cellWidth) > 1)
                 return fail(name + " is not in column " + column)
         }
@@ -182,6 +186,14 @@ ApplicationWindow {
         for (var t = 0; t < tiles.length; ++t)
             icons = icons.concat(findAll(tiles[t], function(x) { return x.thumbnailReady !== undefined }))
         return checkIcons(icons, "grid")
+    }
+
+    function pdfThumbnail() {
+        sections()
+        var tiles = findAll(win.page, function(x) { return x.objectName === "recentGridTile" && x.itemName === "letter.pdf" })
+        if (tiles.length !== 1)
+            return null
+        return findAll(tiles[0], function(x) { return x.priority !== undefined && x.mimeType === "application/pdf" })[0] || null
     }
 
     readonly property var places: ({
@@ -229,13 +241,41 @@ ApplicationWindow {
                 break
             case 1:
                 if (win.checkGrid() === true) {
+                    // Nemo draws the page and tells its size once.
+                    var drawn = win.pdfThumbnail()
+                    if (!drawn)
+                        return win.fail("letter.pdf's tile asks the system thumbnailer")
+                    win.pageWidth = Math.round(drawn.sourceSize.width * 0.7)
+                    drawn.implicitWidth = win.pageWidth
+                    drawn.implicitHeight = drawn.sourceSize.width
+                    if (drawn.width !== win.pageWidth)
+                        return win.fail("letter.pdf's page takes the size Nemo tells: " + drawn.width)
+                    App.setSetting("view_mode", JSON.stringify("list"))
+                    win.step++
+                    win.waited = 0
+                }
+                break
+            case 2:
+                if (win.pdfThumbnail() === null) {
+                    App.setSetting("view_mode", JSON.stringify("grid"))
+                    win.step++
+                    win.waited = 0
+                }
+                break
+            case 3:
+                // Tiles made anew join the drawn thumbnail: Nemo tells them no size.
+                var joined = win.pdfThumbnail()
+                if (joined) {
+                    if (joined.implicitWidth !== 0 || joined.width !== win.pageWidth)
+                        return win.fail("letter.pdf's page, shown again, keeps the size seen: "
+                                        + joined.implicitWidth + " " + joined.width)
                     App.setSetting("view_mode", JSON.stringify("list"))
                     App.setSetting("recents_enabled", JSON.stringify(false))
                     win.step++
                     win.waited = 0
                 }
                 break
-            case 2:
+            case 4:
                 var h = win.hint()
                 if (h === "lautta-recents-off-settings-hint" || h === "Turn them on in Settings") {
                     App.setSetting("recents_enabled", JSON.stringify(true))
