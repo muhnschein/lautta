@@ -53,11 +53,22 @@ Item {
                 id: thumbnail
 
                 readonly property bool page: icon.mimeType === "application/pdf"
+                readonly property string pageKey: source + " " + sourceSize.width + "x" + sourceSize.height
+                property var pageSize: ({ "width": 0, "height": 0 })
+
+                function measure() {
+                    if (page)
+                        pageSize = FileIcons.pageSize(pageKey, implicitWidth, implicitHeight)
+                }
 
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: page ? Math.max(0, (parent.height - height) / 2) : 0
-                width: page ? implicitWidth : parent.width
-                height: page ? implicitHeight : parent.height
+                width: page ? pageSize.width : parent.width
+                height: page ? pageSize.height : parent.height
+                Component.onCompleted: measure()
+                onStatusChanged: measure()
+                onImplicitWidthChanged: measure()
+                onImplicitHeightChanged: measure()
                 source: icon.thumbnailSource
                 mimeType: icon.mimeType
                 sourceSize.width: icon.width

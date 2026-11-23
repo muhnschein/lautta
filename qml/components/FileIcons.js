@@ -39,3 +39,17 @@ function sized(icon, px) {
 function glyph(category, isDir, px) {
     return sized("file-" + kind(category, isDir), px)
 }
+
+var pageSizes = {}
+var pageSizeCount = 0
+
+function pageSize(key, width, height) {
+    if (width > 0 && height > 0) {
+        if (pageSizes[key] === undefined && ++pageSizeCount > 2000) {
+            pageSizes = {}
+            pageSizeCount = 1
+        }
+        pageSizes[key] = { "width": width, "height": height }
+    }
+    return pageSizes[key] || { "width": 0, "height": 0 }
+}

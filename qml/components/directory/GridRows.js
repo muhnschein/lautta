@@ -27,3 +27,24 @@ function tallest(items) {
         height = Math.max(height, items[i].implicitHeight)
     return height
 }
+
+function sectionRows(sections, columns) {
+    var rows = []
+    if (columns <= 0)
+        return rows
+    for (var i = 0; i < sections.length; ++i) {
+        var last = rows.length > 0 ? rows[rows.length - 1] : null
+        if (last && last.section === sections[i] && last.count < columns)
+            last.count++
+        else
+            rows.push({ "section": sections[i], "first": i, "count": 1 })
+    }
+    return rows
+}
+
+function fitRows(model, rows) {
+    for (var i = 0; i < rows.length; ++i)
+        model.set(i, rows[i])
+    if (model.count > rows.length)
+        model.remove(rows.length, model.count - rows.length)
+}

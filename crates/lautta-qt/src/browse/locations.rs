@@ -190,7 +190,7 @@ impl QAbstractListModel for LocationsModel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lautta_core::app_browse::RecentTile;
+    use lautta_core::app_browse::{RecentLook, RecentTile};
 
     #[test]
     fn cells_match_the_columns() {
@@ -242,9 +242,14 @@ mod tests {
                 uri: "lautta://user-pictures/a.jpg".into(),
                 name: "a.jpg".into(),
                 kind: "previewed",
-                category: "image",
-                mime_type: "image/jpeg".into(),
-                thumbnail_source: "file:///p/a.jpg".into(),
+                look: RecentLook {
+                    category: "image",
+                    mime_type: "image/jpeg".into(),
+                    thumbnail_source: "file:///p/a.jpg".into(),
+                    text_thumb: false,
+                    text_mono: false,
+                    type_icon: "types/text",
+                },
             }],
             ..Row::default()
         };
@@ -261,7 +266,10 @@ mod tests {
                 "kind": "previewed",
                 "category": "image",
                 "mimeType": "image/jpeg",
-                "thumbnailSource": "file:///p/a.jpg"
+                "thumbnailSource": "file:///p/a.jpg",
+                "textThumb": false,
+                "textMono": false,
+                "typeIcon": "types/text"
             }])
         );
         assert_eq!(at(&cells(&Row::default()), "tiles"), Cell::s(""));
