@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// F-RCT-03 tiles and F-BRW-11 free space on SCR-01 Browse. No finger, no thumbnailer: looks unproven.
+// F-RCT-03 tiles and F-BRW-11 free space on SCR-01 Browse. No finger, no thumbnailer: looks unproven;
+// text tiles' first lines are real.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -36,16 +37,20 @@ ApplicationWindow {
         }
     }
 
-    initialPage: Component {
-        BrowsePage {
-            id: browsePage
+    initialPage: browsePage
 
-            Component.onCompleted: win.browse = browsePage
+    Component {
+        id: browsePage
+
+        BrowsePage {
+            id: page
+
+            Component.onCompleted: win.browse = page
             recentsStore: store
             deviceFree: 42000000000
             deviceTotal: 128000000000
             listModel: ListModel {
-                ListElement { section: "recents"; uri: ""; name: ""; kind: "recent-strip"; icon: ""; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: ""; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: ""; drive: ""; tiles: "[{\"id\":7,\"uri\":\"lautta://user-pictures/IMG_2041.jpg\",\"name\":\"a\",\"kind\":\"previewed\",\"category\":\"image\",\"mimeType\":\"image/jpeg\",\"thumbnailSource\":\"\"},{\"id\":8,\"uri\":\"lautta://user-documents/strip-notes.md\",\"name\":\"strip-notes.md\",\"kind\":\"opened\",\"category\":\"text\",\"mimeType\":\"text/markdown\",\"thumbnailSource\":\"\"},{\"id\":9,\"uri\":\"lautta://user-pictures/sent.jpg\",\"name\":\"A name far too long for one tile.jpg\",\"kind\":\"transferred\",\"category\":\"image\",\"mimeType\":\"image/jpeg\",\"thumbnailSource\":\"\"}]" }
+                ListElement { section: "recents"; uri: ""; name: ""; kind: "recent-strip"; icon: ""; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: ""; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: ""; drive: ""; tiles: "[{\"id\":7,\"uri\":\"lautta://user-pictures/IMG_2041.jpg\",\"name\":\"a\",\"kind\":\"previewed\",\"category\":\"image\",\"mimeType\":\"image/jpeg\",\"thumbnailSource\":\"\"},{\"id\":8,\"uri\":\"lautta://user-documents/strip-notes.md\",\"name\":\"strip-notes.md\",\"kind\":\"opened\",\"category\":\"text\",\"mimeType\":\"text/markdown\",\"thumbnailSource\":\"\",\"textThumb\":true,\"textMono\":false,\"typeIcon\":\"types/markdown\"},{\"id\":9,\"uri\":\"lautta://user-pictures/sent.jpg\",\"name\":\"A name far too long for one tile.jpg\",\"kind\":\"transferred\",\"category\":\"image\",\"mimeType\":\"image/jpeg\",\"thumbnailSource\":\"\"},{\"id\":10,\"uri\":\"lautta://user-pictures/older.jpg\",\"name\":\"older.jpg\",\"kind\":\"previewed\",\"category\":\"image\",\"mimeType\":\"image/jpeg\",\"thumbnailSource\":\"\"}]" }
                 ListElement { section: "favourites"; uri: "lautta://user-documents/Uni"; name: "Thesis"; kind: "favourite"; icon: "image://theme/icon-m-favorite"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "1"; place: "Documents › Uni"; provider: ""; host: ""; free: -1; total: -1; fs: ""; drive: ""; tiles: "" }
                 ListElement { section: "device"; uri: "lautta://user-documents/"; name: "Documents"; kind: "folder"; icon: "file-folder"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "user-documents"; place: ""; provider: ""; host: ""; free: -1; total: -1; fs: ""; drive: ""; tiles: "" }
                 ListElement { section: "volumes"; uri: "lautta://vol-SD/"; name: "SD card"; kind: "volume"; icon: "image://theme/icon-m-sd-card"; status: "ready"; attention: ""; connection: ""; connectionError: ""; colour: ""; itemId: "vol-SD"; place: ""; provider: ""; host: ""; free: 62500000000; total: 128000000000; fs: "exFAT"; drive: ""; tiles: "" }
@@ -116,7 +121,7 @@ ApplicationWindow {
         var tiles = named(row, "recentTile")
         var names = named(row, "recentTileName").map(function(x) { return x.text }).join("|")
         if (!expect(tiles.length === 3 && names === "a|strip-notes.md|A name far too long for one tile.jpg",
-                    "three tiles with their names: " + tiles.length + " " + names))
+                    "of more recents three are tiles, with their names: " + tiles.length + " " + names))
             return
         var all = named(row, "allRecents")
         if (!expect(all.length === 1 && findAll(all[0], function(x) { return x.text === "lautta-browse-all-recents" }, []).length === 1,
@@ -138,9 +143,9 @@ ApplicationWindow {
         var shortName = named(tiles[0], "recentTileName")[0]
         expect(shortName.implicitWidth <= shortName.width && shortName.horizontalAlignment === Text.AlignHCenter, "a short name sits in the middle")
         var glyphs = tiles.map(function(t) { return named(t, "fileGlyph")[0] })
-        expect(glyphs.every(function(g) { return g && g.visible && g.status === Image.Ready })
+        expect(glyphs.every(function(g) { return g && g.status === Image.Ready }) && glyphs[0].visible && glyphs[2].visible
                && String(glyphs[0].source) !== String(glyphs[1].source),
-               "without thumbnail a tile draws its type's glyph: " + glyphs.map(function(g) { return g ? g.source : "none" }).join(", "))
+               "without thumbnail or first lines a tile draws its type's glyph: " + glyphs.map(function(g) { return g ? g.source : "none" }).join(", "))
         expect(row.menu !== null && !row.plain, "the tiles row is no plain row")
         var depth = pageStack.depth
         row.clicked(null)
@@ -171,6 +176,13 @@ ApplicationWindow {
         expect(space[0].text === BrowseText.volumeLine(42000000000, 128000000000, "") && space[0].text.length > 0,
                "it reads as a volume's line: " + space[0].text)
         expect(left(space[0], view.contentItem) === Math.round(Theme.horizontalPageMargin), "it starts at the page margin")
+        var sizes = [[104300000000, "97 GB"], [128000000000, "119 GB"], [10737418240, "10 GB"], [10694468567, "10 GB"],
+                     [10400000000, "9.7 GB"], [9400000000, "8.8 GB"], [999000000, "953 MB"], [1500000, "1.4 MB"]]
+        for (var i = 0; i < sizes.length; ++i)
+            expect(BrowseText.space(sizes[i][0]) === sizes[i][1],
+                   "space reads whole from 10 of its unit up, with a decimal below: " + BrowseText.space(sizes[i][0]) + " for " + sizes[i][1])
+        expect(BrowseText.volumeLine(-1, 128000000000, "") === "119 GB" && BrowseText.volumeLine(-1, 128000000000, "exFAT") === "119 GB · exFAT",
+               "a volume's size reads that way: " + BrowseText.volumeLine(-1, 128000000000, "exFAT"))
         expect(Math.round(space[0].mapToItem(view.contentItem, 0, space[0].baselineOffset).y)
                === Math.round(device.mapToItem(view.contentItem, 0, device.baselineOffset).y),
                "it stands on the line of On this device")
@@ -244,6 +256,22 @@ ApplicationWindow {
         row.closeMenu()
     }
 
+    function preview(row) {
+        var tile = named(row, "recentTile")[1]
+        var label = tile ? named(tile, "textPreview")[0] : null
+        return label && label.visible ? label.text : ""
+    }
+
+    function checkTextThumb(row) {
+        var tiles = named(row, "recentTile")
+        expect(preview(row).indexOf("# Title\n") === 0, "a text tile shows its first lines: " + JSON.stringify(preview(row)))
+        var type = named(tiles[1], "typeIcon")[0]
+        expect(type && type.icon === "types/markdown" && type.status === Image.Ready, "with its type's icon")
+        expect(!named(tiles[1], "fileGlyph")[0].visible, "and no glyph")
+        expect(named(tiles[0], "textPreview").length === 0 && named(tiles[2], "textPreview").length === 0,
+               "a tile that is no text has no lines")
+    }
+
     function next() {
         step++
         waited = 0
@@ -266,6 +294,14 @@ ApplicationWindow {
                 if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), win.file)
                         || !tools.installFixture(Qt.resolvedUrl("host/fixtures/camera.jpg"), win.photo))
                     return win.fail("fixture")
+                // Page anew once the file is there: its text tile asks for first lines.
+                pageStack.replace(browsePage, {}, PageStackAction.Immediate)
+                win.next()
+                break
+            case 1:
+                if (!row || win.preview(row) === "")
+                    break
+                win.checkTextThumb(row)
                 win.checkTiles(row)
                 win.checkSections()
                 win.checkSpace()
@@ -273,40 +309,40 @@ ApplicationWindow {
                 win.holdTile(row)
                 win.next()
                 break
-            case 1:
+            case 2:
                 if (!row || row.menuOpen)
                     break
                 win.expect(win.lit(row) === "0,0,0", "the menu closed, no tile stays lit: " + win.lit(row))
                 win.named(row, "recentTile")[1].clicked(null)
                 win.next()
                 break
-            case 2:
+            case 3:
                 if (pageStack.busy || !page || page.uri !== win.file)
                     break
                 win.expect(String(page).indexOf("MarkdownViewer") === 0, "an opened file's tile opens the file: " + page)
                 pageStack.pop(null, PageStackAction.Immediate)
                 win.next()
                 break
-            case 3:
+            case 4:
                 if (!row || pageStack.depth !== 1)
                     break
                 win.named(row, "recentTile")[2].clicked(null)
                 win.next()
                 break
-            case 4:
+            case 5:
                 if (pageStack.busy || !page || page.uri !== App.parentUri(win.photo))
                     break
                 win.expect(String(page).indexOf("DirectoryPage") === 0, "a transferred file's tile opens its folder: " + page)
                 pageStack.pop(null, PageStackAction.Immediate)
                 win.next()
                 break
-            case 5:
+            case 6:
                 if (!row || pageStack.depth !== 1)
                     break
                 win.named(row, "allRecents")[0].clicked(null)
                 win.next()
                 break
-            case 6:
+            case 7:
                 if (pageStack.busy || !page || page.recentsOn === undefined)
                     break
                 win.expect(win.removed.join(",") === "8", "nothing else was removed: [" + win.removed.join(",") + "]")

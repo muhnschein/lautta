@@ -105,7 +105,7 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | SCR-55 | Scan adjust (crop, turn) | `dialogs/ScanAdjustDialog.qml` | S | scan page view |
 | SCR-56 | Scan save | `dialogs/ScanSaveDialog.qml` | S | scan Done |
 | SCR-57 | Scan saving | `pages/ScanSavingPage.qml` | S | scan save accept |
-| SCR-58 | Cover (folder / tasks) | `cover/CoverPage.qml`, `cover/TransferCover.qml` | S | app in background |
+| SCR-58 | Cover (page / tasks) | `cover/CoverPage.qml`, `cover/TransferCover.qml` | S | app in background |
 | SCR-59 | Notifications | `components/TransferNotifications.qml` | S | tasks in background |
 | SCR-60 | Nearby setup | `dialogs/NearbySetupDialog.qml` | B | tap Nearby row |
 | SCR-61 | Checksums | `pages/ChecksumsPage.qml` | S | More actions, image More |
@@ -165,7 +165,7 @@ Retired, never reuse: F-SRV-08 Server question, F-SRV-09 Connect to server, F-SR
 - **F-DIR-08 Large folder** — "N loaded · large folder: name order, thumbnails off", Stop.
 - **F-DIR-09 Live updates** — inotify refresh of local folders. *Code:* `watch.rs`.
 - **F-DIR-10 Listing cache** — cached folder visible at once, refreshed after. *Code:* `dircache.rs`; Storage › Keep stored listings.
-- **F-DIR-11 Folder cover** — cover shows folder name and item count.
+- **F-DIR-11 Folder cover** — folder name top right, first items as caption-less tiles (thumbnail, first lines of a text file, or type glyph), three per row, last row fading; empty folder: "No files". Same for Trash and Recents under their titles. *Code:* `CoverGrid.qml`.
 
 ### 3.4 Item actions
 
@@ -211,7 +211,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-XFR-07 Waiting states** — Waiting for network / memory card / connection / your answer, Queued, Paused at n%.
 - **F-XFR-08 Concurrency and lanes** — Transfers at once on this device, Connections per server.
 - **F-XFR-09 Notifications** — progress "N tasks · n%", finished, failed (tap to retry), conflicts, "Lautta needs an answer"; tap opens Activity or the conflict.
-- **F-XFR-10 Transfer cover** — progress, rate; cover actions Pause/Resume all and Open Activity.
+- **F-XFR-10 Transfer cover** — "N tasks" or "N paused" top right, percent and rate in the middle, whole cover fills see-through from the left with progress; cover actions Pause/Resume all and Open Activity.
 - **F-XFR-11 Resume on start / keep history** — Settings › Transfers.
 - **F-XFR-12 Item status in folder** — row line "Uploading to … · n%", "Downloading from …", "Waiting in Activity".
 
@@ -248,9 +248,9 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-FAV-02 Edit favourite** — Label, Folder, Colour (Amber, Green, Red, Blue, Lime, Purple, Pink, Grey), Icon.
 - **F-FAV-03 Remove favourite** — row menu, remorse "Removing favourite".
 - **F-FAV-04 Reorder favourites** — Settings › Browse page drag.
-- **F-RCT-01 Recents** — files opened, edited, transferred; tap opens (transferred → its folder); menu Remove from recents; pulley Clear recents.
+- **F-RCT-01 Recents** — files opened, edited, transferred, under date groups; thumbnails as folders have them; list or grid as View options' View, in grid each date group starts its own row of tiles (name, place). Tap opens (transferred → its folder); menu Remove from recents; pulley Clear recents.
 - **F-RCT-02 Recents off** — Settings › Recents "Remember recent files"; Browse tiles hide.
-- **F-RCT-03 Recents on Browse** — section Recents above Favourites: three newest files as tiles (thumbnail or type glyph, name), fourth tile "All recents" opens SCR-38. Tap opens (transferred → its folder); long press: Remove from recents. No section while Recents are off or empty; switch "Newest recents" in Settings › Browse page. *Code:* `RecentStrip.qml`, `app_browse.rs` (`recent_tiles`).
+- **F-RCT-03 Recents on Browse** — section Recents above Favourites: three newest files as tiles (thumbnail, a text file's first lines, or type glyph; name), fourth tile "All recents" opens SCR-38. Tap opens (transferred → its folder); long press: Remove from recents. No section while Recents are off or empty; switch "Newest recents" in Settings › Browse page. *Code:* `RecentStrip.qml`, `app_browse.rs` (`recent_tiles`).
 - **F-TRH-01 Trash** — items from user folders, "Kept for N days", "N days left", "From folder".
 - **F-TRH-02 Restore / Delete now / Show original folder** — row menu.
 - **F-TRH-03 Empty trash** — pulley, remorse.
@@ -259,7 +259,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 ### 3.12 Share in, cover, notifications, app
 
 - **F-SHR-01 Share target** — Lautta in share sheet; "Save N files" to suggested folders or Another folder…; unreadable files skipped. *Code:* `ShareTargetPage.qml`, `OperationsHandlers.qml`.
-- **F-APP-01 Cover** — folder name + item count, or "Lautta"; transfer cover while tasks run.
+- **F-APP-01 Cover** — shows what a tap opens: page on top, else nearest page below that tells a cover. Browse: no name; free space of phone and mounted volumes (four at most) as icon with "N GB free", two to a row, phone alone on one centred line; below, newest recents as tiles (none: places). Folder, Trash, Recents: F-DIR-11. Viewer: file fills cover, name on dark fade; no picture: type glyph. Built only while cover shows; no timers. Transfer cover while tasks run. *Code:* `CoverPage.qml`, `CoverBrowse.qml`, `CoverFile.qml`.
 - **F-APP-02 Start error** — "Lautta can't open its data".
 - **F-APP-03 Settings** — Browsing (Browse page, View options, Search, Recents), Files (Deleting, Transfers, Storage), About Lautta.
 - **F-APP-04 Storage** — Keep stored listings, Clear cache, Clear app data ("Removes queue, history, favourites and everything in Trash"; refuses while tasks run).

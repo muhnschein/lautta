@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Recents show thumbnails, and show as a grid when *View options* say Grid, with each day group starting its own row. Text files on the Home page's Recents tiles and in the Recents grid show their first lines, as in folders ([#60](https://github.com/muhnschein/lautta/issues/60)).
 - A server whose identity changed now shows a clear security warning: red, with a warning icon, what the risk is, *Review identity* and *Go back*. A failed sign-in shows as a warning in the same style with *Update sign-in*. Both look the same whether you tap the server on Home or open one of its folders ([#118](https://github.com/muhnschein/lautta/issues/118), [#119](https://github.com/muhnschein/lautta/issues/119)).
 - Photos open faster in the image viewer, big ones most: the picture starts loading as your finger touches it, loads at screen size and first, and shows the camera's preview while it loads, or the folder's thumbnail when the photo has none. Pictures you swiped past come back at once ([#41](https://github.com/muhnschein/lautta/issues/41)).
 - PDF thumbnails of files on this device show the top of the first page, not its middle.
@@ -23,6 +24,7 @@
 - When a server goes away, the offline banner says when the folder shown was listed instead of "Showing the copy from ." A listing cut short by a lost connection shows its error instead of the offline banner ([#106](https://github.com/muhnschein/lautta/issues/106)).
 - *Checksums* in *More actions* of a file: SHA-256, MD5, SHA-1, SHA-512 and more (SHA-3, BLAKE2b, BLAKE3, CRC32, xxHash). Tap one to calculate it; tap the value to copy it. When a checksum list such as SHA256SUMS in the same folder names the file, Lautta says whether it matches. A checksum list itself offers *Verify files*: it checks every file the list names ([#40](https://github.com/muhnschein/lautta/issues/40)).
 - Browse starts with your three newest recent files as tiles; *All recents* opens the whole list, and a long press on a tile removes it from recents. The tiles replace the *Recents* row and can be switched off in *Settings › Browse page*. *On this device* now shows the phone's free space ([#169](https://github.com/muhnschein/lautta/issues/169)).
+- The cover shows what a tap brings back: the folder's first files as small tiles, free space and your newest recent files on Browse, the open file in a viewer, and Trash and Recents as tiles. While tasks run, the whole cover fills from the left with their progress ([#121](https://github.com/muhnschein/lautta/issues/121)).
 - While a photo without a camera preview opens, its folder thumbnail fills the photo's whole shape, softly blurred, instead of a square between black bars, so the photo fades in without a jump ([#176](https://github.com/muhnschein/lautta/issues/176)).
 - The photo at the top of an image's *Details* shows at once instead of loading again ([#174](https://github.com/muhnschein/lautta/issues/174)).
 

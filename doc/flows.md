@@ -330,7 +330,8 @@ Features: F-RCT-01 Recents, F-RCT-03 Recents on Browse, F-BRW-11 Phone free spac
 | 1 | SCR-01 Browse | Recents tiles on top, free space beside On this device |
 | 2 | SCR-01 Browse | Long press on a tile: Remove from recents |
 | 3 | SCR-38 Recents | Tile All recents: Recents |
-| 4 | SCR-38 Recents | Menu: Remove from recents |
+| 4 | SCR-38 Recents | Grid when View options say Grid: tiles under date groups |
+| 5 | SCR-38 Recents | Menu: Remove from recents |
 
 ### FL-22 Favourites (standalone)
 
@@ -539,13 +540,13 @@ Features: F-APP-01 Cover, F-XFR-10 Transfer cover, F-XFR-09 Notifications
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-58 Cover (folder / tasks) | Cover on Browse page: Lautta |
-| 2 | SCR-58 Cover (folder / tasks) | Cover in a folder: name, item count |
-| 3 | SCR-58 Cover (folder / tasks) | Task running: count, percent, rate; actions Pause all, Activity |
+| 1 | SCR-58 Cover (page / tasks) | Cover on Browse page: free space, newest recents as tiles |
+| 2 | SCR-58 Cover (page / tasks) | Cover in a folder: name, first items as tiles |
+| 3 | SCR-58 Cover (page / tasks) | Task running: count, percent, rate, cover fills from the left; actions Pause all, Activity |
 | 4 | SCR-21 Activity | Activity pulley: Pause all |
-| 5 | SCR-58 Cover (folder / tasks) | Tasks paused: n paused, action Resume all |
+| 5 | SCR-58 Cover (page / tasks) | Tasks paused: n paused, action Resume all |
 | 6 | SCR-21 Activity | Tap cover: back in Activity |
-| 7 | SCR-58 Cover (folder / tasks) | Long-press Home: close Lautta while a task runs |
+| 7 | SCR-58 Cover (page / tasks) | Long-press Home: close Lautta while a task runs |
 | 8 | SCR-59 Notifications | Closed with a task running: pop-up "1 task stopped", resumes on next open |
 
 ### FL-35 Follow tasks from Events (standalone)

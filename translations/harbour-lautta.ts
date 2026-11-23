@@ -1383,13 +1383,6 @@
         <source>Update sign-in</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-cover-items" numerus="yes">
-        <source>%n items</source>
-        <translation>
-            <numerusform>%n item</numerusform>
-            <numerusform>%n items</numerusform>
-        </translation>
-    </message>
     <message id="lautta-favourite-edit-title">
         <source>Edit favourite</source>
         <translation type="unfinished"></translation>
@@ -2652,6 +2645,10 @@
     </message>
     <message id="lautta-browse-all-recents">
         <source>All recents</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-cover-free">
+        <source>%1 free</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-attention-back">

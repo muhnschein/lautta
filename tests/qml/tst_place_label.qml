@@ -43,6 +43,13 @@ ApplicationWindow {
             horizontalAlignment: Text.AlignRight
         }
         PlaceLabel {
+            id: centredLine
+            width: parent.width
+            text: "Office"
+            remote: true
+            horizontalAlignment: Text.AlignHCenter
+        }
+        PlaceLabel {
             id: longLine
             width: 200
             before: "Copying a-very-long-file-name-that-does-not-fit.mp4 to "
@@ -105,6 +112,14 @@ ApplicationWindow {
         expect(Math.round(h.name.x + h.name.width) === Math.round(headerLine.width),
                "a right-aligned line ends at its edge: " + (h.name.x + h.name.width) + " of " + headerLine.width)
         expect(headerLine.iconShown && h.icon.x + h.icon.width <= h.name.x && h.name.x - h.icon.x < h.icon.width * 2,
+               "with the icon against the name")
+
+        var c = partsOf(centredLine)
+        expect(centredLine.iconShown && c.icon.x > 0
+               && Math.abs(c.icon.x - (centredLine.width - c.name.x - c.name.width)) <= 1,
+               "a centred line has as much room left of the icon as right of the name: " + c.icon.x + ", "
+               + (centredLine.width - c.name.x - c.name.width))
+        expect(c.icon.x + c.icon.width <= c.name.x && c.name.x - c.icon.x < c.icon.width * 2,
                "with the icon against the name")
 
         var g = partsOf(longLine)
