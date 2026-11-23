@@ -28,8 +28,9 @@ They are copied, not imported: `Sailfish.Gallery`, `com.jolla.gallery` and
   at finger down, swipes back reuse them. The placeholder is the camera's
   EXIF thumbnail, else, for the opened photo only and only once the grid
   showed it, the folder grid's tile (system thumbnailer cache, square crop)
-  placed where it sits in the photo: a tile missing from the cache is made
-  on Qt's one image thread and holds back the photo. Server images: the
+  placed where it sits in the photo, its edges drawn out and blurred over
+  the rest of the photo's shape (`../TileFill.qml`): a tile missing from the
+  cache is made on Qt's one image thread and holds back the photo. Server images: the
   cached grid thumbnail.
 - Neighbours load only once the current image has, so it gets the cores
   first.
