@@ -89,9 +89,9 @@ Item {
 
                     objectName: "storageFree"
                     anchors.right: parent.right
-                    //% "%1 free"
                     readonly property string amount: BrowseText.space(modelData.free)
 
+                    //% "%1 free"
                     text: qsTrId("lautta-cover-free").arg(amount)
                     font.pixelSize: Theme.fontSizeTiny
                     color: Theme.secondaryColor

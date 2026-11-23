@@ -2657,8 +2657,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-cover-free">
-        <source></source>
-        <oldsource>%1 free</oldsource>
+        <source>%1 free</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
