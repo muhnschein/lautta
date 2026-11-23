@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Settings › Browse rows, hidden ones included, in Browse order. Roles: `section`, `kind`, `item`,
-//! `name`, `hidden`, `place` (-1 for the switch of *Volumes* or *Servers*, which leads its
+//! `name`, `hidden`, `place` (-1 for the switch of *Recents*, *Volumes* or *Servers*, which leads its
 //! section), `movable`, `nested`.
 //!
 //! Changes apply in place ([`steps`]) so scroll position and delegates survive. A dragged row moves

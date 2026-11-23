@@ -87,7 +87,7 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | SCR-35 | Locked file | `dialogs/LockedFileDialog.qml` | S | locked PDF, pulley Unlock; locked compressed file on open or Extract |
 | SCR-36 | PDF link | `dialogs/PdfLinkDialog.qml` | S | tap web link in PDF |
 | SCR-37 | Open remote (Getting file) | `dialogs/OpenRemoteDialog.qml` | B | open/share remote file without viewer |
-| SCR-38 | Recents | `pages/RecentsPage.qml` | S | Browse row Recents |
+| SCR-38 | Recents | `pages/RecentsPage.qml` | S | Browse tile All recents |
 | SCR-39 | Trash | `pages/TrashPage.qml` | S | Browse row Trash |
 | SCR-40 | Edit favourite | `pages/FavouritePage.qml` | S | Add to favourites (row, item, path menu, image More), Edit favourite |
 | SCR-41 | Settings | `pages/SettingsPage.qml` | S | Browse pulley |
@@ -114,7 +114,7 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 
 Retired, never reuse: SCR-49 Connect to server, SCR-50 Server question.
 
-Browse rows (inside SCR-01): favourite, user folder, Android folder, Recents, Trash, volume (mounted, unmounted, locked), server, Nearby server, consent banner, bridge-unavailable banner. Row status dot: connected, not connected, connecting, failed, needs user.
+Browse rows (inside SCR-01): Recents tiles, favourite, user folder, Android folder, Trash, volume (mounted, unmounted, locked), server, Nearby server, consent banner, bridge-unavailable banner. Row status dot: connected, not connected, connecting, failed, needs user.
 
 ## 3. Features
 
@@ -128,10 +128,11 @@ Format: **F-ID Name** (mode) — what. *Entry:* where user starts it. *Proof:* w
 - **F-BRW-04 Volumes** (S) — mounted memory cards, USB drives with free/total and file system line. *Entry:* Browse "Volumes".
 - **F-BRW-05 Mount / Unmount drive** (B) — *Entry:* tap unmounted volume, or menu Mount; menu Unmount. *Proof:* row turns mounted/disappears from mounted state.
 - **F-BRW-06 Locked drive → Storage settings** (B) — *Entry:* tap locked volume, menu "Open Storage settings". *Proof:* Sailfish Settings › Storage opens (bridge feature `storage-settings`).
-- **F-BRW-07 Browse layout** (S) — hide sections and rows, reorder rows by drag, Restore defaults. *Entry:* Settings › Browse page. *Code:* `BrowseSettingsPage.qml`, `browse_layout.rs`.
+- **F-BRW-07 Browse layout** (S) — hide sections (Recents, Volumes, Servers) and rows, reorder rows by drag, Restore defaults. *Entry:* Settings › Browse page. *Code:* `BrowseSettingsPage.qml`, `browse_layout.rs`.
 - **F-BRW-08 Copy address** (S) — location address to clipboard. *Entry:* Browse row menu, path menu.
 - **F-BRW-09 Rescan volumes** (S) — Browse refreshes rows when shown and when app returns to front (sandbox can miss mounts). *Proof:* new card shows without restart.
 - **F-BRW-10 Activity from Browse** (S) — pulley "Activity (n)". *Proof:* SCR-21.
+- **F-BRW-11 Phone free space** (S) — "N free of M" at left end of "On this device" header: file system user folders are on; read when Browse shows. *Code:* `BrowsePage.qml`, `app_browse.rs` (`device_space`).
 
 ### 3.2 Servers and bridge (B)
 
@@ -248,7 +249,8 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-FAV-03 Remove favourite** — row menu, remorse "Removing favourite".
 - **F-FAV-04 Reorder favourites** — Settings › Browse page drag.
 - **F-RCT-01 Recents** — files opened, edited, transferred; tap opens (transferred → its folder); menu Remove from recents; pulley Clear recents.
-- **F-RCT-02 Recents off** — Settings › Recents "Remember recent files"; Browse row hides.
+- **F-RCT-02 Recents off** — Settings › Recents "Remember recent files"; Browse tiles hide.
+- **F-RCT-03 Recents on Browse** — section Recents above Favourites: three newest files as tiles (thumbnail or type glyph, name), fourth tile "All recents" opens SCR-38. Tap opens (transferred → its folder); long press: Remove from recents. No section while Recents are off or empty; switch "Newest recents" in Settings › Browse page. *Code:* `RecentStrip.qml`, `app_browse.rs` (`recent_tiles`).
 - **F-TRH-01 Trash** — items from user folders, "Kept for N days", "N days left", "From folder".
 - **F-TRH-02 Restore / Delete now / Show original folder** — row menu.
 - **F-TRH-03 Empty trash** — pulley, remorse.

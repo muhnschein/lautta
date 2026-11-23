@@ -43,6 +43,7 @@ Item {
             property string ricon: icon
             property bool rfile: isFile
             property string rdrive: drive
+            property string rtiles: tiles
             property bool marked: false
         }
     }
@@ -119,9 +120,18 @@ Item {
         for (var i = 0; i < rows.count; ++i) {
             var r = rows.itemAt(i)
             if (r && r.rsection === "device")
-                names.push(r.rkind === "deleted" || r.rkind === "recents" ? r.rkind : r.rname)
+                names.push(r.rkind === "deleted" ? r.rkind : r.rname)
         }
         return names.join(",")
+    }
+
+    function tiles() {
+        var strip = row("recent-strip")
+        return strip ? JSON.parse(strip.rtiles) : []
+    }
+
+    function tileNames() {
+        return tiles().map(function(t) { return t.name }).join(",")
     }
 
     function row(kind, name) {
@@ -272,9 +282,15 @@ Item {
                  var nas = row("account", "NAS")
                  return nas !== null && nas.rconnection === "disconnected" && nas.rconnectionError === ""
              })
-        step("folders, Recents and Trash are rows",
+        step("folders and Trash are rows, Recents is none",
              null,
-             function() { return has("folder", "Documents") && has("folder", "Music") && has("recents") && has("deleted") })
+             function() {
+                 return has("folder", "Documents") && has("folder", "Music") && has("deleted")
+                        && !has("recents") && !has("recent-strip") && deviceRows().indexOf("Documents") === 0
+             })
+        step("the device tells its space",
+             null,
+             function() { return locs.deviceTotal > 0 && locs.deviceFree >= 0 && locs.deviceFree <= locs.deviceTotal })
 
         step("Browse page settings list every row",
              function() { layout.reload() },
@@ -319,7 +335,7 @@ Item {
              function() { layout.moveTo("device", "deleted", 0) },
              function() {
                  var d = layoutRow("device", "deleted")
-                 return deviceRows().indexOf("deleted,recents,Documents") === 0 && d !== null && d.lplace === 0
+                 return deviceRows().indexOf("deleted,Documents") === 0 && d !== null && d.lplace === 0
                         && d.marked && layoutRow("device", "user-music").marked
              })
         step("restore defaults",
@@ -329,29 +345,33 @@ Item {
              },
              function() {
                  var d = layoutRow("device", "deleted")
-                 return deviceRows().indexOf("recents,Documents") === 0 && /,deleted$/.test(deviceRows())
+                 return deviceRows().indexOf("Documents") === 0 && /,deleted$/.test(deviceRows())
                         && d !== null && d.lplace > 0
              })
         step("a carried row moves at once and is stored",
              function() {
-                 var at = layoutIndex("device", "recents")
+                 var at = layoutIndex("device", "user-documents")
                  var nearby = layoutIndex("nearby", "nearby")
-                 layoutRow("device", "recents").marked = true
+                 layoutRow("device", "user-documents").marked = true
                  root.moved = layout.moveRow(at, at + 1) && layout.moveRow(at + 1, at + 2)
                  var r = layoutRows.itemAt(at + 2)
-                 root.movedAtOnce = r.litem === "recents" && r.marked && r.lplace === 2
+                 root.movedAtOnce = r.litem === "user-documents" && r.marked && r.lplace === 2
                                     && layoutRows.itemAt(at).lplace === 0
                  root.refused = !layout.moveRow(at, at) && !layout.moveRow(nearby, nearby - 1)
                                 && !layout.moveRow(at, layoutRows.count)
              },
              function() {
-                 var r = layoutRow("device", "recents")
+                 var r = layoutRow("device", "user-documents")
                  return root.moved && root.movedAtOnce && root.refused
-                        && deviceRows().split(",")[2] === "recents" && r.lplace === 2 && r.marked
+                        && deviceRows().split(",")[2] === "Documents" && r.lplace === 2 && r.marked
              })
-        step("Volumes and Servers lead with their switch",
+        step("Recents, Volumes and Servers lead with their switch",
              function() { layout.reload() },
              function() {
+                 var recent = layoutRow("recents", "section")
+                 if (recent === null || recent.lhidden || recent.lplace !== -1 || recent.lmovable || recent.lnested
+                         || layoutIndex("recents", "section") !== 0 || layoutKeys("recents").length !== 1)
+                     return false
                  var v = layoutRow("volumes", "section")
                  var s = layoutRow("servers", "section")
                  var card = layoutRow("volumes", "vol-CARD")
@@ -360,7 +380,7 @@ Item {
                         && !v.lmovable && !v.lnested && card !== null && card.lnested && nas !== null && nas.lnested
                         && layoutIndex("volumes", "section") + 1 === layoutIndex("volumes", "vol-CARD")
                         && layoutIndex("servers", "section") + 1 === layoutIndex("servers", "nv-account:1")
-                        && layoutRow("device", "recents").lnested === false
+                        && layoutRow("device", "user-documents").lnested === false
              })
         step("Servers off hides its rows, not the other sections",
              function() {
@@ -644,12 +664,36 @@ Item {
                         && recentRows.itemAt(0).rname === "d.zip" && recentRows.itemAt(0).rplace === "Documents"
                         && recentRows.itemAt(0).rgroup === "today"
              })
+        step("the newest recents lead Browse as tiles",
+             function() { locs.refresh() },
+             function() {
+                 var first = rows.itemAt(0)
+                 var t = tiles()
+                 return first !== null && first.rkind === "recent-strip" && first.rsection === "recents"
+                        && tileNames() === "d.zip,c.txt,a.txt" && t[0].kind === "transferred"
+                        && t[0].category === "archive" && t[0].uri === docs + "d.zip"
+                        && t[0].id === recentRows.itemAt(0).rid && row("folder", "Documents").rtiles === ""
+             })
         step("remove one recent",
              function() { recents.remove(recentRows.itemAt(0).rid) },
              function() { return recents.count === 2 && recentRows.itemAt(0).rname === "c.txt" })
+        step("and its tile goes without a refresh",
+             null,
+             function() { return tileNames() === "c.txt,a.txt" })
+        step("the Recents switch takes the tiles off Browse",
+             function() { layout.setHidden("recents", "section", true) },
+             function() { return !has("recent-strip") && layoutRow("recents", "section").lhidden })
+        step("and puts them back",
+             function() { layout.setHidden("recents", "section", false) },
+             function() { return tileNames() === "c.txt,a.txt" && !layoutRow("recents", "section").lhidden })
         step("turn recents off through the setting",
-             function() { App.setSetting("recents_enabled", JSON.stringify(false)); recents.reload() },
-             function() { return !recents.enabled })
+             function() {
+                 App.setSetting("recents_enabled", JSON.stringify(false))
+                 recents.reload()
+                 locs.refresh()
+                 layout.reload()
+             },
+             function() { return !recents.enabled && !has("recent-strip") && layoutRow("recents", "section") === null })
         step("clear recents",
              function() { recents.clear() },
              function() { return recents.count === 0 })

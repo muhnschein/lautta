@@ -4,6 +4,9 @@
 
 function sectionTitle(section) {
     switch (section) {
+    case "recents":
+        //% "Recents"
+        return qsTrId("lautta-browse-recents")
     case "favourites":
         //% "Favourites"
         return qsTrId("lautta-browse-section-favourites")
@@ -28,6 +31,9 @@ function sectionTitle(section) {
 }
 
 function sectionSwitchTitle(section) {
+    if (section === "recents")
+        //% "Newest recents"
+        return qsTrId("lautta-browse-layout-recents")
     if (section === "volumes")
         //% "Memory cards and USB drives"
         return qsTrId("lautta-browse-layout-volumes")
@@ -36,16 +42,15 @@ function sectionSwitchTitle(section) {
 }
 
 function rowName(kind, name) {
-    switch (kind) {
-    case "recents":
-        //% "Recents"
-        return qsTrId("lautta-browse-recents")
-    case "deleted":
+    if (kind === "deleted")
         //% "Trash"
         return qsTrId("lautta-browse-trash")
-    default:
-        return name
-    }
+    return name
+}
+
+// Empty until space is known.
+function deviceLine(free, total) {
+    return total > 0 ? volumeLine(free, total, "") : ""
 }
 
 function volumeLine(free, total, fs) {

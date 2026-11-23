@@ -112,6 +112,14 @@ body{margin:0}
 .di-l{flex:1;text-align:right;color:var(--sec)}
 .di-v{flex:1;color:var(--pri);word-break:break-all}
 .note{background:rgba(20,30,40,.92);color:#fff;padding:12px 16px;display:flex;gap:12px;align-items:flex-start;border-radius:6px}
+.rt{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:2px 18px 8px}
+.rt>*{min-width:0;text-decoration:none}
+.rt i{display:flex;align-items:center;justify-content:center;aspect-ratio:1;background:rgba(255,255,255,.07);color:var(--pri)}
+.amb.light .rt i{background:rgba(21,25,29,.06)}
+.rt i .ic{width:40px;height:40px;stroke-width:1.2}
+.rt span{display:block;font-size:13px;color:var(--pri);text-align:center;white-space:nowrap;overflow:hidden;margin-top:3px}
+.sh2{padding:14px 18px 6px;display:flex;justify-content:space-between;align-items:baseline;font-size:15px;color:var(--hl)}
+.sh2 span:first-child{color:var(--sec)}
 </style>
 </helmet>
 <div class="amb {{amb}}" style="width: 400px; height: 860px">
@@ -123,17 +131,17 @@ body{margin:0}
 </div>
 <div class="hdr"><div class="hdr-t">Browse</div><div class="hdr-d">Lautta</div></div>
 <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column">
+<div class="sh">Recents</div><div class="rt"><div><i style="background: linear-gradient(160deg,#f2b36b,#c4513f)"></i><span>IMG_2041.jpg</span></div><div><i><svg class="ic" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg></i><span>Ferry timetab</span></div><div><i style="background: linear-gradient(180deg,#7fb6d6,#e8d6b0)"></i><span>IMG_2040.jpg</span></div><a href="Recents.dc.html"><i style="color: var(--hl)"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></i><span style="color: var(--hl)">All recents</span></a></div>
 <div class="sh">Favourites</div>
 <a class="li s" href="Directory.dc.html"><span class="li-ic" style="color: #e7a33c"><svg class="ic m" viewBox="0 0 24 24"><path d="M3 6.5h6l2 2h10v10.5H3z"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Thesis</span><span class="li-s" style="display: block">Documents › Uni</span></span></a>
 <a class="li s" href="Directory.dc.html"><span class="li-ic" style="color: #7ec97a"><svg class="ic m" viewBox="0 0 24 24"><path d="M3 6.5h6l2 2h10v10.5H3z"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Holiday photos</span><span class="li-s" style="display: block">Pictures › 2026</span></span></a>
-<div class="sh">On this device</div>
+<div class="sh2"><span>42 GB free of 128 GB</span><span>On this device</span></div>
 <a class="li s" href="Directory.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 15h6M9 18h4"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Documents</span></span></a>
 <a class="li s" href="Directory.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Downloads</span></span></a>
 <a class="li s" href="DirectoryGrid.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14"/><circle cx="9" cy="10" r="1.6"/><path d="M3 17l5-5 4 4 3-3 6 6"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Pictures</span></span></a>
 <a class="li s" href="Directory.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="16" r="2"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Music</span></span></a>
 <a class="li s" href="Directory.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12"/><path d="M16 10l5-3v10l-5-3"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Videos</span></span></a>
 <a class="li s" href="Directory.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M3 6.5h6l2 2h10v10.5H3z"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Public</span></span></a>
-<a class="li s" href="Recents.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Recents</span></span></a>
 <a class="li s" href="RecentlyDeleted.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Trash</span></span></a>
 <div class="sh">Android</div>
 <a class="li s" href="Directory.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Download</span></span></a>

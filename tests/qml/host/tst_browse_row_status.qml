@@ -44,7 +44,7 @@ QtObject {
             ["folder", "ready", "", "", "sda1", "", ["sda1"]],
             ["folder", "ready", "connected", "", "", ""],
             ["favourite", "ready", "disconnected", "", "", ""],
-            ["recents", "ready", "", "", "", ""],
+            ["recent-strip", "ready", "", "", "", ""],
             ["deleted", "ready", "", "", "", ""],
             ["nearby", "ready", "connected", "", "", ""],
             ["consent", "ready", "connected", "", "", ""],
