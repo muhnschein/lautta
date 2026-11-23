@@ -80,8 +80,9 @@ Every added or changed test, before push:
 ## Comments and docs
 
 - Caveman-full = drop articles, filler, pleasantries, hedging. Fragments OK, short words. Identifiers, paths, code, errors exact. E.g. "`Cargo.lock` from stable cargo with fallback resolver: no crate newer than `rust-version` allows."
-- No code comments. None: no why, no issue reference, no TODO, no doc comment, no commented-out code; in Rust, QML, JS, shell, Python, Makefile, YAML, TOML, spec, properties. Names and tests say what code does; why (quirk, workaround, constraint) goes in project memory, issue or commit body, as concise as possible: caveman-full, one line where it fits. `make check` runs `tools/no_comments.py`.
-- Branch from before the ban (lint red after merging `main`): `python3 tools/no_comments.py --fix`, then `cargo fmt --all`; move any why worth keeping to project memory first. Comments removed by the ban, file:line at `50ecce9`: project files `lautta-comments/lautta-comments-50ecce9.txt`; odd-looking code → grep it there before changing.
+- No code comments. None: no why, no issue reference, no TODO, no doc comment, no commented-out code; in Rust, QML, JS, shell, Python, Makefile, YAML, TOML, spec, properties. Names and tests say what code does. `make check` runs `tools/no_comments.py`.
+- No workarounds for this rule, no write-ups of code workarounds: no comment archive, no notes or doc file standing in for comments, no comment text hidden in strings or names. Only an absolutely critical fact (code breaks or regresses without it) gets written down: project memory, one short sentence each, nothing more.
+- Branch from before the ban (lint red after merging `main`): `python3 tools/no_comments.py --fix`, then `cargo fmt --all`.
 - Kept, because a tool reads them: shebang; SPDX line 1 (line 2 after shebang); `//%` lupdate source text; bare `// NOSONAR`; `/// # Safety` section right above a `pub unsafe fn` (clippy `missing_safety_doc`). Not checked: `third_party/`, `qml/components/viewers/gallery/`, CodeQL query copy (licences keep their notices), `tests/bridge-contract/` (netvfs mirror), fixtures, `doc/`, `design/`, Markdown.
 - `doc/*.md`, this file: caveman-full. What is true now and why; keep constraints. No changelog, bug report, history, story (git's job). Existing prose: rewrite what you touch, not more.
 - No specs: code and tests say what it does.
