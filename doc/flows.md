@@ -330,7 +330,8 @@ Features: F-RCT-01 Recents, F-RCT-03 Recents on Browse, F-BRW-11 Phone free spac
 | 1 | SCR-01 Browse | Recents tiles on top, free space beside On this device |
 | 2 | SCR-01 Browse | Long press on a tile: Remove from recents |
 | 3 | SCR-38 Recents | Tile All recents: Recents |
-| 4 | SCR-38 Recents | Menu: Remove from recents |
+| 4 | SCR-38 Recents | Grid when View options say Grid: tiles under date groups |
+| 5 | SCR-38 Recents | Menu: Remove from recents |
 
 ### FL-22 Favourites (standalone)
 

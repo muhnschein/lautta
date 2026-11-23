@@ -22,13 +22,17 @@ ApplicationWindow {
     ListModel {
         id: rows
 
-        ListElement { itemId: 1; uri: "lautta://nv-account:1/srv/photos/IMG_2041.jpg"; name: "IMG_2041.jpg"; kind: "opened"; place: "NAS › /srv/photos"; at: 1; dateGroup: "today" }
-        ListElement { itemId: 2; uri: "lautta://user-documents/notes.txt"; name: "notes.txt"; kind: "previewed"; place: "Documents"; at: 2; dateGroup: "today" }
-        ListElement { itemId: 3; uri: "lautta://nv-account:1/invoice-0912.pdf"; name: "invoice-0912.pdf"; kind: "transferred"; place: "NAS"; at: 3; dateGroup: "yesterday" }
-        ListElement { itemId: 4; uri: "lautta://user-documents/README.md"; name: "README.md"; kind: "previewed"; place: "Documents"; at: 4; dateGroup: "last7Days" }
-        ListElement { itemId: 5; uri: "lautta://user-documents/budget.csv"; name: "budget.csv"; kind: "opened"; place: "Documents"; at: 5; dateGroup: "last30Days" }
-        ListElement { itemId: 6; uri: "lautta://user-documents/old.csv"; name: "old.csv"; kind: "opened"; place: ""; at: 6; dateGroup: "older" }
+        ListElement { itemId: 1; uri: "lautta://nv-account:1/srv/photos/IMG_2041.jpg"; name: "IMG_2041.jpg"; kind: "opened"; place: "NAS › /srv/photos"; at: 1; dateGroup: "today"; category: "image"; mimeType: "image/jpeg"; thumbnailSource: "image://lautta-thumb/lautta://nv-account:1/srv/photos/IMG_2041.jpg"; textThumb: false; textMono: false; typeIcon: "types/text" }
+        ListElement { itemId: 2; uri: "lautta://user-documents/notes.txt"; name: "notes.txt"; kind: "previewed"; place: "Documents"; at: 2; dateGroup: "today"; category: "text"; mimeType: "text/plain"; thumbnailSource: ""; textThumb: true; textMono: false; typeIcon: "types/text" }
+        ListElement { itemId: 7; uri: "lautta://user-documents/a.txt"; name: "a.txt"; kind: "opened"; place: "Documents"; at: 7; dateGroup: "today"; category: "text"; mimeType: "text/plain"; thumbnailSource: ""; textThumb: false; textMono: false; typeIcon: "types/text" }
+        ListElement { itemId: 8; uri: "lautta://user-documents/b.txt"; name: "b.txt"; kind: "opened"; place: "Documents"; at: 8; dateGroup: "today"; category: "text"; mimeType: "text/plain"; thumbnailSource: ""; textThumb: false; textMono: false; typeIcon: "types/text" }
+        ListElement { itemId: 3; uri: "lautta://nv-account:1/invoice-0912.pdf"; name: "invoice-0912.pdf"; kind: "transferred"; place: "NAS"; at: 3; dateGroup: "yesterday"; category: "pdf"; mimeType: "application/pdf"; thumbnailSource: ""; textThumb: false; textMono: false; typeIcon: "types/text" }
+        ListElement { itemId: 4; uri: "lautta://user-documents/README.md"; name: "README.md"; kind: "previewed"; place: "Documents"; at: 4; dateGroup: "last7Days"; category: "markdown"; mimeType: "text/markdown"; thumbnailSource: ""; textThumb: false; textMono: false; typeIcon: "types/text" }
+        ListElement { itemId: 5; uri: "lautta://user-documents/budget.csv"; name: "budget.csv"; kind: "opened"; place: "Documents"; at: 5; dateGroup: "last30Days"; category: "text"; mimeType: "text/csv"; thumbnailSource: ""; textThumb: false; textMono: false; typeIcon: "types/text" }
+        ListElement { itemId: 6; uri: "lautta://user-documents/old.csv"; name: "old.csv"; kind: "opened"; place: ""; at: 6; dateGroup: "older"; category: "text"; mimeType: "text/csv"; thumbnailSource: ""; textThumb: false; textMono: false; typeIcon: "types/text" }
     }
+
+    ViewerTools { id: tools }
 
     initialPage: Component {
         Loader {
@@ -72,6 +76,9 @@ ApplicationWindow {
         var views = findAll(win.page, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined })
         for (var i = 0; i < views.length; ++i) {
             views[i].cacheBuffer = 100000
+            // A scroll fills the view at once; a new cache buffer waits for a polish.
+            views[i].contentY += 1
+            views[i].contentY -= 1
             views[i].forceLayout()
         }
         var found = findAll(win.page, function(x) { return x.objectName === "dateSection" })
@@ -105,7 +112,76 @@ ApplicationWindow {
         var boxes = findAll(win.page, function(x) { return String(x).indexOf("ComboBox") === 0 })
         if (boxes.length !== 0)
             return fail("Recents have no Show filter")
-        return checkPlaces()
+        if (!checkPlaces())
+            return false
+        return checkIcons(findAll(win.page, function(x) { return x.objectName === "recentIcon" }), "list")
+    }
+
+    // Icons in model order: list rows and grid tiles both come top to bottom, left to right.
+    function checkIcons(icons, view) {
+        if (icons.length !== rows.count)
+            return fail(view + ": " + icons.length + " icons for " + rows.count + " rows")
+        icons.sort(function(a, b) {
+            var pa = a.mapToItem(win.page, 0, 0), pb = b.mapToItem(win.page, 0, 0)
+            return pa.y - pb.y || pa.x - pb.x
+        })
+        for (var i = 0; i < icons.length; ++i) {
+            var row = rows.get(i)
+            if (icons[i].thumbnailSource !== row.thumbnailSource || icons[i].category !== row.category
+                    || icons[i].mimeType !== row.mimeType)
+                return fail(view + ": icon " + i + " is not " + row.name + "'s thumbnail, type and MIME type")
+        }
+        return true
+    }
+
+    function top(item) {
+        return item.mapToItem(win.page, 0, 0).y
+    }
+
+    // Each date group's tiles under its header and above the next; a group starts its own row.
+    function checkGrid() {
+        var got = sections()
+        if (!matches(got))
+            return waited > 100 ? fail("grid keeps the date groups, got " + JSON.stringify(got)) : false
+        var headers = findAll(win.page, function(x) { return x.objectName === "dateSection" })
+        headers.sort(function(a, b) { return top(a) - top(b) })
+        var tiles = findAll(win.page, function(x) { return x.objectName === "recentGridTile" })
+        if (tiles.length !== rows.count)
+            return fail(tiles.length + " tiles for " + rows.count + " recents")
+        var columns = win.page.columns
+        for (var i = 0; i < tiles.length; ++i) {
+            var name = tiles[i].itemName
+            var row = null
+            for (var r = 0; r < rows.count; ++r) {
+                if (rows.get(r).name === name)
+                    row = { "index": r, "group": rows.get(r).dateGroup }
+            }
+            var g = win.expected.map(function(e) { return e[0] }).indexOf("lautta-date-" + {
+                "today": "today", "yesterday": "yesterday", "last7Days": "last-7-days",
+                "last30Days": "last-30-days", "older": "older" }[row.group])
+            var y = top(tiles[i])
+            if (y < top(headers[g]) + headers[g].height || (g + 1 < headers.length && y >= top(headers[g + 1])))
+                return fail(name + " is not under its date group's header")
+            var column = row.index < 4 ? row.index % columns : 0
+            if (Math.abs(tiles[i].mapToItem(win.page, 0, 0).x - column * win.page.cellWidth) > 1)
+                return fail(name + " is not in column " + column)
+        }
+        var places = findAll(win.page, function(x) { return x.iconShown !== undefined })
+        for (var p = 0; p < places.length; ++p) {
+            if (places[p].text !== "" && places[p].horizontalAlignment !== Text.AlignHCenter)
+                return fail("a tile's place is not centred under its name")
+        }
+        if (!checkPlaces())
+            return false
+        // Page in a Loader: nothing on it counts as visible.
+        var lines = findAll(win.page, function(x) { return x.objectName === "textPreview" })
+        if (lines.length !== 1 || lines[0].text !== "line one\nline two")
+            return waited > 100 ? fail("only notes.txt's tile shows its first lines: "
+                                       + JSON.stringify(lines.map(function(x) { return x.text }))) : false
+        var icons = []
+        for (var t = 0; t < tiles.length; ++t)
+            icons = icons.concat(findAll(tiles[t], function(x) { return x.thumbnailReady !== undefined }))
+        return checkIcons(icons, "grid")
     }
 
     readonly property var places: ({
@@ -142,12 +218,24 @@ ApplicationWindow {
             switch (win.step) {
             case 0:
                 if (win.page && win.checkPage() === true) {
-                    App.setSetting("recents_enabled", JSON.stringify(false))
+                    // a.txt: text, but its row says no first lines (thumbnails off when listed).
+                    if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/notes-crlf.txt"), "lautta://user-documents/notes.txt")
+                            || !tools.installFixture(Qt.resolvedUrl("host/fixtures/short-lines.txt"), "lautta://user-documents/a.txt"))
+                        return win.fail("fixture")
+                    App.setSetting("view_mode", JSON.stringify("grid"))
                     win.step++
                     win.waited = 0
                 }
                 break
             case 1:
+                if (win.checkGrid() === true) {
+                    App.setSetting("view_mode", JSON.stringify("list"))
+                    App.setSetting("recents_enabled", JSON.stringify(false))
+                    win.step++
+                    win.waited = 0
+                }
+                break
+            case 2:
                 var h = win.hint()
                 if (h === "lautta-recents-off-settings-hint" || h === "Turn them on in Settings") {
                     App.setSetting("recents_enabled", JSON.stringify(true))
