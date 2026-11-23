@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Caption-less tiles of a model's first rows; last row fades out. Rows carry what a folder row
-// does (`isDir`, `category`, `thumbnailSource`, `mimeType`), or `uri` only, or `placeIcon`.
+// does (`isDir`, `category`, `thumbnailSource`, `mimeType`, text preview), or `uri` only, or `placeIcon`.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -46,6 +46,12 @@ Item {
             thumbnailSource: grid.field(row, "thumbnailSource", "")
             mimeType: grid.field(row, "mimeType", "")
             placeIcon: grid.field(row, "placeIcon", "")
+            previewText: grid.field(row, "textPreview", "")
+            previewMono: grid.field(row, "textPreviewMono", false)
+            typeIcon: grid.field(row, "typeIcon", "")
+            // List view never asked for the text; folder model reads it once per file.
+            Component.onCompleted: if (grid.field(row, "textThumb", false) && view.model.requestPreview)
+                                       view.model.requestPreview(row.uri)
         }
     }
 

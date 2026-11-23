@@ -165,7 +165,7 @@ Retired, never reuse: F-SRV-08 Server question, F-SRV-09 Connect to server, F-SR
 - **F-DIR-08 Large folder** — "N loaded · large folder: name order, thumbnails off", Stop.
 - **F-DIR-09 Live updates** — inotify refresh of local folders. *Code:* `watch.rs`.
 - **F-DIR-10 Listing cache** — cached folder visible at once, refreshed after. *Code:* `dircache.rs`; Storage › Keep stored listings.
-- **F-DIR-11 Folder cover** — folder name top right, first items as caption-less tiles (thumbnail or type glyph), three per row, last row fading; empty folder: "No files". Same for Trash and Recents under their titles. *Code:* `CoverGrid.qml`.
+- **F-DIR-11 Folder cover** — folder name top right, first items as caption-less tiles (thumbnail, first lines of a text file, or type glyph), three per row, last row fading; empty folder: "No files". Same for Trash and Recents under their titles. *Code:* `CoverGrid.qml`.
 
 ### 3.4 Item actions
 

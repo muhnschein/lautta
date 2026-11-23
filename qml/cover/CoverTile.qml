@@ -12,6 +12,9 @@ Rectangle {
     property bool isDir
     property string thumbnailSource
     property string mimeType
+    property string previewText
+    property bool previewMono
+    property string typeIcon
     // Set: a place, drawn with this glyph.
     property string placeIcon
 
@@ -28,6 +31,9 @@ Rectangle {
         isDir: tile.isDir
         thumbnailSource: visible ? tile.thumbnailSource : ""
         mimeType: tile.mimeType
+        previewText: tile.previewText
+        previewMono: tile.previewMono
+        typeIcon: tile.typeIcon
     }
     AppIcon {
         objectName: "placeGlyph"

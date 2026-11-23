@@ -299,9 +299,19 @@ ApplicationWindow {
         expect(tiles.slice(0, 3).map(function (t) { return t.isDir + ":" + t.category }).join(",") === "true:folder,true:folder,false:markdown",
                "tiles follow the folder's order, folders first: "
                + tiles.slice(0, 3).map(function (t) { return t.isDir + ":" + t.category }).join(","))
+        var note = tiles[2]
+        if (waitFor(function () { return named(note, "textPreview").length === 1 }, "a text file's first lines on its tile")) {
+            expect(named(note, "textPreview")[0].text.indexOf("# Title") === 0,
+                   "the tile shows the file's start: " + JSON.stringify(named(note, "textPreview")[0].text.slice(0, 40)))
+            expect(named(note, "textPreview")[0].font.family !== App.monoFont, "prose in the text font")
+            expect(named(note, "fileGlyph").length === 0, "no glyph under the text")
+            expect(named(note, "typeIcon").length === 1 && named(note, "typeIcon")[0].icon === note.typeIcon && note.typeIcon !== "",
+                   "its type icon in the corner: " + note.typeIcon)
+        }
+        expect(named(tiles[0], "textPreview").length === 0 && named(tiles[0], "fileGlyph").length === 1, "a folder keeps its glyph")
         expect(tiles.every(function (t) { return t.placeIcon === "" }) && named(frame, "placeGlyph").length === 0
-               && named(frame, "fileGlyph").length >= 9,
-               "a folder's tiles draw file glyphs, none a place's")
+               && named(frame, "fileGlyph").length + named(frame, "textPreview").length >= 9,
+               "a folder's tiles draw file glyphs or text, none a place's")
         var wide = Math.floor((frame.width - 2 * Theme.paddingSmall) / 3)
         expect(Math.round(tiles[0].mapToItem(frame, 0, 0).x) === 0 && tiles[0].width === wide
                && Math.round(tiles[2].mapToItem(frame, 0, 0).x + tiles[2].width) >= Math.round(frame.width) - 2,
