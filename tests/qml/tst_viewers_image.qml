@@ -166,19 +166,38 @@ QtQuick.Window {
                               "a tap zooms out: " + back.zoom + " at " + back.contentX)
                 window.expect(window.view.overlay.active, "zoomed out: the overlay is back")
                 window.expect(window.view.interactive && window.page.backNavigation, "swipes and back navigation again")
+                var info = window.named(window.view.overlay, "detailsButton")
+                if (!window.expect(info !== null, "the overlay has Details"))
+                    return
+                info.clicked(null)
+                var details = app.pageStack.currentPage
+                var preview = window.named(details, "detailsPreview")
+                window.expect(details !== window.page && preview !== null, "Details opens with its preview")
+                // Cache hit is synchronous; a new decode would still be loading here.
+                window.expect(preview !== null && preview.status === Image.Ready,
+                              "the preview takes the viewer's decode: " + (preview ? preview.status : "-"))
+                break
+            case 5:
+                if (app.pageStack.busy)
+                    return
+                app.pageStack.pop()
+                break
+            case 6:
+                if (app.pageStack.busy || app.pageStack.currentPage !== window.page)
+                    return
                 var close = window.named(window.view.overlay, "dismissButton")
                 if (!window.expect(close !== null && window.view.overlay.enabled, "the overlay has its close button"))
                     return
                 close.clicked(null)
                 break
-            case 5:
+            case 7:
                 if (app.pageStack.busy || app.pageStack.currentPage === window.page)
                     return
                 window.expect(app.pageStack.depth === 1, "closed: back on the page below: " + app.pageStack.depth)
                 window.cleaned = false
                 Operations.remove(JSON.stringify(["lautta://user-pictures/ViewerOpen"]))
                 break
-            case 6:
+            case 8:
                 if (!window.cleaned)
                     return
                 window.reachedEnd = true
