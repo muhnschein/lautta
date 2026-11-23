@@ -74,6 +74,22 @@ ApplicationWindow {
         expect(d.remaining === 0, "no apply-all for the last conflict")
     }
 
+    function checkTransferCount(d) {
+        expect(one(d, "conflictPosition").text === qsTrId("lautta-conflict-position").arg(1).arg(3),
+               "a running transfer's open questions are counted")
+        expect(d.remaining === 2, "apply-all counts a running transfer's other questions")
+    }
+
+    Component {
+        id: transferConflicts
+
+        ConflictDialog {
+            transferId: 4
+            item: 1
+            conflict: ({ "name": "a.txt", "kind": "copy", "open": 3, "choices": [ "KeepBoth", "Skip" ] })
+        }
+    }
+
     Component {
         id: transferConflict
 
@@ -108,6 +124,7 @@ ApplicationWindow {
             Component.onCompleted: {
                 test.checkPlanConflict(this)
                 test.checkTransferConflict(transferConflict.createObject(test))
+                test.checkTransferCount(transferConflicts.createObject(test))
                 test.reachedEnd = true
             }
         }
