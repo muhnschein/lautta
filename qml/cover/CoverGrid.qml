@@ -38,6 +38,11 @@ Item {
         interactive: false
 
         delegate: CoverTile {
+            id: cell
+
+            // Folder rows bring their text; a recent's is asked here.
+            readonly property bool ownText: row.textPreview !== undefined
+            readonly property alias textAsked: lines.uri
             readonly property var row: grid.told(typeof modelData !== "undefined" ? modelData : model)
 
             size: grid.tile
@@ -46,12 +51,18 @@ Item {
             thumbnailSource: grid.field(row, "thumbnailSource", "")
             mimeType: grid.field(row, "mimeType", "")
             placeIcon: grid.field(row, "placeIcon", "")
-            previewText: grid.field(row, "textPreview", "")
-            previewMono: grid.field(row, "textPreviewMono", false)
+            previewText: ownText ? row.textPreview : lines.text
+            previewMono: grid.field(row, "textPreviewMono", grid.field(row, "textMono", false))
             typeIcon: grid.field(row, "typeIcon", "")
             // List view never asked for the text; folder model reads it once per file.
             Component.onCompleted: if (grid.field(row, "textThumb", false) && view.model.requestPreview)
                                        view.model.requestPreview(row.uri)
+
+            TextThumb {
+                id: lines
+
+                uri: !cell.ownText && grid.field(cell.row, "textThumb", false) ? cell.row.uri : ""
+            }
         }
     }
 

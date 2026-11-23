@@ -305,6 +305,7 @@ ApplicationWindow {
                    "the tile shows the file's start: " + JSON.stringify(named(note, "textPreview")[0].text.slice(0, 40)))
             expect(named(note, "textPreview")[0].font.family !== App.monoFont, "prose in the text font")
             expect(named(note, "fileGlyph").length === 0, "no glyph under the text")
+            expect(note.textAsked === "", "the folder's own text, not read a second time: " + note.textAsked)
             expect(named(note, "typeIcon").length === 1 && named(note, "typeIcon")[0].icon === note.typeIcon && note.typeIcon !== "",
                    "its type icon in the corner: " + note.typeIcon)
         }
@@ -396,6 +397,13 @@ ApplicationWindow {
                "Recents has its title and a tile per file, by type: " + texts(frame, "coverHeader") + " "
                + tiles.map(function (t) { return t.category }).join(","))
         expect(named(frame, "coverEmpty").length === 0, "no empty text beside them")
+        if (waitFor(function () { return named(tiles[0], "textPreview").length === 1 }, "a recent text file's first lines on its tile")) {
+            expect(named(tiles[0], "textPreview")[0].text.indexOf("# Title") === 0 && named(tiles[0], "textPreview")[0].font.family !== App.monoFont,
+                   "the recent's tile shows the file's start in the text font: " + JSON.stringify(named(tiles[0], "textPreview")[0].text.slice(0, 40)))
+            expect(named(tiles[0], "typeIcon").length === 1 && tiles[0].typeIcon !== "", "with its type icon: " + tiles[0].typeIcon)
+        }
+        expect(named(tiles[1], "textPreview").length === 0 && tiles[1].textAsked === "" && tiles[0].textAsked === recentRows.get(0).uri,
+               "a photo's tile carries no text and asks for none: " + tiles[1].textAsked)
         expect(tiles[0].thumbnailSource === "" && tiles[1].thumbnailSource.indexOf("file://") === 0
                && tiles[1].thumbnailSource.indexOf("photo.jpg") > 0,
                "a recent photo's tile asks for its picture: " + tiles[1].thumbnailSource)
