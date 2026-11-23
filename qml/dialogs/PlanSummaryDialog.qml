@@ -49,7 +49,7 @@ Dialog {
         }
         resolving = true
         var entry = open[0]
-        var page = pageStack.push(Qt.resolvedUrl("ConflictDialog.qml"), {
+        pages.push(Qt.resolvedUrl("ConflictDialog.qml"), {
             "planId": planId,
             "item": entry.index,
             "name": entry.name,
@@ -62,8 +62,9 @@ Dialog {
             "defaultChoice": entry.defaultChoice,
             "position": (s.conflicts || open.length) - open.length + 1,
             "total": s.conflicts || open.length
+        }, function (page) {
+            page.rejected.connect(function () { dialog.resolving = false })
         })
-        page.rejected.connect(function() { dialog.resolving = false })
     }
 
     canAccept: planId >= 0
@@ -72,6 +73,10 @@ Dialog {
     onDone: {
         if (result !== DialogResult.Accepted)
             Operations.discardPlan(planId)
+    }
+
+    PageQueue {
+        id: pages
     }
 
     Connections {
