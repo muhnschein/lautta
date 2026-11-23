@@ -81,7 +81,7 @@ CoverBackground {
                 objectName: "coverGrid"
                 anchors {
                     top: header.bottom
-                    topMargin: Theme.paddingSmall
+                    topMargin: Theme.paddingLarge
                     left: parent.left
                     right: parent.right
                     bottom: parent.bottom

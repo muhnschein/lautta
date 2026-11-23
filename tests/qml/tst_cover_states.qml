@@ -24,8 +24,9 @@ ApplicationWindow {
     Item {
         id: frame
 
-        width: Theme.coverSizeLarge.width
-        height: Theme.coverSizeLarge.height
+        // A phone's cover in paddings: headless `Theme.coverSizeLarge` is too small for a line of text.
+        width: 10 * Theme.paddingLarge
+        height: 16 * Theme.paddingLarge
 
         CoverPage {
             id: cover
@@ -187,42 +188,50 @@ ApplicationWindow {
 
     function checkAsleep() {
         expect(cover.kind === "browse", "Browse on top: its cover, not " + cover.kind)
-        expect(named(frame, "coverGrid").length === 0 && named(frame, "storageLine").length === 0,
+        expect(named(frame, "coverGrid").length === 0 && named(frame, "storageCell").length === 0,
                "nothing is built while the cover is out of sight")
         expect(texts(frame, "coverHeader") === "", "nor a header: " + texts(frame, "coverHeader"))
     }
 
     function checkBrowse() {
-        expect(texts(frame, "coverHeader") === "lautta-app-name", "Browse's cover is headed Lautta: " + texts(frame, "coverHeader"))
-        expect(texts(frame, "storageName") === "lautta-cover-phone|SD card",
-               "phone and the first mounted volume have a line each: " + texts(frame, "storageName"))
-        expect(texts(frame, "storageFree") === "lautta-cover-free|lautta-cover-free", "each tells its free space: " + texts(frame, "storageFree"))
-        expect(named(frame, "storageFree").map(function (x) { return x.amount }).join("|") === "39 GB|30 GB",
-               "in whole numbers while there is plenty: " + named(frame, "storageFree").map(function (x) { return x.amount }).join("|"))
-        var lines = named(frame, "storageLine")
-        var width = frame.width - 2 * Theme.paddingLarge
-        if (!expect(lines.length === 2, "two lines"))
+        expect(named(frame, "coverHeader").length === 0, "Browse's cover has no header")
+        var cells = named(frame, "storageCell")
+        var icons = named(frame, "storageIcon").map(function (x) { return x.icon.replace("image://theme/icon-m-", "") }).join("|")
+        expect(icons === "device|sd-card|sd-card", "phone and each mounted volume show by their icon: " + icons)
+        expect(texts(frame, "storageFree") === "lautta-cover-free|lautta-cover-free|lautta-cover-free",
+               "each tells its free space: " + texts(frame, "storageFree"))
+        var amounts = named(frame, "storageFree").map(function (x) { return x.amount }).join("|")
+        expect(amounts.indexOf("39 GB|30 GB|") === 0, "in whole numbers while there is plenty: " + amounts)
+        if (!expect(cells.length === 3, "three cells"))
             return
-        expect(lines[0].width === width && width > 0, "a line spans the cover between its margins: " + lines[0].width)
-        var name = named(lines[0], "storageName")[0]
-        var free = named(lines[0], "storageFree")[0]
-        expect(lines[0].height === name.height && lines[0].children.length === 2,
-               "a line is its two texts, no bar: " + lines[0].height + ", " + lines[0].children.length)
-        expect(name.mapToItem(frame, 0, 0).x + name.width <= free.mapToItem(frame, 0, 0).x
-               && Math.round(name.mapToItem(frame, 0, 0).x) === Math.round(Theme.paddingLarge)
-               && Math.round(free.mapToItem(frame, 0, 0).x + free.width) === Math.round(frame.width - Theme.paddingLarge),
-               "name starts at the left margin, free space ends at the right one")
-        var title = named(frame, "coverHeader")[0]
-        expect(Math.round(title.x) === Math.round(Theme.paddingLarge) && Math.round(title.y) === Math.round(Theme.paddingLarge)
-               && Math.round(title.x + title.width) === Math.round(frame.width - Theme.paddingLarge),
-               "header keeps a large padding from top and both sides: " + title.x + ", " + title.y + ", " + title.width)
+        var margin = Math.round(Theme.paddingLarge)
+        var wide = (frame.width - 2 * Theme.paddingLarge - Theme.paddingMedium) / 2
+        var glyph = named(cells[0], "storageIcon")[0]
+        var free = named(cells[0], "storageFree")[0]
+        var high = Theme.iconSizeSmallPlus + (cells[0].height - glyph.height)
+        expect(cells.every(function (c) { return c.width === wide && c.height === cells[0].height }) && wide > 0
+               && cells[0].height > Theme.iconSizeSmallPlus,
+               "two cells share the cover's width between its margins: " + cells[0].width + ", not " + wide)
+        expect(cells.map(at).join(" ") === [margin + "," + margin, Math.round(margin + wide + Theme.paddingMedium) + "," + margin,
+                                            margin + "," + Math.round(margin + high + Theme.paddingSmall)].join(" "),
+               "two to a row from the top margin, the third below the first: " + cells.map(at).join(" "))
+        expect(glyph.width === Theme.iconSizeSmallPlus && Math.round(glyph.x) === Math.round((wide - glyph.width) / 2) && glyph.y === 0
+               && free.y === glyph.height && Math.round(free.x) === Math.round((wide - free.width) / 2) && free.width > 0,
+               "icon centred in its cell, free space centred below it: " + glyph.x + ", " + free.x + ", " + free.y)
+        // Wide enough for the untranslated id.
+        frame.width = 40 * Theme.paddingLarge
+        expect(free.x > 0 && Math.abs(free.x - (cells[0].width - free.width) / 2) < 1 && free.width === free.implicitWidth,
+               "free space that fits stands centred under its icon: " + free.x + ", " + free.width + " in " + cells[0].width)
+        frame.width = 10 * Theme.paddingLarge
+        var storage = named(frame, "storage")[0]
 
         var grid = named(frame, "coverGrid")[0]
         var tiles = named(frame, "coverTile")
         if (!expect(grid !== undefined && tiles.length === 5, "the newest recents are tiles: " + tiles.length))
             return
-        expect(Math.round(grid.mapToItem(frame, 0, 0).y) >= Math.round(lines[1].mapToItem(frame, 0, lines[1].height).y + Theme.paddingMedium),
-               "tiles start below the lines")
+        expect(Math.round(grid.mapToItem(frame, 0, 0).y) === Math.round(margin + 2 * high + Theme.paddingSmall + Theme.paddingMedium)
+               && Math.round(storage.y + storage.height) === Math.round(margin + 2 * high + Theme.paddingSmall),
+               "tiles start a medium padding below the cells: " + grid.mapToItem(frame, 0, 0).y)
         var side = Math.floor((frame.width - 2 * Theme.paddingSmall) / 3)
         expect(tiles.every(function (t) { return t.width === side && t.height === side }) && side > 0,
                "three tiles fill the cover from edge to edge: " + tiles[0].width + ", not " + side)
@@ -244,11 +253,38 @@ ApplicationWindow {
                === "image://theme/icon-m-favorite,file-folder,image://theme/icon-m-usb,image://theme/icon-m-sd-card,image://theme/icon-m-sd-card,image://theme/icon-m-sd-card",
                "without recents Browse's places are the tiles: " + tiles.map(function (t) { return t.placeIcon }).join(","))
         expect(named(frame, "placeGlyph").length === 6 && named(frame, "fileGlyph").length === 0, "each draws its place's icon only")
+        var more = JSON.parse(JSON.stringify(browse.listModel.get(5)))
+        browse.listModel.append(more)
+        browse.listModel.append(more)
+        expect(named(frame, "storageCell").length === 4, "four cells at most: " + named(frame, "storageCell").length)
+        browse.listModel.remove(browse.listModel.count - 2, 2)
         browse.deviceTotal = -1
-        expect(texts(frame, "storageName") === "SD card", "unknown phone space has no line: " + texts(frame, "storageName"))
+        var icons = named(frame, "storageIcon").map(function (x) { return x.icon.replace("image://theme/icon-m-", "") }).join("|")
+        expect(icons === "sd-card|sd-card", "unknown phone space has no cell: " + icons)
         browse.listModel.remove(5)
-        expect(texts(frame, "storageName") === "Second card" && named(frame, "coverTile").length === 5,
-               "an ejected volume leaves the cover: " + texts(frame, "storageName"))
+        var cells = named(frame, "storageCell")
+        if (!expect(cells.length === 1 && named(frame, "coverTile").length === 5, "an ejected volume leaves the cover: " + cells.length))
+            return
+        var glyph = named(cells[0], "storageIcon")[0]
+        var free = named(cells[0], "storageFree")[0]
+        // Wide enough for the untranslated id.
+        frame.width = 20 * Theme.paddingLarge
+        var wide = frame.width - 2 * Theme.paddingLarge
+        expect(cells[0].width === wide && cells[0].height === Theme.iconSizeSmall && glyph.width === Theme.iconSizeSmall,
+               "alone it is one line as high as its small icon: " + cells[0].width + ", " + cells[0].height + ", " + glyph.width)
+        expect(Math.round(free.x) === Math.round(glyph.x + glyph.width + Theme.paddingSmall)
+               && Math.abs(glyph.x - (wide - free.x - free.width)) < 1 && glyph.x > 0
+               && Math.abs(free.y + free.height / 2 - cells[0].height / 2) < 1,
+               "icon and free space side by side, centred on the cover: " + glyph.x + ", " + free.x + ", " + free.width + ", " + free.y)
+        frame.width = 10 * Theme.paddingLarge
+        var grid = named(frame, "coverGrid")[0]
+        expect(Math.round(grid.mapToItem(frame, 0, 0).y) === Math.round(Theme.paddingLarge + Theme.iconSizeSmall + Theme.paddingMedium),
+               "tiles a medium padding below that line: " + grid.mapToItem(frame, 0, 0).y)
+        var left = browse.listModel.get(5).free
+        browse.listModel.setProperty(5, "free", -1)
+        expect(named(frame, "storageCell").length === 0 && Math.round(grid.mapToItem(frame, 0, 0).y) === 0,
+               "no space known: tiles from the top: " + grid.mapToItem(frame, 0, 0).y)
+        browse.listModel.setProperty(5, "free", left)
         browse.deviceTotal = 128000000000
     }
 
@@ -258,7 +294,7 @@ ApplicationWindow {
         if (!waitFor(function () { return page.coverModel.count === total && named(frame, "coverTile").length >= 9 }, "the folder's tiles"))
             return
         expect(cover.kind === "grid" && texts(frame, "coverHeader") === "Cover121", "a folder's cover is headed by its name: " + texts(frame, "coverHeader"))
-        expect(named(frame, "storageLine").length === 0, "Browse's lines are gone")
+        expect(named(frame, "storageCell").length === 0, "Browse's cells are gone")
         var tiles = named(frame, "coverTile")
         expect(tiles.slice(0, 3).map(function (t) { return t.isDir + ":" + t.category }).join(",") === "true:folder,true:folder,false:markdown",
                "tiles follow the folder's order, folders first: "
@@ -273,14 +309,17 @@ ApplicationWindow {
         expect(named(frame, "fileGlyph").every(function (g) { return !g.highlighted }),
                "folders in the same plain colour as files")
         var header = named(frame, "coverHeader")[0]
-        expect(Math.round(tiles[0].mapToItem(frame, 0, 0).y) === Math.round(header.mapToItem(frame, 0, header.height).y + Theme.paddingSmall),
-               "tiles start under the header")
+        expect(Math.round(header.x) === Math.round(Theme.paddingLarge) && Math.round(header.y) === Math.round(Theme.paddingLarge)
+               && Math.round(header.x + header.width) === Math.round(frame.width - Theme.paddingLarge),
+               "header keeps a large padding from top and both sides: " + header.x + ", " + header.y + ", " + header.width)
+        expect(Math.round(tiles[0].mapToItem(frame, 0, 0).y) === Math.round(header.mapToItem(frame, 0, header.height).y + Theme.paddingLarge),
+               "tiles start as far under the header as it is from the top")
         expect(named(frame, "coverEmpty").length === 0, "no empty text beside tiles")
         frame.width = header.implicitWidth + 4 * Theme.paddingLarge
         expect(header.implicitWidth < header.width && header.horizontalAlignment === Text.AlignRight, "a name that fits stands at the right")
         frame.width = Theme.paddingMedium * 4
         expect(header.implicitWidth > header.width && header.horizontalAlignment === Text.AlignLeft, "a long one is cut at its end, not its start")
-        frame.width = Theme.coverSizeLarge.width
+        frame.width = 10 * Theme.paddingLarge
 
         var empty = push(folderPage, { "uri": base + "Empty/" })
         if (!waitFor(function () { return empty.coverModel.loading === false && texts(frame, "coverHeader") === "Empty" }, "the empty folder"))
@@ -351,7 +390,8 @@ ApplicationWindow {
                && tiles[1].thumbnailSource.indexOf("photo.jpg") > 0,
                "a recent photo's tile asks for its picture: " + tiles[1].thumbnailSource)
         popTo(1)
-        expect(cover.kind === "browse" && texts(frame, "coverHeader") === "lautta-app-name", "back on Browse its cover is back")
+        expect(cover.kind === "browse" && named(frame, "storageCell").length > 0 && named(frame, "coverHeader").length === 0,
+               "back on Browse its cover is back")
     }
 
     function checkTaskCover() {
@@ -404,7 +444,7 @@ ApplicationWindow {
 
     function checkTasksWin() {
         cover.tasks.activeCount = 1
-        expect(cover.kind === "tasks" && named(frame, "coverGrid").length === 0 && named(frame, "storageLine").length === 0,
+        expect(cover.kind === "tasks" && named(frame, "coverGrid").length === 0 && named(frame, "storageCell").length === 0,
                "a running task takes the cover: " + cover.kind)
         expect(texts(frame, "coverHeader") === "lautta-xfr-cover-count", "one header only, the tasks': " + texts(frame, "coverHeader"))
         cover.tasks.activeCount = 0

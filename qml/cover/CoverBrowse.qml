@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// SCR-58 on Browse: free space of phone and first volume, below them newest Recents as tiles;
+// SCR-58 on Browse: free space of phone and mounted volumes, below them newest Recents as tiles;
 // none: Browse's places.
 import QtQuick 2.6
 import QtQml 2.2
 import Sailfish.Silica 1.0
+import "../components"
 import "../components/browse/BrowseText.js" as BrowseText
 
 Item {
@@ -30,25 +31,23 @@ Item {
     })
     // Only volumes tell a size; unmounted ones no free space.
     readonly property var storage: {
-        var lines = []
-        if (deviceTotal > 0) {
-            //% "Phone"
-            lines.push({ "name": qsTrId("lautta-cover-phone"), "free": deviceFree, "total": deviceTotal })
-        }
-        var volumes = seen.filter(function (r) { return r.total > 0 && r.free >= 0 })
-        if (volumes.length > 0)
-            lines.push({ "name": volumes[0].name, "free": volumes[0].free, "total": volumes[0].total })
-        return lines
+        var cells = []
+        if (deviceTotal > 0)
+            cells.push({ "icon": "image://theme/icon-m-device", "free": deviceFree })
+        seen.forEach(function (r) {
+            if (r.total > 0 && r.free >= 0)
+                cells.push({ "icon": r.icon, "free": r.free })
+        })
+        return cells.slice(0, 4)
     }
+    readonly property bool alone: storage.length === 1
 
     Instantiator {
         id: watch
 
         model: root.rows
         delegate: QtObject {
-            readonly property string section: model.section
             readonly property string kind: model.kind
-            readonly property string name: model.name
             readonly property string icon: model.icon
             readonly property string tiles: model.tiles === undefined ? "" : model.tiles
             readonly property real free: model.free
@@ -56,58 +55,59 @@ Item {
         }
     }
 
-    CoverHeader {
-        id: header
+    // Phone alone: icon and free space on one line, centred. More: two to a row, free space under icon.
+    Item {
+        id: cells
 
-        //% "Lautta"
-        text: qsTrId("lautta-app-name")
-    }
+        readonly property real gap: Theme.paddingMedium
+        readonly property real cellWidth: root.alone ? width : (width - gap) / 2
+        readonly property real cellHeight: root.alone ? Theme.iconSizeSmall : Theme.iconSizeSmallPlus + line.height
+        readonly property int rows: Math.ceil(root.storage.length / 2)
 
-    Column {
-        id: lines
+        objectName: "storage"
+        x: Theme.paddingLarge
+        y: Theme.paddingLarge
+        width: parent.width - 2 * x
+        height: rows * cellHeight + Math.max(0, rows - 1) * Theme.paddingSmall
 
-        anchors {
-            top: header.bottom
-            topMargin: Theme.paddingSmall
-            left: parent.left
-            leftMargin: Theme.paddingLarge
-            right: parent.right
-            rightMargin: Theme.paddingLarge
+        FontMetrics {
+            id: line
+
+            font.pixelSize: Theme.fontSizeTiny
         }
 
         Repeater {
             model: root.storage
 
             Item {
-                objectName: "storageLine"
-                width: lines.width
-                height: name.height
+                objectName: "storageCell"
+                x: (index % 2) * (cells.cellWidth + cells.gap)
+                y: Math.floor(index / 2) * (cells.cellHeight + Theme.paddingSmall)
+                width: cells.cellWidth
+                height: cells.cellHeight
 
+                AppIcon {
+                    id: glyph
+
+                    objectName: "storageIcon"
+                    x: root.alone ? (parent.width - width - Theme.paddingSmall - free.width) / 2 : (parent.width - width) / 2
+                    iconSize: root.alone ? Theme.iconSizeSmall : Theme.iconSizeSmallPlus
+                    icon: modelData.icon
+                }
                 Label {
                     id: free
 
-                    objectName: "storageFree"
-                    anchors.right: parent.right
                     readonly property string amount: BrowseText.space(modelData.free)
 
+                    objectName: "storageFree"
+                    x: root.alone ? glyph.x + glyph.width + Theme.paddingSmall : (parent.width - width) / 2
+                    y: root.alone ? (parent.height - height) / 2 : glyph.height
+                    width: Math.min(implicitWidth, root.alone ? parent.width - glyph.width - Theme.paddingSmall : parent.width)
+                    truncationMode: TruncationMode.Fade
                     //% "%1 free"
                     text: qsTrId("lautta-cover-free").arg(amount)
                     font.pixelSize: Theme.fontSizeTiny
                     color: Theme.secondaryColor
-                }
-                Label {
-                    id: name
-
-                    objectName: "storageName"
-                    anchors {
-                        left: parent.left
-                        right: free.left
-                        rightMargin: Theme.paddingSmall
-                    }
-                    truncationMode: TruncationMode.Fade
-                    textFormat: Text.PlainText
-                    text: modelData.name
-                    font.pixelSize: Theme.fontSizeTiny
                 }
             }
         }
@@ -116,8 +116,8 @@ Item {
     CoverGrid {
         objectName: "coverGrid"
         anchors {
-            top: lines.bottom
-            topMargin: Theme.paddingMedium
+            top: parent.top
+            topMargin: root.storage.length > 0 ? cells.y + cells.height + Theme.paddingMedium : 0
             left: parent.left
             right: parent.right
             bottom: parent.bottom

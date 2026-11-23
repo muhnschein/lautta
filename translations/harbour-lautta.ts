@@ -2652,10 +2652,6 @@
         <source>All recents</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-cover-phone">
-        <source>Phone</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-cover-free">
         <source>%1 free</source>
         <translation type="unfinished"></translation>

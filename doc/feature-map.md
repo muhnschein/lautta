@@ -259,7 +259,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 ### 3.12 Share in, cover, notifications, app
 
 - **F-SHR-01 Share target** — Lautta in share sheet; "Save N files" to suggested folders or Another folder…; unreadable files skipped. *Code:* `ShareTargetPage.qml`, `OperationsHandlers.qml`.
-- **F-APP-01 Cover** — shows what a tap opens: page on top, else nearest page below that tells a cover. Browse: "Lautta", free-space lines of phone and first volume, newest recents as tiles (none: places). Folder, Trash, Recents: F-DIR-11. Viewer: file fills cover, name on dark fade; no picture: type glyph. Built only while cover shows; no timers. Transfer cover while tasks run. *Code:* `CoverPage.qml`, `CoverBrowse.qml`, `CoverFile.qml`.
+- **F-APP-01 Cover** — shows what a tap opens: page on top, else nearest page below that tells a cover. Browse: no name; free space of phone and mounted volumes (four at most) as icon with "N GB free", two to a row, phone alone on one centred line; below, newest recents as tiles (none: places). Folder, Trash, Recents: F-DIR-11. Viewer: file fills cover, name on dark fade; no picture: type glyph. Built only while cover shows; no timers. Transfer cover while tasks run. *Code:* `CoverPage.qml`, `CoverBrowse.qml`, `CoverFile.qml`.
 - **F-APP-02 Start error** — "Lautta can't open its data".
 - **F-APP-03 Settings** — Browsing (Browse page, View options, Search, Recents), Files (Deleting, Transfers, Storage), About Lautta.
 - **F-APP-04 Storage** — Keep stored listings, Clear cache, Clear app data ("Removes queue, history, favourites and everything in Trash"; refuses while tasks run).
