@@ -10,6 +10,8 @@ FullscreenContentPage {
     id: page
 
     property string uri
+    readonly property string coverKind: "file"
+    readonly property string coverUri: currentUri
     property string folderUri: App.parentUri(uri)
     property int tileSize
 

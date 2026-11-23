@@ -3,6 +3,7 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import Nemo.Thumbnailer 1.0
+import "../../qml/components"
 import "../../qml/components/directory"
 
 ApplicationWindow {
@@ -13,6 +14,8 @@ ApplicationWindow {
     property string archiveRoot
 
     ViewerTools { id: tools }
+
+    Component { id: twinIcon; FileIcon {} }
 
     DirectoryModel {
         id: documents
@@ -120,6 +123,25 @@ ApplicationWindow {
         system.implicitHeight = 2 * w
         expect(system.y === 0 && Math.abs(system.x + system.width / 2 - frame.width / 2) < 1 && system.x > 0,
                "a page over twice as tall as wide, narrower than the tile, is centred across: " + system.x)
+        system.implicitWidth = 0
+        system.implicitHeight = 0
+        expect(system.width === Math.round(w / 2) && system.height === 2 * w,
+               "a page told no size keeps the size seen: " + system.width + "x" + system.height)
+        var twin = twinIcon.createObject(window.contentItem, { "width": icon.width, "height": icon.height, "size": icon.size,
+                                                               "category": "pdf", "mimeType": "application/pdf",
+                                                               "thumbnailSource": icon.thumbnailSource })
+        var joined = systemThumbnailOf(twin)
+        if (expect(joined && joined !== system, "a second icon of the file asks the system thumbnailer too"))
+            expect(joined.implicitWidth === 0 && joined.width === Math.round(w / 2) && joined.height === 2 * w,
+                   "and shows the page at the size the first saw: " + joined.width + "x" + joined.height)
+        twin.destroy()
+        var other = twinIcon.createObject(window.contentItem, { "width": icon.width + 8, "height": icon.height + 8, "size": icon.size + 8,
+                                                                "category": "pdf", "mimeType": "application/pdf",
+                                                                "thumbnailSource": icon.thumbnailSource })
+        var fresh = systemThumbnailOf(other)
+        if (expect(fresh, "an icon of another size asks the system thumbnailer"))
+            expect(fresh.width === 0, "and takes no size from the first: " + fresh.width)
+        other.destroy()
     }
 
     function checkArchive() {

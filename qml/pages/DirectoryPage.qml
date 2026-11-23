@@ -9,6 +9,9 @@ Page {
 
     property string uri
     property bool shown
+    readonly property string coverKind: "grid"
+    readonly property string coverTitle: App.nameOf(uri)
+    readonly property var coverModel: view.model
 
     allowedOrientations: Orientation.All
 

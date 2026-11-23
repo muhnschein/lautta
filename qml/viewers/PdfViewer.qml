@@ -12,6 +12,8 @@ Page {
     id: page
 
     property string uri
+    readonly property string coverKind: "file"
+    readonly property string coverUri: uri
     property real zoom: 1
     property real renderZoom: 1
     readonly property real maxZoom: 4

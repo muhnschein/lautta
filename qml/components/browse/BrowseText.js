@@ -52,17 +52,24 @@ function deviceLine(free, total) {
     return total > 0 ? volumeLine(free, total, "") : ""
 }
 
+function space(bytes) {
+    var value = bytes
+    while (value >= 1024)
+        value /= 1024
+    return Silica.Format.formatFileSize(bytes, value < 9.95 ? 1 : 0)
+}
+
 function volumeLine(free, total, fs) {
-    var space = ""
+    var text = ""
     if (free >= 0 && total >= 0) {
         //% "%1 free of %2"
-        space = qsTrId("lautta-browse-volume-space").arg(Silica.Format.formatFileSize(free)).arg(Silica.Format.formatFileSize(total))
+        text = qsTrId("lautta-browse-volume-space").arg(space(free)).arg(space(total))
     } else if (total >= 0) {
-        space = Silica.Format.formatFileSize(total)
+        text = space(total)
     }
-    if (space.length === 0)
+    if (text.length === 0)
         return fs
-    return fs.length > 0 ? space + " · " + fs : space
+    return fs.length > 0 ? text + " · " + fs : text
 }
 
 function nearbyLine(provider, host) {

@@ -20,6 +20,7 @@ Page {
     property bool storageSettings: Bridge.storageSettings
     property real deviceFree: locations.deviceFree
     property real deviceTotal: locations.deviceTotal
+    readonly property string coverKind: "browse"
     readonly property bool discovering: status === PageStatus.Active
                                         && Qt.application.state === Qt.ApplicationActive && Bridge.ready
 

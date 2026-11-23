@@ -12,7 +12,6 @@ QtObject {
     property var favourites: FavouritesModel { }
     property var locations: LocationsModel { }
     property var recents: RecentsModel { }
-    property var folder: FolderInfo { }
 
     Component.onCompleted: {
         check(Bridge.status === "absent", "status absent: " + Bridge.status)
@@ -45,9 +44,10 @@ QtObject {
         check(recents.count === 0 && !recents.enabled && !recents.loaded, "recents start empty")
         check(recents.kindFilter === undefined && recents.text === undefined, "recents have no filter")
 
-        folder.uri = "lautta://user-documents/"
-        check(folder.uri === "lautta://user-documents/", "folder uri is set")
-        check(folder.count === -1, "folder count is unknown until looked up")
+        var tile = JSON.parse(App.tileOf("lautta://user-documents/notes.md"))
+        check(tile.name === "notes.md" && tile.category === "markdown" && tile.uri === "lautta://user-documents/notes.md",
+              "a file's tile tells name and type: " + JSON.stringify(tile))
+        check(App.tileOf("no uri") === "", "no uri, no tile")
         reachedEnd = true
     }
 }

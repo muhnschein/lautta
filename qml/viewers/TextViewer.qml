@@ -11,6 +11,8 @@ Page {
     id: page
 
     property string uri
+    readonly property string coverKind: "file"
+    readonly property string coverUri: uri
 
     readonly property string fileName: App.nameOf(uri)
     readonly property real charWidth: metrics.advanceWidth

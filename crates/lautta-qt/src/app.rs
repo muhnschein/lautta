@@ -45,6 +45,7 @@ pub struct App {
     canAddTo: qt_method!(fn(&self, folder_uri: QString) -> bool),
     localUrl: qt_method!(fn(&self, uri: QString) -> QString),
     categoryOf: qt_method!(fn(&self, name_or_uri: QString) -> QString),
+    tileOf: qt_method!(fn(&self, uri: QString) -> QString),
     viewerFor: qt_method!(fn(&self, name_or_uri: QString, mime: QString) -> QString),
     checksumAlgorithms: qt_method!(fn(&self, group: QString) -> QString),
     isChecksumList: qt_method!(fn(&self, name_or_uri: QString) -> bool),
@@ -239,6 +240,13 @@ impl App {
 
     fn categoryOf(&self, name_or_uri: QString) -> QString {
         QString::from(category_of_name(&name_part(&name_or_uri.to_string())).icon_name())
+    }
+
+    fn tileOf(&self, uri: QString) -> QString {
+        match (core(), parse_uri(&uri)) {
+            (Some(c), Some(u)) => QString::from(to_json(&c.file_tile(&u, &c.settings())).as_str()),
+            _ => QString::default(),
+        }
     }
 
     fn checksumAlgorithms(&self, group: QString) -> QString {

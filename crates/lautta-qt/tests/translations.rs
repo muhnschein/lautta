@@ -382,3 +382,20 @@ fn the_catalogue_keeps_one_spelling() {
     let broken = "<source>Canceled</source><source>Fine</source><source>it\u{2019}s</source>";
     assert_eq!(style_breaks(broken), ["Canceled", "it\u{2019}s"]);
 }
+
+fn without_english(ts: &str) -> Vec<String> {
+    ts.split("<message id=\"")
+        .skip(1)
+        .filter(|message| message.contains("<source></source>"))
+        .filter_map(|message| message.split('"').next())
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn every_message_has_its_english() {
+    assert_eq!(without_english(&catalogue()), Vec::<String>::new());
+    let broken =
+        "<message id=\"a\"><source>A</source></message><message id=\"b\"><source></source></message>";
+    assert_eq!(without_english(broken), ["b"]);
+}
