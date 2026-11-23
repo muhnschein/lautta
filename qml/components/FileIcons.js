@@ -48,3 +48,19 @@ function source(name, pixelRatio) {
     var path = Qt.resolvedUrl("../icons/" + name + ".svg").toString().replace(/^file:\/\//, "")
     return "image://lautta-icon" + path + "?stroke=" + 2 * pixelRatio
 }
+
+var pageSizes = {}
+var pageSizeCount = 0
+
+// Size of a page thumbnail, kept per `key`: asked with a size, remembers it; asked with none, tells
+// the one kept ({ "width": 0, "height": 0 }: never seen).
+function pageSize(key, width, height) {
+    if (width > 0 && height > 0) {
+        if (pageSizes[key] === undefined && ++pageSizeCount > 2000) {
+            pageSizes = {}
+            pageSizeCount = 1
+        }
+        pageSizes[key] = { "width": width, "height": height }
+    }
+    return pageSizes[key] || { "width": 0, "height": 0 }
+}

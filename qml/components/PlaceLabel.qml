@@ -20,8 +20,9 @@ Item {
                                                  Math.max(width / 2, width - markWidth - name.implicitWidth))
                                       : 0
     readonly property real nameWidth: Math.min(name.implicitWidth, Math.max(0, width - leadWidth - markWidth))
-    readonly property real start: horizontalAlignment === Text.AlignRight
-                                  ? width - leadWidth - markWidth - nameWidth : 0
+    readonly property real used: leadWidth + markWidth + nameWidth
+    readonly property real start: horizontalAlignment === Text.AlignRight ? width - used
+                                  : horizontalAlignment === Text.AlignHCenter ? (width - used) / 2 : 0
 
     implicitWidth: lead.implicitWidth + markWidth + name.implicitWidth
     implicitHeight: name.implicitHeight

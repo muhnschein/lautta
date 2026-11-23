@@ -5,6 +5,7 @@ mod model;
 mod path;
 mod picker;
 
+pub(crate) use model::cancel_text;
 pub use model::DirectoryModel;
 pub use path::PathModel;
 pub use picker::PickerRootsModel;
