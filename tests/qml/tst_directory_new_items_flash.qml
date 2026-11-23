@@ -144,9 +144,10 @@ ApplicationWindow {
     function finished(act, what) {
         var done = { "ok": false, "uri": "" }
         var on = function (job, ok, resultUri) { done.ok = ok; done.uri = resultUri }
+        flashes = []
         Operations.jobFinished.connect(on)
         act()
-        waitFor(function () { return done.ok }, what)
+        waitFor(function () { return done.ok && flashes.indexOf(done.uri) >= 0 }, what + " and its flash")
         Operations.jobFinished.disconnect(on)
         return done.uri
     }
