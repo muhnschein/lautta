@@ -1,69 +1,108 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
+// SCR-58. Shows what a tap opens: page on top, or the nearest one below it that tells a cover
+// (`coverKind`: "browse", "grid" with `coverTitle` and `coverModel`, "file" with `coverUri`).
+// Nothing built while cover is out of sight.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
-import "../components"
-import "../components/FileIcons.js" as FileIcons
 
 CoverBackground {
     id: cover
 
-    readonly property var topPage: typeof pageStack !== "undefined" && pageStack ? pageStack.currentPage : null
-    readonly property string folderUri: topPage && typeof topPage.uri === "string" ? topPage.uri : ""
+    // Tests set it.
+    property bool live: status === Cover.Active
+    readonly property var source: {
+        if (typeof pageStack === "undefined" || !pageStack)
+            return null
+        var page = pageStack.currentPage
+        while (page && page.coverKind === undefined)
+            page = pageStack.previousPage(page)
+        return page ? page : null
+    }
+    readonly property alias tasks: transferCover
     readonly property bool transferring: transferCover.active
+    readonly property string kind: transferring ? "tasks" : (source ? source.coverKind : "")
 
-    onStatusChanged: if (status === Cover.Active) info.refresh()
-
-    FolderInfo {
-        id: info
-        uri: cover.folderUri
+    // Page on top changes before its cover's content goes: no reading what new page lacks.
+    function told(name, fallback) {
+        return source && source[name] !== undefined ? source[name] : fallback
     }
 
     TransferCover {
         id: transferCover
+
         anchors.fill: parent
         visible: active
     }
 
-    Column {
-        visible: !cover.transferring
-        anchors {
-            left: parent.left
-            right: parent.right
-            margins: Theme.paddingLarge
-            verticalCenter: parent.verticalCenter
-        }
-        spacing: Theme.paddingSmall
+    CoverHeader {
+        visible: cover.kind === ""
+        //% "Lautta"
+        text: qsTrId("lautta-app-name")
+    }
 
-        AppIcon {
-            visible: cover.folderUri.length > 0
-            anchors.horizontalCenter: parent.horizontalCenter
-            // Multiple of 28 px: glyph's sharp set.
-            iconSize: FileIcons.snap(Theme.iconSizeLarge)
-            icon: FileIcons.glyph("folder", true, iconSize)
-            color: Theme.highlightColor
+    Loader {
+        objectName: "coverContent"
+        anchors.fill: parent
+        active: cover.live && cover.source !== null
+        sourceComponent: cover.kind === "browse" ? browse : (cover.kind === "grid" ? grid : (cover.kind === "file" ? file : null))
+    }
+
+    Component {
+        id: browse
+
+        CoverBrowse {
+            rows: cover.told("listModel", null)
+            deviceFree: cover.told("deviceFree", -1)
+            deviceTotal: cover.told("deviceTotal", -1)
         }
-        Label {
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.Wrap
-            maximumLineCount: 3
-            elide: Text.ElideRight
-            text: cover.folderUri.length > 0
-                  ? App.nameOf(cover.folderUri)
-                  //% "Lautta"
-                  : qsTrId("lautta-app-name")
-            font.pixelSize: Theme.fontSizeLarge
-            color: Theme.highlightColor
+    }
+
+    Component {
+        id: file
+
+        CoverFile {
+            uri: cover.told("coverUri", "")
         }
-        Label {
-            visible: cover.folderUri.length > 0 && info.count >= 0
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            //% "%n items"
-            text: qsTrId("lautta-cover-items", info.count)
-            font.pixelSize: Theme.fontSizeSmall
-            color: Theme.secondaryColor
+    }
+
+    Component {
+        id: grid
+
+        Item {
+            CoverHeader {
+                id: header
+
+                text: cover.told("coverTitle", "")
+            }
+            CoverGrid {
+                id: tiles
+
+                objectName: "coverGrid"
+                anchors {
+                    top: header.bottom
+                    topMargin: Theme.paddingSmall
+                    left: parent.left
+                    leftMargin: Theme.paddingMedium
+                    right: parent.right
+                    rightMargin: Theme.paddingMedium
+                    bottom: parent.bottom
+                }
+                model: cover.told("coverModel", null)
+            }
+            Label {
+                objectName: "coverEmpty"
+                visible: tiles.count === 0 && tiles.model !== null && tiles.model.loading !== true
+                anchors.centerIn: parent
+                width: parent.width - 2 * Theme.paddingMedium
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                //% "No files"
+                text: qsTrId("lautta-dir-empty")
+                font.pixelSize: Theme.fontSizeLarge
+                color: Theme.highlightColor
+                opacity: Theme.opacityHigh
+            }
         }
     }
 }

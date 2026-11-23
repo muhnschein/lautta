@@ -8,36 +8,57 @@ import "../components/transfers/TransferText.js" as TransferText
 Item {
     id: root
 
+    // Tests set them.
+    property int activeCount: Transfers.activeCount
+    property int pausedCount: Transfers.pausedCount
+    property int pendingCount: Transfers.pendingCount
+    property bool closing: Transfers.closing
+    property real bytesDone: Transfers.bytesDone
+    property real bytesTotal: Transfers.bytesTotal
+    property real rate: Transfers.rate
     // "transferring", "paused", "pending" or "idle".
-    readonly property string mode: Transfers.closing && Transfers.pendingCount > 0
+    readonly property string mode: closing && pendingCount > 0
         ? "pending"
-        : (Transfers.activeCount > 0 ? "transferring" : (Transfers.pausedCount > 0 ? "paused" : "idle"))
+        : (activeCount > 0 ? "transferring" : (pausedCount > 0 ? "paused" : "idle"))
     readonly property bool active: mode !== "idle"
-    readonly property int percent: TransferText.percent(Transfers.bytesDone, Transfers.bytesTotal)
+    readonly property int percent: TransferText.percent(bytesDone, bytesTotal)
+    readonly property real fraction: bytesTotal > 0 ? Math.min(1, bytesDone / bytesTotal) : 0
+
+    // Whole cover is the progress bar: see-through fill from the left.
+    Rectangle {
+        objectName: "coverFill"
+        visible: root.mode !== "pending"
+        width: Math.round(parent.width * root.fraction)
+        height: parent.height
+        color: root.mode === "paused" ? Theme.rgba(Theme.primaryColor, Theme.opacityFaint)
+                                      : Theme.rgba(Theme.highlightBackgroundColor, Theme.opacityLow)
+    }
+
+    CoverHeader {
+        id: header
+
+        text: root.mode === "pending"
+            //% "Lautta"
+            ? qsTrId("lautta-app-name")
+            : (root.mode === "paused"
+               //% "%n paused"
+               ? qsTrId("lautta-xfr-header-paused", root.pausedCount)
+               //% "%n tasks"
+               : qsTrId("lautta-xfr-cover-count", root.activeCount))
+    }
 
     Column {
+        objectName: "coverProgress"
         anchors {
             left: parent.left
             right: parent.right
-            leftMargin: Theme.paddingLarge
-            rightMargin: Theme.paddingLarge
+            leftMargin: Theme.paddingMedium
+            rightMargin: Theme.paddingMedium
             verticalCenter: parent.verticalCenter
-            verticalCenterOffset: -Theme.paddingLarge
         }
         spacing: Theme.paddingSmall
         visible: root.mode !== "pending"
 
-        Label {
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            color: Theme.secondaryColor
-            font.pixelSize: Theme.fontSizeSmall
-            text: root.mode === "paused"
-                //% "%n paused"
-                ? qsTrId("lautta-xfr-header-paused", Transfers.pausedCount)
-                //% "%n tasks"
-                : qsTrId("lautta-xfr-cover-count", Transfers.activeCount)
-        }
         Label {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
@@ -46,23 +67,15 @@ Item {
             font.weight: Font.Light
             text: root.percent + "%"
         }
-        ProgressBar {
-            width: parent.width + 2 * Theme.paddingLarge
-            x: -Theme.paddingLarge
-            minimumValue: 0
-            maximumValue: 1
-            value: Transfers.bytesTotal > 0 ? Transfers.bytesDone / Transfers.bytesTotal : 0
-            leftMargin: Theme.paddingLarge
-            rightMargin: Theme.paddingLarge
-        }
         Label {
+            objectName: "coverRate"
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             color: Theme.secondaryColor
             font.pixelSize: Theme.fontSizeSmall
-            visible: Transfers.rate > 0
+            visible: root.rate > 0
             //% "%1/s"
-            text: qsTrId("lautta-xfr-rate").arg(TransferText.size(Transfers.rate))
+            text: qsTrId("lautta-xfr-rate").arg(TransferText.size(root.rate))
         }
     }
 
@@ -85,7 +98,7 @@ Item {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
-            text: TransferText.pendingCover(Transfers.pendingCount, App.setting("auto_resume") !== false)
+            text: TransferText.pendingCover(root.pendingCount, App.setting("auto_resume") !== false)
         }
     }
 

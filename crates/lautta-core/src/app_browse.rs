@@ -67,8 +67,8 @@ pub struct Row {
     pub tiles: Vec<RecentTile>,
 }
 
-/// Newest recents shown as tiles on Browse.
-pub const STRIP_TILES: usize = 3;
+/// Newest recents a Browse row carries: Browse shows the first three, its cover all.
+pub const ROW_TILES: usize = 9;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -274,11 +274,6 @@ impl Core {
         }
     }
 
-    pub fn cached_folder_count(&self, uri: &Uri) -> Option<usize> {
-        let hit = self.dircache.get(uri).ok()??;
-        Some(hit.entries.iter().filter(|e| !e.is_hidden()).count())
-    }
-
     pub async fn volume_info(&self, uri: &Uri) -> Result<VolumeInfo> {
         let provider = self.provider(&uri.location)?;
         let space = provider.space(&VPath::root()).await?;
@@ -414,7 +409,7 @@ impl Core {
         if !settings.recents_enabled {
             return Vec::new();
         }
-        let tiles = self.recent_tiles(STRIP_TILES, settings).unwrap_or_default();
+        let tiles = self.recent_tiles(ROW_TILES, settings).unwrap_or_default();
         if tiles.is_empty() {
             return Vec::new();
         }
@@ -438,18 +433,31 @@ impl Core {
     }
 
     fn recent_tile(&self, r: Recent, shown: bool, thumbs: &ThumbSettings) -> RecentTile {
-        let entry = Entry::new(r.uri.name().unwrap_or_default(), Kind::File);
-        let local = self.locations.to_local_path(&r.uri);
+        let mut tile = self.tile(&r.uri, shown, thumbs);
+        tile.id = r.id;
+        tile.name = r.name;
+        tile.kind = r.kind.as_str();
+        tile
+    }
+
+    /// File at `uri` as folders show it: category, type, thumbnail. `id` 0, `kind` empty.
+    pub fn file_tile(&self, uri: &Uri, settings: &Settings) -> RecentTile {
+        self.tile(uri, settings.thumbnails_local, &ThumbSettings::new(settings))
+    }
+
+    fn tile(&self, uri: &Uri, shown: bool, thumbs: &ThumbSettings) -> RecentTile {
+        let entry = Entry::new(uri.name().unwrap_or_default(), Kind::File);
+        let local = self.locations.to_local_path(uri);
         let thumbnail_source = match (thumbnail_source(&entry, local.is_some(), shown, thumbs), local) {
             (ThumbSource::System, Some(path)) => file_url(&path),
-            (ThumbSource::App, _) => app_thumbnail_url(&r.uri),
+            (ThumbSource::App, _) => app_thumbnail_url(uri),
             _ => String::new(),
         };
         RecentTile {
-            id: r.id,
-            uri: r.uri.to_string(),
-            name: r.name,
-            kind: r.kind.as_str(),
+            id: 0,
+            uri: uri.to_string(),
+            name: display_name(&entry.name),
+            kind: "",
             category: category_of(&entry).icon_name(),
             mime_type: mime_of(&entry).unwrap_or_default(),
             thumbnail_source,

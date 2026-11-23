@@ -47,7 +47,7 @@ Item {
         spacing: strip.gap
 
         Repeater {
-            model: strip.tiles
+            model: strip.tiles.slice(0, strip.cells - 1)
 
             BackgroundItem {
                 id: cell

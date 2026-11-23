@@ -22,6 +22,7 @@
 - When a server goes away, the offline banner says when the folder shown was listed instead of "Showing the copy from ." A listing cut short by a lost connection shows its error instead of the offline banner ([#106](https://github.com/muhnschein/lautta/issues/106)).
 - *Checksums* in *More actions* of a file: SHA-256, MD5, SHA-1, SHA-512 and more (SHA-3, BLAKE2b, BLAKE3, CRC32, xxHash). Tap one to calculate it; tap the value to copy it. When a checksum list such as SHA256SUMS in the same folder names the file, Lautta says whether it matches. A checksum list itself offers *Verify files*: it checks every file the list names ([#40](https://github.com/muhnschein/lautta/issues/40)).
 - Browse starts with your three newest recent files as tiles; *All recents* opens the whole list, and a long press on a tile removes it from recents. The tiles replace the *Recents* row and can be switched off in *Settings › Browse page*. *On this device* now shows the phone's free space ([#169](https://github.com/muhnschein/lautta/issues/169)).
+- The cover shows what a tap brings back: the folder's first files as small tiles, free space and your newest recent files on Browse, the open file in a viewer, and Trash and Recents as tiles. While tasks run, the whole cover fills from the left with their progress ([#121](https://github.com/muhnschein/lautta/issues/121)).
 
 ## 1.0.0
 

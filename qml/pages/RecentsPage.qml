@@ -12,6 +12,10 @@ Page {
 
     property var listModel: recents
     readonly property bool recentsOn: JSON.parse(App.settingsJson).recents_enabled !== false
+    readonly property string coverKind: "grid"
+    //% "Recents"
+    readonly property string coverTitle: qsTrId("lautta-recents-title")
+    readonly property var coverModel: listModel
 
     allowedOrientations: Orientation.All
 
