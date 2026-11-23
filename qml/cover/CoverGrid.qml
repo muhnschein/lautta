@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // Caption-less tiles of a model's first rows; last row fades out. Rows carry what a folder row
-// does (`isDir`, `category`, `thumbnailSource`, `mimeType`), or `uri` only, or `icon` (a place).
+// does (`isDir`, `category`, `thumbnailSource`, `mimeType`), or `uri` only, or `placeIcon`.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -20,7 +20,7 @@ Item {
 
     // `uri` only: core tells the rest.
     function told(row) {
-        if (row.thumbnailSource !== undefined || row.icon !== undefined || !row.uri)
+        if (row.thumbnailSource !== undefined || row.placeIcon !== undefined || !row.uri)
             return row
         var json = App.tileOf(row.uri)
         return json.length > 0 ? JSON.parse(json) : row
@@ -45,7 +45,7 @@ Item {
             category: grid.field(row, "category", isDir ? "folder" : App.categoryOf(grid.field(row, "name", "")))
             thumbnailSource: grid.field(row, "thumbnailSource", "")
             mimeType: grid.field(row, "mimeType", "")
-            placeIcon: grid.field(row, "icon", "")
+            placeIcon: grid.field(row, "placeIcon", "")
         }
     }
 

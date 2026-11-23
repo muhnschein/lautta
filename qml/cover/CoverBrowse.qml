@@ -25,7 +25,7 @@ Item {
         return strip.length > 0 ? JSON.parse(strip[0].tiles) : []
     }
     readonly property var places: seen.filter(function (r) { return r.icon.length > 0 }).map(function (r) {
-        return { "icon": r.icon }
+        return { "placeIcon": r.icon }
     })
     // Only volumes tell a size; unmounted ones no free space.
     readonly property var storage: {

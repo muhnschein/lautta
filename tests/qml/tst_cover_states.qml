@@ -257,6 +257,9 @@ ApplicationWindow {
         expect(tiles.slice(0, 3).map(function (t) { return t.isDir + ":" + t.category }).join(",") === "true:folder,true:folder,false:markdown",
                "tiles follow the folder's order, folders first: "
                + tiles.slice(0, 3).map(function (t) { return t.isDir + ":" + t.category }).join(","))
+        expect(tiles.every(function (t) { return t.placeIcon === "" }) && named(frame, "placeGlyph").length === 0
+               && named(frame, "fileGlyph").length >= 9,
+               "a folder's tiles draw file glyphs, none a place's")
         var header = named(frame, "coverHeader")[0]
         expect(Math.round(tiles[0].mapToItem(frame, 0, 0).y) === Math.round(header.mapToItem(frame, 0, header.height).y + Theme.paddingSmall),
                "tiles start under the header")
