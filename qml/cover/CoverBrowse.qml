@@ -4,6 +4,7 @@
 import QtQuick 2.6
 import QtQml 2.2
 import Sailfish.Silica 1.0
+import "../components/browse/BrowseText.js" as BrowseText
 
 Item {
     id: root
@@ -89,7 +90,9 @@ Item {
                     objectName: "storageFree"
                     anchors.right: parent.right
                     //% "%1 free"
-                    text: qsTrId("lautta-cover-free").arg(Format.formatFileSize(modelData.free))
+                    readonly property string amount: BrowseText.space(modelData.free)
+
+                    text: qsTrId("lautta-cover-free").arg(amount)
                     font.pixelSize: Theme.fontSizeTiny
                     color: Theme.secondaryColor
                 }

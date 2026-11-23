@@ -171,6 +171,13 @@ ApplicationWindow {
         expect(space[0].text === BrowseText.volumeLine(42000000000, 128000000000, "") && space[0].text.length > 0,
                "it reads as a volume's line: " + space[0].text)
         expect(left(space[0], view.contentItem) === Math.round(Theme.horizontalPageMargin), "it starts at the page margin")
+        var sizes = [[104300000000, "97 GB"], [128000000000, "119 GB"], [10737418240, "10 GB"], [10694468567, "10 GB"],
+                     [10400000000, "9.7 GB"], [9400000000, "8.8 GB"], [999000000, "953 MB"], [1500000, "1.4 MB"]]
+        for (var i = 0; i < sizes.length; ++i)
+            expect(BrowseText.space(sizes[i][0]) === sizes[i][1],
+                   "space reads whole from 10 of its unit up, with a decimal below: " + BrowseText.space(sizes[i][0]) + " for " + sizes[i][1])
+        expect(BrowseText.volumeLine(-1, 128000000000, "") === "119 GB" && BrowseText.volumeLine(-1, 128000000000, "exFAT") === "119 GB · exFAT",
+               "a volume's size reads that way: " + BrowseText.volumeLine(-1, 128000000000, "exFAT"))
         expect(Math.round(space[0].mapToItem(view.contentItem, 0, space[0].baselineOffset).y)
                === Math.round(device.mapToItem(view.contentItem, 0, device.baselineOffset).y),
                "it stands on the line of On this device")

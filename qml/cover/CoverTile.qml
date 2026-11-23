@@ -28,7 +28,6 @@ Rectangle {
         isDir: tile.isDir
         thumbnailSource: visible ? tile.thumbnailSource : ""
         mimeType: tile.mimeType
-        highlighted: tile.isDir
     }
     AppIcon {
         objectName: "placeGlyph"

@@ -67,8 +67,8 @@ pub struct Row {
     pub tiles: Vec<RecentTile>,
 }
 
-/// Newest recents a Browse row carries: Browse shows the first three, its cover all.
-pub const ROW_TILES: usize = 9;
+/// Newest recents a Browse row carries: Browse shows the first three, its cover up to four rows.
+pub const ROW_TILES: usize = 12;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 #[serde(rename_all = "camelCase")]

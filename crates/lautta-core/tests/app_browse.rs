@@ -263,13 +263,13 @@ async fn the_newest_recents_lead_browse_as_tiles() {
     let ids: std::collections::BTreeSet<i64> = tiles.iter().map(|t| t.id).collect();
     assert_eq!(ids.len(), 4);
 
-    for i in 0..8 {
+    for i in 0..9 {
         record(core, &format!("more{i}.txt"), RecentKind::Opened, 10 + i);
     }
     let tiles = strip(&core.browse_rows().await);
-    assert_eq!(tiles.len(), 9, "nine at most");
-    assert_eq!(tiles[0].name, "more7.txt");
-    assert_eq!(tiles[8].name, "c.ogg");
+    assert_eq!(tiles.len(), 12, "twelve at most");
+    assert_eq!(tiles[0].name, "more8.txt");
+    assert_eq!(tiles[11].name, "b.pdf");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

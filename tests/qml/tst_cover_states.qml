@@ -197,6 +197,8 @@ ApplicationWindow {
         expect(texts(frame, "storageName") === "lautta-cover-phone|SD card",
                "phone and the first mounted volume have a line each: " + texts(frame, "storageName"))
         expect(texts(frame, "storageFree") === "lautta-cover-free|lautta-cover-free", "each tells its free space: " + texts(frame, "storageFree"))
+        expect(named(frame, "storageFree").map(function (x) { return x.amount }).join("|") === "39 GB|30 GB",
+               "in whole numbers while there is plenty: " + named(frame, "storageFree").map(function (x) { return x.amount }).join("|"))
         var lines = named(frame, "storageLine")
         var used = named(frame, "storageUsed")
         var width = frame.width - 2 * Theme.paddingMedium
@@ -260,6 +262,8 @@ ApplicationWindow {
         expect(tiles.every(function (t) { return t.placeIcon === "" }) && named(frame, "placeGlyph").length === 0
                && named(frame, "fileGlyph").length >= 9,
                "a folder's tiles draw file glyphs, none a place's")
+        expect(named(frame, "fileGlyph").every(function (g) { return !g.highlighted }),
+               "folders in the same plain colour as files")
         var header = named(frame, "coverHeader")[0]
         expect(Math.round(tiles[0].mapToItem(frame, 0, 0).y) === Math.round(header.mapToItem(frame, 0, header.height).y + Theme.paddingSmall),
                "tiles start under the header")
