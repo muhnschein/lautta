@@ -170,7 +170,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-55 Scan adjust (crop, turn) | FL-23 |
 | SCR-56 Scan save | FL-23 |
 | SCR-57 Scan saving | FL-23 |
-| SCR-58 Cover (folder / tasks) | FL-34 |
+| SCR-58 Cover (page / tasks) | FL-34 |
 | SCR-59 Notifications | FL-28, FL-34, FL-35 |
 | SCR-60 Nearby setup | FL-36 |
 | SCR-61 Checksums | FL-38 |
