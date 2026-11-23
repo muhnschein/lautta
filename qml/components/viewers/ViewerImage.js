@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Image viewer's photo request. ViewerPrefetch asks the same, so Qt's pixmap cache hands its
-// decode to the viewer: keep both in step.
+// Image viewer's photo request. ViewerPrefetch and Image details' preview ask the same, so Qt's
+// pixmap cache shares one decode: keep all three in step.
 .pragma library
 
 function source(uri) {

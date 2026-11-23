@@ -22,14 +22,16 @@ Page {
 
     Image {
         id: preview
+        objectName: "detailsPreview"
         anchors { top: parent.top; left: parent.left; right: parent.right }
         height: Math.min(parent.height * 0.35, Theme.itemSizeHuge * 2)
         source: page.imageSource
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
+        // Viewer photo's request (ViewerImage.js): its decode comes from Qt's pixmap cache.
         autoTransform: true
-        sourceSize.width: page.width
-        sourceSize.height: page.width
+        sourceSize.width: Screen.width
+        sourceSize.height: Screen.height
 
         Rectangle {
             anchors.fill: parent
