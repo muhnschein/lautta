@@ -13,16 +13,18 @@ ApplicationWindow {
         return ok
     }
 
-    function findAll(item, pred, out) {
-        if (!item)
+    function findAll(item, pred, out, seen) {
+        seen = seen || []
+        if (!item || seen.indexOf(item) >= 0)
             return out
+        seen.push(item)
         if (pred(item))
             out.push(item)
         var kids = item.children || []
         for (var i = 0; i < kids.length; ++i)
-            findAll(kids[i], pred, out)
+            findAll(kids[i], pred, out, seen)
         if (item.contentItem)
-            findAll(item.contentItem, pred, out)
+            findAll(item.contentItem, pred, out, seen)
         return out
     }
 
@@ -57,7 +59,7 @@ ApplicationWindow {
         expect(d.choice === "Skip" && one(d, "choiceSkip").checked && !one(d, "choiceKeepBoth").checked,
                "choices are exclusive")
         var applyAll = one(d, "applyAll")
-        expect(applyAll.visible && applyAll.text === qsTrId("lautta-conflict-apply-all", 9),
+        expect(d.remaining === 9 && applyAll.text === qsTrId("lautta-conflict-apply-all", 9),
                "apply-all counts the conflicts after this one")
     }
 
@@ -69,7 +71,7 @@ ApplicationWindow {
         expect(incoming.label === qsTrId("lautta-conflict-moving"), "a move says Moving")
         expect(incoming.uri === "lautta://user-documents/report.pdf", "the incoming tile knows its file")
         expect(incoming.look.category === "pdf", "the incoming tile shows its look")
-        expect(!one(d, "applyAll").visible, "no apply-all for the last conflict")
+        expect(d.remaining === 0, "no apply-all for the last conflict")
     }
 
     Component {

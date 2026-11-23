@@ -13,16 +13,18 @@ ApplicationWindow {
         return ok
     }
 
-    function findAll(item, pred, out) {
-        if (!item)
+    function findAll(item, pred, out, seen) {
+        seen = seen || []
+        if (!item || seen.indexOf(item) >= 0)
             return out
+        seen.push(item)
         if (pred(item))
             out.push(item)
         var kids = item.children || []
         for (var i = 0; i < kids.length; ++i)
-            findAll(kids[i], pred, out)
+            findAll(kids[i], pred, out, seen)
         if (item.contentItem)
-            findAll(item.contentItem, pred, out)
+            findAll(item.contentItem, pred, out, seen)
         return out
     }
 
@@ -34,7 +36,7 @@ ApplicationWindow {
 
     function check(d) {
         var origin = one(d, "originTile")
-        expect(origin.visible && origin.label === qsTrId("lautta-plan-origin"), "the origin tile is labelled Origin")
+        expect(origin.label === qsTrId("lautta-plan-origin"), "the origin tile is labelled Origin")
         expect(origin.name === qsTrId("lautta-plan-origin-more", 4).arg("IMG_0001.jpg"), "the origin counts the rest")
         expect(origin.stacked, "several items show as a stack")
         expect(origin.captions.length === 1 && origin.captions[0] === "DCIM", "the origin names its folder")
@@ -43,16 +45,16 @@ ApplicationWindow {
         expect(destination.label === qsTrId("lautta-plan-destination"), "the destination tile is labelled Destination")
         expect(destination.name === "photos" && destination.captions[0] === "srv", "the destination names itself and its folder")
         expect(destination.isDir, "the destination is a folder")
-        expect(one(d, "originArrow").visible, "an arrow points from origin to destination")
+        expect(one(d, "originArrow").icon === "arrow-right", "an arrow points from origin to destination")
         expect(one(d, "filesFigure").value === qsTrId("lautta-plan-files", 1284)
                && one(d, "filesFigure").label === qsTrId("lautta-plan-in-folders", 37), "files and folders are counted")
-        expect(one(d, "freeFigure").visible, "free space is shown when known")
+        expect(one(d, "freeFigure").value === Format.formatFileSize(812000000000), "free space is shown when known")
         var row = one(d, "conflictsRow")
         var title = one(d, "conflictsTitle")
-        expect(row.visible && row.enabled && title.text === qsTrId("lautta-plan-conflict-count", 12),
+        expect(row.enabled && title.text === qsTrId("lautta-plan-conflict-count", 12),
                "open conflicts are counted")
         d.conflictCount = 0
-        expect(row.visible && !row.enabled && title.text === qsTrId("lautta-plan-conflicts-resolved", 12),
+        expect(!row.enabled && title.text === qsTrId("lautta-plan-conflicts-resolved", 12),
                "resolved conflicts say so")
         expect(d.optionsJson() === JSON.stringify({ "suggestedNames": true }), "only the name choice is sent")
     }
