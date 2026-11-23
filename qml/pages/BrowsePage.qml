@@ -116,10 +116,6 @@ Page {
         remorseRow(item, qsTrId("lautta-browse-removing-favourite"), function() { favourites.remove(id) })
     }
 
-    function copyAddress(text) {
-        Clipboard.text = text
-    }
-
     LocationsModel {
         id: locations
     }
@@ -396,12 +392,6 @@ Page {
                         //% "Add to favourites"
                         text: qsTrId("lautta-browse-add-favourite")
                         onClicked: page.openFavourite(model.uri)
-                    }
-                    MenuItem {
-                        visible: !row.notMounted
-                        //% "Copy address"
-                        text: qsTrId("lautta-browse-copy-address")
-                        onClicked: page.copyAddress(App.displayAddress(model.uri))
                     }
                     MenuItem {
                         visible: row.kind === "volume" && !row.notMounted && row.drive.length > 0

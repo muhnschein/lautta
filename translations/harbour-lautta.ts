@@ -1455,10 +1455,6 @@
         <source>Add to favourites</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-browse-copy-address">
-        <source>Copy address</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-browse-open-storage-settings">
         <source>Open Storage settings</source>
         <translation type="unfinished"></translation>
@@ -1675,27 +1671,6 @@
     <message id="lautta-dir-transfer-waiting">
         <source>Waiting in Activity</source>
         <oldsource>Waiting in Transfers</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-path-copy-address">
-        <source>Copy address</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-path-edit">
-        <source>Edit path</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-path-favourite">
-        <source>Add to favourites</source>
-        <oldsource>Favourite</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-path-label">
-        <source>Path</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-path-from-cache">
-        <source>Folder · from cache</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-picker-new-folder">

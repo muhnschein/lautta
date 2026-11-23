@@ -235,16 +235,25 @@ ApplicationWindow {
         waitFor(function () { return !host.pullDownMenu.active && host.contentY === 0 }, label + ": the pulley to close")
     }
 
-    function checkPathMenu(view, label) {
-        var menu = named(view, "folderPathMenu")
-        var header = named(view, "folderHeader")
-        if (!menu || !header)
+    function checkCrumbs(view, label) {
+        var bar = named(view, "folderPageHeader")
+        var crumbs = named(view, "folderCrumbs")
+        var home = named(view, "crumbHome")
+        if (!bar || !crumbs || !home)
             return
-        expect(menu.y > 0 && menu.y <= header.height, label + ": the path menu sits in the header: " + menu.y)
-        expect(Math.abs(menu.maxHeight - (view.height - menu.y - Theme.itemSizeLarge)) < 0.5 && menu.maxHeight > 0,
-               label + ": the open menu leaves a strip of the page: " + menu.maxHeight + " of " + view.height + " from " + menu.y)
-        var scrollers = findAll(menu, function (x) { return x.objectName === "pathMenuScroller" }, [])
-        expect(scrollers.length === 1 && scrollers[0].anchors.fill === menu, label + ": the menu scrolls inside its cap")
+        expect(crumbs.visible, label + ": the path shows beside the folder's name")
+        expect(bar.leftMargin === Theme.horizontalPageMargin + crumbs.reserve && crumbs.reserve > 0,
+               label + ": the name leaves room for the way home: " + bar.leftMargin + " vs " + crumbs.reserve)
+        var left = home.mapToItem(bar, 0, 0).x
+        expect(left >= Theme.horizontalPageMargin - 0.5, label + ": the path starts inside the page margin: " + left)
+        expect(home.height === bar.height, label + ": a crumb is as tall as the header: " + home.height + " vs " + bar.height)
+        expect(crumbs.menuMost === Math.floor((view.height - bar.height) / Theme.itemSizeSmall) && crumbs.menuMost > 0,
+               label + ": folded folders fill at most the page below the header: " + crumbs.menuMost)
+        view.startSelection()
+        expect(!crumbs.visible && bar.leftMargin === Theme.horizontalPageMargin,
+               label + ": selecting hides the path and gives the count the whole header: " + bar.leftMargin)
+        view.endSelection()
+        expect(crumbs.visible, label + ": the path comes back")
     }
 
     function checkLayout(page, label) {
@@ -255,7 +264,7 @@ ApplicationWindow {
         checkSelectionHeight(view, label)
         checkPulley(view, label)
         checkGestures(view, label)
-        checkPathMenu(view, label)
+        checkCrumbs(view, label)
     }
 
     function checkOrientations(mode) {

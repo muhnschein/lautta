@@ -11,7 +11,7 @@ Silica idioms to use instead:
 - PageHeader: right-aligned, light weight, highlight colour; description below it.
 - Back navigation = swipe right; shown only by the page-stack indicator (top-left
   small dots `.ind-back`). Attached page (swipe left) = `.ind-fwd` top-right.
-- Actions = PulleyMenu (top, pull down) only. NO PushUpMenu anywhere (hard to discover); folder-level actions (Copy address, Edit path, Favourite) live in the header path menu. Closed state shows
+- Actions = PulleyMenu (top, pull down) only. NO PushUpMenu anywhere (hard to discover); folder-level actions live in the folder pulley; folder header carries path crumbs (house, folders above, "…" for what doesn't fit). Closed state shows
   only the thin glowing `.pull-ind` line at the top edge (`.push-ind` at bottom).
   Open state: menu items centred, primary colour, the item under the finger in
   highlight colour, highlight-tinted gradient backdrop; page content pushed down.
@@ -119,6 +119,11 @@ body{margin:0}
 .hdr{min-height:80px;padding:14px 18px 6px 60px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;text-align:right}
 .hdr-t{font-size:28px;font-weight:300;color:var(--hl);line-height:1.15}
 .hdr-d{font-size:15px;color:var(--hl2);margin-top:2px}
+.crh{min-height:80px;padding:0 18px 0 10px;display:flex;align-items:center;justify-content:flex-end;white-space:nowrap;overflow:hidden}
+.crh .cr{flex:none;display:flex;align-items:center;align-self:stretch;padding:0 6px;color:var(--pri);font-size:19px}
+.crh .cr.down{background:var(--hlbg);color:var(--hl)}
+.crh .sp{flex:none;color:var(--sec);font-size:17px}
+.crh .hdr-t{margin-left:6px;min-width:0;overflow:hidden;text-overflow:ellipsis}
 /* dialog header */
 .dlg{height:80px;padding:0 18px;display:flex;align-items:center;justify-content:space-between}
 .dlg-c{font-size:19px;color:var(--pri)}

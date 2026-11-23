@@ -2,6 +2,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "ContextActions.js" as ContextActions
 
 PullDownMenu {
     id: menu
@@ -51,6 +52,12 @@ PullDownMenu {
         //% "Select"
         text: qsTrId("lautta-dir-menu-select")
         onClicked: menu.owner.startSelection()
+    }
+    MenuItem {
+        objectName: "folderMenuFavourite"
+        visible: !menu.selecting
+        text: ContextActions.text("favourite")
+        onClicked: menu.owner.runAction("favourite", [menu.owner.uri], {}, null)
     }
     MenuItem {
         visible: !menu.selecting && menu.writable && App.clipboardCount > 0 && App.canPasteInto(owner ? owner.uri : "")

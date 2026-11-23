@@ -42,6 +42,11 @@ body{margin:0}
 .hdr{min-height:80px;padding:14px 18px 6px 60px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;text-align:right}
 .hdr-t{font-size:28px;font-weight:300;color:var(--hl);line-height:1.15}
 .hdr-d{font-size:15px;color:var(--hl2);margin-top:2px}
+.crh{min-height:80px;padding:0 18px 0 10px;display:flex;align-items:center;justify-content:flex-end;white-space:nowrap;overflow:hidden}
+.crh .cr{flex:none;display:flex;align-items:center;align-self:stretch;padding:0 6px;color:var(--pri);font-size:19px}
+.crh .cr.down{background:var(--hlbg);color:var(--hl)}
+.crh .sp{flex:none;color:var(--sec);font-size:17px}
+.crh .hdr-t{margin-left:6px;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .dlg{height:80px;padding:0 18px;display:flex;align-items:center;justify-content:space-between}
 .dlg-c{font-size:19px;color:var(--pri)}
 .dlg-a{font-size:28px;font-weight:300;color:var(--hl)}
@@ -117,7 +122,7 @@ body{margin:0}
 <div class="amb {{amb}}" style="width: 400px; height: 860px">
 <div class="pull-ind"></div>
 <div class="ind-back"><i></i><i></i></div>
-<a href="PathMenu.dc.html" style="display:block"><div class="hdr"><div class="hdr-t">DCIM</div><div class="hdr-d">Android › DCIM</div></div></a>
+<div class="crh"><a class="cr" href="Main.dc.html" aria-label="Home"><svg class="ic" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 9.5V21h14V9.5M10 21v-6h4v6"/></svg></a><span class="sp">›</span><a class="cr" href="Directory.dc.html">Android</a><span class="sp">›</span><div class="hdr-t">DCIM</div></div>
 <div class="banner"><span>Shown as grid because most items are photos</span><a class="act" href="Directory.dc.html">Use list</a></div>
 <div class="sh">October 2026</div>
 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:0 18px"><a href="ImageViewer.dc.html" style="display:block;position:relative;aspect-ratio:1;background:linear-gradient(135deg,#d98e5f,#7a4a6b)"></a><a href="ImageViewer.dc.html" style="display:block;position:relative;aspect-ratio:1;background:linear-gradient(135deg,#4f8fb0,#a8d4e6)"></a><a href="VideoPlayer.dc.html" style="display:block;position:relative;aspect-ratio:1;background:linear-gradient(135deg,#6b8f5a,#d1d98a)"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff"><svg class="ic m" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span><span style="position:absolute;right:5px;bottom:3px;font-size:12px;color:#fff;background:rgba(0,0,0,.45);padding:0 4px">0:42</span></a><a href="ImageViewer.dc.html" style="display:block;position:relative;aspect-ratio:1;background:linear-gradient(135deg,#2c3e56,#7f6fa8)"></a><a href="ImageViewer.dc.html" style="display:block;position:relative;aspect-ratio:1;background:linear-gradient(135deg,#c9a16a,#e8d9b0)"></a><a href="ImageViewer.dc.html" style="display:block;position:relative;aspect-ratio:1;background:linear-gradient(135deg,#5a6b73,#9fb2b8)"></a></div>
