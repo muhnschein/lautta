@@ -55,7 +55,8 @@ Item {
         }
     }
 
-    // Phone alone: icon and free space on one line, centred. More: two to a row, free space under icon.
+    // Phone alone: icon and free space on one line, centred, same gap below as above. More: two to a
+    // row, free space under icon.
     Item {
         id: cells
 
@@ -117,7 +118,7 @@ Item {
         objectName: "coverGrid"
         anchors {
             top: parent.top
-            topMargin: root.storage.length > 0 ? cells.y + cells.height + Theme.paddingMedium : 0
+            topMargin: root.storage.length > 0 ? cells.y + cells.height + (root.alone ? Theme.paddingLarge : Theme.paddingMedium) : 0
             left: parent.left
             right: parent.right
             bottom: parent.bottom

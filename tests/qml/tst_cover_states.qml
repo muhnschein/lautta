@@ -278,8 +278,8 @@ ApplicationWindow {
                "icon and free space side by side, centred on the cover: " + glyph.x + ", " + free.x + ", " + free.width + ", " + free.y)
         frame.width = 10 * Theme.paddingLarge
         var grid = named(frame, "coverGrid")[0]
-        expect(Math.round(grid.mapToItem(frame, 0, 0).y) === Math.round(Theme.paddingLarge + Theme.iconSizeSmall + Theme.paddingMedium),
-               "tiles a medium padding below that line: " + grid.mapToItem(frame, 0, 0).y)
+        expect(Math.round(grid.mapToItem(frame, 0, 0).y) === Math.round(Theme.paddingLarge + Theme.iconSizeSmall + Theme.paddingLarge),
+               "tiles as far below that line as it is from the top: " + grid.mapToItem(frame, 0, 0).y)
         var left = browse.listModel.get(5).free
         browse.listModel.setProperty(5, "free", -1)
         expect(named(frame, "storageCell").length === 0 && Math.round(grid.mapToItem(frame, 0, 0).y) === 0,
