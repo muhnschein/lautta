@@ -72,6 +72,9 @@ class Hash(unittest.TestCase):
         text = '#!/bin/sh\n# SPDX-License-Identifier: LGPL-2.1-or-later\necho "a # b" $# ${#x} # tail\n# full\n'
         self.assertEqual(found("a.sh", text), ["# tail", "# full"])
 
+    def test_escaped_quote_in_hash_string(self):
+        self.assertEqual(found("a.toml", 'a = "x\\" # no" # yes\n'), ["# yes"])
+
     def test_shell_escaped_quote(self):
         self.assertEqual(found("a.sh", "echo \\' # x\n"), ["# x"])
 
