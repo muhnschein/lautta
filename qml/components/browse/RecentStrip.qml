@@ -18,7 +18,7 @@ Item {
 
     signal touched(var tile)
     signal letGo()
-    signal opened(var tile)
+    signal opened(var tile, int tileSize)
     signal held(var tile)
     signal allOpened()
 
@@ -55,7 +55,7 @@ Item {
                 height: strip.cellHeight
                 onPressed: strip.touched(tile)
                 onCanceled: strip.letGo()
-                onClicked: strip.opened(tile)
+                onClicked: strip.opened(tile, tileIcon.thumbnailReady ? strip.tileSize : 0)
                 onPressAndHold: strip.held(tile)
 
                 Rectangle {

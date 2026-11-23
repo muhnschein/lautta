@@ -58,6 +58,8 @@ pub struct Row {
 
 pub const ROW_TILES: usize = 12;
 
+pub const STRIP_MIN_TILES: usize = 3;
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecentTile {
@@ -399,7 +401,7 @@ impl Core {
             return Vec::new();
         }
         let tiles = self.recent_tiles(ROW_TILES, settings).unwrap_or_default();
-        if tiles.is_empty() {
+        if tiles.len() < STRIP_MIN_TILES {
             return Vec::new();
         }
         let mut row = Row::new("recents", "recent-strip");

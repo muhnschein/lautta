@@ -90,11 +90,11 @@ Page {
         pageStack.push(Qt.resolvedUrl("RecentsPage.qml"))
     }
 
-    function openRecent(tile) {
+    function openRecent(tile, tileSize) {
         if (tile.kind === "transferred")
             openDirectory(App.parentUri(tile.uri))
         else
-            Open.open(pageStack, App, Operations, tile.uri, false, "", "")
+            Open.open(pageStack, App, Operations, tile.uri, false, "", "", tileSize)
     }
 
     function openFavourite(uri) {
@@ -238,7 +238,7 @@ Page {
                         heldId: row.menuOpen ? row.heldId : -1
                         onTouched: if (tile.kind !== "transferred") prefetch.start(tile.uri, tile.mimeType)
                         onLetGo: prefetch.stop()
-                        onOpened: page.openRecent(tile)
+                        onOpened: page.openRecent(tile, tileSize)
                         onHeld: {
                             prefetch.stop()
                             row.heldId = tile.id
