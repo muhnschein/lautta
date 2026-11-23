@@ -11,6 +11,7 @@ pub mod app;
 pub mod browse;
 pub mod checksum;
 pub mod directory;
+pub mod icons;
 pub mod json;
 pub mod operations;
 pub mod runtime;

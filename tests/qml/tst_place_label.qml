@@ -87,7 +87,7 @@ ApplicationWindow {
 
     function check() {
         var r = partsOf(remoteLine)
-        expect(remoteLine.iconShown && /\/icons\/server\.svg$/.test(String(r.icon.source))
+        expect(remoteLine.iconShown && /\/icons\/server\.svg\?stroke=/.test(String(r.icon.source))
                && r.icon.status === Image.Ready,
                "a server's place has the server icon")
         expect(r.icon.x + r.icon.width <= r.name.x && r.icon.x === 0, "the icon stands right before the name")

@@ -55,7 +55,25 @@ Item {
              ["file-document-28", "file-folder-32", "file-archive-28"], "the glyph of an item at a size")
     }
 
+    Image {
+        id: drawn
+    }
+
+    function testSource() {
+        var want = String(Qt.resolvedUrl("../../../qml/icons/server.svg")).replace(/^file:\/\//, "")
+        same(FileIcons.source("server", 1.5), "image://lautta-icon" + want + "?stroke=3",
+             "an app icon comes from the icon provider, outlines 2 units at the pixel ratio")
+        same(FileIcons.source("file-folder-28", 1.75).slice(-11), "?stroke=3.5", "pixel ratio 1.75: 3.5 px")
+        same(FileIcons.source("image://theme/icon-m-favorite", 1.5), "image://theme/icon-m-favorite", "a theme icon stays")
+        same(FileIcons.source("", 1.5), "", "no icon stays none")
+        drawn.sourceSize = Qt.size(168, 168)
+        drawn.source = FileIcons.source("file-folder-28", 1.5)
+        check(drawn.status === Image.Ready && drawn.implicitWidth === 168,
+              "the provider draws the glyph at its size: status " + drawn.status + ", " + drawn.implicitWidth + " px")
+    }
+
     Component.onCompleted: {
+        testSource()
         testSets()
         testSnap()
         testKinds()
