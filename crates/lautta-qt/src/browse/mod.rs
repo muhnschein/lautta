@@ -7,6 +7,7 @@ mod folderinfo;
 mod layout;
 mod locations;
 mod recents;
+mod textthumb;
 
 use crate::runtime::handle;
 use cpp::cpp;
@@ -174,6 +175,7 @@ pub fn register() {
     );
     qmetaobject::qml_register_type::<recents::RecentsModel>(&uri, 1, 0, &crate::cstr("RecentsModel"));
     qmetaobject::qml_register_type::<folderinfo::FolderInfo>(&uri, 1, 0, &crate::cstr("FolderInfo"));
+    qmetaobject::qml_register_type::<textthumb::TextThumb>(&uri, 1, 0, &crate::cstr("TextThumb"));
     qmetaobject::qml_register_type::<layout::BrowseLayoutModel>(
         &uri,
         1,

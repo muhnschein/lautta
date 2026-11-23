@@ -80,12 +80,66 @@ Item {
              "an item of no height (the Repeater) changes nothing")
     }
 
+    function testSectionRows() {
+        same(GridRows.sectionRows(["today", "today", "today", "today", "yesterday", "older", "older"], 3),
+             [{ "section": "today", "first": 0, "count": 3 }, { "section": "today", "first": 3, "count": 1 },
+              { "section": "yesterday", "first": 4, "count": 1 }, { "section": "older", "first": 5, "count": 2 }],
+             "a section starts its own row, a full row goes on in the next")
+        same(GridRows.sectionRows(["today", "today", "today", "today", "yesterday"], 5),
+             [{ "section": "today", "first": 0, "count": 4 }, { "section": "yesterday", "first": 4, "count": 1 }],
+             "in landscape")
+        same(GridRows.sectionRows([], 3), [], "nothing, no rows")
+        same(GridRows.sectionRows(["today"], 0), [], "no columns, no rows")
+    }
+
+    ListModel {
+        id: fitted
+
+        property int changed
+        property int inserted
+        property int removed
+        property int reset
+
+        onDataChanged: changed++
+        onRowsInserted: inserted++
+        onRowsRemoved: removed++
+        onModelReset: reset++
+    }
+
+    function rowsOf(model) {
+        var out = []
+        for (var i = 0; i < model.count; ++i) {
+            var r = model.get(i)
+            out.push({ "section": r.section, "first": r.first, "count": r.count })
+        }
+        return out
+    }
+
+    function testFitRows() {
+        var three = GridRows.sectionRows(["today", "today", "today", "today", "older"], 3)
+        GridRows.fitRows(fitted, three)
+        same(rowsOf(fitted), three, "rows come")
+        fitted.changed = fitted.inserted = fitted.removed = fitted.reset = 0
+        GridRows.fitRows(fitted, three)
+        same([fitted.changed, fitted.inserted, fitted.removed, fitted.reset], [0, 0, 0, 0], "same rows: nothing moves")
+        var after = GridRows.sectionRows(["today", "today", "today", "older"], 3)
+        GridRows.fitRows(fitted, after)
+        same(rowsOf(fitted), after, "an item gone")
+        same([fitted.changed, fitted.inserted, fitted.removed, fitted.reset], [1, 0, 1, 0],
+             "second row changes, last goes, first stays: view keeps its place")
+        GridRows.fitRows(fitted, three)
+        same(rowsOf(fitted), three, "and back")
+        same(fitted.inserted, 1, "a row comes at the end")
+    }
+
     Component.onCompleted: {
         testColumns()
         testRows()
         testIndexAt()
         testRegroup()
         testTallest()
+        testSectionRows()
+        testFitRows()
         reachedEnd = true
     }
 }
