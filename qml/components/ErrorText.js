@@ -25,9 +25,9 @@ function message(kind, context) {
                      qsTrId("lautta-err-auth-failed-unnamed"))
     case "ServerIdentityChanged":
         return _pick(loc,
-                     //% "%1 is presenting a different identity than before. This can mean it was reinstalled — or that someone is intercepting the connection."
+                     //% "%1 is not presenting the identity saved for it. If you didn't reinstall or change this server, someone may be intercepting the connection."
                      qsTrId("lautta-err-identity-changed"),
-                     //% "The server is presenting a different identity than before. This can mean it was reinstalled — or that someone is intercepting the connection."
+                     //% "The server is not presenting the identity saved for it. If you didn't reinstall or change it, someone may be intercepting the connection."
                      qsTrId("lautta-err-identity-changed-unnamed"))
     case "ServerIdentityUnknown":
         return _pick(loc,

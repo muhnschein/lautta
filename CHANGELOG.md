@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A server whose identity changed now shows a clear security warning: red, with a warning icon, what the risk is, *Review identity* and *Go back*. A failed sign-in shows as a warning in the same style with *Update sign-in*. Both look the same whether you tap the server on Home or open one of its folders ([#118](https://github.com/muhnschein/lautta/issues/118), [#119](https://github.com/muhnschein/lautta/issues/119)).
 - Photos open faster in the image viewer, big ones most: the picture starts loading as your finger touches it, loads at screen size and first, and shows the camera's preview while it loads, or the folder's thumbnail when the photo has none. Pictures you swiped past come back at once ([#41](https://github.com/muhnschein/lautta/issues/41)).
 - PDF thumbnails of files on this device show the top of the first page, not its middle.
 - New items scroll into view and light up briefly: folders you make (also in the folder picker), pasted or moved items, files you compress, extracted files, scans and renamed items; in grid view the name and details light up too ([#113](https://github.com/muhnschein/lautta/issues/113)).
