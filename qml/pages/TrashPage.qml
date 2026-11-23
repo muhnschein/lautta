@@ -11,6 +11,10 @@ Page {
 
     readonly property int retentionDays: App.setting("recently_deleted_retention_days") || 30
     readonly property int remorseMs: (App.setting("remorse_seconds") || 5) * 1000
+    readonly property string coverKind: "grid"
+    //% "Trash"
+    readonly property string coverTitle: qsTrId("lautta-trash-title")
+    readonly property var coverModel: trash
 
     allowedOrientations: Orientation.All
 

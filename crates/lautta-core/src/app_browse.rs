@@ -68,8 +68,8 @@ pub struct Row {
     pub tiles: Vec<RecentTile>,
 }
 
-/// Newest recents shown as tiles on Browse.
-pub const STRIP_TILES: usize = 3;
+/// Newest recents a Browse row carries: Browse shows the first three, its cover up to four rows.
+pub const ROW_TILES: usize = 12;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -290,11 +290,6 @@ impl Core {
         }
     }
 
-    pub fn cached_folder_count(&self, uri: &Uri) -> Option<usize> {
-        let hit = self.dircache.get(uri).ok()??;
-        Some(hit.entries.iter().filter(|e| !e.is_hidden()).count())
-    }
-
     pub async fn volume_info(&self, uri: &Uri) -> Result<VolumeInfo> {
         let provider = self.provider(&uri.location)?;
         let space = provider.space(&VPath::root()).await?;
@@ -430,7 +425,7 @@ impl Core {
         if !settings.recents_enabled {
             return Vec::new();
         }
-        let tiles = self.recent_tiles(STRIP_TILES, settings).unwrap_or_default();
+        let tiles = self.recent_tiles(ROW_TILES, settings).unwrap_or_default();
         if tiles.is_empty() {
             return Vec::new();
         }
@@ -468,6 +463,18 @@ impl Core {
             return RecentLook::default();
         }
         self.recent_look(uri, settings.thumbnails_local, &ThumbSettings::new(settings))
+    }
+
+    /// File at `uri` as folders show it: category, type, thumbnail. `id` 0, `kind` empty.
+    pub fn file_tile(&self, uri: &Uri, settings: &Settings) -> RecentTile {
+        let entry = Entry::new(uri.name().unwrap_or_default(), Kind::File);
+        RecentTile {
+            look: self.recent_look(uri, settings.thumbnails_local, &ThumbSettings::new(settings)),
+            id: 0,
+            uri: uri.to_string(),
+            name: display_name(&entry.name),
+            kind: "",
+        }
     }
 
     /// `shown`: *Show thumbnails*.

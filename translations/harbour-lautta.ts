@@ -1307,13 +1307,6 @@
         <source>Update sign-in</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-cover-items" numerus="yes">
-        <source>%n items</source>
-        <translation>
-            <numerusform>%n item</numerusform>
-            <numerusform>%n items</numerusform>
-        </translation>
-    </message>
     <message id="lautta-favourite-edit-title">
         <source>Edit favourite</source>
         <translation type="unfinished"></translation>
@@ -2659,6 +2652,10 @@
             <numerusform>You chose for it</numerusform>
             <numerusform>You chose for all %n</numerusform>
         </translation>
+    </message>
+    <message id="lautta-cover-free">
+        <source>%1 free</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>

@@ -13,6 +13,8 @@ Page {
     id: page
 
     property string uri
+    readonly property string coverKind: "file"
+    readonly property string coverUri: uri
     // Multiple of fitted width; pages re-rendered at `renderZoom` once pinch settles.
     property real zoom: 1
     property real renderZoom: 1

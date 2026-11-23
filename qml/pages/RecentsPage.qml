@@ -15,6 +15,10 @@ Page {
 
     property var listModel: recents
     readonly property bool recentsOn: JSON.parse(App.settingsJson).recents_enabled !== false
+    readonly property string coverKind: "grid"
+    //% "Recents"
+    readonly property string coverTitle: qsTrId("lautta-recents-title")
+    readonly property var coverModel: listModel
     // View options' View, as folders without their own.
     readonly property bool gridMode: JSON.parse(App.settingsJson).view_mode === "grid"
     readonly property real tileWidth: Math.min(Screen.width, Screen.height) / gridMetrics.portraitColumns
