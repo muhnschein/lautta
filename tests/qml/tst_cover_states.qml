@@ -229,9 +229,9 @@ ApplicationWindow {
         var tiles = named(frame, "coverTile")
         if (!expect(grid !== undefined && tiles.length === 5, "the newest recents are tiles: " + tiles.length))
             return
-        expect(Math.round(grid.mapToItem(frame, 0, 0).y) === Math.round(margin + 2 * high + Theme.paddingSmall + Theme.paddingMedium)
+        expect(Math.round(grid.mapToItem(frame, 0, 0).y) === Math.round(margin + 2 * high + Theme.paddingSmall + Theme.paddingLarge)
                && Math.round(storage.y + storage.height) === Math.round(margin + 2 * high + Theme.paddingSmall),
-               "tiles start a medium padding below the cells: " + grid.mapToItem(frame, 0, 0).y)
+               "tiles as far below the cells as those are from the top: " + grid.mapToItem(frame, 0, 0).y)
         var side = Math.floor((frame.width - 2 * Theme.paddingSmall) / 3)
         expect(tiles.every(function (t) { return t.width === side && t.height === side }) && side > 0,
                "three tiles fill the cover from edge to edge: " + tiles[0].width + ", not " + side)
