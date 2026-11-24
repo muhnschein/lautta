@@ -50,26 +50,23 @@ Item {
 
             clip: thumbnail.page
 
-            // Nemo's crop keeps the middle. A page shows from its top: asked whole, as wide as the
-            // icon (pages up to twice as tall as wide), cut here; a shorter page sits in the middle.
-            // Nemo tells implicit size 0 to an item joining a thumbnail it has drawn before: size
-            // kept in FileIcons.
             Thumbnail {
                 id: thumbnail
 
                 readonly property bool page: icon.mimeType === "application/pdf"
                 readonly property string pageKey: source + " " + sourceSize.width + "x" + sourceSize.height
                 property var pageSize: ({ "width": 0, "height": 0 })
+                readonly property real pageZoom: pageSize.height > 0
+                                                 ? Math.max(parent.width / pageSize.width, parent.height / pageSize.height)
+                                                 : 0
 
                 function measure() {
                     if (page)
                         pageSize = FileIcons.pageSize(pageKey, implicitWidth, implicitHeight)
                 }
 
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: page ? Math.max(0, (parent.height - height) / 2) : 0
-                width: page ? pageSize.width : parent.width
-                height: page ? pageSize.height : parent.height
+                width: page ? pageSize.width * pageZoom : parent.width
+                height: page ? pageSize.height * pageZoom : parent.height
                 Component.onCompleted: measure()
                 onStatusChanged: measure()
                 onImplicitWidthChanged: measure()

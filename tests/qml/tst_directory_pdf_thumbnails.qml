@@ -109,41 +109,55 @@ ApplicationWindow {
                    "a photo stays cropped to the tile: " + system.sourceSize + " " + system.height)
     }
 
-    // No page drawn here: sizes stand in for what Nemo returns.
+    function near(a, b) {
+        return Math.abs(a - b) < 1
+    }
+
+    function framed(system, x, y, width, height) {
+        return system.x === x && system.y === y && near(system.width, width) && near(system.height, height)
+    }
+
     function checkPageFrame(icon, system) {
         var w = Math.round(icon.width)
         var frame = system.parent
         system.implicitWidth = w
         system.implicitHeight = Math.round(w * 842 / 595)
-        expect(frame.clip && Math.abs(frame.height - icon.height) < 1, "the tile cuts the page: " + frame.height)
-        expect(system.y === 0 && system.height === system.implicitHeight && system.width === w,
-               "a portrait page shows from its top, unscaled: " + system.y + " " + system.width + "x" + system.height)
+        expect(frame.clip && near(frame.width, icon.width) && near(frame.height, icon.height),
+               "the tile cuts the page: " + frame.width + "x" + frame.height)
+        expect(framed(system, 0, 0, w, system.implicitHeight),
+               "a portrait page shows from its top, unscaled: " + system.x + "," + system.y + " " + system.width + "x" + system.height)
         system.implicitHeight = Math.round(w / 2)
-        expect(Math.abs(system.y - (frame.height - system.height) / 2) < 1 && system.y > 0,
-               "a landscape page sits whole in the middle: " + system.y)
+        expect(framed(system, 0, 0, 2 * w, w),
+               "a landscape page shows from its left, as tall as the tile: " + system.x + "," + system.y + " " + system.width + "x" + system.height)
         system.implicitWidth = Math.round(w / 2)
         system.implicitHeight = 2 * w
-        expect(system.y === 0 && Math.abs(system.x + system.width / 2 - frame.width / 2) < 1 && system.x > 0,
-               "a page over twice as tall as wide, narrower than the tile, is centred across: " + system.x)
-        // Nemo tells no size to an item joining a thumbnail it has drawn before.
+        expect(framed(system, 0, 0, w, 4 * w),
+               "a page over twice as tall as wide shows from its top, as wide as the tile: " + system.x + "," + system.y + " " + system.width + "x" + system.height)
         system.implicitWidth = 0
         system.implicitHeight = 0
-        expect(system.width === Math.round(w / 2) && system.height === 2 * w,
+        expect(framed(system, 0, 0, w, 4 * w),
                "a page told no size keeps the size seen: " + system.width + "x" + system.height)
         var twin = twinIcon.createObject(window.contentItem, { "width": icon.width, "height": icon.height, "size": icon.size,
                                                                "category": "pdf", "mimeType": "application/pdf",
                                                                "thumbnailSource": icon.thumbnailSource })
         var joined = systemThumbnailOf(twin)
-        if (expect(joined && joined !== system, "a second icon of the file asks the system thumbnailer too"))
-            expect(joined.implicitWidth === 0 && joined.width === Math.round(w / 2) && joined.height === 2 * w,
+        expect(joined && joined !== system, "a second icon of the file asks the system thumbnailer too")
+        if (joined && joined !== system) {
+            expect(joined.implicitWidth === 0 && framed(joined, 0, 0, w, 4 * w),
                    "and shows the page at the size the first saw: " + joined.width + "x" + joined.height)
+            twin.width = icon.width + 3
+            twin.height = icon.height + 3
+            joined.implicitWidth = 1
+            expect(joined.width === 0 && joined.height === 0,
+                   "resized, it drops the size seen at the old size: " + joined.width + "x" + joined.height)
+        }
         twin.destroy()
         var other = twinIcon.createObject(window.contentItem, { "width": icon.width + 8, "height": icon.height + 8, "size": icon.size + 8,
                                                                 "category": "pdf", "mimeType": "application/pdf",
                                                                 "thumbnailSource": icon.thumbnailSource })
         var fresh = systemThumbnailOf(other)
         if (expect(fresh, "an icon of another size asks the system thumbnailer"))
-            expect(fresh.width === 0, "and takes no size from the first: " + fresh.width)
+            expect(fresh.width === 0 && fresh.height === 0, "and takes no size from the first: " + fresh.width + "x" + fresh.height)
         other.destroy()
     }
 
