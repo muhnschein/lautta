@@ -92,6 +92,8 @@ async fn the_list_groups_questions_and_history() {
     let questions = h.core.question_list(id).unwrap();
     assert_eq!(questions.len(), 1);
     assert_eq!(questions[0]["name"], "a.txt");
+    assert_eq!(questions[0]["kind"], "copy");
+    assert_eq!(questions[0]["open"], 1);
     assert_eq!(questions[0]["src_size"], 11);
     assert_eq!(questions[0]["dst_size"], 3);
 
@@ -116,6 +118,57 @@ async fn the_list_groups_questions_and_history() {
     assert_eq!(h.core.clear_history(), 1);
     assert!(h.core.transfer_rows(&book).is_empty());
     assert_eq!(h.core.clear_history(), 0);
+}
+
+#[tokio::test]
+async fn questions_carry_what_the_conflict_screen_shows() {
+    let h = home().await;
+    write(&h.root.join("Documents/a.txt"), b"new");
+    write(&h.root.join("Documents/b.jpg"), b"new");
+    write(&h.root.join("Downloads/a.txt"), b"old");
+    write(&h.root.join("Downloads/b.jpg"), b"old");
+    let Started::Transfer(id) = h
+        .core
+        .copy_or_move(
+            OperationKind::Move,
+            vec![
+                uri("lautta://user-documents/a.txt"),
+                uri("lautta://user-documents/b.jpg"),
+            ],
+            uri("lautta://user-downloads/"),
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("small moves start at once")
+    };
+    let core = h.core.clone();
+    h.core
+        .engine
+        .wait_for(id, move |_| core.engine.questions(id).is_ok_and(|q| q.len() == 2))
+        .await
+        .unwrap();
+
+    let questions = h.core.question_list(id).unwrap();
+    let image = questions
+        .iter()
+        .find(|q| q["name"] == "b.jpg")
+        .expect("b.jpg is asked about");
+    assert_eq!(image["kind"], "move");
+    assert_eq!(image["open"], 2);
+    assert_eq!(image["source"], "lautta://user-documents/b.jpg");
+    assert_eq!(image["destination"], "lautta://user-downloads/b.jpg");
+    assert_eq!(image["source_look"]["category"], "image");
+    let src = image["source_look"]["thumbnailSource"].as_str().unwrap();
+    let dst = image["destination_look"]["thumbnailSource"].as_str().unwrap();
+    assert!(
+        src.starts_with("file://") && src.ends_with("/Documents/b.jpg"),
+        "{src}"
+    );
+    assert!(
+        dst.starts_with("file://") && dst.ends_with("/Downloads/b.jpg"),
+        "{dst}"
+    );
 }
 
 #[tokio::test]

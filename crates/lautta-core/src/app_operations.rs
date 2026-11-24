@@ -4,13 +4,15 @@
 
 use crate::app::{Core, Started};
 use crate::app_directory::file_url;
+use crate::app_home::RecentLook;
 use crate::compress::{compress, ArchiveKind, CompressOptions};
 use crate::entry::{cap, Entry, Kind};
 use crate::error::{Error, ErrorKind, Result};
+use crate::locations::LocationKind;
 use crate::mime;
 use crate::ops::conflict as conflict_ops;
 use crate::ops::names::{keep_both_dir_name, keep_both_name, split_extension};
-use crate::ops::{Conflict, ConflictChoice, OperationKind, Plan};
+use crate::ops::{Conflict, ConflictChoice, OperationKind, Plan, PlanItem};
 use crate::password::Password;
 use crate::provider::{list_all, Disposition, Lane, Provider, WriteOptions};
 use crate::settings::Settings;
@@ -183,11 +185,24 @@ pub struct PlanSummary {
     pub renamed: u64,
     pub destination: String,
     pub destination_name: String,
+    pub destination_folder: String,
+    pub origin: Option<Origin>,
     pub free_bytes: Option<u64>,
     pub renames: Vec<RenamePair>,
     /// Offered only when both sides keep POSIX modes.
     pub permissions_supported: bool,
     pub options: StartOptions,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Origin {
+    pub uri: String,
+    pub name: String,
+    pub folder: String,
+    pub more: u64,
+    pub is_dir: bool,
+    pub look: RecentLook,
 }
 
 pub fn kind_name(kind: OperationKind) -> &'static str {
@@ -238,6 +253,8 @@ pub struct ConflictEntry {
     pub source: String,
     pub destination: String,
     pub conflict: Conflict,
+    pub source_look: RecentLook,
+    pub destination_look: RecentLook,
     /// Never `Replace`.
     pub default_choice: ConflictChoice,
 }
@@ -367,6 +384,53 @@ impl Core {
             .map_or_else(|| self.display_path(uri), |p| self.display_path(&p))
     }
 
+    pub fn display_title(&self, uri: &Uri) -> String {
+        uri.name().map_or_else(
+            || {
+                self.location(&uri.location)
+                    .map_or_else(|| uri.location.clone(), |l| l.name)
+            },
+            display_name,
+        )
+    }
+
+    fn parent_title(&self, uri: &Uri) -> String {
+        uri.parent().map(|p| self.display_title(&p)).unwrap_or_default()
+    }
+
+    fn archive_file(&self, uri: &Uri) -> Option<Uri> {
+        let location = self.location(&uri.location)?;
+        if location.kind != LocationKind::Archive {
+            return None;
+        }
+        Uri::parse(location.url.as_deref()?).ok()
+    }
+
+    fn origin(&self, plan: &Plan, settings: &Settings) -> Option<Origin> {
+        let tops: Vec<&PlanItem> = plan
+            .items
+            .iter()
+            .filter(|it| it.dst.parent().as_ref() == Some(&plan.destination))
+            .collect();
+        let first = tops.first()?;
+        let archive = match plan.kind {
+            OperationKind::Extract => self.archive_file(&first.src),
+            _ => None,
+        };
+        let (uri, is_dir, more) = match archive {
+            Some(file) => (file, false, 0),
+            None => (first.src.clone(), first.kind == Kind::Dir, tops.len() as u64 - 1),
+        };
+        Some(Origin {
+            name: self.display_title(&uri),
+            folder: self.parent_title(&uri),
+            more,
+            is_dir,
+            look: self.item_look(&uri, is_dir, settings),
+            uri: uri.to_string(),
+        })
+    }
+
     pub async fn plan_summary(&self, plan: &Plan) -> PlanSummary {
         let dest = &plan.destination;
         let free_bytes = match self.provider(&dest.location) {
@@ -399,6 +463,7 @@ impl Core {
                 to: it.dst.name().map(display_name).unwrap_or_default(),
             })
             .collect();
+        let settings = self.settings();
         PlanSummary {
             kind: kind_name(plan.kind).to_owned(),
             files: plan.totals.files,
@@ -407,11 +472,13 @@ impl Core {
             conflicts: plan.totals.conflicts,
             renamed: plan.totals.renamed,
             destination: dest.to_string(),
-            destination_name: self.display_path(dest),
+            destination_name: self.display_title(dest),
+            destination_folder: self.parent_title(dest),
+            origin: self.origin(plan, &settings),
             free_bytes,
             renames,
             permissions_supported,
-            options: StartOptions::from_settings(&self.settings()),
+            options: StartOptions::from_settings(&settings),
         }
     }
 
@@ -440,6 +507,7 @@ impl Core {
     }
 
     pub fn unresolved_conflicts(&self, plan: &Plan) -> Vec<ConflictEntry> {
+        let settings = self.settings();
         conflict_ops::unresolved(plan)
             .into_iter()
             .filter_map(|index| {
@@ -452,6 +520,8 @@ impl Core {
                     source: item.src.to_string(),
                     destination: item.dst.to_string(),
                     default_choice: conflict_ops::default_choice(&conflict),
+                    source_look: self.item_look(&item.src, conflict.src_is_dir, &settings),
+                    destination_look: self.item_look(&item.dst, conflict.dst_is_dir, &settings),
                     conflict,
                 })
             })

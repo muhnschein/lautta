@@ -471,6 +471,13 @@ impl Core {
         }
     }
 
+    pub fn item_look(&self, uri: &Uri, is_dir: bool, settings: &Settings) -> RecentLook {
+        if is_dir {
+            return RecentLook::default();
+        }
+        self.recent_look(uri, settings.thumbnails_local, &ThumbSettings::new(settings))
+    }
+
     /// File at `uri` as folders show it: category, type, thumbnail. `id` 0, `kind` empty.
     pub fn file_tile(&self, uri: &Uri, settings: &Settings) -> RecentTile {
         let entry = Entry::new(uri.name().unwrap_or_default(), Kind::File);

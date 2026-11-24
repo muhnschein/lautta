@@ -208,10 +208,10 @@ Features: F-OPS-02 Plan summary, F-OPS-03 Conflict resolution, F-OPS-04 Not-enou
 | 1 | SCR-07 Item context menu | Long-press folder: Copy |
 | 2 | SCR-10 Clipboard panel | Clipboard panel: 1 item copied |
 | 3 | SCR-06 Folder pulley | In target folder, pull: Paste |
-| 4 | SCR-19 Plan summary | Large paste: plan summary: items, size, free, conflicts, options |
-| 5 | SCR-20 Conflict | Conflict: Merge, Keep both, Skip, Replace, … |
+| 4 | SCR-19 Plan summary | Large paste: plan summary: origin → destination, files, size, free, conflicts |
+| 5 | SCR-20 Conflict | Conflict 1 of N: both items as tiles, Resolution list |
 | 6 | SCR-20 Conflict | Picked Keep both |
-| 7 | SCR-19 Plan summary | Summary after answer |
+| 7 | SCR-19 Plan summary | Summary after answer: Conflicts resolved |
 | 8 | SCR-23 Activity bar | Started: activity bar |
 | 9 | SCR-03 Folder page (list) | Done |
 

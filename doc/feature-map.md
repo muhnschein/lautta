@@ -32,7 +32,7 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | **remorse** | Silica countdown with undo before an action runs (trash, move, remove favourite, rename) | "undo toast" |
 | **task** | one queued job (copy, move, delete, compress, extract, upload, download) | "transfer" in code (`Transfers`) |
 | **Activity** | page listing tasks; **activity bar** = slim bar for running task on Home/folder page | "transfers page", "queue" |
-| **plan summary** | dialog before a large operation: items, size, free space, conflicts, options | |
+| **plan summary** | dialog before a large operation: origin → destination tiles, files, size, free space, conflicts, names that need changing | |
 | **conflict** | name clash at destination; **conflict dialog** resolves (Merge, Keep both, Skip, Replace, Replace if newer, Resume) | |
 | **Trash** | Lautta's own trash for user-folder deletes ("Recently deleted" in design) | system trash |
 | **Recents** | list of files opened, edited or transferred | "history" |
@@ -192,8 +192,8 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 ### 3.6 Clipboard and operations
 
 - **F-OPS-01 Paste** — pulley "Paste N items" or clipboard panel "Paste here"; Cut → remorse "Moving …" then move. Panel: "N items copied/cut from …", Clear clipboard.
-- **F-OPS-02 Plan summary** — before ops over threshold (Settings › Transfers › Ask before large operations): items, size, free on destination, conflicts, names changed (Use suggested names for all), options (Keep modification times, Keep permissions, Verify with checksums), Start.
-- **F-OPS-03 Conflict resolution** — Merge (folders), Keep both ("Saves as …"), Skip, Replace, Replace if newer, Resume (unfinished copies); "Do this for the remaining N conflicts". Add only: Keep both only, "Lautta may only add files here."
+- **F-OPS-02 Plan summary** — before ops over threshold (Settings › Transfers › Ask before large operations): Origin → Destination tiles (first item, "and N more" as stack; extract: archive), files "in N folders", size "in total", "free there"; conflicts row in warning colour (tap: resolve), then "Conflicts resolved"; Names that need changing as old → new, Use suggested names for all; Start. Times, permissions, checksums from Settings › Transfers only.
+- **F-OPS-03 Conflict resolution** — header "Conflict N of M" (or "Conflict"); Copying/Moving and Already there side by side as grid tiles (name, size, date, "Newer"); Resolution: one-pick list, Merge (folders), Keep both ("Saves as …"), Skip, Replace, Replace if newer, Resume (unfinished copies); choices not offered dimmed; Further conflicts: "Do this for the remaining N conflicts". Add only: Keep both only, "Lautta may only add files here."
 - **F-OPS-04 Not-enough-space check** — error names place and sizes.
 - **F-OPS-05 Extract** — no page: task starts (locked file not open: SCR-35 asks first). One top item lands as is beside compressed file, several go into new folder named after it; taken name gets " 2", nothing merged or replaced. *Entry:* More actions of compressed file, pulley inside one. *Proof:* task in Activity, result lights up in folder.
 - **F-OPS-06 Archive location** — compressed file opens read-only as folder, header line "Compressed file · read only". Locked one (Zip AES, 7z AES): SCR-35 asks password, wrong one asks again; open while a page shows it, its items sit on clipboard or a task reads it, then closed and password gone (memory only, never stored). *Code:* `provider/archive.rs`, `app_archives.rs`.
