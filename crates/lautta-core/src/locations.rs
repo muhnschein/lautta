@@ -13,7 +13,7 @@ use crate::provider::local::{lexical_normalize, new_io_semaphore, LocalProvider}
 use crate::provider::{Provider, ProviderResolver};
 use crate::uri::{LocationId, Uri};
 use crate::volumes::{self, Volume, VolumeEvent, VolumeWatcher, VolumeWords};
-use crate::vpath::VPath;
+use crate::vpath::{display_name, VPath};
 use percent_encoding::{percent_encode, AsciiSet, CONTROLS};
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
@@ -485,11 +485,11 @@ impl LocationRegistry {
         let Some(loc) = self.get(&uri.location) else {
             return uri.to_string();
         };
-        if let Some(full) = local_path_of(&loc, uri) {
-            return format!(
-                "file://{}",
-                percent_encode(full.as_os_str().as_bytes(), ADDRESS_SET)
-            );
+        if local_path_of(&loc, uri).is_some() {
+            return std::iter::once(loc.name)
+                .chain(uri.path.components().map(display_name))
+                .collect::<Vec<_>>()
+                .join(" › ");
         }
         match loc.url.as_deref().map(strip_secrets) {
             Some(base) if uri.path.is_root() => base,
@@ -1043,27 +1043,18 @@ mod tests {
     }
 
     #[test]
-    fn local_addresses_are_file_urls() {
+    fn local_addresses_are_places() {
         let e = env_with(&["Documents"]);
         let u = Uri::parse("lautta://user-documents/My%20Files/caf%C3%A9%20%231.txt").unwrap();
-        assert_eq!(
-            e.reg.display_address(&u),
-            format!(
-                "file://{}/Documents/My%20Files/caf%C3%A9%20%231.txt",
-                e.home.display()
-            )
-        );
-        assert_eq!(
-            e.reg.display_address(&Uri::root("user-documents")),
-            format!("file://{}/Documents", e.home.display())
-        );
+        assert_eq!(e.reg.display_address(&u), "Documents › My Files › café #1.txt");
+        assert_eq!(e.reg.display_address(&Uri::root("user-documents")), "Documents");
     }
 
     #[test]
-    fn non_utf8_local_paths_are_escaped_byte_for_byte() {
+    fn non_utf8_local_names_show_replacement_characters() {
         let e = env_with(&["Documents"]);
         let u = Uri::new("user-documents", VPath::parse(b"caf\xe9").unwrap());
-        assert!(e.reg.display_address(&u).ends_with("/Documents/caf%E9"));
+        assert_eq!(e.reg.display_address(&u), "Documents › caf\u{fffd}");
     }
 
     #[test]

@@ -83,11 +83,7 @@ async fn the_list_groups_questions_and_history() {
     assert_eq!(rows[0].direction.name(), "local");
     assert_eq!(rows[0].kind_name(), "copy");
     assert_eq!(rows[0].summary.title, "a.txt");
-    assert!(
-        rows[0].dest_address.starts_with("file://"),
-        "{}",
-        rows[0].dest_address
-    );
+    assert_eq!(rows[0].dest_address, "Downloads");
 
     let questions = h.core.question_list(id).unwrap();
     assert_eq!(questions.len(), 1);
