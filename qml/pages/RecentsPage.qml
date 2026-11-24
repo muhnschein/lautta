@@ -101,9 +101,11 @@ Page {
 
         anchors.fill: parent
 
-        header: PageHeader {
-            //% "Recents"
-            title: qsTrId("lautta-recents-title")
+        header: HeaderBand {
+            PageHeader {
+                //% "Recents"
+                title: qsTrId("lautta-recents-title")
+            }
         }
 
         section.property: "dateGroup"

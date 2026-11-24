@@ -136,9 +136,11 @@ Page {
         anchors.fill: parent
         model: page.listModel
 
-        header: PageHeader {
-            //% "Browse"
-            title: qsTrId("lautta-browse-title")
+        header: HeaderBand {
+            PageHeader {
+                //% "Browse"
+                title: qsTrId("lautta-browse-title")
+            }
         }
 
         section.property: "section"
@@ -147,6 +149,11 @@ Page {
             width: list.width
             height: sectionHeader.height
 
+            HeaderBand {
+                objectName: "recentsHeaderBand"
+                visible: section === "recents"
+                anchors.fill: parent
+            }
             SectionHeader {
                 id: sectionHeader
 
@@ -229,6 +236,12 @@ Page {
             onClicked: if (plain) page.openRow(model)
             onPressAndHold: prefetch.stop()
             onCanceled: prefetch.stop()
+
+            HeaderBand {
+                objectName: "stripHeaderBand"
+                visible: row.strip
+                height: row.contentHeight
+            }
 
             Loader {
                 id: stripLoader
