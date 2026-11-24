@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- The folder header shows the path: a house for the Home page, then the folders above, then the folder's name, all in one size on one line. Tap a folder to go straight back to it, tap the house to go home. When the path gets long, the farthest folders and the house hide behind "…"; tap it to list them, with Home at the end. *Add to favourites* for the open folder moved to the pulley menu. *Edit path* and *Copy address* are gone ([#38](https://github.com/muhnschein/lautta/issues/38)).
+- The folder header shows the path: a house for the Home page, then the folders above, then the folder's name, all in one size on one line. Tap a folder to go straight back to it, tap the house to go home. When the path gets long, the farthest folders and the house hide behind "…"; tap it to list them, with Home at the end. The same house marks *Browse page* in Settings. *Add to favourites* for the open folder moved to the pulley menu. *Edit path* and *Copy address* are gone ([#38](https://github.com/muhnschein/lautta/issues/38)).
 - The cover of the Home page leaves as much room under two or more storage icons as above them.
 - Lautta's own icons draw their lines as thin as Sailfish's, at every size and on every screen: servers, Checksums, links, the PDF lock, the lines on document glyphs and the glyphs on grid tiles. *View options* in Settings has its own list-and-grid icon ([#145](https://github.com/muhnschein/lautta/issues/145)).
 - A 7z file whose names are readable but whose contents are locked no longer accepts a wrong password now and then when it opens.

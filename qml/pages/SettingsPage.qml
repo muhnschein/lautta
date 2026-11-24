@@ -34,7 +34,7 @@ Page {
             }
             SettingsEntry {
                 objectName: "browsePageEntry"
-                iconSource: "image://theme/icon-m-home"
+                iconSource: FileIcons.source("home", Theme.pixelRatio)
                 //% "Browse page"
                 text: qsTrId("lautta-settings-browse-page")
                 onClicked: page.open("BrowseSettingsPage.qml")
