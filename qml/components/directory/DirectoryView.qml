@@ -9,6 +9,7 @@ import "../transfers"
 import "../viewers"
 import "../Open.js" as Open
 import "../ErrorText.js" as ErrorText
+import "../ServerWarning.js" as ServerWarning
 import "../Access.js" as Access
 import "DirFormat.js" as DirFormat
 import "GridRows.js" as GridRows
@@ -415,7 +416,7 @@ Item {
         return dir.readable ? "empty" : "hidden"
     }
 
-    function placeholderTitle(kind) {
+    function placeholderTitle(kind, errorKind) {
         switch (kind) {
         case "noaccess":
             //% "Not accessible"
@@ -426,10 +427,10 @@ Item {
         case "hidden":
             return hiddenTitle()
         }
-        switch (dir.errorKind) {
+        switch (errorKind) {
         case "AuthFailed":
-            //% "Sign-in failed"
-            return qsTrId("lautta-dir-err-auth")
+        case "ServerIdentityChanged":
+            return ServerWarning.title(errorKind)
         case "NotFound":
             //% "Folder not found"
             return qsTrId("lautta-dir-err-not-found")
@@ -445,10 +446,10 @@ Item {
         return qsTrId("lautta-dir-err-generic")
     }
 
-    function placeholderHint(kind) {
+    function placeholderHint(kind, errorKind) {
         switch (kind) {
         case "noaccess":
-            return dir.errorKind === "Sandbox"
+            return errorKind === "Sandbox"
                    //% "This link points outside the folders Lautta may read."
                    ? qsTrId("lautta-dir-noaccess-hint")
                    //% "You don't have permission to open this folder."
@@ -465,17 +466,18 @@ Item {
                    //% "This folder is empty"
                    : qsTrId("lautta-dir-empty-hint-readonly")
         }
-        var text = ErrorText.message(dir.errorKind, { "location": dir.locationName, "item": dir.title, "open": true })
+        var text = ServerWarning.level(errorKind)
+                   ? ServerWarning.hint(errorKind, dir.locationName)
+                   : ErrorText.message(errorKind, { "location": dir.locationName, "item": dir.title, "open": true })
         return detailsShown ? text + "\n\n" + dir.errorMessage : text
     }
 
-    function placeholderButtons(kind) {
+    function placeholderButtons(kind, errorKind) {
         if (kind !== "error")
             return []
         var buttons = []
-        if (dir.errorKind === "AuthFailed")
-            //% "Update sign-in"
-            buttons.push({ "text": qsTrId("lautta-dir-update-sign-in"), "action": "signIn" })
+        if (ServerWarning.level(errorKind))
+            buttons.push({ "text": ServerWarning.fixText(errorKind), "action": "account", "primary": true })
         else
             //% "Retry"
             buttons.push({ "text": qsTrId("lautta-dir-retry"), "action": "retry" })
@@ -488,7 +490,7 @@ Item {
         switch (action) {
         case "retry": dir.refresh(); break
         case "details": detailsShown = !detailsShown; break
-        case "signIn":
+        case "account":
             Bridge.editAccount("lautta://" + uri.split("/")[2] + "/")
             break
         }
@@ -999,6 +1001,7 @@ Item {
                         pathModel: path
                         menuHost: headerBar
                         menuMost: Math.max(0, Math.floor((view.height - leadSlot.height) / Theme.itemSizeSmall) - 1)
+                        homeText: view.rootTitle
                         onPicked: view.ancestorPicked(uri)
                         onHome: view.homePicked()
                     }
@@ -1009,7 +1012,7 @@ Item {
 
                     objectName: "folderPageHeader"
                     visible: !view.picking
-                    leftMargin: Theme.horizontalPageMargin + (crumbs.visible ? crumbs.reserve : 0)
+                    leftMargin: crumbs.visible ? crumbs.leftMargin : Theme.horizontalPageMargin
                     title: view.selecting
                            //% "%n selected"
                            ? qsTrId("lautta-dir-selected", dir.selectedCount)
@@ -1029,6 +1032,7 @@ Item {
                             titleTop: pageHeader.topMargin
                             menuHost: headerBar
                             menuMost: Math.max(0, Math.floor((view.height - pageHeader.height) / Theme.itemSizeSmall))
+                            pageWidth: view.width
                             onPicked: view.ancestorPicked(uri)
                             onHome: view.homePicked()
                         }
@@ -1247,10 +1251,12 @@ Item {
             objectName: "folderPlaceholder"
             visible: kind.length > 0
             x: Theme.horizontalPageMargin
-            y: Math.round(parent.height * 0.38)
-            title: view.placeholderTitle(kind)
-            hint: view.placeholderHint(kind)
-            buttons: view.placeholderButtons(kind)
+            // Lifted when tall (warning in landscape) so buttons stay on screen.
+            y: Math.max(0, Math.min(Math.round(parent.height * 0.38), parent.height - height - Theme.paddingLarge))
+            level: ServerWarning.level(dir.errorKind)
+            title: view.placeholderTitle(kind, dir.errorKind)
+            hint: view.placeholderHint(kind, dir.errorKind)
+            buttons: view.placeholderButtons(kind, dir.errorKind)
             onTriggered: view.placeholderAction(action)
         }
     }

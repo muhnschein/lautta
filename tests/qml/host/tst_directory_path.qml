@@ -8,7 +8,7 @@ Item {
     property bool reachedEnd
 
     readonly property real sep: 20
-    readonly property real dots: 60
+    readonly property real house: 50
 
     readonly property string pictures: "lautta://user-pictures/"
     readonly property string uni: "lautta://user-pictures/Uni"
@@ -24,25 +24,36 @@ Item {
         check(JSON.stringify(a) === JSON.stringify(b), what + ": " + JSON.stringify(a) + " != " + JSON.stringify(b))
     }
 
-    function folded(widths, available) {
-        return PathFold.folded(widths, root.sep, root.dots, available)
+    function folded(widths, room) {
+        return PathFold.folded(widths, root.sep, room)
     }
 
-    function testShownWidth() {
-        same(PathFold.shownWidth([100, 80, 120], sep, dots, 0), 360, "all shown: each folder and the separator after it")
-        same(PathFold.shownWidth([100, 80, 120], sep, dots, 1), 320, "one folded: dots and their separator stand in for it")
-        same(PathFold.shownWidth([100, 80, 120], sep, dots, 3), 80, "all folded: dots and their separator")
-        same(PathFold.shownWidth([], sep, dots, 0), 0, "a place's top folder: nothing before its name")
+    function homeFits(widths, room) {
+        return PathFold.homeFits(widths, root.sep, root.house, room)
+    }
+
+    function testTailWidth() {
+        same(PathFold.tailWidth([100, 80, 120], sep, 0), 360, "all shown: each folder and the separator after it")
+        same(PathFold.tailWidth([100, 80, 120], sep, 1), 240, "one folded: the rest")
+        same(PathFold.tailWidth([100, 80, 120], sep, 3), 0, "all folded: nothing")
+        same(PathFold.tailWidth([], sep, 0), 0, "a place's top folder: nothing before its name")
+    }
+
+    function testHomeFits() {
+        same(homeFits([100, 80, 120], 430), true, "house, its separator and every folder fit exactly: house shows")
+        same(homeFits([100, 80, 120], 429), false, "one pixel short: no house")
+        same(homeFits([], 70), true, "a place's top folder: house and its separator fit exactly")
+        same(homeFits([], 69), false, "a place's top folder, one pixel short: no house")
+        same(homeFits([100], 0), false, "no room: no house")
     }
 
     function testFolded() {
         same(folded([100, 80, 120], 360), 0, "all fit exactly: nothing folds")
         same(folded([100, 80, 120], 359), 1, "one pixel short: the farthest folder folds")
-        same(folded([100, 80, 120], 320), 1, "the rest fits exactly beside the dots")
-        same(folded([100, 80, 120], 319), 2, "still too wide: the next one folds")
-        same(folded([100, 80, 120], 219), 3, "the nearest alone does not fit: all fold")
+        same(folded([100, 80, 120], 240), 1, "the rest fits exactly")
+        same(folded([100, 80, 120], 239), 2, "still too wide: the next one folds")
+        same(folded([100, 80, 120], 139), 3, "the nearest alone does not fit: all fold")
         same(folded([100, 80, 120], 0), 3, "no room at all: all fold")
-        same(folded([30, 200, 120], 400), 2, "a short far folder: folding it gains nothing, the next goes too")
         same(folded([100, 80, 120, 90, 70], 280), 3, "a deep path keeps the nearest folders")
         same(folded([], 100), 0, "a place's top folder: nothing to fold")
     }
@@ -55,11 +66,12 @@ Item {
     }
 
     function testMenuRows() {
-        same(PathFold.menuRows(3, 8), [2, 1, 0], "folded folders listed nearest first")
-        same(PathFold.menuRows(1, 8), [0], "one folded folder: one row")
-        same(PathFold.menuRows(0, 8), [], "nothing folded: no rows")
-        same(PathFold.menuRows(5, 3), [4, 3, 2], "more than fit below: the nearest ones")
-        same(PathFold.menuRows(3, 3), [2, 1, 0], "exactly as many as fit: all")
+        same(PathFold.menuRows(3, 8), [2, 1, 0, -1], "folded folders nearest first, then the way home")
+        same(PathFold.menuRows(1, 8), [0, -1], "one folded folder: its row, then home")
+        same(PathFold.menuRows(0, 8), [-1], "nothing folded: only home")
+        same(PathFold.menuRows(5, 3), [4, 3, -1], "more than fit below: the nearest ones, home keeps its row")
+        same(PathFold.menuRows(3, 4), [2, 1, 0, -1], "exactly as many as fit: all")
+        same(PathFold.menuRows(3, 1), [-1], "room for one row: home")
         same(PathFold.menuRows(3, 0), [], "no room below: no rows")
     }
 
@@ -90,7 +102,8 @@ Item {
     }
 
     Component.onCompleted: {
-        testShownWidth()
+        testTailWidth()
+        testHomeFits()
         testFolded()
         testOffsets()
         testMenuRows()

@@ -22,7 +22,7 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | **attention** | server state needing user: `auth-failed`, `server-identity-changed` | |
 | **folder page** | `DirectoryPage`: one folder's listing | "directory view" in UI talk |
 | **list / grid** | folder view modes (grid 3 or 4 per row) | |
-| **path crumbs** | folder header, left of folder name: house (Browse), then folders above, each a tap target; what doesn't fit folds into "…" | "breadcrumbs", "path menu" |
+| **path crumbs** | folder header, left of folder name: house (Browse) while whole path fits, then folders above, each a tap target; what doesn't fit folds into "…", house too | "breadcrumbs", "path menu" |
 | **pulley** | Silica pull-down menu at page top | "pull-down", "menu" |
 | **context menu** | long-press menu on a row | |
 | **More actions** | page listing the rest of item actions | |
@@ -141,7 +141,7 @@ Format: **F-ID Name** (mode) — what. *Entry:* where user starts it. *Proof:* w
 - **F-SRV-04 Account servers** — SFTP, SMB, WebDAV, FTPS accounts from Settings › Accounts with *Files* on and an access level other than not allowed; row dot shows state; opening connects. *Entry:* Servers rows.
 - **F-SRV-05 Add server** — pulley "Add server" opens Settings › Accounts (netvfs). *Proof:* Sailfish Settings opens.
 - **F-SRV-06 Edit server / Update sign-in / Review server identity** — row menu, hands off to Settings.
-- **F-SRV-07 Server attention page** — "Sign-in failed" or "Server identity changed" with Update sign-in / Review in Settings. *Entry:* tap row with attention.
+- **F-SRV-07 Server attention page** — "Sign-in failed" (warning) or "Server identity changed" (security warning: red, "Security warning") with attention icon, Update sign-in / Review identity, Go back. Folder placeholder on server shows same warning. *Entry:* tap row with attention.
 - **F-SRV-11 Nearby** — mDNS-found servers while Browse is in front; tap → SCR-60 "This server isn't set up yet …", Set up opens Settings' add-account flow for that provider. *Proof:* "Nearby" section rows; Settings opens.
 - **F-SRV-12 Offline listing** — cached listing with banner "Offline. Showing the copy from …", Retry. *Code:* `dircache.rs`.
 - **F-SRV-13 Reconnect** — backoff, rows show connecting; running tasks wait then resume.
@@ -159,7 +159,7 @@ Retired, never reuse: F-SRV-08 Server question, F-SRV-09 Connect to server, F-SR
 - **F-DIR-03 Grid hint** — "Shown as grid because most items are photos", Use list.
 - **F-DIR-04 Sort and filter** — sort by Name/Size/Modified/Type, Descending, Folders first, Show hidden files. *Entry:* View options (folder pulley or Settings).
 - **F-DIR-05 Thumbnails switch** — Show thumbnails (untrusted-file warning), Thumbnails from servers, largest server file, cache size.
-- **F-DIR-06 Path crumbs** — header shows house › folders above › folder name. Tap folder: back to its page; no page of it on stack → it replaces pages inside it. Tap house: back to Browse. Too long → farthest fold into "…": context menu under header, nearest first, as many as fit. Hidden while selecting. *Code:* `PathCrumbs.qml`, `PathFold.js`, `PathNav.js`.
+- **F-DIR-06 Path crumbs** — header shows house › folders above › folder name. Tap folder: back to its page; no page of it on stack → it replaces pages inside it. Tap house: back to Browse. House only while whole path fits and house stays right of page's left quarter; else "…" leads. Too long → farthest fold into "…": context menu under header, nearest first, as many as fit, last row Home (Browse). Hidden while selecting. *Code:* `PathCrumbs.qml`, `PathFold.js`, `PathNav.js`.
 - **F-DIR-07 Folder states** — empty ("Pull down to create a folder or paste"), hidden (Add only: "Files here are hidden"), no access, sign-in failed (Update sign-in), not found, can't reach (Retry, Details).
 - **F-DIR-08 Large folder** — "N loaded · large folder: name order, thumbnails off", Stop.
 - **F-DIR-09 Live updates** — inotify refresh of local folders. *Code:* `watch.rs`.

@@ -11,7 +11,7 @@ Silica idioms to use instead:
 - PageHeader: right-aligned, light weight, highlight colour; description below it.
 - Back navigation = swipe right; shown only by the page-stack indicator (top-left
   small dots `.ind-back`). Attached page (swipe left) = `.ind-fwd` top-right.
-- Actions = PulleyMenu (top, pull down) only. NO PushUpMenu anywhere (hard to discover); folder-level actions live in the folder pulley; folder header carries path crumbs (house, folders above, "…" for what doesn't fit). Closed state shows
+- Actions = PulleyMenu (top, pull down) only. NO PushUpMenu anywhere (hard to discover); folder-level actions live in the folder pulley; folder header carries path crumbs (house while whole path fits right of page's left quarter, folders above, "…" for what doesn't fit, its menu ends with Home). Closed state shows
   only the thin glowing `.pull-ind` line at the top edge (`.push-ind` at bottom).
   Open state: menu items centred, primary colour, the item under the finger in
   highlight colour, highlight-tinted gradient backdrop; page content pushed down.
@@ -26,6 +26,9 @@ Silica idioms to use instead:
   ComboBox (label + highlight value; opens inline menu), Slider (value above,
   label below), TextField (underline, label below).
 - Empty states = ViewPlaceholder (big light highlight text centred + hint).
+- Server warnings (`FolderPlaceholder` `level`) = placeholder with `icon-l-attention` on top, buttons
+  stacked, fix first on highlight background. Security level (identity changed): icon and title
+  `Theme.errorColor`, "Security warning" label above title.
 - Busy = BusyIndicator ring. Progress = thin highlight line.
 - Buttons (rare in Silica; only in page content) = `.btn` rounded.
 - Section headers = small, right-aligned, highlight colour.

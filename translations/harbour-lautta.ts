@@ -12,7 +12,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-err-identity-changed">
-        <source>%1 is presenting a different identity than before. This can mean it was reinstalled — or that someone is intercepting the connection.</source>
+        <source>%1 is not presenting the identity saved for it. If you didn&apos;t reinstall or change this server, someone may be intercepting the connection.</source>
+        <oldsource>%1 is presenting a different identity than before. This can mean it was reinstalled — or that someone is intercepting the connection.</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-err-identity-unknown">
@@ -1347,7 +1348,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-attention-review">
-        <source>Review in Settings</source>
+        <source>Review identity</source>
+        <oldsource>Review in Settings</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-attention-update">
@@ -1546,10 +1548,6 @@
         <source>No files</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-dir-err-auth">
-        <source>Sign-in failed</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-err-not-found">
         <source>Folder not found</source>
         <translation type="unfinished"></translation>
@@ -1576,10 +1574,6 @@
     </message>
     <message id="lautta-dir-empty-hint-readonly">
         <source>This folder is empty</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-update-sign-in">
-        <source>Update sign-in</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-retry">
@@ -1961,7 +1955,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-err-identity-changed-unnamed">
-        <source>The server is presenting a different identity than before. This can mean it was reinstalled — or that someone is intercepting the connection.</source>
+        <source>The server is not presenting the identity saved for it. If you didn&apos;t reinstall or change it, someone may be intercepting the connection.</source>
+        <oldsource>The server is presenting a different identity than before. This can mean it was reinstalled — or that someone is intercepting the connection.</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-err-identity-unknown-unnamed">
@@ -2581,6 +2576,22 @@
     </message>
     <message id="lautta-cover-free">
         <source>%1 free</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-attention-back">
+        <source>Go back</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-attention-security-warning">
+        <source>Security warning</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-attention-identity-blocked">
+        <source>Lautta won&apos;t connect until you check the new identity.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-path-home">
+        <source>Home</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-menu-new-folder">

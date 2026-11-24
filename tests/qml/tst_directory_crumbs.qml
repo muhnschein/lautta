@@ -11,7 +11,9 @@ ApplicationWindow {
     property bool reachedEnd
 
     readonly property string docs: "lautta://user-documents/"
-    readonly property var names: ["Crumbs", "Alpha", "Beta", "Gamma", "Delta"]
+    readonly property string longName: "Delta" + new Array(11).join("AndOnAndOn")
+    readonly property var names: ["Crumbs", "Alpha", "Beta", "Gamma", longName]
+    readonly property string homeRow: "lautta-path-home"
 
     ViewerTools { id: tools }
 
@@ -39,6 +41,10 @@ ApplicationWindow {
 
     function same(a, b, what) {
         return expect(JSON.stringify(a) === JSON.stringify(b), what + ": " + JSON.stringify(a) + " != " + JSON.stringify(b))
+    }
+
+    function near(a, b, what) {
+        return expect(Math.abs(a - b) < 0.01, what + ": " + a + " != " + b)
     }
 
     function waitFor(done, what) {
@@ -182,80 +188,140 @@ ApplicationWindow {
         var widths = widthsOf(steps)
         var sep = separator.width
         var fitting = function (folded) {
-            return PathFold.shownWidth(widths, sep, dots.width, folded) - dots.width - sep
+            return PathFold.tailWidth(widths, sep, folded)
         }
-        expect(home.width > 0 && dots.width > 0 && widths[0] > 0, "crumbs have a width: " + home.width + " " + dots.width + " " + widths)
-        same(crumbs.reserve, home.width + sep + Theme.paddingMedium + dots.width + sep,
-             "kept free of the name: the way home, the dots and their separators")
+        expect(home.width > dots.width + 1 && widths[0] > 0, "crumbs have a width, the house more than the dots: " + home.width + " " + dots.width + " " + widths)
+        same(crumbs.reserve, dots.width + sep + Theme.paddingMedium, "kept free of the name: the dots and their separator")
+        var start = Theme.itemSizeSmall
+        same(crumbs.leftMargin, start + crumbs.reserve, "the name's left margin: where a tap goes a page back, then the room kept")
+        var house = String(named(host, "crumbHouse").source)
+        expect(house.indexOf("/qml/icons/home.svg?stroke=") > 0, "the house is Lautta's own drawing: " + house)
+        var houseAt = fitting(0) + home.width - dots.width
 
-        crumbs.width = fitting(0)
-        same(crumbs.folded, 0, "room for all: nothing folded")
-        expect(!dots.visible, "and no dots")
+        crumbs.width = houseAt + 0.5
+        expect(home.visible && !dots.visible, "room for the house and every folder: the house leads, no dots")
+        same(crumbs.folded, 0, "nothing folded")
         same(shown(steps), ["Documents", "Crumbs", "Alpha", "Beta", "Gamma"], "every folder above shows, the folder itself is the header's name")
         same(row.mapToItem(crumbs, row.width, 0).x, crumbs.width - Theme.paddingMedium, "the path ends beside the name")
+        near(row.mapToItem(crumbs, 0, 0).x, 0.5 - crumbs.reserve, "and starts where the kept room starts")
+        same(separator.x, home.width, "a separator follows the house")
         laidOut(steps, row, home.width + sep, "all shown")
+        tap(home)
+        same(host.homes, 1, "a tap on the house goes home")
+        same(host.picked.length, 0, "and picks no folder")
+
+        crumbs.width = houseAt - 0.5
+        expect(!home.visible && dots.visible, "a little short: the dots take the house's place")
+        same(crumbs.folded, 0, "every folder still fits")
+        same(shown(steps), ["Documents", "Crumbs", "Alpha", "Beta", "Gamma"], "and shows")
+        same(dots.x, 0, "the dots lead")
+        same(separator.x, dots.width, "a separator follows them")
+        laidOut(steps, row, dots.width + sep, "dots first")
+
+        crumbs.width = houseAt + 100
+        var quarter = start + Theme.paddingMedium + 100
+        crumbs.pageWidth = 4 * (quarter - 0.5)
+        expect(home.visible && !dots.visible, "the house may stand where the page's left quarter ends")
+        crumbs.pageWidth = 4 * (quarter + 0.5)
+        expect(!home.visible && dots.visible, "a little into the quarter: no house")
+        same(crumbs.folded, 0, "the folders stay")
+        crumbs.pageWidth = 0
+        expect(home.visible, "no quarter to keep clear: the house is back")
 
         crumbs.width = fitting(0) - 1
-        same(crumbs.folded, 1, "one pixel short: the farthest folder folds")
-        expect(dots.visible, "and the dots stand in for it")
+        same(crumbs.folded, 1, "one pixel short for the folders: the farthest folds")
+        expect(!home.visible && dots.visible, "behind the dots")
         same(shown(steps), ["Crumbs", "Alpha", "Beta", "Gamma"], "the rest shows")
 
         crumbs.width = fitting(3)
         same(crumbs.folded, 3, "narrower: more fold")
         same(shown(steps), ["Beta", "Gamma"], "the nearest stay")
-        same(dots.x, home.width + sep, "the dots come after the house")
-        laidOut(steps, row, dots.x + dots.width + sep, "folded")
+        laidOut(steps, row, dots.width + sep, "folded")
         expect(row.mapToItem(crumbs, 0, 0).x >= -crumbs.reserve - 0.5,
                "the path stays inside what the name leaves: " + row.mapToItem(crumbs, 0, 0).x + " vs " + crumbs.reserve)
 
         crumbs.width = 0
         same(crumbs.folded, 5, "no room beside the name: all fold")
         same(shown(steps), [], "no folder shows")
-        same(row.width + Theme.paddingMedium, crumbs.reserve, "the way home and the dots fill exactly what was kept free")
+        same(row.width + Theme.paddingMedium, crumbs.reserve, "the dots fill exactly what was kept free")
 
         crumbs.width = fitting(3)
         tap(steps[4].children[0])
         same(host.picked, [uriOf(4)], "a tap on a folder picks it")
-        tap(home)
-        same(host.homes, 1, "a tap on the house goes home")
-        same(host.picked.length, 1, "and picks no folder")
+        same(host.homes, 1, "and does not go home")
 
         var bare = host.height
         var menu = openFolded(host)
-        if (menu) {
-            expect(menu.parent === host, "the menu hangs under the header")
-            same(menu.height, 2 * Theme.itemSizeSmall, "no more rows than fit below")
-            same(host.height, bare + menu.height, "the header grows by the menu")
-            var rows = rowsOf(menu)
-            same(texts(rows), ["Alpha", "Crumbs"], "folded folders, nearest first")
-            tapRow(menu, rows[1])
-            same(host.picked.length, 1, "nothing is picked while the menu is still open")
-            waitFor(function () { return host.picked.length === 2 }, "the pick once the menu closed")
-            same(host.picked[1], uriOf(1), "the row's folder is picked")
-            waitFor(function () { return host.height === bare }, "the header to shrink back")
-        }
+        if (!menu)
+            return
+        expect(menu.parent === host, "the menu hangs under the header")
+        same(menu.height, 2 * Theme.itemSizeSmall, "no more rows than fit below")
+        same(host.height, bare + menu.height, "the header grows by the menu")
+        var rows = rowsOf(menu)
+        same(texts(rows), ["Alpha", homeRow], "the nearest folded folder, then the way home")
+        tapRow(menu, rows[0])
+        same(host.picked.length, 1, "nothing is picked while the menu is still open")
+        waitFor(function () { return host.picked.length === 2 }, "the pick once the menu closed")
+        same(host.picked[1], uriOf(2), "the row's folder is picked")
+        same(host.homes, 1, "not home")
+        waitFor(function () { return host.height === bare && !menu.active }, "the header to shrink back")
 
-        crumbs.width = fitting(0)
+        crumbs.width = houseAt + 0.5
         deep.uri = uriOf(1)
         steps = stepsOf(host)
         same(steps.length, 2, "another path: its crumbs")
         same(crumbs.folded, 0, "folded anew for the new path")
         same(shown(steps), ["Documents"], "the one folder above")
-        expect(crumbs.hasAncestors, "there is a folder above")
+        expect(home.visible, "with room, the house leads")
         deep.uri = docs
         same(shown(stepsOf(host)), [], "a place's top folder: no folder above")
-        expect(!crumbs.hasAncestors && !dots.visible, "and nothing to fold")
-        same(crumbs.reserve, home.width + sep + Theme.paddingMedium, "only the way home is kept free")
+        expect(home.visible && !dots.visible, "the house alone")
+        crumbs.width = 0
+        expect(!home.visible && dots.visible, "a top folder whose name takes the header: dots, no house")
+        same(row.width + Theme.paddingMedium, crumbs.reserve, "in the room kept free")
 
         crumbs.pathModel = plain
         steps = stepsOf(host)
         widths = widthsOf(steps)
         crumbs.width = fitting(0)
-        same(crumbs.folded, 0, "another model: room for all")
+        same(crumbs.folded, 0, "another model: room for all its folders")
         plain.setProperty(0, "name", "A longer name")
         expect(steps[0].crumbWidth > widths[0], "a longer name makes a wider crumb: " + steps[0].crumbWidth + " vs " + widths[0])
         same(crumbs.folded, 1, "and the path folds anew")
         same(shown(steps), ["Two"], "the nearest still shows")
+        pageStack.pop(null, PageStackAction.Immediate)
+    }
+
+    function goHomeFrom(host, rowTexts, what) {
+        var bare = host.height
+        var menu = openFolded(host)
+        if (!menu)
+            return
+        var rows = rowsOf(menu)
+        if (!same(texts(rows), rowTexts, what))
+            return
+        tapRow(menu, rows[rows.length - 1])
+        same(host.homes, 0, what + ": nothing happens while the menu is still open")
+        waitFor(function () { return host.homes === 1 }, what + ": going home once the menu closed")
+        same(host.picked, [], what + ": the home row picks no folder")
+        waitFor(function () { return host.height === bare && !menu.active }, what + ": the header to shrink back")
+    }
+
+    function checkHomeRow() {
+        deep.uri = uriOf(5)
+        var page = pageStack.push(benchPage, { "most": 8 }, PageStackAction.Immediate)
+        var host = named(page, "bench")
+        host.crumbs.width = PathFold.tailWidth(widthsOf(stepsOf(host)), named(host, "crumbSeparator").width, 3)
+        same(host.crumbs.folded, 3, "three folders fold")
+        goHomeFrom(host, ["Alpha", "Crumbs", "Documents", homeRow], "room below: every folded folder, nearest first, home last")
+        pageStack.pop(null, PageStackAction.Immediate)
+
+        deep.uri = docs
+        page = pageStack.push(benchPage, { "most": 8 }, PageStackAction.Immediate)
+        host = named(page, "bench")
+        host.crumbs.width = 0
+        expect(named(host, "crumbDots").visible, "a top folder whose name takes the header: dots")
+        goHomeFrom(host, [homeRow], "their menu holds the way home alone")
         pageStack.pop(null, PageStackAction.Immediate)
     }
 
@@ -288,46 +354,52 @@ ApplicationWindow {
         var header = named(view, "folderHeader")
         var bar = named(view, "folderPageHeader")
         var crumbs = named(view, "folderCrumbs")
-        same(bar.title, "Delta", "the header names the folder")
-        same(crumbs.folded, 5, "the test window is narrow: every folder above folds")
+        same(bar.title, longName, "the header names the folder")
+        same(crumbs.pageWidth, view.width, "the path knows the page's width")
+        same(bar.leftMargin, crumbs.leftMargin, "the name leaves the path its room")
+        same(crumbs.folded, 5, "the name takes the whole header: every folder above folds")
+        expect(!named(view, "crumbHome").visible, "and the house with them")
         var bare = header.height
         var listAt = view.flickable.y
         var menu = openFolded(pages[5])
         if (!menu)
             return
-        same(texts(rowsOf(menu)), ["Gamma", "Beta"], "the nearest folded folders that fit the page")
+        same(texts(rowsOf(menu)), ["Gamma", homeRow], "the nearest folded folder that fits the page, then the way home")
         same(header.height, bare + menu.height, "the folder's header grows by the menu")
         same(view.flickable.y, listAt + menu.height, "and the content moves down with it")
         same(menu.mapToItem(view, 0, 0).y, bar.height, "the menu opens right under the name")
         same(menu.width, view.width, "over the page's whole width")
-        tapRow(menu, rowsOf(menu)[1])
-        waitFor(function () { return pageStack.currentPage !== pages[5] && settled() }, "the tap on Beta to leave the page")
-        expect(pageStack.currentPage === pages[3], "a tap on a folder walked through goes back to its page")
-        same(pageStack.depth, 4, "the pages above it are gone")
+        tapRow(menu, rowsOf(menu)[0])
+        waitFor(function () { return pageStack.currentPage !== pages[5] && settled() }, "the tap on Gamma to leave the page")
+        expect(pageStack.currentPage === pages[4], "a tap on a folder walked through goes back to its page")
+        same(pageStack.depth, 5, "the page above it is gone")
 
-        pickFolded(pages[3], "Crumbs")
+        named(pages[4], "folderCrumbs").picked(uriOf(1))
+        waitFor(function () { return pageStack.currentPage !== pages[4] && settled() }, "the pick of Crumbs to leave the page")
         expect(pageStack.currentPage === pages[1], "further up: that folder's page")
         same(pageStack.depth, 2, "nothing left above it")
 
-        tap(named(pages[1], "crumbHome"))
-        waitFor(function () { return pageStack.currentPage !== pages[1] && settled() }, "going home")
-        expect(pageStack.currentPage === start, "the house goes back to the first page")
+        for (depth = 2; depth <= 4; ++depth)
+            open(uriOf(depth), false)
+        var top = open(uriOf(5), false)
+        same(pageStack.depth, 6, "walked down again")
+        pickFolded(top, homeRow)
+        expect(pageStack.currentPage === start, "the way home goes back to the first page")
         same(pageStack.depth, 1, "all folder pages are gone")
     }
 
     function checkEnteredDeep() {
         var start = pageStack.currentPage
         var entered = open(uriOf(5), true)
-        pickFolded(entered, "Beta")
-        var beta = pageStack.currentPage
-        expect(beta !== entered && beta !== start, "a folder not walked through gets a page")
-        same(beta.trail, [docs, uriOf(1), uriOf(2), uriOf(3)], "of that folder")
+        pickFolded(entered, "Gamma")
+        var gamma = pageStack.currentPage
+        expect(gamma !== entered && gamma !== start, "a folder not walked through gets a page")
+        same(gamma.trail, [docs, uriOf(1), uriOf(2), uriOf(3), uriOf(4)], "of that folder")
         same(pageStack.depth, 2, "in place of the page left")
-        expect(pageStack.previousPage(beta) === start, "back from it goes where the old page went back to")
+        expect(pageStack.previousPage(gamma) === start, "back from it goes where the old page went back to")
 
-        open(uriOf(4), false)
         var top = open(uriOf(5), false)
-        same(pageStack.depth, 4, "two folders further down")
+        same(pageStack.depth, 3, "a folder further down")
         named(top, "folderCrumbs").picked(uriOf(1))
         waitFor(function () { return pageStack.currentPage !== top && settled() }, "the pick of Crumbs to leave the page")
         var crumbsPage = pageStack.currentPage
@@ -338,7 +410,7 @@ ApplicationWindow {
         var only = open(uriOf(5), false)
         named(only, "folderCrumbs").home()
         waitFor(function () { return pageStack.currentPage !== only && settled() }, "going home from two pages up")
-        expect(pageStack.currentPage === start, "the house skips every page between")
+        expect(pageStack.currentPage === start, "home skips every page between")
     }
 
     function checkFavourite() {
@@ -364,6 +436,7 @@ ApplicationWindow {
     Component.onCompleted: {
         makeFolders()
         checkFolding()
+        checkHomeRow()
         checkWalkedDown()
         checkEnteredDeep()
         checkFavourite()
@@ -380,6 +453,8 @@ ApplicationWindow {
         id: benchPage
 
         Page {
+            property int most: 2
+
             Item {
                 id: host
 
@@ -403,7 +478,7 @@ ApplicationWindow {
                     pathModel: deep
                     titleTop: Theme.paddingLarge
                     menuHost: host
-                    menuMost: 2
+                    menuMost: most
                     onPicked: host.picked = host.picked.concat([uri])
                     onHome: host.homes++
                 }

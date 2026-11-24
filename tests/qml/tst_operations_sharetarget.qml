@@ -37,12 +37,17 @@ ApplicationWindow {
 
         Page {
             property alias band: benchBand
+            property int homes
 
             PathBand {
                 id: benchBand
 
                 title: "Deepest"
                 pathModel: way
+                menuHost: benchBand
+                menuMost: 3
+                homeText: "Places"
+                onHome: homes++
             }
         }
     }
@@ -134,11 +139,12 @@ ApplicationWindow {
                "they open under the band, which makes room")
         var room = Math.floor((view.height - named(page, "shareLead").height) / Theme.itemSizeSmall) - 1
         var folded = ["Documents", "ShareHere", "Deep", "Deeper"].slice(0, named(band, "bandCrumbs").folded).reverse()
-        expect(room > 0 && folded.length > room, "more folders folded than fit under the band: " + folded + ", " + room)
-        same(rows.map(function (row) { return row.text }), folded.slice(0, room), "as many as fit, nearest first")
-        if (rows.length === 0)
+        expect(room > 1 && folded.length >= room, "more folders folded than fit under the band beside the way to Locations: " + folded + ", " + room)
+        same(rows.map(function (row) { return row.text }), folded.slice(0, room - 1).concat(["lautta-share-locations"]),
+             "as many as fit, nearest first, Locations last")
+        if (rows.length < 2)
             return
-        var far = rows[rows.length - 1]
+        var far = rows[rows.length - 2]
         var there = { "Documents": docs, "ShareHere": target, "Deep": inner, "Deeper": deeper }[far.text]
         tapRow(menu, far)
         waitFor(listed(view, there), "the folder picked from them: " + far.text)
@@ -399,6 +405,18 @@ ApplicationWindow {
         }
         same(folds, [0, 1, 2, 3, 4], "from all folders shown to all folded")
         same(outside, [], "at every width house, dots and folders stay between the band's edge and the name")
+
+        named(band, "crumbDots").clicked(null)
+        var menu = named(band, "crumbMenu")
+        if (menu) {
+            waitFor(function () { return menu.active && menu._expanded }, "the band's folded folders to open")
+            var rows = findAll(menu, function (x) { return x.hasOwnProperty("__silica_menuitem") }, [])
+            if (same(rows.map(function (row) { return row.text }), ["Deeper", "Deep", "Places"],
+                     "the nearest folded folders, then the way home under the name its band gives it")) {
+                tapRow(menu, rows[2])
+                waitFor(function () { return page.homes === 1 }, "the last row to go home")
+            }
+        }
         leave()
     }
 

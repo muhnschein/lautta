@@ -9,6 +9,7 @@ Item {
     property var pathModel
     property Item menuHost
     property int menuMost
+    property alias homeText: crumbs.homeText
 
     readonly property bool hasPath: pathModel ? pathModel.count > 0 : false
     readonly property real menuHeight: crumbs.menuHeight

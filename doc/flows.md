@@ -44,10 +44,10 @@ Features: F-DIR-06 Path crumbs
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-03 Folder page (list) | Deep folder: header shows house › … › folders above › name |
-| 2 | SCR-05 Folded path | Tap "…": folded folders, nearest first |
+| 1 | SCR-03 Folder page (list) | Deep folder: header shows … › folders above › name |
+| 2 | SCR-05 Folded path | Tap "…": folded folders, nearest first, then Home |
 | 3 | SCR-03 Folder page (list) | Tap a folder: its page |
-| 4 | SCR-01 Browse | Tap house: Browse |
+| 4 | SCR-01 Browse | Tap Home (short path: house in header): Browse |
 
 ### FL-04 Change how a folder looks (standalone)
 
@@ -473,11 +473,12 @@ Features: F-SRV-07 Server attention page, F-SRV-06 Edit server / Update sign-in 
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-03 Folder page (list) | Opening: identity changed |
+| 1 | SCR-03 Folder page (list) | Opening: identity changed, security warning |
 | 2 | SCR-01 Browse | Row shows attention |
-| 3 | SCR-51 Server attention | Server attention page |
+| 3 | SCR-51 Server attention | Server attention page: security warning |
 | 4 | SCR-01 Browse | Menu: Review server identity |
-| 5 | SCR-51 Server attention | Sign-in failed (no stored password) |
+| 5 | SCR-03 Folder page (list) | Opening: sign-in failed (no stored password) |
+| 6 | SCR-51 Server attention | Server attention page: sign-in failed |
 
 ### FL-32 Work with files on a server (bridge)
 

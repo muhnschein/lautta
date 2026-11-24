@@ -2,6 +2,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "PathFold.js" as PathFold
+import "../FileIcons.js" as FileIcons
 
 Item {
     id: crumbs
@@ -12,18 +13,21 @@ Item {
     property string titleFamily: Theme.fontFamilyHeading
     property Item menuHost
     property int menuMost
+    property real pageWidth
+    //% "Home"
+    property string homeText: qsTrId("lautta-path-home")
     property var widths: []
     property Item _menu
 
-    readonly property bool hasAncestors: steps.count > 1
-    readonly property real separatorWidth: houseSeparator.width
-    readonly property real _lead: houseButton.width + separatorWidth
-    readonly property real _foldable: hasAncestors ? dotsButton.width + separatorWidth : 0
-    readonly property real reserve: _lead + _foldable + Theme.paddingMedium
-    readonly property real room: width + _foldable
-    readonly property int folded: PathFold.folded(widths, separatorWidth, dotsButton.width, room)
+    readonly property real separatorWidth: leadSeparator.width
+    readonly property real backTapWidth: Theme.itemSizeSmall
+    readonly property real reserve: dotsButton.width + separatorWidth + Theme.paddingMedium
+    readonly property real leftMargin: backTapWidth + reserve
+    readonly property bool homeShown: PathFold.homeFits(widths, separatorWidth, houseButton.width,
+                                                        width + reserve - Math.max(Theme.paddingMedium, pageWidth / 4 - backTapWidth))
+    readonly property int folded: PathFold.folded(widths, separatorWidth, width)
     readonly property var offsets: PathFold.offsets(widths, separatorWidth, folded)
-    readonly property real shownWidth: PathFold.shownWidth(widths, separatorWidth, dotsButton.width, folded)
+    readonly property real _lead: (homeShown ? houseButton.width : dotsButton.width) + separatorWidth
     readonly property real textBaseline: titleTop + heading.ascent
     readonly property real menuHeight: _menu ? _menu.height : 0
 
@@ -62,13 +66,14 @@ Item {
             right: parent.right
             rightMargin: Theme.paddingMedium
         }
-        width: crumbs._lead + crumbs.shownWidth
+        width: crumbs._lead + PathFold.tailWidth(crumbs.widths, crumbs.separatorWidth, crumbs.folded)
         height: parent.height
 
         BackgroundItem {
             id: houseButton
 
             objectName: "crumbHome"
+            visible: crumbs.homeShown
             width: house.width + 2 * Theme.paddingMedium
             height: parent.height
             onClicked: crumbs.home()
@@ -76,22 +81,23 @@ Item {
             HighlightImage {
                 id: house
 
+                objectName: "crumbHouse"
                 x: Theme.paddingMedium
                 y: Math.round(crumbs.titleTop + (heading.height - height) / 2)
                 width: Theme.iconSizeSmallPlus
                 height: width
                 sourceSize.width: width
                 sourceSize.height: height
-                source: "image://theme/icon-m-home"
+                source: FileIcons.source("home", Theme.pixelRatio)
                 highlighted: houseButton.highlighted
             }
         }
 
         Label {
-            id: houseSeparator
+            id: leadSeparator
 
             objectName: "crumbSeparator"
-            x: houseButton.width
+            x: crumbs._lead - width
             y: Math.round(crumbs.textBaseline - baselineOffset)
             text: "›"
             color: Theme.secondaryColor
@@ -101,8 +107,7 @@ Item {
             id: dotsButton
 
             objectName: "crumbDots"
-            visible: crumbs.folded > 0
-            x: crumbs._lead
+            visible: !crumbs.homeShown
             width: dotsLabel.width + 2 * Theme.paddingMedium
             height: parent.height
             onClicked: crumbs.openFolded()
@@ -115,14 +120,6 @@ Item {
                 text: "…"
                 color: dotsButton.highlighted ? Theme.highlightColor : Theme.primaryColor
             }
-        }
-
-        Label {
-            visible: dotsButton.visible
-            x: dotsButton.x + dotsButton.width
-            y: houseSeparator.y
-            text: houseSeparator.text
-            color: Theme.secondaryColor
         }
 
         Repeater {
@@ -139,7 +136,7 @@ Item {
 
                 objectName: "crumb"
                 visible: index >= crumbs.folded && index < steps.count - 1
-                x: crumbs._lead + (crumbs.folded > 0 ? crumbs._foldable : 0) + (crumbs.offsets[index] || 0)
+                x: crumbs._lead + (crumbs.offsets[index] || 0)
                 width: crumbWidth + crumbs.separatorWidth
                 height: parent.height
                 onCrumbWidthChanged: crumbs.measure()
@@ -164,8 +161,8 @@ Item {
 
                 Label {
                     x: stepButton.width
-                    y: houseSeparator.y
-                    text: houseSeparator.text
+                    y: leadSeparator.y
+                    text: leadSeparator.text
                     color: Theme.secondaryColor
                 }
             }
@@ -184,8 +181,8 @@ Item {
                 MenuItem {
                     readonly property Item step: steps.itemAt(modelData)
 
-                    text: step ? step.name : ""
-                    onDelayedClick: crumbs.picked(step.uri)
+                    text: modelData < 0 ? crumbs.homeText : step ? step.name : ""
+                    onDelayedClick: modelData < 0 ? crumbs.home() : crumbs.picked(step.uri)
                 }
             }
         }
