@@ -34,6 +34,7 @@ Page {
             PageHeader {
                 //% "Checksums"
                 title: qsTrId("lautta-checksum-title")
+                description: App.nameOf(page.uri)
             }
         }
 

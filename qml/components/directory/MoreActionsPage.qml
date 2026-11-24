@@ -3,7 +3,6 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../"
-import "../FileIcons.js" as FileIcons
 import "ContextActions.js" as Actions
 import "Selection.js" as Selection
 
@@ -45,37 +44,10 @@ Page {
             }
         }
 
-        delegate: BackgroundItem {
-            id: row
-
-            objectName: "moreRow"
-            height: Theme.itemSizeSmall
+        delegate: MoreActionRow {
+            text: modelData.text
+            icon: modelData.icon
             onClicked: page.choose(modelData.id)
-
-            AppIcon {
-                id: icon
-
-                anchors {
-                    left: parent.left
-                    leftMargin: Theme.horizontalPageMargin
-                    verticalCenter: parent.verticalCenter
-                }
-                icon: FileIcons.sized(modelData.icon, iconSize)
-                highlighted: row.highlighted
-            }
-
-            Label {
-                anchors {
-                    left: icon.right
-                    leftMargin: Theme.paddingLarge
-                    right: parent.right
-                    rightMargin: Theme.horizontalPageMargin
-                    verticalCenter: parent.verticalCenter
-                }
-                text: modelData.text
-                truncationMode: TruncationMode.Fade
-                color: row.highlighted ? Theme.highlightColor : Theme.primaryColor
-            }
         }
 
         VerticalScrollDecorator { }
