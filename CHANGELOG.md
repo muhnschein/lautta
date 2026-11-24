@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Times of files inside a Zip are right when the Zip has no Unix times, as in ones made with Python; they were off by the phone's offset from UTC ([#206](https://github.com/muhnschein/lautta/issues/206)).
 - The Home page shows only how much space is free on the phone and on memory cards and USB drives, as "12 GB free", no longer "12 GB free of 50 GB".
 - The start page is called *Home* now, no longer *Browse*, and its settings are *Home page*. What you hid or reordered there stays as it was ([#143](https://github.com/muhnschein/lautta/issues/143)).
 - Saving files shared to Lautta works like a folder in the app: *Save here* on top, what gets saved below it, then the folder with its path to tap your way up, or to *Locations* by the house. Folders open in place; files show dimmed, so you see what is there already. It opens where you saved last (Downloads the first time), *Locations* lists the last three folders you saved to, and the pulley makes a new folder. *Save here* is off where Lautta may not add files ([#95](https://github.com/muhnschein/lautta/issues/95)).

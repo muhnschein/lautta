@@ -10,6 +10,7 @@ use crate::entry::Kind;
 use crate::error::{Error, ErrorKind, Result};
 use crate::password::Password;
 use crate::zipaes::{self, AesField, Decryptor};
+use chrono::{DateTime, Local, Offset, TimeZone};
 use std::io::{self, Read, Seek, SeekFrom};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime};
@@ -260,15 +261,24 @@ fn classify(made_by: u16, attrs: u32, name: &[u8]) -> (Kind, Option<u32>) {
     }
 }
 
-/// Local time treated as UTC.
 pub fn dos_to_time(date: u16, time: u16) -> SystemTime {
+    dos_to_time_in(&Local, date, time)
+}
+
+fn dos_to_time_in<Tz: TimeZone>(tz: &Tz, date: u16, time: u16) -> SystemTime {
     let year = 1980 + i64::from(date >> 9);
     let month = i64::from((date >> 5) & 0xF).clamp(1, 12);
     let day = i64::from(date & 0x1F).max(1);
-    let secs = days_from_civil(year, month, day) * 86_400
+    let wall = days_from_civil(year, month, day) * 86_400
         + i64::from(time >> 11) * 3600
         + i64::from((time >> 5) & 0x3F) * 60
         + i64::from(time & 0x1F) * 2;
+    let offset = DateTime::from_timestamp(wall, 0).map_or(0, |t| {
+        tz.offset_from_utc_datetime(&t.naive_utc())
+            .fix()
+            .local_minus_utc()
+    });
+    let secs = wall - i64::from(offset);
     SystemTime::UNIX_EPOCH + Duration::from_secs(u64::try_from(secs).unwrap_or(0))
 }
 
@@ -414,18 +424,25 @@ impl Read for Checked {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::FixedOffset;
 
     #[test]
     fn dos_time_conversion() {
         // 2024-03-05 12:34:56
         let date = ((2024 - 1980) << 9) | (3 << 5) | 5;
         let time = (12 << 11) | (34 << 5) | (56 / 2);
-        let t = dos_to_time(date as u16, time as u16);
-        let secs = t
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        assert_eq!(secs, 1_709_642_096);
+        let secs = |tz: &FixedOffset| {
+            dos_to_time_in(tz, date as u16, time as u16)
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0)
+        };
+        assert_eq!(secs(&FixedOffset::east_opt(0).unwrap()), 1_709_642_096);
+        assert_eq!(secs(&FixedOffset::east_opt(3600).unwrap()), 1_709_642_096 - 3600);
+        assert_eq!(
+            secs(&FixedOffset::west_opt(5 * 3600).unwrap()),
+            1_709_642_096 + 5 * 3600
+        );
     }
 
     #[test]
