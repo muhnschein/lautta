@@ -47,7 +47,7 @@ Item {
         visible: band.hasPath
         anchors {
             left: parent.left
-            leftMargin: Theme.horizontalPageMargin
+            leftMargin: Theme.horizontalPageMargin + crumbs.reserve
             right: current.left
         }
         height: parent.height

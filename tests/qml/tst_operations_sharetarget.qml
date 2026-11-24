@@ -3,6 +3,7 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../../qml/pages"
+import "../../qml/components/directory"
 
 ApplicationWindow {
     id: test
@@ -27,6 +28,23 @@ ApplicationWindow {
         target: Operations
         onJobFinished: if (ok && resultUri.indexOf("packed") >= 0) Operations.openArchive(resultUri, "")
         onArchiveOpened: test.packed = rootUri
+    }
+
+    PathModel { id: way }
+
+    Component {
+        id: bandBench
+
+        Page {
+            property alias band: benchBand
+
+            PathBand {
+                id: benchBand
+
+                title: "Deepest"
+                pathModel: way
+            }
+        }
     }
 
     initialPage: Component {
@@ -360,6 +378,30 @@ ApplicationWindow {
         leave()
     }
 
+    function checkBandWidths() {
+        way.uri = deepest
+        var page = pageStack.push(bandBench, {}, PageStackAction.Immediate)
+        var band = page.band
+        var row = named(band, "crumbRow")
+        var title = named(band, "bandTitle")
+        var crumbs = named(band, "bandCrumbs")
+        if (!row || !title || !crumbs || !waitFor(function () { return crumbs.widths.length === 4 }, "the folders above to be measured"))
+            return
+        var outside = []
+        var folds = []
+        for (var width = 2000; width > 2 * Theme.horizontalPageMargin + crumbs.reserve + title.implicitWidth; width -= 4) {
+            band.width = width
+            var left = row.mapToItem(band, 0, 0).x
+            if (left < Theme.horizontalPageMargin - 0.5 || left + row.width > title.x + 0.5)
+                outside.push(width)
+            if (folds.indexOf(crumbs.folded) < 0)
+                folds.push(crumbs.folded)
+        }
+        same(folds, [0, 1, 2, 3, 4], "from all folders shown to all folded")
+        same(outside, [], "at every width house, dots and folders stay between the band's edge and the name")
+        leave()
+    }
+
     function checkPlaceStatus() {
         var page = share([App.localUrl(shared)])
         same([page.rootStatus("attention", "auth-failed", "NAS"), page.rootStatus("attention", "server-identity-changed", "NAS"),
@@ -377,6 +419,7 @@ ApplicationWindow {
         checkOtherViews()
         checkGrid()
         checkPlaceStatus()
+        checkBandWidths()
         checkReadOnly()
         reachedEnd = true
     }
