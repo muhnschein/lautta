@@ -461,10 +461,6 @@
         <source>Ask before large operations</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-settings-large-value">
-        <source>Over %1 items or %2</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-settings-search">
         <source>Search</source>
         <translation type="unfinished"></translation>
@@ -2612,6 +2608,14 @@
     </message>
     <message id="lautta-home-volume-free">
         <source>%1 free</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-large-gb">
+        <source>Over %1 items or %2 GB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-settings-large-mb">
+        <source>Over %1 items or %2 MB</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-empty-hint-paste">
