@@ -2,7 +2,8 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
-import "../ErrorText.js" as ErrorText
+import "../directory"
+import "../ServerWarning.js" as ServerWarning
 
 Page {
     id: page
@@ -11,12 +12,20 @@ Page {
     property string serverName
     property string attention
 
-    readonly property bool identity: attention === "server-identity-changed"
+    readonly property string kind: ServerWarning.kindOf(attention)
+
+    function act(action) {
+        if (action === "account")
+            Bridge.editAccount("lautta://" + page.locationId + "/")
+        else
+            pageStack.pop()
+    }
 
     allowedOrientations: Orientation.All
 
     SilicaFlickable {
         anchors.fill: parent
+        contentHeight: Math.max(height, warning.y + warning.height + Theme.paddingLarge)
 
         PageHeader {
             id: header
@@ -24,29 +33,21 @@ Page {
             description: App.displayAddress("lautta://" + page.locationId + "/")
         }
 
-        ViewPlaceholder {
-            enabled: true
-            text: page.identity
-                  //% "Server identity changed"
-                  ? qsTrId("lautta-attention-identity-title")
-                  //% "Sign-in failed"
-                  : qsTrId("lautta-attention-auth-title")
-            hintText: ErrorText.message(page.identity ? "ServerIdentityChanged" : "AuthFailed",
-                                        { "location": page.serverName })
+        FolderPlaceholder {
+            id: warning
+
+            objectName: "attentionWarning"
+            x: Theme.horizontalPageMargin
+            y: Math.max(header.height, Math.round((page.height - height) / 2))
+            level: ServerWarning.level(page.kind)
+            title: ServerWarning.title(page.kind)
+            hint: ServerWarning.hint(page.kind, page.serverName)
+            //% "Go back"
+            buttons: [{ "text": ServerWarning.fixText(page.kind), "action": "account", "primary": true },
+                      { "text": qsTrId("lautta-attention-back"), "action": "back" }]
+            onTriggered: page.act(action)
         }
 
-        Button {
-            anchors {
-                horizontalCenter: parent.horizontalCenter
-                bottom: parent.bottom
-                bottomMargin: parent.height / 4
-            }
-            text: page.identity
-                  //% "Review in Settings"
-                  ? qsTrId("lautta-attention-review")
-                  //% "Update sign-in"
-                  : qsTrId("lautta-attention-update")
-            onClicked: Bridge.editAccount("lautta://" + page.locationId + "/")
-        }
+        VerticalScrollDecorator {}
     }
 }
