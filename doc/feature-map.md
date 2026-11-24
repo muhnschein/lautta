@@ -22,7 +22,7 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | **attention** | server state needing user: `auth-failed`, `server-identity-changed` | |
 | **folder page** | `DirectoryPage`: one folder's listing | "directory view" in UI talk |
 | **list / grid** | folder view modes (grid 3 or 4 per row) | |
-| **path crumbs** | folder header, left of folder name: house (Browse), then folders above, each a tap target; what doesn't fit folds into "…" | "breadcrumbs", "path menu" |
+| **path crumbs** | folder header, left of folder name: house (Browse) while whole path fits, then folders above, each a tap target; what doesn't fit folds into "…", house too | "breadcrumbs", "path menu" |
 | **pulley** | Silica pull-down menu at page top | "pull-down", "menu" |
 | **context menu** | long-press menu on a row | |
 | **More actions** | page listing the rest of item actions | |
@@ -159,7 +159,7 @@ Retired, never reuse: F-SRV-08 Server question, F-SRV-09 Connect to server, F-SR
 - **F-DIR-03 Grid hint** — "Shown as grid because most items are photos", Use list.
 - **F-DIR-04 Sort and filter** — sort by Name/Size/Modified/Type, Descending, Folders first, Show hidden files. *Entry:* View options (folder pulley or Settings).
 - **F-DIR-05 Thumbnails switch** — Show thumbnails (untrusted-file warning), Thumbnails from servers, largest server file, cache size.
-- **F-DIR-06 Path crumbs** — header shows house › folders above › folder name. Tap folder: back to its page; no page of it on stack → it replaces pages inside it. Tap house: back to Browse. Too long → farthest fold into "…": context menu under header, nearest first, as many as fit. Hidden while selecting. *Code:* `PathCrumbs.qml`, `PathFold.js`, `PathNav.js`.
+- **F-DIR-06 Path crumbs** — header shows house › folders above › folder name. Tap folder: back to its page; no page of it on stack → it replaces pages inside it. Tap house: back to Browse. House only while whole path fits and house stays right of page's left quarter; else "…" leads. Too long → farthest fold into "…": context menu under header, nearest first, as many as fit, last row Home (Browse). Hidden while selecting. *Code:* `PathCrumbs.qml`, `PathFold.js`, `PathNav.js`.
 - **F-DIR-07 Folder states** — empty ("Pull down to create a folder or paste"), hidden (Add only: "Files here are hidden"), no access, sign-in failed (Update sign-in), not found, can't reach (Retry, Details).
 - **F-DIR-08 Large folder** — "N loaded · large folder: name order, thumbnails off", Stop.
 - **F-DIR-09 Live updates** — inotify refresh of local folders. *Code:* `watch.rs`.

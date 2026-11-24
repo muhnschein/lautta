@@ -238,15 +238,16 @@ ApplicationWindow {
     function checkCrumbs(view, label) {
         var bar = named(view, "folderPageHeader")
         var crumbs = named(view, "folderCrumbs")
-        var home = named(view, "crumbHome")
-        if (!bar || !crumbs || !home)
+        var row = named(view, "crumbRow")
+        if (!bar || !crumbs || !row)
             return
         expect(crumbs.visible, label + ": the path shows beside the folder's name")
-        expect(bar.leftMargin === Theme.horizontalPageMargin + crumbs.reserve && crumbs.reserve > 0,
-               label + ": the name leaves room for the way home: " + bar.leftMargin + " vs " + crumbs.reserve)
-        var left = home.mapToItem(bar, 0, 0).x
-        expect(left >= Theme.horizontalPageMargin - 0.5, label + ": the path starts inside the page margin: " + left)
-        expect(home.height === bar.height, label + ": a crumb is as tall as the header: " + home.height + " vs " + bar.height)
+        var start = Theme.itemSizeSmall
+        expect(bar.leftMargin === start + crumbs.reserve && crumbs.reserve > 0,
+               label + ": the name leaves room for the path's dots: " + bar.leftMargin + " vs " + crumbs.reserve)
+        var left = row.mapToItem(bar, 0, 0).x
+        expect(left >= start - 0.5, label + ": the path starts right of where a tap goes a page back: " + left)
+        expect(row.height === bar.height, label + ": a crumb is as tall as the header: " + row.height + " vs " + bar.height)
         expect(crumbs.menuMost === Math.floor((view.height - bar.height) / Theme.itemSizeSmall) && crumbs.menuMost > 0,
                label + ": folded folders fill at most the page below the header: " + crumbs.menuMost)
         view.startSelection()

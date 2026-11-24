@@ -971,7 +971,7 @@ Item {
                     id: pageHeader
 
                     objectName: "folderPageHeader"
-                    leftMargin: Theme.horizontalPageMargin + (crumbs.visible ? crumbs.reserve : 0)
+                    leftMargin: crumbs.visible ? crumbs.leftMargin : Theme.horizontalPageMargin
                     title: view.selecting
                            //% "%n selected"
                            ? qsTrId("lautta-dir-selected", dir.selectedCount)
@@ -991,6 +991,7 @@ Item {
                             titleTop: pageHeader.topMargin
                             menuHost: headerBar
                             menuMost: Math.max(0, Math.floor((view.height - pageHeader.height) / Theme.itemSizeSmall))
+                            pageWidth: view.width
                             onPicked: view.ancestorPicked(uri)
                             onHome: view.homePicked()
                         }

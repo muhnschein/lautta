@@ -2638,5 +2638,9 @@
         <source>Lautta won&apos;t connect until you check the new identity.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-path-home">
+        <source>Home</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

@@ -44,10 +44,10 @@ Features: F-DIR-06 Path crumbs
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-03 Folder page (list) | Deep folder: header shows house › … › folders above › name |
-| 2 | SCR-05 Folded path | Tap "…": folded folders, nearest first |
+| 1 | SCR-03 Folder page (list) | Deep folder: header shows … › folders above › name |
+| 2 | SCR-05 Folded path | Tap "…": folded folders, nearest first, then Home |
 | 3 | SCR-03 Folder page (list) | Tap a folder: its page |
-| 4 | SCR-01 Browse | Tap house: Browse |
+| 4 | SCR-01 Browse | Tap Home (short path: house in header): Browse |
 
 ### FL-04 Change how a folder looks (standalone)
 
