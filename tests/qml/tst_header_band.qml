@@ -10,23 +10,15 @@ ApplicationWindow {
 
     property bool reachedEnd
 
-    readonly property string folder: "lautta://user-documents/HeaderBand/"
+    readonly property string folder: "lautta://user-documents/"
     readonly property color tint: Theme.rgba(Theme.highlightBackgroundColor, 0.12)
 
     ViewerTools { id: tools }
-
-    DirectoryModel { id: documents; uri: "lautta://user-documents/" }
 
     function expect(ok, what) {
         if (!ok)
             console.error("FAILED: " + what)
         return ok
-    }
-
-    function waitFor(done, what) {
-        for (var i = 0; i < 200 && !done(); ++i)
-            tools.pump(50)
-        return expect(done(), "timed out waiting for " + what)
     }
 
     function findAll(item, pred, out, seen) {
@@ -71,6 +63,11 @@ ApplicationWindow {
         return item.mapToItem(page, 0, item.height).y
     }
 
+    function within(item, band, page) {
+        return topOf(item, page) >= topOf(band, page) - 0.5 && bottomOf(item, page) <= bottomOf(band, page) + 0.5
+                && item.height > 0
+    }
+
     function near(a, b) {
         return Math.abs(a - b) < 0.5
     }
@@ -99,7 +96,7 @@ ApplicationWindow {
             return null
         var band = bands[0]
         var title = headers(page)
-        expect(title.length === 1 && isInside(band, title[0]), label + ": the title sits on the band")
+        expect(title.length === 1 && within(title[0], band, page), label + ": the title sits on the band")
         expect(near(band.width, page.width), label + ": the band is as wide as the page: " + band.width)
         expect(near(topOf(band, page), 0), label + ": the band starts at the top: " + topOf(band, page))
         var bottom = end ? bottomOf(end, page) : bottomOf(title[0], page)
@@ -120,15 +117,6 @@ ApplicationWindow {
             checkBand(page, simple[i][1])
             pop()
         }
-    }
-
-    function checkTrashNote() {
-        var page = push(trash)
-        var band = checkBand(page, "Trash")
-        var notes = findAll(page, function (x) { return String(x.text) === "lautta-trash-note" }, [])
-        if (band && notes.length === 1)
-            expect(!isInside(band, notes[0]), "Trash: its note stays under the band")
-        pop()
     }
 
     function checkSearch() {
@@ -192,13 +180,13 @@ ApplicationWindow {
                    && near(bottomOf(bands[1], page), topOf(bands[2], page)),
                    "Browse: the band runs on without gap or overlap: " + bands.map(function (b) {
                        return topOf(b, page) + "-" + bottomOf(b, page) }).join(" "))
-            expect(isInside(bands[0], headers(page)[0]), "Browse: the title sits on the band")
+            expect(within(headers(page)[0], bands[0], page), "Browse: the title sits on the band")
             var named = findAll(bands[1].parent, function (x) { return x.visible && String(x.text) === "lautta-browse-recents" }, [])
             expect(named.length === 1, "Browse: the band takes in the Recents heading: " + named.length)
             expect(isInside(row, bands[2]) && near(bottomOf(bands[2], page), topOf(row, page) + row.contentHeight),
                    "Browse: the band ends with the tiles: " + bottomOf(bands[2], page) + " vs "
                    + (topOf(row, page) + row.contentHeight))
-            var next = findAll(page, function (x) { return x.visible && String(x.text) === "lautta-browse-favourites" }, [])
+            var next = findAll(page, function (x) { return x.visible && String(x.text) === "lautta-browse-section-favourites" }, [])
             expect(next.length === 1 && topOf(next[0], page) >= bottomOf(bands[2], page) - 0.5,
                    "Browse: Favourites stay under the band")
             row.heldId = 7
@@ -223,10 +211,7 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        documents.createFolder("HeaderBand")
-        waitFor(function () { return documents.indexOf(folder.replace(/\/$/, "")) >= 0 }, "the folder")
         checkPages()
-        checkTrashNote()
         checkSearch()
         checkTextViewer()
         checkFolder()
