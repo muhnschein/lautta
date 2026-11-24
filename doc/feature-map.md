@@ -142,7 +142,7 @@ Format: **F-ID Name** (mode) — what. *Entry:* where user starts it. *Proof:* w
 - **F-SRV-04 Account servers** — SFTP, SMB, WebDAV, FTPS accounts from Settings › Accounts with *Files* on and an access level other than not allowed; row dot shows state; opening connects. *Entry:* Servers rows.
 - **F-SRV-05 Add server** — pulley "Add server" opens Settings › Accounts (netvfs). *Proof:* Sailfish Settings opens.
 - **F-SRV-06 Edit server / Update sign-in / Review server identity** — row menu, hands off to Settings.
-- **F-SRV-07 Server attention page** — "Sign-in failed" or "Server identity changed" with Update sign-in / Review in Settings. *Entry:* tap row with attention.
+- **F-SRV-07 Server attention page** — "Sign-in failed" (warning) or "Server identity changed" (security warning: red, "Security warning") with attention icon, Update sign-in / Review identity, Go back. Folder placeholder on server shows same warning. *Entry:* tap row with attention.
 - **F-SRV-11 Nearby** — mDNS-found servers while Browse is in front; tap → SCR-60 "This server isn't set up yet …", Set up opens Settings' add-account flow for that provider. *Proof:* "Nearby" section rows; Settings opens.
 - **F-SRV-12 Offline listing** — cached listing with banner "Offline. Showing the copy from …", Retry. *Code:* `dircache.rs`.
 - **F-SRV-13 Reconnect** — backoff, rows show connecting; running tasks wait then resume.
