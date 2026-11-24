@@ -32,7 +32,7 @@ User tests RPM on phone; that test judges feel, lag, transitions. Say exactly wh
 
 ## Device tests
 
-- Test phone: OnePlus 6, SFOS 5.1, via `muhnschein-sfos-harness` workflow `do`; lautta's caller notes: its `apps/lautta.md`. Its AGENTS.md rules every phone run (baseline, no blind taps, reboot, language, `clean_slate`); helpers: its README, `scripts/lib.sh`. Test accounts and test servers only. Never run fork or others' PR code there: any job can root phone.
+- Test phone: on the local SFOS test host via the harness's `local/run.sh` (`muhnschein-sfos-harness`, see its `local/README.md`); lautta's caller notes: its `apps/lautta.md`. Its AGENTS.md rules every phone run (baseline, no blind taps, reboot, language, `clean_slate`); helpers: its README, `scripts/lib.sh`. Test accounts and test servers only. Never run fork or others' PR code there: any run can root phone.
 - PR build onto phone: `install_artifact muhnschein/lautta RUN_ID harbour-lautta`, RUN_ID of this PR's green CI run.
 - Every run starts from named state; `state.txt` records it plus RPM name and sha256:
   - `clean`: `reset`: quit app, drop sailjail grant, `rpm -e`, reset dconf `/apps/harbour-lautta/`, delete `~/.local/share/org.netvfs/lautta`, `~/.config/org.netvfs/lautta`, `~/.cache/org.netvfs/lautta` (and unsandboxed `harbour-lautta` dirs); install. Standalone: no netvfs on phone.
@@ -43,7 +43,7 @@ User tests RPM on phone; that test judges feel, lag, transitions. Say exactly wh
 - Footprint check (`fs_mark`, `footprint`): file app touched outside known dirs → add to reset or fail run. Leftovers taint results.
 - Before/after: same start state, same steps.
 - Motion or timing change: launch with `FRAMELOG`, report `frames` (fps, slow frames, worst gap per animation). Never measure frames while recording: recorder slows compositor.
-- Privacy: user stays muhnschein, nothing more. Harness results come scrubbed (no location, addresses, device or network ids, server names; its AGENTS.md "Privacy"). PR evidence only from those files (crops, GIFs, charts made from them OK); never type identifiers in. No passwords, login links, QR codes. Location tests: harness fake places only, never real fix.
+- Privacy: user stays muhnschein, nothing more. Harness output leaves the test host only scrubbed, through its `local/publish.sh` (no location, addresses, device or network ids, server names; its AGENTS.md "Privacy"). PR evidence only from those files (crops, GIFs, charts made from them OK); never type identifiers in. No passwords, login links, QR codes. Location tests: harness fake places only, never real fix.
 - Harness proves function and frame timing. Feel, lag, transitions stay user's call on device.
 
 ## Local checks
