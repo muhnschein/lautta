@@ -34,7 +34,7 @@ Page {
             }
             SettingsEntry {
                 objectName: "homePageEntry"
-                iconSource: "image://theme/icon-m-home"
+                iconSource: FileIcons.source("home", Theme.pixelRatio)
                 //% "Home page"
                 text: qsTrId("lautta-settings-home-page")
                 onClicked: page.open("HomeSettingsPage.qml")
