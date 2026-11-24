@@ -63,7 +63,16 @@ fn check_password(reader: &mut ArchiveReader<File>) -> Result<()> {
         if !entry.has_stream() {
             return Ok(true);
         }
-        failed = data.read(&mut [0u8; 4096]).is_err();
+        let mut buf = [0u8; 4096];
+        let want = buf.len().min(usize::try_from(entry.size()).unwrap_or(usize::MAX));
+        let mut got = 0;
+        while got < want {
+            match data.read(&mut buf[got..want]) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => got += n,
+            }
+        }
+        failed = got < want;
         Ok(false)
     });
     if failed || res.is_err() {

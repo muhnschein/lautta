@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import "FileIcons.js" as FileIcons
 
 Item {
     id: line
@@ -48,7 +49,7 @@ Item {
         visible: line.iconShown
         x: line.start + line.leadWidth
         anchors.verticalCenter: parent.verticalCenter
-        source: Qt.resolvedUrl("../icons/server.svg")
+        source: FileIcons.source("server", Theme.pixelRatio)
         width: Math.round(line.fontSize * 1.25)
         height: width
         sourceSize.width: width

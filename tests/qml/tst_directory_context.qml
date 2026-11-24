@@ -96,7 +96,7 @@ ApplicationWindow {
     }
 
     function glyph(kind) {
-        return String(Qt.resolvedUrl("../../qml/icons/" + FileIcons.glyph(kind, false, Theme.iconSizeMedium) + ".svg"))
+        return FileIcons.source(FileIcons.glyph(kind, false, Theme.iconSizeMedium), Theme.pixelRatio)
     }
 
     function pageRows(page) {
@@ -123,7 +123,7 @@ ApplicationWindow {
         var got = JSON.stringify(rows.map(function(r) { return [r.text, r.icon] }))
         var want = JSON.stringify([[Actions.text("favourite"), "image://theme/icon-m-favorite"],
                                    [Actions.text("compress"), glyph("archive")],
-                                   [Actions.text("checksums"), String(Qt.resolvedUrl("../../qml/icons/checksum.svg"))],
+                                   [Actions.text("checksums"), FileIcons.source("checksum", Theme.pixelRatio)],
                                    [Actions.text("moveToNewFolder"), glyph("folder")]].slice(0, rows.length))
         if (rows.length < 3 || got !== want)
             return fail("More actions rows: " + got + " != " + want)

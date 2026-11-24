@@ -225,13 +225,11 @@ ApplicationWindow {
                 if (!first || first.name !== "" || !first.chosen || win.iconCells().length !== favs.iconChoices().length + 1)
                     return win.fail("a file offers its own icon first, chosen")
                 var image = win.findAll(first, function(x) { return x.source !== undefined }, [])
-                var document = String(Qt.resolvedUrl("../../qml/icons/"
-                                                      + FileIcons.glyph("markdown", false, Theme.iconSizeMedium) + ".svg"))
+                var document = FileIcons.source(FileIcons.glyph("markdown", false, Theme.iconSizeMedium), Theme.pixelRatio)
                 if (image.length === 0 || String(image[0].source) !== document)
                     return win.fail("the file's own icon: " + (image.length > 0 ? image[0].source : "none"))
                 var folderImage = win.findAll(win.iconCell("file-folder"), function(x) { return x.source !== undefined }, [])
-                var folderGlyph = String(Qt.resolvedUrl("../../qml/icons/"
-                                                         + FileIcons.sized("file-folder", Theme.iconSizeMedium) + ".svg"))
+                var folderGlyph = FileIcons.source(FileIcons.sized("file-folder", Theme.iconSizeMedium), Theme.pixelRatio)
                 if (folderImage.length === 0 || String(folderImage[0].source) !== folderGlyph)
                     return win.fail("the folder to choose: " + (folderImage.length > 0 ? folderImage[0].source : "none"))
                 win.iconCell("favorite").clicked(null)

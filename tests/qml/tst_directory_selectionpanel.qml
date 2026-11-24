@@ -113,7 +113,7 @@ ApplicationWindow {
     }
 
     function glyph(kind) {
-        return String(Qt.resolvedUrl("../../qml/icons/" + FileIcons.glyph(kind, false, Theme.iconSizeMedium) + ".svg"))
+        return FileIcons.source(FileIcons.glyph(kind, false, Theme.iconSizeMedium), Theme.pixelRatio)
     }
 
     function pageTitle(page) {

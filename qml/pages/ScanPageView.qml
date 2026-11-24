@@ -5,6 +5,7 @@ import Lautta 1.0
 import "../components/viewers"
 import "../components/viewers/gallery"
 import "../components/ErrorText.js" as ErrorText
+import "../components/FileIcons.js" as FileIcons
 
 FullscreenContentPage {
     id: page
@@ -181,7 +182,7 @@ FullscreenContentPage {
 
                 IconButton {
                     objectName: "rotateButton"
-                    icon.source: Qt.resolvedUrl("../icons/rotate-right.svg")
+                    icon.source: FileIcons.source("rotate-right", Theme.pixelRatio)
                     icon.sourceSize: Qt.size(Theme.iconSizeMedium, Theme.iconSizeMedium)
                     onClicked: page.scan.turn(page.current, 1)
                 }

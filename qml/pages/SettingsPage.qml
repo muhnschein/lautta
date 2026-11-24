@@ -2,6 +2,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "../components/search"
+import "../components/FileIcons.js" as FileIcons
 
 Page {
     id: page
@@ -40,7 +41,7 @@ Page {
             }
             SettingsEntry {
                 objectName: "viewOptionsRow"
-                iconSource: "image://theme/icon-m-month-view"
+                iconSource: FileIcons.source("view-options", Theme.pixelRatio)
                 //% "View options"
                 text: qsTrId("lautta-settings-view-options")
                 onClicked: page.open("ViewOptionsPage.qml")

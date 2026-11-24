@@ -67,7 +67,7 @@ ApplicationWindow {
     }
 
     function documentGlyph() {
-        return String(Qt.resolvedUrl("../../qml/icons/" + FileIcons.glyph("markdown", false, Theme.iconSizeMedium) + ".svg"))
+        return FileIcons.source(FileIcons.glyph("markdown", false, Theme.iconSizeMedium), Theme.pixelRatio)
     }
 
     function icons(row) {

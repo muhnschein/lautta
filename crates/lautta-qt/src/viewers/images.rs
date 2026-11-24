@@ -272,6 +272,7 @@ cpp! {{
         engine->addImageProvider(QStringLiteral("lautta-file"), new LauttaImageProvider(1));
         engine->addImageProvider(QStringLiteral("lautta-pdf"), new LauttaImageProvider(2));
         engine->addImageProvider(QStringLiteral("lautta-cover"), new LauttaImageProvider(3));
+        engine->addImageProvider(QStringLiteral("lautta-icon"), new LauttaIconProvider());
     }
 }}
 

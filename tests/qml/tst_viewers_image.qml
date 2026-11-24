@@ -5,6 +5,7 @@ import QtTest 1.0
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../../qml/viewers"
+import "../../qml/components/FileIcons.js" as FileIcons
 
 QtQuick.Window {
     id: window
@@ -102,7 +103,7 @@ QtQuick.Window {
         expect(view.overlay.active && view.overlay.opacity > 0, "the overlay shows at first")
         var more = named(view.overlay, "moreButton")
         if (expect(more !== null, "the overlay has More")) {
-            expect(String(more.icon.source).slice(-15) === "/icons/more.svg", "More shows the app's icon: " + more.icon.source)
+            expect(String(more.icon.source) === FileIcons.source("more", Theme.pixelRatio), "More shows the app's icon: " + more.icon.source)
             expect(more.icon.status === Image.Ready, "the More icon loaded: " + more.icon.status)
             expect(more.icon.width === Theme.iconSizeMedium && more.icon.height === Theme.iconSizeMedium,
                    "the More icon has the theme icons' size: " + more.icon.width + "x" + more.icon.height)
