@@ -289,10 +289,11 @@ cpp! {{
         engine->addImageProvider(QStringLiteral("lautta-file"), new LauttaImageProvider(1));
         engine->addImageProvider(QStringLiteral("lautta-pdf"), new LauttaImageProvider(2));
         engine->addImageProvider(QStringLiteral("lautta-cover"), new LauttaImageProvider(3));
+        engine->addImageProvider(QStringLiteral("lautta-icon"), new LauttaIconProvider());
     }
 }}
 
-/// Adds `lautta-thumb`, `lautta-file`, `lautta-pdf` and `lautta-cover` providers to a `QQmlEngine` (engine takes
+/// Adds `lautta-thumb`, `lautta-file`, `lautta-pdf`, `lautta-cover` and `lautta-icon` providers to a `QQmlEngine` (engine takes
 /// ownership). Once per engine.
 ///
 /// # Safety

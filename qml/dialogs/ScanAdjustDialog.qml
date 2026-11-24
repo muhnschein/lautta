@@ -5,6 +5,7 @@ import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/scan"
 import "../components/scan/ScanMath.js" as ScanMath
+import "../components/FileIcons.js" as FileIcons
 
 Dialog {
     id: dialog
@@ -240,14 +241,14 @@ Dialog {
         // The app's own icons: the theme's rotate arrows read as undo and redo.
         IconButton {
             objectName: "rotateLeftButton"
-            icon.source: Qt.resolvedUrl("../icons/rotate-left.svg")
+            icon.source: FileIcons.source("rotate-left", Theme.pixelRatio)
             icon.sourceSize: Qt.size(Theme.iconSizeMedium, Theme.iconSizeMedium)
             onClicked: dialog.turn(-1)
         }
 
         IconButton {
             objectName: "rotateRightButton"
-            icon.source: Qt.resolvedUrl("../icons/rotate-right.svg")
+            icon.source: FileIcons.source("rotate-right", Theme.pixelRatio)
             icon.sourceSize: Qt.size(Theme.iconSizeMedium, Theme.iconSizeMedium)
             onClicked: dialog.turn(1)
         }

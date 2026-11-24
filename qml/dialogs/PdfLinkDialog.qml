@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import "../components/FileIcons.js" as FileIcons
 import "../components/viewers/PdfText.js" as PdfText
 
 Dialog {
@@ -35,7 +36,7 @@ Dialog {
 
                 HighlightImage {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    source: Qt.resolvedUrl("../icons/link.svg")
+                    source: FileIcons.source("link", Theme.pixelRatio)
                     sourceSize.width: Theme.iconSizeLarge
                     sourceSize.height: Theme.iconSizeLarge
                     color: Theme.highlightColor
