@@ -154,6 +154,7 @@ ApplicationWindow {
         act()
         waitFor(function () { return done.ok }, what)
         Operations.jobFinished.disconnect(on)
+        waitFor(function () { return flashes.indexOf(done.uri) >= 0 }, what + ": its flash")
         return done.uri
     }
 

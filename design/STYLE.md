@@ -81,6 +81,15 @@ below); real `<button>`/`<a href>`/`<input>`/`<label>` for controls, `aria-label
 icon-only buttons; no `<iframe>`; no scripts building DOM. Use `&amp;` for & in
 attribute values, `&lt;` `&gt;` in text.
 
+## Line weight
+Sailfish's icons draw every outline 2 units × pixel ratio wide (3 px at ratio 1.5), at small,
+medium and large size alike; secondary parts dimmed (60 % opacity), not thinner.
+- Lautta's own icons (`qml/icons`): same. `FileIcons.source` loads them via `image://lautta-icon`,
+  which scales every `stroke-width` so the root's (= outline) comes out that wide at drawn size.
+- Grid per main size, lines on half units: 32 units for medium (64, 96, 128 px), 48 for large,
+  28 for 112 px and grid tiles. Inner lines no wider than outline.
+- Kit (`.ic`): 1.1 px at every size (3 px of 1080).
+
 ## CSS (paste verbatim in each artboard's helmet `<style>`)
 
 ```css
@@ -93,9 +102,9 @@ body{margin:0}
 .amb *{box-sizing:border-box}
 .amb button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:inherit}
 .amb a{color:inherit;text-decoration:none}
-.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
-.ic.m{width:40px;height:40px;stroke-width:1.2}
-.ic.l{width:64px;height:64px;stroke-width:1}
+.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.1;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.m{width:40px;height:40px;stroke-width:.66}
+.ic.l{width:64px;height:64px;stroke-width:.41}
 .hl{color:var(--hl)}.sec{color:var(--sec)}.hl2{color:var(--hl2)}.warn{color:var(--warn)}
 .small{font-size:15px}.xs{font-size:13px}.tiny{font-size:12px}.large{font-size:26px;font-weight:300}.xl{font-size:34px;font-weight:300}
 .mono{font-family:'JetBrains Mono',monospace}

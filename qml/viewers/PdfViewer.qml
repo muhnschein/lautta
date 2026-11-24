@@ -7,6 +7,7 @@ import "../components"
 import "../components/viewers"
 import "../dialogs"
 import "../components/ErrorText.js" as ErrorText
+import "../components/FileIcons.js" as FileIcons
 import "../components/viewers/PdfText.js" as PdfText
 
 Page {
@@ -494,7 +495,7 @@ Page {
 
         HighlightImage {
             anchors.horizontalCenter: parent.horizontalCenter
-            source: page.unlocking ? Qt.resolvedUrl("../icons/lock.svg") : ""
+            source: page.unlocking ? FileIcons.source("lock", Theme.pixelRatio) : ""
             sourceSize.width: Theme.iconSizeLarge
             sourceSize.height: Theme.iconSizeLarge
             color: Theme.highlightColor

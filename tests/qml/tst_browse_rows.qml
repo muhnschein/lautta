@@ -157,13 +157,13 @@ ApplicationWindow {
             return findAll(row, function(x) { return x.themed !== undefined && x.visible }, [])[0]
         }
         var folder = image(rowOf("Documents"))
-        var want = String(Qt.resolvedUrl("../../qml/icons/" + FileIcons.sized("file-folder", Theme.iconSizeMedium) + ".svg"))
+        var want = FileIcons.source(FileIcons.sized("file-folder", Theme.iconSizeMedium), Theme.pixelRatio)
         expect(folder && String(folder.source) === want && folder.status === Image.Ready,
                "a folder row draws the app's folder glyph: " + (folder ? folder.source : "none"))
         var star = image(rowOf("Thesis"))
         expect(star && String(star.source) === "image://theme/icon-m-favorite", "a favourite's star is the theme's")
         var server = image(rowOf("NAS"))
-        expect(server && String(server.source) === String(Qt.resolvedUrl("../../qml/icons/server.svg"))
+        expect(server && String(server.source) === FileIcons.source("server", Theme.pixelRatio)
                && server.status === Image.Ready, "a server row draws the app's server glyph: " + (server ? server.source : "none"))
     }
 
@@ -173,7 +173,7 @@ ApplicationWindow {
         expect(remote && remote.text === "NAS › /srv/photos" && remote.iconShown,
                "a favourite on a server has the server icon before its place")
         var icons = findAll(remote, function(x) { return x.objectName === "remoteIcon" }, [])
-        expect(icons.length === 1 && /\/icons\/server\.svg$/.test(String(icons[0].source)), "the icon is the server icon")
+        expect(icons.length === 1 && /\/icons\/server\.svg\?stroke=/.test(String(icons[0].source)), "the icon is the server icon")
         expect(local && local.text === "Documents › Uni" && !local.iconShown, "a local favourite's place has no icon")
     }
 

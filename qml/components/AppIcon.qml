@@ -2,6 +2,7 @@
 // glyphs vanish on a light ambience.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import "FileIcons.js" as FileIcons
 
 HighlightImage {
     property string icon
@@ -9,7 +10,7 @@ HighlightImage {
     property real iconSize: small ? Theme.iconSizeSmall : Theme.iconSizeMedium
     readonly property bool themed: icon.indexOf(":") >= 0
 
-    source: icon.length === 0 ? "" : (themed ? icon : Qt.resolvedUrl("../icons/" + icon + ".svg"))
+    source: FileIcons.source(icon, Theme.pixelRatio)
     sourceSize.width: iconSize
     sourceSize.height: iconSize
     width: sourceSize.width
