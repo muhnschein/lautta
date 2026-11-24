@@ -5,6 +5,7 @@ use super::*;
 use crate::provider::memory::MemoryProvider;
 use crate::provider::{list_all, no_progress, read_all};
 use std::io::Cursor;
+use std::time::Duration;
 
 fn vp(s: &str) -> VPath {
     VPath::parse(s.as_bytes()).unwrap_or_default()
@@ -353,6 +354,43 @@ async fn conflicting_entries_are_skipped_and_later_duplicates_win() {
     assert_eq!(p.skipped_entries(), 2);
     assert_eq!(read_entry(&p, "same.txt").await, b"newer");
     assert_eq!(read_entry(&p, "dir/file").await, b"1");
+}
+
+#[tokio::test]
+async fn tar_times_out_of_range_list_without_time() {
+    let mut b = tar::Builder::new(Vec::new());
+    tar_add(&mut b, "ok.txt", b"1", tar::EntryType::Regular);
+    // libarchive test_read_format_tar_pax_negative_time.tar: base-256 negative mtime.
+    let negative = [
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x80, 0x0d, 0x5c, 0x80, 0x20,
+    ];
+    for (name, mtime) in [("negative.txt", negative), ("huge.txt", [0xff; 12])] {
+        let mut h = tar::Header::new_gnu();
+        h.set_size(1);
+        h.set_entry_type(tar::EntryType::Regular);
+        h.as_old_mut().name[..name.len()].copy_from_slice(name.as_bytes());
+        h.as_old_mut().mtime = mtime;
+        h.set_cksum();
+        b.append(&h, &b"1"[..]).unwrap();
+    }
+    let tar = b.into_inner().unwrap();
+    for (name, data) in [
+        ("t.tar", tar.clone()),
+        ("t.tar.gz", compressed(Compression::Gzip, &tar)),
+    ] {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = open_named(name, &data, tmp.path()).await.unwrap();
+        let root = list_all(&p, &VPath::root(), Lane::Interactive).await.unwrap();
+        let modified = |n: &str| root.iter().find(|e| e.name == n.as_bytes()).unwrap().modified;
+        assert_eq!(
+            modified("ok.txt"),
+            Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000)),
+            "{name}"
+        );
+        assert_eq!(modified("negative.txt"), None, "{name}");
+        assert_eq!(modified("huge.txt"), None, "{name}");
+        assert_eq!(read_entry(&p, "negative.txt").await, b"1", "{name}");
+    }
 }
 
 #[tokio::test]
