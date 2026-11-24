@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Track info of the media player (`AudioInfo`): tags and where the cover comes from. Values raw,
-//! already plain text; QML lays them out and translates.
 
 use super::{parse_uri, qstr, run_then};
 use crate::runtime::core;
@@ -12,7 +10,6 @@ pub fn register() {
     qml_register_type::<AudioInfoModel>(&crate::qml_uri(), 1, 0, &crate::cstr("AudioInfo"));
 }
 
-/// Numbers are 0 when the file has none; `cover` is `file`, `folder` or empty.
 #[derive(QObject, Default)]
 pub struct AudioInfoModel {
     base: qt_base_class!(trait QObject),
@@ -79,7 +76,6 @@ impl AudioInfoModel {
                     return;
                 }
                 me.loading = false;
-                // Unreadable file: no tags, page shows the file name.
                 me.show(res.as_ref().ok());
                 me.stateChanged();
             },

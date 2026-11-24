@@ -1,16 +1,5 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-2.1-or-later
-# Checks the built RPM (RPMS/*.rpm) in the Sailfish OS Platform SDK:
-#   - Harbour intake: sdk-harbour-rpmvalidator at VALIDATOR_COMMIT; any error fails,
-#     warnings must be listed in doc/harbour-warnings.md;
-#   - binary exports `main`, links __libc_start_main@GLIBC_2.34, no RPATH, only Harbour libraries;
-#   - LGPL text shipped in /usr/share/harbour-lautta/LICENSE;
-#   - package installs into the target, every library resolves;
-#   - every shipped QML file and tests/qml/tst_*.qml loads in the target, each test in its own
-#     process and home; a test with a `scenarioRunning` property runs until it clears it;
-#     the canary test must fail;
-#   - shipped catalogue gives the English plural forms.
-# Env: SDK_IMAGE (container image), TARGET (sb2 target name), DOCKER_ARGS.
 set -eu
 : "${SDK_IMAGE:?}" "${TARGET:?}"
 VALIDATOR_COMMIT=7dd7dd5
@@ -21,10 +10,8 @@ if [ "${1:-}" != --in-sdk ]; then
     trap 'rm -rf "$work" 2>/dev/null || sudo rm -rf "$work"' EXIT
     git clone -q https://github.com/sailfishos/sdk-harbour-rpmvalidator.git "$work/.validator"
     git -C "$work/.validator" checkout -q "$VALIDATOR_COMMIT"
-    # SDK runs as mersdk (uid 100000): world-writable copy.
     (cd "$root" && cp -r --parents RPMS tests/qml tests/translations tests/fonts tools/ci doc/harbour-warnings.md "$work/")
     chmod -R a+rwX "$work"
-    # shellcheck disable=SC2086
     docker run --rm ${DOCKER_ARGS:-} -e TARGET -e SDK_IMAGE -v "$work:/home/mersdk/src" -w /home/mersdk/src \
         "$SDK_IMAGE" bash -euc "${SDK_PREPARE:-true}; sh tools/ci/check-rpm.sh --in-sdk"
     exit 0
@@ -40,7 +27,6 @@ rpm=$(ls RPMS/harbour-lautta-*.aarch64.rpm | grep -v -e debuginfo -e debugsource
 echo "== $rpm"
 rpm -qp --requires "$rpm" | sed 's/^/  requires: /'
 
-# ERROR lines fail; WARNING lines must be documented.
 validator_status=0
 out=$(cd .validator && ./rpmvalidation.sh -c -g . "../$rpm" 2>&1) || validator_status=$?
 echo "$out"
@@ -77,7 +63,6 @@ grep -q 'GNU LESSER GENERAL PUBLIC LICENSE' "$work/usr/share/harbour-lautta/LICE
 size=$(stat -c %s "$bin")
 [ "$size" -le 20971520 ] || fail "binary is $size bytes, over the 20 MB budget"
 
-# TLS must start past the Android TLS slots the GL driver writes on libhybris devices.
 tls_align=$(readelf -lW "$bin" | awk '$1 == "TLS" { print $NF }')
 [ $((tls_align)) -ge 128 ] || fail "TLS segment alignment is ${tls_align:-missing}, needs 128 (libhybris)"
 
@@ -86,18 +71,12 @@ if sb2 -t "$TARGET" ldd /usr/bin/harbour-lautta | grep 'not found'; then
     fail "unresolved libraries"
 fi
 
-# PDF viewer test installs fixtures into Documents, a location only when the folder exists.
 mkdir -p "$HOME/Documents"
 
-# Tests import "../../qml/…": point that at the installed QML.
-# tests/qml/host runs in `make test`.
 qml_files=$(find "$PWD/tests/qml" \( -path '*/host' -o -path '*/canary' \) -prune -o -name 'tst_*.qml' -print | sort)
 rm -rf "$PWD/qml"
 cp -r "/srv/mer/targets/$TARGET/usr/share/harbour-lautta/qml" "$PWD/qml"
 shipped=$(cd "/srv/mer/targets/$TARGET" && find usr/share/harbour-lautta/qml -name '*.qml' | sort | sed 's|^|/|')
-# Own home per test: settings, favourites, clipboard and files one test leaves behind reach no
-# other. Shipped files change nothing: one process per share. Homes in the tree: mktemp under
-# /tmp does not reach the app under scratchbox.
 jobs=${QML_JOBS:-$(nproc)}
 share="$PWD/.qml-share"
 rm -rf "$share"
@@ -124,7 +103,6 @@ while [ "$k" -lt "$jobs" ]; do
     (
         : > "$share/$k.log"
         if [ -f "$share/$k.shipped" ]; then
-            # shellcheck disable=SC2046 # one word per file
             qml_check "$share/$k.home" $(cat "$share/$k.shipped") >> "$share/$k.log" 2>&1 || touch "$share/$k.failed"
         fi
         n=0
@@ -151,14 +129,11 @@ fi
 home="$PWD/.qml-home"
 rm -rf "$home"
 mkdir -p "$home"
-# `-T` fails when the package ships no catalogue.
 if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal \
         /usr/bin/harbour-lautta --qml-check -T /usr/share/harbour-lautta/translations \
         "$PWD/tests/translations/tst_english_plurals.qml"; then
     fail "English plural forms on the target"
 fi
-# Plain `minimal` has no font database: app fonts load only with `enable_fonts`. Page tests above
-# keep it off (their layouts expect it).
 if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal:enable_fonts \
         /usr/bin/harbour-lautta --qml-check -F /usr/share/harbour-lautta/fonts \
         "$PWD/tests/fonts/tst_bundled_font.qml"; then

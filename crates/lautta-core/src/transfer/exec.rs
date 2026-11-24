@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Executes one plan item: chooses the data path, moves bytes through a scratch fd, names
-//! temporaries, resumes, verifies, finishes moves.
-//!
-//! Touches no queue state; engine feeds an [`ItemEnv`] and an [`ItemJob`] and acts on the
-//! [`Outcome`].
 
 use super::conflict::{build_conflict, decide, numbered_name, Decision, WriteMode};
 use super::model::TransferOptions;
@@ -23,8 +18,6 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-/// Longest temp name prefix taken from the original name; names are limited
-/// to 255 bytes on most file systems and the suffix needs room.
 const MAX_TEMP_STEM: usize = 200;
 
 #[derive(Clone)]
@@ -37,16 +30,12 @@ pub struct ItemEnv {
     pub scratch_dir: PathBuf,
     pub trasher: Option<Arc<dyn Trasher>>,
     pub progress: ProgressSink,
-    /// `true` right before a step an abort could not undo, `false` when abortable again; returns
-    /// false when the item was taken away: stop.
     pub commit: Arc<dyn Fn(bool) -> bool + Send + Sync>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ItemJob {
     pub plan: PlanItem,
-    /// Destination temporary name, fixed before the first attempt so a later run finds the partial
-    /// file.
     pub temp_name: Vec<u8>,
 }
 
@@ -54,16 +43,11 @@ pub struct ItemJob {
 pub enum Outcome {
     Done,
     Skipped,
-    /// The item and everything below it is finished (renamed folder,
-    /// trashed or recursively deleted subtree).
     Subtree,
     Ask(Conflict),
-    /// *Keep both*: use this destination instead and run again.
     KeepBoth(Uri),
 }
 
-/// `.<name>.lautta-<shortid>.part`. Short id derives from transfer and item so the same item always
-/// finds its partial file.
 pub fn temp_name_for(name: &[u8], transfer: i64, seq: u32) -> Vec<u8> {
     let t = u32::try_from(transfer & 0xffff_ffff).unwrap_or(0);
     let short = t.wrapping_mul(0x9E37_79B1) ^ seq;
@@ -74,8 +58,6 @@ pub fn temp_name_for(name: &[u8], transfer: i64, seq: u32) -> Vec<u8> {
     out
 }
 
-/// Checksum algorithm both sides can compute, if any. `Checksums` without listed algorithms is
-/// assumed SHA-256.
 pub fn common_algorithm(a: &Capabilities, b: &Capabilities) -> Option<String> {
     const PREFERRED: [&str; 3] = ["sha256", "sha1", "md5"];
     if !a.has(cap::CHECKSUMS) || !b.has(cap::CHECKSUMS) {
@@ -122,17 +104,14 @@ async fn remove_if_exists(p: &dyn Provider, path: &VPath) -> Result<()> {
     }
 }
 
-/// Destination keeps existing items as they are (access level `read-add`, `add`).
 fn add_only(env: &ItemEnv) -> bool {
     env.dst.capabilities().has(cap::NO_CHANGE)
 }
 
-/// At a level that hides files (`add`), a refused look means a file is there.
 fn hidden(env: &ItemEnv, e: &Error) -> bool {
     e.kind == ErrorKind::PermissionDenied && !env.dst.capabilities().readable()
 }
 
-/// Existing destination item, or `Err(None)`: one is there that the level hides.
 async fn stat_dst(env: &ItemEnv, path: &VPath) -> std::result::Result<Option<Entry>, Option<Error>> {
     match stat_opt(&*env.dst, path).await {
         Err(e) if hidden(env, &e) => Err(None),
@@ -152,7 +131,6 @@ fn rename_mode(mode: WriteMode) -> RenameMode {
     }
 }
 
-/// Rename failures that only mean "not possible here": fall back to copying.
 fn rename_unavailable(e: &Error) -> bool {
     matches!(e.kind, ErrorKind::CrossesDevice | ErrorKind::Unsupported)
 }
@@ -233,7 +211,6 @@ async fn place_file(env: &ItemEnv, job: &ItemJob, mode: WriteMode) -> Result<()>
         }
     }
     let caps = env.dst.capabilities();
-    // AtomicPut backends are written directly; so is an in-place resume.
     let temp_used = !(caps.has(cap::ATOMIC_PUT) || mode.resume);
     let write_path = if temp_used {
         temp_path(&plan.dst, &job.temp_name)?
@@ -277,8 +254,6 @@ async fn server_copy_to(
         .await
 }
 
-/// Committed offset is the size of the partial file at the destination. Providers without
-/// `ResumeUpload` restart the file.
 async fn committed_offset(
     env: &ItemEnv,
     write_path: &VPath,
@@ -335,9 +310,6 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> std::io::Result<T> + Se
         .map_err(Error::from)
 }
 
-/// download_into(src -> scratch fd), then upload_from(scratch fd -> dst). Scratch file, not a pipe:
-/// providers write with `pwrite` at explicit offsets, which a pipe cannot take, and resuming needs
-/// a seekable source.
 async fn stream_to(
     env: &ItemEnv,
     job: &ItemJob,
@@ -357,7 +329,7 @@ async fn stream_to(
     }
     let dir = env.scratch_dir.clone();
     let scratch = blocking(move || {
-        std::fs::create_dir_all(&dir)?; // NOSONAR: runs on the blocking pool
+        std::fs::create_dir_all(&dir)?; // NOSONAR
         tempfile::tempfile_in(dir)
     })
     .await?;
@@ -385,7 +357,6 @@ async fn stream_to(
         .await
 }
 
-/// Local source: its own fd goes to the destination, no scratch copy.
 #[allow(clippy::too_many_arguments)]
 async fn upload_direct(
     env: &ItemEnv,
@@ -433,7 +404,7 @@ fn write_path_is_temp(job: &ItemJob, write_path: &VPath) -> bool {
 
 async fn file_len(f: &File) -> Result<u64> {
     let f = f.try_clone().map_err(Error::from)?;
-    blocking(move || f.metadata().map(|m| m.len())).await // NOSONAR: runs on the blocking pool
+    blocking(move || f.metadata().map(|m| m.len())).await // NOSONAR
 }
 
 fn wanted_mtime(env: &ItemEnv, plan: &PlanItem, src: &Entry) -> Option<std::time::SystemTime> {
@@ -443,7 +414,6 @@ fn wanted_mtime(env: &ItemEnv, plan: &PlanItem, src: &Entry) -> Option<std::time
     src.modified.or_else(|| plan.mtime_ms.map(ms_to_system_time))
 }
 
-/// Modes only when the user enabled it and both sides support them.
 fn wanted_mode(env: &ItemEnv, src: &Entry) -> Option<u32> {
     let both = env.src.capabilities().has(cap::PERMISSIONS) && env.dst.capabilities().has(cap::PERMISSIONS);
     (env.options.preserve_mode && both).then_some(src.mode).flatten()
@@ -457,8 +427,6 @@ fn digests_match(a: &[u8], b: &[u8]) -> Result<()> {
     }
 }
 
-/// Compares checksums when both sides can compute one. A provider that turns out not to support it
-/// just skips the check.
 async fn verify_checksum(env: &ItemEnv, src: &VPath, dst: &VPath) -> Result<()> {
     let Some(alg) = common_algorithm(&env.src.capabilities(), &env.dst.capabilities()) else {
         return Ok(());
@@ -493,8 +461,6 @@ async fn apply_attributes(
     }
 }
 
-/// Size check (always), checksum (when asked or moving), attributes, and the
-/// final rename out of the temporary name.
 async fn finish_placement(
     env: &ItemEnv,
     job: &ItemJob,
@@ -658,8 +624,6 @@ async fn run_delete(env: &ItemEnv, job: &ItemJob) -> Result<Outcome> {
     }
 }
 
-/// Deletes a folder with everything in it. Files go as they are found;
-/// folders afterwards, deepest first.
 pub async fn remove_tree(p: &dyn Provider, root: &VPath, is_dir: bool) -> Result<()> {
     if !is_dir {
         return remove_if_exists(p, root).await;
@@ -1059,7 +1023,6 @@ mod tests {
         src.add_file("f", b"new", 1);
         let j = job(item("f", "f", Kind::File, 3));
         let temp = String::from_utf8(j.temp_name.clone()).unwrap();
-        // "f" appears between the stat before writing and the final rename.
         dst.fail_next("stat", "f", Error::kind(ErrorKind::NotFound));
         dst.fail_next("rename", &temp, Error::kind(ErrorKind::AlreadyExists));
         dst.add_file("f", b"appeared", 1);

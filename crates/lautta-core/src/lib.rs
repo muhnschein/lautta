@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `lautta-core`: everything below the UI. No Qt dependency. Unsafe code is denied crate-wide and
-//! allowed only in [`sys`].
 
 pub mod app;
 pub mod app_archives;

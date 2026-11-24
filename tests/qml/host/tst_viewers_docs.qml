@@ -112,7 +112,6 @@ Item {
         check(markup === "&lt;img src=&quot;image://lautta-thumb/x&quot;&gt; &amp;lt;b&amp;gt; &amp; &lt;b&gt;bold&lt;/b&gt; &amp;nbsp;&lt;a href=&quot;x&quot;&gt;link&lt;/a&gt;",
               "markup in a file is text: " + markup)
 
-        // Past FIRST_WAIT of colouring: text comes plain, colours after.
         check(tools.installRepeated(Qt.resolvedUrl("fixtures/rows.sh"), "lautta://user-documents/big.sh", 1000), "big script")
         big.uri = "lautta://user-documents/big.sh"
         settle(big)

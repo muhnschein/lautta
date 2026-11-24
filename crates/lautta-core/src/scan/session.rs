@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! One scan in progress: photos and their pages in a folder of its own under the cache, gone when
-//! the session is dropped. Every call decodes pictures: blocking contexts only.
 
 use super::pdf::{PageImage, PdfWriter, Pixels};
 use super::tone::{black_white, grayscale, pack_bits};
@@ -18,11 +16,8 @@ use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
-/// Longer side of the picture pages are shown and adjusted on.
 pub const WORK_SIDE: u32 = 1600;
-/// Longer side of a saved page: A4 at 200 dpi.
 pub const PAGE_SIDE: u32 = 2339;
-/// Photos are decoded at least this large; larger ones at a half, quarter or eighth.
 const DECODE_SIDE: u32 = 3200;
 const MAX_PIXELS: u64 = 100_000_000;
 const WORK_QUALITY: u8 = 85;
@@ -36,7 +31,6 @@ fn no_page() -> Error {
     Error::new(ErrorKind::NotFound, "no such page")
 }
 
-/// The photo as taken, upright (EXIF orientation applied).
 fn load_upright(path: &Path) -> Result<RgbImage> {
     let bytes = std::fs::read(path)?;
     let reader = image::io::Reader::new(Cursor::new(&bytes))
@@ -70,11 +64,9 @@ where
     Ok(data)
 }
 
-/// A straightened, turned and toned page.
 enum Rendered {
     Colour(RgbImage),
     Gray(GrayImage),
-    /// 0 = ink, 255 = paper.
     Ink(GrayImage),
 }
 
@@ -96,28 +88,20 @@ fn render(src: &RgbImage, page: &Page, max_long: u32) -> Rendered {
 
 #[derive(Debug, Clone, PartialEq)]
 struct Page {
-    /// Stays with the page through retakes.
     id: u32,
-    /// Number of its photo; names the page's files.
     shot: u32,
     quad: Quad,
-    /// Quarter turns clockwise, 0..=3.
     turns: u8,
     colour: Colour,
-    /// Page edges were found in the photo; else the whole picture is the page.
     found: bool,
     revision: u32,
     view: PathBuf,
 }
 
-/// What the screen needs to show a page.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PageInfo {
-    /// Same for one page as long as the scan lives, new photo or place included.
     pub id: u32,
-    /// The upright photo, for marking corners on.
     pub picture: String,
-    /// The page as it will be saved.
     pub view: String,
     pub quad: [f32; 8],
     pub turns: u8,
@@ -133,7 +117,6 @@ pub struct ScanSession {
 }
 
 impl ScanSession {
-    /// One scan at a time: folders already there are leftovers of a killed app and are removed.
     pub fn create(paths: &AppPaths) -> Result<ScanSession> {
         let root = paths.scan_dir();
         let _ = std::fs::remove_dir_all(&root);
@@ -170,7 +153,6 @@ impl ScanSession {
         self.pages.get(index).ok_or_else(no_page)
     }
 
-    /// Place of the page with this id.
     pub fn position(&self, id: u32) -> Option<usize> {
         self.pages.iter().position(|p| p.id == id)
     }
@@ -190,7 +172,6 @@ impl ScanSession {
             .collect()
     }
 
-    /// Writes the page's view under a new name: screens cache pictures by path.
     fn refresh(&self, page: &mut Page) -> Result<()> {
         let work = image::open(self.work(page.shot))
             .map_err(bad_picture)?
@@ -219,7 +200,6 @@ impl ScanSession {
         }
     }
 
-    /// Takes `photo` in: moved when it lies in the session's folder, copied otherwise.
     fn import(&mut self, photo: &Path, id: u32, colour: Colour) -> Result<Page> {
         let shot = self.next_shot;
         self.next_shot += 1;
@@ -261,7 +241,6 @@ impl ScanSession {
         self.refresh(page)
     }
 
-    /// New last page, in the colour of the page before it. Returns its position.
     pub fn add(&mut self, photo: &Path) -> Result<usize> {
         let colour = self.pages.last().map(|p| p.colour).unwrap_or_default();
         let page = self.import(photo, self.next_id, colour)?;
@@ -270,7 +249,6 @@ impl ScanSession {
         Ok(self.pages.len() - 1)
     }
 
-    /// Another photo for the page at `index`; its colour stays.
     pub fn retake(&mut self, index: usize, photo: &Path) -> Result<()> {
         let (id, colour) = self.page(index).map(|p| (p.id, p.colour))?;
         let page = self.import(photo, id, colour)?;
@@ -291,7 +269,6 @@ impl ScanSession {
         self.change(index, |p| p.colour = colour)
     }
 
-    /// Quarter turns, clockwise when positive.
     pub fn turn(&mut self, index: usize, quarters: i32) -> Result<()> {
         self.change(index, |p| {
             p.turns = (i32::from(p.turns) + quarters).rem_euclid(4) as u8;
@@ -341,8 +318,6 @@ impl ScanSession {
         })
     }
 
-    /// All pages as one PDF. `progress(done, of)` after each page; `created` as for
-    /// [`PdfWriter::finish`].
     pub fn write_pdf<W: Write>(
         &self,
         out: W,

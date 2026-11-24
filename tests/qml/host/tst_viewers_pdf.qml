@@ -20,7 +20,6 @@ Item {
             tools.pump(50)
     }
 
-    // Unlocking AES-256 is slow in a debug build.
     function loaded(d) {
         tools.pump(50)
         for (var i = 0; i < 600 && d.loading; ++i)

@@ -1,10 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Transfer engine: owns the queue, starts items the scheduler picks, reacts to results, persists
-//! every change and publishes events. Queue state lives behind one `std::sync::Mutex` never held
-//! across `.await`; item tasks are plain tokio tasks, abortable (pause, cancel, waiting) because
-//! each state change they make is one synchronous function, so an abort never lands halfway.
-//! Pause and waiting spare an item past its point of no return (`commit`): an abort cannot undo
-//! a step already running. Results count only from the task registered for the item.
 
 use super::clock::{Clock, SystemClock};
 use super::exec::{self, ItemEnv, ItemJob, Outcome};
@@ -29,14 +23,10 @@ use tokio::task::{AbortHandle, JoinHandle};
 
 #[derive(Debug, Clone)]
 pub struct EngineConfig {
-    /// First retry delay; doubled per retry (1 s, 2 s, 4 s).
     pub backoff_base: Duration,
-    /// Retries of a transient error before the item fails or the transfer waits.
     pub max_retries: u32,
-    /// Where anonymous scratch files go (the app's cache folder).
     pub scratch_dir: PathBuf,
     pub retention_days: u32,
-    /// Minimum spacing of `Progress` events per transfer (4 Hz).
     pub progress_event_interval_ms: i64,
 }
 
@@ -100,7 +90,6 @@ impl Live {
         }
     }
 
-    /// Whether the calling task is the one running `seq`.
     fn is_current(&self, seq: u32) -> bool {
         let me = tokio::task::try_id();
         me.is_some() && self.running.get(&seq).map(|r| r.task.id()) == me
@@ -128,11 +117,9 @@ impl Live {
 
 struct Running {
     task: JoinHandle<()>,
-    /// Past its point of no return.
     committed: bool,
 }
 
-/// Folders, links and deletes run alone and in order; files run in parallel.
 fn is_barrier(op: OperationKind, kind: Kind) -> bool {
     op == OperationKind::Delete || kind != Kind::File
 }
@@ -160,7 +147,6 @@ struct Inner {
     state: Mutex<State>,
     events: broadcast::Sender<TransferEvent>,
     writer: mpsc::UnboundedSender<Cmd>,
-    /// So engine calls from threads outside the runtime (the Qt side) can spawn.
     rt: tokio::runtime::Handle,
 }
 
@@ -236,8 +222,6 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T> + Send + 'sta
 }
 
 impl Engine {
-    /// Must be called inside a tokio runtime; call [`Engine::load`] afterwards to restore the
-    /// queue.
     pub fn new(deps: EngineDeps, cfg: EngineConfig) -> Engine {
         let store = Store::new(deps.db.clone());
         let (events, _) = broadcast::channel(1024);
@@ -263,8 +247,6 @@ impl Engine {
         self.inner.events.subscribe()
     }
 
-    /// Unfinished transfers come back paused, resumed at once when `auto_resume`. Also purges old
-    /// history. Returns the number of unfinished transfers.
     pub async fn load(&self, auto_resume: bool) -> Result<usize> {
         let store = self.inner.store.clone();
         let (now, days) = (self.inner.deps.clock.now_ms(), self.inner.cfg.retention_days);
@@ -331,7 +313,6 @@ impl Engine {
             .ok_or_else(|| not_found(id))
     }
 
-    /// `Transfer::landed`, without cloning its items.
     pub fn landed(&self, id: TransferId) -> Vec<Uri> {
         self.inner
             .lock()
@@ -341,13 +322,11 @@ impl Engine {
             .unwrap_or_default()
     }
 
-    /// First item's plan for the list's direction icon, without cloning a 100 000 item plan.
     pub fn first_item(&self, id: TransferId) -> Option<PlanItem> {
         let st = self.inner.lock();
         st.live.get(&id)?.t.items.first().map(|i| i.plan.clone())
     }
 
-    /// Plan of the first item refused for lack of permission (`PermissionDenied`).
     pub fn first_refused(&self, id: TransferId) -> Option<PlanItem> {
         let st = self.inner.lock();
         let refused = ErrorKind::PermissionDenied.name();
@@ -357,7 +336,6 @@ impl Engine {
         })
     }
 
-    /// Unanswered conflicts of a transfer: item index and the question.
     pub fn questions(&self, id: TransferId) -> Result<Vec<(u32, Conflict)>> {
         let st = self.inner.lock();
         let live = st.live.get(&id).ok_or_else(|| not_found(id))?;
@@ -371,7 +349,6 @@ impl Engine {
             .collect())
     }
 
-    /// Waits until the transfer's summary satisfies `pred`.
     pub async fn wait_for(
         &self,
         id: TransferId,
@@ -440,7 +417,6 @@ impl Engine {
         self.inner.cancel_locked(&mut st, id)
     }
 
-    /// *Retry failed*: only failed items run again.
     pub fn retry_failed(&self, id: TransferId) -> Result<()> {
         let mut st = self.inner.lock();
         self.inner.retry_locked(&mut st, id)
@@ -468,8 +444,6 @@ impl Engine {
         true
     }
 
-    /// `apply_to_all` also settles other open questions that allow the choice and answers future
-    /// ones the same way.
     pub fn answer(
         &self,
         id: TransferId,
@@ -481,7 +455,6 @@ impl Engine {
         self.inner.answer_locked(&mut st, id, item, choice, apply_to_all)
     }
 
-    /// Transfers on bridge locations wait and resume by themselves.
     pub fn bridge_available(&self, up: bool) {
         let mut st = self.inner.lock();
         st.bridge_up = up;
@@ -496,8 +469,6 @@ impl Engine {
         self.inner.pump(&mut st);
     }
 
-    /// A removable volume vanished or came back; affected transfers show
-    /// "Insert the card to continue".
     pub fn volume_present(&self, location: &str, present: bool) {
         let mut st = self.inner.lock();
         if present {
@@ -509,19 +480,16 @@ impl Engine {
         self.inner.pump(&mut st);
     }
 
-    /// 1 to 6.
     pub fn set_remote_limit(&self, location: &str, limit: usize) {
         let mut st = self.inner.lock();
         st.sched.set_remote_limit(location, limit);
         self.inner.pump(&mut st);
     }
 
-    /// Hold `KeepAlive` while true.
     pub fn is_busy(&self) -> bool {
         self.inner.lock().busy
     }
 
-    /// Unfinished transfers, for the "will resume when you open Lautta again" notification.
     pub fn pending_summary(&self) -> usize {
         self.inner
             .lock()
@@ -663,7 +631,6 @@ impl Inner {
         Ok(())
     }
 
-    /// Partial files stay for resume; items go back in line and state moves to `to`.
     fn suspend(&self, st: &mut State, id: TransferId, to: TransferState) -> Result<()> {
         let live = st.live.get_mut(&id).ok_or_else(|| not_found(id))?;
         let op = live.t.kind;
@@ -756,7 +723,6 @@ impl Inner {
         Ok(())
     }
 
-    /// Runs once `stopped` item tasks are gone: a provider writes no new file after its call is dropped.
     async fn remove_leftovers(
         &self,
         op: OperationKind,
@@ -932,8 +898,6 @@ impl Inner {
         self.complete(st, id);
     }
 
-    /// After files are verified and gone, empty source folders go too, deepest first; a folder
-    /// still holding something stays.
     async fn remove_moved_dirs(&self, mut dirs: Vec<Uri>) {
         dirs.sort_by_key(|d| std::cmp::Reverse(d.path.depth()));
         for dir in dirs {
@@ -958,7 +922,6 @@ impl Inner {
         } else {
             TransferState::Completed
         };
-        // Queued (nothing to do) and Waiting(Question) pass through Running.
         if live.t.state != TransferState::Running {
             if let Err(e) = self.set_state(st, id, TransferState::Running) {
                 log::debug!("complete: {e}");
@@ -976,7 +939,6 @@ impl Inner {
         let now = self.deps.clock.now_ms();
         let mut st = self.lock();
         let due = st.throttle.due(id, now);
-        // A stopped item's thread may still report once before it sees the stop.
         let Some(live) = st.live.get_mut(&id).filter(|l| l.running.contains_key(&seq)) else {
             return;
         };
@@ -999,7 +961,6 @@ impl Inner {
         }
     }
 
-    /// False for a task no longer running its item (paused, canceled): its result is dropped.
     fn release(&self, st: &mut State, pick: ItemRef) -> bool {
         let Some(live) = st.live.get_mut(&pick.transfer) else {
             return false;
@@ -1013,8 +974,6 @@ impl Inner {
         true
     }
 
-    /// Point of no return: from here pause and waiting let the item finish. False when the item
-    /// was already taken from this task.
     fn commit(&self, pick: ItemRef, on: bool) -> bool {
         let mut st = self.lock();
         let Some(live) = st.live.get_mut(&pick.transfer) else {
@@ -1064,8 +1023,6 @@ impl Inner {
         self.pump(st);
     }
 
-    /// Everything not started below the settled item gets the same state
-    /// (a folder renamed as a whole, trashed, or skipped).
     fn settle_subtree(&self, st: &mut State, pick: ItemRef, to: ItemState) {
         let Some(live) = st.live.get_mut(&pick.transfer) else {
             return;
@@ -1171,7 +1128,6 @@ impl Inner {
                     return Next::Rerun;
                 }
             }
-            // A rerun starts over: abortable again until its own point of no return.
             Err(e) if self.commit(pick, false) => return self.on_error(pick, e, attempt),
             Err(_) => {}
         }
@@ -1348,12 +1304,10 @@ impl Inner {
     }
 }
 
-/// Retries transient errors with backoff, keeps partial file for resume.
 async fn run_item_task(inner: Arc<Inner>, pick: ItemRef) {
     let Some(Prepared { env, mut job }) = inner.prepare(pick) else {
         return;
     };
-    // The item decides with them (atomic writes, resume, checksums).
     env.src.known_capabilities().await;
     env.dst.known_capabilities().await;
     let mut attempt = 0;
@@ -1424,8 +1378,6 @@ mod tests {
         assert!(engine.landed(id + 1).is_empty());
     }
 
-    /// A task that no longer runs its item (paused, then the item went to another task) changes
-    /// nothing with what it reports.
     #[tokio::test]
     async fn results_from_a_task_no_longer_running_the_item_are_dropped() {
         let resolver = StaticResolver::default()

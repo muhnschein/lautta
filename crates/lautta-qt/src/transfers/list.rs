@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Activity page list: unended in queue order, then ended, newest first. Per row `dateGroup` and
-//! `group` (active, waiting, paused or history).
 
 use super::events;
 use crate::runtime::core;
@@ -170,7 +168,6 @@ impl QAbstractListModel for TransfersModel {
 }
 
 impl TransfersModel {
-    /// QML gives list models no start-up hook.
     fn ensure_registered(&self) {
         if self.registered.replace(true) {
             return;
@@ -217,7 +214,6 @@ impl TransfersModel {
         self.apply(rows.iter().map(transfer_row).collect());
     }
 
-    /// Same row order: update in place (keeps scroll position and open context menus); else reset.
     fn apply(&mut self, new: Vec<RowData>) {
         let same = new.len() == self.rows.len() && new.iter().zip(&self.rows).all(|(a, b)| a.id == b.id);
         if same {

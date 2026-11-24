@@ -16,7 +16,6 @@ ApplicationWindow {
         return ok
     }
 
-    // No render loop headless: lay out by hand.
     function tiles(grid) {
         var out = []
         grid.forceLayout()

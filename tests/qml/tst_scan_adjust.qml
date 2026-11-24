@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Corners and turn of a scanned page: dragged by their
-// handles, changed on Done only.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -16,7 +15,6 @@ ApplicationWindow {
     property var dialog
     property var before
     property var set
-    // Corners found when the photo was taken.
     property var sheetCorners
     property QtObject scan
 
@@ -82,7 +80,6 @@ ApplicationWindow {
         return same(corners, [0, 0, 1, 0, 1, 1, 0, 1])
     }
 
-    // Handle sits with its middle on its corner of the photo.
     function onCorner(index) {
         var frame = named(win.dialog, "frame")
         var handle = named(win.dialog, "handle" + index)
@@ -94,7 +91,6 @@ ApplicationWindow {
         return p.x >= item.x && p.x <= item.x + item.width && p.y >= item.y && p.y <= item.y + item.height
     }
 
-    // As the dialog places it, for a finger at `p` on the dialog.
     function loupeAt(p) {
         var size = named(win.dialog, "loupe").width
         var at = ScanMath.loupeAt(p.x, p.y, size, Theme.itemSizeLarge, win.dialog.width, win.dialog.height)
@@ -116,7 +112,6 @@ ApplicationWindow {
         running: win.scenarioRunning
         onTriggered: {
             win.waited++
-            // Hang guard: emulated target needs seconds per picture.
             if (win.waited > 600)
                 return win.fail("step " + win.step + " timed out")
             var frame, handle, loupe, start, moved, finger
@@ -143,7 +138,6 @@ ApplicationWindow {
                     break
                 if (!same(win.dialog.corners, win.before.quad) || win.dialog.turns !== 0 || !win.dialog.canAccept)
                     return win.fail("starts from the page's corners and turn")
-                // Photo is 480 x 360: frame keeps that shape, as large as its place allows.
                 if (!near(frame.width / frame.height, 480 / 360) || frame.rotation !== 0
                         || !near(Math.min(frame.parent.width / frame.width, frame.parent.height / frame.height), 1))
                     return win.fail("photo shown whole, upright: " + frame.width + " x " + frame.height)
@@ -154,11 +148,9 @@ ApplicationWindow {
                 loupe = named(win.dialog, "loupe")
                 if (loupe.visible || win.dialog.grabbed !== -1)
                     return win.fail("no loupe until a corner is held")
-                // Test screen is tiny: handles overlap, the last one lies on top.
                 handle = named(win.dialog, "handle3")
                 start = win.dialog.corners.slice()
                 var dx = frame.width * 0.1, dy = frame.height * 0.08
-                // Taken off its middle: the corner must not jump under the finger.
                 tools.mouse(handle, "press", handle.width / 2 + 5, handle.height / 2 + 7)
                 if (win.dialog.grabbed !== 3 || !loupe.visible || !same(win.dialog.corners, start))
                     return win.fail("held corner: loupe shows, corner stays")
@@ -169,7 +161,6 @@ ApplicationWindow {
                         || !(loupe.width >= Math.min(win.dialog.width, win.dialog.height) / 2 - 1))
                     return win.fail("loupe big, round, placed for the finger: " + loupe.x + "," + loupe.y + " " + loupe.width)
                 var held = finger
-                // Test screen is too small for room above a handle: finger set where there is.
                 win.dialog.fingerX = win.dialog.width / 2 + 10
                 win.dialog.fingerY = win.dialog.height - 10
                 finger = Qt.point(win.dialog.fingerX, win.dialog.fingerY)
@@ -177,7 +168,6 @@ ApplicationWindow {
                         || !near(loupe.x + loupe.width / 2, finger.x))
                     return win.fail("room above: loupe above the finger, clear of it: " + loupe.x + "," + loupe.y)
                 tools.mouse(handle, "move", handle.width / 2 + 5 + dx, handle.height / 2 + 7 + dy)
-                // Handle moved with the corner: the finger is where it was, plus the move.
                 finger = Qt.point(held.x + dx, held.y + dy)
                 if (loupeAt(finger) !== JSON.stringify([loupe.x, loupe.y]))
                     return win.fail("loupe moves with the finger: " + loupe.x + "," + loupe.y)
@@ -192,7 +182,6 @@ ApplicationWindow {
                     return win.fail("loupe: held corner twice as large, in its middle: " + lensPhoto.x + "," + lensPhoto.y)
                 if (!onCorner(3))
                     return win.fail("handle follows its corner")
-                // Far past the opposite corner: no page that way, corner stays.
                 tools.mouse(handle, "move", handle.width / 2 + frame.width * 2, handle.height / 2 - frame.height * 2)
                 if (!same(win.dialog.corners, moved))
                     return win.fail("a drag that leaves no page is refused")
@@ -204,7 +193,6 @@ ApplicationWindow {
                 named(win.dialog, "rotateRightButton").clicked(null)
                 if (win.dialog.turns !== 1 || frame.rotation !== 90 || !near(frame.width / frame.height, 480 / 360))
                     return win.fail("turned right: " + win.dialog.turns)
-                // On its side the photo's height runs across.
                 if (!near(Math.min(frame.parent.width / frame.height, frame.parent.height / frame.width), 1))
                     return win.fail("turned photo fills its place: " + frame.width + " x " + frame.height)
                 named(win.dialog, "rotateLeftButton").clicked(null)
@@ -238,10 +226,8 @@ ApplicationWindow {
                     break
                 if (!whole(win.dialog.corners))
                     return win.fail("opens on the whole picture")
-                // Corners as a drag would leave them: the sheet's.
                 win.dialog.corners = win.sheetCorners.slice()
                 frame = named(win.dialog, "frame")
-                // Top left corner held: no room above, loupe beside the finger.
                 handle = named(win.dialog, "handle0")
                 tools.mouse(handle, "press", handle.width / 2, handle.height / 2)
                 loupe = named(win.dialog, "loupe")
@@ -282,7 +268,6 @@ ApplicationWindow {
                     break
                 if (!same(win.dialog.corners, win.set) || win.dialog.turns !== 1 || named(win.dialog, "frame").rotation !== 90)
                     return win.fail("opens with what was set")
-                // Turned photo: a drag to the left on screen moves the corner down the photo.
                 frame = named(win.dialog, "frame")
                 handle = named(win.dialog, "handle3")
                 start = win.dialog.corners.slice()
@@ -314,7 +299,6 @@ ApplicationWindow {
                     break
                 if (win.dialog.turns !== 2)
                     return win.fail("opens upside down: " + win.dialog.turns)
-                // Nothing changed and accepted: no work.
                 win.dialog.accept()
                 win.next()
                 break

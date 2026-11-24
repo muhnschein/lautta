@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Writes a scan as PDF into its folder. Done: back to
-// the folder. Failed: back to the save dialog, pages kept.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -8,7 +7,6 @@ Page {
     id: page
 
     property string parentUri
-    // Folder view the scan belongs to; told when the scan is left.
     property Item owner
     property QtObject scan
     property string name

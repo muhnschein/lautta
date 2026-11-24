@@ -79,7 +79,6 @@ ApplicationWindow {
         return FileIcons.source("file-" + kind + "-" + set, Theme.pixelRatio)
     }
 
-    // No render loop headless: lay out by hand.
     function icons(view) {
         view.flickable.forceLayout()
         var out = {}

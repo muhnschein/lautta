@@ -5,7 +5,6 @@ import Lautta 1.0
 
 TextSwitch {
     property string settingKey
-    // Reading App.settingsJson makes binding follow every change.
     readonly property bool current: {
         var dependency = App.settingsJson
         return settingKey.length > 0 && App.setting(settingKey) === true

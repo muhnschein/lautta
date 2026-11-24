@@ -8,7 +8,6 @@ use crate::provider::{no_progress, Provider};
 use crate::vpath::VPath;
 use std::sync::Mutex;
 
-/// Digests of "abc" from the reference tools (`sha256sum`, `b2sum`, `b3sum`, `xxhsum`, `crc32`).
 const ABC: [(Algorithm, &str); 13] = [
     (Algorithm::Sha256, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"),
     (Algorithm::Md5, "900150983cd24fb0d6963f7d28e17f72"),
@@ -121,7 +120,6 @@ fn canceled_reader_digest_stops() {
     assert_eq!(err.kind, ErrorKind::Canceled);
 }
 
-/// Fails reads with `Interrupted` once, then serves `data`.
 struct Flaky<'a>(&'a [u8], bool);
 impl Read for Flaky<'_> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
@@ -203,13 +201,10 @@ async fn cancel_wakes_a_waiting_run() {
         .expect("hang guard")
         .unwrap();
     assert_eq!(res.unwrap_err().kind, ErrorKind::Canceled);
-    // Canceled before the run starts: ends at once too.
     let res = cancel.run(std::future::pending::<Result<()>>()).await;
     assert_eq!(res.unwrap_err().kind, ErrorKind::Canceled);
     assert_eq!(Cancel::default().run(async { Ok(5) }).await.unwrap(), 5);
 }
-
-// --- lists ---
 
 const SUM: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 

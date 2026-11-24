@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Finger down on an image, list and grid: its decode for the viewer starts. Not for other files,
-// not for folders named like images, not while selecting. Hold, scroll or finger let go off the
-// item: dropped. Tap opens the viewer with the size the thumbnail shows at, for its cached tile;
-// none while it shows none.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -26,7 +22,6 @@ ApplicationWindow {
     }
     DirectoryModel { id: inner }
 
-    // Status as the source changes: not Ready when dropped before the decode is done.
     Connections {
         target: window.prefetch
         onSourceChanged: window.log.push({ "source": String(window.prefetch.source), "status": window.prefetch.status })
@@ -97,7 +92,6 @@ ApplicationWindow {
         tools.mouse(c, "release", c.width / 2, c.height * 4)
     }
 
-    // Each check its own photo: one decoded before comes from the cache, let go at once.
     function photo() {
         return "p" + (fresh++) + ".jpg"
     }
@@ -129,7 +123,6 @@ ApplicationWindow {
         view.flickable.positionViewAtBeginning()
         expect(pageStack.depth === 1, mode + ": no viewer opened")
 
-        // Grid's hold needs a mouse event: a real one comes after the decode is done.
         if (mode === "list") {
             c = press(photo())
             c.pressAndHold(null)
@@ -160,7 +153,6 @@ ApplicationWindow {
         return null
     }
 
-    // Stand-in for an icon's thumbnail still loading.
     Component {
         id: loadingThumbnail
         Item {
@@ -222,8 +214,6 @@ ApplicationWindow {
                 return
             check(mode)
         }
-        // Last: the viewer also decodes neighbours, which checks above need cold. Each open from a
-        // fresh page: a second press on the grid after the viewer's pop does not arrive headless.
         var opens = [["grid", false], ["grid", true], ["list", false], ["list", true]]
         for (var o = 0; o < opens.length; ++o) {
             freshPage(opens[o][0])

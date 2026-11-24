@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Outline and page links. Only page destinations and http(s) URIs are read; every other action
-//! (Launch, JavaScript, GoToR, file: URIs, ...) is dropped, so a PDF cannot cause file or network
-//! access. No I/O.
 
 use crate::{PageRect, PdfDocument, PdfError};
 use hayro::hayro_syntax::object::{Array, Dict, MaybeRef, Name, Null, ObjRef, Object};
@@ -18,23 +15,18 @@ pub(crate) const MAX_OUTLINE_ITEMS: usize = 10_000;
 pub(crate) const MAX_LINKS: usize = 1_000;
 pub(crate) const MAX_URI_BYTES: usize = 2048;
 pub(crate) const MAX_NAMED_DESTS: usize = 100_000;
-/// Longest title read, in bytes of the PDF string; rest cut.
 pub(crate) const MAX_TITLE_BYTES: usize = 2048;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct OutlineItem {
     pub title: String,
-    /// 0 for the top level.
     pub level: u32,
-    /// 0-based target page; `None` when the target cannot be resolved.
     pub page: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LinkTarget {
-    /// `top`: fraction of the shown page's height from its top, when the destination gives one.
     Page { index: usize, top: Option<f32> },
-    /// For the user's browser after they confirm.
     Uri(String),
 }
 
@@ -102,7 +94,6 @@ impl<'a> Nav<'a> {
             let Some((item, level)) = stack.pop() else {
                 break;
             };
-            // sibling goes below the first child, so children come first
             stack.extend(self.linked(&item, b"Next", &mut visited).map(|d| (d, level)));
             if level + 1 < MAX_OUTLINE_DEPTH {
                 stack.extend(self.linked(&item, b"First", &mut visited).map(|d| (d, level + 1)));
@@ -181,7 +172,6 @@ impl<'a> Nav<'a> {
         Some(Dest { page, left, top })
     }
 
-    /// Page reference, or (in some broken files) a 0-based page number.
     fn page_of(&self, item: MaybeRef<Object<'a>>) -> Option<usize> {
         match item {
             MaybeRef::Ref(r) => self.page_index.get(&r).copied(),
@@ -199,7 +189,6 @@ impl<'a> Nav<'a> {
         }
     }
 
-    /// `/Dests` dictionary (PDF 1.1) and `/Names /Dests` name tree.
     fn named_dests(&self) -> NamedDests<'a> {
         let mut named = NamedDests::default();
         let dests = self.catalog.get::<Dict<'a>>(b"Dests").unwrap_or_default();
@@ -222,7 +211,6 @@ impl<'a> Nav<'a> {
         named
     }
 
-    /// False once full.
     fn add_leaf(&self, node: &Dict<'a>, named: &mut NamedDests<'a>) -> bool {
         let names = node.get::<Array<'a>>(b"Names").unwrap_or_default();
         let mut items = names.raw_iter().map(|i| self.resolve(i));
@@ -294,7 +282,6 @@ impl Shown {
         })
     }
 
-    /// Rotated by 90 or 270 degrees, the shown vertical comes from `left`.
     fn top(&self, left: Option<f64>, top: Option<f64>) -> Option<f32> {
         let [_, from_x, _, from_y, _, _] = self.0.as_coeffs();
         let x = if from_x == 0.0 { 0.0 } else { left? };
@@ -303,7 +290,6 @@ impl Shown {
     }
 }
 
-/// `uri` when http or https, printable ASCII, at most [`MAX_URI_BYTES`] long.
 fn web_uri(uri: &[u8]) -> Option<String> {
     let uri = std::str::from_utf8(uri.trim_ascii()).ok()?;
     let (scheme, _) = uri.split_once(':')?;
@@ -312,7 +298,6 @@ fn web_uri(uri: &[u8]) -> Option<String> {
     (web && clean).then(|| uri.to_string())
 }
 
-/// UTF-16BE or UTF-8 with BOM, else PDFDocEncoding; control characters removed, trimmed.
 fn text(bytes: &[u8]) -> String {
     let bytes = &bytes[..bytes.len().min(MAX_TITLE_BYTES)];
     let decoded: String = match bytes {
@@ -329,7 +314,6 @@ fn text(bytes: &[u8]) -> String {
     visible.trim().to_string()
 }
 
-/// PDFDocEncoding: Latin-1 but for 0x18..=0x1F and 0x80..=0xA0.
 fn pdf_doc_char(b: u8) -> char {
     const ACCENTS: [char; 8] = ['˘', 'ˇ', 'ˆ', '˙', '˝', '˛', '˚', '˜'];
     const HIGH: [char; 33] = [

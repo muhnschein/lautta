@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Facades: search, storage settings, per-location preferences.
 
 mod search_model;
 mod storage;
