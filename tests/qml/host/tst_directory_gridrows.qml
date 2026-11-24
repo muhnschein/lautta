@@ -54,6 +54,13 @@ Item {
         same(GridRows.rowOf(4, 0), 0, "and with no columns")
     }
 
+    function testSpan() {
+        same(GridRows.span(0, 3, 7), { "from": 0, "to": 3 }, "the first row's cells")
+        same(GridRows.span(1, 3, 7), { "from": 3, "to": 6 }, "the second row's")
+        same(GridRows.span(2, 3, 7), { "from": 6, "to": 7 }, "the last row holds what is left")
+        same(GridRows.span(-1, 3, 7), { "from": 0, "to": 0 }, "a row the view has removed holds no cells")
+    }
+
     function testIndexAt() {
         same(GridRows.indexAt(0, 0, 180, 3, 7), 0, "the first cell")
         same(GridRows.indexAt(0, 179.5, 180, 3, 7), 0, "up to its right edge")
@@ -135,6 +142,7 @@ Item {
     Component.onCompleted: {
         testColumns()
         testRows()
+        testSpan()
         testIndexAt()
         testRegroup()
         testTallest()

@@ -889,17 +889,16 @@ Item {
             // `first` may not have followed columns yet.
             function regroup() {
                 var all = rowCells.items
-                var from = index * grid.columns
-                var to = Math.min(from + grid.columns, all.count)
+                var span = GridRows.span(index, grid.columns, all.count)
                 var kept = []
                 for (var i = inRow.count - 1; i >= 0; --i) {
                     var at = inRow.get(i).itemsIndex
-                    if (at < from || at >= to)
+                    if (at < span.from || at >= span.to)
                         inRow.remove(i, 1)
                     else
                         kept.push(at)
                 }
-                for (var j = from; j < to; ++j) {
+                for (var j = span.from; j < span.to; ++j) {
                     if (kept.indexOf(j) < 0)
                         all.addGroups(j, 1, "inRow")
                 }
