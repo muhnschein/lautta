@@ -125,13 +125,13 @@ Format: **F-ID Name** (mode) — what. *Entry:* where user starts it. *Proof:* w
 - **F-HOM-01 Home start page** (S) — sections of all locations. *Entry:* app start. *Proof:* Home lists sections. *Code:* `HomePage.qml`, `app_home.rs`.
 - **F-HOM-02 User folders** (S) — Documents, Downloads, Pictures, Music, Videos, Public, Playlists. *Entry:* Home "On this device". *Proof:* folder page.
 - **F-HOM-03 Android folders** (S) — `android_storage` folders. *Entry:* Home "Android" (only when present).
-- **F-HOM-04 Volumes** (S) — mounted memory cards, USB drives with free/total and file system line. *Entry:* Home "Volumes".
+- **F-HOM-04 Volumes** (S) — mounted memory cards, USB drives with free space (size while free unknown) and file system line. *Entry:* Home "Volumes".
 - **F-HOM-05 Mount / Unmount drive** (B) — *Entry:* tap unmounted volume, or menu Mount; menu Unmount. *Proof:* row turns mounted/disappears from mounted state.
 - **F-HOM-06 Locked drive → Storage settings** (B) — *Entry:* tap locked volume, menu "Open Storage settings". *Proof:* Sailfish Settings › Storage opens (bridge feature `storage-settings`).
 - **F-HOM-07 Home layout** (S) — hide sections (Recents, Volumes, Servers) and rows, reorder rows by drag, Restore defaults. *Entry:* Settings › Home page. *Code:* `HomeSettingsPage.qml`, `home_layout.rs`.
 - **F-HOM-09 Rescan volumes** (S) — Home refreshes rows when shown and when app returns to front (sandbox can miss mounts). *Proof:* new card shows without restart.
 - **F-HOM-10 Activity from Home** (S) — pulley "Activity (n)". *Proof:* SCR-21.
-- **F-HOM-11 Phone free space** (S) — "N free of M" at left end of "On this device" header: file system user folders are on; read when Home shows. *Code:* `HomePage.qml`, `app_home.rs` (`device_space`).
+- **F-HOM-11 Phone free space** (S) — "N free" at left end of "On this device" header: file system user folders are on; read when Home shows. *Code:* `HomePage.qml`, `app_home.rs` (`device_space`).
 
 ### 3.2 Servers and bridge (B)
 
