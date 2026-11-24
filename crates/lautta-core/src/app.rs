@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 use crate::bridge::{Attention, BridgeClient, BridgeConfig, BridgeStatus, RemoteLocation};
-use crate::browse_layout::BrowseLayout;
 use crate::db::Db;
 use crate::dircache::DirCache;
 use crate::entry::Entry;
 use crate::error::{Error, ErrorKind, Result};
+use crate::home_layout::HomeLayout;
 use crate::locations::{ConnectionState, Location, LocationKind, LocationRegistry, LocationStatus};
 use crate::ops::plan::{PlanOptions, Planner};
 use crate::ops::{OperationKind, Plan};
@@ -50,7 +50,7 @@ pub struct Core {
     pub recents: Recents,
     pub recent_searches: RecentSearches,
     pub location_prefs: LocationPrefsStore,
-    pub browse_layout: BrowseLayout,
+    pub home_layout: HomeLayout,
     pub working_copies: WorkingCopies,
     pub bridge: Option<BridgeClient>,
     settings: Mutex<Settings>,
@@ -140,7 +140,7 @@ impl Core {
             recents: Recents::new(db.clone()),
             recent_searches: RecentSearches::new(db.clone()),
             location_prefs: LocationPrefsStore::new(db.clone()),
-            browse_layout: BrowseLayout::new(db.clone()),
+            home_layout: HomeLayout::new(db.clone()),
             working_copies: WorkingCopies::new(db.clone(), paths.clone(), Arc::new(SystemClock)),
             bridge: client.clone(),
             settings: Mutex::new(settings),

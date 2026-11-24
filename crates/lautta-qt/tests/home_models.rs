@@ -1,0 +1,182 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
+
+#![allow(non_snake_case)]
+
+use lautta_bridge_proto::access::Level;
+use lautta_bridge_proto::fake::{Consent, FakeBridge, FakeDrive};
+use lautta_bridge_proto::feature;
+use lautta_core::org::RecentKind;
+use lautta_core::paths::AppPaths;
+use lautta_core::Uri;
+use qmetaobject::*;
+use std::os::unix::fs::PermissionsExt;
+use std::sync::Mutex;
+
+static FAKE: Mutex<Option<FakeBridge>> = Mutex::new(None);
+
+fn fake() -> FakeBridge {
+    FAKE.lock().unwrap().clone().expect("the fake bridge is set up")
+}
+
+fn run<T>(f: impl std::future::Future<Output = T>) -> T {
+    lautta_qt::runtime::handle().block_on(f)
+}
+
+#[derive(QObject, Default)]
+struct FakeWorld {
+    base: qt_base_class!(trait QObject),
+    pump: qt_method!(fn(&self, ms: i32)),
+    grant: qt_method!(fn(&self)),
+    consentRequests: qt_method!(fn(&self) -> i32),
+    setAttention: qt_method!(fn(&self, id: QString, attention: QString)),
+    setState: qt_method!(fn(&self, id: QString, state: QString, error: QString)),
+    addAccount: qt_method!(fn(&self, n: i32, name: QString)),
+    locationKnown: qt_method!(fn(&self, id: QString) -> bool),
+    removeAccount: qt_method!(fn(&self, id: QString)),
+    setAccess: qt_method!(fn(&self, id: QString, level: QString)),
+    handoffs: qt_method!(fn(&self) -> QString),
+    drives: qt_method!(fn(&self) -> QString),
+    addDrive: qt_method!(fn(&self, id: QString, label: QString, locked: bool)),
+    record: qt_method!(fn(&self, uri: QString, name: QString, kind: QString)),
+    putFile: qt_method!(fn(&self, location: QString, path: QString)),
+    superuser: qt_method!(fn(&self) -> bool),
+}
+
+impl FakeWorld {
+    fn pump(&self, ms: i32) {
+        lautta_qt::home::pump_events(ms);
+    }
+
+    fn grant(&self) {
+        run(fake().set_consent(Consent::Allowed(Level::Full)));
+    }
+
+    fn consentRequests(&self) -> i32 {
+        fake().consent_requests() as i32
+    }
+
+    fn setAttention(&self, id: QString, attention: QString) {
+        let attention = attention.to_string();
+        run(fake().set_attention(
+            &id.to_string(),
+            Some(attention.as_str()).filter(|a| !a.is_empty()),
+        ));
+    }
+
+    fn setState(&self, id: QString, state: QString, error: QString) {
+        let error = error.to_string();
+        run(fake().set_state(
+            &id.to_string(),
+            &state.to_string(),
+            Some(error.as_str()).filter(|e| !e.is_empty()),
+        ));
+    }
+
+    fn addAccount(&self, n: i32, name: QString) {
+        run(fake().add_account(n, "sftp", &name.to_string(), "office.home"));
+    }
+
+    fn locationKnown(&self, id: QString) -> bool {
+        lautta_qt::runtime::core().is_some_and(|core| core.location(&id.to_string()).is_some())
+    }
+
+    fn removeAccount(&self, id: QString) {
+        run(fake().remove_location(&id.to_string()));
+    }
+
+    fn setAccess(&self, id: QString, level: QString) {
+        run(fake().set_access(&id.to_string(), Level::parse(&level.to_string())));
+    }
+
+    fn handoffs(&self) -> QString {
+        QString::from(serde_json::to_string(&fake().handoffs()).unwrap().as_str())
+    }
+
+    fn drives(&self) -> QString {
+        let list: Vec<serde_json::Value> = fake()
+            .drives()
+            .iter()
+            .map(|d| serde_json::json!({"id": d.id, "mounted": !d.mount_point.is_empty()}))
+            .collect();
+        QString::from(serde_json::to_string(&list).unwrap().as_str())
+    }
+
+    fn addDrive(&self, id: QString, label: QString, locked: bool) {
+        let mut drives = fake().drives();
+        let drive = FakeDrive::new(&id.to_string(), &label.to_string(), "sd", 8);
+        drives.push(if locked { drive.locked() } else { drive });
+        run(fake().set_drives(drives));
+    }
+
+    fn record(&self, uri: QString, name: QString, kind: QString) {
+        let core = lautta_qt::runtime::core().unwrap();
+        let uri = Uri::parse(&uri.to_string()).unwrap();
+        let kind = RecentKind::parse(&kind.to_string()).unwrap();
+        core.recents.record(&uri, &name.to_string(), kind).unwrap();
+    }
+}
+
+impl FakeWorld {
+    fn putFile(&self, location: QString, path: QString) {
+        fake().put_file(&location.to_string(), path.to_string().as_bytes(), b"x");
+    }
+
+    fn superuser(&self) -> bool {
+        lautta_core::sys::effective_ids().0 == 0
+    }
+}
+
+impl QSingletonInit for FakeWorld {
+    fn init(&mut self) {}
+}
+
+const SCRIPT: &str = include_str!("home_models.qml");
+
+#[test]
+fn home_models_follow_the_core_and_the_bridge() {
+    let home = tempfile::tempdir().unwrap();
+    for d in ["Documents", "Music"] {
+        std::fs::create_dir_all(home.path().join(d)).unwrap();
+    }
+    std::fs::write(home.path().join("Documents/a.txt"), "a").unwrap();
+    std::fs::write(home.path().join("Documents/.hidden"), "h").unwrap();
+    let locked = home.path().join("Music/locked");
+    std::fs::create_dir(&locked).unwrap();
+    for f in ["x.txt", "y.txt"] {
+        std::fs::write(locked.join(f), f).unwrap();
+    }
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+    std::env::set_var("HOME", home.path());
+    std::env::set_var("QT_QPA_PLATFORM", "offscreen");
+
+    let bridge = FakeBridge::new();
+    let paths = AppPaths::from_env();
+    let _listener = run(async {
+        bridge.set_consent(Consent::Unknown).await;
+        bridge.add_account(1, "sftp", "NAS", "nas.home").await;
+        bridge.set_features(Some(&[feature::STORAGE_SETTINGS, feature::DRIVES]));
+        bridge
+            .set_drives(vec![FakeDrive::new("sda1", "STICK", "usb", 8)])
+            .await;
+        bridge.listen(&paths.bridge_socket()).unwrap()
+    });
+    *FAKE.lock().unwrap() = Some(bridge);
+
+    lautta_qt::runtime::init(paths).unwrap();
+    qml_register_singleton_type::<FakeWorld>(
+        &lautta_qt::cstr("FakeWorld"),
+        1,
+        0,
+        &lautta_qt::cstr("FakeWorld"),
+    );
+
+    let file = home.path().join("scenario.qml");
+    std::fs::write(
+        &file,
+        format!("import QtQuick 2.6\nimport Lautta 1.0\nimport FakeWorld 1.0\n{SCRIPT}"),
+    )
+    .unwrap();
+    let rc = lautta_qt::qml_check(&[file.display().to_string()]);
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(rc, 0, "a step of the scenario failed (see output)");
+}

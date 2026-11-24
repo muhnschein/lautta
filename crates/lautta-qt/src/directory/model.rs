@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
-use crate::browse::Guard;
+use crate::home::Guard;
 use crate::json::from_json;
 use crate::runtime::{self, core, spawn_then};
 use cpp::cpp;
@@ -144,7 +144,6 @@ pub struct DirectoryModel {
     prefsChanged: qt_signal!(),
 
     filterText: qt_property!(QString; NOTIFY filterChanged WRITE set_filter_text),
-    foldersOnly: qt_property!(bool; NOTIFY filterChanged WRITE set_folders_only),
     filterChanged: qt_signal!(),
 
     refresh: qt_method!(fn(&mut self)),
@@ -796,12 +795,6 @@ impl DirectoryModel {
     fn set_filter_text(&mut self, text: QString) {
         self.filterText = text;
         self.filter.set_text(&self.filterText.to_string());
-        self.refilter();
-    }
-
-    fn set_folders_only(&mut self, value: bool) {
-        self.foldersOnly = value;
-        self.filter.folders_only = value;
         self.refilter();
     }
 

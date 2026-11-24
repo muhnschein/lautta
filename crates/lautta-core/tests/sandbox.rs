@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 use lautta_core::app::Core;
-use lautta_core::app_browse::Row;
+use lautta_core::app_home::Row;
 use lautta_core::locations::LocationRegistry;
 use lautta_core::paths::AppPaths;
 use lautta_core::trash::now_secs;
@@ -289,19 +289,19 @@ async fn a_volume_mounted_while_the_app_runs_appears_and_goes() {
     assert!(p.core.location("vol-USB").is_none());
     std::fs::create_dir(p.media.join("USB")).unwrap();
     eventually("the volume", || p.core.location("vol-USB").is_some()).await;
-    let rows = p.core.browse_rows().await;
+    let rows = p.core.home_rows().await;
     assert!(row(&rows, "volumes", "volume", "USB").is_some());
     std::fs::remove_dir(p.media.join("USB")).unwrap();
     eventually("the volume to go", || p.core.location("vol-USB").is_none()).await;
 }
 
 #[tokio::test]
-async fn browse_finds_volumes_the_watch_has_not_seen_yet() {
+async fn home_finds_volumes_the_watch_has_not_seen_yet() {
     let p = plain().await;
     std::fs::create_dir(p.media.join("SD")).unwrap();
-    let rows = p.core.browse_rows().await;
+    let rows = p.core.home_rows().await;
     assert!(row(&rows, "volumes", "volume", "SD").is_some());
     std::fs::remove_dir(p.media.join("SD")).unwrap();
-    let rows = p.core.browse_rows().await;
+    let rows = p.core.home_rows().await;
     assert!(row(&rows, "volumes", "volume", "SD").is_none());
 }

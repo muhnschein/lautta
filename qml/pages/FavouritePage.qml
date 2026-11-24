@@ -2,7 +2,8 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
-import "../components/browse"
+import "../components"
+import "../components/home"
 
 Page {
     id: page
@@ -77,11 +78,13 @@ Page {
             width: parent.width
             enabled: page.filled
 
-            PageHeader {
-                //% "Edit favourite"
-                title: qsTrId("lautta-favourite-edit-title")
-                //% "Added to favourites"
-                description: page.added ? qsTrId("lautta-favourite-added") : ""
+            HeaderBand {
+                PageHeader {
+                    //% "Edit favourite"
+                    title: qsTrId("lautta-favourite-edit-title")
+                    //% "Added to favourites"
+                    description: page.added ? qsTrId("lautta-favourite-added") : ""
+                }
             }
 
             TextField {

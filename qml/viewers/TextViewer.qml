@@ -73,13 +73,16 @@ Page {
             }
         }
 
-        header: PageHeader {
+        header: HeaderBand {
             width: view.width
-            title: page.fileName
-            description: doc.loaded
-                         //% "Read-only · %1"
-                         ? qsTrId("lautta-viewers-read-only").arg(Format.formatFileSize(doc.size))
-                         : " "
+
+            PageHeader {
+                title: page.fileName
+                description: doc.loaded
+                             //% "Read-only · %1"
+                             ? qsTrId("lautta-viewers-read-only").arg(Format.formatFileSize(doc.size))
+                             : " "
+            }
         }
 
         delegate: Item {

@@ -4,6 +4,7 @@ import Sailfish.Silica 1.0
 import QtMultimedia 5.6 as MM
 import Nemo.KeepAlive 1.2
 import Lautta 1.0
+import "../components"
 import "../components/viewers"
 import "../components/viewers/ViewerText.js" as ViewerText
 import "../components/ErrorText.js" as ErrorText
@@ -136,15 +137,18 @@ Page {
         return ""
     }
 
-    PageHeader {
+    HeaderBand {
         id: header
         x: page.paneX
         width: page.paneWidth
         opacity: page.chrome || !page.video ? 1 : 0
         visible: opacity > 0
-        title: page.fileName
-        description: page.statusText
         Behavior on opacity { FadeAnimation { } }
+
+        PageHeader {
+            title: page.fileName
+            description: page.statusText
+        }
     }
 
     Item {

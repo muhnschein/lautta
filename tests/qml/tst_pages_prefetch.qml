@@ -33,7 +33,7 @@ ApplicationWindow {
     }
 
     ListModel {
-        id: browseRows
+        id: homeRows
         ListElement { section: "favourites"; uri: "lautta://user-pictures/PagesPrefetch/fav.jpg"; name: "fav.jpg"; kind: "favourite"; isFile: true; icon: "image://theme/icon-m-favorite"; status: "ready"; attention: ""; colour: ""; itemId: "1"; place: "Pictures"; provider: ""; host: ""; free: -1; total: -1; fs: "" }
         ListElement { section: "favourites"; uri: "lautta://user-pictures/PagesPrefetch/album.jpg"; name: "album.jpg"; kind: "favourite"; isFile: false; icon: "image://theme/icon-m-favorite"; status: "ready"; attention: ""; colour: ""; itemId: "2"; place: "Pictures"; provider: ""; host: ""; free: -1; total: -1; fs: "" }
     }
@@ -140,11 +140,11 @@ ApplicationWindow {
         pageStack.pop(null, PageStackAction.Immediate)
     }
 
-    function checkBrowse() {
-        var page = open(Qt.resolvedUrl("../../qml/pages/BrowsePage.qml"), { "listModel": browseRows })
-        starts(page, "fav.jpg", "browse, image favourite")
-        holdDrops(page, "fav.jpg", "browse")
-        startsNone(page, "album.jpg", "browse, folder favourite")
+    function checkHome() {
+        var page = open(Qt.resolvedUrl("../../qml/pages/HomePage.qml"), { "listModel": homeRows })
+        starts(page, "fav.jpg", "home, image favourite")
+        holdDrops(page, "fav.jpg", "home")
+        startsNone(page, "album.jpg", "home, folder favourite")
     }
 
     Component.onCompleted: {
@@ -162,7 +162,7 @@ ApplicationWindow {
         pageStack.push(rootComponent, {}, PageStackAction.Immediate)
         checkSearch()
         checkRecents()
-        checkBrowse()
+        checkHome()
         reachedEnd = true
     }
 

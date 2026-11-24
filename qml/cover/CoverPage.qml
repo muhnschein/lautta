@@ -40,13 +40,13 @@ CoverBackground {
         objectName: "coverContent"
         anchors.fill: parent
         active: cover.live && cover.source !== null
-        sourceComponent: cover.kind === "browse" ? browse : (cover.kind === "grid" ? grid : (cover.kind === "file" ? file : null))
+        sourceComponent: cover.kind === "home" ? home : (cover.kind === "grid" ? grid : (cover.kind === "file" ? file : null))
     }
 
     Component {
-        id: browse
+        id: home
 
-        CoverBrowse {
+        CoverHome {
             rows: cover.told("listModel", null)
             deviceFree: cover.told("deviceFree", -1)
             deviceTotal: cover.told("deviceTotal", -1)

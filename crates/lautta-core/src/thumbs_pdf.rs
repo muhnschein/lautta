@@ -31,11 +31,9 @@ fn pdf_problem(e: PdfError) -> Error {
 
 pub fn first_page(bytes: Vec<u8>, size: u32) -> Result<Vec<u8>> {
     let doc = PdfDocument::open(bytes).map_err(pdf_problem)?;
-    let page = doc.render(0, size).map_err(pdf_problem)?;
-    let side = page.height.min(page.width);
-    let width = page.width as usize;
-    let rgb = RgbImage::from_fn(page.width, side, |x, y| {
-        let at = (y as usize * width + x as usize) * 4;
+    let page = doc.render_top_left_square(0, size).map_err(pdf_problem)?;
+    let rgb = RgbImage::from_fn(page.width, page.height, |x, y| {
+        let at = (y as usize * page.width as usize + x as usize) * 4;
         Rgb([page.rgba[at], page.rgba[at + 1], page.rgba[at + 2]])
     });
     encode(&DynamicImage::ImageRgb8(rgb))
@@ -150,7 +148,7 @@ impl PdfThumbs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lautta_pdf::sample::{build, page, LOCKED_AES256, LOCKED_RC4, RED_SQUARE};
+    use lautta_pdf::sample::{build, page, LOCKED_AES256, LOCKED_RC4};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
@@ -199,9 +197,15 @@ mod tests {
     }
 
     #[test]
-    fn a_landscape_page_is_whole() {
-        let out = first_page(build(&[page(300, 150, RED_SQUARE)]), 64).unwrap();
-        assert_eq!(pixels(&out).dimensions(), (64, 32));
+    fn a_landscape_page_is_cut_to_a_square_from_the_left() {
+        let content = "1 0 0 rg 0 100 50 50 re f 0 0 1 rg 150 0 150 150 re f";
+        let img = pixels(&first_page(build(&[page(300, 150, content)]), 64).unwrap());
+        assert_eq!(img.dimensions(), (64, 64), "as tall as asked, as wide as tall");
+        assert!(is_red(img.get_pixel(2, 2)), "the top left corner");
+        assert!(
+            is_white(img.get_pixel(60, 2)) && is_white(img.get_pixel(60, 60)),
+            "the blue right half is cut off"
+        );
     }
 
     #[test]

@@ -165,6 +165,73 @@ fn a_huge_page_renders_within_the_limits() {
 }
 
 #[test]
+fn a_landscape_page_gives_its_left_square_as_tall_as_asked() {
+    let content = "1 0 0 rg 0 100 50 50 re f 0 0 1 rg 150 0 150 150 re f";
+    let doc = PdfDocument::open(build(&[page(300, 150, content)])).unwrap();
+    let r = doc.render_top_left_square(0, 75).unwrap();
+    assert_eq!((r.width, r.height), (75, 75), "half the points");
+    assert_eq!(r.rgba.len(), 75 * 75 * 4);
+    assert_eq!(pixel(&r, 1, 1), RED, "top left corner");
+    assert_eq!(pixel(&r, 30, 30), WHITE_PX);
+    assert_eq!(pixel(&r, 73, 1), WHITE_PX, "the blue right half is not in it");
+    assert_eq!(pixel(&r, 73, 73), WHITE_PX);
+}
+
+#[test]
+fn a_portrait_page_gives_its_top_square_as_wide_as_asked() {
+    let content = "1 0 0 rg 0 150 50 50 re f 0 0 1 rg 0 0 100 100 re f";
+    let doc = PdfDocument::open(build(&[page(100, 200, content)])).unwrap();
+    let r = doc.render_top_left_square(0, 200).unwrap();
+    assert_eq!((r.width, r.height), (200, 200), "twice the points");
+    assert_eq!(pixel(&r, 2, 2), RED, "top left corner");
+    assert_eq!(pixel(&r, 150, 2), WHITE_PX);
+    assert_eq!(pixel(&r, 2, 197), WHITE_PX, "the blue bottom half is not in it");
+}
+
+#[test]
+fn square_renders_stay_within_the_edge_limit() {
+    let size = |width, height| PageSize { width, height };
+    assert_eq!(square_scale(size(300.0, 150.0), 75), (0.5, 75));
+    assert_eq!(square_scale(size(150.0, 300.0), 300), (2.0, 300));
+    assert_eq!(
+        square_scale(size(300.0, 150.0), 0),
+        (1.0 / 150.0, 1),
+        "at least one pixel"
+    );
+    assert_eq!(
+        square_scale(size(100.0, 100.0), 100_000),
+        (MAX_EDGE as f32 / 100.0, 4096)
+    );
+    for strip in [size(100.0, 10_000.0), size(10_000.0, 100.0)] {
+        let (scale, edge) = square_scale(strip, 64);
+        assert!((scale * 10_000.0 - MAX_EDGE as f32).abs() < 0.01, "{scale}");
+        assert_eq!(edge, 41, "the long edge stays within the limit");
+    }
+    assert_eq!(square_scale(size(1.0, 14_400.0), 64).1, 1, "at least one pixel");
+    assert_eq!(
+        square_scale(size(0.0, 0.0), 10),
+        (10.0, 10),
+        "one point per edge at least"
+    );
+}
+
+#[test]
+fn a_huge_page_square_renders_within_the_limits() {
+    let doc = PdfDocument::open(build(&[page(14_400, 7_200, RED_SQUARE)])).unwrap();
+    let r = doc.render_top_left_square(0, 100_000).unwrap();
+    assert_eq!((r.width, r.height), (2048, 2048));
+}
+
+#[test]
+fn a_missing_page_has_no_square() {
+    let doc = PdfDocument::open(build(&[page(100, 100, "")])).unwrap();
+    assert_eq!(
+        doc.render_top_left_square(1, 10).unwrap_err(),
+        PdfError::NoSuchPage
+    );
+}
+
+#[test]
 fn errors_read_as_sentences() {
     for (e, text) in [
         (PdfError::Invalid, "not a readable PDF"),

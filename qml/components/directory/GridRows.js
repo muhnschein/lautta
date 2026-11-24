@@ -13,6 +13,13 @@ function rowOf(index, columns) {
     return columns > 0 ? Math.floor(index / columns) : 0
 }
 
+function span(row, columns, count) {
+    if (row < 0)
+        return { "from": 0, "to": 0 }
+    var from = row * columns
+    return { "from": from, "to": Math.min(from + columns, count) }
+}
+
 function indexAt(row, x, cellWidth, columns, count) {
     if (row < 0 || x < 0 || cellWidth <= 0)
         return -1

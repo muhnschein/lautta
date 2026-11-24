@@ -73,6 +73,10 @@ Page {
         onTriggered: page.start()
     }
 
+    HeaderBand {
+        anchors.fill: heading
+    }
+
     Column {
         id: heading
 

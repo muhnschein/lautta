@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
+use crate::home::{watch_sources, Guard};
 use crate::runtime::core;
 use cpp::cpp;
 use lautta_core::app::Core;
 use lautta_core::locations::{Location, LocationKind, LocationStatus};
 use lautta_core::Uri;
 use qmetaobject::prelude::*;
-use qmetaobject::QByteArray;
-use std::cell::RefCell;
+use qmetaobject::{QByteArray, QPointer};
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 cpp! {{
@@ -24,12 +25,14 @@ const ROLE_STATUS: i32 = 0x0103;
 const ROLE_ATTENTION: i32 = 0x0104;
 const ROLE_SELECTABLE: i32 = 0x0105;
 const ROLE_WRITABLE: i32 = 0x0106;
+const ROLE_ICON: i32 = 0x0107;
 
 #[derive(Clone)]
 struct Root {
     uri: String,
     name: String,
     kind: &'static str,
+    icon: &'static str,
     status: &'static str,
     attention: String,
     writable: bool,
@@ -42,6 +45,8 @@ pub struct PickerRootsModel {
     hasRemote: qt_method!(fn(&self) -> bool),
     pump: qt_method!(fn(&self, ms: i32)),
     rows: RefCell<Option<Vec<Root>>>,
+    watching: Cell<bool>,
+    guard: Guard,
 }
 
 fn kind_name(kind: &LocationKind) -> &'static str {
@@ -69,6 +74,7 @@ fn to_root(core: &Core, l: Location) -> Root {
         writable: level.is_none_or(|level| level.adds()),
         uri: Uri::root(l.id.clone()).to_string(),
         kind: kind_name(&l.kind),
+        icon: core.location_icon(&l),
         status: status_name(l.status),
         attention: l.attention.unwrap_or_default(),
         name: l.name,
@@ -88,7 +94,15 @@ impl PickerRootsModel {
             .unwrap_or_default()
     }
 
+    fn watch(&self) {
+        let Some(core) = core() else { return };
+        if !self.watching.replace(true) {
+            watch_sources(QPointer::from(self), &core, &self.guard, Self::refresh);
+        }
+    }
+
     fn with_rows<T>(&self, f: impl FnOnce(&[Root]) -> T) -> T {
+        self.watch();
         let mut rows = self.rows.borrow_mut();
         f(rows.get_or_insert_with(Self::load))
     }
@@ -135,6 +149,7 @@ impl QAbstractListModel for PickerRootsModel {
             ROLE_ATTENTION => QString::from(root.attention.as_str()).into(),
             ROLE_SELECTABLE => (root.status == "ready").into(),
             ROLE_WRITABLE => root.writable.into(),
+            ROLE_ICON => QString::from(root.icon).into(),
             _ => QVariant::default(),
         }
     }
@@ -148,6 +163,7 @@ impl QAbstractListModel for PickerRootsModel {
             (ROLE_ATTENTION, "attention".into()),
             (ROLE_SELECTABLE, "selectable".into()),
             (ROLE_WRITABLE, "writable".into()),
+            (ROLE_ICON, "icon".into()),
         ])
     }
 }

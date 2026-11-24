@@ -139,9 +139,6 @@ Item {
         dir.filterText = "ALPHA"
         same(names(rep), ["alpha.txt"], "filter ignores case")
         dir.filterText = ""
-        dir.foldersOnly = true
-        same(names(rep), ["Zeta"], "folders only")
-        dir.foldersOnly = false
         check(dir.count === 4, "files back")
         check(dir.setViewPrefs(JSON.stringify({ sortKey: "type" })) && dir.sortKey === "type", "sort key")
         dir.setViewPrefs(JSON.stringify({ sortKey: "name" }))
@@ -205,14 +202,12 @@ Item {
         check(missing.errorKind === "NotFound" && missing.count === 0 && !missing.loading, "missing folder: " + missing.errorKind)
         check(broken.errorKind === "InvalidArgument" && !broken.loading, "bad URI")
         var zeta = root.docs + "Zeta"
-        check(path.count === 2 && path.address === "~/Documents/Zeta", "path model: " + path.count + " " + path.address)
+        check(path.count === 2, "path model: " + path.count)
         check(rootPath.count === 1, "root path has one step")
         check(path.fullPath === "Documents › Zeta", "full path: " + path.fullPath)
         check(rootPath.fullPath === "Documents", "root full path")
-        var found = path.complete("~/Documents/z")
-        same(found, [zeta], "completion from the cached listing")
-        check(path.resolve("~/Documents/Zeta") === zeta, "resolve")
-        check(path.resolve("nowhere") === "", "resolve refuses")
+        same(path.trail, [root.docs, zeta], "trail: the place's top folder first, the folder itself last")
+        same(rootPath.trail, [root.docs], "trail of a place's top folder: itself")
     }
 
     function testPrefsAreGlobal() {

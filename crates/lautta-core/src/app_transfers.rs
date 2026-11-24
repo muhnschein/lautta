@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 use crate::app::Core;
+use crate::app_home::RecentLook;
+use crate::app_operations::kind_name;
 use crate::date_group::DateGroup;
 use crate::error::{Error, ErrorKind, Result};
 use crate::locations::LocationRegistry;
@@ -123,11 +125,28 @@ pub fn parse_choice(name: &str) -> Option<ConflictChoice> {
     .find(|c| choice_name(*c) == name)
 }
 
-pub fn conflict_json(id: TransferId, item: u32, name: &str, c: &Conflict) -> serde_json::Value {
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct QuestionAbout {
+    pub name: String,
+    pub kind: &'static str,
+    pub open: usize,
+    pub source: String,
+    pub destination: String,
+    pub source_look: RecentLook,
+    pub destination_look: RecentLook,
+}
+
+pub fn conflict_json(id: TransferId, item: u32, about: &QuestionAbout, c: &Conflict) -> serde_json::Value {
     serde_json::json!({
         "transferId": id,
         "item": item,
-        "name": name,
+        "name": about.name,
+        "kind": about.kind,
+        "open": about.open,
+        "source": about.source,
+        "destination": about.destination,
+        "source_look": about.source_look,
+        "destination_look": about.destination_look,
         "dst_is_dir": c.dst_is_dir,
         "src_is_dir": c.src_is_dir,
         "src_size": c.src_size,
@@ -338,15 +357,28 @@ impl Core {
     pub fn question_list(&self, id: TransferId) -> Result<Vec<serde_json::Value>> {
         let items = self.engine.items(id)?;
         let questions = self.engine.questions(id)?;
+        let kind = self.engine.get(id).map_or("copy", |s| kind_name(s.kind));
+        let settings = self.settings();
         Ok(questions
             .iter()
             .map(|(seq, c)| {
-                let name = items
-                    .get(*seq as usize)
-                    .and_then(|i| i.plan.dst.name())
-                    .map(crate::vpath::display_name)
-                    .unwrap_or_default();
-                conflict_json(id, *seq, &name, c)
+                let mut about = QuestionAbout {
+                    kind,
+                    open: questions.len(),
+                    ..QuestionAbout::default()
+                };
+                if let Some(plan) = items.get(*seq as usize).map(|i| &i.plan) {
+                    about.name = plan
+                        .dst
+                        .name()
+                        .map(crate::vpath::display_name)
+                        .unwrap_or_default();
+                    about.source = plan.src.to_string();
+                    about.destination = plan.dst.to_string();
+                    about.source_look = self.item_look(&plan.src, c.src_is_dir, &settings);
+                    about.destination_look = self.item_look(&plan.dst, c.dst_is_dir, &settings);
+                }
+                conflict_json(id, *seq, &about, c)
             })
             .collect())
     }
@@ -568,10 +600,19 @@ mod tests {
             choices: vec![ConflictChoice::Replace, ConflictChoice::KeepBoth],
             add_only: true,
         };
-        let j = conflict_json(7, 2, "a.txt", &c);
+        let about = QuestionAbout {
+            name: "a.txt".into(),
+            kind: "move",
+            open: 3,
+            ..QuestionAbout::default()
+        };
+        let j = conflict_json(7, 2, &about, &c);
         assert_eq!(j["transferId"], 7);
         assert_eq!(j["item"], 2);
         assert_eq!(j["name"], "a.txt");
+        assert_eq!(j["kind"], "move");
+        assert_eq!(j["open"], 3);
+        assert_eq!(j["source_look"]["thumbnailSource"], "");
         assert_eq!(j["dst_size"], 4);
         assert!(j["dst_mtime_ms"].is_null());
         assert_eq!(j["choices"], serde_json::json!(["Replace", "KeepBoth"]));

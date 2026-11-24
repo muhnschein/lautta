@@ -39,8 +39,10 @@ Page {
         anchors.fill: parent
         model: page.actions
 
-        header: PageHeader {
-            title: page.count === 1 ? App.nameOf(page.info.uri) : qsTrId("lautta-dir-selected", page.count)
+        header: HeaderBand {
+            PageHeader {
+                title: page.count === 1 ? App.nameOf(page.info.uri) : qsTrId("lautta-dir-selected", page.count)
+            }
         }
 
         delegate: BackgroundItem {

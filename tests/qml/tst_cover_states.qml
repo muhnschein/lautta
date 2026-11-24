@@ -13,7 +13,7 @@ ApplicationWindow {
     property bool reachedEnd
     readonly property string base: "lautta://user-documents/Cover121/"
     readonly property var files: ["a.md", "b.md", "c.md", "d.md", "e.md", "f.md", "g.md", "h.md", "i.md", "j.md", "photo.jpg"]
-    property var browse
+    property var home
     property bool stuck
 
     ViewerTools { id: tools }
@@ -53,10 +53,10 @@ ApplicationWindow {
     }
 
     initialPage: Component {
-        BrowsePage {
-            id: browsePage
+        HomePage {
+            id: homePage
 
-            Component.onCompleted: win.browse = browsePage
+            Component.onCompleted: win.home = homePage
             deviceFree: 42000000000
             deviceTotal: 128000000000
             listModel: ListModel {
@@ -183,14 +183,14 @@ ApplicationWindow {
     }
 
     function checkAsleep() {
-        expect(cover.kind === "browse", "Browse on top: its cover, not " + cover.kind)
+        expect(cover.kind === "home", "Home on top: its cover, not " + cover.kind)
         expect(named(frame, "coverGrid").length === 0 && named(frame, "storageCell").length === 0,
                "nothing is built while the cover is out of sight")
         expect(texts(frame, "coverHeader") === "", "nor a header: " + texts(frame, "coverHeader"))
     }
 
-    function checkBrowse() {
-        expect(named(frame, "coverHeader").length === 0, "Browse's cover has no header")
+    function checkHome() {
+        expect(named(frame, "coverHeader").length === 0, "Home's cover has no header")
         var cells = named(frame, "storageCell")
         var icons = named(frame, "storageIcon").map(function (x) { return x.icon.replace("image://theme/icon-m-", "") }).join("|")
         expect(icons === "device|sd-card|sd-card", "phone and each mounted volume show by their icon: " + icons)
@@ -224,9 +224,9 @@ ApplicationWindow {
         var tiles = named(frame, "coverTile")
         if (!expect(grid !== undefined && tiles.length === 5, "the newest recents are tiles: " + tiles.length))
             return
-        expect(Math.round(grid.mapToItem(frame, 0, 0).y) === Math.round(margin + 2 * high + Theme.paddingSmall + Theme.paddingMedium)
+        expect(Math.round(grid.mapToItem(frame, 0, 0).y) === Math.round(margin + 2 * high + Theme.paddingSmall + Theme.paddingLarge)
                && Math.round(storage.y + storage.height) === Math.round(margin + 2 * high + Theme.paddingSmall),
-               "tiles start a medium padding below the cells: " + grid.mapToItem(frame, 0, 0).y)
+               "tiles as far below the cells as those are from the top: " + grid.mapToItem(frame, 0, 0).y)
         var side = Math.floor((frame.width - 2 * Theme.paddingSmall) / 3)
         expect(tiles.every(function (t) { return t.width === side && t.height === side }) && side > 0,
                "three tiles fill the cover from edge to edge: " + tiles[0].width + ", not " + side)
@@ -242,21 +242,21 @@ ApplicationWindow {
     }
 
     function checkPlaces() {
-        browse.listModel.setProperty(0, "tiles", "")
+        home.listModel.setProperty(0, "tiles", "")
         var tiles = named(frame, "coverTile")
         expect(tiles.length === 6 && tiles.map(function (t) { return t.placeIcon }).join(",")
                === "image://theme/icon-m-favorite,file-folder,image://theme/icon-m-usb,image://theme/icon-m-sd-card,image://theme/icon-m-sd-card,image://theme/icon-m-sd-card",
-               "without recents Browse's places are the tiles: " + tiles.map(function (t) { return t.placeIcon }).join(","))
+               "without recents Home's places are the tiles: " + tiles.map(function (t) { return t.placeIcon }).join(","))
         expect(named(frame, "placeGlyph").length === 6 && named(frame, "fileGlyph").length === 0, "each draws its place's icon only")
-        var more = JSON.parse(JSON.stringify(browse.listModel.get(5)))
-        browse.listModel.append(more)
-        browse.listModel.append(more)
+        var more = JSON.parse(JSON.stringify(home.listModel.get(5)))
+        home.listModel.append(more)
+        home.listModel.append(more)
         expect(named(frame, "storageCell").length === 4, "four cells at most: " + named(frame, "storageCell").length)
-        browse.listModel.remove(browse.listModel.count - 2, 2)
-        browse.deviceTotal = -1
+        home.listModel.remove(home.listModel.count - 2, 2)
+        home.deviceTotal = -1
         var icons = named(frame, "storageIcon").map(function (x) { return x.icon.replace("image://theme/icon-m-", "") }).join("|")
         expect(icons === "sd-card|sd-card", "unknown phone space has no cell: " + icons)
-        browse.listModel.remove(5)
+        home.listModel.remove(5)
         var cells = named(frame, "storageCell")
         if (!expect(cells.length === 1 && named(frame, "coverTile").length === 5, "an ejected volume leaves the cover: " + cells.length))
             return
@@ -274,12 +274,12 @@ ApplicationWindow {
         var grid = named(frame, "coverGrid")[0]
         expect(Math.round(grid.mapToItem(frame, 0, 0).y) === Math.round(Theme.paddingLarge + Theme.iconSizeSmall + Theme.paddingLarge),
                "tiles as far below that line as it is from the top: " + grid.mapToItem(frame, 0, 0).y)
-        var left = browse.listModel.get(5).free
-        browse.listModel.setProperty(5, "free", -1)
+        var left = home.listModel.get(5).free
+        home.listModel.setProperty(5, "free", -1)
         expect(named(frame, "storageCell").length === 0 && Math.round(grid.mapToItem(frame, 0, 0).y) === 0,
                "no space known: tiles from the top: " + grid.mapToItem(frame, 0, 0).y)
-        browse.listModel.setProperty(5, "free", left)
-        browse.deviceTotal = 128000000000
+        home.listModel.setProperty(5, "free", left)
+        home.deviceTotal = 128000000000
     }
 
     function checkFolder() {
@@ -288,7 +288,7 @@ ApplicationWindow {
         if (!waitFor(function () { return page.coverModel.count === total && named(frame, "coverTile").length >= 9 }, "the folder's tiles"))
             return
         expect(cover.kind === "grid" && texts(frame, "coverHeader") === "Cover121", "a folder's cover is headed by its name: " + texts(frame, "coverHeader"))
-        expect(named(frame, "storageCell").length === 0, "Browse's cells are gone")
+        expect(named(frame, "storageCell").length === 0, "Home's cells are gone")
         var tiles = named(frame, "coverTile")
         expect(tiles.slice(0, 3).map(function (t) { return t.isDir + ":" + t.category }).join(",") === "true:folder,true:folder,false:markdown",
                "tiles follow the folder's order, folders first: "
@@ -402,8 +402,8 @@ ApplicationWindow {
                && tiles[1].thumbnailSource.indexOf("photo.jpg") > 0,
                "a recent photo's tile asks for its picture: " + tiles[1].thumbnailSource)
         popTo(1)
-        expect(cover.kind === "browse" && named(frame, "storageCell").length > 0 && named(frame, "coverHeader").length === 0,
-               "back on Browse its cover is back")
+        expect(cover.kind === "home" && named(frame, "storageCell").length > 0 && named(frame, "coverHeader").length === 0,
+               "back on Home its cover is back")
     }
 
     function checkTaskCover() {
@@ -460,12 +460,12 @@ ApplicationWindow {
                "a running task takes the cover: " + cover.kind)
         expect(texts(frame, "coverHeader") === "lautta-xfr-cover-count", "one header only, the tasks': " + texts(frame, "coverHeader"))
         cover.tasks.activeCount = 0
-        expect(cover.kind === "browse" && named(frame, "coverGrid").length === 1, "the page's cover is back once it ends")
+        expect(cover.kind === "home" && named(frame, "coverGrid").length === 1, "the page's cover is back once it ends")
     }
 
     Timer {
         interval: 1
-        running: win.browse !== undefined && win.browse.status === PageStatus.Active && !pageStack.busy
+        running: win.home !== undefined && win.home.status === PageStatus.Active && !pageStack.busy
         onTriggered: {
             if (!win.makeFolder()) {
                 win.scenarioRunning = false
@@ -473,7 +473,7 @@ ApplicationWindow {
             }
             win.checkAsleep()
             cover.live = true
-            win.checkBrowse()
+            win.checkHome()
             win.checkTasksWin()
             win.checkPlaces()
             win.checkFolder()

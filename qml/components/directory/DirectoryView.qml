@@ -9,6 +9,7 @@ import "../transfers"
 import "../viewers"
 import "../Open.js" as Open
 import "../ErrorText.js" as ErrorText
+import "../ServerWarning.js" as ServerWarning
 import "../Access.js" as Access
 import "DirFormat.js" as DirFormat
 import "GridRows.js" as GridRows
@@ -21,7 +22,13 @@ Item {
     property bool selectionMode
     property bool selectionWaiting
     property bool detailsShown
+    property bool picking
+    property string rootTitle
     property alias model: dir
+    property alias leadArea: leadSlot
+    property alias placesArea: placesSlot
+    readonly property bool atRoot: picking && uri.length === 0
+    readonly property var trail: path.trail
     readonly property bool selecting: selectionMode
     readonly property bool gridMode: dir.viewMode === "grid"
     property string pendingName
@@ -33,8 +40,11 @@ Item {
     property var toMove: []
     property var made: []
     readonly property real coveredHeight: panelSpace.height
+    readonly property real backTapWidth: Theme.itemSizeSmall
 
     signal openFolder(string uri)
+    signal ancestorPicked(string uri)
+    signal homePicked
     signal flashed(string itemUri)
 
     function setSelection(state) {
@@ -61,6 +71,10 @@ Item {
             openFolder(itemUri)
         else
             Open.open(pageStack, App, Operations, itemUri, false, mimeType, uri, tileSize)
+    }
+
+    function offered(isDir) {
+        return !picking || isDir
     }
 
     function newFolder(moving) {
@@ -378,7 +392,7 @@ Item {
     }
 
     function placeholderKind() {
-        if (dir.count > 0 || dir.loading)
+        if (dir.count > 0 || dir.loading || atRoot)
             return ""
         if (dir.errorKind === "Sandbox" || dir.errorKind === "PermissionDenied")
             return "noaccess"
@@ -387,7 +401,7 @@ Item {
         return dir.readable ? "empty" : "hidden"
     }
 
-    function placeholderTitle(kind) {
+    function placeholderTitle(kind, errorKind) {
         switch (kind) {
         case "noaccess":
             //% "Not accessible"
@@ -398,10 +412,10 @@ Item {
         case "hidden":
             return hiddenTitle()
         }
-        switch (dir.errorKind) {
+        switch (errorKind) {
         case "AuthFailed":
-            //% "Sign-in failed"
-            return qsTrId("lautta-dir-err-auth")
+        case "ServerIdentityChanged":
+            return ServerWarning.title(errorKind)
         case "NotFound":
             //% "Folder not found"
             return qsTrId("lautta-dir-err-not-found")
@@ -417,10 +431,10 @@ Item {
         return qsTrId("lautta-dir-err-generic")
     }
 
-    function placeholderHint(kind) {
+    function placeholderHint(kind, errorKind) {
         switch (kind) {
         case "noaccess":
-            return dir.errorKind === "Sandbox"
+            return errorKind === "Sandbox"
                    //% "This link points outside the folders Lautta may read."
                    ? qsTrId("lautta-dir-noaccess-hint")
                    //% "You don't have permission to open this folder."
@@ -428,23 +442,27 @@ Item {
         case "hidden":
             return hiddenHint()
         case "empty":
+            if (picking && dir.writable)
+                //% "Save here, or pull down to create a folder"
+                return qsTrId("lautta-dir-empty-hint-picking")
             return dir.writable
                    //% "Pull down to create a folder or paste"
                    ? qsTrId("lautta-dir-empty-hint")
                    //% "This folder is empty"
                    : qsTrId("lautta-dir-empty-hint-readonly")
         }
-        var text = ErrorText.message(dir.errorKind, { "location": dir.locationName, "item": dir.title, "open": true })
+        var text = ServerWarning.level(errorKind)
+                   ? ServerWarning.hint(errorKind, dir.locationName)
+                   : ErrorText.message(errorKind, { "location": dir.locationName, "item": dir.title, "open": true })
         return detailsShown ? text + "\n\n" + dir.errorMessage : text
     }
 
-    function placeholderButtons(kind) {
+    function placeholderButtons(kind, errorKind) {
         if (kind !== "error")
             return []
         var buttons = []
-        if (dir.errorKind === "AuthFailed")
-            //% "Update sign-in"
-            buttons.push({ "text": qsTrId("lautta-dir-update-sign-in"), "action": "signIn" })
+        if (ServerWarning.level(errorKind))
+            buttons.push({ "text": ServerWarning.fixText(errorKind), "action": "account", "primary": true })
         else
             //% "Retry"
             buttons.push({ "text": qsTrId("lautta-dir-retry"), "action": "retry" })
@@ -457,7 +475,7 @@ Item {
         switch (action) {
         case "retry": dir.refresh(); break
         case "details": detailsShown = !detailsShown; break
-        case "signIn":
+        case "account":
             Bridge.editAccount("lautta://" + uri.split("/")[2] + "/")
             break
         }
@@ -569,9 +587,9 @@ Item {
             }
 
             contentHeight: Theme.itemSizeMedium
-            menu: view.selecting || model.inaccessible ? null : contextMenu
-            enabled: !model.inaccessible
-            opacity: model.inaccessible ? Theme.opacityLow : 1
+            menu: view.selecting || view.picking || model.inaccessible ? null : contextMenu
+            enabled: !model.inaccessible && view.offered(model.isDir)
+            opacity: enabled ? 1 : Theme.opacityLow
             onPressed: view.itemPressed(model.uri, model.isDir, model.mimeType)
             onClicked: {
                 if (view.selecting)
@@ -724,6 +742,8 @@ Item {
             x: (index % grid.columns) * width
             width: grid.cellWidth
             height: parent ? parent.height : implicitHeight
+            enabled: view.offered(model.isDir)
+            opacity: enabled ? 1 : Theme.opacityLow
             implicitHeight: gridMetrics.cellHeight(width, caption.implicitHeight)
             onCountKeyChanged: cell.countItems()
             onPreviewKeyChanged: cell.askPreview()
@@ -744,7 +764,7 @@ Item {
             }
             onPressAndHold: {
                 prefetch.stop()
-                if (dir.readable)
+                if (dir.readable && !view.picking)
                     dragSelect.begin(cell, index, mouse.x, mouse.y)
             }
             onPositionChanged: if (dragSelect.holder === cell) dragSelect.move(mouse.x, mouse.y)
@@ -851,17 +871,16 @@ Item {
 
             function regroup() {
                 var all = rowCells.items
-                var from = index * grid.columns
-                var to = Math.min(from + grid.columns, all.count)
+                var span = GridRows.span(index, grid.columns, all.count)
                 var kept = []
                 for (var i = inRow.count - 1; i >= 0; --i) {
                     var at = inRow.get(i).itemsIndex
-                    if (at < from || at >= to)
+                    if (at < span.from || at >= span.to)
                         inRow.remove(i, 1)
                     else
                         kept.push(at)
                 }
-                for (var j = from; j < to; ++j) {
+                for (var j = span.from; j < span.to; ++j) {
                     if (kept.indexOf(j) < 0)
                         all.addGroups(j, 1, "inRow")
                 }
@@ -929,29 +948,78 @@ Item {
             }
             height: errorNotice.y + errorNotice.height
 
+            HeaderBand {
+                objectName: "folderHeaderBand"
+                anchors {
+                    top: parent.top
+                    bottom: accessNotice.bottom
+                }
+            }
+
+            Item {
+                id: leadSlot
+
+                width: parent.width
+                height: childrenRect.height
+            }
+
             Item {
                 id: headerBar
 
+                objectName: "folderHeaderBar"
+                anchors.top: leadSlot.bottom
                 width: parent.width
-                height: pageHeader.height
+                height: view.picking ? band.space : pageHeader.height + crumbs.menuHeight
+
+                Loader {
+                    id: band
+
+                    readonly property real space: item ? item.height + item.menuHeight : 0
+
+                    width: parent.width
+                    active: view.picking
+                    sourceComponent: PathBand {
+                        objectName: "folderBand"
+                        title: view.atRoot ? view.rootTitle : dir.title
+                        pathModel: path
+                        menuHost: headerBar
+                        menuMost: Math.max(0, Math.floor((view.height - leadSlot.height) / Theme.itemSizeSmall) - 1)
+                        homeText: view.rootTitle
+                        onPicked: view.ancestorPicked(uri)
+                        onHome: view.homePicked()
+                    }
+                }
 
                 PageHeader {
                     id: pageHeader
 
                     objectName: "folderPageHeader"
-                    title: view.selecting
-                           //% "%n selected"
-                           ? qsTrId("lautta-dir-selected", dir.selectedCount)
-                           : dir.title
+                    visible: !view.picking
+                    leftMargin: view.backTapWidth
                     description: !view.selecting && Operations.isArchive(view.uri)
                                  //% "Compressed file · read only"
                                  ? qsTrId("lautta-dir-compressed-readonly")
                                  : ""
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: !view.selecting
-                    onClicked: pathMenu.open = !pathMenu.open
+                    extraContent.children: [
+                        PathCrumbs {
+                            id: crumbs
+
+                            objectName: "folderCrumbs"
+                            anchors.fill: parent
+                            title: view.selecting
+                                   //% "%n selected"
+                                   ? qsTrId("lautta-dir-selected", dir.selectedCount)
+                                   : dir.title
+                            pathShown: !view.selecting
+                            pathModel: path
+                            titleTop: pageHeader.topMargin
+                            menuHost: headerBar
+                            menuMost: Math.max(0, Math.floor((view.height - pageHeader.height) / Theme.itemSizeSmall))
+                            homeInset: view.width / 4 - view.backTapWidth
+                            onPicked: view.ancestorPicked(uri)
+                            onHome: view.homePicked()
+                        }
+                    ]
                 }
             }
 
@@ -962,23 +1030,11 @@ Item {
                 running: dir.loading
             }
 
-            PathMenu {
-                id: pathMenu
-
-                objectName: "folderPathMenu"
-                anchors.top: progress.bottom
-                maxHeight: Math.max(0, view.height - y - Theme.itemSizeLarge)
-                pathModel: path
-                currentUri: view.uri
-                onNavigate: view.openFolder(uri)
-                onFavouriteRequested: view.runAction("favourite", [view.uri], {}, null)
-            }
-
             Item {
                 id: accessNotice
 
                 objectName: "folderAccessNotice"
-                anchors.top: pathMenu.bottom
+                anchors.top: progress.bottom
                 width: parent.width
                 visible: dir.access.length > 0
                 height: visible ? accessRow.height + Theme.paddingMedium : 0
@@ -1070,7 +1126,7 @@ Item {
                 bottom: parent.bottom
             }
             clip: true
-            visible: !view.gridMode
+            visible: !view.gridMode && !view.atRoot
             model: view.gridMode ? null : dir
             delegate: listDelegate
             footer: Item {
@@ -1109,7 +1165,7 @@ Item {
                 bottom: parent.bottom
             }
             clip: true
-            visible: view.gridMode
+            visible: view.gridMode && !view.atRoot
             model: gridRows
             delegate: gridRowDelegate
             onColumnsChanged: view.fitGridRows()
@@ -1130,13 +1186,25 @@ Item {
 
             VerticalScrollDecorator { }
         }
+
+        Item {
+            id: placesSlot
+
+            anchors {
+                top: top.bottom
+                left: parent.left
+                right: parent.right
+                bottom: parent.bottom
+            }
+            visible: view.atRoot
+        }
     }
 
     Item {
         id: panelSpace
 
         width: 1
-        height: (view.selecting || App.clipboardCount > 0 ? Theme.itemSizeLarge : 0) + activityBar.space
+        height: (view.selecting || clipboardPanel.open ? Theme.itemSizeLarge : 0) + activityBar.space
     }
 
     Item {
@@ -1163,10 +1231,11 @@ Item {
             objectName: "folderPlaceholder"
             visible: kind.length > 0
             x: Theme.horizontalPageMargin
-            y: Math.round(parent.height * 0.38)
-            title: view.placeholderTitle(kind)
-            hint: view.placeholderHint(kind)
-            buttons: view.placeholderButtons(kind)
+            y: Math.max(0, Math.min(Math.round(parent.height * 0.38), parent.height - height - Theme.paddingLarge))
+            level: ServerWarning.level(dir.errorKind)
+            title: view.placeholderTitle(kind, dir.errorKind)
+            hint: view.placeholderHint(kind, dir.errorKind)
+            buttons: view.placeholderButtons(kind, dir.errorKind)
             onTriggered: view.placeholderAction(action)
         }
     }
@@ -1194,7 +1263,7 @@ Item {
     ActivityBar {
         id: activityBar
 
-        allowed: !view.selecting
+        allowed: !view.selecting && !view.picking
         anchors.bottomMargin: clipboardPanel.visibleSize
     }
 }

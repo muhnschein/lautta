@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import "../components"
 import "../components/search"
 import "../components/FileIcons.js" as FileIcons
 
@@ -23,9 +24,11 @@ Page {
 
             width: parent.width
 
-            PageHeader {
-                //% "Settings"
-                title: qsTrId("lautta-settings-title")
+            HeaderBand {
+                PageHeader {
+                    //% "Settings"
+                    title: qsTrId("lautta-settings-title")
+                }
             }
 
             SectionHeader {
@@ -33,11 +36,11 @@ Page {
                 text: qsTrId("lautta-settings-browsing")
             }
             SettingsEntry {
-                objectName: "browsePageEntry"
-                iconSource: "image://theme/icon-m-home"
-                //% "Browse page"
-                text: qsTrId("lautta-settings-browse-page")
-                onClicked: page.open("BrowseSettingsPage.qml")
+                objectName: "homePageEntry"
+                iconSource: FileIcons.source("home", Theme.pixelRatio)
+                //% "Home page"
+                text: qsTrId("lautta-settings-home-page")
+                onClicked: page.open("HomeSettingsPage.qml")
             }
             SettingsEntry {
                 objectName: "viewOptionsRow"

@@ -150,6 +150,9 @@ const MIGRATIONS: &[&str] = &[
         WHERE section = 'device' AND item = 'recents' AND hidden = 1;
     DELETE FROM browse_layout WHERE section = 'device' AND item = 'recents';
     "#,
+    r#"
+    ALTER TABLE browse_layout RENAME TO home_layout;
+    "#,
 ];
 
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -322,7 +325,7 @@ mod tests {
             ("favourites", "uri"),
             ("recents", "location_id"),
             ("location_prefs", "location_id"),
-            ("browse_layout", "item"),
+            ("home_layout", "item"),
             ("dircache", "location_id"),
             ("recent_searches", "location_id"),
             ("reading_positions", "location_id"),
@@ -395,7 +398,7 @@ mod tests {
         let db = Db::open(&path).unwrap();
         let conn = db.lock();
         let mut stmt = conn
-            .prepare("SELECT section, item, hidden, position FROM browse_layout ORDER BY section, item")
+            .prepare("SELECT section, item, hidden, position FROM home_layout ORDER BY section, item")
             .unwrap();
         let mut rows = stmt.query([]).unwrap();
         let mut out = Vec::new();
@@ -435,6 +438,22 @@ mod tests {
              INSERT INTO browse_layout VALUES ('device', 'user-music', 0, 0);",
         );
         assert_eq!(left, [("device".to_owned(), "user-music".to_owned(), 0, Some(0))]);
+    }
+
+    #[test]
+    fn the_layout_table_is_renamed_with_its_rows() {
+        let left = layout_after_schema_8("INSERT INTO browse_layout VALUES ('device', 'user-music', 1, 4);");
+        assert_eq!(left, [("device".to_owned(), "user-music".to_owned(), 1, Some(4))]);
+        let db = Db::open_in_memory().unwrap();
+        let old: i64 = db
+            .lock()
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE name = 'browse_layout'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(old, 0, "no table under the old name");
     }
 
     #[test]
