@@ -82,6 +82,20 @@ pub fn index_stream(input: impl Read) -> Result<Vec<RawEntry>> {
     Ok(out)
 }
 
+/// Single compressed file: one entry, the whole stream; read through once for its size.
+pub fn index_single(mut input: impl Read, name: Vec<u8>) -> Result<RawEntry> {
+    let size = io::copy(&mut input, &mut io::sink()).map_err(tar_err)?;
+    Ok(RawEntry {
+        name,
+        kind: Kind::File,
+        size,
+        mtime: None,
+        mode: None,
+        link: None,
+        loc: Loc::TarStream(0),
+    })
+}
+
 /// Decompressed stream of a compressed tar, read forward once and kept in an unlinked file:
 /// entry read in archive order costs only its own bytes. Earlier entry past what file keeps
 /// decompresses again from start.

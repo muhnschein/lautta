@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Read-only archive provider: zip, tar, tar.gz/bz2/xz/zst, 7z as a location.
+//! Read-only archive provider: zip, tar, tar.gz/bz2/xz/zst, 7z as a location. Single compressed
+//! file (gz/bz2/xz/zst, no tar inside) = archive of one file named without compression extension.
 //!
 //! * zip via `Read + Seek` adapter with 64 KiB block cache ([`blocks`]): ranged reads only, central
 //!   directory first, then opened entries.
 //! * plain tar indexed the same way (headers only).
-//! * compressed tar and 7z need a full read: downloaded once to a cache file, indexed from there.
+//! * compressed tar, single compressed file and 7z need a full read: downloaded once to a cache
+//!   file, indexed from there.
 //!
 //! Names that could leave the archive (`..`, absolute, drive letters, NUL) are never indexed;
 //! counted by [`ArchiveProvider::skipped_entries`].
@@ -60,6 +62,8 @@ pub enum Compression {
 pub enum ArchiveFormat {
     Zip,
     Tar(Compression),
+    /// Compressed stream without tar inside.
+    Single(Compression),
     SevenZ,
 }
 
@@ -68,7 +72,7 @@ enum Loc {
     Implicit,
     Zip(zipdir::ZipLoc),
     TarAt(u64),
-    /// Data offset in the decompressed stream of a compressed tar.
+    /// Data offset in the decompressed stream of a compressed tar or single compressed file.
     TarStream(u64),
     SevenZ(String),
 }
@@ -165,7 +169,11 @@ fn has_ustar(block: &[u8]) -> bool {
 pub fn detect_format(head: &[u8], name: &[u8]) -> Option<ArchiveFormat> {
     if let Some(comp) = compression_magic(head) {
         let is_tar = has_tar_extension(name) || has_ustar(&tarfmt::decompressed_head(comp, head, 512));
-        return is_tar.then_some(ArchiveFormat::Tar(comp));
+        return Some(if is_tar {
+            ArchiveFormat::Tar(comp)
+        } else {
+            ArchiveFormat::Single(comp)
+        });
     }
     if head.starts_with(b"PK\x03\x04") || head.starts_with(b"PK\x05\x06") {
         return Some(ArchiveFormat::Zip);
@@ -177,6 +185,19 @@ pub fn detect_format(head: &[u8], name: &[u8]) -> Option<ArchiveFormat> {
         return Some(ArchiveFormat::Tar(Compression::None));
     }
     None
+}
+
+/// Name of the one file in a single compressed file: compression extension dropped; whole name
+/// when it has none.
+fn single_name(archive: &[u8]) -> Vec<u8> {
+    let lower = archive.to_ascii_lowercase();
+    [".gz", ".gzip", ".bz2", ".xz", ".zst", ".zstd"]
+        .iter()
+        .find(|ext| lower.len() > ext.len() && lower.ends_with(ext.as_bytes()))
+        .map_or_else(
+            || archive.to_vec(),
+            |ext| archive[..archive.len() - ext.len()].to_vec(),
+        )
 }
 
 pub fn is_archive(head: &[u8], name: &[u8]) -> bool {
@@ -373,7 +394,7 @@ impl Inner {
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
                     if spill.is_none() {
                         let comp = match self.format {
-                            ArchiveFormat::Tar(c) => c,
+                            ArchiveFormat::Tar(c) | ArchiveFormat::Single(c) => c,
                             _ => Compression::None,
                         };
                         *spill = Some(tarfmt::Spill::new(self.cache_file()?, comp, &self.cache_dir)?);
@@ -484,7 +505,8 @@ impl ArchiveProvider {
             }
             _ => {
                 let cache = download_to_cache(source.as_ref(), &path, &cache_dir).await?;
-                index_cached(format, cache, cache_dir, password).await?
+                let name = path.name().unwrap_or_default().to_vec();
+                index_cached(format, cache, cache_dir, password, name).await?
             }
         };
         Ok(ArchiveProvider {
@@ -581,11 +603,13 @@ async fn index_ranged(
     })
 }
 
+/// `name`: archive's file name, for the entry of a single compressed file.
 async fn index_cached(
     format: ArchiveFormat,
     cache: CacheFile,
     cache_dir: PathBuf,
     password: Option<Password>,
+    name: Vec<u8>,
 ) -> Result<Inner> {
     let path = cache.0.clone();
     let (raw, password) = tokio::task::spawn_blocking(move || -> Result<_> {
@@ -593,6 +617,13 @@ async fn index_cached(
         match format {
             ArchiveFormat::Tar(comp) => Ok((
                 tarfmt::index_stream(tarfmt::decoder(comp, io::BufReader::new(file))?)?,
+                None,
+            )),
+            ArchiveFormat::Single(comp) => Ok((
+                vec![tarfmt::index_single(
+                    tarfmt::decoder(comp, io::BufReader::new(file))?,
+                    single_name(&name),
+                )?],
                 None,
             )),
             _ => {

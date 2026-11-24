@@ -934,6 +934,27 @@ async fn extract_follows_the_macos_rule() {
 }
 
 #[tokio::test]
+async fn single_compressed_file_extracts_and_browses_as_its_one_file() {
+    use std::io::Write;
+    let h = home().await;
+    let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+    gz.write_all(b"line one\nline two\n").unwrap();
+    write(&h.root.join("Documents/notes.txt.gz"), &gz.finish().unwrap());
+    let archive = uri("lautta://user-documents/notes.txt.gz");
+
+    finish(&h, h.core.extract(&archive, None).await.unwrap()).await;
+    assert_eq!(
+        std::fs::read(h.root.join("Documents/notes.txt")).unwrap(),
+        b"line one\nline two\n"
+    );
+
+    let (location, _hold) = h.core.open_archive(&archive, None).await.unwrap();
+    let inner = Uri::root(location).join(b"notes.txt").unwrap();
+    let entry = h.core.stat(&inner).await.unwrap();
+    assert_eq!((entry.name.as_slice(), entry.size), (&b"notes.txt"[..], Some(18)));
+}
+
+#[tokio::test]
 async fn extract_never_merges_into_a_folder_made_meanwhile() {
     let h = home().await;
     write(&h.root.join("Documents/one.txt"), b"one");
