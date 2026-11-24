@@ -2517,10 +2517,6 @@
         <source>Trash</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-home-volume-space">
-        <source>%1 free of %2</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-home-all-recents">
         <source>All recents</source>
         <translation type="unfinished"></translation>
@@ -2611,6 +2607,10 @@
     </message>
     <message id="lautta-settings-home-page">
         <source>Home page</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-home-volume-free">
+        <source>%1 free</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
