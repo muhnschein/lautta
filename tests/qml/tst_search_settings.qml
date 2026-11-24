@@ -178,6 +178,9 @@ ApplicationWindow {
         expect(keys.length === 0, "Settings is a list of entries, with no setting of its own: " + keys)
         expect(find(settings, "browsePageEntry") !== null && find(settings, "aboutEntry") !== null,
                "Browse page and About stay on Settings")
+        var homeIcon = String(find(settings, "browsePageEntry").iconSource)
+        expect(homeIcon.indexOf("image://lautta-icon/") === 0 && homeIcon.indexOf("/home.svg?") > 0,
+               "its row shows the house of the folder header: " + homeIcon)
         checkNamesOnly(settings)
         subPages.forEach(function (spec) { checkSubPage(settings, spec) })
         checkLargeOps(settings)
