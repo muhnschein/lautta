@@ -3,7 +3,7 @@
 Shot on a test phone with Lautta and netvfs. Everything shown is public
 domain or CC0, except the background.
 
-- Background: photo by Jon Flobrant on Unsplash, Unsplash License.
+- Background: photo by Jon Flobrant on Unsplash, Unsplash License; on the Home shot, Sailfish OS's own Origami ambience.
 - Lake_sunset.jpg: [Gander Bay lake sunset](https://commons.wikimedia.org/wiki/File:Gander_Bay_lake_sunset._(Unsplash).jpg), Elliot Yeo, CC0.
 - Pine_forest.jpg: [Pine forest Haukipudas Oulu](https://commons.wikimedia.org/wiki/File:Pine_forest_Haukipudas_Oulu_20130908_01.JPG), Estormiz, CC0.
 - Northern_lights.jpg: [Aurora borealis over Lapland](https://commons.wikimedia.org/wiki/File:Aurora_borealis_over_Lapland_(Unsplash).jpg), Vincent Guth, CC0.
