@@ -118,7 +118,7 @@ Item {
         objectName: "coverGrid"
         anchors {
             top: parent.top
-            topMargin: root.storage.length > 0 ? cells.y + cells.height + (root.alone ? Theme.paddingLarge : Theme.paddingMedium) : 0
+            topMargin: root.storage.length > 0 ? cells.y + cells.height + Theme.paddingLarge : 0
             left: parent.left
             right: parent.right
             bottom: parent.bottom

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The cover of the Home page leaves as much room under two or more storage icons as above them.
 - Lautta's own icons draw their lines as thin as Sailfish's, at every size and on every screen: servers, Checksums, links, the PDF lock, the lines on document glyphs and the glyphs on grid tiles. *View options* in Settings has its own list-and-grid icon ([#145](https://github.com/muhnschein/lautta/issues/145)).
 - A 7z file whose names are readable but whose contents are locked no longer accepts a wrong password now and then when it opens.
 - The Home page shows its Recents tiles only once there are three recent files to show, so a fresh install starts without a half-empty row.
