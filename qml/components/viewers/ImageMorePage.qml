@@ -4,6 +4,7 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import ".."
+import "../directory"
 import "../directory/ContextActions.js" as Actions
 
 Page {
@@ -39,7 +40,7 @@ Page {
         anchors.fill: parent
         model: (page.changeable ? [
             //% "Rename"
-            { "id": "rename", "text": qsTrId("lautta-viewers-more-rename") }
+            { "id": "rename", "text": qsTrId("lautta-viewers-more-rename"), "icon": Actions.icon("rename") }
         ] : []).concat(Actions.more({ "isDir": false, "writable": page.writable }))
 
         header: HeaderBand {
@@ -48,16 +49,10 @@ Page {
             }
         }
 
-        delegate: BackgroundItem {
+        delegate: MoreActionRow {
+            text: modelData.text
+            icon: modelData.icon
             onClicked: page.choose(modelData.id)
-
-            Label {
-                x: Theme.horizontalPageMargin
-                anchors.verticalCenter: parent.verticalCenter
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                text: modelData.text
-                color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
-            }
         }
 
         VerticalScrollDecorator { }

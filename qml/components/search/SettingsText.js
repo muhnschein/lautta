@@ -14,3 +14,11 @@ function megabytes(list) {
         return qsTrId("lautta-settings-up-to-mb").arg(n)
     })
 }
+
+function largeOperation(items, bytes) {
+    if (bytes >= 1000000000)
+        //% "Over %1 items or %2 GB"
+        return qsTrId("lautta-settings-large-gb").arg(items).arg(Math.round(bytes / 100000000) / 10)
+    //% "Over %1 items or %2 MB"
+    return qsTrId("lautta-settings-large-mb").arg(items).arg(Math.round(bytes / 1000000))
+}
