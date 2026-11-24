@@ -85,7 +85,7 @@ QtQuick.Window {
     function showsItsLine(row, number) {
         var line = lineOf(number)
         plain.width = row.width
-        plain.text = line
+        plain.text = line.replace(/^[ \t]+(?=\S)/, "")
         expect(row.contentWidth > 0 && row.lineCount === plain.lineCount
                && Math.abs(row.contentWidth - plain.contentWidth) < 1,
                "line " + number + " " + JSON.stringify(line) + " is " + row.lineCount + " lines, " + row.contentWidth
@@ -119,8 +119,10 @@ QtQuick.Window {
     }
 
     function checkTabbed(shown) {
-        var tabbed = '&nbsp;&nbsp;&nbsp;&nbsp;<font color="' + colourOf("function") + '">echo</font>'
+        var tabbed = '<font color="' + colourOf("function") + '">echo</font>'
         expect(shown["2"].text.indexOf(tabbed) === 0, "the row with a tab: " + shown["2"].text)
+        expect(shown["2"].x > shown["1"].x && shown["2"].width < shown["1"].width,
+               "the tab's indent moves the row in: " + shown["2"].x + " " + shown["1"].x)
     }
 
     function checkLong(shown) {
