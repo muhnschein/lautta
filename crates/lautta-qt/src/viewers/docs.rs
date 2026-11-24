@@ -38,6 +38,7 @@ pub struct TextDocument {
 
     reload: qt_method!(fn(&mut self)),
     rowNumber: qt_method!(fn(&self, index: i32) -> i32),
+    rowIndent: qt_method!(fn(&self, index: i32) -> i32),
     styledRow: qt_method!(fn(&self, index: i32, colours: QString) -> QString),
 
     generation: u64,
@@ -142,14 +143,23 @@ impl TextDocument {
         i32::try_from(number).unwrap_or(i32::MAX)
     }
 
+    fn rowIndent(&self, index: i32) -> i32 {
+        let indent = usize::try_from(index)
+            .ok()
+            .and_then(|i| self.rows.row(i))
+            .map_or(0, |r| r.indent);
+        i32::try_from(indent).unwrap_or(i32::MAX)
+    }
+
     fn styledRow(&self, index: i32, colours: QString) -> QString {
         let Some(row) = usize::try_from(index).ok().and_then(|i| self.rows.row(i)) else {
             return QString::default();
         };
+        let skip = if row.start == 0 { row.indent } else { 0 };
         let palette = Palette::parse(&colours.to_string());
         QString::from(
             self.lines
-                .styled_row(row.line, row.start, row.text, &palette)
+                .styled_row(row.line, row.start + skip, &row.text[skip..], &palette)
                 .as_str(),
         )
     }

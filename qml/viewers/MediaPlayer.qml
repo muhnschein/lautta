@@ -291,8 +291,6 @@ Page {
             maximumValue: Math.max(1, page.duration)
             enabled: page.duration > 0
             handleVisible: page.duration > 0
-            valueText: ViewerText.clock(value)
-            label: page.duration > 0 ? ViewerText.clock(page.duration) : ""
             onReleased: page.seek(value)
 
             Binding {
@@ -300,6 +298,28 @@ Page {
                 property: "value"
                 value: page.position
                 when: !slider.down
+            }
+        }
+
+        Item {
+            width: parent.width
+            height: elapsed.height
+
+            Label {
+                id: elapsed
+
+                objectName: "elapsedTime"
+                x: slider.leftMargin
+                text: page.duration > 0 ? ViewerText.clock(slider.value) : ""
+                font.pixelSize: Theme.fontSizeSmall
+                color: slider.highlighted ? Theme.highlightColor : Theme.primaryColor
+            }
+            Label {
+                objectName: "totalTime"
+                x: parent.width - slider.rightMargin - width
+                text: page.duration > 0 ? ViewerText.clock(page.duration) : ""
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.secondaryColor
             }
         }
 

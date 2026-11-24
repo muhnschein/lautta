@@ -11,12 +11,14 @@ pub struct Row<'a> {
     pub text: &'a str,
     pub line: usize,
     pub start: usize,
+    pub indent: usize,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct Span {
     line: usize,
     start: usize,
+    indent: usize,
     bytes: Range<usize>,
 }
 
@@ -52,9 +54,11 @@ impl TextRows {
             }
             column += width;
         }
+        let first = self.rows.len();
         let mut row = Span {
             line,
             start: 0,
+            indent: 0,
             bytes: begin..begin,
         };
         let mut column = 0;
@@ -65,6 +69,7 @@ impl TextRows {
                 let next = Span {
                     line,
                     start: column,
+                    indent: 0,
                     bytes: cut..cut,
                 };
                 self.rows.push(std::mem::replace(&mut row, next));
@@ -73,6 +78,12 @@ impl TextRows {
         }
         row.bytes.end = self.shown.len();
         self.rows.push(row);
+        let lead = &self.shown[self.rows[first].bytes.clone()];
+        let spaces = lead.len() - lead.trim_start_matches(' ').len();
+        let indent = if spaces < lead.len() { spaces } else { 0 };
+        for span in &mut self.rows[first..] {
+            span.indent = indent;
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -94,6 +105,7 @@ impl TextRows {
             text: self.shown.get(span.bytes.clone())?,
             line: span.line,
             start: span.start,
+            indent: span.indent,
         })
     }
 }
@@ -169,6 +181,28 @@ mod tests {
         assert_eq!(starts, [(1, 0), (1, 1000), (1, 2000)]);
         let joined: String = (1..4).filter_map(|i| long.row(i)).map(|r| r.text).collect();
         assert_eq!(joined, "c".repeat(2500), "nothing is lost");
+    }
+
+    #[test]
+    fn rows_of_a_line_share_its_indent() {
+        let indents = |text: &str| -> Vec<usize> {
+            let rows = TextRows::new(text);
+            (0..rows.len())
+                .filter_map(|i| rows.row(i))
+                .map(|r| r.indent)
+                .collect()
+        };
+        assert_eq!(indents("a\n    b\n\tc\n  \n"), [0, 4, 4, 0, 0]);
+        assert_eq!(
+            indents(&format!("  {}", "x".repeat(1500))),
+            [2, 2],
+            "a long line goes on at its indent"
+        );
+        assert_eq!(
+            indents(&format!("{}x", " ".repeat(1200))),
+            [0, 0],
+            "first row all blank: no indent"
+        );
     }
 
     #[test]

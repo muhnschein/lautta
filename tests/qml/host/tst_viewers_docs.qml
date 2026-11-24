@@ -87,16 +87,18 @@ Item {
         var echo = styled(coloured, 2, "")
         check(echo.indexOf("<") < 0 && echo.indexOf("&lt;b&gt;bold?&lt;/b&gt; &amp;amp;") > 0, "no colours, still escaped: " + echo)
         var indented = styled(coloured, 3, "")
-        check(indented === '&nbsp;&nbsp;if [ &quot;$x&quot; ]; then&nbsp;&nbsp;echo &quot;a&nbsp;&nbsp;b&quot;; fi', "whitespace is kept: " + indented)
+        check(indented === 'if [ &quot;$x&quot; ]; then&nbsp;&nbsp;echo &quot;a&nbsp;&nbsp;b&quot;; fi', "whitespace is kept, but the indent: " + indented)
+        check(coloured.rowIndent(3) === 2 && coloured.rowIndent(2) === 0, "the indent apart: " + coloured.rowIndent(3))
         var past = [coloured.styledRow(9, "comment=#123456"), coloured.styledRow(-1, "comment=#123456"),
-                    coloured.rowNumber(9), coloured.rowNumber(-1)]
-        check(JSON.stringify(past) === JSON.stringify(["", "", 0, 0]), "past either end: none: " + past)
+                    coloured.rowNumber(9), coloured.rowNumber(-1), coloured.rowIndent(9), coloured.rowIndent(-1)]
+        check(JSON.stringify(past) === JSON.stringify(["", "", 0, 0, 0, 0]), "past either end: none: " + past)
 
         waitForColours(coloured, "lautta://user-documents/rows.sh")
         var palette = "comment=#123456,function=#654321,string=#abcdef"
         var tabbed = styled(coloured, 1, palette)
-        check(tabbed === '&nbsp;&nbsp;&nbsp;&nbsp;<font color="#654321">echo</font> <font color="#abcdef">&quot;\uD83D\uDE00&quot;</font> '
+        check(tabbed === '<font color="#654321">echo</font> <font color="#abcdef">&quot;\uD83D\uDE00&quot;</font> '
               + '<font color="#123456"># tab</font>', "a row with a tab and an emoji: " + tabbed)
+        check(coloured.rowIndent(1) === 4, "the tab is its indent: " + coloured.rowIndent(1))
         check(coloured.rowCount === 4 && coloured.lineCount === 3 && coloured.rowNumber(2) === 3
               && coloured.rowNumber(3) === 0, "a long line in two rows: " + coloured.rowCount + " " + coloured.rowNumber(3))
         var rest = styled(coloured, 3, palette)

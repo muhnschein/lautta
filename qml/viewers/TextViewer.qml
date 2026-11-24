@@ -86,6 +86,9 @@ Page {
         }
 
         delegate: Item {
+            readonly property real room: width - page.gutter - Theme.horizontalPageMargin
+            readonly property real indent: Math.min(doc.rowIndent(index) * page.charWidth, room / 2)
+
             width: view.width
             height: Math.max(line.implicitHeight, Theme.fontSizeExtraSmall * 1.4)
 
@@ -101,8 +104,8 @@ Page {
             }
             Label {
                 id: line
-                x: page.gutter
-                width: parent.width - page.gutter - Theme.horizontalPageMargin
+                x: page.gutter + parent.indent
+                width: parent.room - parent.indent
                 text: doc.styledRow(index, doc.highlighted ? page.colours : "")
                 font.family: App.monoFont
                 font.pixelSize: Theme.fontSizeExtraSmall
