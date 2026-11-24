@@ -215,18 +215,18 @@ ApplicationWindow {
         waitFor(function () { return gone(sel) }, "the panel to leave")
     }
 
-    function checkMoreOfOne(sel) {
+    function checkMoreOfOne(sel, favourite) {
         var page = openMore(sel, [base + "a.md"])
         if (!page)
             return
         same(pageTitle(page), "a.md", "the header names the one item")
         same(page.actions.map(function (a) { return [a.text, a.icon] }),
              [[qsTrId("lautta-dir-act-rename"), "image://theme/icon-m-edit"],
-              [qsTrId("lautta-dir-act-favourite"), "image://theme/icon-m-favorite"],
+              [qsTrId(favourite ? "lautta-dir-act-edit-favourite" : "lautta-dir-act-favourite"), "image://theme/icon-m-favorite"],
               [qsTrId("lautta-dir-act-compress"), "file-archive"],
               [qsTrId("lautta-dir-act-checksums"), "checksum"],
               [qsTrId("lautta-dir-act-move-new-folder"), "file-folder"]],
-             "one item: Rename, Add to favourites, Compress, Checksums, Move to new folder, each with its icon")
+             "one item: Rename, Add to (or, once added, Edit) favourites, Compress, Checksums, Move to new folder, each with its icon")
         pageStack.pop(null, PageStackAction.Immediate)
         waitFor(function () { return !pageStack.busy && view !== null }, "the folder again")
         expect(view.selecting && view.model.selectedCount === 1, "leaving the page keeps the selection")
@@ -324,11 +324,11 @@ ApplicationWindow {
             checkSelectionPanel()
             var sel = panel("buttons")
             checkLeavingKeepsButtons(sel)
-            checkMoreOfOne(sel)
+            checkMoreOfOne(sel, false)
             checkMoreOfSeveral(sel)
             App.setSetting("view_mode", JSON.stringify("grid"))
             if (waitFor(function () { return view.gridMode }, "the folder as a grid"))
-                checkMoreOfOne(sel)
+                checkMoreOfOne(sel, true)
             App.setSetting("view_mode", JSON.stringify("list"))
             waitFor(function () { return !view.gridMode }, "the folder as a list")
             checkClipboardPanel()
