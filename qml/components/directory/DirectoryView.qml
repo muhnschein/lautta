@@ -957,6 +957,14 @@ Item {
             }
             height: errorNotice.y + errorNotice.height
 
+            HeaderBand {
+                objectName: "folderHeaderBand"
+                anchors {
+                    top: parent.top
+                    bottom: accessNotice.bottom
+                }
+            }
+
             Item {
                 id: headerBar
 

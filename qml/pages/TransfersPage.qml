@@ -55,10 +55,12 @@ Page {
         header: Column {
             width: list.width
 
-            PageHeader {
-                //% "Activity"
-                title: qsTrId("lautta-xfr-title")
-                description: page.headerDescription()
+            HeaderBand {
+                PageHeader {
+                    //% "Activity"
+                    title: qsTrId("lautta-xfr-title")
+                    description: page.headerDescription()
+                }
             }
             BackgroundItem {
                 id: banner

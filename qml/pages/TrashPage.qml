@@ -62,11 +62,13 @@ Page {
         header: Column {
             width: list.width
 
-            PageHeader {
-                //% "Trash"
-                title: qsTrId("lautta-trash-title")
-                //% "Kept for %n days"
-                description: qsTrId("lautta-trash-kept", page.retentionDays)
+            HeaderBand {
+                PageHeader {
+                    //% "Trash"
+                    title: qsTrId("lautta-trash-title")
+                    //% "Kept for %n days"
+                    description: qsTrId("lautta-trash-kept", page.retentionDays)
+                }
             }
 
             Item {
