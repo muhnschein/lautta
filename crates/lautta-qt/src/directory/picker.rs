@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Places the share target saves to; plain list of `core.locations.locations()`.
 
-use crate::browse::{watch_sources, Guard};
+use crate::home::{watch_sources, Guard};
 use crate::runtime::core;
 use cpp::cpp;
 use lautta_core::app::Core;

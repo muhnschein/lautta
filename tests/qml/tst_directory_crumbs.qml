@@ -13,7 +13,7 @@ ApplicationWindow {
     readonly property string docs: "lautta://user-documents/"
     readonly property string longName: "Delta" + new Array(11).join("AndOnAndOn")
     readonly property var names: ["Crumbs", "Alpha", "Beta", "Gamma", longName]
-    readonly property string homeRow: "lautta-path-home"
+    readonly property string homeRow: "lautta-home-title"
 
     ViewerTools { id: tools }
 

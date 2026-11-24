@@ -3,7 +3,7 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../../qml/components"
-import "../../qml/components/browse"
+import "../../qml/components/home"
 import "../../qml/components/directory"
 import "../../qml/components/operations"
 import "../../qml/components/search"

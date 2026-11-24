@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 // SCR-58. Shows what a tap opens: page on top, or the nearest one below it that tells a cover
-// (`coverKind`: "browse", "grid" with `coverTitle` and `coverModel`, "file" with `coverUri`).
+// (`coverKind`: "home", "grid" with `coverTitle` and `coverModel`, "file" with `coverUri`).
 // Nothing built while cover is out of sight.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
@@ -45,13 +45,13 @@ CoverBackground {
         objectName: "coverContent"
         anchors.fill: parent
         active: cover.live && cover.source !== null
-        sourceComponent: cover.kind === "browse" ? browse : (cover.kind === "grid" ? grid : (cover.kind === "file" ? file : null))
+        sourceComponent: cover.kind === "home" ? home : (cover.kind === "grid" ? grid : (cover.kind === "file" ? file : null))
     }
 
     Component {
-        id: browse
+        id: home
 
-        CoverBrowse {
+        CoverHome {
             rows: cover.told("listModel", null)
             deviceFree: cover.told("deviceFree", -1)
             deviceTotal: cover.told("deviceTotal", -1)

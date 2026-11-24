@@ -48,7 +48,7 @@ pub struct App {
     canAddTo: qt_method!(fn(&self, folder_uri: QString) -> bool),
     localUrl: qt_method!(fn(&self, uri: QString) -> QString),
     categoryOf: qt_method!(fn(&self, name_or_uri: QString) -> QString),
-    /// JSON `lautta_core::app_browse::RecentTile` of the file at `uri`; empty: no such uri.
+    /// JSON `lautta_core::app_home::RecentTile` of the file at `uri`; empty: no such uri.
     tileOf: qt_method!(fn(&self, uri: QString) -> QString),
     viewerFor: qt_method!(fn(&self, name_or_uri: QString, mime: QString) -> QString),
     /// `[{ id, label }]` JSON of `common` or `more` checksum algorithms.

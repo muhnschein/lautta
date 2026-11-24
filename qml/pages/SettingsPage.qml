@@ -33,11 +33,11 @@ Page {
                 text: qsTrId("lautta-settings-browsing")
             }
             SettingsEntry {
-                objectName: "browsePageEntry"
+                objectName: "homePageEntry"
                 iconSource: "image://theme/icon-m-home"
-                //% "Browse page"
-                text: qsTrId("lautta-settings-browse-page")
-                onClicked: page.open("BrowseSettingsPage.qml")
+                //% "Home page"
+                text: qsTrId("lautta-settings-home-page")
+                onClicked: page.open("HomeSettingsPage.qml")
             }
             SettingsEntry {
                 objectName: "viewOptionsRow"

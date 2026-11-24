@@ -76,29 +76,29 @@ Item {
     }
 
     function testPlan() {
-        var browse = []
+        var home = []
         var atPictures = [pictures]
         var atUni = [pictures, uni]
         var atThesis = [pictures, uni, thesis]
         var atPlots = [pictures, uni, thesis, plots]
-        same(PathNav.plan([atPlots, atThesis, atUni, atPictures, browse], uni), { "pop": 2 },
+        same(PathNav.plan([atPlots, atThesis, atUni, atPictures, home], uni), { "pop": 2 },
              "walked down: back to that folder's own page")
-        same(PathNav.plan([atPlots, atThesis, atUni, atPictures, browse], thesis), { "pop": 1 },
+        same(PathNav.plan([atPlots, atThesis, atUni, atPictures, home], thesis), { "pop": 1 },
              "the parent: one page back")
-        same(PathNav.plan([atPlots, atThesis, atUni, atPictures, browse], pictures), { "pop": 3 },
+        same(PathNav.plan([atPlots, atThesis, atUni, atPictures, home], pictures), { "pop": 3 },
              "the place's top folder: its page")
-        same(PathNav.plan([atPlots, browse], uni), { "replace": 0 },
+        same(PathNav.plan([atPlots, home], uni), { "replace": 0 },
              "entered deep from a favourite: no page of that folder, it takes this page's place")
-        same(PathNav.plan([atPlots, atThesis, browse], uni), { "replace": 1 },
+        same(PathNav.plan([atPlots, atThesis, home], uni), { "replace": 1 },
              "pages inside that folder all go: it takes the lowest one's place")
-        same(PathNav.plan([atPlots, browse, atUni, atPictures, browse], uni), { "replace": 0 },
+        same(PathNav.plan([atPlots, home, atUni, atPictures, home], uni), { "replace": 0 },
              "a page of that folder behind another kind of page is left alone")
-        same(PathNav.plan([atPlots, atThesis, browse, atThesis], uni), { "replace": 1 },
+        same(PathNav.plan([atPlots, atThesis, home, atThesis], uni), { "replace": 1 },
              "only the run of folder pages on top counts")
-        same(PathNav.plan([atPlots, ["lautta://user-documents/", "lautta://user-documents/Uni"], browse], uni), { "replace": 0 },
+        same(PathNav.plan([atPlots, ["lautta://user-documents/", "lautta://user-documents/Uni"], home], uni), { "replace": 0 },
              "a folder of another place below: stays")
         same(PathNav.plan([atPlots], uni), { "replace": 0 }, "the only page: replaced")
-        same(PathNav.plan([browse, atPlots], uni), { "replace": 0 }, "top page shows no folder: it is the one replaced")
+        same(PathNav.plan([home, atPlots], uni), { "replace": 0 }, "top page shows no folder: it is the one replaced")
     }
 
     Component.onCompleted: {

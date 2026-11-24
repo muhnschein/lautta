@@ -1,0 +1,774 @@
+// Scenario of home_models.rs: steps with action and condition; a step fails when its condition
+// does not hold within 30 seconds. Qt 5.15 on host: no Connections here.
+Item {
+    id: root
+
+    property int stage: 0
+    property int waited: 0
+    property bool acted: false
+    property var steps: []
+    property string connected: ""
+    property string failedKind: ""
+    property string failedSubject: ""
+    property string busyAtOnce: ""
+    property bool relisted: false
+    property bool moved: false
+    property bool movedAtOnce: false
+    property bool refused: false
+    property int polls: 0
+    property int remoteChanges: 0
+
+    LocationsModel { id: locs }
+    FavouritesModel { id: favs }
+    RecentsModel { id: recents }
+    DirectoryModel { id: remoteDir }
+    DirectoryModel { id: localDir }
+
+    Repeater {
+        id: rows
+        model: locs
+        delegate: Item {
+            property string rkind: kind
+            property string rname: name
+            property string rstatus: status
+            property string rattention: attention
+            property string rconnection: connection
+            property string rconnectionError: connectionError
+            property string rcolour: colour
+            property string rplace: place
+            property string rprovider: provider
+            property string ruri: uri
+            property string ritem: itemId
+            property string rsection: section
+            property string ricon: icon
+            property bool rfile: isFile
+            property string rdrive: drive
+            property string rtiles: tiles
+            property bool marked: false
+        }
+    }
+
+    Repeater {
+        id: remoteRows
+        model: remoteDir
+        delegate: Item {
+            property string rname: name
+            property bool rfolder: isDir
+            property real rmodified: modified
+            property int ritems: itemCount
+            property string rthumb: thumbnailSource
+        }
+    }
+
+    Repeater {
+        id: recentRows
+        model: recents
+        delegate: Item {
+            property int rid: itemId
+            property string rname: name
+            property string rplace: place
+            property string rgroup: dateGroup
+        }
+    }
+
+    PickerRootsModel { id: saveTo }
+
+    Repeater {
+        id: placeRows
+        model: saveTo
+        delegate: Item {
+            property string pname: name
+            property string pkind: kind
+            property string picon: icon
+            property string pattention: attention
+            property bool pwritable: writable
+            property bool pselectable: selectable
+        }
+    }
+
+    HomeLayoutModel { id: layout }
+
+    Repeater {
+        id: layoutRows
+        model: layout
+        delegate: Item {
+            property string lsection: section
+            property string litem: item
+            property bool lhidden: hidden
+            property int lplace: place
+            property bool lmovable: movable
+            property bool lnested: nested
+            property bool marked: false
+        }
+    }
+
+    function layoutRow(section, item) {
+        for (var i = 0; i < layoutRows.count; ++i) {
+            var r = layoutRows.itemAt(i)
+            if (r && r.lsection === section && r.litem === item)
+                return r
+        }
+        return null
+    }
+
+    function layoutIndex(section, item) {
+        for (var i = 0; i < layoutRows.count; ++i) {
+            var r = layoutRows.itemAt(i)
+            if (r && r.lsection === section && r.litem === item)
+                return i
+        }
+        return -1
+    }
+
+    function layoutKeys(section) {
+        var items = []
+        for (var i = 0; i < layoutRows.count; ++i) {
+            var r = layoutRows.itemAt(i)
+            if (r && r.lsection === section)
+                items.push(r.litem)
+        }
+        return items
+    }
+
+    function deviceRows() {
+        var names = []
+        for (var i = 0; i < rows.count; ++i) {
+            var r = rows.itemAt(i)
+            if (r && r.rsection === "device")
+                names.push(r.rkind === "deleted" ? r.rkind : r.rname)
+        }
+        return names.join(",")
+    }
+
+    function tiles() {
+        var strip = row("recent-strip")
+        return strip ? JSON.parse(strip.rtiles) : []
+    }
+
+    function tileNames() {
+        return tiles().map(function(t) { return t.name }).join(",")
+    }
+
+    function row(kind, name) {
+        for (var i = 0; i < rows.count; ++i) {
+            var r = rows.itemAt(i)
+            if (r && r.rkind === kind && (name === undefined || r.rname === name))
+                return r
+        }
+        return null
+    }
+
+    function has(kind, name) {
+        return row(kind, name) !== null
+    }
+
+    function place(name) {
+        for (var i = 0; i < placeRows.count; ++i) {
+            var p = placeRows.itemAt(i)
+            if (p && p.pname === name)
+                return p
+        }
+        return null
+    }
+
+    function hasItem(kind, item) {
+        for (var i = 0; i < rows.count; ++i) {
+            var r = rows.itemAt(i)
+            if (r && r.rkind === kind && r.ritem === item)
+                return true
+        }
+        return false
+    }
+
+    function favouriteNames() {
+        var names = []
+        for (var i = 0; i < rows.count; ++i) {
+            var r = rows.itemAt(i)
+            if (r && r.rkind === "favourite")
+                names.push(r.rname)
+        }
+        return names.join(",")
+    }
+
+    function remoteRow(name) {
+        for (var i = 0; i < remoteRows.count; ++i)
+            if (remoteRows.itemAt(i).rname === name)
+                return remoteRows.itemAt(i)
+        return null
+    }
+
+    function thumbOf(name) {
+        for (var i = 0; i < remoteRows.count; ++i) {
+            if (remoteRows.itemAt(i).rname === name)
+                return remoteRows.itemAt(i).rthumb
+        }
+        return null
+    }
+
+    function step(label, act, ok) {
+        steps.push({ "label": label, "act": act, "ok": ok })
+    }
+
+    function tick() {
+        var s = steps[stage]
+        if (!s) {
+            return
+        }
+        if (!acted) {
+            acted = true
+            if (s.act)
+                s.act()
+        }
+        if (s.ok()) {
+            console.log("PASS " + s.label)
+            stage++
+            acted = false
+            waited = 0
+        } else if (++waited > 1200) {  // 30 s at 25 ms: a busy machine
+            console.error("FAILED: " + s.label)
+            stage = steps.length
+        }
+    }
+
+    function run() {
+        while (stage < steps.length) {
+            var before = stage
+            tick()
+            if (stage === before)
+                FakeWorld.pump(25)
+        }
+        console.log("DONE")
+    }
+
+    Component.onCompleted: {
+        Bridge.mounted.connect(function(uri) { root.connected = uri })
+        Bridge.failed.connect(function(kind, message, subject) {
+            root.failedKind = kind
+            root.failedSubject = subject
+        })
+
+        var docs = "lautta://user-documents/"
+        var a = docs + "a.txt"
+
+        step("consent row while the user has not decided",
+             function() { locs.refresh() },
+             function() { return Bridge.status === "consentUnknown" && has("consent") && !Bridge.ready })
+        step("Settings › Storage opens without the consent",
+             function() { if (Bridge.storageSettings) Bridge.openStorageSettings() },
+             function() { return JSON.parse(FakeWorld.handoffs()).indexOf("storage") >= 0 })
+        step("a drive that is not mounted is a volume row",
+             null,
+             function() {
+                 var v = row("volume", "STICK")
+                 return v !== null && v.rstatus === "unmounted" && v.rdrive === "sda1" && v.ruri === ""
+                        && v.ritem === "vol-STICK" && v.ricon === "image://theme/icon-m-usb"
+             })
+        step("a drive mounted out of the app's sight is an error naming it",
+             function() {
+                 Bridge.mountDrive("sda1", "STICK")
+                 root.busyAtOnce = Bridge.busyDrives.join(",")
+             },
+             function() {
+                 return root.failedKind === "NotFound" && root.failedSubject === "STICK"
+                        && JSON.parse(FakeWorld.drives())[0].mounted && !has("volume", "STICK")
+             })
+        step("the drive was busy while it was mounted and is not any more",
+             null,
+             function() { return root.busyAtOnce === "sda1" && Bridge.busyDrives.length === 0 })
+        step("unmounting reaches the bridge and the row comes back",
+             function() {
+                 root.failedKind = ""
+                 Bridge.unmountDrive("sda1", "STICK")
+                 root.busyAtOnce = Bridge.busyDrives.join(",")
+             },
+             function() {
+                 var v = row("volume", "STICK")
+                 return !JSON.parse(FakeWorld.drives())[0].mounted && v !== null && v.rstatus === "unmounted"
+                        && root.failedKind === "" && root.connected === ""
+             })
+        step("the drive was busy while it was unmounted and is not any more",
+             null,
+             function() { return root.busyAtOnce === "sda1" && Bridge.busyDrives.length === 0 })
+        step("no account without consent", null, function() { return !has("account") })
+        step("ask again reaches the bridge",
+             function() { Bridge.requestConsent() },
+             function() { return FakeWorld.consentRequests() >= 2 })
+        step("granting shows the server",
+             function() { FakeWorld.grant() },
+             function() {
+                 var nas = row("account", "NAS")
+                 return Bridge.ready && nas !== null && nas.rstatus === "ready" && nas.rprovider === "SFTP"
+                        && nas.ruri === "lautta://nv-account:1/"
+             })
+        step("and offers it as a place to save shared files to",
+             null,
+             function() {
+                 var nas = place("NAS")
+                 return nas !== null && nas.pkind === "server" && nas.picon === "server" && nas.pwritable
+                        && nas.pselectable && nas.pattention === ""
+             })
+        step("an unused server is not connected",
+             null,
+             function() {
+                 var nas = row("account", "NAS")
+                 return nas !== null && nas.rconnection === "disconnected" && nas.rconnectionError === ""
+             })
+        step("folders and Trash are rows, Recents is none",
+             null,
+             function() {
+                 return has("folder", "Documents") && has("folder", "Music") && has("deleted")
+                        && !has("recents") && !has("recent-strip") && deviceRows().indexOf("Documents") === 0
+             })
+        step("the device tells its space",
+             null,
+             function() { return locs.deviceTotal > 0 && locs.deviceFree >= 0 && locs.deviceFree <= locs.deviceTotal })
+
+        step("Home page settings list every row",
+             function() { layout.reload() },
+             function() {
+                 var m = layoutRow("device", "user-music")
+                 var n = layoutRow("nearby", "nearby")
+                 return m !== null && !m.lhidden && m.lmovable && n !== null && !n.lhidden && !n.lmovable
+                        && layoutRow("device", "deleted") !== null
+             })
+        step("hide a folder in the settings",
+             function() { layout.setHidden("device", "user-music", true) },
+             function() {
+                 var m = layoutRow("device", "user-music")
+                 return !has("folder", "Music") && has("folder", "Documents") && m !== null && m.lhidden
+             })
+        step("a drive that comes shows in the Home page and its settings",
+             function() { FakeWorld.addDrive("mmcblk1p1", "CARD", false) },
+             function() {
+                 var v = row("volume", "CARD")
+                 var l = layoutRow("volumes", "vol-CARD")
+                 return v !== null && v.rdrive === "mmcblk1p1" && l !== null && !l.lhidden
+             })
+        step("a locked drive shows as locked in the Home page and its settings",
+             function() { FakeWorld.addDrive("mmcblk1p2", "VAULT", true) },
+             function() {
+                 var v = row("volume", "VAULT")
+                 var l = layoutRow("volumes", "vol-VAULT")
+                 return v !== null && v.rstatus === "locked" && v.rdrive === "mmcblk1p2" && v.ruri === ""
+                        && v.ricon === "image://theme/icon-m-sd-card" && l !== null && !l.lhidden
+             })
+        step("show it again from the settings",
+             function() {
+                 layoutRow("device", "user-music").marked = true
+                 layoutRow("device", "deleted").marked = true
+                 layout.setHidden("device", "user-music", false)
+             },
+             function() {
+                 var m = layoutRow("device", "user-music")
+                 return has("folder", "Music") && m !== null && !m.lhidden && m.marked
+             })
+        step("move a row within its section",
+             function() { layout.moveTo("device", "deleted", 0) },
+             function() {
+                 var d = layoutRow("device", "deleted")
+                 return deviceRows().indexOf("deleted,Documents") === 0 && d !== null && d.lplace === 0
+                        && d.marked && layoutRow("device", "user-music").marked
+             })
+        step("restore defaults",
+             function() {
+                 layout.setHidden("device", "user-documents", true)
+                 layout.restoreDefaults()
+             },
+             function() {
+                 var d = layoutRow("device", "deleted")
+                 return deviceRows().indexOf("Documents") === 0 && /,deleted$/.test(deviceRows())
+                        && d !== null && d.lplace > 0
+             })
+        step("a carried row moves at once and is stored",
+             function() {
+                 var at = layoutIndex("device", "user-documents")
+                 var nearby = layoutIndex("nearby", "nearby")
+                 layoutRow("device", "user-documents").marked = true
+                 root.moved = layout.moveRow(at, at + 1) && layout.moveRow(at + 1, at + 2)
+                 var r = layoutRows.itemAt(at + 2)
+                 root.movedAtOnce = r.litem === "user-documents" && r.marked && r.lplace === 2
+                                    && layoutRows.itemAt(at).lplace === 0
+                 root.refused = !layout.moveRow(at, at) && !layout.moveRow(nearby, nearby - 1)
+                                && !layout.moveRow(at, layoutRows.count)
+             },
+             function() {
+                 var r = layoutRow("device", "user-documents")
+                 return root.moved && root.movedAtOnce && root.refused
+                        && deviceRows().split(",")[2] === "Documents" && r.lplace === 2 && r.marked
+             })
+        step("Recents, Volumes and Servers lead with their switch",
+             function() { layout.reload() },
+             function() {
+                 var recent = layoutRow("recents", "section")
+                 if (recent === null || recent.lhidden || recent.lplace !== -1 || recent.lmovable || recent.lnested
+                         || layoutIndex("recents", "section") !== 0 || layoutKeys("recents").length !== 1)
+                     return false
+                 var v = layoutRow("volumes", "section")
+                 var s = layoutRow("servers", "section")
+                 var card = layoutRow("volumes", "vol-CARD")
+                 var nas = layoutRow("servers", "nv-account:1")
+                 return v !== null && s !== null && !v.lhidden && !s.lhidden && v.lplace === -1 && s.lplace === -1
+                        && !v.lmovable && !v.lnested && card !== null && card.lnested && nas !== null && nas.lnested
+                        && layoutIndex("volumes", "section") + 1 === layoutIndex("volumes", "vol-CARD")
+                        && layoutIndex("servers", "section") + 1 === layoutIndex("servers", "nv-account:1")
+                        && layoutRow("device", "user-documents").lnested === false
+             })
+        step("Servers off hides its rows, not the other sections",
+             function() {
+                 layout.setHidden("servers", "nv-account:1", true)
+                 layoutRow("servers", "section").marked = true
+                 layoutRow("volumes", "section").marked = true
+                 layoutRow("volumes", "vol-CARD").marked = true
+                 layout.setHidden("servers", "section", true)
+             },
+             function() {
+                 var s = layoutRow("servers", "section")
+                 return s !== null && s.lhidden && s.marked && layoutRow("servers", "nv-account:1") === null
+                        && !has("account")
+                        && layoutRow("volumes", "section").marked && layoutRow("volumes", "vol-CARD").marked
+                        && has("volume", "CARD") && has("folder", "Music")
+             })
+        step("a server comes while Servers is off",
+             function() { FakeWorld.addAccount(2, "Office") },
+             function() { return FakeWorld.locationKnown("nv-account:2") })
+        // A drive after the server: once the drive shows, the models have seen the server.
+        step("that server shows nowhere",
+             function() { FakeWorld.addDrive("mmcblk1p3", "SPARE", false) },
+             function() {
+                 return layoutRow("volumes", "vol-SPARE") !== null && has("volume", "SPARE")
+                        && layoutRow("servers", "section").lhidden
+                        && !has("account") && layoutRow("servers", "nv-account:2") === null
+                        && JSON.stringify(layoutKeys("servers")) === '["section"]'
+             })
+        step("Servers on shows its rows again with their earlier switches",
+             function() {
+                 layoutRow("servers", "section").marked = true
+                 layout.setHidden("servers", "section", false)
+             },
+             function() {
+                 var s = layoutRow("servers", "section")
+                 var nas = layoutRow("servers", "nv-account:1")
+                 var office = layoutRow("servers", "nv-account:2")
+                 return s !== null && !s.lhidden && s.marked && nas !== null && nas.lhidden
+                        && office !== null && !office.lhidden && has("account", "Office") && !has("account", "NAS")
+             })
+        step("Volumes off removes the volumes from the Home page",
+             function() { layout.setHidden("volumes", "section", true) },
+             function() {
+                 var v = layoutRow("volumes", "section")
+                 return v !== null && v.lhidden && layoutRow("volumes", "vol-CARD") === null
+                        && !has("volume") && has("account", "Office")
+                        && JSON.stringify(layoutKeys("volumes")) === '["section"]'
+             })
+        step("restore defaults switches both sections on and shows every row",
+             function() { layout.restoreDefaults() },
+             function() {
+                 return !layoutRow("volumes", "section").lhidden && !layoutRow("servers", "section").lhidden
+                        && has("volume", "CARD") && has("volume", "VAULT") && has("account", "NAS")
+                        && has("account", "Office") && !layoutRow("servers", "nv-account:1").lhidden
+             })
+        step("the second server goes away",
+             function() { FakeWorld.removeAccount("account:2") },
+             function() { return !has("account", "Office") && layoutRow("servers", "nv-account:2") === null })
+
+        step("a remote folder lists",
+             function() {
+                 FakeWorld.putFile("account:1", "r1.txt")
+                 remoteDir.uri = "lautta://nv-account:1/"
+             },
+             function() { return !remoteDir.loading && remoteDir.count === 1 })
+        step("coming back to a remote folder lists it again",
+             function() {
+                 FakeWorld.putFile("account:1", "r2.txt")
+                 remoteDir.revisit()
+                 root.relisted = remoteDir.loading
+             },
+             function() { return root.relisted && !remoteDir.loading && remoteDir.count === 2 })
+        step("a server's pictures and PDFs have the app's thumbnails",
+             function() {
+                 FakeWorld.putFile("account:1", "p.jpg")
+                 FakeWorld.putFile("account:1", "d.pdf")
+                 remoteDir.revisit()
+             },
+             function() {
+                 var base = "image://lautta-thumb/lautta://nv-account:1/"
+                 return !remoteDir.loading && remoteDir.count === 4 && thumbOf("p.jpg") === base + "p.jpg"
+                        && thumbOf("d.pdf") === base + "d.pdf" && thumbOf("r1.txt") === ""
+             })
+        step("Thumbnails from servers off takes them from the open folder",
+             function() { App.setSetting("thumbnails_remote", JSON.stringify(false)) },
+             function() { return thumbOf("p.jpg") === "" && thumbOf("d.pdf") === "" })
+        step("and on again gives them back",
+             function() { App.setSetting("thumbnails_remote", JSON.stringify(true)) },
+             function() { return thumbOf("p.jpg") !== "" && thumbOf("d.pdf") !== "" })
+        step("a remote folder is listed with a folder in it",
+             function() {
+                 FakeWorld.putFile("account:1", "sub/inner.txt")
+                 remoteDir.revisit()
+             },
+             function() { return !remoteDir.loading && remoteDir.count === 5 })
+        step("a folder on a server is not counted",
+             function() {
+                 root.polls = 0
+                 root.remoteChanges = 0
+                 remoteDir.dataChanged.connect(function () { root.remoteChanges += 1 })
+                 remoteDir.requestCount("lautta://nv-account:1/sub")
+             },
+             function() {
+                 var sub = remoteRow("sub")
+                 return ++root.polls > 40 && sub !== null && sub.rfolder && sub.rmodified > 0
+                        && sub.ritems === -1 && !remoteDir.folderCounts && root.remoteChanges === 0
+             })
+        step("a folder with full access shows no level",
+             null,
+             function() {
+                 return remoteDir.access === "" && remoteDir.writable && remoteDir.changeable && remoteDir.readable
+             })
+        step("a narrower level shows in the open folder at once",
+             function() { FakeWorld.setAccess("account:1", "read-add") },
+             function() {
+                 return remoteDir.access === "read-add" && remoteDir.writable && !remoteDir.changeable
+                        && remoteDir.readable && !remoteDir.loading && remoteDir.count === 5
+             })
+        step("add only lists the folders only",
+             function() { FakeWorld.setAccess("account:1", "add") },
+             function() {
+                 return remoteDir.access === "add" && remoteDir.writable && !remoteDir.readable
+                        && !remoteDir.loading && remoteDir.count === 1
+             })
+        step("read only adds nothing",
+             function() { FakeWorld.setAccess("account:1", "read") },
+             function() {
+                 return remoteDir.access === "read" && !remoteDir.writable && remoteDir.readable
+                        && !remoteDir.loading && remoteDir.count === 5
+             })
+        step("nor does it take shared files",
+             null,
+             function() { return place("NAS") !== null && !place("NAS").pwritable })
+        step("full access again",
+             function() { FakeWorld.setAccess("account:1", "full") },
+             function() {
+                 return remoteDir.access === "" && remoteDir.changeable && !remoteDir.loading
+                        && remoteDir.count === 5
+             })
+        step("and takes shared files again",
+             null,
+             function() { return place("NAS") !== null && place("NAS").pwritable })
+        step("listing connected the server",
+             null,
+             function() {
+                 var nas = row("account", "NAS")
+                 return nas !== null && nas.rconnection === "connected"
+             })
+        step("a failed connection updates the server row in place",
+             function() {
+                 row("account", "NAS").marked = true
+                 FakeWorld.setState("account:1", "failed", "Timeout")
+             },
+             function() {
+                 var nas = row("account", "NAS")
+                 return nas !== null && nas.rconnection === "failed" && nas.rconnectionError === "Timeout"
+                        && nas.rstatus === "ready" && nas.marked
+             })
+        step("and so does closing it when idle",
+             function() { FakeWorld.setState("account:1", "disconnected", "") },
+             function() {
+                 var nas = row("account", "NAS")
+                 return nas !== null && nas.rconnection === "disconnected" && nas.rconnectionError === ""
+                        && nas.marked
+             })
+        step("a local folder lists",
+             function() { localDir.uri = docs },
+             function() { return !localDir.loading && localDir.count === 1 && localDir.writable })
+        step("coming back to a watched local folder does not list it again",
+             function() {
+                 localDir.revisit()
+                 root.relisted = localDir.loading
+             },
+             function() { return !root.relisted })
+        step("a local folder whose permissions forbid adding takes nothing, but for root",
+             function() { localDir.uri = "lautta://user-music/locked/" },
+             function() {
+                 return !localDir.loading && localDir.count === 2 && localDir.writable === FakeWorld.superuser()
+                        && localDir.readable
+             })
+
+        step("add a favourite",
+             function() { favs.add(docs, "Docs", "#e7a33c") },
+             function() {
+                 var f = row("favourite", "Docs")
+                 return f !== null && f.rplace === "Documents" && f.rcolour === "#e7a33c"
+             })
+        step("the settings list shows it",
+             null,
+             function() { return layoutRow("favourites", String(favs.idOf(docs))) !== null })
+        step("edit it",
+             function() { favs.edit(favs.idOf(docs), "Papers", "#4fa3e5") },
+             function() { return has("favourite", "Papers") && !has("favourite", "Docs") })
+        // Row remorse lives in its delegate: a change elsewhere in the list must not rebuild rows
+        // that stay.
+        step("order favourites, keeping the other rows",
+             function() {
+                 row("favourite", "Papers").marked = true
+                 row("folder", "Music").marked = true
+                 favs.add("lautta://user-music/", "Tunes", "")
+             },
+             function() {
+                 return favouriteNames() === "Papers,Tunes" && row("favourite", "Papers").marked
+                        && row("folder", "Music").marked
+             })
+        step("move one up",
+             function() { favs.moveTo(favs.idOf("lautta://user-music/"), 0) },
+             function() { return favouriteNames() === "Tunes,Papers" })
+        step("remove favourites",
+             function() {
+                 favs.remove(favs.idOf(docs))
+                 favs.remove(favs.idOf("lautta://user-music/"))
+             },
+             function() { return !has("favourite") })
+        step("page adds a first favourite",
+             function() { favs.save(docs, "Docs", "", "", true) },
+             function() { return favouriteNames() === "Docs" })
+        step("page adds a second favourite",
+             function() { favs.save("lautta://user-music/", "Tunes", "#4fa3e5", "", true) },
+             function() { return favouriteNames() === "Docs,Tunes" })
+        step("page relabels a favourite",
+             function() { favs.save(docs, "Papers", "", "", true) },
+             function() { return favouriteNames() === "Papers,Tunes" })
+        step("page gives a favourite an icon",
+             function() { favs.save(docs, "Papers", "#e5604f", "home", true) },
+             function() {
+                 var f = row("favourite", "Papers")
+                 var stored = JSON.parse(favs.get(favs.idOf(docs)))
+                 return f !== null && f.ricon === "image://theme/icon-m-home" && f.rcolour === "#e5604f"
+                        && stored.icon === "home" && stored.defaultIcon === "image://theme/icon-m-favorite"
+                        && favs.iconChoices()[0] === "favorite" && favs.iconChoices().indexOf("home") > 0
+             })
+        step("an unknown icon is the star",
+             function() { favs.save(docs, "Papers", "", "no-such-icon", true) },
+             function() {
+                 var f = row("favourite", "Papers")
+                 return f !== null && f.ricon === "image://theme/icon-m-favorite" && f.rcolour === ""
+                        && JSON.parse(favs.get(favs.idOf(docs))).icon === ""
+             })
+        step("page adds a file favourite",
+             function() { favs.save(a, "Notes", "", "", false) },
+             function() {
+                 var f = row("favourite", "Notes")
+                 var stored = JSON.parse(favs.get(favs.idOf(a)))
+                 return f !== null && f.rfile && f.rplace === "Documents" && f.ricon === "file-document"
+                        && stored.isDir === false && stored.place === "Documents" && stored.icon === ""
+                        && stored.defaultIcon === "file-document"
+                        && !row("favourite", "Papers").rfile && row("favourite", "Papers").ricon === "image://theme/icon-m-favorite"
+             })
+        step("relabelling it keeps it a file",
+             function() { favs.save(a, "Lecture notes", "", "", true) },
+             function() {
+                 var f = row("favourite", "Lecture notes")
+                 return f !== null && f.rfile && JSON.parse(favs.get(favs.idOf(a))).isDir === false
+             })
+        step("page removes favourites",
+             function() {
+                 favs.removeUri(docs)
+                 favs.removeUri("lautta://user-music/")
+                 favs.removeUri(a)
+             },
+             function() { return !has("favourite") && favs.idOf(docs) === -1 && favs.idOf(a) === -1 })
+        step("a closed page's change still reaches Home",
+             function() {
+                 var gone = Qt.createQmlObject("import Lautta 1.0; FavouritesModel { }", root)
+                 gone.save(docs, "Gone", "", "", true)
+                 gone.destroy()
+             },
+             function() { return favouriteNames() === "Gone" })
+        step("and its removal too",
+             function() {
+                 var gone = Qt.createQmlObject("import Lautta 1.0; FavouritesModel { }", root)
+                 gone.removeUri(docs)
+                 gone.destroy()
+             },
+             function() { return !has("favourite") })
+
+        step("recents come newest first with places",
+             function() {
+                 FakeWorld.record(a, "a.txt", "opened")
+                 FakeWorld.record(docs + "b.txt", "b.txt", "opened")
+                 FakeWorld.record(docs + "c.txt", "c.txt", "previewed")
+                 FakeWorld.record(docs + "d.zip", "d.zip", "transferred")
+                 recents.reload()
+             },
+             function() {
+                 return recents.loaded && recents.enabled && recents.count === 4 && recentRows.count === 4
+                        && recentRows.itemAt(0).rname === "d.zip" && recentRows.itemAt(0).rplace === "Documents"
+                        && recentRows.itemAt(0).rgroup === "today"
+             })
+        step("the newest recents lead Home as tiles",
+             function() { locs.refresh() },
+             function() {
+                 var first = rows.itemAt(0)
+                 var t = tiles()
+                 return first !== null && first.rkind === "recent-strip" && first.rsection === "recents"
+                        && tileNames() === "d.zip,c.txt,b.txt,a.txt" && t[0].kind === "transferred"
+                        && t[0].category === "archive" && t[0].uri === docs + "d.zip"
+                        && t[0].id === recentRows.itemAt(0).rid && row("folder", "Documents").rtiles === ""
+             })
+        step("remove one recent",
+             function() { recents.remove(recentRows.itemAt(0).rid) },
+             function() { return recents.count === 3 && recentRows.itemAt(0).rname === "c.txt" })
+        step("and its tile goes without a refresh",
+             null,
+             function() { return tileNames() === "c.txt,b.txt,a.txt" })
+        step("the Recents switch takes the tiles off Home",
+             function() { layout.setHidden("recents", "section", true) },
+             function() { return !has("recent-strip") && layoutRow("recents", "section").lhidden })
+        step("and puts them back",
+             function() { layout.setHidden("recents", "section", false) },
+             function() { return tileNames() === "c.txt,b.txt,a.txt" && !layoutRow("recents", "section").lhidden })
+        step("with two recents left the tiles leave Home",
+             function() { recents.remove(recentRows.itemAt(0).rid) },
+             function() { return recents.count === 2 && !has("recent-strip") && !layoutRow("recents", "section").lhidden })
+        step("turn recents off through the setting",
+             function() {
+                 App.setSetting("recents_enabled", JSON.stringify(false))
+                 recents.reload()
+                 locs.refresh()
+                 layout.reload()
+             },
+             function() { return !recents.enabled && !has("recent-strip") && layoutRow("recents", "section") === null })
+        step("clear recents",
+             function() { recents.clear() },
+             function() { return recents.count === 0 })
+
+        step("attention shows on the server",
+             function() { FakeWorld.setAttention("account:1", "auth-failed") },
+             function() {
+                 var nas = row("account", "NAS")
+                 return nas !== null && nas.rstatus === "attention" && nas.rattention === "auth-failed"
+             })
+        step("and on it as a place to save to, which can't be picked",
+             null,
+             function() {
+                 var nas = place("NAS")
+                 return nas !== null && nas.pattention === "auth-failed" && !nas.pselectable
+             })
+
+        step("hand-offs reach the bridge",
+             function() {
+                 Bridge.addServer("")
+                 Bridge.addServer("smb")
+                 Bridge.editAccount("lautta://nv-account:1/")
+             },
+             function() {
+                 var h = JSON.parse(FakeWorld.handoffs())
+                 return h.indexOf("add:sftp") >= 0 && h.indexOf("add:smb") >= 0 && h.indexOf("settings:account:1") >= 0
+             })
+
+        step("an account removed in Settings is forgotten",
+             function() { favs.add("lautta://nv-account:1/photos", "Photos", "") },
+             function() { return has("favourite", "Photos") })
+        step("the account goes away",
+             function() { FakeWorld.removeAccount("account:1") },
+             function() { return !has("account") && !has("favourite", "Photos") })
+        run()
+    }
+}

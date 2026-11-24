@@ -2,7 +2,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
-import "../components/browse"
+import "../components/home"
 
 Page {
     id: page
@@ -47,7 +47,7 @@ Page {
         filled = true
     }
 
-    // Save once typing pauses (each save refreshes Browse rows), and on page leave: at start of pop
+    // Save once typing pauses (each save refreshes Home rows), and on page leave: at start of pop
     // or when no transition.
     function flush() {
         if (labelTimer.running)

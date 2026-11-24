@@ -6,7 +6,7 @@ import "../components"
 import "../components/directory"
 import "../components/ErrorText.js" as ErrorText
 import "../components/FileIcons.js" as FileIcons
-import "../components/browse/BrowseText.js" as BrowseText
+import "../components/home/HomeText.js" as HomeText
 import "../components/operations/Share.js" as Share
 
 Dialog {
@@ -199,7 +199,7 @@ Dialog {
 
         section.property: "kind"
         section.delegate: SectionHeader {
-            text: BrowseText.sectionTitle(Share.sectionOf(section))
+            text: HomeText.sectionTitle(Share.sectionOf(section))
         }
 
         delegate: ListItem {

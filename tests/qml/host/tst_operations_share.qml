@@ -77,7 +77,7 @@ Item {
 
     function testSections() {
         same(["folder", "android", "volume", "server"].map(Share.sectionOf), ["device", "android", "volumes", "servers"],
-             "places group as on Browse")
+             "places group as on Home")
     }
 
     function testPlaces() {
