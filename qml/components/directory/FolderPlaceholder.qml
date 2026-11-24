@@ -7,24 +7,58 @@ Column {
 
     property string title
     property string hint
+    // [{ text, action, primary }]
     property var buttons: []
+    // "", "warning" or "security" (ServerWarning.js)
+    property string level
+
+    readonly property bool warning: level.length > 0
+    readonly property bool security: level === "security"
 
     signal triggered(string action)
 
     spacing: Theme.paddingLarge
     width: parent ? parent.width - 2 * Theme.horizontalPageMargin : 0
 
-    Label {
+    HighlightImage {
+        objectName: "placeholderIcon"
+        visible: placeholder.warning
+        anchors.horizontalCenter: parent.horizontalCenter
+        source: visible ? "image://theme/icon-l-attention" : ""
+        color: placeholder.security ? Theme.errorColor : Theme.highlightColor
+    }
+
+    Column {
         width: parent.width
-        horizontalAlignment: Text.AlignHCenter
-        wrapMode: Text.Wrap
-        text: placeholder.title
-        font {
-            pixelSize: Theme.fontSizeExtraLarge
-            family: Theme.fontFamilyHeading
+        spacing: Theme.paddingSmall
+
+        Label {
+            objectName: "placeholderKicker"
+            visible: placeholder.security
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            //% "Security warning"
+            text: qsTrId("lautta-attention-security-warning")
+            font {
+                pixelSize: Theme.fontSizeSmall
+                capitalization: Font.AllUppercase
+            }
+            color: Theme.errorColor
         }
-        color: Theme.highlightColor
-        opacity: Theme.opacityHigh
+
+        Label {
+            objectName: "placeholderTitle"
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.Wrap
+            text: placeholder.title
+            font {
+                pixelSize: Theme.fontSizeExtraLarge
+                family: Theme.fontFamilyHeading
+            }
+            color: placeholder.security ? Theme.errorColor : Theme.highlightColor
+            opacity: placeholder.warning ? 1.0 : Theme.opacityHigh
+        }
     }
 
     Label {
@@ -36,8 +70,10 @@ Column {
         color: Theme.secondaryHighlightColor
     }
 
-    Row {
+    // Warning: buttons stacked, fix first and marked.
+    Grid {
         anchors.horizontalCenter: parent.horizontalCenter
+        columns: placeholder.warning ? 1 : Math.max(1, placeholder.buttons.length)
         spacing: Theme.paddingLarge
         visible: placeholder.buttons.length > 0
 
@@ -45,7 +81,13 @@ Column {
             model: placeholder.buttons
 
             Button {
+                objectName: "placeholderButton"
                 text: modelData.text
+                preferredWidth: placeholder.warning ? Math.min(Theme.buttonWidthLarge, placeholder.width)
+                                                    : Theme.buttonWidthSmall
+                backgroundColor: modelData.primary
+                                 ? Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity)
+                                 : Theme.rgba(color, Theme.opacityFaint)
                 onClicked: placeholder.triggered(modelData.action)
             }
         }

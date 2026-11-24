@@ -26,6 +26,9 @@ Silica idioms to use instead:
   ComboBox (label + highlight value; opens inline menu), Slider (value above,
   label below), TextField (underline, label below).
 - Empty states = ViewPlaceholder (big light highlight text centred + hint).
+- Server warnings (`FolderPlaceholder` `level`) = placeholder with `icon-l-attention` on top, buttons
+  stacked, fix first on highlight background. Security level (identity changed): icon and title
+  `Theme.errorColor`, "Security warning" label above title.
 - Busy = BusyIndicator ring. Progress = thin highlight line.
 - Buttons (rare in Silica; only in page content) = `.btn` rounded.
 - Section headers = small, right-aligned, highlight colour.
