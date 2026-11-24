@@ -251,6 +251,12 @@ ApplicationWindow {
         same(named(band, "crumbTitle").text, view.model.title, "the band names the folder")
         expect(named(band, "crumbRow").visible, "with the way up before it")
         expect(named(page, "folderHeaderBar").y >= named(page, "shareCount").height, "under Save here and the count")
+        var middle = band.height / 2
+        var tints = findAll(page, function (x) {
+            return x.visible && x.radius !== undefined && x.color !== undefined && x.color.a > 0 && x.width > 0
+                    && x.mapToItem(band, 0, 0).y <= middle && x.mapToItem(band, 0, x.height).y >= middle
+        }, [])
+        same(tints.map(function (x) { return x.objectName }), ["folderHeaderBand"], "one tint behind the path: the header band")
         same(pulley(page), ["lautta-dir-menu-new-folder"], "the pulley makes a folder, nothing else")
         named(page, "folderMenuNewFolder").clicked()
         waitFor(function () { return pageStack.currentPage !== page && !pageStack.busy }, "the page that names a folder")

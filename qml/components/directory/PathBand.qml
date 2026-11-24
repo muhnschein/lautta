@@ -19,11 +19,6 @@ Item {
     width: parent ? parent.width : 0
     height: Theme.itemSizeSmall
 
-    Rectangle {
-        anchors.fill: parent
-        color: Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity / 2)
-    }
-
     PathCrumbs {
         id: crumbs
 
