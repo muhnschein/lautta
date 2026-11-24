@@ -42,6 +42,13 @@ function glyph(category, isDir, px) {
     return sized("file-" + kind(category, isDir), px)
 }
 
+function source(name, pixelRatio) {
+    if (name.length === 0 || name.indexOf(":") >= 0)
+        return name
+    var path = Qt.resolvedUrl("../icons/" + name + ".svg").toString().replace(/^file:\/\//, "")
+    return "image://lautta-icon" + path + "?stroke=" + 2 * pixelRatio
+}
+
 var pageSizes = {}
 var pageSizeCount = 0
 

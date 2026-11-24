@@ -406,3 +406,15 @@ async fn tar_files_cannot_have_a_password() {
         assert_eq!(kind_of(done), Some(ErrorKind::InvalidArgument));
     }
 }
+
+#[tokio::test]
+async fn wrong_password_whose_garbage_decodes_is_still_wrong() {
+    let tmp = tempfile::tempdir().unwrap();
+    let bytes = include_bytes!("names-shown-garbles-with-Pass.7z");
+    assert_eq!(
+        kind_of(open("s.7z", bytes, tmp.path(), Some("Pass")).await),
+        Some(ErrorKind::WrongPassword)
+    );
+    let p = open("s.7z", bytes, tmp.path(), Some("pass")).await.unwrap();
+    assert_eq!(read(&p, "shown.txt").await.unwrap(), b"names shown, data locked");
+}

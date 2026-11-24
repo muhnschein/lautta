@@ -76,7 +76,7 @@ ApplicationWindow {
     }
 
     function svg(kind, set) {
-        return String(Qt.resolvedUrl("../../qml/icons/file-" + kind + "-" + set + ".svg"))
+        return FileIcons.source("file-" + kind + "-" + set, Theme.pixelRatio)
     }
 
     // No render loop headless: lay out by hand.
