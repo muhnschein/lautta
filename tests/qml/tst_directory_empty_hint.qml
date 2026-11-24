@@ -11,18 +11,23 @@ ApplicationWindow {
     readonly property string base: "lautta://user-documents/EmptyHint/"
     readonly property string empty: base + "empty/"
     readonly property string other: base + "other/"
+    property string archiveRoot
 
     ViewerTools { id: tools }
 
     DirectoryModel { id: documents; uri: "lautta://user-documents/" }
     DirectoryModel { id: top }
 
+    Connections {
+        target: Operations
+        onJobFinished: if (ok) Operations.openArchive(resultUri, "")
+        onArchiveOpened: window.archiveRoot = rootUri
+    }
+
     Component {
         id: pageComponent
 
-        DirectoryPage {
-            uri: window.empty
-        }
+        DirectoryPage { }
     }
 
     function expect(ok, what) {
@@ -91,6 +96,17 @@ ApplicationWindow {
             expect(panelPaste() === paste, what + ": paste bar " + (paste ? "has" : "has no") + " Paste here")
     }
 
+    function openEmpty(uri, replace) {
+        if (replace)
+            pageStack.replace(pageComponent, { "uri": uri }, PageStackAction.Immediate)
+        else
+            pageStack.push(pageComponent, { "uri": uri }, PageStackAction.Immediate)
+        return waitFor(function () {
+            var views = findAll(window.contentItem, function (x) { return x.placeholderKind !== undefined && x.runAction !== undefined }, [])
+            return views.length === 1 && views[0].uri === uri && !views[0].model.loading && views[0].placeholderKind() === "empty"
+        }, "empty folder " + uri + " open")
+    }
+
     Component.onCompleted: {
         App.clearClipboard()
         documents.createFolder("EmptyHint")
@@ -100,11 +116,7 @@ ApplicationWindow {
         waitFor(function () { return top.nameKind("empty") === "folder" }, "the empty folder")
         top.createFolder("other")
         waitFor(function () { return top.nameKind("other") === "folder" }, "the other folder")
-        pageStack.push(pageComponent, {}, PageStackAction.Immediate)
-        waitFor(function () {
-            var views = findAll(window.contentItem, function (x) { return x.placeholderKind !== undefined && x.runAction !== undefined }, [])
-            return views.length === 1 && !views[0].model.loading && views[0].model.writable && views[0].placeholderKind() === "empty"
-        }, "the empty folder open")
+        openEmpty(empty, false)
 
         expectState("lautta-dir-empty-hint", false, "nothing copied")
         expect(App.copy(JSON.stringify([other])), "copy the other folder")
@@ -113,6 +125,13 @@ ApplicationWindow {
         expectState("lautta-dir-empty-hint", false, "the open folder copied: no paste into itself")
         App.clearClipboard()
         expectState("lautta-dir-empty-hint", false, "clipboard cleared")
+
+        Operations.compress(JSON.stringify([empty]), base, "packed", "zip", "")
+        waitFor(function () { return archiveRoot.length > 0 }, "the compressed folder")
+        openEmpty(archiveRoot + "empty/", true)
+        expect(App.copy(JSON.stringify([other])), "copy the other folder again")
+        expectState("lautta-dir-empty-hint-readonly", false, "an empty folder in a compressed file: read-only")
+        App.clearClipboard()
         reachedEnd = true
     }
 }
