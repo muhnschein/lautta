@@ -85,7 +85,7 @@ QtQuick.Window {
     function showsItsLine(row, number) {
         var line = lineOf(number)
         plain.width = row.width
-        plain.text = line.replace(/^[ \t]+(?=\S)/, "")
+        plain.text = line.replace(/^[ \t]+(?=\S)/, "").replace(/ {2,}/g, function (run) { return run.replace(/ /g, "\u00a0") })
         expect(row.contentWidth > 0 && row.lineCount === plain.lineCount
                && Math.abs(row.contentWidth - plain.contentWidth) < 1,
                "line " + number + " " + JSON.stringify(line) + " is " + row.lineCount + " lines, " + row.contentWidth
