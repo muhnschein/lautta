@@ -108,7 +108,7 @@ ApplicationWindow {
     function checkPages() {
         var simple = [
             [settings, "Settings"], [about, "About"], [trash, "Trash"], [transfers, "Activity"],
-            [recents, "Recents"], [browseSettings, "Browse page settings"], [storage, "Storage"],
+            [recents, "Recents"], [homeSettings, "Home page settings"], [storage, "Storage"],
             [deleting, "Deleting"], [searchSettings, "Search settings"], [recentsSettings, "Recents settings"],
             [transferSettings, "Transfer settings"]
         ]
@@ -159,54 +159,54 @@ ApplicationWindow {
         return null
     }
 
-    function browseList(page) {
+    function homeList(page) {
         var views = findAll(page, function (x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         return views.length === 1 ? views[0] : null
     }
 
-    function checkBrowseWithRecents() {
-        var page = push(browse, { "listModel": withRecents })
-        var list = browseList(page)
+    function checkHomeWithRecents() {
+        var page = push(home, { "listModel": withRecents })
+        var list = homeList(page)
         var row = list ? stripRow(list) : null
-        if (!expect(row !== null, "Browse: the Recents tiles"))
+        if (!expect(row !== null, "Home: the Recents tiles"))
             return pop()
         list.positionViewAtBeginning()
         settle(page)
         var bands = shownBands(page)
         bands.sort(function (a, b) { return topOf(a, page) - topOf(b, page) })
-        if (expect(bands.length === 3, "Browse: title, Recents and its tiles on the band: " + bands.length)) {
-            expect(near(topOf(bands[0], page), 0), "Browse: the band starts at the top: " + topOf(bands[0], page))
+        if (expect(bands.length === 3, "Home: title, Recents and its tiles on the band: " + bands.length)) {
+            expect(near(topOf(bands[0], page), 0), "Home: the band starts at the top: " + topOf(bands[0], page))
             expect(near(bottomOf(bands[0], page), topOf(bands[1], page))
                    && near(bottomOf(bands[1], page), topOf(bands[2], page)),
-                   "Browse: the band runs on without gap or overlap: " + bands.map(function (b) {
+                   "Home: the band runs on without gap or overlap: " + bands.map(function (b) {
                        return topOf(b, page) + "-" + bottomOf(b, page) }).join(" "))
-            expect(within(headers(page)[0], bands[0], page), "Browse: the title sits on the band")
-            var named = findAll(bands[1].parent, function (x) { return x.visible && String(x.text) === "lautta-browse-recents" }, [])
-            expect(named.length === 1, "Browse: the band takes in the Recents heading: " + named.length)
+            expect(within(headers(page)[0], bands[0], page), "Home: the title sits on the band")
+            var named = findAll(bands[1].parent, function (x) { return x.visible && String(x.text) === "lautta-home-recents" }, [])
+            expect(named.length === 1, "Home: the band takes in the Recents heading: " + named.length)
             expect(isInside(row, bands[2]) && near(bottomOf(bands[2], page), topOf(row, page) + row.contentHeight),
-                   "Browse: the band ends with the tiles: " + bottomOf(bands[2], page) + " vs "
+                   "Home: the band ends with the tiles: " + bottomOf(bands[2], page) + " vs "
                    + (topOf(row, page) + row.contentHeight))
-            var next = findAll(page, function (x) { return x.visible && String(x.text) === "lautta-browse-section-favourites" }, [])
+            var next = findAll(page, function (x) { return x.visible && String(x.text) === "lautta-home-section-favourites" }, [])
             expect(next.length === 1 && topOf(next[0], page) >= bottomOf(bands[2], page) - 0.5,
-                   "Browse: Favourites stay under the band")
+                   "Home: Favourites stay under the band")
             row.heldId = 7
             row.openMenu()
             settle(page)
             expect(row.menuOpen && near(bands[2].height, row.contentHeight) && row.height > row.contentHeight + 1,
-                   "Browse: a tile menu opens under the band: " + bands[2].height + " vs " + row.height)
+                   "Home: a tile menu opens under the band: " + bands[2].height + " vs " + row.height)
             row.closeMenu()
         }
         pop()
     }
 
-    function checkBrowseWithoutRecents() {
-        var page = push(browse, { "listModel": withoutRecents })
-        var list = browseList(page)
+    function checkHomeWithoutRecents() {
+        var page = push(home, { "listModel": withoutRecents })
+        var list = homeList(page)
         if (list) {
             list.positionViewAtBeginning()
             settle(page)
         }
-        checkBand(page, "Browse without Recents")
+        checkBand(page, "Home without Recents")
         pop()
     }
 
@@ -215,8 +215,8 @@ ApplicationWindow {
         checkSearch()
         checkTextViewer()
         checkFolder()
-        checkBrowseWithRecents()
-        checkBrowseWithoutRecents()
+        checkHomeWithRecents()
+        checkHomeWithoutRecents()
         reachedEnd = true
     }
 
@@ -240,7 +240,7 @@ ApplicationWindow {
     Component { id: trash; TrashPage { } }
     Component { id: transfers; TransfersPage { } }
     Component { id: recents; RecentsPage { } }
-    Component { id: browseSettings; BrowseSettingsPage { } }
+    Component { id: homeSettings; HomeSettingsPage { } }
     Component { id: storage; StorageSettingsPage { } }
     Component { id: deleting; DeletingSettingsPage { } }
     Component { id: searchSettings; SearchSettingsPage { } }
@@ -249,5 +249,5 @@ ApplicationWindow {
     Component { id: search; SearchPage { } }
     Component { id: text; TextViewer { } }
     Component { id: directory; DirectoryPage { } }
-    Component { id: browse; BrowsePage { } }
+    Component { id: home; HomePage { } }
 }

@@ -5,7 +5,7 @@ import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components"
 import "../components/Open.js" as Open
-import "../components/browse"
+import "../components/home"
 import "../components/directory"
 import "../components/directory/GridRows.js" as GridRows
 import "../components/viewers"

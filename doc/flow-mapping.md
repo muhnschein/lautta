@@ -6,16 +6,16 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 
 | Feature | Mode | Flows | Screens |
 |---|---|---|---|
-| F-BRW-01 Browse start page | S | FL-01 | SCR-01, SCR-02 |
-| F-BRW-02 User folders | S | FL-01, FL-02 | SCR-01, SCR-02, SCR-03 |
-| F-BRW-03 Android folders | S | FL-01 | SCR-01, SCR-02 |
-| F-BRW-04 Volumes | S | FL-01, FL-27 | SCR-01, SCR-02 |
-| F-BRW-05 Mount / Unmount drive | B | FL-27 | SCR-01 |
-| F-BRW-06 Locked drive → Storage settings | B | FL-27 | SCR-01 |
-| F-BRW-07 Browse layout | S | FL-26 | SCR-01, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
-| F-BRW-09 Rescan volumes | S | — | — |
-| F-BRW-10 Activity from Browse | S | FL-18 | SCR-06, SCR-21, SCR-22 |
-| F-BRW-11 Phone free space | S | FL-21 | SCR-01, SCR-38 |
+| F-HOM-01 Home start page | S | FL-01 | SCR-01, SCR-02 |
+| F-HOM-02 User folders | S | FL-01, FL-02 | SCR-01, SCR-02, SCR-03 |
+| F-HOM-03 Android folders | S | FL-01 | SCR-01, SCR-02 |
+| F-HOM-04 Volumes | S | FL-01, FL-27 | SCR-01, SCR-02 |
+| F-HOM-05 Mount / Unmount drive | B | FL-27 | SCR-01 |
+| F-HOM-06 Locked drive → Storage settings | B | FL-27 | SCR-01 |
+| F-HOM-07 Home layout | S | FL-26 | SCR-01, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
+| F-HOM-09 Rescan volumes | S | — | — |
+| F-HOM-10 Activity from Home | S | FL-18 | SCR-06, SCR-21, SCR-22 |
+| F-HOM-11 Phone free space | S | FL-21 | SCR-01, SCR-38 |
 | F-SRV-01 Bridge detection | B | FL-01, FL-28 | SCR-01, SCR-02, SCR-48, SCR-59 |
 | F-SRV-02 Consent banner | B | FL-28 | SCR-01, SCR-48, SCR-59 |
 | F-SRV-03 Bridge unavailable banner | B | — | — |
@@ -115,7 +115,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 
 | Screen | Flows |
 |---|---|
-| SCR-01 Browse | FL-01, FL-02, FL-03, FL-21, FL-22, FL-26, FL-27, FL-28, FL-29, FL-30, FL-33, FL-36 |
+| SCR-01 Home | FL-01, FL-02, FL-03, FL-21, FL-22, FL-26, FL-27, FL-28, FL-29, FL-30, FL-33, FL-36 |
 | SCR-02 Start error | FL-01 |
 | SCR-03 Folder page (list) | FL-02, FL-03, FL-06, FL-10, FL-11, FL-12, FL-13, FL-14, FL-16, FL-17, FL-23, FL-25, FL-29, FL-30, FL-37 |
 | SCR-04 Folder page (grid) | FL-04, FL-32 |
@@ -155,7 +155,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-39 Trash | FL-20 |
 | SCR-40 Edit favourite | FL-22 |
 | SCR-41 Settings | FL-26 |
-| SCR-42 Settings › Browse page | FL-26 |
+| SCR-42 Settings › Home page | FL-26 |
 | SCR-43 Settings › Search | FL-26 |
 | SCR-44 Settings › Recents | FL-26 |
 | SCR-45 Settings › Deleting | FL-26 |
@@ -176,5 +176,5 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-63 Checksum | FL-38 |
 | SCR-64 Verify files | FL-38 |
 
-Features in no flow: background behaviour, nothing to tap (F-BRW-09, F-SRV-03, F-DIR-09, F-XFR-07, F-VWR-11, F-APP-06).
+Features in no flow: background behaviour, nothing to tap (F-HOM-09, F-SRV-03, F-DIR-09, F-XFR-07, F-VWR-11, F-APP-06).
 Screens in no flow: reached only from states flows don't set up (SCR-29).

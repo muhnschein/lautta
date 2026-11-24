@@ -94,7 +94,7 @@ File system seen (firejail `whitelist`): tmpfs on `$HOME`, each granted folder a
 ## Pages
 
 ```
-Browse ─┬─ Directory ─┬─ Directory …
+Home ─┬─ Directory ─┬─ Directory …
         │             ├─ Viewers
         │             ├─ Add ── Scan (camera, page view, adjust, save as PDF)
         │             └─ Search results
@@ -115,7 +115,7 @@ Reference: current Jolla phone, aarch64.
 | First remote batch rendered ≤ 3 × RTT + 100 ms on warm bridge connection |
 | No frame > 32 ms scrolling 20 000-entry list (thumbnails off) |
 | RSS ≤ 150 MB with 20 000-entry folder open |
-| Launch to Browse ≤ 1.0 s warm, ≤ 2.0 s cold |
+| Launch to Home ≤ 1.0 s warm, ≤ 2.0 s cold |
 | Local copy ≥ 90 % of `cp` throughput on same storage |
 | Browsing latency within ± 20 % while 2 bulk transfers run |
 | 0 % CPU, no timers while idle in background |
@@ -126,7 +126,7 @@ Remote throughput is netvfs's budget; app must not be bottleneck (fd passing, no
 
 | Milestone | Scope | Exit criteria |
 |---|---|---|
-| M0 skeleton | workspace, SailfishApp bootstrap from Rust, rpmvalidator in CI, Browse with user folders | validator clean; launches on device |
+| M0 skeleton | workspace, SailfishApp bootstrap from Rust, rpmvalidator in CI, Home with user folders | validator clean; launches on device |
 | M1 local MVP | directory page, sort/filter, cache, file operations, clipboard, folder picker, Trash, image/text viewers, local thumbnails, local transfers, cover | Harbour submission of standalone 1.0 candidate; folder, scroll, launch budgets met |
 | M2 bridge | netvfs provider, consent, accounts, remote browse and operations, local↔remote transfers with resume, remote thumbnails | contract tests with netvfs green; device test with SFTP and SMB |
 | M3 depth | streaming, share target, search, archives, Nearby | parity list below done |

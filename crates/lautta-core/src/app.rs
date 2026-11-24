@@ -2,11 +2,11 @@
 //! App context: `Core` wires stores, location registry and transfer engine. Qt-free.
 
 use crate::bridge::{Attention, BridgeClient, BridgeConfig, BridgeStatus, RemoteLocation};
-use crate::browse_layout::BrowseLayout;
 use crate::db::Db;
 use crate::dircache::DirCache;
 use crate::entry::Entry;
 use crate::error::{Error, ErrorKind, Result};
+use crate::home_layout::HomeLayout;
 use crate::locations::{ConnectionState, Location, LocationKind, LocationRegistry, LocationStatus};
 use crate::ops::plan::{PlanOptions, Planner};
 use crate::ops::{OperationKind, Plan};
@@ -51,13 +51,13 @@ pub struct Core {
     pub recents: Recents,
     pub recent_searches: RecentSearches,
     pub location_prefs: LocationPrefsStore,
-    pub browse_layout: BrowseLayout,
+    pub home_layout: HomeLayout,
     pub working_copies: WorkingCopies,
     /// `None` only in tests.
     pub bridge: Option<BridgeClient>,
     settings: Mutex<Settings>,
     settings_changed: watch::Sender<u64>,
-    /// Follows removable-media root; `None` without inotify, Browse then rescans on refresh.
+    /// Follows removable-media root; `None` without inotify, Home then rescans on refresh.
     _volume_watch: Option<VolumeWatcher>,
     /// Made on first use, again after a failed start.
     dir_watcher: Mutex<Option<DirWatcher>>,
@@ -146,7 +146,7 @@ impl Core {
             recents: Recents::new(db.clone()),
             recent_searches: RecentSearches::new(db.clone()),
             location_prefs: LocationPrefsStore::new(db.clone()),
-            browse_layout: BrowseLayout::new(db.clone()),
+            home_layout: HomeLayout::new(db.clone()),
             working_copies: WorkingCopies::new(db.clone(), paths.clone(), Arc::new(SystemClock)),
             bridge: client.clone(),
             settings: Mutex::new(settings),

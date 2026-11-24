@@ -162,7 +162,7 @@ ApplicationWindow {
     }
 
     function checkNamesOnly(settings) {
-        var names = ["browsePageEntry", "viewOptionsRow", "searchEntry", "recentsEntry", "deletingEntry",
+        var names = ["homePageEntry", "viewOptionsRow", "searchEntry", "recentsEntry", "deletingEntry",
                      "transfersEntry", "storageEntry", "aboutEntry"]
         names.forEach(function (name) {
             var row = find(settings, name)
@@ -176,9 +176,9 @@ ApplicationWindow {
         var settings = pageStack.currentPage
         var keys = keysOf(settings)
         expect(keys.length === 0, "Settings is a list of entries, with no setting of its own: " + keys)
-        expect(find(settings, "browsePageEntry") !== null && find(settings, "aboutEntry") !== null,
-               "Browse page and About stay on Settings")
-        var homeIcon = String(find(settings, "browsePageEntry").iconSource)
+        expect(find(settings, "homePageEntry") !== null && find(settings, "aboutEntry") !== null,
+               "Home page and About stay on Settings")
+        var homeIcon = String(find(settings, "homePageEntry").iconSource)
         expect(homeIcon.indexOf("image://lautta-icon/") === 0 && homeIcon.indexOf("/home.svg?") > 0,
                "its row shows the house of the folder header: " + homeIcon)
         checkNamesOnly(settings)

@@ -4,9 +4,9 @@
 
 pub mod app;
 pub mod app_archives;
-pub mod app_browse;
 pub mod app_checksum;
 pub mod app_directory;
+pub mod app_home;
 pub mod app_operations;
 pub mod app_pdf;
 pub mod app_scan;
@@ -23,10 +23,10 @@ pub mod sys;
 pub mod uri;
 pub mod vpath;
 
-pub mod browse_layout;
 pub mod dircache;
 pub mod filter;
 pub mod foldercount;
+pub mod home_layout;
 pub mod listing;
 pub mod locations;
 pub mod mime;

@@ -15,7 +15,7 @@ Item {
     property int menuMost
     property real homeInset
     //% "Home"
-    property string homeText: qsTrId("lautta-path-home")
+    property string homeText: qsTrId("lautta-home-title")
     property var widths: []
     property Item _menu
 

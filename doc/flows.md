@@ -10,27 +10,27 @@ Retired, never reuse: FL-31 Connect to a server once.
 
 Open Lautta and see every location.
 
-Features: F-BRW-01 Browse start page, F-BRW-02 User folders, F-BRW-03 Android folders, F-BRW-04 Volumes, F-SRV-01 Bridge detection, F-FAV-01 Favourites section, F-APP-02 Start error
+Features: F-HOM-01 Home start page, F-HOM-02 User folders, F-HOM-03 Android folders, F-HOM-04 Volumes, F-SRV-01 Bridge detection, F-FAV-01 Favourites section, F-APP-02 Start error
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-01 Browse | Launch: Browse with Favourites, On this device, Volumes, Servers |
-| 2 | SCR-01 Browse | Scroll: Volumes and Servers |
-| 3 | SCR-01 Browse | End of list |
-| 4 | SCR-01 Browse | Standalone: no Servers, no trace of netvfs |
+| 1 | SCR-01 Home | Launch: Home with Favourites, On this device, Volumes, Servers |
+| 2 | SCR-01 Home | Scroll: Volumes and Servers |
+| 3 | SCR-01 Home | End of list |
+| 4 | SCR-01 Home | Standalone: no Servers, no trace of netvfs |
 | 5 | SCR-02 Start error | Data can't open: Start error |
 
-## Browse
+## Home
 
 ### FL-02 Browse into folders (standalone)
 
 Go down into a folder and back.
 
-Features: F-BRW-02 User folders, F-DIR-01 Folder listing, F-DIR-11 Folder cover, F-ITM-01 Open item
+Features: F-HOM-02 User folders, F-DIR-01 Folder listing, F-DIR-11 Folder cover, F-ITM-01 Open item
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-01 Browse | Tap a user folder |
+| 1 | SCR-01 Home | Tap a user folder |
 | 2 | SCR-03 Folder page (list) | Folder page |
 | 3 | SCR-03 Folder page (list) | Tap subfolder: one level down |
 | 4 | SCR-03 Folder page (list) | Mixed folder as list |
@@ -38,7 +38,7 @@ Features: F-BRW-02 User folders, F-DIR-01 Folder listing, F-DIR-11 Folder cover,
 
 ### FL-03 Jump up the path (standalone)
 
-Go to a folder above, or straight back to Browse.
+Go to a folder above, or straight back to Home.
 
 Features: F-DIR-06 Path crumbs
 
@@ -47,7 +47,7 @@ Features: F-DIR-06 Path crumbs
 | 1 | SCR-03 Folder page (list) | Deep folder: header shows … › folders above › name |
 | 2 | SCR-05 Folded path | Tap "…": folded folders, nearest first, then Home |
 | 3 | SCR-03 Folder page (list) | Tap a folder: its page |
-| 4 | SCR-01 Browse | Tap Home (short path: house in header): Browse |
+| 4 | SCR-01 Home | Tap Home (short path: house in header): Home |
 
 ### FL-04 Change how a folder looks (standalone)
 
@@ -283,7 +283,7 @@ Features: F-ITM-10 Checksums, F-ITM-11 Verify files
 
 See tasks, open details, pause, resume, retry.
 
-Features: F-XFR-01 Activity page, F-XFR-02 Task row menu, F-XFR-03 Task details, F-XFR-04 Pause all / Resume all / Clear activity history, F-XFR-06 Activity bar, F-BRW-10 Activity from Browse
+Features: F-XFR-01 Activity page, F-XFR-02 Task row menu, F-XFR-03 Task details, F-XFR-04 Pause all / Resume all / Clear activity history, F-XFR-06 Activity bar, F-HOM-10 Activity from Home
 
 | # | Screen | Step |
 |---|---|---|
@@ -325,12 +325,12 @@ Features: F-TRH-01 Trash, F-TRH-02 Restore / Delete now / Show original folder, 
 
 Open something used lately.
 
-Features: F-RCT-01 Recents, F-RCT-03 Recents on Browse, F-BRW-11 Phone free space
+Features: F-RCT-01 Recents, F-RCT-03 Recents on Home, F-HOM-11 Phone free space
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-01 Browse | Recents tiles on top, free space beside On this device |
-| 2 | SCR-01 Browse | Long press on a tile: Remove from recents |
+| 1 | SCR-01 Home | Recents tiles on top, free space beside On this device |
+| 2 | SCR-01 Home | Long press on a tile: Remove from recents |
 | 3 | SCR-38 Recents | Tile All recents: Recents |
 | 4 | SCR-38 Recents | Grid when View options say Grid: tiles under date groups |
 | 5 | SCR-38 Recents | Menu: Remove from recents |
@@ -344,7 +344,7 @@ Features: F-FAV-01 Favourites section, F-FAV-02 Edit favourite, F-FAV-03 Remove 
 | # | Screen | Step |
 |---|---|---|
 | 1 | SCR-06 Folder pulley | Pull: Add to favourites |
-| 2 | SCR-01 Browse | Favourite menu: Edit, Remove |
+| 2 | SCR-01 Home | Favourite menu: Edit, Remove |
 | 3 | SCR-40 Edit favourite | Edit favourite: label, colour |
 | 4 | SCR-40 Edit favourite | Icon |
 
@@ -404,13 +404,13 @@ Features: F-SHR-01 Share target
 
 Tune Lautta.
 
-Features: F-APP-03 Settings, F-APP-04 Storage, F-APP-05 About, F-BRW-07 Browse layout, F-RCT-02 Recents off, F-TRH-04 Trash settings, F-XFR-08 Concurrency and lanes, F-XFR-11 Resume on start / keep history, F-SRC-03 Server search depth, F-SRV-05 Add server, F-FAV-04 Reorder favourites, F-DIR-10 Listing cache
+Features: F-APP-03 Settings, F-APP-04 Storage, F-APP-05 About, F-HOM-07 Home layout, F-RCT-02 Recents off, F-TRH-04 Trash settings, F-XFR-08 Concurrency and lanes, F-XFR-11 Resume on start / keep history, F-SRC-03 Server search depth, F-SRV-05 Add server, F-FAV-04 Reorder favourites, F-DIR-10 Listing cache
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-01 Browse | Pull: Settings, Add server, Activity |
+| 1 | SCR-01 Home | Pull: Settings, Add server, Activity |
 | 2 | SCR-41 Settings | Settings |
-| 3 | SCR-42 Settings › Browse page | Browse page: hide, reorder |
+| 3 | SCR-42 Settings › Home page | Home page: hide, reorder |
 | 4 | SCR-24 View options | View options |
 | 5 | SCR-43 Settings › Search | Search |
 | 6 | SCR-44 Settings › Recents | Recents |
@@ -419,7 +419,7 @@ Features: F-APP-03 Settings, F-APP-04 Storage, F-APP-05 About, F-BRW-07 Browse l
 | 9 | SCR-47 Settings › Storage | Storage |
 | 10 | SCR-48 About | About |
 | 11 | SCR-48 About | About, standalone |
-| 12 | SCR-01 Browse | Standalone pulley: Settings, Activity |
+| 12 | SCR-01 Home | Standalone pulley: Settings, Activity |
 
 ## Locations
 
@@ -427,13 +427,13 @@ Features: F-APP-03 Settings, F-APP-04 Storage, F-APP-05 About, F-BRW-07 Browse l
 
 Browse, mount, unmount, unlock.
 
-Features: F-BRW-04 Volumes, F-BRW-05 Mount / Unmount drive, F-BRW-06 Locked drive → Storage settings
+Features: F-HOM-04 Volumes, F-HOM-05 Mount / Unmount drive, F-HOM-06 Locked drive → Storage settings
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-01 Browse | Mounted volume menu: Add to favourites, Unmount, Open Storage settings |
-| 2 | SCR-01 Browse | Unmounted: Mount |
-| 3 | SCR-01 Browse | Mounted |
+| 1 | SCR-01 Home | Mounted volume menu: Add to favourites, Unmount, Open Storage settings |
+| 2 | SCR-01 Home | Unmounted: Mount |
+| 3 | SCR-01 Home | Mounted |
 
 ## Servers
 
@@ -445,11 +445,11 @@ Features: F-SRV-02 Consent banner, F-SRV-01 Bridge detection
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-01 Browse | Servers section: Network locations need your permission, Ask again |
+| 1 | SCR-01 Home | Servers section: Network locations need your permission, Ask again |
 | 2 | SCR-59 Notifications | Events: netvfs asks which servers Lautta may use |
 | 3 | SCR-59 Notifications | Tap note: netvfs dialog, level per server |
 | 4 | SCR-48 About | About: Waiting for your permission |
-| 5 | SCR-01 Browse | Allowed: servers listed |
+| 5 | SCR-01 Home | Allowed: servers listed |
 
 ### FL-29 Open a saved server (bridge)
 
@@ -459,9 +459,9 @@ Features: F-SRV-04 Account servers, F-SRV-06 Edit server / Update sign-in / Revi
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-01 Browse | Servers section |
-| 2 | SCR-01 Browse | Server row menu: Edit server |
-| 3 | SCR-01 Browse | SMB server menu |
+| 1 | SCR-01 Home | Servers section |
+| 2 | SCR-01 Home | Server row menu: Edit server |
+| 3 | SCR-01 Home | SMB server menu |
 | 4 | SCR-03 Folder page (list) | Server root |
 | 5 | SCR-03 Folder page (list) | Server folder |
 
@@ -474,9 +474,9 @@ Features: F-SRV-07 Server attention page, F-SRV-06 Edit server / Update sign-in 
 | # | Screen | Step |
 |---|---|---|
 | 1 | SCR-03 Folder page (list) | Opening: identity changed, security warning |
-| 2 | SCR-01 Browse | Row shows attention |
+| 2 | SCR-01 Home | Row shows attention |
 | 3 | SCR-51 Server attention | Server attention page: security warning |
-| 4 | SCR-01 Browse | Menu: Review server identity |
+| 4 | SCR-01 Home | Menu: Review server identity |
 | 5 | SCR-03 Folder page (list) | Opening: sign-in failed (no stored password) |
 | 6 | SCR-51 Server attention | Server attention page: sign-in failed |
 
@@ -503,7 +503,7 @@ Features: F-SRV-12 Offline listing, F-SRV-13 Reconnect
 | # | Screen | Step |
 |---|---|---|
 | 1 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint) | Offline banner: stored copy, Retry |
-| 2 | SCR-01 Browse | Server row after drop |
+| 2 | SCR-01 Home | Server row after drop |
 
 ### FL-36 Set up a nearby server (bridge)
 
@@ -513,7 +513,7 @@ Features: F-SRV-11 Nearby, F-SRV-05 Add server
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-01 Browse | Nearby: server found on the network |
+| 1 | SCR-01 Home | Nearby: server found on the network |
 | 2 | SCR-60 Nearby setup | Tap: This server isn't set up yet …, Set up |
 | 3 | SCR-60 Nearby setup | Set up: Settings › Accounts opens its add-account flow |
 
@@ -544,7 +544,7 @@ Features: F-APP-01 Cover, F-XFR-10 Transfer cover, F-XFR-09 Notifications
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-58 Cover (page / tasks) | Cover on Browse page: free space, newest recents as tiles |
+| 1 | SCR-58 Cover (page / tasks) | Cover on Home page: free space, newest recents as tiles |
 | 2 | SCR-58 Cover (page / tasks) | Cover in a folder: name, first items as tiles |
 | 3 | SCR-58 Cover (page / tasks) | Task running: count, percent, rate, cover fills from the left; actions Pause all, Activity |
 | 4 | SCR-21 Activity | Activity pulley: Pause all |

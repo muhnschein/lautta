@@ -3,7 +3,7 @@
 //! diffs become row inserts/removes/updates, local folders watched, view settings are the global
 //! ones, followed while open.
 
-use crate::browse::Guard;
+use crate::home::Guard;
 use crate::json::from_json;
 use crate::runtime::{self, core, spawn_then};
 use cpp::cpp;

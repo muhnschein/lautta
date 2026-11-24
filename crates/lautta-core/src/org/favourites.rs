@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Favourites: any folder or file, local or remote, with label, colour and icon, reorderable.
-//! Whether it is a folder is stored with it, so Browse can show and open a favourite without asking
+//! Whether it is a folder is stored with it, so Home can show and open a favourite without asking
 //! its location.
 
 use super::{location_prefix, move_to, next_position, parse_uri, renumber, rewrite_uris};

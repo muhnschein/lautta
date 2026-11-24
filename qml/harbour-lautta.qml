@@ -8,7 +8,7 @@ import "components"
 ApplicationWindow {
     id: window
 
-    initialPage: App.ready ? Qt.resolvedUrl("pages/BrowsePage.qml") : Qt.resolvedUrl("pages/StartErrorPage.qml")
+    initialPage: App.ready ? Qt.resolvedUrl("pages/HomePage.qml") : Qt.resolvedUrl("pages/StartErrorPage.qml")
     cover: Qt.resolvedUrl("cover/CoverPage.qml")
     allowedOrientations: defaultAllowedOrientations
     // Plain text everywhere: names, paths, server prompts, errors are untrusted. Silica default is
@@ -30,13 +30,13 @@ ApplicationWindow {
         if (!App.ready)
             return
         //% "Memory card"
-        App.setVolumeNames(qsTrId("lautta-browse-volume-card"),
+        App.setVolumeNames(qsTrId("lautta-home-volume-card"),
                            //% "USB drive"
-                           qsTrId("lautta-browse-volume-usb"))
+                           qsTrId("lautta-home-volume-usb"))
         App.loadSettings(settingsStore.value)
     }
 
-    BrowseHandlers { }
+    HomeHandlers { }
     OperationsHandlers { }
     TransfersHandlers { }
 }
