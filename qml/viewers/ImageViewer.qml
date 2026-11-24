@@ -197,6 +197,7 @@ FullscreenContentPage {
 
     VerticalPageBackHint {
         pageActive: page.status === PageStatus.Active
+        bottomMargin: page.slideshow ? page.slideshow.overlay.toolbarSpace : 0
     }
 
     RemorsePopup { id: remorse }
