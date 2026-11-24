@@ -11,6 +11,7 @@ ApplicationWindow {
     property int step: 0
     property int waited: 0
     property int pageWidth
+    property real shownWidth
     property var page
     readonly property var expected: [
         ["lautta-date-today", "Today"],
@@ -248,8 +249,11 @@ ApplicationWindow {
                     win.pageWidth = Math.round(drawn.sourceSize.width * 0.7)
                     drawn.implicitWidth = win.pageWidth
                     drawn.implicitHeight = drawn.sourceSize.width
-                    if (drawn.width !== win.pageWidth)
-                        return win.fail("letter.pdf's page takes the size Nemo tells: " + drawn.width)
+                    win.shownWidth = drawn.parent.width
+                    if (Math.abs(drawn.width - win.shownWidth) >= 1
+                            || Math.abs(drawn.height - drawn.implicitHeight * win.shownWidth / win.pageWidth) >= 1)
+                        return win.fail("letter.pdf's page, zoomed from the size Nemo tells, fills the tile across: "
+                                        + drawn.width + "x" + drawn.height)
                     App.setSetting("view_mode", JSON.stringify("list"))
                     win.step++
                     win.waited = 0
@@ -266,7 +270,7 @@ ApplicationWindow {
                 // Tiles made anew join the drawn thumbnail: Nemo tells them no size.
                 var joined = win.pdfThumbnail()
                 if (joined) {
-                    if (joined.implicitWidth !== 0 || joined.width !== win.pageWidth)
+                    if (joined.implicitWidth !== 0 || Math.abs(joined.width - win.shownWidth) >= 1)
                         return win.fail("letter.pdf's page, shown again, keeps the size seen: "
                                         + joined.implicitWidth + " " + joined.width)
                     App.setSetting("view_mode", JSON.stringify("list"))

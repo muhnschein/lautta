@@ -3,10 +3,13 @@
 //! bytes only: no file, network or process access, no scripts, links and actions not followed.
 //! Standard fonts and CMaps compiled in.
 
+use hayro::hayro_interpret::util::TransformExt;
 use hayro::hayro_interpret::InterpreterSettings;
 use hayro::hayro_syntax::{LoadPdfError, Pdf};
+use hayro::kurbo::Affine;
 use hayro::vello_cpu::color::palette::css::WHITE;
-use hayro::{render, PixmapSettings, RenderCache, RenderSettings};
+use hayro::vello_cpu::{Pixmap, RasterizerSettings, RenderContext, Resources, TargetInit};
+use hayro::{render_into, RenderCache, RenderSettings};
 use std::fmt;
 
 mod nav;
@@ -125,19 +128,39 @@ impl PdfDocument {
     /// `width` pixels wide, aspect ratio kept; smaller when an edge would exceed [`MAX_EDGE`].
     pub fn render(&self, index: usize, width: u32) -> Result<RenderedPage, PdfError> {
         let size = *self.sizes.get(index).ok_or(PdfError::NoSuchPage)?;
-        let page = self.pdf.pages().get(index).ok_or(PdfError::NoSuchPage)?;
         let scale = render_scale(size, width);
+        let w = (size.width * scale) as u16;
+        let h = (size.height * scale) as u16;
+        self.draw(index, scale, w, h)
+    }
+
+    pub fn render_top_left_square(&self, index: usize, side: u32) -> Result<RenderedPage, PdfError> {
+        let size = *self.sizes.get(index).ok_or(PdfError::NoSuchPage)?;
+        let (scale, edge) = square_scale(size, side);
+        self.draw(index, scale, edge, edge)
+    }
+
+    fn draw(&self, index: usize, scale: f32, width: u16, height: u16) -> Result<RenderedPage, PdfError> {
+        let page = self.pdf.pages().get(index).ok_or(PdfError::NoSuchPage)?;
         let cache = RenderCache::new();
-        let pixmap = render(
+        let mut ctx = RenderContext::new(width, height);
+        let transform = Affine::scale(f64::from(scale)) * page.initial_transform(true).to_kurbo();
+        render_into(
             page,
             &cache,
-            // default draws widgets and links as on paper; nothing clickable
             &InterpreterSettings::default(),
             &RenderSettings::default(),
-            &PixmapSettings {
-                x_scale: scale,
-                y_scale: scale,
-                bg_color: WHITE,
+            &mut ctx,
+            transform,
+        );
+        ctx.flush();
+        let mut pixmap = Pixmap::new(ctx.width(), ctx.height());
+        ctx.render_with(
+            &mut pixmap,
+            &mut Resources::default(),
+            RasterizerSettings {
+                target_init: TargetInit::Clear(WHITE),
+                ..Default::default()
             },
         );
         Ok(RenderedPage {
@@ -156,6 +179,15 @@ pub fn render_scale(size: PageSize, width: u32) -> f32 {
     let want = f64::from(width.clamp(1, MAX_EDGE)) / w;
     let edge = f64::from(MAX_EDGE) / w.max(h);
     want.min(edge) as f32
+}
+
+fn square_scale(size: PageSize, side: u32) -> (f32, u16) {
+    let short = size.width.min(size.height).max(1.0);
+    let long = size.width.max(size.height).max(1.0);
+    let want = side.clamp(1, MAX_EDGE) as f32 / short;
+    let scale = want.min(MAX_EDGE as f32 / long);
+    let edge = (short * scale).round() as u16;
+    (scale, edge.max(1))
 }
 
 mod text;
