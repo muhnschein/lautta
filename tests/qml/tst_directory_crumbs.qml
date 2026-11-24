@@ -21,6 +21,19 @@ ApplicationWindow {
 
     PathModel { id: deep }
 
+    FontMetrics {
+        id: stockTitle
+
+        font.pixelSize: Theme.fontSizeLarge
+    }
+
+    FontMetrics {
+        id: lineText
+
+        font.pixelSize: Theme.fontSizeMedium
+        font.family: Theme.fontFamily
+    }
+
     ListModel {
         id: plain
 
@@ -182,9 +195,13 @@ ApplicationWindow {
         var home = named(host, "crumbHome")
         var dots = named(host, "crumbDots")
         var separator = named(host, "crumbSeparator")
+        var title = named(host, "crumbTitle")
         var steps = stepsOf(host)
         if (!same(steps.length, 6, "a crumb per step of the path"))
             return
+        var setRoom = function (room) {
+            crumbs.width = room + title.implicitWidth + crumbs.reserve
+        }
         var widths = widthsOf(steps)
         var sep = separator.width
         var fitting = function (folded) {
@@ -192,25 +209,35 @@ ApplicationWindow {
         }
         expect(home.width > dots.width + 1 && widths[0] > 0, "crumbs have a width, the house more than the dots: " + home.width + " " + dots.width + " " + widths)
         same(crumbs.reserve, dots.width + sep + Theme.paddingMedium, "kept free of the name: the dots and their separator")
-        var start = Theme.itemSizeSmall
-        same(crumbs.leftMargin, start + crumbs.reserve, "the name's left margin: where a tap goes a page back, then the room kept")
-        var house = String(named(host, "crumbHouse").source)
-        expect(house.indexOf("/qml/icons/home.svg?stroke=") > 0, "the house is Lautta's own drawing: " + house)
+        var house = named(host, "crumbHouse")
+        expect(String(house.source).indexOf("/qml/icons/home.svg?stroke=") > 0, "the house is Lautta's own drawing: " + house.source)
         var houseAt = fitting(0) + home.width - dots.width
 
-        crumbs.width = houseAt + 0.5
+        same(title.text, "Here", "the line ends with the folder's name")
+        same([title.font.pixelSize, title.font.family], [separator.font.pixelSize, separator.font.family], "name and path are one size")
+        same(title.y, separator.y, "on one line")
+        expect(Qt.colorEqual(title.color, Theme.highlightColor) && !Qt.colorEqual(separator.color, title.color), "its colour sets the name apart: " + title.color)
+        same(title.truncationMode, TruncationMode.Fade, "a long name fades out")
+        var capMiddle = Theme.paddingLarge + stockTitle.ascent - stockTitle.tightBoundingRect("H").height / 2
+        expect(Math.abs(title.y + title.baselineOffset - lineText.tightBoundingRect("H").height / 2 - capMiddle) <= 0.5,
+               "its capitals stand around the middle of a stock title's capitals: " + title.y + " " + title.baselineOffset + " " + capMiddle)
+        expect(Math.abs(house.y + house.height / 2 - capMiddle) <= 0.5, "and so does the house: " + house.y + " " + house.height + " " + capMiddle)
+
+        setRoom(houseAt + 0.5)
+        same(title.width, title.implicitWidth, "the name shows whole")
+        same(title.x + title.width, crumbs.width, "at the line's end")
         expect(home.visible && !dots.visible, "room for the house and every folder: the house leads, no dots")
         same(crumbs.folded, 0, "nothing folded")
-        same(shown(steps), ["Documents", "Crumbs", "Alpha", "Beta", "Gamma"], "every folder above shows, the folder itself is the header's name")
-        same(row.mapToItem(crumbs, row.width, 0).x, crumbs.width - Theme.paddingMedium, "the path ends beside the name")
-        near(row.mapToItem(crumbs, 0, 0).x, 0.5 - crumbs.reserve, "and starts where the kept room starts")
+        same(shown(steps), ["Documents", "Crumbs", "Alpha", "Beta", "Gamma"], "every folder above shows, the folder itself is the line's name")
+        near(row.mapToItem(crumbs, row.width, 0).x, title.x - Theme.paddingMedium, "the path ends beside the name")
+        near(row.mapToItem(crumbs, 0, 0).x, 0.5, "and starts where the line starts")
         same(separator.x, home.width, "a separator follows the house")
         laidOut(steps, row, home.width + sep, "all shown")
         tap(home)
         same(host.homes, 1, "a tap on the house goes home")
         same(host.picked.length, 0, "and picks no folder")
 
-        crumbs.width = houseAt - 0.5
+        setRoom(houseAt - 0.5)
         expect(!home.visible && dots.visible, "a little short: the dots take the house's place")
         same(crumbs.folded, 0, "every folder still fits")
         same(shown(steps), ["Documents", "Crumbs", "Alpha", "Beta", "Gamma"], "and shows")
@@ -218,34 +245,45 @@ ApplicationWindow {
         same(separator.x, dots.width, "a separator follows them")
         laidOut(steps, row, dots.width + sep, "dots first")
 
-        crumbs.width = houseAt + 100
-        var quarter = start + Theme.paddingMedium + 100
-        crumbs.pageWidth = 4 * (quarter - 0.5)
-        expect(home.visible && !dots.visible, "the house may stand where the page's left quarter ends")
-        crumbs.pageWidth = 4 * (quarter + 0.5)
-        expect(!home.visible && dots.visible, "a little into the quarter: no house")
+        setRoom(houseAt + 100)
+        crumbs.homeInset = Theme.paddingMedium + 99.5
+        expect(home.visible && !dots.visible, "the house may stand where the part kept clear of it ends")
+        crumbs.homeInset = Theme.paddingMedium + 100.5
+        expect(!home.visible && dots.visible, "a little into it: no house")
         same(crumbs.folded, 0, "the folders stay")
-        crumbs.pageWidth = 0
-        expect(home.visible, "no quarter to keep clear: the house is back")
+        crumbs.homeInset = 0
+        expect(home.visible, "nothing to keep clear: the house is back")
 
-        crumbs.width = fitting(0) - 1
+        setRoom(fitting(0) - 1)
         same(crumbs.folded, 1, "one pixel short for the folders: the farthest folds")
         expect(!home.visible && dots.visible, "behind the dots")
         same(shown(steps), ["Crumbs", "Alpha", "Beta", "Gamma"], "the rest shows")
 
-        crumbs.width = fitting(3)
+        setRoom(fitting(3))
         same(crumbs.folded, 3, "narrower: more fold")
         same(shown(steps), ["Beta", "Gamma"], "the nearest stay")
         laidOut(steps, row, dots.width + sep, "folded")
-        expect(row.mapToItem(crumbs, 0, 0).x >= -crumbs.reserve - 0.5,
-               "the path stays inside what the name leaves: " + row.mapToItem(crumbs, 0, 0).x + " vs " + crumbs.reserve)
+        near(row.mapToItem(crumbs, 0, 0).x, 0, "the path starts where the line starts")
 
-        crumbs.width = 0
+        setRoom(0)
         same(crumbs.folded, 5, "no room beside the name: all fold")
         same(shown(steps), [], "no folder shows")
         same(row.width + Theme.paddingMedium, crumbs.reserve, "the dots fill exactly what was kept free")
+        same(title.width, title.implicitWidth, "the name still shows whole")
 
-        crumbs.width = fitting(3)
+        crumbs.width = crumbs.reserve + title.implicitWidth / 2
+        near(title.width, title.implicitWidth / 2, "a name too long for the line is cut, the dots keep their room")
+        near(row.mapToItem(crumbs, 0, 0).x, 0, "at the line's start")
+        same(crumbs.folded, 5, "and every folder stays folded")
+
+        crumbs.pathShown = false
+        expect(!row.visible, "no path asked for: none shows")
+        same(crumbs.reserve, 0, "and no room is kept for it")
+        near(title.width, Math.min(title.implicitWidth, crumbs.width), "the name takes the line")
+        crumbs.pathShown = true
+        expect(row.visible, "the path comes back")
+
+        setRoom(fitting(3))
         tap(steps[4].children[0])
         same(host.picked, [uriOf(4)], "a tap on a folder picks it")
         same(host.homes, 1, "and does not go home")
@@ -266,7 +304,7 @@ ApplicationWindow {
         same(host.homes, 1, "not home")
         waitFor(function () { return host.height === bare && !menu.active }, "the header to shrink back")
 
-        crumbs.width = houseAt + 0.5
+        setRoom(houseAt + 0.5)
         deep.uri = uriOf(1)
         steps = stepsOf(host)
         same(steps.length, 2, "another path: its crumbs")
@@ -276,14 +314,14 @@ ApplicationWindow {
         deep.uri = docs
         same(shown(stepsOf(host)), [], "a place's top folder: no folder above")
         expect(home.visible && !dots.visible, "the house alone")
-        crumbs.width = 0
-        expect(!home.visible && dots.visible, "a top folder whose name takes the header: dots, no house")
+        setRoom(0)
+        expect(!home.visible && dots.visible, "a top folder whose name takes the line: dots, no house")
         same(row.width + Theme.paddingMedium, crumbs.reserve, "in the room kept free")
 
         crumbs.pathModel = plain
         steps = stepsOf(host)
         widths = widthsOf(steps)
-        crumbs.width = fitting(0)
+        setRoom(fitting(0))
         same(crumbs.folded, 0, "another model: room for all its folders")
         plain.setProperty(0, "name", "A longer name")
         expect(steps[0].crumbWidth > widths[0], "a longer name makes a wider crumb: " + steps[0].crumbWidth + " vs " + widths[0])
@@ -312,6 +350,7 @@ ApplicationWindow {
         var page = pageStack.push(benchPage, { "most": 8 }, PageStackAction.Immediate)
         var host = named(page, "bench")
         host.crumbs.width = PathFold.tailWidth(widthsOf(stepsOf(host)), named(host, "crumbSeparator").width, 3)
+                            + named(host, "crumbTitle").implicitWidth + host.crumbs.reserve
         same(host.crumbs.folded, 3, "three folders fold")
         goHomeFrom(host, ["Alpha", "Crumbs", "Documents", homeRow], "room below: every folded folder, nearest first, home last")
         pageStack.pop(null, PageStackAction.Immediate)
@@ -319,8 +358,8 @@ ApplicationWindow {
         deep.uri = docs
         page = pageStack.push(benchPage, { "most": 8 }, PageStackAction.Immediate)
         host = named(page, "bench")
-        host.crumbs.width = 0
-        expect(named(host, "crumbDots").visible, "a top folder whose name takes the header: dots")
+        host.crumbs.width = host.crumbs.reserve
+        expect(named(host, "crumbDots").visible, "a top folder whose name takes the line: dots")
         goHomeFrom(host, [homeRow], "their menu holds the way home alone")
         pageStack.pop(null, PageStackAction.Immediate)
     }
@@ -354,9 +393,9 @@ ApplicationWindow {
         var header = named(view, "folderHeader")
         var bar = named(view, "folderPageHeader")
         var crumbs = named(view, "folderCrumbs")
-        same(bar.title, longName, "the header names the folder")
-        same(crumbs.pageWidth, view.width, "the path knows the page's width")
-        same(bar.leftMargin, crumbs.leftMargin, "the name leaves the path its room")
+        same(named(view, "crumbTitle").text, longName, "the header names the folder")
+        same(bar.leftMargin, Theme.itemSizeSmall, "the line starts right of where a tap goes a page back")
+        same(crumbs.homeInset, view.width / 4 - Theme.itemSizeSmall, "the house keeps out of the page's left quarter")
         same(crumbs.folded, 5, "the name takes the whole header: every folder above folds")
         expect(!named(view, "crumbHome").visible, "and the house with them")
         var bare = header.height
@@ -476,6 +515,7 @@ ApplicationWindow {
                     anchors.right: parent.right
                     height: Theme.itemSizeLarge
                     pathModel: deep
+                    title: "Here"
                     titleTop: Theme.paddingLarge
                     menuHost: host
                     menuMost: most

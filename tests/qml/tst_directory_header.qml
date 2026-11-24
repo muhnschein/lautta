@@ -144,11 +144,12 @@ ApplicationWindow {
             expect(f.y === before.y && f.contentY === f.originY,
                    label + " " + when + ": the content stays put at its top: " + f.y + " vs " + before.y)
         }
+        var title = named(view, "crumbTitle")
         view.startSelection()
-        expect(bar.title.indexOf("lautta-dir-selected") === 0, label + ": selecting shows the count: " + bar.title)
+        expect(title.text.indexOf("lautta-dir-selected") === 0, label + ": selecting shows the count: " + title.text)
         same("selecting")
         view.endSelection()
-        expect(bar.title === view.model.title, label + ": the name comes back: " + bar.title)
+        expect(title.text === view.model.title, label + ": the name comes back: " + title.text)
         same("after selecting")
     }
 
@@ -239,22 +240,27 @@ ApplicationWindow {
         var bar = named(view, "folderPageHeader")
         var crumbs = named(view, "folderCrumbs")
         var row = named(view, "crumbRow")
-        if (!bar || !crumbs || !row)
+        var title = named(view, "crumbTitle")
+        if (!bar || !crumbs || !row || !title)
             return
-        expect(crumbs.visible, label + ": the path shows beside the folder's name")
+        expect(row.visible && crumbs.reserve > 0, label + ": the path shows beside the folder's name")
+        expect(bar.title === "" && title.text === view.model.title, label + ": the line, not the stock title, names the folder: " + title.text)
         var start = Theme.itemSizeSmall
-        expect(bar.leftMargin === start + crumbs.reserve && crumbs.reserve > 0,
-               label + ": the name leaves room for the path's dots: " + bar.leftMargin + " vs " + crumbs.reserve)
+        expect(bar.leftMargin === start, label + ": the line keeps clear of where a tap goes a page back: " + bar.leftMargin)
         var left = row.mapToItem(bar, 0, 0).x
-        expect(left >= start - 0.5, label + ": the path starts right of where a tap goes a page back: " + left)
+        expect(left >= start - 0.5, label + ": the path starts right of it: " + left)
+        expect(Math.abs(title.mapToItem(bar, title.width, 0).x - (bar.width - Theme.horizontalPageMargin)) < 0.5,
+               label + ": the name ends at the page margin: " + title.mapToItem(bar, title.width, 0).x)
+        var top = title.mapToItem(bar, 0, 0).y
+        expect(bar.titleHeight > 0 && top >= bar.topMargin && top + title.height <= bar.topMargin + bar.titleHeight,
+               label + ": the line stands inside a stock title's line: " + top + " " + title.height + " vs " + bar.topMargin + " " + bar.titleHeight)
         expect(row.height === bar.height, label + ": a crumb is as tall as the header: " + row.height + " vs " + bar.height)
         expect(crumbs.menuMost === Math.floor((view.height - bar.height) / Theme.itemSizeSmall) && crumbs.menuMost > 0,
                label + ": folded folders fill at most the page below the header: " + crumbs.menuMost)
         view.startSelection()
-        expect(!crumbs.visible && bar.leftMargin === Theme.horizontalPageMargin,
-               label + ": selecting hides the path and gives the count the whole header: " + bar.leftMargin)
+        expect(!row.visible && crumbs.reserve === 0, label + ": selecting hides the path and gives the count the line")
         view.endSelection()
-        expect(crumbs.visible, label + ": the path comes back")
+        expect(row.visible, label + ": the path comes back")
     }
 
     function checkLayout(page, label) {

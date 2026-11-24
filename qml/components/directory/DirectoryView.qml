@@ -36,6 +36,7 @@ Item {
     property var made: []
     // Bottom of the view under clipboard, selection or activity panel.
     readonly property real coveredHeight: panelSpace.height
+    readonly property real backTapWidth: Theme.itemSizeSmall
 
     signal openFolder(string uri)
     signal ancestorPicked(string uri)
@@ -971,11 +972,7 @@ Item {
                     id: pageHeader
 
                     objectName: "folderPageHeader"
-                    leftMargin: crumbs.visible ? crumbs.leftMargin : Theme.horizontalPageMargin
-                    title: view.selecting
-                           //% "%n selected"
-                           ? qsTrId("lautta-dir-selected", dir.selectedCount)
-                           : dir.title
+                    leftMargin: view.backTapWidth
                     description: !view.selecting && Operations.isArchive(view.uri)
                                  //% "Compressed file · read only"
                                  ? qsTrId("lautta-dir-compressed-readonly")
@@ -986,12 +983,16 @@ Item {
 
                             objectName: "folderCrumbs"
                             anchors.fill: parent
-                            visible: !view.selecting
+                            title: view.selecting
+                                   //% "%n selected"
+                                   ? qsTrId("lautta-dir-selected", dir.selectedCount)
+                                   : dir.title
+                            pathShown: !view.selecting
                             pathModel: path
                             titleTop: pageHeader.topMargin
                             menuHost: headerBar
                             menuMost: Math.max(0, Math.floor((view.height - pageHeader.height) / Theme.itemSizeSmall))
-                            pageWidth: view.width
+                            homeInset: view.width / 4 - view.backTapWidth
                             onPicked: view.ancestorPicked(uri)
                             onHome: view.homePicked()
                         }
