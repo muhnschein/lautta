@@ -7,7 +7,7 @@
 - The Home page shows its Recents tiles only once there are three recent files to show, so a fresh install starts without a half-empty row.
 - Recents show thumbnails, and show as a grid when *View options* say Grid, with each day group starting its own row. Text files on the Home page's Recents tiles and in the Recents grid show their first lines, as in folders ([#60](https://github.com/muhnschein/lautta/issues/60)).
 - Photos open faster in the image viewer, big ones most: the picture starts loading as your finger touches it, loads at screen size and first, and shows the camera's preview while it loads, or the thumbnail you tapped when the photo has none. Pictures you swiped past come back at once ([#41](https://github.com/muhnschein/lautta/issues/41)).
-- PDF thumbnails of files on this device show the top of the first page, not its middle.
+- PDF thumbnails fill their tile with the top left of the first page, on this device and on servers: the top of a portrait page, not its middle, and the left of a landscape page, not a strip ([#193](https://github.com/muhnschein/lautta/issues/193)).
 - New items scroll into view and light up briefly: folders you make (also in the folder picker), pasted or moved items, files you compress, extracted files, scans and renamed items; in grid view the name and details light up too ([#113](https://github.com/muhnschein/lautta/issues/113)).
 - A folder listed again right after a change no longer shows as empty for a moment.
 - Videos from servers stream and seek instead of downloading first ([#100](https://github.com/muhnschein/lautta/issues/100)).
