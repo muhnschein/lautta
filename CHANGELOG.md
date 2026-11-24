@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The Home page shows only how much space is free on the phone and on memory cards and USB drives, as "12 GB free", no longer "12 GB free of 50 GB".
 - The start page is called *Home* now, no longer *Browse*, and its settings are *Home page*. What you hid or reordered there stays as it was ([#143](https://github.com/muhnschein/lautta/issues/143)).
 - Saving files shared to Lautta works like a folder in the app: *Save here* on top, what gets saved below it, then the folder with its path to tap your way up, or to *Locations* by the house. Folders open in place; files show dimmed, so you see what is there already. It opens where you saved last (Downloads the first time), *Locations* lists the last three folders you saved to, and the pulley makes a new folder. *Save here* is off where Lautta may not add files ([#95](https://github.com/muhnschein/lautta/issues/95)).
 - The folder header shows the path: a house for the Home page, then the folders above, then the folder's name, all in one size on one line. Tap a folder to go straight back to it, tap the house to go home. When the path gets long, the farthest folders and the house hide behind "…"; tap it to list them, with Home at the end. The same house marks *Home page* in Settings. *Add to favourites* for the open folder moved to the pulley menu. *Edit path* and *Copy address* are gone ([#38](https://github.com/muhnschein/lautta/issues/38)).

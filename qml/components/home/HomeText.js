@@ -62,8 +62,8 @@ function space(bytes) {
 function volumeLine(free, total, fs) {
     var text = ""
     if (free >= 0 && total >= 0) {
-        //% "%1 free of %2"
-        text = qsTrId("lautta-home-volume-space").arg(space(free)).arg(space(total))
+        //% "%1 free"
+        text = qsTrId("lautta-home-volume-free").arg(space(free))
     } else if (total >= 0) {
         text = space(total)
     }

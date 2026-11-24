@@ -178,6 +178,9 @@ ApplicationWindow {
         for (var i = 0; i < sizes.length; ++i)
             expect(HomeText.space(sizes[i][0]) === sizes[i][1],
                    "space reads whole from 10 of its unit up, with a decimal below: " + HomeText.space(sizes[i][0]) + " for " + sizes[i][1])
+        expect(HomeText.volumeLine(42000000000, 128000000000, "exFAT")
+               === qsTrId("lautta-home-volume-free").arg(HomeText.space(42000000000)) + " · exFAT",
+               "a volume's line tells free space only, not size: " + HomeText.volumeLine(42000000000, 128000000000, "exFAT"))
         expect(HomeText.volumeLine(-1, 128000000000, "") === "119 GB" && HomeText.volumeLine(-1, 128000000000, "exFAT") === "119 GB · exFAT",
                "a volume's size reads that way: " + HomeText.volumeLine(-1, 128000000000, "exFAT"))
         expect(Math.round(space[0].mapToItem(view.contentItem, 0, space[0].baselineOffset).y)
