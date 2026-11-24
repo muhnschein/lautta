@@ -31,6 +31,8 @@ Item {
     readonly property var trail: path.trail
     readonly property bool selecting: selectionMode
     readonly property bool gridMode: dir.viewMode === "grid"
+    // Paste row, Paste here and empty hint. Reads clipboardCount: canPasteInto is a call, binds to nothing.
+    readonly property bool canPaste: dir.writable && App.clipboardCount > 0 && App.canPasteInto(uri)
     property string pendingName
     readonly property Item flickable: gridMode ? grid : list
     property var renamed: null
@@ -461,11 +463,14 @@ Item {
             if (picking && dir.writable)
                 //% "Save here, or pull down to create a folder"
                 return qsTrId("lautta-dir-empty-hint-picking")
-            return dir.writable
-                   //% "Pull down to create a folder or paste"
-                   ? qsTrId("lautta-dir-empty-hint")
-                   //% "This folder is empty"
-                   : qsTrId("lautta-dir-empty-hint-readonly")
+            if (!dir.writable)
+                //% "This folder is empty"
+                return qsTrId("lautta-dir-empty-hint-readonly")
+            return canPaste
+                   //% "Pull down to add or paste"
+                   ? qsTrId("lautta-dir-empty-hint-paste")
+                   //% "Pull down to add"
+                   : qsTrId("lautta-dir-empty-hint")
         }
         var text = ServerWarning.level(errorKind)
                    ? ServerWarning.hint(errorKind, dir.locationName)

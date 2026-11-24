@@ -1405,7 +1405,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-empty-hint">
-        <source>Pull down to create a folder or paste</source>
+        <source>Pull down to add</source>
+        <oldsource>Pull down to create a folder or paste</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-empty-hint-readonly">
@@ -2611,6 +2612,10 @@
     </message>
     <message id="lautta-settings-home-page">
         <source>Home page</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-empty-hint-paste">
+        <source>Pull down to add or paste</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
