@@ -28,6 +28,9 @@ pub struct ViewerTools {
     base: qt_base_class!(trait QObject),
     noteViewed: qt_method!(fn(&self, uri: QString)),
     noteOpened: qt_method!(fn(&self, uri: QString)),
+    /// Keeps `obj` (player, video output) past its page while player `source` is stuck loading:
+    /// tearing either down then blocks the app. Deleted once `source` leaves loading.
+    keepWhileLoading: qt_method!(fn(&self, source: QVariant, obj: QVariant) -> bool),
     /// Test support: pumps the event loop so async viewer results arrive during a test.
     pump: qt_method!(fn(&self, ms: i32)),
     /// Test support: copies local `sourceUrl` (`file://`) to the local path of `destUri`.
@@ -55,6 +58,10 @@ impl ViewerTools {
 
     fn noteOpened(&self, uri: QString) {
         self.note(uri, RecentKind::Opened);
+    }
+
+    fn keepWhileLoading(&self, source: QVariant, obj: QVariant) -> bool {
+        super::media::keep_while_loading(&source, &obj)
     }
 
     fn pump(&self, ms: i32) {

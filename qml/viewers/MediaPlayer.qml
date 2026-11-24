@@ -86,6 +86,11 @@ Page {
             localPlayer.stop()
         else
             remote.stop()
+        // Player stuck loading: tearing it or its output down would block the app.
+        var media = local ? localPlayer : remote.mediaObject
+        tools.keepWhileLoading(media, output)
+        if (local)
+            tools.keepWhileLoading(media, localPlayer)
     }
 
     DisplayBlanking {
@@ -117,6 +122,7 @@ Page {
     }
 
     MM.VideoOutput {
+        id: output
         anchors.fill: parent
         visible: page.video
         source: page.local ? localPlayer : remote

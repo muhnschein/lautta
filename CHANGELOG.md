@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A video the phone cannot decode, such as some CAVS or 10-bit H.264 files, no longer freezes Lautta when you leave the player ([#161](https://github.com/muhnschein/lautta/issues/161)).
 - Small things: *More* in the image viewer shows icons, as *More actions* does; *Checksums* names its file; *Settings › Transfers* asks before operations of "Over 1000 items or 1 GB", no longer "953.7 MB" ([#214](https://github.com/muhnschein/lautta/issues/214)).
 - The Home page shows only how much space is free on the phone and on memory cards and USB drives, as "12 GB free", no longer "12 GB free of 50 GB".
 - The start page is called *Home* now, no longer *Browse*, and its settings are *Home page*. What you hid or reordered there stays as it was ([#143](https://github.com/muhnschein/lautta/issues/143)).

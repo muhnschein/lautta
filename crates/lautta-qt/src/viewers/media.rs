@@ -37,8 +37,11 @@ cpp! {{
     #include <QtCore/QCoreApplication>
     #include <QtCore/QEvent>
     #include <QtCore/QIODevice>
+    #include <QtCore/QMetaProperty>
     #include <QtCore/QUrl>
     #include <QtCore/QVariant>
+    #include <QtQml/QQmlEngine>
+    #include <QtQuick/QQuickItem>
 
     // Random-access device over a Rust `ReadAhead`. Reads run on the GUI thread (Qt 5.6 `QGstAppSrc`)
     // and block it only when the bytes are not cached yet (start, seek). Unbuffered: a held read must not come from QIODevice's buffer either.
@@ -156,15 +159,64 @@ cpp! {{
         m->device->releaseLater();
     }
 
+    // Registered enum type: raw int, Qt 5.6 QVariant may not convert it to int.
+    static int lauttaEnumValue(const QVariant &v)
+    {
+        if (QMetaType::typeFlags(v.userType()) & QMetaType::IsEnumeration)
+            return *static_cast<const int *>(v.constData());
+        return v.toInt();
+    }
+
+    // gst-droid's video decoder can block its streaming thread for good on video it cannot decode
+    // (CAVS, 10-bit H.264): no preroll, status stays Loading. Pipeline teardown (player deleted,
+    // VideoOutput unbound or deleted) waits on that thread: GUI thread blocked. So `obj` lives on
+    // unparented, deleted on `source`'s next status change (away from Loading: notify only on change).
+    static bool lauttaKeepWhileLoading(QObject *source, QObject *obj)
+    {
+        if (!source || !obj)
+            return false;
+        const QMetaObject *meta = source->metaObject();
+        int index = meta->indexOfProperty("mediaStatus");
+        if (index < 0)
+            index = meta->indexOfProperty("status");
+        if (index < 0)
+            return false;
+        const QMetaProperty status = meta->property(index);
+        if (!status.hasNotifySignal() || lauttaEnumValue(status.read(source)) != QMediaPlayer::LoadingMedia)
+            return false;
+        QQmlEngine::setObjectOwnership(obj, QQmlEngine::CppOwnership);
+        if (QQuickItem *item = qobject_cast<QQuickItem *>(obj))
+            item->setParentItem(nullptr);
+        obj->setParent(nullptr);
+        const QMetaMethod drop = obj->metaObject()->method(obj->metaObject()->indexOfSlot("deleteLater()"));
+        QObject::connect(source, status.notifySignal(), obj, drop);
+        if (source != obj)
+            QObject::connect(source, &QObject::destroyed, obj, &QObject::deleteLater);
+        return true;
+    }
+
     static void lauttaMediaFree(LauttaMedia *m)
     {
         m->player->stop();
-        m->player->setMedia(QMediaContent());
-        delete m->player;
-        delete m->device;
+        if (lauttaKeepWhileLoading(m->player, m->player)) {
+            if (m->device)
+                m->device->setParent(m->player);
+        } else {
+            m->player->setMedia(QMediaContent());
+            delete m->player;
+            delete m->device;
+        }
         delete m;
     }
 }}
+
+/// `obj` outlives its parent while player `source` is stuck loading (`lauttaKeepWhileLoading`).
+/// Both are QObject variants; false when `source` is not loading.
+pub(crate) fn keep_while_loading(source: &QVariant, obj: &QVariant) -> bool {
+    cpp!(unsafe [source as "const QVariant*", obj as "const QVariant*"] -> bool as "bool" {
+        return lauttaKeepWhileLoading(qvariant_cast<QObject *>(*source), qvariant_cast<QObject *>(*obj));
+    })
+}
 
 fn reader_ptr(r: Arc<ReadAhead>) -> *mut c_void {
     Arc::into_raw(r) as *mut c_void
