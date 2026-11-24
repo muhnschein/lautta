@@ -248,8 +248,8 @@ ApplicationWindow {
 
         var band = named(page, "folderBand")
         expect(!named(page, "folderPageHeader").visible, "the path band stands in for the folder header")
-        same(named(band, "bandTitle").text, view.model.title, "the band names the folder")
-        expect(named(band, "bandCrumbs").visible, "with the way up before it")
+        same(named(band, "crumbTitle").text, view.model.title, "the band names the folder")
+        expect(named(band, "crumbRow").visible, "with the way up before it")
         expect(named(page, "folderHeaderBar").y >= named(page, "shareCount").height, "under Save here and the count")
         same(pulley(page), ["lautta-dir-menu-new-folder"], "the pulley makes a folder, nothing else")
         named(page, "folderMenuNewFolder").clicked()
@@ -260,8 +260,8 @@ ApplicationWindow {
 
         named(band, "crumbHome").clicked(null)
         expect(view.atRoot && page.folderUri === "", "the house goes to Locations")
-        same(named(band, "bandTitle").text, "lautta-share-locations", "the band says so")
-        expect(!named(band, "bandCrumbs").visible, "no way up from there")
+        same(named(band, "crumbTitle").text, "lautta-share-locations", "the band says so")
+        expect(!named(band, "crumbRow").visible, "no way up from there")
         expect(!page.canAccept, "nothing is saved to Locations")
         same(view.placeholderKind(), "", "and nothing is told about a folder there")
         same(pulley(page), null, "no pulley there")
@@ -389,7 +389,7 @@ ApplicationWindow {
         var page = pageStack.push(bandBench, {}, PageStackAction.Immediate)
         var band = page.band
         var row = named(band, "crumbRow")
-        var title = named(band, "bandTitle")
+        var title = named(band, "crumbTitle")
         var crumbs = named(band, "bandCrumbs")
         if (!row || !title || !crumbs || !waitFor(function () { return crumbs.widths.length === 4 }, "the folders above to be measured"))
             return
@@ -398,13 +398,16 @@ ApplicationWindow {
         for (var width = 2000; width > 2 * Theme.horizontalPageMargin + crumbs.reserve + title.implicitWidth; width -= 4) {
             band.width = width
             var left = row.mapToItem(band, 0, 0).x
-            if (left < Theme.horizontalPageMargin - 0.5 || left + row.width > title.x + 0.5)
+            var name = title.mapToItem(band, 0, 0).x
+            if (left < Theme.horizontalPageMargin - 0.5 || left + row.width > name + 0.5
+                    || Math.abs(name + title.width - (width - Theme.horizontalPageMargin)) > 0.5)
                 outside.push(width)
             if (folds.indexOf(crumbs.folded) < 0)
                 folds.push(crumbs.folded)
         }
         same(folds, [0, 1, 2, 3, 4], "from all folders shown to all folded")
-        same(outside, [], "at every width house, dots and folders stay between the band's edge and the name")
+        same(outside, [], "at every width house, dots and folders stay between the band's edge and the name, which ends at the other edge")
+        same(crumbs.capMiddle, band.height / 2, "the line sits in the middle of the band")
 
         named(band, "crumbDots").clicked(null)
         var menu = named(band, "crumbMenu")

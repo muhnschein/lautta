@@ -5,13 +5,12 @@ import Sailfish.Silica 1.0
 Item {
     id: band
 
-    property string title
-    property var pathModel
-    property Item menuHost
-    property int menuMost
+    property alias title: crumbs.title
+    property alias pathModel: crumbs.pathModel
+    property alias menuHost: crumbs.menuHost
+    property alias menuMost: crumbs.menuMost
     property alias homeText: crumbs.homeText
 
-    readonly property bool hasPath: pathModel ? pathModel.count > 0 : false
     readonly property real menuHeight: crumbs.menuHeight
 
     signal picked(string uri)
@@ -25,39 +24,17 @@ Item {
         color: Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity / 2)
     }
 
-    Label {
-        id: current
-
-        objectName: "bandTitle"
-        anchors {
-            right: parent.right
-            rightMargin: Theme.horizontalPageMargin
-            verticalCenter: parent.verticalCenter
-        }
-        width: Math.min(implicitWidth,
-                        band.width - 2 * Theme.horizontalPageMargin - (band.hasPath ? crumbs.reserve : 0))
-        text: band.title
-        color: Theme.highlightColor
-        truncationMode: TruncationMode.Fade
-    }
-
     PathCrumbs {
         id: crumbs
 
         objectName: "bandCrumbs"
-        visible: band.hasPath
         anchors {
-            left: parent.left
-            leftMargin: Theme.horizontalPageMargin + crumbs.reserve
-            right: current.left
+            fill: parent
+            leftMargin: Theme.horizontalPageMargin
+            rightMargin: Theme.horizontalPageMargin
         }
-        height: parent.height
-        pathModel: band.pathModel
-        titleTop: current.y
-        titlePixelSize: current.font.pixelSize
-        titleFamily: current.font.family
-        menuHost: band.menuHost
-        menuMost: band.menuMost
+        pathShown: pathModel ? pathModel.count > 0 : false
+        titleTop: band.height / 2 - capDrop
         onPicked: band.picked(uri)
         onHome: band.home()
     }

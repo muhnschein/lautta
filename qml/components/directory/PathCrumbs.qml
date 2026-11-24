@@ -8,27 +8,28 @@ Item {
     id: crumbs
 
     property var pathModel
+    property string title
+    property bool pathShown: true
     property real titleTop
-    property int titlePixelSize: Theme.fontSizeLarge
-    property string titleFamily: Theme.fontFamilyHeading
     property Item menuHost
     property int menuMost
-    property real pageWidth
+    property real homeInset
     //% "Home"
     property string homeText: qsTrId("lautta-path-home")
     property var widths: []
     property Item _menu
 
     readonly property real separatorWidth: leadSeparator.width
-    readonly property real backTapWidth: Theme.itemSizeSmall
-    readonly property real reserve: dotsButton.width + separatorWidth + Theme.paddingMedium
-    readonly property real leftMargin: backTapWidth + reserve
+    readonly property real reserve: pathShown ? dotsButton.width + separatorWidth + Theme.paddingMedium : 0
+    readonly property real room: width - titleLabel.width - reserve
     readonly property bool homeShown: PathFold.homeFits(widths, separatorWidth, houseButton.width,
-                                                        width + reserve - Math.max(Theme.paddingMedium, pageWidth / 4 - backTapWidth))
-    readonly property int folded: PathFold.folded(widths, separatorWidth, width)
+                                                        room + reserve - Math.max(Theme.paddingMedium, homeInset))
+    readonly property int folded: PathFold.folded(widths, separatorWidth, room)
     readonly property var offsets: PathFold.offsets(widths, separatorWidth, folded)
     readonly property real _lead: (homeShown ? houseButton.width : dotsButton.width) + separatorWidth
-    readonly property real textBaseline: titleTop + heading.ascent
+    readonly property real capDrop: stockTitle.ascent - stockTitle.tightBoundingRect("H").height / 2
+    readonly property real capMiddle: titleTop + capDrop
+    readonly property real textBaseline: capMiddle + lineText.tightBoundingRect("H").height / 2
     readonly property real menuHeight: _menu ? _menu.height : 0
 
     signal picked(string uri)
@@ -52,18 +53,36 @@ Item {
     }
 
     FontMetrics {
-        id: heading
+        id: stockTitle
 
-        font.pixelSize: crumbs.titlePixelSize
-        font.family: crumbs.titleFamily
+        font.pixelSize: Theme.fontSizeLarge
+    }
+
+    FontMetrics {
+        id: lineText
+
+        font: titleLabel.font
+    }
+
+    Label {
+        id: titleLabel
+
+        objectName: "crumbTitle"
+        anchors.right: parent.right
+        y: Math.round(crumbs.textBaseline - baselineOffset)
+        width: Math.min(implicitWidth, crumbs.width - crumbs.reserve)
+        text: crumbs.title
+        color: Theme.highlightColor
+        truncationMode: TruncationMode.Fade
     }
 
     Item {
         id: row
 
         objectName: "crumbRow"
+        visible: crumbs.pathShown
         anchors {
-            right: parent.right
+            right: titleLabel.left
             rightMargin: Theme.paddingMedium
         }
         width: crumbs._lead + PathFold.tailWidth(crumbs.widths, crumbs.separatorWidth, crumbs.folded)
@@ -83,7 +102,7 @@ Item {
 
                 objectName: "crumbHouse"
                 x: Theme.paddingMedium
-                y: Math.round(crumbs.titleTop + (heading.height - height) / 2)
+                y: Math.round(crumbs.capMiddle - height / 2)
                 width: Theme.iconSizeSmallPlus
                 height: width
                 sourceSize.width: width
