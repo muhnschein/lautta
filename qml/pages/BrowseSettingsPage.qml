@@ -2,6 +2,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../components"
 import "../components/browse"
 import "../components/browse/BrowseText.js" as BrowseText
 
@@ -44,8 +45,10 @@ Page {
             }
         }
 
-        header: PageHeader {
-            title: qsTrId("lautta-settings-browse-page")
+        header: HeaderBand {
+            PageHeader {
+                title: qsTrId("lautta-settings-browse-page")
+            }
         }
 
         section.property: "section"
