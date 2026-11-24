@@ -75,6 +75,10 @@ Page {
         onTriggered: page.start()
     }
 
+    HeaderBand {
+        anchors.fill: heading
+    }
+
     // Field and filter summary sit above the list, not in its header: each search resets model,
     // list makes first new row current and takes focus, so a header field lost the keyboard.
     Column {

@@ -2,6 +2,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import ".."
 import "../directory"
 import "../ServerWarning.js" as ServerWarning
 
@@ -27,10 +28,13 @@ Page {
         anchors.fill: parent
         contentHeight: Math.max(height, warning.y + warning.height + Theme.paddingLarge)
 
-        PageHeader {
+        HeaderBand {
             id: header
-            title: page.serverName
-            description: App.displayAddress("lautta://" + page.locationId + "/")
+
+            PageHeader {
+                title: page.serverName
+                description: App.displayAddress("lautta://" + page.locationId + "/")
+            }
         }
 
         FolderPlaceholder {

@@ -4,6 +4,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../components"
 import "../components/operations/Json.js" as Json
 
 Page {
@@ -33,9 +34,11 @@ Page {
         anchors.fill: parent
         model: rowModel
 
-        header: PageHeader {
-            //% "Checksums"
-            title: qsTrId("lautta-checksum-title")
+        header: HeaderBand {
+            PageHeader {
+                //% "Checksums"
+                title: qsTrId("lautta-checksum-title")
+            }
         }
 
         section.property: "section"

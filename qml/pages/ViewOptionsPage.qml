@@ -2,6 +2,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../components"
 import "../components/search"
 import "../components/search/SettingsText.js" as SettingsText
 
@@ -38,10 +39,12 @@ Page {
 
             width: parent.width
 
-            PageHeader {
-                objectName: "viewOptionsHeader"
-                //% "View options"
-                title: qsTrId("lautta-dir-opts-title")
+            HeaderBand {
+                PageHeader {
+                    objectName: "viewOptionsHeader"
+                    //% "View options"
+                    title: qsTrId("lautta-dir-opts-title")
+                }
             }
 
             ComboBox {
