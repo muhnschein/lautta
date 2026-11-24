@@ -122,7 +122,7 @@ impl VPath {
         Some(VPath(self.0[base.0.len() + 1..].to_vec()))
     }
 
-    /// Ancestors from the root down to the parent (for the path menu).
+    /// Ancestors from the root down to the parent.
     pub fn ancestors(&self) -> Vec<VPath> {
         let mut out = vec![VPath::root()];
         let mut cur = VPath::root();

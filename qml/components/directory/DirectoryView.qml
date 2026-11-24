@@ -23,6 +23,7 @@ Item {
     property bool selectionWaiting
     property bool detailsShown
     property alias model: dir
+    readonly property var trail: path.trail
     readonly property bool selecting: selectionMode
     readonly property bool gridMode: dir.viewMode === "grid"
     property string pendingName
@@ -35,8 +36,11 @@ Item {
     property var made: []
     // Bottom of the view under clipboard, selection or activity panel.
     readonly property real coveredHeight: panelSpace.height
+    readonly property real backTapWidth: Theme.itemSizeSmall
 
     signal openFolder(string uri)
+    signal ancestorPicked(string uri)
+    signal homePicked
     signal flashed(string itemUri)
 
     function setSelection(state) {
@@ -968,26 +972,39 @@ Item {
             Item {
                 id: headerBar
 
+                objectName: "folderHeaderBar"
                 width: parent.width
-                height: pageHeader.height
+                height: pageHeader.height + crumbs.menuHeight
 
                 PageHeader {
                     id: pageHeader
 
                     objectName: "folderPageHeader"
-                    title: view.selecting
-                           //% "%n selected"
-                           ? qsTrId("lautta-dir-selected", dir.selectedCount)
-                           : dir.title
+                    leftMargin: view.backTapWidth
                     description: !view.selecting && Operations.isArchive(view.uri)
                                  //% "Compressed file · read only"
                                  ? qsTrId("lautta-dir-compressed-readonly")
                                  : ""
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: !view.selecting
-                    onClicked: pathMenu.open = !pathMenu.open
+                    extraContent.children: [
+                        PathCrumbs {
+                            id: crumbs
+
+                            objectName: "folderCrumbs"
+                            anchors.fill: parent
+                            title: view.selecting
+                                   //% "%n selected"
+                                   ? qsTrId("lautta-dir-selected", dir.selectedCount)
+                                   : dir.title
+                            pathShown: !view.selecting
+                            pathModel: path
+                            titleTop: pageHeader.topMargin
+                            menuHost: headerBar
+                            menuMost: Math.max(0, Math.floor((view.height - pageHeader.height) / Theme.itemSizeSmall))
+                            homeInset: view.width / 4 - view.backTapWidth
+                            onPicked: view.ancestorPicked(uri)
+                            onHome: view.homePicked()
+                        }
+                    ]
                 }
             }
 
@@ -998,23 +1015,11 @@ Item {
                 running: dir.loading
             }
 
-            PathMenu {
-                id: pathMenu
-
-                objectName: "folderPathMenu"
-                anchors.top: progress.bottom
-                maxHeight: Math.max(0, view.height - y - Theme.itemSizeLarge)
-                pathModel: path
-                currentUri: view.uri
-                onNavigate: view.openFolder(uri)
-                onFavouriteRequested: view.runAction("favourite", [view.uri], {}, null)
-            }
-
             Item {
                 id: accessNotice
 
                 objectName: "folderAccessNotice"
-                anchors.top: pathMenu.bottom
+                anchors.top: progress.bottom
                 width: parent.width
                 visible: dir.access.length > 0
                 height: visible ? accessRow.height + Theme.paddingMedium : 0

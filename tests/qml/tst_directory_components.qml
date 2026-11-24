@@ -8,15 +8,11 @@ ApplicationWindow {
     id: test
     property bool reachedEnd
 
-    PathModel {
-        id: path
-        uri: "lautta://user-documents/Uni"
-    }
-
     initialPage: Component {
         Page {
             Column {
                 width: parent.width
+                Component.onCompleted: test.reachedEnd = true
 
                 Row {
                     FileIcon { isDir: true; category: "folder" }
@@ -30,13 +26,6 @@ ApplicationWindow {
                     FileIcon { category: "other" }
                     FileIcon { category: "image"; thumbnailSource: "file:///nonexistent.png"; mimeType: "image/png" }
                     FileIcon { category: "image"; thumbnailSource: "image://lautta-thumb/lautta://nv-x/a.png" }
-                }
-                PathMenu {
-                    open: true
-                    editing: true
-                    pathModel: path
-                    currentUri: "lautta://user-documents/Uni"
-                    Component.onCompleted: test.reachedEnd = true
                 }
             }
         }

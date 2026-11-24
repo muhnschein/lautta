@@ -213,6 +213,8 @@ mod tests {
             ("view-options.svg", 96, 3.0),
             ("file-folder-28.svg", 112, 3.5),
             ("dir-copy.svg", 128, 4.0),
+            ("home.svg", 72, 3.0),
+            ("home.svg", 48, 2.0),
         ] {
             let alpha = drawn(name, side, stroke);
             assert!(!alpha.is_empty(), "{name} at {side} px not drawn");

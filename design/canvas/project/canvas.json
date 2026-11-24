@@ -274,10 +274,10 @@
       "x": 4800,
       "y": 8200
     },
-    "PathMenu.dc.html": {
+    "PathFolded.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Path menu & edit path",
+      "title": "Folded path",
       "w": 400,
       "x": 2400,
       "y": 2060
@@ -892,7 +892,7 @@
     "DirectoryContext.dc.html",
     "DirectorySelect.dc.html",
     "DirectoryGrid.dc.html",
-    "PathMenu.dc.html",
+    "PathFolded.dc.html",
     "DirectoryRemorse.dc.html",
     "ViewOptions.dc.html",
     "NewItem.dc.html",

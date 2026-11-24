@@ -22,7 +22,7 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | **attention** | server state needing user: `auth-failed`, `server-identity-changed` | |
 | **folder page** | `DirectoryPage`: one folder's listing | "directory view" in UI talk |
 | **list / grid** | folder view modes (grid 3 or 4 per row) | |
-| **path menu** | drop-down from tapping folder header: path crumbs, Edit path, Copy address, Add to favourites | "breadcrumbs" |
+| **path crumbs** | folder header, left of folder name: house (Browse) while whole path fits, then folders above, each a tap target; what doesn't fit folds into "…", house too | "breadcrumbs", "path menu" |
 | **pulley** | Silica pull-down menu at page top | "pull-down", "menu" |
 | **context menu** | long-press menu on a row | |
 | **More actions** | page listing the rest of item actions | |
@@ -53,9 +53,9 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 |---|---|---|---|---|
 | SCR-01 | Browse | `pages/BrowsePage.qml` | S | app start |
 | SCR-02 | Start error | `pages/StartErrorPage.qml` | S | start, data can't open |
-| SCR-03 | Folder page (list) | `pages/DirectoryPage.qml` + `directory/DirectoryView.qml` | S | any folder row, favourite, path menu, search result, Trash "Show original folder" |
+| SCR-03 | Folder page (list) | `pages/DirectoryPage.qml` + `directory/DirectoryView.qml` | S | any folder row, favourite, path crumb, search result, Trash "Show original folder" |
 | SCR-04 | Folder page (grid) | same, grid mode | S | View options, auto when mostly photos |
-| SCR-05 | Path menu | `components/PathMenu.qml` | S | tap folder header |
+| SCR-05 | Folded path | `directory/PathCrumbs.qml` | S | tap "…" in folder header |
 | SCR-06 | Folder pulley | `directory/DirectoryMenu.qml` | S | pull folder page |
 | SCR-07 | Item context menu | `directory/FileContextMenu.qml` | S | long-press list row |
 | SCR-08 | More actions | `directory/MoreActionsPage.qml` | S | context menu, selection bar |
@@ -89,7 +89,7 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | SCR-37 | Open remote (Getting file) | `dialogs/OpenRemoteDialog.qml` | B | open/share remote file without viewer |
 | SCR-38 | Recents | `pages/RecentsPage.qml` | S | Browse tile All recents |
 | SCR-39 | Trash | `pages/TrashPage.qml` | S | Browse row Trash |
-| SCR-40 | Edit favourite | `pages/FavouritePage.qml` | S | Add to favourites (row, item, path menu, image More), Edit favourite |
+| SCR-40 | Edit favourite | `pages/FavouritePage.qml` | S | Add to favourites (row, item, folder pulley, image More), Edit favourite |
 | SCR-41 | Settings | `pages/SettingsPage.qml` | S | Browse pulley |
 | SCR-42 | Settings › Browse page | `pages/BrowseSettingsPage.qml` | S | Settings |
 | SCR-43 | Settings › Search | `pages/SearchSettingsPage.qml` | S | Settings |
@@ -129,7 +129,6 @@ Format: **F-ID Name** (mode) — what. *Entry:* where user starts it. *Proof:* w
 - **F-BRW-05 Mount / Unmount drive** (B) — *Entry:* tap unmounted volume, or menu Mount; menu Unmount. *Proof:* row turns mounted/disappears from mounted state.
 - **F-BRW-06 Locked drive → Storage settings** (B) — *Entry:* tap locked volume, menu "Open Storage settings". *Proof:* Sailfish Settings › Storage opens (bridge feature `storage-settings`).
 - **F-BRW-07 Browse layout** (S) — hide sections (Recents, Volumes, Servers) and rows, reorder rows by drag, Restore defaults. *Entry:* Settings › Browse page. *Code:* `BrowseSettingsPage.qml`, `browse_layout.rs`.
-- **F-BRW-08 Copy address** (S) — location address to clipboard. *Entry:* Browse row menu, path menu.
 - **F-BRW-09 Rescan volumes** (S) — Browse refreshes rows when shown and when app returns to front (sandbox can miss mounts). *Proof:* new card shows without restart.
 - **F-BRW-10 Activity from Browse** (S) — pulley "Activity (n)". *Proof:* SCR-21.
 - **F-BRW-11 Phone free space** (S) — "N free of M" at left end of "On this device" header: file system user folders are on; read when Browse shows. *Code:* `BrowsePage.qml`, `app_browse.rs` (`device_space`).
@@ -160,7 +159,7 @@ Retired, never reuse: F-SRV-08 Server question, F-SRV-09 Connect to server, F-SR
 - **F-DIR-03 Grid hint** — "Shown as grid because most items are photos", Use list.
 - **F-DIR-04 Sort and filter** — sort by Name/Size/Modified/Type, Descending, Folders first, Show hidden files. *Entry:* View options (folder pulley or Settings).
 - **F-DIR-05 Thumbnails switch** — Show thumbnails (untrusted-file warning), Thumbnails from servers, largest server file, cache size.
-- **F-DIR-06 Path menu** — crumbs to any ancestor, Edit path (type a path), Copy address, Add to favourites, "Folder · from cache". *Entry:* tap header.
+- **F-DIR-06 Path crumbs** — header shows house › folders above › folder name on one line, one size (list text), name in highlight colour. Tap folder: back to its page; no page of it on stack → it replaces pages inside it. Tap house: back to Browse. House only while whole path fits and house stays right of page's left quarter; else "…" leads. Too long → farthest fold into "…": context menu under header, nearest first, as many as fit, last row Home (Browse). Hidden while selecting. *Code:* `PathCrumbs.qml`, `PathFold.js`, `PathNav.js`.
 - **F-DIR-07 Folder states** — empty ("Pull down to create a folder or paste"), hidden (Add only: "Files here are hidden"), no access, sign-in failed (Update sign-in), not found, can't reach (Retry, Details).
 - **F-DIR-08 Large folder** — "N loaded · large folder: name order, thumbnails off", Stop.
 - **F-DIR-09 Live updates** — inotify refresh of local folders. *Code:* `watch.rs`.
@@ -176,7 +175,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-ITM-03 Copy / Cut** — to clipboard. *Proof:* clipboard panel.
 - **F-ITM-04 Rename** — dialog, then remorse "File renamed" with undo.
 - **F-ITM-05 Delete** — user folders with Trash on: remorse "Moving to trash"; volumes, servers, Trash off: SCR-15 "Delete permanently?".
-- **F-ITM-06 Add to favourites** — from context More, path menu, Browse row, image More. *Proof:* SCR-40 "Added to favourites".
+- **F-ITM-06 Add to favourites** — from context More, folder pulley (open folder), Browse row, image More. *Proof:* SCR-40 "Added to favourites".
 - **F-ITM-07 Compress** — Name, Format list (Zip, 7z, tar.xz, tar.gz, one line each, picked row lit), Password + Confirm password for Zip and 7z (AES-256; 7z hides names too; empty = none; mismatch greys Compress; guessable one: label "Weak password" in orange, never refused); file lands beside items, taken name gets " 2". *Proof:* notice "Compressed file created", new file lights up.
 - **F-ITM-08 Move to new folder** — new folder dialog, then move.
 - **F-ITM-09 Open with** — other app for local file (viewer pulley, image toolbar).
@@ -270,7 +269,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 
 AGENTS.md: feature reachable from several places → all of them. ✓ = offered, — = not offered.
 
-| Feature | Context menu | Selection bar | More actions | Path menu | Browse row | Image viewer | Text/MD/PDF viewer | Share target |
+| Feature | Context menu | Selection bar | More actions | Folder pulley | Browse row | Image viewer | Text/MD/PDF viewer | Share target |
 |---|---|---|---|---|---|---|---|---|
 | Share | ✓ (files) | ✓ | — | — | — | ✓ | ✓ | n/a |
 | Copy / Cut | ✓ | ✓ | — | — | — | — | — | — |
@@ -278,10 +277,9 @@ AGENTS.md: feature reachable from several places → all of them. ✓ = offered,
 | Delete | ✓ | ✓ | — | — | — | ✓ | — | — |
 | Add to favourites | via More | via More | ✓ | ✓ | ✓ (folder, volume) | ✓ (More) | — | — |
 | Compress | via More | via More | ✓ | — | — | ✓ (More) | — | — |
-| Extract | via More | via More (1 item) | ✓ | — | — | — | — | — |
+| Extract | via More | via More (1 item) | ✓ | ✓ (inside compressed file) | — | — | — | — |
 | Move to new folder | via More | via More | ✓ | — | — | — | — | — |
 | Checksums | via More (files) | via More (1 file) | ✓ | — | — | ✓ (More) | — | — |
 | Verify files | via More (checksum list) | via More (1 list) | ✓ | — | — | — | — | — |
 | Open with | — | — | — | — | — | ✓ | ✓ | — |
-| Copy address | — | — | — | ✓ | ✓ | — | — | — |
 

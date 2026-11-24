@@ -13,7 +13,6 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-BRW-05 Mount / Unmount drive | B | FL-27 | SCR-01 |
 | F-BRW-06 Locked drive → Storage settings | B | FL-27 | SCR-01 |
 | F-BRW-07 Browse layout | S | FL-26 | SCR-01, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
-| F-BRW-08 Copy address | S | FL-03 | SCR-03, SCR-05 |
 | F-BRW-09 Rescan volumes | S | — | — |
 | F-BRW-10 Activity from Browse | S | FL-18 | SCR-06, SCR-21, SCR-22 |
 | F-BRW-11 Phone free space | S | FL-21 | SCR-01, SCR-38 |
@@ -36,7 +35,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-DIR-03 Grid hint | S | FL-04 | SCR-04, SCR-06, SCR-24 |
 | F-DIR-04 Sort and filter | S | FL-04 | SCR-04, SCR-06, SCR-24 |
 | F-DIR-05 Thumbnails switch | S | FL-04 | SCR-04, SCR-06, SCR-24 |
-| F-DIR-06 Path menu | S | FL-03 | SCR-03, SCR-05 |
+| F-DIR-06 Path crumbs | S | FL-03 | SCR-01, SCR-03, SCR-05 |
 | F-DIR-07 Folder states | S | FL-10, FL-37 | SCR-03, SCR-06, SCR-07, SCR-11, SCR-12, SCR-13, SCR-21 |
 | F-DIR-08 Large folder | S | FL-05 | SCR-11 |
 | F-DIR-09 Live updates | S | — | — |
@@ -47,7 +46,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-ITM-03 Copy / Cut | S | FL-13 | SCR-03, SCR-06, SCR-07, SCR-10 |
 | F-ITM-04 Rename | S | FL-11 | SCR-03, SCR-07, SCR-14 |
 | F-ITM-05 Delete | S | FL-06, FL-12 | SCR-03, SCR-07, SCR-15, SCR-27, SCR-28 |
-| F-ITM-06 Add to favourites | S | FL-03, FL-22 | SCR-01, SCR-03, SCR-05, SCR-40 |
+| F-ITM-06 Add to favourites | S | FL-22 | SCR-01, SCR-06, SCR-40 |
 | F-ITM-07 Compress | S | FL-16 | SCR-03, SCR-07, SCR-08, SCR-16 |
 | F-ITM-08 Move to new folder | S | FL-16 | SCR-03, SCR-07, SCR-08, SCR-16 |
 | F-ITM-09 Open with | S | FL-06, FL-24 | SCR-03, SCR-07, SCR-09, SCR-27, SCR-28, SCR-37 |
@@ -94,10 +93,10 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-SCN-02 Page edge detection and crop | S | FL-23 | SCR-03, SCR-12, SCR-53, SCR-54, SCR-55, SCR-56, SCR-57 |
 | F-SCN-03 Page view | S | FL-23 | SCR-03, SCR-12, SCR-53, SCR-54, SCR-55, SCR-56, SCR-57 |
 | F-SCN-04 Save as PDF | S | FL-23 | SCR-03, SCR-12, SCR-53, SCR-54, SCR-55, SCR-56, SCR-57 |
-| F-FAV-01 Favourites section | S | FL-01, FL-22 | SCR-01, SCR-02, SCR-05, SCR-40 |
-| F-FAV-02 Edit favourite | S | FL-22 | SCR-01, SCR-05, SCR-40 |
-| F-FAV-03 Remove favourite | S | FL-22 | SCR-01, SCR-05, SCR-40 |
-| F-FAV-04 Reorder favourites | S | FL-22, FL-26 | SCR-01, SCR-05, SCR-24, SCR-40, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
+| F-FAV-01 Favourites section | S | FL-01, FL-22 | SCR-01, SCR-02, SCR-06, SCR-40 |
+| F-FAV-02 Edit favourite | S | FL-22 | SCR-01, SCR-06, SCR-40 |
+| F-FAV-03 Remove favourite | S | FL-22 | SCR-01, SCR-06, SCR-40 |
+| F-FAV-04 Reorder favourites | S | FL-22, FL-26 | SCR-01, SCR-06, SCR-24, SCR-40, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
 | F-RCT-01 Recents | S | FL-21 | SCR-01, SCR-38 |
 | F-RCT-02 Recents off | S | FL-26 | SCR-01, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
 | F-TRH-01 Trash | S | FL-20 | SCR-39 |
@@ -116,12 +115,12 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 
 | Screen | Flows |
 |---|---|
-| SCR-01 Browse | FL-01, FL-02, FL-21, FL-22, FL-26, FL-27, FL-28, FL-29, FL-30, FL-33, FL-36 |
+| SCR-01 Browse | FL-01, FL-02, FL-03, FL-21, FL-22, FL-26, FL-27, FL-28, FL-29, FL-30, FL-33, FL-36 |
 | SCR-02 Start error | FL-01 |
 | SCR-03 Folder page (list) | FL-02, FL-03, FL-06, FL-10, FL-11, FL-12, FL-13, FL-14, FL-16, FL-17, FL-23, FL-25, FL-29, FL-30, FL-37 |
 | SCR-04 Folder page (grid) | FL-04, FL-32 |
-| SCR-05 Path menu | FL-03, FL-22 |
-| SCR-06 Folder pulley | FL-04, FL-10, FL-13, FL-14, FL-15, FL-17, FL-18, FL-19, FL-32, FL-37 |
+| SCR-05 Folded path | FL-03 |
+| SCR-06 Folder pulley | FL-04, FL-10, FL-13, FL-14, FL-15, FL-17, FL-18, FL-19, FL-22, FL-32, FL-37 |
 | SCR-07 Item context menu | FL-11, FL-12, FL-13, FL-14, FL-16, FL-24, FL-37, FL-38 |
 | SCR-08 More actions | FL-15, FL-16, FL-17, FL-38 |
 | SCR-09 Selection mode + selection bar | FL-15, FL-24 |

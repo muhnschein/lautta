@@ -36,16 +36,18 @@ Features: F-BRW-02 User folders, F-DIR-01 Folder listing, F-DIR-11 Folder cover,
 | 4 | SCR-03 Folder page (list) | Mixed folder as list |
 | 5 | SCR-03 Folder page (list) | Back by swipe right |
 
-### FL-03 Jump with the path menu (standalone)
+### FL-03 Jump up the path (standalone)
 
-Go to a parent folder, type a path, copy the address.
+Go to a folder above, or straight back to Browse.
 
-Features: F-DIR-06 Path menu, F-BRW-08 Copy address, F-ITM-06 Add to favourites
+Features: F-DIR-06 Path crumbs
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-03 Folder page (list) | Tap folder header |
-| 2 | SCR-05 Path menu | Path menu: crumbs, Edit path, Copy address, Add to favourites |
+| 1 | SCR-03 Folder page (list) | Deep folder: header shows … › folders above › name |
+| 2 | SCR-05 Folded path | Tap "…": folded folders, nearest first, then Home |
+| 3 | SCR-03 Folder page (list) | Tap a folder: its page |
+| 4 | SCR-01 Browse | Tap Home (short path: house in header): Browse |
 
 ### FL-04 Change how a folder looks (standalone)
 
@@ -341,8 +343,8 @@ Features: F-FAV-01 Favourites section, F-FAV-02 Edit favourite, F-FAV-03 Remove 
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-05 Path menu | Path menu: Add to favourites |
-| 2 | SCR-01 Browse | Favourite menu: Edit, Copy address, Remove |
+| 1 | SCR-06 Folder pulley | Pull: Add to favourites |
+| 2 | SCR-01 Browse | Favourite menu: Edit, Remove |
 | 3 | SCR-40 Edit favourite | Edit favourite: label, colour |
 | 4 | SCR-40 Edit favourite | Icon |
 
@@ -427,7 +429,7 @@ Features: F-BRW-04 Volumes, F-BRW-05 Mount / Unmount drive, F-BRW-06 Locked driv
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-01 Browse | Mounted volume menu: Add to favourites, Copy address, Unmount, Open Storage settings |
+| 1 | SCR-01 Browse | Mounted volume menu: Add to favourites, Unmount, Open Storage settings |
 | 2 | SCR-01 Browse | Unmounted: Mount |
 | 3 | SCR-01 Browse | Mounted |
 
@@ -456,7 +458,7 @@ Features: F-SRV-04 Account servers, F-SRV-06 Edit server / Update sign-in / Revi
 | # | Screen | Step |
 |---|---|---|
 | 1 | SCR-01 Browse | Servers section |
-| 2 | SCR-01 Browse | Server row menu: Edit server, Copy address |
+| 2 | SCR-01 Browse | Server row menu: Edit server |
 | 3 | SCR-01 Browse | SMB server menu |
 | 4 | SCR-03 Folder page (list) | Server root |
 | 5 | SCR-03 Folder page (list) | Server folder |

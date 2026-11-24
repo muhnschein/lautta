@@ -14,18 +14,18 @@ ApplicationWindow {
     property int storageCalls: 0
 
     readonly property var menus: [
-        { "name": "Thesis", "items": ["edit-favourite", "copy-address", "remove-favourite"] },
-        { "name": "Documents", "items": ["add-favourite", "copy-address"] },
-        { "name": "SD card", "items": ["add-favourite", "copy-address", "open-storage-settings"] },
-        { "name": "CARD", "items": ["add-favourite", "copy-address", "unmount", "open-storage-settings"] },
+        { "name": "Thesis", "items": ["edit-favourite", "remove-favourite"] },
+        { "name": "Documents", "items": ["add-favourite"] },
+        { "name": "SD card", "items": ["add-favourite", "open-storage-settings"] },
+        { "name": "CARD", "items": ["add-favourite", "unmount", "open-storage-settings"] },
         { "name": "STICK", "items": ["mount", "open-storage-settings"] },
         { "name": "VAULT", "items": ["open-storage-settings"] },
-        { "name": "NAS", "items": ["edit-server", "copy-address"] },
-        { "name": "Office", "items": ["edit-server", "update-sign-in", "copy-address"] },
-        { "name": "Vault", "items": ["edit-server", "review-identity", "copy-address"] }
+        { "name": "NAS", "items": ["edit-server"] },
+        { "name": "Office", "items": ["edit-server", "update-sign-in"] },
+        { "name": "Vault", "items": ["edit-server", "review-identity"] }
     ]
 
-    readonly property var withoutStorage: { "name": "SD card", "items": ["add-favourite", "copy-address"] }
+    readonly property var withoutStorage: { "name": "SD card", "items": ["add-favourite"] }
 
     initialPage: Component {
         BrowsePage {

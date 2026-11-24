@@ -42,6 +42,11 @@ body{margin:0}
 .hdr{min-height:80px;padding:14px 18px 6px 60px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;text-align:right}
 .hdr-t{font-size:28px;font-weight:300;color:var(--hl);line-height:1.15}
 .hdr-d{font-size:15px;color:var(--hl2);margin-top:2px}
+.crh{min-height:80px;padding:0 18px 0 44px;display:flex;align-items:center;justify-content:flex-end;white-space:nowrap;overflow:hidden}
+.crh .cr{flex:none;display:flex;align-items:center;align-self:stretch;padding:0 6px;color:var(--pri);font-size:19px}
+.crh .cr.down{background:var(--hlbg);color:var(--hl)}
+.crh .sp{flex:none;color:var(--sec);font-size:19px}
+.crh .hdr-t{margin-left:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:19px;font-weight:400;line-height:normal}
 .dlg{height:80px;padding:0 18px;display:flex;align-items:center;justify-content:space-between}
 .dlg-c{font-size:19px;color:var(--pri)}
 .dlg-a{font-size:28px;font-weight:300;color:var(--hl)}
@@ -115,7 +120,7 @@ body{margin:0}
 </style>
 </helmet>
 <div class="amb {{amb}}" style="width: 400px; height: 860px">
-<div class="pull-ind"></div><div class="ind-back"><i></i><i></i></div><div class="hdr"><div class="hdr-t">Old drafts</div><div class="hdr-d">Documents › Uni</div></div><div class="ph" style="top: 330px"><div class="ph-t">Not accessible</div><div class="ph-h">This link points outside the folders Lautta may read.</div></div>
+<div class="pull-ind"></div><div class="ind-back"><i></i><i></i></div><div class="crh"><a class="cr" href="PathFolded.dc.html">…</a><span class="sp">›</span><a class="cr" href="Directory.dc.html">Documents</a><span class="sp">›</span><a class="cr" href="Directory.dc.html">Uni</a><span class="sp">›</span><div class="hdr-t">Old drafts</div></div><div class="ph" style="top: 330px"><div class="ph-t">Not accessible</div><div class="ph-h">This link points outside the folders Lautta may read.</div></div>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":400,"height":860}}'>
