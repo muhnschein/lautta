@@ -186,8 +186,11 @@ ApplicationWindow {
         checkLargeOps(settings)
         checkViewOptions(settings)
         var all = Object.keys(JSON.parse(App.settingsJson))
-        var lost = all.filter(function (k) { return reached.indexOf(k) < 0 })
+        var remembered = ["share_folders"]
+        var lost = all.filter(function (k) { return reached.indexOf(k) < 0 && remembered.indexOf(k) < 0 })
         expect(lost.length === 0, "every setting has its control: none for " + lost)
+        expect(remembered.every(function (k) { return all.indexOf(k) >= 0 && reached.indexOf(k) < 0 }),
+               "what Lautta remembers by itself is kept, without a control: " + remembered)
         expect(all.indexOf("date_format") < 0 && reached.indexOf("date_format") < 0, "there is no date format")
         expect(all.indexOf("grid_columns") < 0, "there is no grid size")
         reachedEnd = true

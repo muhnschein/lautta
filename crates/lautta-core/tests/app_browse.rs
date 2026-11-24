@@ -726,6 +726,7 @@ async fn drives_show_as_volumes_until_they_are_mounted() {
     let vols = of(&rows, "volumes");
     assert_eq!(vols[2].icon, "image://theme/icon-m-usb");
     assert_eq!(vols[0].icon, "image://theme/icon-m-sd-card");
+    assert_eq!(vols[1].icon, "image://theme/icon-m-usb");
     assert_eq!((vols[0].uri.as_str(), vols[0].total, vols[0].free), ("", 64, -1));
 }
 

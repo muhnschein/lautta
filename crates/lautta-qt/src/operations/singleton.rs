@@ -67,7 +67,7 @@ pub struct Operations {
     archiveSource: qt_method!(fn(&self, uri: QString) -> QString),
     displayPath: qt_method!(fn(&self, uri: QString) -> QString),
     probeShared: qt_method!(fn(&self, paths_json: QString) -> QString),
-    destinationsJson: qt_method!(fn(&self) -> QString),
+    sharePlacesJson: qt_method!(fn(&self) -> QString),
 
     needsSummary: qt_signal!(planId: i32, summaryJson: QString),
     started: qt_signal!(transferId: i64),
@@ -513,9 +513,9 @@ impl Operations {
         QString::from(to_json(&files).as_str())
     }
 
-    fn destinationsJson(&self) -> QString {
-        let list = core().map(|c| c.destinations()).unwrap_or_default();
-        QString::from(to_json(&list).as_str())
+    fn sharePlacesJson(&self) -> QString {
+        let places = core().map(|c| c.share_places()).unwrap_or_default();
+        QString::from(to_json(&places).as_str())
     }
 }
 

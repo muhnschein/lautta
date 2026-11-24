@@ -96,7 +96,6 @@ File system seen (firejail `whitelist`): tmpfs on `$HOME`, each granted folder a
 ```
 Browse ─┬─ Directory ─┬─ Directory …
         │             ├─ Viewers
-        │             ├─ Folder picker
         │             ├─ Add ── Scan (camera, page view, adjust, save as PDF)
         │             └─ Search results
         ├─ Recents

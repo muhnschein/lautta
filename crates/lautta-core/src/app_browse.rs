@@ -30,6 +30,7 @@ use std::time::Duration;
 
 const PLACE_SEPARATOR: &str = " › ";
 const SERVER_ICON: &str = "server";
+const FOLDER_ICON: &str = "file-folder";
 
 /// Drive mounted by bridge takes time to show in sandbox: this many looks, this far apart.
 const MOUNT_LOOKS: u32 = 10;
@@ -285,6 +286,16 @@ impl Core {
         format!("{name}{PLACE_SEPARATOR}{}", parts.join(PLACE_SEPARATOR))
     }
 
+    pub fn location_icon(&self, location: &Location) -> &'static str {
+        match location.kind {
+            LocationKind::Volume => {
+                drive_icon(self.locations.volume_kind(&location.id).unwrap_or(DriveKind::Usb))
+            }
+            LocationKind::Server { .. } => SERVER_ICON,
+            _ => FOLDER_ICON,
+        }
+    }
+
     pub fn favourite_place(&self, f: &Favourite) -> String {
         match f.uri.parent().filter(|_| !f.is_dir) {
             Some(folder) => self.place_of(&folder),
@@ -519,7 +530,7 @@ impl Core {
                 let mut row = Row::new(section, "folder");
                 row.uri = Uri::root(l.id.clone()).to_string();
                 row.name = display_of(&l, prefs);
-                row.icon = "file-folder".to_owned();
+                row.icon = FOLDER_ICON.to_owned();
                 row.item_id = l.id;
                 row
             })
@@ -555,7 +566,7 @@ impl Core {
             let mut row = Row::new("volumes", "volume");
             row.uri = uri.to_string();
             row.name = l.name.clone();
-            row.icon = drive_icon(self.locations.volume_kind(&l.id).unwrap_or(DriveKind::Usb)).to_owned();
+            row.icon = self.location_icon(&l).to_owned();
             row.item_id = l.id.clone();
             if let Some(d) = drives
                 .iter()

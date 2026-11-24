@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-import "../../qml/dialogs"
+import "../../qml/pages"
 import "../../qml/components/ErrorText.js" as ErrorText
 import "../../qml/components/transfers/TransferText.js" as TransferText
 import "../../qml/components/Access.js" as Access
@@ -105,11 +105,8 @@ ApplicationWindow {
     }
 
     initialPage: Component {
-        FolderPickerDialog {
+        ShareTargetPage {
             id: picker
-            title: "Copy to"
-            acceptText: "Copy here"
-            startUri: "lautta://user-documents/"
             Component.onCompleted: {
                 test.checkPermission()
                 test.checkPasswords()

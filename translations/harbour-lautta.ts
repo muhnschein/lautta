@@ -789,38 +789,11 @@
             <numerusform>Save %n files</numerusform>
         </translation>
     </message>
-    <message id="lautta-share-unreadable">
-        <source>This file can&apos;t be read by Lautta</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-share-save-to">
-        <source>Save to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-share-pick">
-        <source>Save to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-share-pick-accept">
-        <source>Select</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-share-other">
-        <source>Another folder…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-share-will-save" numerus="yes">
-        <source>%n files will be saved.</source>
-        <translation>
-            <numerusform>%n file will be saved.</numerusform>
-            <numerusform>%n files will be saved.</numerusform>
-        </translation>
-    </message>
     <message id="lautta-share-skipped" numerus="yes">
-        <source>%n files will be skipped.</source>
+        <source>%n files can&apos;t be read, skipped</source>
         <translation>
-            <numerusform>%n file will be skipped.</numerusform>
-            <numerusform>%n files will be skipped.</numerusform>
+            <numerusform>%n file can&apos;t be read, skipped</numerusform>
+            <numerusform>%n files can&apos;t be read, skipped</numerusform>
         </translation>
     </message>
     <message id="lautta-viewers-details">
@@ -1665,27 +1638,6 @@
     <message id="lautta-dir-transfer-waiting">
         <source>Waiting in Activity</source>
         <oldsource>Waiting in Transfers</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-picker-new-folder">
-        <source>New folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-picker-locations">
-        <source>Locations</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-picker-in">
-        <source>In %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-picker-empty">
-        <source>No folders</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-dir-picker-empty-hint">
-        <source>Use this folder, or pull down to create one</source>
-        <oldsource>You can use this folder or pull down to make one</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-new-exists-folder">
@@ -2640,6 +2592,30 @@
     </message>
     <message id="lautta-path-home">
         <source>Home</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-menu-new-folder">
+        <source>New folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-empty-hint-picking">
+        <source>Save here, or pull down to create a folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-share-one">
+        <source>Save %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-share-skipped-one">
+        <source>%1 can&apos;t be read, skipped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-share-locations">
+        <source>Locations</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-share-recent">
+        <source>Saved here lately</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Saving files shared to Lautta works like a folder in the app: *Save here* on top, what gets saved below it, then the folder with its path to tap your way up, or to *Locations* by the house. Folders open in place; files show dimmed, so you see what is there already. It opens where you saved last (Downloads the first time), *Locations* lists the last three folders you saved to, and the pulley makes a new folder. *Save here* is off where Lautta may not add files ([#95](https://github.com/muhnschein/lautta/issues/95)).
 - The folder header shows the path: a house for the Home page, then the folders above, then the folder's name, all in one size on one line. Tap a folder to go straight back to it, tap the house to go home. When the path gets long, the farthest folders and the house hide behind "…"; tap it to list them, with Home at the end. The same house marks *Browse page* in Settings. *Add to favourites* for the open folder moved to the pulley menu. *Edit path* and *Copy address* are gone ([#38](https://github.com/muhnschein/lautta/issues/38)).
 - Page headers sit on a light band in the ambience colour, from the top of the screen to the end of the header. On the Home page the band takes in the Recents tiles.
 - The cover of the Home page leaves as much room under two or more storage icons as above them.
@@ -12,7 +13,7 @@
 - A server whose identity changed now shows a clear security warning: red, with a warning icon, what the risk is, *Review identity* and *Go back*. A failed sign-in shows as a warning in the same style with *Update sign-in*. Both look the same whether you tap the server on Home or open one of its folders ([#118](https://github.com/muhnschein/lautta/issues/118), [#119](https://github.com/muhnschein/lautta/issues/119)).
 - Photos open faster in the image viewer, big ones most: the picture starts loading as your finger touches it, loads at screen size and first, and shows the camera's preview while it loads, or the thumbnail you tapped when the photo has none. Pictures you swiped past come back at once ([#41](https://github.com/muhnschein/lautta/issues/41)).
 - PDF thumbnails fill their tile with the top left of the first page, on this device and on servers: the top of a portrait page, not its middle, and the left of a landscape page, not a strip ([#193](https://github.com/muhnschein/lautta/issues/193)).
-- New items scroll into view and light up briefly: folders you make (also in the folder picker), pasted or moved items, files you compress, extracted files, scans and renamed items; in grid view the name and details light up too ([#113](https://github.com/muhnschein/lautta/issues/113)).
+- New items scroll into view and light up briefly: folders you make (also when saving shared files), pasted or moved items, files you compress, extracted files, scans and renamed items; in grid view the name and details light up too ([#113](https://github.com/muhnschein/lautta/issues/113)).
 - A folder listed again right after a change no longer shows as empty for a moment.
 - Videos from servers stream and seek instead of downloading first ([#100](https://github.com/muhnschein/lautta/issues/100)).
 - Streaming videos no longer freeze the screen every second or so, and start and seek faster.

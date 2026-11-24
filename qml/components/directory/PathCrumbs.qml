@@ -14,6 +14,8 @@ Item {
     property Item menuHost
     property int menuMost
     property real homeInset
+    //% "Home"
+    property string homeText: qsTrId("lautta-path-home")
     property var widths: []
     property Item _menu
 
@@ -25,7 +27,8 @@ Item {
     readonly property int folded: PathFold.folded(widths, separatorWidth, room)
     readonly property var offsets: PathFold.offsets(widths, separatorWidth, folded)
     readonly property real _lead: (homeShown ? houseButton.width : dotsButton.width) + separatorWidth
-    readonly property real capMiddle: titleTop + stockTitle.ascent - stockTitle.tightBoundingRect("H").height / 2
+    readonly property real capDrop: stockTitle.ascent - stockTitle.tightBoundingRect("H").height / 2
+    readonly property real capMiddle: titleTop + capDrop
     readonly property real textBaseline: capMiddle + lineText.tightBoundingRect("H").height / 2
     readonly property real menuHeight: _menu ? _menu.height : 0
 
@@ -197,10 +200,7 @@ Item {
                 MenuItem {
                     readonly property Item step: steps.itemAt(modelData)
 
-                    text: modelData < 0
-                          //% "Home"
-                          ? qsTrId("lautta-path-home")
-                          : step ? step.name : ""
+                    text: modelData < 0 ? crumbs.homeText : step ? step.name : ""
                     onDelayedClick: modelData < 0 ? crumbs.home() : crumbs.picked(step.uri)
                 }
             }

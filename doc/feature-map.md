@@ -42,7 +42,7 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | **working copy** | local copy of remote file for another app (`Downloads/Lautta/Opened`, 24 h) | "cache" |
 | **archive** | zip, tar(.gz/.bz2/.xz/.zst), 7z opened read-only as location; on screen "compressed file" | "archive" on screen |
 | **scan** | camera → pages → one PDF | |
-| **share target** | Lautta in Sailfish share sheet: "Save to" page | share *out* = Share action |
+| **share target** | Lautta in Sailfish share sheet: "Save here" folder browser | share *out* = Share action |
 | **cover** | app cover: current folder, or task progress | |
 | **offline listing** | cached listing shown when server unreachable | |
 | **large folder** | over threshold: name order, thumbnails off, Stop loading | |
@@ -63,11 +63,11 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | SCR-10 | Clipboard panel | `directory/ClipboardPanel.qml` | S | after Copy/Cut |
 | SCR-11 | Folder states (empty, no access, error, offline, large, grid hint) | `DirectoryView.qml`, `InfoBanner` | S/B | folder page |
 | SCR-12 | Add | `dialogs/AddDialog.qml` | S | pulley Add |
-| SCR-13 | New folder | `dialogs/NewItemDialog.qml` | S | Add, Move to new folder, folder picker pulley |
+| SCR-13 | New folder | `dialogs/NewItemDialog.qml` | S | Add, Move to new folder, share target pulley |
 | SCR-14 | Rename | `dialogs/RenameDialog.qml` | S | context menu, More actions, image viewer |
 | SCR-15 | Delete permanently | `dialogs/DeleteDialog.qml` | S | delete on volume, server, Trash off, Trash "Delete now" |
 | SCR-16 | Compress | `dialogs/CompressDialog.qml` | S | More actions, selection More, image More |
-| SCR-18 | Folder picker | `dialogs/FolderPickerDialog.qml` | S | share target "Another folder…" |
+| SCR-18 | Share target: Locations | `pages/ShareTargetPage.qml` | S | house in share target's path band |
 | SCR-19 | Plan summary | `dialogs/PlanSummaryDialog.qml` | S | large copy/move/extract |
 | SCR-20 | Conflict | `dialogs/ConflictDialog.qml` | S | plan summary, activity bar Answer, Activity row, notification |
 | SCR-21 | Activity | `pages/TransfersPage.qml` | S | Browse/folder pulley, activity bar Show, cover action, notification |
@@ -99,7 +99,7 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | SCR-47 | Settings › Storage | `pages/StorageSettingsPage.qml` | S | Settings |
 | SCR-48 | About | `pages/AboutPage.qml` | S | Settings |
 | SCR-51 | Server attention | `browse/ServerAttentionPage.qml` | B | tap server row with attention |
-| SCR-52 | Share target ("Save to") | `pages/ShareTargetPage.qml` | S | Sailfish share sheet → Lautta |
+| SCR-52 | Share target ("Save here") | `pages/ShareTargetPage.qml` | S | Sailfish share sheet → Lautta |
 | SCR-53 | Scan camera | `pages/ScanPage.qml` | S | Add → Scan document |
 | SCR-54 | Scan page view | `pages/ScanPageView.qml` | S | scan thumbnails, saved-pages strip |
 | SCR-55 | Scan adjust (crop, turn) | `dialogs/ScanAdjustDialog.qml` | S | scan page view |
@@ -148,7 +148,7 @@ Format: **F-ID Name** (mode) — what. *Entry:* where user starts it. *Proof:* w
 - **F-SRV-14 Remote thumbnails** — pictures, PDFs and audio covers from servers, size cap; audio reads tag area only. *Entry:* View options.
 - **F-SRV-15 Remote streaming** — video/audio stream with seek ("Streaming from …"), else download first. *Code:* `MediaPlayer.qml`, `app_viewers.rs`.
 - **F-SRV-16 Open remote in other app** — working copy to `Downloads/Lautta/Opened`, removed after 24 h. *Entry:* Open with / Share on remote file. *Proof:* SCR-37 "Getting …".
-- **F-SRV-17 Access levels** — folder on a server with less than full access shows lock + level under header ("Read only", "Read and add", "Add only") and offers only what level allows: Read and add adds, changes nothing (no Cut, Rename, Delete); Read only adds nothing; Add only lists folders only ("Files here are hidden"), no Select, conflicts keep both. Folder picker greys out servers it can't write. Level narrowed mid-task → task fails "Lautta may now only … on …". *Entry:* open server with narrowed level. *Code:* `Access.js`, `ContextActions.js`, `access.rs`.
+- **F-SRV-17 Access levels** — folder on a server with less than full access shows lock + level under header ("Read only", "Read and add", "Add only") and offers only what level allows: Read and add adds, changes nothing (no Cut, Rename, Delete); Read only adds nothing; Add only lists folders only ("Files here are hidden"), no Select, conflicts keep both. Share target's Locations grey out places it can't write. Level narrowed mid-task → task fails "Lautta may now only … on …". *Entry:* open server with narrowed level. *Code:* `Access.js`, `ContextActions.js`, `access.rs`.
 
 Retired, never reuse: F-SRV-08 Server question, F-SRV-09 Connect to server, F-SRV-10 Recent ad-hoc servers.
 
@@ -257,7 +257,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 
 ### 3.12 Share in, cover, notifications, app
 
-- **F-SHR-01 Share target** — Lautta in share sheet; "Save N files" to suggested folders or Another folder…; unreadable files skipped. *Code:* `ShareTargetPage.qml`, `OperationsHandlers.qml`.
+- **F-SHR-01 Share target** — Lautta in share sheet; dialog "Save here" over a folder view: "Save N files" (one file: its name), path band with crumbs (F-DIR-06), folders open in place, files dimmed, list or grid as View options say, pulley New folder. Opens folder saved to last, first time Downloads. House → Locations: last three folders saved to, then device folders, volumes, servers. Save here off at Locations and where folder takes no files; unreadable files skipped, told in one line. *Code:* `ShareTargetPage.qml`, `directory/DirectoryView.qml` (`picking`), `directory/PathBand.qml`, `operations/Share.js`, `OperationsHandlers.qml`.
 - **F-APP-01 Cover** — shows what a tap opens: page on top, else nearest page below that tells a cover. Browse: no name; free space of phone and mounted volumes (four at most) as icon with "N GB free", two to a row, phone alone on one centred line; below, newest recents as tiles (fewer than three: places). Folder, Trash, Recents: F-DIR-11. Viewer: file fills cover, name on dark fade; no picture: type glyph. Built only while cover shows; no timers. Transfer cover while tasks run. *Code:* `CoverPage.qml`, `CoverBrowse.qml`, `CoverFile.qml`.
 - **F-APP-02 Start error** — "Lautta can't open its data".
 - **F-APP-03 Settings** — Browsing (Browse page, View options, Search, Recents), Files (Deleting, Transfers, Storage), About Lautta.

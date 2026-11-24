@@ -142,9 +142,6 @@ Item {
         dir.filterText = "ALPHA"
         same(names(rep), ["alpha.txt"], "filter ignores case")
         dir.filterText = ""
-        dir.foldersOnly = true
-        same(names(rep), ["Zeta"], "folders only")
-        dir.foldersOnly = false
         check(dir.count === 4, "files back")
         check(dir.setViewPrefs(JSON.stringify({ sortKey: "type" })) && dir.sortKey === "type", "sort key")
         dir.setViewPrefs(JSON.stringify({ sortKey: "name" }))

@@ -22,7 +22,12 @@ Item {
     property bool selectionMode
     property bool selectionWaiting
     property bool detailsShown
+    property bool picking
+    property string rootTitle
     property alias model: dir
+    property alias leadArea: leadSlot
+    property alias placesArea: placesSlot
+    readonly property bool atRoot: picking && uri.length === 0
     readonly property var trail: path.trail
     readonly property bool selecting: selectionMode
     readonly property bool gridMode: dir.viewMode === "grid"
@@ -70,6 +75,10 @@ Item {
             openFolder(itemUri)
         else
             Open.open(pageStack, App, Operations, itemUri, false, mimeType, uri, tileSize)
+    }
+
+    function offered(isDir) {
+        return !picking || isDir
     }
 
     function newFolder(moving) {
@@ -399,7 +408,7 @@ Item {
     }
 
     function placeholderKind() {
-        if (dir.count > 0 || dir.loading)
+        if (dir.count > 0 || dir.loading || atRoot)
             return ""
         if (dir.errorKind === "Sandbox" || dir.errorKind === "PermissionDenied")
             return "noaccess"
@@ -449,6 +458,9 @@ Item {
         case "hidden":
             return hiddenHint()
         case "empty":
+            if (picking && dir.writable)
+                //% "Save here, or pull down to create a folder"
+                return qsTrId("lautta-dir-empty-hint-picking")
             return dir.writable
                    //% "Pull down to create a folder or paste"
                    ? qsTrId("lautta-dir-empty-hint")
@@ -592,9 +604,9 @@ Item {
             }
 
             contentHeight: Theme.itemSizeMedium
-            menu: view.selecting || model.inaccessible ? null : contextMenu
-            enabled: !model.inaccessible
-            opacity: model.inaccessible ? Theme.opacityLow : 1
+            menu: view.selecting || view.picking || model.inaccessible ? null : contextMenu
+            enabled: !model.inaccessible && view.offered(model.isDir)
+            opacity: enabled ? 1 : Theme.opacityLow
             onPressed: view.itemPressed(model.uri, model.isDir, model.mimeType)
             onClicked: {
                 if (view.selecting)
@@ -747,6 +759,8 @@ Item {
             x: (index % grid.columns) * width
             width: grid.cellWidth
             height: parent ? parent.height : implicitHeight
+            enabled: view.offered(model.isDir)
+            opacity: enabled ? 1 : Theme.opacityLow
             implicitHeight: gridMetrics.cellHeight(width, caption.implicitHeight)
             onCountKeyChanged: cell.countItems()
             onPreviewKeyChanged: cell.askPreview()
@@ -768,7 +782,7 @@ Item {
             // Add only: no Select, as in the pulley.
             onPressAndHold: {
                 prefetch.stop()
-                if (dir.readable)
+                if (dir.readable && !view.picking)
                     dragSelect.begin(cell, index, mouse.x, mouse.y)
             }
             onPositionChanged: if (dragSelect.holder === cell) dragSelect.move(mouse.x, mouse.y)
@@ -878,17 +892,16 @@ Item {
             // `first` may not have followed columns yet.
             function regroup() {
                 var all = rowCells.items
-                var from = index * grid.columns
-                var to = Math.min(from + grid.columns, all.count)
+                var span = GridRows.span(index, grid.columns, all.count)
                 var kept = []
                 for (var i = inRow.count - 1; i >= 0; --i) {
                     var at = inRow.get(i).itemsIndex
-                    if (at < from || at >= to)
+                    if (at < span.from || at >= span.to)
                         inRow.remove(i, 1)
                     else
                         kept.push(at)
                 }
-                for (var j = from; j < to; ++j) {
+                for (var j = span.from; j < span.to; ++j) {
                     if (kept.indexOf(j) < 0)
                         all.addGroups(j, 1, "inRow")
                 }
@@ -970,16 +983,44 @@ Item {
             }
 
             Item {
+                id: leadSlot
+
+                width: parent.width
+                height: childrenRect.height
+            }
+
+            Item {
                 id: headerBar
 
                 objectName: "folderHeaderBar"
+                anchors.top: leadSlot.bottom
                 width: parent.width
-                height: pageHeader.height + crumbs.menuHeight
+                height: view.picking ? band.space : pageHeader.height + crumbs.menuHeight
+
+                Loader {
+                    id: band
+
+                    readonly property real space: item ? item.height + item.menuHeight : 0
+
+                    width: parent.width
+                    active: view.picking
+                    sourceComponent: PathBand {
+                        objectName: "folderBand"
+                        title: view.atRoot ? view.rootTitle : dir.title
+                        pathModel: path
+                        menuHost: headerBar
+                        menuMost: Math.max(0, Math.floor((view.height - leadSlot.height) / Theme.itemSizeSmall) - 1)
+                        homeText: view.rootTitle
+                        onPicked: view.ancestorPicked(uri)
+                        onHome: view.homePicked()
+                    }
+                }
 
                 PageHeader {
                     id: pageHeader
 
                     objectName: "folderPageHeader"
+                    visible: !view.picking
                     leftMargin: view.backTapWidth
                     description: !view.selecting && Operations.isArchive(view.uri)
                                  //% "Compressed file · read only"
@@ -1111,7 +1152,7 @@ Item {
                 bottom: parent.bottom
             }
             clip: true
-            visible: !view.gridMode
+            visible: !view.gridMode && !view.atRoot
             model: view.gridMode ? null : dir
             delegate: listDelegate
             footer: Item {
@@ -1151,7 +1192,7 @@ Item {
                 bottom: parent.bottom
             }
             clip: true
-            visible: view.gridMode
+            visible: view.gridMode && !view.atRoot
             model: gridRows
             delegate: gridRowDelegate
             onColumnsChanged: view.fitGridRows()
@@ -1172,13 +1213,25 @@ Item {
 
             VerticalScrollDecorator { }
         }
+
+        Item {
+            id: placesSlot
+
+            anchors {
+                top: top.bottom
+                left: parent.left
+                right: parent.right
+                bottom: parent.bottom
+            }
+            visible: view.atRoot
+        }
     }
 
     Item {
         id: panelSpace
 
         width: 1
-        height: (view.selecting || App.clipboardCount > 0 ? Theme.itemSizeLarge : 0) + activityBar.space
+        height: (view.selecting || clipboardPanel.open ? Theme.itemSizeLarge : 0) + activityBar.space
     }
 
     // States sit in content of list or grid, as Silica's ViewPlaceholder: pulley moves them with
@@ -1240,7 +1293,7 @@ Item {
     ActivityBar {
         id: activityBar
 
-        allowed: !view.selecting
+        allowed: !view.selecting && !view.picking
         anchors.bottomMargin: clipboardPanel.visibleSize
     }
 }

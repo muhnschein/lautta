@@ -71,6 +71,21 @@ Item {
         }
     }
 
+    PickerRootsModel { id: saveTo }
+
+    Repeater {
+        id: placeRows
+        model: saveTo
+        delegate: Item {
+            property string pname: name
+            property string pkind: kind
+            property string picon: icon
+            property string pattention: attention
+            property bool pwritable: writable
+            property bool pselectable: selectable
+        }
+    }
+
     BrowseLayoutModel { id: layout }
 
     Repeater {
@@ -145,6 +160,15 @@ Item {
 
     function has(kind, name) {
         return row(kind, name) !== null
+    }
+
+    function place(name) {
+        for (var i = 0; i < placeRows.count; ++i) {
+            var p = placeRows.itemAt(i)
+            if (p && p.pname === name)
+                return p
+        }
+        return null
     }
 
     function hasItem(kind, item) {
@@ -275,6 +299,13 @@ Item {
                  var nas = row("account", "NAS")
                  return Bridge.ready && nas !== null && nas.rstatus === "ready" && nas.rprovider === "SFTP"
                         && nas.ruri === "lautta://nv-account:1/"
+             })
+        step("and offers it as a place to save shared files to",
+             null,
+             function() {
+                 var nas = place("NAS")
+                 return nas !== null && nas.pkind === "server" && nas.picon === "server" && nas.pwritable
+                        && nas.pselectable && nas.pattention === ""
              })
         step("an unused server is not connected",
              null,
@@ -511,12 +542,18 @@ Item {
                  return remoteDir.access === "read" && !remoteDir.writable && remoteDir.readable
                         && !remoteDir.loading && remoteDir.count === 5
              })
+        step("nor does it take shared files",
+             null,
+             function() { return place("NAS") !== null && !place("NAS").pwritable })
         step("full access again",
              function() { FakeWorld.setAccess("account:1", "full") },
              function() {
                  return remoteDir.access === "" && remoteDir.changeable && !remoteDir.loading
                         && remoteDir.count === 5
              })
+        step("and takes shared files again",
+             null,
+             function() { return place("NAS") !== null && place("NAS").pwritable })
         step("listing connected the server",
              null,
              function() {
@@ -707,6 +744,12 @@ Item {
              function() {
                  var nas = row("account", "NAS")
                  return nas !== null && nas.rstatus === "attention" && nas.rattention === "auth-failed"
+             })
+        step("and on it as a place to save to, which can't be picked",
+             null,
+             function() {
+                 var nas = place("NAS")
+                 return nas !== null && nas.pattention === "auth-failed" && !nas.pselectable
              })
 
         step("hand-offs reach the bridge",
