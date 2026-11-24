@@ -395,7 +395,7 @@ impl Transfers {
         self.showRequested();
     }
 
-    /// Asks nothing (large plans start at once). Serves tests and the cover; browse and operations
+    /// Asks nothing (large plans start at once). Serves tests and the cover; home and operations
     /// have their own entry points.
     fn queueCopy(&self, uris_json: QString, dest: QString) {
         let Some(core) = core() else { return };

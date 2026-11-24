@@ -1,3 +1,2 @@
 <!-- SPDX-License-Identifier: LGPL-2.1-or-later -->
-<!-- 24-unit grid, stroke 1: edges on whole units, so whole pixels at any multiple of 24 px. -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="6"/><rect x="3.5" y="13.5" width="17" height="6"/><circle cx="7" cy="7.5" r="1" fill="#ffffff" stroke="none"/><circle cx="7" cy="16.5" r="1" fill="#ffffff" stroke="none"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#ffffff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 32 32"><rect x="5.5" y="6.5" width="21" height="8" rx="1"/><rect x="5.5" y="17.5" width="21" height="8" rx="1"/><circle cx="10" cy="10.5" r="1.25" fill="#ffffff" stroke="none"/><circle cx="10" cy="21.5" r="1.25" fill="#ffffff" stroke="none"/></svg>

@@ -630,7 +630,7 @@ async fn the_thumbnails_setting_decides_whether_trashed_media_show_them() {
 }
 
 #[tokio::test]
-async fn share_probe_and_destinations() {
+async fn shared_files_are_probed() {
     let h = home().await;
     write(&h.root.join("Downloads/shared.jpg"), b"123456");
     let outside = tempfile::tempdir().unwrap();
@@ -648,16 +648,64 @@ async fn share_probe_and_destinations() {
         "files outside every location cannot be received"
     );
     assert!(!probed[2].readable);
+}
+
+#[tokio::test]
+async fn share_starts_in_downloads_then_where_it_last_saved() {
+    let h = home().await;
+    let first = h.core.share_places();
+    assert_eq!(first.start, "lautta://user-downloads/");
+    assert!(first.recent.is_empty());
 
     let _remote = register_remote(&h);
-    let dests = h.core.destinations();
-    let names: Vec<&str> = dests.iter().map(|d| d.name.as_str()).collect();
-    assert!(names.contains(&"Documents") && names.contains(&"NAS"));
-    assert_eq!(dests.iter().find(|d| d.name == "NAS").unwrap().kind, "server");
+    std::fs::create_dir_all(h.root.join("Documents/Uni/Thesis")).unwrap();
+    let saved_to = |folders: &[&str]| {
+        let mut settings = h.core.settings();
+        settings.share_folders = folders.iter().map(|f| (*f).to_owned()).collect();
+        h.core.apply_settings(settings);
+        let places = h.core.share_places();
+        let shown: Vec<(String, String, String, bool)> = places
+            .recent
+            .into_iter()
+            .map(|f| (f.uri, f.name, f.place, f.remote))
+            .collect();
+        (places.start, shown)
+    };
+    let row = |uri: &str, name: &str, place: &str, remote: bool| {
+        (uri.to_owned(), name.to_owned(), place.to_owned(), remote)
+    };
+
+    let (start, shown) = saved_to(&[
+        "lautta://user-documents/Uni/Thesis",
+        "lautta://user-documents/Gone",
+        "lautta://nas/photos/2026",
+    ]);
+    assert_eq!(start, "lautta://user-documents/Uni/Thesis");
     assert_eq!(
-        dests.iter().find(|d| d.name == "Documents").unwrap().kind,
-        "device"
+        shown,
+        [
+            row(
+                "lautta://user-documents/Uni/Thesis",
+                "Thesis",
+                "Documents \u{203a} Uni",
+                false
+            ),
+            row("lautta://nas/photos/2026", "2026", "NAS \u{203a} /photos", true),
+        ],
+        "a deleted folder is left out, a server folder is taken on trust"
     );
+
+    let (start, shown) = saved_to(&["lautta://removed/x", "junk", "lautta://user-documents/"]);
+    assert_eq!(start, "lautta://user-documents/");
+    assert_eq!(shown, [row("lautta://user-documents/", "Documents", "", false)]);
+
+    write(&h.root.join("Documents/Uni/notes.txt"), b"x");
+    let (start, shown) = saved_to(&[
+        "lautta://user-documents/Gone",
+        "lautta://user-documents/Uni/notes.txt",
+    ]);
+    assert_eq!(start, "lautta://user-downloads/");
+    assert!(shown.is_empty(), "only folders that are still there");
 }
 
 #[tokio::test]

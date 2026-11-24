@@ -2,6 +2,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../components"
 import "../components/search"
 import "../components/search/SettingsText.js" as SettingsText
 
@@ -20,8 +21,10 @@ Page {
 
             width: parent.width
 
-            PageHeader {
-                title: qsTrId("lautta-settings-deleting")
+            HeaderBand {
+                PageHeader {
+                    title: qsTrId("lautta-settings-deleting")
+                }
             }
 
             SettingSwitch {

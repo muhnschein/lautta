@@ -6,17 +6,16 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 
 | Feature | Mode | Flows | Screens |
 |---|---|---|---|
-| F-BRW-01 Browse start page | S | FL-01 | SCR-01, SCR-02 |
-| F-BRW-02 User folders | S | FL-01, FL-02 | SCR-01, SCR-02, SCR-03 |
-| F-BRW-03 Android folders | S | FL-01 | SCR-01, SCR-02 |
-| F-BRW-04 Volumes | S | FL-01, FL-27 | SCR-01, SCR-02 |
-| F-BRW-05 Mount / Unmount drive | B | FL-27 | SCR-01 |
-| F-BRW-06 Locked drive → Storage settings | B | FL-27 | SCR-01 |
-| F-BRW-07 Browse layout | S | FL-26 | SCR-01, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
-| F-BRW-08 Copy address | S | FL-03 | SCR-03, SCR-05 |
-| F-BRW-09 Rescan volumes | S | — | — |
-| F-BRW-10 Activity from Browse | S | FL-18 | SCR-06, SCR-21, SCR-22 |
-| F-BRW-11 Phone free space | S | FL-21 | SCR-01, SCR-38 |
+| F-HOM-01 Home start page | S | FL-01 | SCR-01, SCR-02 |
+| F-HOM-02 User folders | S | FL-01, FL-02 | SCR-01, SCR-02, SCR-03 |
+| F-HOM-03 Android folders | S | FL-01 | SCR-01, SCR-02 |
+| F-HOM-04 Volumes | S | FL-01, FL-27 | SCR-01, SCR-02 |
+| F-HOM-05 Mount / Unmount drive | B | FL-27 | SCR-01 |
+| F-HOM-06 Locked drive → Storage settings | B | FL-27 | SCR-01 |
+| F-HOM-07 Home layout | S | FL-26 | SCR-01, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
+| F-HOM-09 Rescan volumes | S | — | — |
+| F-HOM-10 Activity from Home | S | FL-18 | SCR-06, SCR-21, SCR-22 |
+| F-HOM-11 Phone free space | S | FL-21 | SCR-01, SCR-38 |
 | F-SRV-01 Bridge detection | B | FL-01, FL-28 | SCR-01, SCR-02, SCR-48, SCR-59 |
 | F-SRV-02 Consent banner | B | FL-28 | SCR-01, SCR-48, SCR-59 |
 | F-SRV-03 Bridge unavailable banner | B | — | — |
@@ -36,7 +35,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-DIR-03 Grid hint | S | FL-04 | SCR-04, SCR-06, SCR-24 |
 | F-DIR-04 Sort and filter | S | FL-04 | SCR-04, SCR-06, SCR-24 |
 | F-DIR-05 Thumbnails switch | S | FL-04 | SCR-04, SCR-06, SCR-24 |
-| F-DIR-06 Path menu | S | FL-03 | SCR-03, SCR-05 |
+| F-DIR-06 Path crumbs | S | FL-03 | SCR-01, SCR-03, SCR-05 |
 | F-DIR-07 Folder states | S | FL-10, FL-37 | SCR-03, SCR-06, SCR-07, SCR-11, SCR-12, SCR-13, SCR-21 |
 | F-DIR-08 Large folder | S | FL-05 | SCR-11 |
 | F-DIR-09 Live updates | S | — | — |
@@ -47,7 +46,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-ITM-03 Copy / Cut | S | FL-13 | SCR-03, SCR-06, SCR-07, SCR-10 |
 | F-ITM-04 Rename | S | FL-11 | SCR-03, SCR-07, SCR-14 |
 | F-ITM-05 Delete | S | FL-06, FL-12 | SCR-03, SCR-07, SCR-15, SCR-27, SCR-28 |
-| F-ITM-06 Add to favourites | S | FL-03, FL-22 | SCR-01, SCR-03, SCR-05, SCR-40 |
+| F-ITM-06 Add to favourites | S | FL-22 | SCR-01, SCR-06, SCR-40 |
 | F-ITM-07 Compress | S | FL-16 | SCR-03, SCR-07, SCR-08, SCR-16 |
 | F-ITM-08 Move to new folder | S | FL-16 | SCR-03, SCR-07, SCR-08, SCR-16 |
 | F-ITM-09 Open with | S | FL-06, FL-24 | SCR-03, SCR-07, SCR-09, SCR-27, SCR-28, SCR-37 |
@@ -94,17 +93,17 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-SCN-02 Page edge detection and crop | S | FL-23 | SCR-03, SCR-12, SCR-53, SCR-54, SCR-55, SCR-56, SCR-57 |
 | F-SCN-03 Page view | S | FL-23 | SCR-03, SCR-12, SCR-53, SCR-54, SCR-55, SCR-56, SCR-57 |
 | F-SCN-04 Save as PDF | S | FL-23 | SCR-03, SCR-12, SCR-53, SCR-54, SCR-55, SCR-56, SCR-57 |
-| F-FAV-01 Favourites section | S | FL-01, FL-22 | SCR-01, SCR-02, SCR-05, SCR-40 |
-| F-FAV-02 Edit favourite | S | FL-22 | SCR-01, SCR-05, SCR-40 |
-| F-FAV-03 Remove favourite | S | FL-22 | SCR-01, SCR-05, SCR-40 |
-| F-FAV-04 Reorder favourites | S | FL-22, FL-26 | SCR-01, SCR-05, SCR-24, SCR-40, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
+| F-FAV-01 Favourites section | S | FL-01, FL-22 | SCR-01, SCR-02, SCR-06, SCR-40 |
+| F-FAV-02 Edit favourite | S | FL-22 | SCR-01, SCR-06, SCR-40 |
+| F-FAV-03 Remove favourite | S | FL-22 | SCR-01, SCR-06, SCR-40 |
+| F-FAV-04 Reorder favourites | S | FL-22, FL-26 | SCR-01, SCR-06, SCR-24, SCR-40, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
 | F-RCT-01 Recents | S | FL-21 | SCR-01, SCR-38 |
 | F-RCT-02 Recents off | S | FL-26 | SCR-01, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
 | F-TRH-01 Trash | S | FL-20 | SCR-39 |
 | F-TRH-02 Restore / Delete now / Show original folder | S | FL-20 | SCR-39 |
 | F-TRH-03 Empty trash | S | FL-20 | SCR-39 |
 | F-TRH-04 Trash settings | S | FL-12, FL-26 | SCR-01, SCR-03, SCR-07, SCR-15, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
-| F-SHR-01 Share target | S | FL-25 | SCR-03, SCR-18, SCR-52 |
+| F-SHR-01 Share target | S | FL-25 | SCR-03, SCR-13, SCR-18, SCR-52 |
 | F-APP-01 Cover | S | FL-34, FL-35 | SCR-20, SCR-21, SCR-23, SCR-58, SCR-59 |
 | F-APP-02 Start error | S | FL-01 | SCR-01, SCR-02 |
 | F-APP-03 Settings | S | FL-26 | SCR-01, SCR-24, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
@@ -116,23 +115,23 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 
 | Screen | Flows |
 |---|---|
-| SCR-01 Browse | FL-01, FL-02, FL-21, FL-22, FL-26, FL-27, FL-28, FL-29, FL-30, FL-33, FL-36 |
+| SCR-01 Home | FL-01, FL-02, FL-03, FL-21, FL-22, FL-26, FL-27, FL-28, FL-29, FL-30, FL-33, FL-36 |
 | SCR-02 Start error | FL-01 |
 | SCR-03 Folder page (list) | FL-02, FL-03, FL-06, FL-10, FL-11, FL-12, FL-13, FL-14, FL-16, FL-17, FL-23, FL-25, FL-29, FL-30, FL-37 |
 | SCR-04 Folder page (grid) | FL-04, FL-32 |
-| SCR-05 Path menu | FL-03, FL-22 |
-| SCR-06 Folder pulley | FL-04, FL-10, FL-13, FL-14, FL-15, FL-17, FL-18, FL-19, FL-32, FL-37 |
+| SCR-05 Folded path | FL-03 |
+| SCR-06 Folder pulley | FL-04, FL-10, FL-13, FL-14, FL-15, FL-17, FL-18, FL-19, FL-22, FL-32, FL-37 |
 | SCR-07 Item context menu | FL-11, FL-12, FL-13, FL-14, FL-16, FL-24, FL-37, FL-38 |
 | SCR-08 More actions | FL-15, FL-16, FL-17, FL-38 |
 | SCR-09 Selection mode + selection bar | FL-15, FL-24 |
 | SCR-10 Clipboard panel | FL-13, FL-14, FL-32 |
 | SCR-11 Folder states (empty, no access, error, offline, large, grid hint) | FL-05, FL-10, FL-33, FL-37 |
 | SCR-12 Add | FL-10, FL-23 |
-| SCR-13 New folder | FL-10 |
+| SCR-13 New folder | FL-10, FL-25 |
 | SCR-14 Rename | FL-11 |
 | SCR-15 Delete permanently | FL-12 |
 | SCR-16 Compress | FL-16 |
-| SCR-18 Folder picker | FL-25 |
+| SCR-18 Share target: Locations | FL-25 |
 | SCR-19 Plan summary | FL-14 |
 | SCR-20 Conflict | FL-14, FL-35 |
 | SCR-21 Activity | FL-18, FL-34, FL-37 |
@@ -156,7 +155,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-39 Trash | FL-20 |
 | SCR-40 Edit favourite | FL-22 |
 | SCR-41 Settings | FL-26 |
-| SCR-42 Settings › Browse page | FL-26 |
+| SCR-42 Settings › Home page | FL-26 |
 | SCR-43 Settings › Search | FL-26 |
 | SCR-44 Settings › Recents | FL-26 |
 | SCR-45 Settings › Deleting | FL-26 |
@@ -164,7 +163,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-47 Settings › Storage | FL-26 |
 | SCR-48 About | FL-26, FL-28 |
 | SCR-51 Server attention | FL-30 |
-| SCR-52 Share target ("Save to") | FL-25 |
+| SCR-52 Share target ("Save here") | FL-25 |
 | SCR-53 Scan camera | FL-23 |
 | SCR-54 Scan page view | FL-23 |
 | SCR-55 Scan adjust (crop, turn) | FL-23 |
@@ -177,5 +176,5 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-63 Checksum | FL-38 |
 | SCR-64 Verify files | FL-38 |
 
-Features in no flow: background behaviour, nothing to tap (F-BRW-09, F-SRV-03, F-DIR-09, F-XFR-07, F-VWR-11, F-APP-06).
+Features in no flow: background behaviour, nothing to tap (F-HOM-09, F-SRV-03, F-DIR-09, F-XFR-07, F-VWR-11, F-APP-06).
 Screens in no flow: reached only from states flows don't set up (SCR-29).

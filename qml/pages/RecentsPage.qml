@@ -5,7 +5,7 @@ import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components"
 import "../components/Open.js" as Open
-import "../components/browse"
+import "../components/home"
 import "../components/directory"
 import "../components/directory/GridRows.js" as GridRows
 import "../components/viewers"
@@ -60,11 +60,11 @@ Page {
         onSettingsJsonChanged: recents.reload()
     }
 
-    function openRecent(row) {
+    function openRecent(row, tileSize) {
         if (row.kind === "transferred")
             pageStack.push(Qt.resolvedUrl("DirectoryPage.qml"), { "uri": App.parentUri(row.uri) })
         else
-            Open.open(pageStack, App, Operations, row.uri, false, "", "")
+            Open.open(pageStack, App, Operations, row.uri, false, "", "", tileSize)
     }
 
     ViewerPrefetch { id: prefetch }
@@ -101,9 +101,11 @@ Page {
 
         anchors.fill: parent
 
-        header: PageHeader {
-            //% "Recents"
-            title: qsTrId("lautta-recents-title")
+        header: HeaderBand {
+            PageHeader {
+                //% "Recents"
+                title: qsTrId("lautta-recents-title")
+            }
         }
 
         section.property: "dateGroup"
@@ -165,11 +167,13 @@ Page {
                 }
             }
             onPressed: if (model.kind !== "transferred") prefetch.start(model.uri, model.mimeType)
-            onClicked: page.openRecent(model)
+            onClicked: page.openRecent(model, icon.thumbnailReady ? Math.round(icon.size) : 0)
             onPressAndHold: prefetch.stop()
             onCanceled: prefetch.stop()
 
             FileIcon {
+                id: icon
+
                 objectName: "recentIcon"
                 x: Theme.horizontalPageMargin
                 anchors.verticalCenter: parent.verticalCenter
@@ -269,7 +273,7 @@ Page {
                     height: cells.height
                     implicitHeight: gridMetrics.cellHeight(width, caption.implicitHeight + place.height)
                     onPressed: if (model.kind !== "transferred") prefetch.start(model.uri, model.mimeType)
-                    onClicked: page.openRecent(model)
+                    onClicked: page.openRecent(model, tileIcon.thumbnailReady ? Math.round(tileIcon.width) : 0)
                     onPressAndHold: {
                         prefetch.stop()
                         row.heldId = model.itemId

@@ -3,8 +3,8 @@
 //! Trash, share. Qt-free.
 
 use crate::app::{Core, Started};
-use crate::app_browse::RecentLook;
 use crate::app_directory::file_url;
+use crate::app_home::RecentLook;
 use crate::compress::{compress, ArchiveKind, CompressOptions};
 use crate::entry::{cap, Entry, Kind};
 use crate::error::{Error, ErrorKind, Result};
@@ -355,22 +355,20 @@ pub struct SharedFile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct Destination {
+pub struct ShareFolder {
     pub uri: String,
     pub name: String,
-    pub kind: String,
+    pub place: String,
+    pub remote: bool,
 }
 
-fn location_kind_name(kind: &crate::locations::LocationKind) -> &'static str {
-    use crate::locations::LocationKind as K;
-    match kind {
-        K::UserFolder => "device",
-        K::Android => "android",
-        K::Volume => "volume",
-        K::Server { .. } => "server",
-        K::Archive => "archive",
-    }
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct SharePlaces {
+    pub start: String,
+    pub recent: Vec<ShareFolder>,
 }
+
+const SHARE_FIRST_PLACE: &str = "user-downloads";
 
 impl Core {
     pub fn display_path(&self, uri: &Uri) -> String {
@@ -743,18 +741,40 @@ impl Core {
             .collect()
     }
 
-    pub fn destinations(&self) -> Vec<Destination> {
-        self.locations
-            .locations()
-            .into_iter()
-            .filter(|l| !matches!(l.kind, crate::locations::LocationKind::Archive))
-            .filter(|l| self.provider(&l.id).is_ok_and(|p| p.capabilities().writable()))
-            .map(|l| Destination {
-                uri: Uri::root(l.id.clone()).to_string(),
-                name: l.name.clone(),
-                kind: location_kind_name(&l.kind).to_owned(),
+    pub fn share_places(&self) -> SharePlaces {
+        let recent: Vec<ShareFolder> = self
+            .settings()
+            .share_folders
+            .iter()
+            .filter_map(|folder| Uri::parse(folder).ok())
+            .filter(|uri| self.share_folder_there(uri))
+            .map(|uri| self.share_folder(&uri))
+            .collect();
+        let start = recent
+            .first()
+            .map(|folder| folder.uri.clone())
+            .or_else(|| {
+                self.location(SHARE_FIRST_PLACE)
+                    .map(|l| Uri::root(l.id).to_string())
             })
-            .collect()
+            .unwrap_or_default();
+        SharePlaces { start, recent }
+    }
+
+    fn share_folder_there(&self, uri: &Uri) -> bool {
+        let Some(location) = self.location(&uri.location) else {
+            return false;
+        };
+        !location.is_local() || self.locations.to_local_path(uri).is_some_and(|p| p.is_dir())
+    }
+
+    fn share_folder(&self, uri: &Uri) -> ShareFolder {
+        ShareFolder {
+            uri: uri.to_string(),
+            name: uri.name().map_or_else(|| self.place_of(uri), display_name),
+            place: uri.parent().map(|up| self.place_of(&up)).unwrap_or_default(),
+            remote: self.location(&uri.location).is_some_and(|l| !l.is_local()),
+        }
     }
 }
 

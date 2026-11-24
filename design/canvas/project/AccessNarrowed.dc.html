@@ -20,9 +20,9 @@ body{margin:0}
 .amb *{box-sizing:border-box}
 .amb button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:inherit}
 .amb a{color:inherit;text-decoration:none}
-.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
-.ic.m{width:40px;height:40px;stroke-width:1.2}
-.ic.l{width:64px;height:64px;stroke-width:1}
+.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.1;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.m{width:40px;height:40px;stroke-width:.66}
+.ic.l{width:64px;height:64px;stroke-width:.41}
 .hl{color:var(--hl)}.sec{color:var(--sec)}.hl2{color:var(--hl2)}.warn{color:var(--warn)}
 .small{font-size:15px}.xs{font-size:13px}.tiny{font-size:12px}.large{font-size:26px;font-weight:300}.xl{font-size:34px;font-weight:300}
 .mono{font-family:'Source Code Pro',monospace}
@@ -42,6 +42,11 @@ body{margin:0}
 .hdr{min-height:80px;padding:14px 18px 6px 60px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;text-align:right}
 .hdr-t{font-size:28px;font-weight:300;color:var(--hl);line-height:1.15}
 .hdr-d{font-size:15px;color:var(--hl2);margin-top:2px}
+.crh{min-height:80px;padding:0 18px 0 44px;display:flex;align-items:center;justify-content:flex-end;white-space:nowrap;overflow:hidden}
+.crh .cr{flex:none;display:flex;align-items:center;align-self:stretch;padding:0 6px;color:var(--pri);font-size:19px}
+.crh .cr.down{background:var(--hlbg);color:var(--hl)}
+.crh .sp{flex:none;color:var(--sec);font-size:19px}
+.crh .hdr-t{margin-left:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:19px;font-weight:400;line-height:normal}
 .dlg{height:80px;padding:0 18px;display:flex;align-items:center;justify-content:space-between}
 .dlg-c{font-size:19px;color:var(--pri)}
 .dlg-a{font-size:28px;font-weight:300;color:var(--hl)}
@@ -123,7 +128,7 @@ body{margin:0}
 </helmet>
 <div class="amb {{amb}}" style="width: 400px; height: 860px">
 <div class="ind-back"><i></i><i></i></div>
-<a href="PathMenu.dc.html" style="display:block"><div class="hdr"><div class="hdr-t">photos</div><div class="hdr-d">NAS</div></div></a>
+<div class="crh"><a class="cr" href="Main.dc.html" aria-label="Home"><svg class="ic" viewBox="0 0 24 24"><path d="M3.5 11.5L12 4.5l8.5 7"/><path d="M5.5 10.5v8a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-8"/><path d="M10.5 19.5v-5h3v5" stroke-opacity=".6"/></svg></a><span class="sp">›</span><a class="cr" href="Directory.dc.html">NAS</a><span class="sp">›</span><div class="hdr-t">photos</div></div>
 <div class="small" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:0 18px 10px;color:var(--hl2)"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span>Read only</span></div>
 <div class="li "><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M3 6.5h6l2 2h10v10.5H3z"/></svg></span><span class="li-b"><span class="li-t" style="display: block">2025</span><span class="li-s" style="display: block">412 items</span></span></div>
 <div class="li "><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M3 6.5h6l2 2h10v10.5H3z"/></svg></span><span class="li-b"><span class="li-t" style="display: block">2026</span><span class="li-s" style="display: block">96 items</span></span></div>

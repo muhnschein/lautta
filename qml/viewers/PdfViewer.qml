@@ -7,6 +7,7 @@ import "../components"
 import "../components/viewers"
 import "../dialogs"
 import "../components/ErrorText.js" as ErrorText
+import "../components/FileIcons.js" as FileIcons
 import "../components/viewers/PdfText.js" as PdfText
 
 Page {
@@ -328,13 +329,16 @@ Page {
                 }
             }
 
-            header: PageHeader {
+            header: HeaderBand {
                 width: view.width
                 x: view.contentX
-                title: page.fileName
-                // List at top when pages arrive; ListView keeps contentY when header grows, so
-                // description line is there, blank, from the start.
-                description: doc.loaded ? PdfText.summary(doc.pageCount) : " "
+
+                PageHeader {
+                    title: page.fileName
+                    // List at top when pages arrive; ListView keeps contentY when header grows, so
+                    // description line is there, blank, from the start.
+                    description: doc.loaded ? PdfText.summary(doc.pageCount) : " "
+                }
             }
 
             delegate: PdfPage {
@@ -494,7 +498,7 @@ Page {
 
         HighlightImage {
             anchors.horizontalCenter: parent.horizontalCenter
-            source: page.unlocking ? Qt.resolvedUrl("../icons/lock.svg") : ""
+            source: page.unlocking ? FileIcons.source("lock", Theme.pixelRatio) : ""
             sourceSize.width: Theme.iconSizeLarge
             sourceSize.height: Theme.iconSizeLarge
             color: Theme.highlightColor

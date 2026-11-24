@@ -2,212 +2,253 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
-import "../components/operations"
+import "../components"
+import "../components/directory"
+import "../components/ErrorText.js" as ErrorText
+import "../components/FileIcons.js" as FileIcons
+import "../components/home/HomeText.js" as HomeText
+import "../components/operations/Share.js" as Share
 
 Dialog {
     id: page
 
     property var resources: []
-    property string destUri
-    property string customUri
+    property string folderUri
     property var entries: []
-    property var destinations: []
+    property var recent: []
 
-    readonly property int readableCount: countReadable(true)
-    readonly property int skippedCount: countReadable(false)
-
-    allowedOrientations: Orientation.All
-    canAccept: readableCount > 0 && destUri.length > 0
-
-    function pathOf(resource) {
-        if (typeof resource === "string")
-            return resource
-        return resource.filePath || resource.url || ""
-    }
-
-    function countReadable(readable) {
-        var n = 0
-        for (var i = 0; i < entries.length; ++i)
-            if (entries[i].readable === readable)
-                ++n
-        return n
+    readonly property var readable: Share.readable(entries)
+    readonly property int readableCount: readable.length
+    readonly property int skippedCount: entries.length - readableCount
+    readonly property string saveText: readableCount === 1
+                                       //% "Save %1"
+                                       ? qsTrId("lautta-share-one").arg(readable[0].name)
+                                       //% "Save %n files"
+                                       : qsTrId("lautta-share-count", readableCount)
+    readonly property string skippedText: {
+        if (skippedCount === 0)
+            return ""
+        if (skippedCount === 1)
+            //% "%1 can't be read, skipped"
+            return qsTrId("lautta-share-skipped-one").arg(Share.skipped(entries)[0].name)
+        //% "%n files can't be read, skipped"
+        return qsTrId("lautta-share-skipped", skippedCount)
     }
 
     function load() {
-        var paths = []
-        for (var i = 0; i < resources.length; ++i)
-            paths.push(pathOf(resources[i]))
-        var probed = JSON.parse(Operations.probeShared(JSON.stringify(paths)))
-        var list = []
-        for (var j = 0; j < probed.length; ++j) {
-            var file = probed[j]
-            if (paths[j].length === 0)
-                file.readable = false
-            list.push(file)
-        }
-        entries = list
-        destinations = JSON.parse(Operations.destinationsJson())
-        for (var k = 0; k < destinations.length; ++k) {
-            if (destinations[k].uri.indexOf("user-downloads") >= 0)
-                destUri = destinations[k].uri
-        }
-        if (destUri.length === 0 && destinations.length > 0)
-            destUri = destinations[0].uri
+        var shared = Share.paths(resources)
+        entries = Share.probed(shared, JSON.parse(Operations.probeShared(JSON.stringify(shared))))
+        var places = JSON.parse(Operations.sharePlacesJson())
+        recent = places.recent
+        folderUri = places.start
     }
 
+    function rootStatus(status, attention, name) {
+        if (attention === "auth-failed")
+            return qsTrId("lautta-attention-auth-title")
+        if (attention === "server-identity-changed")
+            return qsTrId("lautta-attention-identity-title")
+        return status === "offline" ? ErrorText.message("NetworkUnreachable", { "location": name }) : ""
+    }
+
+    allowedOrientations: Orientation.All
+    canAccept: Share.canSave(readableCount, folderUri, view.model.writable, view.model.loading, view.model.errorKind)
+
     onAccepted: {
-        var uris = []
-        for (var i = 0; i < entries.length; ++i)
-            if (entries[i].readable)
-                uris.push(entries[i].uri)
-        Operations.copyTo(JSON.stringify(uris), destUri)
+        Operations.copyTo(JSON.stringify(Share.uris(readable)), folderUri)
+        App.setSetting("share_folders", JSON.stringify(Share.remembered(folderUri, JSON.parse(App.settingsJson).share_folders)))
     }
 
     Component.onCompleted: load()
 
-    SilicaListView {
-        id: list
+    PickerRootsModel {
+        id: roots
+    }
 
+    DirectoryView {
+        id: view
+
+        objectName: "shareView"
         anchors.fill: parent
-        model: page.entries
-        currentIndex: -1
+        picking: true
+        uri: page.folderUri
+        //% "Locations"
+        rootTitle: qsTrId("lautta-share-locations")
+        onOpenFolder: page.folderUri = uri
+        onAncestorPicked: page.folderUri = uri
+        onHomePicked: page.folderUri = ""
+    }
 
-        header: Column {
-            width: list.width
+    Column {
+        objectName: "shareLead"
+        parent: view.leadArea
+        width: parent.width
 
-            DialogHeader {
-                //% "Save here"
-                acceptText: qsTrId("lautta-share-accept")
-            }
-            DialogSubtitle {
-                //% "Save %n files"
-                text: qsTrId("lautta-share-count", page.entries.length)
-            }
+        DialogHeader {
+            dialog: page
+            //% "Save here"
+            acceptText: qsTrId("lautta-share-accept")
         }
 
-        delegate: Item {
-            width: list.width
-            height: Theme.itemSizeMedium
+        SectionHeader {
+            objectName: "shareCount"
+            text: page.saveText
+        }
 
-            OpIcon {
-                id: glyph
-                x: Theme.horizontalPageMargin
-                anchors.verticalCenter: parent.verticalCenter
-                category: App.categoryOf(modelData.name)
-                opacity: modelData.readable ? 1.0 : Theme.opacityLow
-            }
-            Column {
+        Item {
+            objectName: "shareSkipped"
+            visible: page.skippedCount > 0
+            width: parent.width
+            height: visible ? skippedLabel.height + Theme.paddingMedium : 0
+
+            HighlightImage {
                 anchors {
-                    left: glyph.right
-                    leftMargin: Theme.paddingMedium
-                    right: sizeLabel.left
-                    rightMargin: Theme.paddingMedium
-                    verticalCenter: parent.verticalCenter
+                    right: skippedLabel.left
+                    rightMargin: Theme.paddingSmall
+                    verticalCenter: skippedLabel.verticalCenter
                 }
-                Label {
-                    width: parent.width
-                    text: modelData.name
-                    color: modelData.readable ? Theme.primaryColor : Theme.secondaryColor
-                    truncationMode: TruncationMode.Fade
-                }
-                Label {
-                    width: parent.width
-                    visible: !modelData.readable
-                    color: Theme.errorColor
-                    font.pixelSize: Theme.fontSizeExtraSmall
-                    truncationMode: TruncationMode.Fade
-                    //% "This file can't be read by Lautta"
-                    text: qsTrId("lautta-share-unreadable")
-                }
+                source: "image://theme/icon-s-warning"
+                color: Theme.errorColor
             }
+
             Label {
-                id: sizeLabel
+                id: skippedLabel
+
                 anchors {
                     right: parent.right
                     rightMargin: Theme.horizontalPageMargin
-                    verticalCenter: parent.verticalCenter
                 }
-                color: Theme.secondaryColor
+                width: Math.min(implicitWidth, parent.width - 2 * Theme.horizontalPageMargin - Theme.iconSizeSmall
+                                               - Theme.paddingSmall)
+                text: page.skippedText
+                color: Theme.errorColor
                 font.pixelSize: Theme.fontSizeSmall
-                text: Format.formatFileSize(modelData.size)
+                truncationMode: TruncationMode.Fade
             }
         }
+    }
 
-        footer: Column {
-            width: list.width
+    SilicaListView {
+        id: places
+
+        objectName: "sharePlaces"
+        parent: view.placesArea
+        anchors.fill: parent
+        clip: true
+        model: roots
+
+        header: Column {
+            width: places.width
 
             SectionHeader {
-                //% "Save to"
-                text: qsTrId("lautta-share-save-to")
+                objectName: "shareRecentTitle"
+                visible: page.recent.length > 0
+                //% "Saved here lately"
+                text: qsTrId("lautta-share-recent")
             }
+
             Repeater {
-                model: page.destinations
+                model: page.recent
 
-                BackgroundItem {
-                    width: list.width
-                    height: Theme.itemSizeSmall
-                    highlighted: down || page.destUri === modelData.uri
-                    onClicked: page.destUri = modelData.uri
+                ListItem {
+                    id: lately
 
-                    Label {
+                    objectName: "shareRecent"
+                    contentHeight: Theme.itemSizeMedium
+                    onClicked: page.folderUri = modelData.uri
+
+                    AppIcon {
+                        id: latelyIcon
+
                         anchors {
                             left: parent.left
                             leftMargin: Theme.horizontalPageMargin
+                            verticalCenter: parent.verticalCenter
+                        }
+                        icon: "image://theme/icon-m-history"
+                        highlighted: lately.highlighted
+                    }
+
+                    Column {
+                        anchors {
+                            left: latelyIcon.right
+                            leftMargin: Theme.paddingLarge
                             right: parent.right
                             rightMargin: Theme.horizontalPageMargin
                             verticalCenter: parent.verticalCenter
                         }
-                        text: modelData.name
-                        color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
-                        truncationMode: TruncationMode.Fade
+
+                        Label {
+                            width: parent.width
+                            text: modelData.name
+                            color: lately.highlighted ? Theme.highlightColor : Theme.primaryColor
+                            truncationMode: TruncationMode.Fade
+                        }
+
+                        PlaceLabel {
+                            visible: text.length > 0
+                            width: parent.width
+                            text: modelData.place
+                            remote: modelData.remote
+                            color: lately.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
+                        }
                     }
                 }
             }
-            BackgroundItem {
-                width: list.width
-                height: Theme.itemSizeSmall
-                highlighted: down || (page.customUri.length > 0 && page.destUri === page.customUri)
-                onClicked: {
-                    var picker = pageStack.push(Qt.resolvedUrl("../dialogs/FolderPickerDialog.qml"), {
-                        //% "Save to"
-                        "title": qsTrId("lautta-share-pick"),
-                        //% "Select"
-                        "acceptText": qsTrId("lautta-share-pick-accept"),
-                        "startUri": page.destUri
-                    })
-                    picker.accepted.connect(function() {
-                        page.customUri = picker.selectedUri
-                        page.destUri = picker.selectedUri
-                    })
+        }
+
+        section.property: "kind"
+        section.delegate: SectionHeader {
+            text: HomeText.sectionTitle(Share.sectionOf(section))
+        }
+
+        delegate: ListItem {
+            id: place
+
+            readonly property string status: page.rootStatus(model.status, model.attention, model.name)
+
+            objectName: "sharePlace"
+            contentHeight: status.length > 0 ? Theme.itemSizeMedium : Theme.itemSizeSmall
+            enabled: model.selectable && model.writable
+            opacity: enabled ? 1 : Theme.opacityLow
+            onClicked: page.folderUri = model.uri
+
+            AppIcon {
+                id: placeIcon
+
+                anchors {
+                    left: parent.left
+                    leftMargin: Theme.horizontalPageMargin
+                    verticalCenter: parent.verticalCenter
+                }
+                icon: FileIcons.sized(model.icon, iconSize)
+                highlighted: place.highlighted
+            }
+
+            Column {
+                anchors {
+                    left: placeIcon.right
+                    leftMargin: Theme.paddingLarge
+                    right: parent.right
+                    rightMargin: Theme.horizontalPageMargin
+                    verticalCenter: parent.verticalCenter
                 }
 
                 Label {
-                    anchors {
-                        left: parent.left
-                        leftMargin: Theme.horizontalPageMargin
-                        right: parent.right
-                        rightMargin: Theme.horizontalPageMargin
-                        verticalCenter: parent.verticalCenter
-                    }
-                    text: page.customUri.length > 0
-                          ? Operations.displayPath(page.customUri)
-                          //% "Another folder…"
-                          : qsTrId("lautta-share-other")
-                    color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
+                    width: parent.width
+                    text: model.name
+                    color: place.highlighted ? Theme.highlightColor : Theme.primaryColor
                     truncationMode: TruncationMode.Fade
                 }
-            }
-            Label {
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.Wrap
-                color: Theme.secondaryColor
-                font.pixelSize: Theme.fontSizeSmall
-                //% "%n files will be saved."
-                text: qsTrId("lautta-share-will-save", page.readableCount) + (page.skippedCount > 0
-                      //% "%n files will be skipped."
-                      ? " " + qsTrId("lautta-share-skipped", page.skippedCount) : "")
+
+                Label {
+                    visible: place.status.length > 0
+                    width: parent.width
+                    text: place.status
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                    truncationMode: TruncationMode.Fade
+                }
             }
         }
 

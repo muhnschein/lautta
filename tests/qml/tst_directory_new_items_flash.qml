@@ -3,7 +3,6 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../../qml/components/directory"
-import "../../qml/dialogs"
 
 ApplicationWindow {
     id: window
@@ -155,6 +154,7 @@ ApplicationWindow {
         act()
         waitFor(function () { return done.ok }, what)
         Operations.jobFinished.disconnect(on)
+        waitFor(function () { return flashes.indexOf(done.uri) >= 0 }, what + ": its flash")
         return done.uri
     }
 
@@ -213,25 +213,6 @@ ApplicationWindow {
         view.forgetRename(view.renamed)
     }
 
-    function checkPicker() {
-        flashes = []
-        var picker = pageStack.push(pickerComponent, {}, PageStackAction.Immediate)
-        var list = findAll(picker, function (x) { return x.positionViewAtIndex !== undefined && x.model && x.model.foldersOnly !== undefined }, [])[0]
-        waitFor(function () { return !list.model.loading && list.model.count === filler + 4 }, "the picker's folders")
-        picker.flashed.connect(function (itemUri) { window.flashes.push(itemUri) })
-        list.model.createFolder("zz")
-        var uri = base + "zz"
-        if (!waitFor(function () { return flashes.length > 0 }, "picker: the flash"))
-            return
-        expect(JSON.stringify(flashes) === JSON.stringify([uri]), "picker: one flash, for the new folder: " + JSON.stringify(flashes))
-        var flash = flashOf(list, uri)
-        if (expect(flash, "picker: the new folder has its highlight")) {
-            expect(flash.running, "picker: its highlight runs")
-            expect(inView(flash, list), "picker: the new folder is scrolled into view")
-        }
-        pageStack.pop(null, PageStackAction.Immediate)
-    }
-
     Component.onCompleted: {
         App.setSetting("view_mode", JSON.stringify("list"))
         setUp()
@@ -246,7 +227,6 @@ ApplicationWindow {
         checkView(view, "zy", "grid")
         checkGridCaption(view, base + "zy", "zy")
         pageStack.pop(null, PageStackAction.Immediate)
-        checkPicker()
         reachedEnd = true
     }
 
@@ -263,16 +243,6 @@ ApplicationWindow {
                 height: 1000
                 uri: window.base
             }
-        }
-    }
-
-    Component {
-        id: pickerComponent
-
-        FolderPickerDialog {
-            title: "Save to"
-            acceptText: "Save"
-            startUri: window.base
         }
     }
 }

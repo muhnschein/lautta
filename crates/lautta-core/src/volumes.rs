@@ -4,7 +4,7 @@
 //! No UDisks2 listener: folder scan plus an inotify watch on the media root sees the same mounts
 //! and unmounts (udisks creates and removes mount point directories), needs no D-Bus dependency in
 //! core, and is trivial to test. Core keeps a [`VolumeWatcher`] for its lifetime; the watch can
-//! miss a mount inside the sandbox's mount namespace, so Browse also rescans on refresh. The
+//! miss a mount inside the sandbox's mount namespace, so Home also rescans on refresh. The
 //! sandbox mounts nothing itself: the bridge mounts and unmounts drives
 //! ([`crate::app::Core::mount_drive`]).
 

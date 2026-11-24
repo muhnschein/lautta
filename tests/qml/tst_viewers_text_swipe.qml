@@ -91,7 +91,7 @@ QtQuick.Window {
                "the pulley has Open with and Share only: " + JSON.stringify(entries))
         expect(vertical(view), "the list flicks only up and down: direction " + view.flickableDirection
                + ", " + view.contentWidth + " wide in " + view.width)
-        expect(Math.abs(view.contentY - view.originY) < 0.5 && view.headerItem.description.trim() !== "",
+        expect(Math.abs(view.contentY - view.originY) < 0.5 && view.headerItem.children[0].description.trim() !== "",
                "the whole header shows: contentY " + view.contentY + ", originY " + view.originY)
         view.positionViewAtIndex(3, ListView.Beginning)
         view.forceLayout()

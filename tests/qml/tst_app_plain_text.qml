@@ -76,7 +76,7 @@ Item {
         var component = Qt.createComponent(Qt.resolvedUrl("../../qml/harbour-lautta.qml"))
         expect(component.status === Component.Ready, "the app's window: " + component.errorString())
         win = component.createObject(null)
-        waitFor(function () { return win && win.pageStack.currentPage && !win.pageStack.busy }, "Browse")
+        waitFor(function () { return win && win.pageStack.currentPage && !win.pageStack.busy }, "Home")
     }
 
     function checkFolder() {

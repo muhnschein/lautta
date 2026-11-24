@@ -2,7 +2,7 @@
 //! Transfers area on `Core`: transfer list with live progress, start-up restore. Qt-free.
 
 use crate::app::Core;
-use crate::app_browse::RecentLook;
+use crate::app_home::RecentLook;
 use crate::app_operations::kind_name;
 use crate::date_group::DateGroup;
 use crate::error::{Error, ErrorKind, Result};

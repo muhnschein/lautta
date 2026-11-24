@@ -50,34 +50,34 @@
       "x": 2880,
       "y": 8200
     },
-    "BrowsePulley.dc.html": {
+    "HomePulley.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Browse \u00b7 pulley open",
+      "title": "Home \u00b7 pulley open",
       "w": 400,
       "x": 480,
       "y": 0
     },
-    "BrowseServerMenu.dc.html": {
+    "HomeServerMenu.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Browse \u00b7 server menu & consent",
+      "title": "Home \u00b7 server menu & consent",
       "w": 400,
       "x": 1440,
       "y": 0
     },
-    "BrowseStandalone.dc.html": {
+    "HomeStandalone.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Browse \u00b7 standalone, pulley",
+      "title": "Home \u00b7 standalone, pulley",
       "w": 400,
       "x": 960,
       "y": 0
     },
-    "BrowseVolume.dc.html": {
+    "HomeVolume.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Browse \u00b7 volume menu",
+      "title": "Home \u00b7 volume menu",
       "w": 400,
       "x": 1920,
       "y": 0
@@ -178,22 +178,6 @@
       "x": 4320,
       "y": 0
     },
-    "FolderPicker.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Copy to\u2026 picker",
-      "w": 400,
-      "x": 0,
-      "y": 4860
-    },
-    "FolderPickerPulley.dc.html": {
-      "h": 860,
-      "is_interactive": true,
-      "title": "Picker \u00b7 new folder",
-      "w": 400,
-      "x": 2880,
-      "y": 14440
-    },
     "GridIcons.dc.html": {
       "h": 2250,
       "is_interactive": true,
@@ -229,7 +213,7 @@
     "Main.dc.html": {
       "h": 1640,
       "is_interactive": true,
-      "title": "Browse (bridge mode)",
+      "title": "Home (bridge mode)",
       "w": 400,
       "x": 0,
       "y": 0
@@ -274,10 +258,10 @@
       "x": 4800,
       "y": 8200
     },
-    "PathMenu.dc.html": {
+    "PathFolded.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Path menu & edit path",
+      "title": "Folded path",
       "w": 400,
       "x": 2400,
       "y": 2060
@@ -634,10 +618,10 @@
       "x": 2880,
       "y": 17100
     },
-    "AccessBrowse.dc.html": {
+    "AccessHome.dc.html": {
       "h": 860,
       "is_interactive": true,
-      "title": "Browse \u00b7 no level shown",
+      "title": "Home \u00b7 no level shown",
       "w": 400,
       "x": 0,
       "y": 18260
@@ -761,6 +745,22 @@
       "w": 400,
       "x": 4320,
       "y": 8200
+    },
+    "ShareLocations.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Share target \u00b7 Locations",
+      "w": 400,
+      "x": 0,
+      "y": 4860
+    },
+    "SharePulley.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Share target \u00b7 new folder",
+      "w": 400,
+      "x": 2880,
+      "y": 14440
     }
   },
   "createdOnFiles": {
@@ -775,7 +775,7 @@
     "r0": {
       "kind": "title1",
       "maxW": 5200,
-      "text": "Browse & locations",
+      "text": "Home & locations",
       "w": 240,
       "x": 0,
       "y": -300
@@ -879,10 +879,10 @@
   },
   "order": [
     "Main.dc.html",
-    "BrowsePulley.dc.html",
-    "BrowseStandalone.dc.html",
-    "BrowseServerMenu.dc.html",
-    "BrowseVolume.dc.html",
+    "HomePulley.dc.html",
+    "HomeStandalone.dc.html",
+    "HomeServerMenu.dc.html",
+    "HomeVolume.dc.html",
     "Recents.dc.html",
     "NearbySetup.dc.html",
     "FavouriteEdit.dc.html",
@@ -892,7 +892,7 @@
     "DirectoryContext.dc.html",
     "DirectorySelect.dc.html",
     "DirectoryGrid.dc.html",
-    "PathMenu.dc.html",
+    "PathFolded.dc.html",
     "DirectoryRemorse.dc.html",
     "ViewOptions.dc.html",
     "NewItem.dc.html",
@@ -908,7 +908,7 @@
     "StateIdentity.dc.html",
     "StateLarge.dc.html",
     "StateReconnecting.dc.html",
-    "FolderPicker.dc.html",
+    "ShareLocations.dc.html",
     "PlanSummary.dc.html",
     "Conflict.dc.html",
     "Compress.dc.html",
@@ -938,7 +938,7 @@
     "DirectorySelectPulley.dc.html",
     "RecentsPulley.dc.html",
     "RecentlyDeletedEmpty.dc.html",
-    "FolderPickerPulley.dc.html",
+    "SharePulley.dc.html",
     "TransferDetailsPulley.dc.html",
     "TextViewerPulley.dc.html",
     "ImageDeleteRemote.dc.html",
@@ -963,7 +963,7 @@
     "AccessSettings.dc.html",
     "AccessSettingsApp.dc.html",
     "AccessSettingsMenu.dc.html",
-    "AccessBrowse.dc.html",
+    "AccessHome.dc.html",
     "AccessReadOnly.dc.html",
     "AccessReadAdd.dc.html",
     "AccessItemMenu.dc.html",

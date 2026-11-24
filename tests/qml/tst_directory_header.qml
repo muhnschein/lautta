@@ -144,11 +144,12 @@ ApplicationWindow {
             expect(f.y === before.y && f.contentY === f.originY,
                    label + " " + when + ": the content stays put at its top: " + f.y + " vs " + before.y)
         }
+        var title = named(view, "crumbTitle")
         view.startSelection()
-        expect(bar.title.indexOf("lautta-dir-selected") === 0, label + ": selecting shows the count: " + bar.title)
+        expect(title.text.indexOf("lautta-dir-selected") === 0, label + ": selecting shows the count: " + title.text)
         same("selecting")
         view.endSelection()
-        expect(bar.title === view.model.title, label + ": the name comes back: " + bar.title)
+        expect(title.text === view.model.title, label + ": the name comes back: " + title.text)
         same("after selecting")
     }
 
@@ -235,16 +236,31 @@ ApplicationWindow {
         waitFor(function () { return !host.pullDownMenu.active && host.contentY === 0 }, label + ": the pulley to close")
     }
 
-    function checkPathMenu(view, label) {
-        var menu = named(view, "folderPathMenu")
-        var header = named(view, "folderHeader")
-        if (!menu || !header)
+    function checkCrumbs(view, label) {
+        var bar = named(view, "folderPageHeader")
+        var crumbs = named(view, "folderCrumbs")
+        var row = named(view, "crumbRow")
+        var title = named(view, "crumbTitle")
+        if (!bar || !crumbs || !row || !title)
             return
-        expect(menu.y > 0 && menu.y <= header.height, label + ": the path menu sits in the header: " + menu.y)
-        expect(Math.abs(menu.maxHeight - (view.height - menu.y - Theme.itemSizeLarge)) < 0.5 && menu.maxHeight > 0,
-               label + ": the open menu leaves a strip of the page: " + menu.maxHeight + " of " + view.height + " from " + menu.y)
-        var scrollers = findAll(menu, function (x) { return x.objectName === "pathMenuScroller" }, [])
-        expect(scrollers.length === 1 && scrollers[0].anchors.fill === menu, label + ": the menu scrolls inside its cap")
+        expect(row.visible && crumbs.reserve > 0, label + ": the path shows beside the folder's name")
+        expect(bar.title === "" && title.text === view.model.title, label + ": the line, not the stock title, names the folder: " + title.text)
+        var start = Theme.itemSizeSmall
+        expect(bar.leftMargin === start, label + ": the line keeps clear of where a tap goes a page back: " + bar.leftMargin)
+        var left = row.mapToItem(bar, 0, 0).x
+        expect(left >= start - 0.5, label + ": the path starts right of it: " + left)
+        expect(Math.abs(title.mapToItem(bar, title.width, 0).x - (bar.width - Theme.horizontalPageMargin)) < 0.5,
+               label + ": the name ends at the page margin: " + title.mapToItem(bar, title.width, 0).x)
+        var top = title.mapToItem(bar, 0, 0).y
+        expect(bar.titleHeight > 0 && top >= bar.topMargin && top + title.height <= bar.topMargin + bar.titleHeight,
+               label + ": the line stands inside a stock title's line: " + top + " " + title.height + " vs " + bar.topMargin + " " + bar.titleHeight)
+        expect(row.height === bar.height, label + ": a crumb is as tall as the header: " + row.height + " vs " + bar.height)
+        expect(crumbs.menuMost === Math.floor((view.height - bar.height) / Theme.itemSizeSmall) && crumbs.menuMost > 0,
+               label + ": folded folders fill at most the page below the header: " + crumbs.menuMost)
+        view.startSelection()
+        expect(!row.visible && crumbs.reserve === 0, label + ": selecting hides the path and gives the count the line")
+        view.endSelection()
+        expect(row.visible, label + ": the path comes back")
     }
 
     function checkLayout(page, label) {
@@ -255,7 +271,7 @@ ApplicationWindow {
         checkSelectionHeight(view, label)
         checkPulley(view, label)
         checkGestures(view, label)
-        checkPathMenu(view, label)
+        checkCrumbs(view, label)
     }
 
     function checkOrientations(mode) {

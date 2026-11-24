@@ -8,10 +8,10 @@ toggle-pill switches, no modal sheets sliding from bottom, no snackbars with
 no separators between list rows, no centred titles.
 
 Silica idioms to use instead:
-- PageHeader: right-aligned, light weight, highlight colour; description below it.
+- PageHeader: right-aligned, light weight, highlight colour; description below it. Folder header: one line at list-text size, path crumbs then folder name in highlight colour.
 - Back navigation = swipe right; shown only by the page-stack indicator (top-left
   small dots `.ind-back`). Attached page (swipe left) = `.ind-fwd` top-right.
-- Actions = PulleyMenu (top, pull down) only. NO PushUpMenu anywhere (hard to discover); folder-level actions (Copy address, Edit path, Favourite) live in the header path menu. Closed state shows
+- Actions = PulleyMenu (top, pull down) only. NO PushUpMenu anywhere (hard to discover); folder-level actions live in the folder pulley; folder header carries path crumbs (house while whole path fits right of page's left quarter, folders above, "…" for what doesn't fit, its menu ends with Home). Closed state shows
   only the thin glowing `.pull-ind` line at the top edge (`.push-ind` at bottom).
   Open state: menu items centred, primary colour, the item under the finger in
   highlight colour, highlight-tinted gradient backdrop; page content pushed down.
@@ -26,6 +26,9 @@ Silica idioms to use instead:
   ComboBox (label + highlight value; opens inline menu), Slider (value above,
   label below), TextField (underline, label below).
 - Empty states = ViewPlaceholder (big light highlight text centred + hint).
+- Server warnings (`FolderPlaceholder` `level`) = placeholder with `icon-l-attention` on top, buttons
+  stacked, fix first on highlight background. Security level (identity changed): icon and title
+  `Theme.errorColor`, "Security warning" label above title.
 - Busy = BusyIndicator ring. Progress = thin highlight line.
 - Buttons (rare in Silica; only in page content) = `.btn` rounded.
 - Section headers = small, right-aligned, highlight colour.
@@ -81,6 +84,15 @@ below); real `<button>`/`<a href>`/`<input>`/`<label>` for controls, `aria-label
 icon-only buttons; no `<iframe>`; no scripts building DOM. Use `&amp;` for & in
 attribute values, `&lt;` `&gt;` in text.
 
+## Line weight
+Sailfish's icons draw every outline 2 units × pixel ratio wide (3 px at ratio 1.5), at small,
+medium and large size alike; secondary parts dimmed (60 % opacity), not thinner.
+- Lautta's own icons (`qml/icons`): same. `FileIcons.source` loads them via `image://lautta-icon`,
+  which scales every `stroke-width` so the root's (= outline) comes out that wide at drawn size.
+- Grid per main size, lines on half units: 32 units for medium (64, 96, 128 px), 48 for large,
+  28 for 112 px and grid tiles. Inner lines no wider than outline.
+- Kit (`.ic`): 1.1 px at every size (3 px of 1080).
+
 ## CSS (paste verbatim in each artboard's helmet `<style>`)
 
 ```css
@@ -93,9 +105,9 @@ body{margin:0}
 .amb *{box-sizing:border-box}
 .amb button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:inherit}
 .amb a{color:inherit;text-decoration:none}
-.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
-.ic.m{width:40px;height:40px;stroke-width:1.2}
-.ic.l{width:64px;height:64px;stroke-width:1}
+.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.1;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.m{width:40px;height:40px;stroke-width:.66}
+.ic.l{width:64px;height:64px;stroke-width:.41}
 .hl{color:var(--hl)}.sec{color:var(--sec)}.hl2{color:var(--hl2)}.warn{color:var(--warn)}
 .small{font-size:15px}.xs{font-size:13px}.tiny{font-size:12px}.large{font-size:26px;font-weight:300}.xl{font-size:34px;font-weight:300}
 .mono{font-family:'JetBrains Mono',monospace}
@@ -119,6 +131,11 @@ body{margin:0}
 .hdr{min-height:80px;padding:14px 18px 6px 60px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;text-align:right}
 .hdr-t{font-size:28px;font-weight:300;color:var(--hl);line-height:1.15}
 .hdr-d{font-size:15px;color:var(--hl2);margin-top:2px}
+.crh{min-height:80px;padding:0 18px 0 10px;display:flex;align-items:center;justify-content:flex-end;white-space:nowrap;overflow:hidden}
+.crh .cr{flex:none;display:flex;align-items:center;align-self:stretch;padding:0 6px;color:var(--pri);font-size:19px}
+.crh .cr.down{background:var(--hlbg);color:var(--hl)}
+.crh .sp{flex:none;color:var(--sec);font-size:17px}
+.crh .hdr-t{margin-left:6px;min-width:0;overflow:hidden;text-overflow:ellipsis}
 /* dialog header */
 .dlg{height:80px;padding:0 18px;display:flex;align-items:center;justify-content:space-between}
 .dlg-c{font-size:19px;color:var(--pri)}
