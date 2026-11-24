@@ -40,7 +40,7 @@ Page {
         model: (page.changeable ? [
             //% "Rename"
             { "id": "rename", "text": qsTrId("lautta-viewers-more-rename") }
-        ] : []).concat(Actions.more({ "isDir": false, "writable": page.writable }))
+        ] : []).concat(Actions.more({ "isDir": false, "writable": page.writable, "favourite": App.isFavourite(page.uri) }))
 
         header: HeaderBand {
             PageHeader {

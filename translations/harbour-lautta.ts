@@ -2613,5 +2613,9 @@
         <source>%1 free</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-dir-act-edit-favourite">
+        <source>Edit favourite</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

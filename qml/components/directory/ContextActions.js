@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 .pragma library
 
-function text(id) {
+function text(id, ctx) {
     switch (id) {
     case "share":
         //% "Share"
@@ -22,6 +22,9 @@ function text(id) {
         //% "More actions"
         return qsTrId("lautta-dir-act-more")
     case "favourite":
+        if (ctx && ctx.favourite)
+            //% "Edit favourite"
+            return qsTrId("lautta-dir-act-edit-favourite")
         //% "Add to favourites"
         return qsTrId("lautta-dir-act-favourite")
     case "extract":
@@ -56,7 +59,7 @@ function icon(id) {
     return ""
 }
 
-// ctx: { isDir, changeable, readable, writable, archive, checksumList }; readable unless false. Compress and
+// ctx: { isDir, changeable, readable, writable, archive, checksumList, favourite }; readable unless false. Compress and
 // Extract put their result beside the item: folder must be writable.
 function applicable(id, ctx) {
     var readable = ctx.readable !== false
@@ -84,7 +87,7 @@ function pick(order, ctx) {
     var out = []
     for (var i = 0; i < order.length; ++i) {
         if (applicable(order[i], ctx))
-            out.push({ "id": order[i], "text": text(order[i]), "icon": icon(order[i]) })
+            out.push({ "id": order[i], "text": text(order[i], ctx), "icon": icon(order[i]) })
     }
     return out
 }

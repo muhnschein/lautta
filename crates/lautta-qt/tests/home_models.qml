@@ -599,9 +599,12 @@ Item {
                  var f = row("favourite", "Docs")
                  return f !== null && f.rplace === "Documents" && f.rcolour === "#e7a33c"
              })
-        step("the settings list shows it",
+        step("the settings list shows it, and menus offer to edit it",
              null,
-             function() { return layoutRow("favourites", String(favs.idOf(docs))) !== null })
+             function() {
+                 return layoutRow("favourites", String(favs.idOf(docs))) !== null && App.isFavourite(docs)
+                        && !App.isFavourite("lautta://user-music/") && !App.isFavourite("junk")
+             })
         step("edit it",
              function() { favs.edit(favs.idOf(docs), "Papers", "#4fa3e5") },
              function() { return has("favourite", "Papers") && !has("favourite", "Docs") })
@@ -625,7 +628,7 @@ Item {
                  favs.remove(favs.idOf(docs))
                  favs.remove(favs.idOf("lautta://user-music/"))
              },
-             function() { return !has("favourite") })
+             function() { return !has("favourite") && !App.isFavourite(docs) })
         step("page adds a first favourite",
              function() { favs.save(docs, "Docs", "", "", true) },
              function() { return favouriteNames() === "Docs" })

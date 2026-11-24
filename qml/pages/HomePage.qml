@@ -402,8 +402,9 @@ Page {
                     }
                     MenuItem {
                         visible: (row.kind === "folder" || row.kind === "volume") && !row.notMounted
-                        //% "Add to favourites"
-                        text: qsTrId("lautta-home-add-favourite")
+                        text: App.isFavourite(model.uri) ? qsTrId("lautta-home-edit-favourite")
+                                                         //% "Add to favourites"
+                                                         : qsTrId("lautta-home-add-favourite")
                         onClicked: page.openFavourite(model.uri)
                     }
                     MenuItem {
