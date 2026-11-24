@@ -89,6 +89,7 @@ impl EntryBuilder {
         } else if is_readonly(st.mode, st.uid, st.gid, self.euid, self.egid) {
             e.flags |= EntryFlags::READONLY;
         }
+        e.content_type = crate::mime::sniff_local(name, path).map(str::to_owned);
         e
     }
 
@@ -201,6 +202,34 @@ mod tests {
         assert_eq!(
             e.owner.as_deref(),
             Some(Names::default().user(sys::stat(&f, true).unwrap().uid).as_str())
+        );
+    }
+
+    #[test]
+    fn ts_entries_carry_sniffed_type() {
+        let d = tempfile::tempdir().unwrap();
+        let mut stream = vec![0u8; 188 * 4];
+        for start in (0..stream.len()).step_by(188) {
+            stream[start] = 0x47;
+        }
+        std::fs::write(d.path().join("rec.ts"), &stream).unwrap();
+        std::fs::write(d.path().join("app.ts"), "let x: number = 1;\n").unwrap();
+        symlink("rec.ts", d.path().join("link.ts")).unwrap();
+        let b = builder(d.path());
+        let entry = |name: &str| {
+            b.stat_entry(&d.path().join(name), name.as_bytes(), false)
+                .unwrap()
+        };
+        assert_eq!(entry("rec.ts").content_type.as_deref(), Some("video/mp2t"));
+        assert_eq!(
+            crate::mime::category_of(&entry("rec.ts")),
+            crate::mime::FileCategory::Video
+        );
+        assert_eq!(entry("link.ts").content_type.as_deref(), Some("video/mp2t"));
+        assert_eq!(entry("app.ts").content_type, None);
+        assert_eq!(
+            crate::mime::category_of(&entry("app.ts")),
+            crate::mime::FileCategory::Code
         );
     }
 
