@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- HEIC, HEIF, AVIF and JPEG XL files no longer open in the image viewer only to say "Can't show this image": Sailfish OS has no decoder for them. They show the plain file icon and open with another app, like other files Lautta can't show ([#158](https://github.com/muhnschein/lautta/issues/158)).
 - Small things: *More* in the image viewer shows icons, as *More actions* does; *Checksums* names its file; *Settings › Transfers* asks before operations of "Over 1000 items or 1 GB", no longer "953.7 MB" ([#214](https://github.com/muhnschein/lautta/issues/214)).
 - The Home page shows only how much space is free on the phone and on memory cards and USB drives, as "12 GB free", no longer "12 GB free of 50 GB".
 - The start page is called *Home* now, no longer *Browse*, and its settings are *Home page*. What you hid or reordered there stays as it was ([#143](https://github.com/muhnschein/lautta/issues/143)).
