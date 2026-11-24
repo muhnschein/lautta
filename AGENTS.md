@@ -22,9 +22,9 @@ In this order; later step only once earlier ones hold:
 6. Device: CI job "Sailfish OS 5.2 aarch64 RPM" builds it on every push; run that RPM on test phone (see "Device tests"); give user the `harbour-lautta-aarch64` artifact link of the green run and the evidence. Needs newer netvfs → link those RPMs too, say install order.
 7. With RPM: outline briefly what merging this PR risks and how you mitigated it.
 
-PR opens as draft on first push. Mark ready for review only once steps 1–7 hold and their evidence is in PR body.
+PR opens as draft on first push. Mark ready for review only once steps 1–7 hold and their evidence is posted (visual: project thread; text: PR body).
 
-Docs-only change (docs, comments, no code or string change): steps 6–7 skipped; no phone run.
+No phone run when change can't show on phone: docs, CI, build scripts (RPM contents unchanged), tests only. Steps 6–7 skipped; PR says why.
 
 Feature reachable from several places (folder pulley, item context menu, selection bar, viewers, cover, share target, folder picker) → all of them. Same for device folders and server locations; standalone mode shows no bridge traces.
 
@@ -32,6 +32,7 @@ User tests RPM on phone; that test judges feel, lag, transitions. Say exactly wh
 
 ## Device tests
 
+- Page tests (`tst_*.qml`) and OS file lookups (Silica QML, theme icons, sailjail profiles): SDK container, never phone.
 - Test phone: on the local SFOS test host via the harness's `local/run.sh` (`muhnschein-sfos-harness`, see its `local/README.md`); lautta's caller notes: its `apps/lautta.md`. Its AGENTS.md rules every phone run (baseline, no blind taps, reboot, language, `clean_slate`); helpers: its README, `scripts/lib.sh`. Test accounts and test servers only. Never run fork or others' PR code there: any run can root phone.
 - PR build onto phone: `install_artifact muhnschein/lautta RUN_ID harbour-lautta`, RUN_ID of this PR's green CI run.
 - Every run starts from named state; `state.txt` records it plus RPM name and sha256:
@@ -41,21 +42,23 @@ User tests RPM on phone; that test judges feel, lag, transitions. Say exactly wh
   - `upgrade:FROM`: release FROM plus fixture, then install build over it. Required when change touches stored data (`lautta.db`, trash) or settings.
 - Test files in user dirs (Documents, Downloads, Pictures): own subfolder, listed in harness `apps/harbour-lautta.dirs`, so `reset` removes them.
 - Footprint check (`fs_mark`, `footprint`): file app touched outside known dirs → add to reset or fail run. Leftovers taint results.
-- Before/after: same start state, same steps.
+- Before/after: same start state, same steps, one `local/run.sh` run (both builds, one `launch` each).
+- Build already passed same steps → cite that run, no rerun.
+- Run stopped on own script mistake → fix from its shots, rerun only failed steps.
 - Motion or timing change: launch with `FRAMELOG`, report `frames` (fps, slow frames, worst gap per animation). Never measure frames while recording: recorder slows compositor.
-- Privacy: user stays muhnschein, nothing more. Harness output leaves the test host only scrubbed, through its `local/publish.sh` (no location, addresses, device or network ids, server names; its AGENTS.md "Privacy"). PR evidence only from those files (crops, GIFs, charts made from them OK); never type identifiers in. No passwords, login links, QR codes. Location tests: harness fake places only, never real fix.
+- Privacy: user stays muhnschein, nothing more. Harness output leaves the test host only scrubbed, through its `local/publish.sh` (no location, addresses, device or network ids, server names; its AGENTS.md "Privacy"). Evidence only from those files (crops, GIFs, charts made from them OK); never type identifiers in. No passwords, login links, QR codes. Location tests: harness fake places only, never real fix.
 - Harness proves function and frame timing. Feel, lag, transitions stay user's call on device.
 
 ## Local checks
 
 - Host deps (Ubuntu 24.04): `./tools/ci/install-host-deps.sh [nextest] [coverage] [mutants] [cross]`: Qt 5 dev files, `lupdate`, pinned Rust 1.95; extras = pinned cargo-nextest (`make test` runs 32 tests at once; without it `cargo test`), cargo-llvm-cov, cargo-mutants, `libc6-i386`.
-- `make check` = rustfmt, catalogue drift, clippy (`clippy::all` denied), host tests incl. host QML (`tests/qml/host`: real Lautta types, offscreen, no Silica). Fake bridge (`lautta-bridge-proto` feature `fake`) stands in for netvfs.
+- `make check` = rustfmt, comment lint, catalogue drift, clippy (`clippy::all` denied), host tests incl. host QML (`tests/qml/host`: real Lautta types, offscreen, no Silica). Fake bridge (`lautta-bridge-proto` feature `fake`) stands in for netvfs.
 - Page tests (`tests/qml/tst_*.qml`, real Silica, Qt 5.6) run only on SDK target: `make rpm && make check-rpm` (docker, `libc6-i386`; also Harbour validator, linked libs, installability) or `tools/sdk-qml-check.sh` against running SDK container. QML change → run one, or say only CI did.
 - Missing tool (docker, cargo-mutants) → step skipped locally. Say which; CI runs all.
 - Local failure → rerun on untouched `main` before calling it environment.
 - Iterating → run only what change touches: `cargo test -p lautta-core <filter>`, host QML `cargo test -p lautta-qt --features lautta-bridge-proto/fake --test qml_host`, page tests `tools/sdk-qml-check.sh tests/qml/tst_<page>.qml`. Before every push: full `make check`. CI runs everything (docs-only PR or push to main: no build or test jobs, CodeQL actions only; `tools/ci/changes.sh`).
 - Gates catch device-only breakage (Qt 5.6 QML, Harbour rules of `doc/PROJECT.md` "Platform", linked libs, validator). Gate red → fix code, never loosen gate. New validator warning only if unavoidable, listed with reason in `doc/harbour-warnings.md`.
-- Mutant exclusion (`.cargo/mutants.toml`) only with proof it changes no observable behaviour, written beside it.
+- Mutant exclusion (`.cargo/mutants.toml`) only with proof it changes no observable behaviour, in commit body and PR.
 - New dependency must earn its keep: well maintained, widely used, more than someone's pet project, builds at Rust 1.95, pure Rust preferred, native links only to Harbour's allowed libraries (`doc/PROJECT.md`). Say why in PR. `Cargo.lock` via `cargo +stable update -p <crate>` (CONTRIBUTING-CODE.md "Toolchain").
 
 ## New tests
@@ -63,14 +66,14 @@ User tests RPM on phone; that test judges feel, lag, transitions. Say exactly wh
 Every added or changed test, before push:
 
 - Honest: fails when behaviour its name claims breaks; "Done means" step 3 proves it. No assert that cannot fail: tautology, check of own setup, assert in branch or loop that may not run, discarded result, timeout read as answer (`timeout(recv) → None` ≠ channel closed).
-- Waits on signal or condition only. No sleep, `pump(N)`, wall-clock assert. Timeout = hang guard: seconds for work of milliseconds. Fixed wait only for "nothing happens", where no event exists; test says so.
+- Waits on signal or condition only. No sleep, `pump(N)`, wall-clock assert. Timeout = hang guard: seconds for work of milliseconds. Fixed wait only for "nothing happens", where no event exists; test name says so.
 - Waits for event only step under test makes. Not one an earlier step also makes (stale `.part` delete before copy), not one that may come twice (file write = several inotify events; `mkdir` = one), not thread name set after spawn.
 - Parallel-safe: passes alone and among 32 others (`make test`). Own tempdir; no fixed port or path, shared HOME/XDG, env or cwd change shared with other tests, global state across tests. Few inotify instances and threads (128 per user).
 - Runner stalls any thread any time for hundreds of ms: test still passes. Async or timing-sensitive test → `cargo nextest run -j 32 --stress-count 20 <filter>` on loaded host, or stall injected at race point; say which.
 
 ## UI and words
 
-- Vocabulary: screens, features, flows named and numbered as feature map (`SCR-*`, `F-*`, `FL-*`); use those names in code comments, issues, PRs, chat. Map lives outside repo, in Claude project files `lautta-map/` (`feature-map.md`, `flows.md`, `flow-mapping.md`, atlas page `atlas.html`, generator `gen_atlas.py`; how: its `README.md`) and flow atlas artifact https://claude.ai/artifact/QdZcdWUheEkH6YmJrahrfU (page plus phone shots). Screen, feature or flow added, changed or removed → update map files, regenerate, republish atlas with new shots from device run; PR names the IDs and what changed, and says map and atlas are done.
+- Vocabulary: screens, features, flows named and numbered as feature map (`SCR-*`, `F-*`, `FL-*`); use those names in issues, PRs, chat. Map lives outside repo, in Claude project files `lautta-map/` (`feature-map.md`, `flows.md`, `flow-mapping.md`, atlas page `atlas.html`, generator `gen_atlas.py`; how: its `README.md`) and flow atlas artifact https://claude.ai/artifact/QdZcdWUheEkH6YmJrahrfU (page plus phone shots). Screen, feature or flow added, changed or removed → update map files, regenerate, republish atlas with new shots from device run; PR names the IDs and what changed, and says map and atlas are done.
 - Silica stock components only, built like existing pages; idioms in `design/STYLE.md` (pulley, no push-up menu, remorse, dialog pages). Jolla app has same feature (e.g. Gallery's image viewer) → match it. Feature references: Harbour File Browser, Transmit/Cyberduck, iOS Files.
 - "Design first" / "no PR yet" → artboard on design canvas (`design/canvas/project/*.dc.html`, kit `design/STYLE.md`), wait for approval, then code.
 - Every string `qsTrId()` with `//%` engineering English; error text as `doc/PROJECT.md` "Words on screen". Changed strings → `make translations` (`make check` fails on drift). A count in a text → one `%n` plural string, never "(s)"; `make translations` adds its English singular (read the printed pairs).
@@ -80,9 +83,12 @@ Every added or changed test, before push:
 ## Comments and docs
 
 - Caveman-full = drop articles, filler, pleasantries, hedging. Fragments OK, short words. Identifiers, paths, code, errors exact. E.g. "`Cargo.lock` from stable cargo with fallback resolver: no crate newer than `rust-version` allows."
-- Code comments, `doc/*.md`, this file: caveman-full. What is true now and why; keep constraints. No changelog, bug report, history, story (git's job): delete comment rather than turn it into history. Existing prose: rewrite what you touch, not more.
-- Default: no comment. One only for constraint, external quirk, invariant code can't show; one line where possible, four max. Applies to new and touched code; trim old long comments when changing that code anyway, no sweep.
-- SPDX header on every source file. No specs: code and tests say what it does.
+- No code comments. None: no why, no issue reference, no TODO, no doc comment, no commented-out code; in Rust, QML, JS, shell, Python, Makefile, YAML, TOML, spec, properties. Names and tests say what code does. `make check` runs `tools/no_comments.py`.
+- No workarounds for this rule, no write-ups of code workarounds: no comment archive, no notes or doc file standing in for comments, no comment text hidden in strings or names. Only an absolutely critical fact (code breaks or regresses without it) gets written down: project memory, one short sentence each, nothing more.
+- Branch from before the ban (lint red after merging `main`): `python3 tools/no_comments.py --fix`, then `cargo fmt --all`.
+- Kept, because a tool reads them: shebang; SPDX line 1 (line 2 after shebang); `//%` lupdate source text; bare `// NOSONAR`; `/// # Safety` section right above a `pub unsafe fn` (clippy `missing_safety_doc`). Not checked: `third_party/`, `qml/components/viewers/gallery/`, CodeQL query copy (licences keep their notices), `tests/bridge-contract/` (netvfs mirror), fixtures, `doc/`, `design/`, Markdown.
+- `doc/*.md`, this file: caveman-full. What is true now and why; keep constraints. No changelog, bug report, history, story (git's job). Existing prose: rewrite what you touch, not more.
+- No specs: code and tests say what it does.
 - `README.md`, `CHANGELOG.md`, release notes, store and forum posts: plain prose for users, as short and to the point as possible.
 - User-visible change → line in `CHANGELOG.md` under `## Unreleased` (file or section missing → create it), same PR.
 - No plans, research notes, scratch files in repo.
@@ -95,12 +101,12 @@ Every added or changed test, before push:
 - Commit and PR titles: Conventional Commits, plain language, say outcome: `fix(transfers): paste from SFTP to SMB no longer fails`. Types `feat` `fix` `perf` `refactor` `test` `docs` `ci` `build` `chore`; scope = app area or subsystem (`browse`, `directory`, `operations`, `transfers`, `viewers`, `search`, `bridge`, `rpm`, …). Body says why, plain prose; brief, to the point.
 - PR body: the problem in a sentence or two, then how you fixed it. End with the model and harness that did the work.
 - Final diff: no debug logging, no leftovers.
-- Evidence shown in PR body, not just described:
+- Evidence shown, not just described (visual: files in project thread; text: PR body):
   - UI → before/after device screenshots.
-  - Transitions, motion, feel, lag → before/after GIF (preferred: plays inline; mp4 by URL shows as link only) or mp4. GIF from harness mp4 via `ffmpeg`.
+  - Transitions, motion, feel, lag → before/after GIF or mp4. GIF from harness mp4 via `ffmpeg`.
   - Performance → before/after chart (image), numbers in table beside it. Frame timing from separate `frames` run: recording slows compositor.
   - Non-visual proof (tests, mutations, logs) → text.
-- Evidence on GitHub, never in tree: push to orphan branch `evidence/pr-N`, embed by URL in PR, delete branch after merge. No PR-only screenshots or assets in `main` or PR branch.
+- Evidence never on GitHub: no `evidence/` branches, no uploads to PR, no assets in `main` or PR branch.
 - Flaky test → find and fix cause. Never add retries: pass on second try = defect. Never re-run CI until green and call it done. Never skip test or loosen assert. One re-run OK only for infra failure before any test ran (runner lost, apt mirror timeout); say so.
 - Merge only on user's explicit go. Merge commit, not squash/rebase.
 - Before asking for merge go: `main` moved since PR's last green run → merge `main` in, CI green again. Each PR green alone ≠ merge green.

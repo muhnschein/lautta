@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Camera page of a scan, photos handed in as the camera
-// would: page flies into the stack, page count, retake, going on to the pages and to saving.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -17,7 +16,6 @@ ApplicationWindow {
     property var retaker
     property var pageView
     property var ended: []
-    // Null once the scan is destroyed.
     property QtObject scan
 
     Component {
@@ -84,7 +82,6 @@ ApplicationWindow {
         running: win.scenarioRunning
         onTriggered: {
             win.waited++
-            // Hang guard: emulated target needs seconds per picture.
             if (win.waited > 600)
                 return win.fail("step " + win.step + " timed out")
             switch (win.step) {
@@ -163,7 +160,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 6:
-                // Photo in: back to the page it was for.
                 if (pageStack.busy || pageStack.currentPage !== win.pageView)
                     break
                 if (win.scan.count !== 2 || info(0).found || info(0).id !== 1 || !info(1).found || win.pageView.current !== 0)
@@ -200,7 +196,6 @@ ApplicationWindow {
                     break
                 if (win.ended.length !== 0 || win.camera.scan !== win.scan || win.camera.pages !== 2 || win.camera.retakeOnly)
                     return win.fail("plus tile: camera again, same scan")
-                // No camera where the tests run: pages taken stay in reach all the same.
                 if (!named(win.camera, "pagesButton").visible || !named(win.camera, "doneButton").visible)
                     return win.fail("pages and Done need no camera")
                 var finder = named(win.camera, "finderLoader")

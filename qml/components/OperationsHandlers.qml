@@ -9,7 +9,6 @@ import "ErrorText.js" as ErrorText
 Item {
     id: handlers
 
-    // Off in --qml-check: no session bus for the share provider to register on.
     property bool shareEnabled: Qt.application.arguments.indexOf("--qml-check") < 0
 
     function show(text) {
@@ -23,13 +22,11 @@ Item {
         return { "item": Operations.displayPath(subject), "location": App.locationName(subject) }
     }
 
-    // Share sheet leaves its own app in front.
     function receiveShare(resources) {
         __silica_applicationwindow_instance.activate()
         pages.push(Qt.resolvedUrl("../pages/ShareTargetPage.qml"), { "resources": resources })
     }
 
-    // Password goes straight on to `action`; the page forgets it.
     function askPassword(uri, action, wrong) {
         pages.push(Qt.resolvedUrl("../dialogs/LockedFileDialog.qml"), { "wrong": wrong }, function (dialog) {
             dialog.accepted.connect(function () {

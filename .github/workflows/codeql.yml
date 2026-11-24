@@ -1,6 +1,4 @@
 name: CodeQL
-# Advanced setup: default setup cannot leave paths out. Default setup must be off
-# (Settings > Code security) or GitHub refuses the upload.
 on:
   push:
     branches:
@@ -11,7 +9,6 @@ on:
     - cron: "23 5 * * 1"
 permissions:
   contents: read
-# Push: own group, never cancelled: a docs-only push after it skips, trusting its run.
 concurrency:
   group: codeql-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: true
@@ -23,10 +20,9 @@ jobs:
     outputs:
       code: ${{ steps.diff.outputs.code }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
-          # Pull request: merge commit and its base parent. Push: back to `before`.
           fetch-depth: ${{ github.event_name != 'push' && 2 || 0 }}
       - id: diff
         env:
@@ -44,25 +40,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Docs-only: actions alone (seconds), so every commit keeps a CodeQL analysis for the
-        # ruleset's code scanning rule; Rust takes ten minutes.
         language: ${{ fromJSON(needs.changes.outputs.code == 'true' && '["actions", "rust"]' || '["actions"]') }}
     env:
-      # Shipped build: no cfg(test), default features only.
       CODEQL_EXTRACTOR_RUST_OPTION_CARGO_CFG_OVERRIDES: -test
       CODEQL_EXTRACTOR_RUST_OPTION_CARGO_FEATURES: default
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
       - id: init
-        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370
         with:
           languages: ${{ matrix.language }}
           build-mode: none
           config-file: ./.github/codeql/${{ matrix.language == 'rust' && 'codeql-config-rust.yml' || 'codeql-config.yml' }}
-      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
-      # Our query against planted cases.
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370
       - if: matrix.language == 'rust'
         run: '"$CODEQL" test run --additional-packs .github/codeql .github/codeql/rust-queries-tests'
         env:

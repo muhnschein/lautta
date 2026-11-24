@@ -32,7 +32,6 @@ fn fractions() {
     assert_eq!(fraction(5, None), -1.0);
 }
 
-/// As `VerifyModel`: a move is carried out after the change.
 fn step(r: &mut VerifyRows, event: VerifyEvent) -> Change {
     let change = r.apply(event);
     if let Change::Moved(from, to) = change {
@@ -192,7 +191,6 @@ fn a_problem_already_in_place_is_only_updated() {
         Change::Updated(1)
     );
     assert_eq!(names(&r), [("a", "notChecked"), ("b", "missing")]);
-    // A new list starts over.
     step(&mut r, VerifyEvent::Listed(vec![b"x".to_vec(), b"y".to_vec()]));
     assert_eq!(
         step(

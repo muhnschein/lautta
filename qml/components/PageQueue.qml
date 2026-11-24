@@ -2,18 +2,15 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
-// PageStack drops a push made during a transition: pages pushed from signals wait here until it is idle.
 Item {
     id: queue
 
     property var pending: []
 
-    // Resolved when used: window publishes its instance once created.
     function stack() {
         return __silica_applicationwindow_instance.pageStack
     }
 
-    // `pushed(page)`, if given, once the page is on the stack.
     function push(url, props, pushed) {
         pending = pending.concat([{ "url": url, "props": props, "pushed": pushed }])
         next()

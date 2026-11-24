@@ -1,18 +1,13 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Scheduling: FIFO per destination location, round-robin across locations, concurrency limits per
-//! location. Pure logic: no I/O, clock or randomness, so decisions are reproducible in tests.
 
 use super::model::TransferId;
 use std::collections::{HashMap, VecDeque};
 
-/// Concurrent items for a local destination.
 pub const LOCAL_LIMIT: usize = 2;
-/// Default for a remote location; the user may choose 1 to 6.
 pub const DEFAULT_REMOTE_LIMIT: usize = 2;
 pub const MIN_REMOTE_LIMIT: usize = 1;
 pub const MAX_REMOTE_LIMIT: usize = 6;
 
-/// Bridge-served locations: `nv-<bridge id>`.
 pub fn is_bridge_location(location: &str) -> bool {
     location.starts_with("nv-")
 }
@@ -28,7 +23,6 @@ struct Entry {
     id: TransferId,
     location: String,
     runnable: bool,
-    /// Items not yet started, in plan order, each with its barrier flag.
     pending: VecDeque<(u32, bool)>,
     running: u32,
     barrier_running: bool,
@@ -45,8 +39,6 @@ struct Sim {
 pub struct Scheduler {
     entries: Vec<Entry>,
     remote_limits: HashMap<String, usize>,
-    /// Optional cap on running items over all locations; without it the
-    /// round-robin only interleaves the start order.
     global_limit: Option<usize>,
     cursor: usize,
 }
@@ -77,9 +69,6 @@ impl Scheduler {
             .unwrap_or(DEFAULT_REMOTE_LIMIT)
     }
 
-    /// Queues a transfer at the end. `items` are `(seq, barrier)`: a barrier
-    /// (folder, link, delete) runs alone, after everything before it, and
-    /// blocks what follows until done.
     pub fn add(&mut self, id: TransferId, location: &str, items: impl IntoIterator<Item = (u32, bool)>) {
         self.remove(id);
         self.entries.push(Entry {
@@ -106,7 +95,6 @@ impl Scheduler {
         }
     }
 
-    /// Re-queues items (retry), keeping plan order.
     pub fn requeue(&mut self, id: TransferId, items: impl IntoIterator<Item = (u32, bool)>) {
         if let Some(e) = self.entry_mut(id) {
             for item in items {
@@ -119,7 +107,6 @@ impl Scheduler {
         }
     }
 
-    /// Drops not-yet-started items (skipped subtrees, answered "skip").
     pub fn drop_pending(&mut self, id: TransferId, keep: impl Fn(u32) -> bool) {
         if let Some(e) = self.entry_mut(id) {
             e.pending.retain(|p| keep(p.0));
@@ -192,12 +179,10 @@ impl Scheduler {
         }
     }
 
-    /// What `start_runnable` would start now, without changing anything.
     pub fn next_runnable(&self) -> Vec<ItemRef> {
         self.compute().0.into_iter().map(|(item, _)| item).collect()
     }
 
-    /// Marks the picked items running and advances the round-robin cursor.
     pub fn start_runnable(&mut self) -> Vec<ItemRef> {
         let (picked, cursor) = self.compute();
         self.cursor = cursor;
@@ -245,9 +230,6 @@ impl Scheduler {
         let mut picked = Vec::new();
         let mut last = None;
         let mut total: usize = self.entries.iter().map(|e| e.running as usize).sum();
-        // A round that picks nothing ends the loop, so each further round
-        // takes a pending item: at most that many rounds (a mistake in the
-        // stop condition then fails tests instead of hanging them).
         let rounds: usize = self.entries.iter().map(|e| e.pending.len()).sum();
         for _ in 0..rounds {
             let before = picked.len();
@@ -272,8 +254,6 @@ impl Scheduler {
         (picked, last.map_or(self.cursor, |l| (l + 1) % n))
     }
 
-    /// The first startable item of the first transfer of `location` that has
-    /// one (FIFO within the location).
     fn pick_from(&self, location: &str, sims: &mut [Sim]) -> Option<(ItemRef, bool)> {
         for (i, e) in self.entries.iter().enumerate() {
             if e.location != location || !e.runnable {

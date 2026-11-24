@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// SCR-58 per page on top. No thumbnailer, no catalogue: pictures and sizes in texts unproven.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -24,7 +23,6 @@ ApplicationWindow {
     Item {
         id: frame
 
-        // A phone's cover in paddings: headless `Theme.coverSizeLarge` is too small for a line of text.
         width: 10 * Theme.paddingLarge
         height: 16 * Theme.paddingLarge
 
@@ -105,7 +103,6 @@ ApplicationWindow {
         return ok
     }
 
-    // Condition polled; bound only guards a hang. One hang ends all waiting.
     function waitFor(done, what) {
         for (var i = 0; i < 400 && !stuck && !done(); ++i)
             tools.pump(50)
@@ -134,7 +131,6 @@ ApplicationWindow {
         return true
     }
 
-    // Named items on screen, in reading order.
     function named(root, name) {
         var views = findAll(root, function (x) { return x.forceLayout !== undefined }, [])
         for (var i = 0; i < views.length; ++i)
@@ -218,7 +214,6 @@ ApplicationWindow {
         expect(glyph.width === Theme.iconSizeSmallPlus && Math.round(glyph.x) === Math.round((wide - glyph.width) / 2) && glyph.y === 0
                && free.y === glyph.height && Math.round(free.x) === Math.round((wide - free.width) / 2) && free.width > 0,
                "icon centred in its cell, free space centred below it: " + glyph.x + ", " + free.x + ", " + free.y)
-        // Wide enough for the untranslated id.
         frame.width = 40 * Theme.paddingLarge
         expect(free.x > 0 && Math.abs(free.x - (cells[0].width - free.width) / 2) < 1 && free.width === free.implicitWidth,
                "free space that fits stands centred under its icon: " + free.x + ", " + free.width + " in " + cells[0].width)
@@ -267,7 +262,6 @@ ApplicationWindow {
             return
         var glyph = named(cells[0], "storageIcon")[0]
         var free = named(cells[0], "storageFree")[0]
-        // Wide enough for the untranslated id.
         frame.width = 20 * Theme.paddingLarge
         var wide = frame.width - 2 * Theme.paddingLarge
         expect(cells[0].width === wide && cells[0].height === Theme.iconSizeSmall && glyph.width === Theme.iconSizeSmall,

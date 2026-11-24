@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! WinZip AES for zip entries (read AE-1 and AE-2, write AE-2 with AES-256). PBKDF2-HMAC-SHA1, 1000
-//! rounds, gives AES key, HMAC key and a 2-byte password check; AES-CTR with little-endian counter
-//! from 1; HMAC-SHA1 over the ciphertext, first 10 bytes kept. Entry data: salt, check, ciphertext,
-//! tag. Primitives from RustCrypto; nothing here is a cipher of our own.
 
 use crate::error::{Error, ErrorKind, Result};
 use crate::password::Password;
@@ -59,13 +55,11 @@ impl Strength {
         self.key_len() / 2
     }
 
-    /// Bytes an entry gains: salt, check, tag.
     pub fn overhead(self) -> u64 {
         (self.salt_len() + CHECK_LEN + TAG_LEN) as u64
     }
 }
 
-/// Extra field `0x9901`: version, strength and the real compression method.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AesField {
     pub version: u16,
@@ -74,7 +68,6 @@ pub struct AesField {
 }
 
 impl AesField {
-    /// AE-2 stores no CRC: a CRC of the plain data would tell something about it.
     pub fn written(method: u16) -> AesField {
         AesField {
             version: AE2,
@@ -95,7 +88,6 @@ impl AesField {
         })
     }
 
-    /// Whole extra record: id, length, data.
     pub fn record(&self) -> [u8; 11] {
         let mut r = [0u8; 11];
         r[0..2].copy_from_slice(&EXTRA_ID.to_le_bytes());
@@ -107,7 +99,6 @@ impl AesField {
         r
     }
 
-    /// AE-1 keeps the CRC of the plain data; AE-2 stores 0 there.
     pub fn has_crc(&self) -> bool {
         self.version == AE1
     }
@@ -156,7 +147,6 @@ fn derive(password: &Password, salt: &[u8], strength: Strength) -> Keys {
     }
 }
 
-/// Encrypts what is written into `out`, AES-256. Call [`Encryptor::finish`] for the tag.
 pub struct Encryptor<W: Write> {
     out: W,
     keys: Keys,
@@ -164,7 +154,6 @@ pub struct Encryptor<W: Write> {
 }
 
 impl<W: Write> Encryptor<W> {
-    /// Writes salt and check at once.
     pub fn new(mut out: W, password: &Password) -> io::Result<Encryptor<W>> {
         let strength = Strength::Aes256;
         let mut salt = vec![0u8; strength.salt_len()];
@@ -209,18 +198,14 @@ fn auth_failed() -> io::Error {
     )
 }
 
-/// Decrypts an entry's stored bytes. The tag is checked once the last ciphertext byte is read, or by
-/// [`Decryptor::finish`] when the reader stops early.
 pub struct Decryptor<R: Read> {
     inner: R,
     cipher: Ctr,
-    /// `None` once the tag is checked.
     mac: Option<HmacSha1>,
     left: u64,
 }
 
 impl<R: Read> Decryptor<R> {
-    /// `inner` yields the entry's `stored` bytes. Wrong password fails here, before any data.
     pub fn new(mut inner: R, stored: u64, password: &Password, strength: Strength) -> Result<Decryptor<R>> {
         let left = stored
             .checked_sub(strength.overhead())
@@ -240,7 +225,6 @@ impl<R: Read> Decryptor<R> {
         })
     }
 
-    /// Reads what is left and checks the tag: fails on changed, truncated or padded data.
     pub fn finish(&mut self) -> io::Result<()> {
         let mut scratch = [0u8; 8192];
         while self.left > 0 {
