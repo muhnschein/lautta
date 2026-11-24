@@ -75,15 +75,18 @@ Page {
             }
         }
 
-        header: PageHeader {
+        header: HeaderBand {
             width: view.width
-            title: page.fileName
-            // List at top when text arrives; ListView keeps contentY when header grows, so
-            // description line is there, blank, from the start.
-            description: doc.loaded
-                         //% "Read-only · %1"
-                         ? qsTrId("lautta-viewers-read-only").arg(Format.formatFileSize(doc.size))
-                         : " "
+
+            PageHeader {
+                title: page.fileName
+                // List at top when text arrives; ListView keeps contentY when header grows, so
+                // description line is there, blank, from the start.
+                description: doc.loaded
+                             //% "Read-only · %1"
+                             ? qsTrId("lautta-viewers-read-only").arg(Format.formatFileSize(doc.size))
+                             : " "
+            }
         }
 
         delegate: Item {

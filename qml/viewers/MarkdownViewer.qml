@@ -2,6 +2,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../components"
 import "../components/viewers"
 import "../components/ErrorText.js" as ErrorText
 import "../components/viewers/ReadingStyle.js" as ReadingStyle
@@ -63,9 +64,12 @@ Page {
             }
         }
 
-        header: PageHeader {
+        header: HeaderBand {
             width: view.width
-            title: page.fileName
+
+            PageHeader {
+                title: page.fileName
+            }
         }
 
         // Viewer draws quote bar and code panel: Qt rich text paints cell backgrounds only behind text.

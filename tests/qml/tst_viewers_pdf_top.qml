@@ -60,9 +60,9 @@ ApplicationWindow {
 
     function open(fixture, pages) {
         var view = show(install(fixture))
-        if (view.count !== pages || view.contentHeight <= view.height || view.headerItem.description.trim() === "")
+        if (view.count !== pages || view.contentHeight <= view.height || view.headerItem.children[0].description.trim() === "")
             console.error("FAILED: " + fixture + ": " + view.count + " pages, " + view.contentHeight
-                          + " high in a view " + view.height + " high, header '" + view.headerItem.description + "'")
+                          + " high in a view " + view.height + " high, header '" + view.headerItem.children[0].description + "'")
         checkTop(fixture, view, "when loaded")
         waitFor(function() { return rendered(pageStack.currentPage) }, fixture + " rendered")
         checkTop(fixture, view, "once rendered")
