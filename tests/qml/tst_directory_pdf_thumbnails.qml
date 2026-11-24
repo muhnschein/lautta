@@ -141,9 +141,16 @@ ApplicationWindow {
                                                                "category": "pdf", "mimeType": "application/pdf",
                                                                "thumbnailSource": icon.thumbnailSource })
         var joined = systemThumbnailOf(twin)
-        if (expect(joined && joined !== system, "a second icon of the file asks the system thumbnailer too"))
+        expect(joined && joined !== system, "a second icon of the file asks the system thumbnailer too")
+        if (joined && joined !== system) {
             expect(joined.implicitWidth === 0 && framed(joined, 0, 0, w, 4 * w),
                    "and shows the page at the size the first saw: " + joined.width + "x" + joined.height)
+            twin.width = icon.width + 3
+            twin.height = icon.height + 3
+            joined.implicitWidth = 1
+            expect(joined.width === 0 && joined.height === 0,
+                   "resized, it drops the size seen at the old size: " + joined.width + "x" + joined.height)
+        }
         twin.destroy()
         var other = twinIcon.createObject(window.contentItem, { "width": icon.width + 8, "height": icon.height + 8, "size": icon.size + 8,
                                                                 "category": "pdf", "mimeType": "application/pdf",
