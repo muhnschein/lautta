@@ -90,6 +90,9 @@ Page {
         }
 
         delegate: Item {
+            readonly property real room: width - page.gutter - Theme.horizontalPageMargin
+            readonly property real indent: Math.min(doc.rowIndent(index) * page.charWidth, room / 2)
+
             width: view.width
             height: Math.max(line.implicitHeight, Theme.fontSizeExtraSmall * 1.4)
 
@@ -105,9 +108,9 @@ Page {
             }
             Label {
                 id: line
-                x: page.gutter
+                x: page.gutter + parent.indent
                 // Never implicitWidth: wrapping makes it depend on width again (binding loop).
-                width: parent.width - page.gutter - Theme.horizontalPageMargin
+                width: parent.room - parent.indent
                 // Row characters come back escaped from core with colours: file never read as
                 // markup.
                 text: doc.styledRow(index, doc.highlighted ? page.colours : "")
