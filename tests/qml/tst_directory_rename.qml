@@ -50,7 +50,6 @@ ApplicationWindow {
         expect(field[0].selectedText === "draft-v7", "selected without the extension: " + field[0].selectedText)
         expect(!field[0].errorHighlight && dialog.canAccept === false, "the old name is no error, nor a rename")
         field[0].text = "taken.md"
-        // Taken once the dialog has listed the folder.
         for (var i = 0; i < 200 && !dialog.taken; ++i)
             tools.pump(50)
         expect(field[0].errorHighlight && field[0].label !== field[0].placeholderText && !dialog.canAccept,

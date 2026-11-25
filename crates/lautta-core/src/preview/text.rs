@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Text viewer model: bounded loading, UTF-8 validation. `text` is normalised: line breaks `\n`,
-//! BOM dropped, single final line break not part of it.
 
 use crate::error::Result;
 use crate::provider::{read_all, ReadHandle};
@@ -11,7 +9,6 @@ const BOM: &[u8] = b"\xEF\xBB\xBF";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextDoc {
-    /// Lossy when `valid_utf8` is false.
     pub text: String,
     pub truncated: bool,
     pub valid_utf8: bool,
@@ -22,7 +19,6 @@ pub async fn load_text(handle: &dyn ReadHandle) -> Result<TextDoc> {
     Ok(analyze(&bytes))
 }
 
-/// `bytes.len() > MAX_TEXT_BYTES` means truncated.
 pub fn analyze(bytes: &[u8]) -> TextDoc {
     let truncated = bytes.len() > MAX_TEXT_BYTES;
     let raw = &bytes[..bytes.len().min(MAX_TEXT_BYTES)];
@@ -40,7 +36,6 @@ pub fn analyze(bytes: &[u8]) -> TextDoc {
     }
 }
 
-/// Multi-byte sequence cut by truncation is not an error.
 fn decode(raw: &[u8], truncated: bool) -> (bool, String) {
     match std::str::from_utf8(raw) {
         Ok(s) => (true, s.to_owned()),
@@ -167,7 +162,6 @@ pub fn text_kind(name: &[u8]) -> TextKind {
     }
 }
 
-/// `.txt` other than build files: reading font, no line numbers.
 pub fn reads_as_prose(name: &[u8]) -> bool {
     let lower = String::from_utf8_lossy(name).to_lowercase();
     lower.ends_with(".txt") && text_kind(name) == TextKind::Plain

@@ -8,7 +8,6 @@ import "../components/transfers/TransferText.js" as TransferText
 Item {
     id: root
 
-    // Tests set them.
     property int activeCount: Transfers.activeCount
     property int pausedCount: Transfers.pausedCount
     property int pendingCount: Transfers.pendingCount
@@ -16,7 +15,6 @@ Item {
     property real bytesDone: Transfers.bytesDone
     property real bytesTotal: Transfers.bytesTotal
     property real rate: Transfers.rate
-    // "transferring", "paused", "pending" or "idle".
     readonly property string mode: closing && pendingCount > 0
         ? "pending"
         : (activeCount > 0 ? "transferring" : (pausedCount > 0 ? "paused" : "idle"))
@@ -24,7 +22,6 @@ Item {
     readonly property int percent: TransferText.percent(bytesDone, bytesTotal)
     readonly property real fraction: bytesTotal > 0 ? Math.min(1, bytesDone / bytesTotal) : 0
 
-    // Whole cover is the progress bar: see-through fill from the left.
     Rectangle {
         objectName: "coverFill"
         visible: root.mode !== "pending"

@@ -40,7 +40,6 @@ ApplicationWindow {
         return findAll(item, function (x) { return x.objectName === name }, [])[0]
     }
 
-    // No render loop headless: lay out by hand.
     function layOut(view) {
         var flicks = findAll(view, function (x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < flicks.length; ++i)
@@ -57,7 +56,6 @@ ApplicationWindow {
         return findAll(view, function (x) { return x.previewShown === true }, [])
     }
 
-    // Cells asking for a text preview, by name: the request, not the async answer.
     function asking(view) {
         layOut(view)
         return findAll(view, function (x) { return x.previewAsked !== undefined && x.previewAsked !== "" }, [])

@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Pages of a scan one at a time: place, colour, turn,
-// remove behind a remorse, adjust.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -72,7 +71,6 @@ ApplicationWindow {
         return JSON.parse(scan.pageJson(index))
     }
 
-    // Without a catalogue the text is its id.
     function place(of, total) {
         var text = named(win.pageView, "placeLabel").text
         return text === of + " of " + total || text === "lautta-scan-page-of"
@@ -89,7 +87,6 @@ ApplicationWindow {
         running: win.scenarioRunning
         onTriggered: {
             win.waited++
-            // Hang guard: emulated target needs seconds per picture.
             if (win.waited > 600)
                 return win.fail("step " + win.step + " timed out")
             var popup
@@ -104,7 +101,6 @@ ApplicationWindow {
             case 1:
                 if (win.scan.busy)
                     break
-                // Longer than a step may take: a remorse that runs out by itself fails the test.
                 App.setSetting("remorse_seconds", JSON.stringify(60))
                 win.pageView = pageStack.push(Qt.resolvedUrl("../../qml/pages/ScanPageView.qml"), { "scan": win.scan, "index": 1 })
                 win.next()
@@ -168,7 +164,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 8:
-                // The view itself follows a removed page only once drawn: not in this headless run.
                 if (win.scan.busy || win.scan.count !== 2)
                     break
                 if (info(0).id !== 1 || info(1).id !== 3)
@@ -220,7 +215,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 14:
-                // No page left: nothing to show, back to where it came from.
                 if (pageStack.busy || pageStack.depth !== 1)
                     break
                 if (win.scan.count !== 0)

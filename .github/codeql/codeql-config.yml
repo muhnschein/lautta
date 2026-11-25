@@ -1,6 +1,3 @@
-# Code that ships, as sonar-project.properties draws it. Inline test modules and test-only
-# `sample`, `fake` features drop out via extractor options in codeql.yml; test modules in
-# files (`mod tests;`) need paths here: extractor reads them anyway.
 paths-ignore:
   - crates/*/tests
   - crates/*/src/**/tests.rs

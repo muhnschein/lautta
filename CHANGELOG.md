@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- HEIC, HEIF, AVIF and JPEG XL files no longer open in the image viewer only to say "Can't show this image": Sailfish OS has no decoder for them. They show the plain file icon and open with another app, like other files Lautta can't show ([#158](https://github.com/muhnschein/lautta/issues/158)).
+- An empty folder says *Pull down to add*, as the pulley entry is called, and mentions paste only when something on the clipboard can be pasted there. *Paste here* on the clipboard bar now also shows in folders you opened before copying ([#192](https://github.com/muhnschein/lautta/issues/192)).
+- Videos ending in .ts, as TV and camera recordings do, show the video icon in folders on this device and open in the video player, no longer as code in the text viewer. TypeScript files ending in .ts still open as code. .mts and .m2ts files are videos too ([#160](https://github.com/muhnschein/lautta/issues/160)).
+- A compressed single file such as log.gz, dump.sql.xz, data.json.zst or a .bz2 file opens like other compressed files, with that one file inside to view or extract. It no longer fails with "not a supported archive" ([#159](https://github.com/muhnschein/lautta/issues/159)).
+- Small things: *More* in the image viewer shows icons, as *More actions* does; *Checksums* names its file; *Settings › Transfers* asks before operations of "Over 1000 items or 1 GB", no longer "953.7 MB" ([#214](https://github.com/muhnschein/lautta/issues/214)).
+- Long code lines in the text viewer wrap at their own indent, so wrapped parts line up with the code above them ([#211](https://github.com/muhnschein/lautta/issues/211)).
+- In the audio player, elapsed and total time sit on one line under the slider, at its two ends ([#212](https://github.com/muhnschein/lautta/issues/212)).
+- The image viewer's first-time hint *Swipe down to go to previous view* sits above the toolbar, no longer over Delete, Open with, Share and More ([#213](https://github.com/muhnschein/lautta/issues/213)).
+- Times of files inside a Zip are right when the Zip has no Unix times, as in ones made with Python; they were off by the phone's offset from UTC ([#206](https://github.com/muhnschein/lautta/issues/206)).
+- Copy and move tasks name the folder the items went to, not the place it is in: *Copied notes.txt to Mixed*, no longer *to Pictures* ([#207](https://github.com/muhnschein/lautta/issues/207)).
+- Search filters and *Task details* show folders on this device as *Pictures › Holiday*, no longer as file:// addresses ([#208](https://github.com/muhnschein/lautta/issues/208), [#125](https://github.com/muhnschein/lautta/issues/125)).
 - Recents tiles on the Home page shorten long names in the middle with "…", so the extension stays in view ([#209](https://github.com/muhnschein/lautta/issues/209)).
 - The Home page shows only how much space is free on the phone and on memory cards and USB drives, as "12 GB free", no longer "12 GB free of 50 GB".
 - The start page is called *Home* now, no longer *Browse*, and its settings are *Home page*. What you hid or reordered there stays as it was ([#143](https://github.com/muhnschein/lautta/issues/143)).

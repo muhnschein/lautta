@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! tar and compressed tar. Plain tar indexed via block cache (headers, data skipped by seek);
-//! compressed tar read sequentially from the downloaded cache file; entry data served from
-//! [`Spill`], so reading every entry decompresses archive about once, not once per entry.
 
 use super::blocks::{from_io, BlockReader};
 use super::{Compression, Loc, RawEntry};
@@ -14,7 +11,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-/// Decompressed bytes [`Spill`] keeps before starting a new file at the next entry.
 pub const SPILL_CAP: u64 = 256 * 1024 * 1024;
 
 pub fn decoder<'a, R: Read + Send + 'a>(
@@ -70,7 +66,6 @@ pub fn index_seek(reader: BlockReader) -> Result<Vec<RawEntry>> {
     Ok(out)
 }
 
-/// Entries located by data offset in the decompressed stream.
 pub fn index_stream(input: impl Read) -> Result<Vec<RawEntry>> {
     let mut archive = tar::Archive::new(input);
     let mut out = Vec::new();
@@ -82,17 +77,25 @@ pub fn index_stream(input: impl Read) -> Result<Vec<RawEntry>> {
     Ok(out)
 }
 
-/// Decompressed stream of a compressed tar, read forward once and kept in an unlinked file:
-/// entry read in archive order costs only its own bytes. Earlier entry past what file keeps
-/// decompresses again from start.
+pub fn index_single(mut input: impl Read, name: Vec<u8>) -> Result<RawEntry> {
+    let size = io::copy(&mut input, &mut io::sink()).map_err(tar_err)?;
+    Ok(RawEntry {
+        name,
+        kind: Kind::File,
+        size,
+        mtime: None,
+        mode: None,
+        link: None,
+        loc: Loc::TarStream(0),
+    })
+}
+
 pub struct Spill {
     comp: Compression,
     dir: PathBuf,
     input: Box<dyn Read + Send>,
-    /// Stream bytes read from `input`.
     pos: u64,
     file: Arc<File>,
-    /// Stream offset of `file`'s first byte; it holds `base..pos`.
     base: u64,
     cap: u64,
 }
@@ -110,7 +113,6 @@ impl Spill {
         })
     }
 
-    /// File holding stream bytes `offset..offset + len`, and where they start in it.
     pub fn fetch(
         &mut self,
         offset: u64,
@@ -144,7 +146,6 @@ impl Spill {
         Ok((Arc::clone(&self.file), offset - self.base))
     }
 
-    /// Drops kept bytes; next file starts at `offset`.
     fn skip_to(&mut self, offset: u64) -> Result<()> {
         let gap = offset - self.pos;
         let skipped = io::copy(&mut (&mut self.input).take(gap), &mut io::sink()).map_err(tar_err)?;
@@ -163,17 +164,14 @@ fn spill_file(dir: &Path) -> Result<File> {
         .write(true)
         .create_new(true)
         .open(&path)?;
-    // Unlinked at once: data lives as long as the handles.
     std::fs::remove_file(&path)?;
     Ok(file)
 }
 
-/// Recognises compressed tar by `ustar` magic.
 pub fn decompressed_head(comp: Compression, head: &[u8], limit: usize) -> Vec<u8> {
     let mut out = Vec::new();
     if let Ok(dec) = decoder(comp, head) {
         let mut taken = dec.take(limit as u64);
-        // A truncated head ends in an error after the bytes we need.
         let _ = taken.read_to_end(&mut out);
     }
     out
@@ -288,7 +286,6 @@ mod tests {
     fn spill_past_cap_keeps_later_entries_only_and_rereads_earlier() {
         let data = entries();
         let (_d, path, locs, mut spill) = spill_of(&data);
-        // Entries 4 and 5 fit together, 0 to 4 do not.
         spill.cap = locs[5].0 + locs[5].1 - locs[4].0;
         let reopened = AtomicUsize::new(0);
         assert_eq!(read(&mut spill, locs[0], &path, &reopened), data[0]);

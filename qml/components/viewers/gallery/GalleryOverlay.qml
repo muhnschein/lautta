@@ -23,6 +23,7 @@ Item {
     property bool held
 
     property alias toolbar: toolbar
+    readonly property real toolbarSpace: enabled ? bottomFade.height : 0
     property alias detailsButton: detailsButton
     property alias topFade: topFade
     property alias fadeOpacity: topFade.fadeOpacity

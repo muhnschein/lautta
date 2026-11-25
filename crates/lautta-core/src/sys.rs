@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 #![allow(unsafe_code)]
-//! Only module allowed `unsafe`: renameat2, statx, FICLONE, fd helpers.
-//!
-//! rustix 0.38 wraps every needed syscall safely, so currently no `unsafe` block. Everything
-//! returns `std::io::Result`: callers map with `Error::from`, keeping errno.
 
 use rustix::fs::{
     copy_file_range, fadvise, ioctl_ficlone, renameat_with, statvfs as rx_statvfs, utimensat, Access, Advice,
@@ -16,10 +12,8 @@ use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
-/// Largest single `copy_file_range` request. The kernel may copy less.
 const COPY_CHUNK: usize = 8 << 20;
 
-/// File type values (not exported by `std`).
 const S_IFMT: u32 = 0o170_000;
 const S_IFDIR: u32 = 0o040_000;
 const S_IFREG: u32 = 0o100_000;
@@ -32,7 +26,6 @@ pub struct FileStat {
     pub uid: u32,
     pub gid: u32,
     pub mtime: SystemTime,
-    /// Birth time; `None` when the filesystem or kernel does not record it.
     pub btime: Option<SystemTime>,
     pub dev: u64,
     pub ino: u64,
@@ -56,7 +49,6 @@ impl FileStat {
         self.mode & 0o7777
     }
 
-    /// No birth time.
     pub fn from_metadata(m: &std::fs::Metadata) -> FileStat {
         FileStat {
             mode: m.mode(),
@@ -81,7 +73,6 @@ pub fn timestamp(sec: i64, nsec: u32) -> SystemTime {
     }
 }
 
-/// One syscall: type, size, owner, times, birth time. `follow` selects stat vs lstat.
 pub fn stat(path: &Path, follow: bool) -> io::Result<FileStat> {
     let flags = if follow {
         AtFlags::empty()
@@ -104,8 +95,6 @@ pub fn stat(path: &Path, follow: bool) -> io::Result<FileStat> {
                 nlink: u64::from(sx.stx_nlink),
             })
         }
-        // Old kernels and some seccomp profiles refuse statx; the plain
-        // stat answers the same question minus the birth time.
         Err(e) if statx_unavailable(e) => {
             let meta = if follow {
                 std::fs::metadata(path)?
@@ -126,14 +115,10 @@ pub fn same_device(a: &Path, b: &Path) -> io::Result<bool> {
     Ok(stat(a, true)?.dev == stat(b, true)?.dev)
 }
 
-/// Trash copies across mounts only when it can remove the original afterwards.
 pub fn can_change(dir: &Path) -> bool {
     rustix::fs::access(dir, Access::WRITE_OK | Access::EXEC_OK).is_ok()
 }
 
-/// `renameat2(RENAME_NOREPLACE)`: atomic "fail if the destination exists".
-/// `EEXIST` comes back as `AlreadyExists`; `EINVAL`/`ENOSYS`/`EOPNOTSUPP`
-/// mean the filesystem cannot do it (see [`is_flag_unsupported`]).
 pub fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
     renameat_with(CWD, from, CWD, to, RenameFlags::NOREPLACE).map_err(Into::into)
 }
@@ -147,16 +132,10 @@ pub fn is_flag_unsupported(e: &io::Error) -> bool {
         if [Errno::INVAL, Errno::NOSYS, Errno::OPNOTSUPP].iter().any(|k| k.raw_os_error() == code))
 }
 
-/// `FICLONE`: makes `dst` share `src`'s extents (reflink). Fails with
-/// `EOPNOTSUPP`/`EXDEV`/`EINVAL`/`ENOTTY` when the filesystem cannot.
 pub fn clone_file(dst: &File, src: &File) -> io::Result<()> {
     ioctl_ficlone(dst, src).map_err(Into::into)
 }
 
-/// Copies from the current position of `src` to the current position of
-/// `dst` until end of file with `copy_file_range`, calling `progress` with
-/// the running total of bytes; its error ends the copy. On error the positions
-/// stay consistent, so the caller can continue with a buffered copy.
 pub fn copy_range_all(
     src: &File,
     dst: &File,
@@ -178,7 +157,6 @@ pub fn copy_range_all(
 
 pub fn fs_magic(path: &Path) -> io::Result<u64> {
     let st = rustix::fs::statfs(path)?;
-    // f_type is signed on some targets; the magic is a 32-bit value.
     Ok(st.f_type as u64 & 0xFFFF_FFFF)
 }
 
@@ -232,7 +210,6 @@ pub fn set_mtime(path: &Path, mtime: SystemTime) -> io::Result<()> {
     utimensat(CWD, path, &times, AtFlags::empty()).map_err(Into::into)
 }
 
-/// Read-ahead hint (`posix_fadvise(WILLNEED)`). Best effort.
 pub fn advise_willneed(file: &File, offset: u64, len: u64) {
     let _ = fadvise(file, offset, len, Advice::WillNeed);
 }
@@ -324,8 +301,6 @@ mod tests {
         match clone_file(&dst, &src) {
             Ok(()) => assert_eq!(std::fs::read(&b).unwrap(), b"reflink me"),
             Err(e) => {
-                // ext4/tmpfs have no reflinks: the error must be one the
-                // copy code treats as "fall back".
                 assert!(
                     matches!(e.raw_os_error(), Some(c) if [
                         Errno::OPNOTSUPP, Errno::XDEV, Errno::INVAL, Errno::NOTTY, Errno::NOSYS, Errno::BADF

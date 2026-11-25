@@ -23,7 +23,6 @@ async fn a_late_location_list_does_not_resurrect_a_withdrawn_consent() {
     let replies = rig.fake.location_replies();
     let asked = rig.fake.calls_of("ListLocations").len();
     rig.fake.set_consent(Consent::Allowed(Level::Full)).await;
-    // The bridge has made its list (with the account) and is slow to answer.
     eventually("the list asked for", || {
         rig.fake.calls_of("ListLocations").len() > asked
     })
@@ -31,7 +30,6 @@ async fn a_late_location_list_does_not_resurrect_a_withdrawn_consent() {
     rig.fake.set_consent(Consent::Unknown).await;
     eventually("the late list", || rig.fake.location_replies() > replies).await;
     rig.fake.set_latency(Duration::ZERO);
-    // One more round trip: the late answer came before it on the same connection.
     let _ = rig
         .provider()
         .stat(&VPath::root(), false, Lane::Interactive)
@@ -68,8 +66,6 @@ async fn the_apps_copy_of_the_descriptor_is_closed_once_the_bridge_has_it() {
     let upload = provider.upload_from(reader, &target, opts, no_progress());
     let check = async {
         eventually("the job to start", || !rig.fake.calls_of("Upload").is_empty()).await;
-        // Left: writer's end and bridge's reader (a fake message may hold one more briefly). An app
-        // copy would hide a stalled reader from the writer.
         eventually("the app's copy to be closed", || descriptors_on_pipe(inode) <= 2).await;
         File::from(writer).write_all(b"abc").unwrap();
     };

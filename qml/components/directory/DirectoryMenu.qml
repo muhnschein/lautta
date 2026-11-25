@@ -14,7 +14,6 @@ PullDownMenu {
     readonly property bool writable: owner ? owner.model.writable : false
     readonly property bool readable: owner ? owner.model.readable : false
     readonly property bool makes: picking && writable && !owner.atRoot
-    // Inside a compressed file: the file itself, else "".
     readonly property string archiveUri: owner ? Operations.archiveSource(owner.uri) : ""
 
     visible: !picking || makes
@@ -65,7 +64,7 @@ PullDownMenu {
         onClicked: menu.owner.runAction("favourite", [menu.owner.uri], {}, null)
     }
     MenuItem {
-        visible: menu.browsing && menu.writable && App.clipboardCount > 0 && App.canPasteInto(owner ? owner.uri : "")
+        visible: menu.browsing && (owner ? owner.canPaste : false)
         //% "Paste %n items"
         text: qsTrId("lautta-dir-menu-paste", App.clipboardCount)
         onClicked: menu.owner.paste()

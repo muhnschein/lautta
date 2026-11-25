@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// F-RCT-03 tiles and F-HOM-11 free space on SCR-01 Home. No finger, no thumbnailer: looks unproven;
-// text tiles' first lines are real.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -82,7 +80,6 @@ ApplicationWindow {
         return out
     }
 
-    // No render loop headless: lay out by hand.
     function list() {
         var views = findAll(home, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         if (views.length === 0)
@@ -204,7 +201,6 @@ ApplicationWindow {
         return named(row, "recentTile").map(function(t) { return t.lit ? t.tile.id : 0 }).join(",")
     }
 
-    // Finger down on a photo's tile starts its decode for the viewer, as rows of SCR-38 do.
     function checkPrefetch(row) {
         var tiles = named(row, "recentTile")
         prefetch = named(home, "viewerPrefetch")[0] || null
@@ -219,14 +215,12 @@ ApplicationWindow {
         touch(tiles[0], true)
     }
 
-    // Finger down on a tile; scrolls away unless it stays.
     function touch(tile, stay) {
         tools.mouse(tile, "press", tile.width / 2, tile.height / 2)
         if (!stay)
             letGo(tile)
     }
 
-    // Dragged along the list: it takes the finger, the tile's press is cancelled.
     function letGo(tile) {
         var view = list()
         var at = view.contentY
@@ -234,7 +228,6 @@ ApplicationWindow {
         for (var i = 1; i <= 4; ++i)
             tools.mouse(tile, "move", tile.width / 2, y + i * Theme.startDragDistance)
         tools.mouse(tile, "release", tile.width / 2, y + 4 * Theme.startDragDistance)
-        // Next press would only stop the flick.
         view.cancelFlick()
         view.contentY = at
     }
@@ -245,7 +238,6 @@ ApplicationWindow {
         tiles[1].pressAndHold(null)
         expect(fetched.length === 2 && fetched[1] === "" && prefetch.status !== Image.Ready,
                "a hold drops the decode: " + JSON.stringify(fetched))
-        // Finger off the tile, then up: no tap. Open menu holds the list still, so no scroll takes the press.
         tools.mouse(tiles[0], "move", -Theme.paddingSmall, tiles[0].height / 2)
         tools.mouse(tiles[0], "release", -Theme.paddingSmall, tiles[0].height / 2)
         if (!expect(row.menuOpen, "a long press on a tile opens a menu"))
@@ -298,7 +290,6 @@ ApplicationWindow {
                 if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), win.file)
                         || !tools.installFixture(Qt.resolvedUrl("host/fixtures/camera.jpg"), win.photo))
                     return win.fail("fixture")
-                // Page anew once the file is there: its text tile asks for first lines.
                 pageStack.replace(homePage, {}, PageStackAction.Immediate)
                 win.next()
                 break

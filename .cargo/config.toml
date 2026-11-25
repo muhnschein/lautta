@@ -1,3 +1,2 @@
-# Dependencies are resolved for the workspace's rust-version.
 [resolver]
 incompatible-rust-versions = "fallback"

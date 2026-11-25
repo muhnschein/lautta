@@ -1,11 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Thumbnails of server PDFs (local ones are the system thumbnailer's): first page's top left
-//! square, drawn by `lautta-pdf`, as JPEG.
-//!
-//! One page at a time on a phone CPU: [`PdfThumbs`] lets a render wait for the one before it, also
-//! when the asking delegate has gone (a render cannot be stopped). A PDF that cannot be drawn,
-//! panicking render included, is remembered, so scrolling back costs nothing; one whose render took
-//! the process down (stack overflow, OOM) is marked on disk, so the next start skips it.
 
 use crate::error::{Error, ErrorKind, Result};
 use crate::panics::catch;
@@ -18,7 +11,6 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, PoisonError};
 use tokio::sync::Semaphore;
 
-/// Oldest forgotten first.
 const MAX_REFUSED: usize = 256;
 
 fn unsupported(msg: &str) -> Error {
@@ -47,22 +39,18 @@ pub fn first_page(bytes: Vec<u8>, size: u32) -> Result<Vec<u8>> {
     encode(&DynamicImage::ImageRgb8(rgb))
 }
 
-/// A panic in `draw(bytes, size)` (a PDF tripping hayro or the code around it) refuses the PDF, not
-/// the app.
 fn drawn(draw: Draw, bytes: Vec<u8>, size: u32) -> Result<Vec<u8>> {
     catch(|| draw(bytes, size)).unwrap_or_else(|_| Err(unsupported("drawing the PDF failed")))
 }
 
 type Draw = fn(Vec<u8>, u32) -> Result<Vec<u8>>;
 
-/// A marker already there means an earlier run did not end, and `work` does not run.
 fn guarded<T>(marker: &Path, work: impl FnOnce() -> Result<T>) -> Result<T> {
     if marker.exists() {
         return Err(unsupported("an earlier try at this PDF did not end"));
     }
     std::fs::write(marker, [])?;
     let made = work();
-    // Stays when the process is gone before this line.
     let _ = std::fs::remove_file(marker);
     made
 }
@@ -82,8 +70,6 @@ impl Default for PdfThumbs {
 }
 
 impl PdfThumbs {
-    /// Whether `version` (URI, mtime and etag, see `thumbs::thumb_key` with size 0) was found not
-    /// drawable.
     pub fn is_refused(&self, version: &str) -> bool {
         self.refused
             .lock()
@@ -104,9 +90,6 @@ impl PdfThumbs {
         true
     }
 
-    /// `dir` holds the marker files; `version` names the file's version (see
-    /// [`PdfThumbs::is_refused`]). A file over `max_bytes` is not read; a PDF that cannot be drawn
-    /// is refused from then on.
     pub async fn make(
         &self,
         dir: &Path,
@@ -134,8 +117,6 @@ impl PdfThumbs {
         if handle.size().is_some_and(|s| s > max_bytes) {
             return Err(too_large());
         }
-        // A file that grew or lied about its size is cut one byte past the limit: nothing larger is
-        // held in memory.
         let bytes = read_all(handle, max_bytes.saturating_add(1)).await?;
         if bytes.len() as u64 > max_bytes {
             return Err(too_large());
@@ -153,8 +134,6 @@ impl PdfThumbs {
         made
     }
 
-    /// Dropping the future before it runs cancels it; once running it goes to its end and holds its
-    /// turn.
     async fn exclusive<T: Send + 'static>(&self, work: impl FnOnce() -> T + Send + 'static) -> Result<T> {
         let turn = Arc::clone(&self.gate).acquire_owned().await.map_err(internal)?;
         tokio::task::spawn_blocking(move || {
@@ -516,7 +495,6 @@ mod tests {
                 pdfs.make(&path, "v", &h, 32, 1_000_000).await
             })
         };
-        // No event says "waiting for the turn": a second is far longer than a render without it.
         assert!(
             tokio::time::timeout(Duration::from_secs(1), &mut made)
                 .await
@@ -552,7 +530,6 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 
-    /// Jobs for `exclusive` that count how many run at once and wait for `release`.
     struct Probe {
         running: AtomicUsize,
         peak: AtomicUsize,

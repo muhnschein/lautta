@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Archives are read back by independent readers (`zip`, `tar`, `flate2`) and by `ArchiveProvider`.
 
 use super::zipstream::ZipStream;
 use super::*;
@@ -297,7 +296,6 @@ async fn single_files_and_multiple_locations() {
     .unwrap();
     assert_eq!((stats.files, stats.dirs), (2, 1));
     let mut z = zip::ZipArchive::new(io::Cursor::new(sink.bytes())).unwrap();
-    // Archive order (by index); `file_names()` iterates a hash map.
     let names: Vec<String> = (0..z.len())
         .map(|i| z.by_index(i).unwrap().name().unwrap().into_owned())
         .collect();
@@ -435,7 +433,6 @@ async fn a_failing_sink_ends_the_run_with_its_error() {
     }
 }
 
-/// Accepts every byte; only the last flush fails, as a sink that commits on flush can.
 struct FailingFlush;
 
 impl Sink for FailingFlush {}
@@ -525,7 +522,6 @@ fn zip_writer_handles_unknown_sizes_and_forced_zip64() {
     }
 }
 
-/// "Version needed to extract" of central entry `name`.
 fn version_needed(zip: &[u8], name: &[u8]) -> u16 {
     let u16_at = |at: usize| u16::from_le_bytes([zip[at], zip[at + 1]]);
     (0..zip.len() - 46)
@@ -678,7 +674,6 @@ async fn sevenz_round_trips_with_folders_links_modes_and_times() {
     assert_eq!(st.mode, Some(0o644));
     let dir = p.stat(&vp("proj/src"), false, Lane::Bulk).await.unwrap();
     assert_eq!(dir.mode, Some(0o755));
-    // 7-Zip on Windows reads the directory attribute, not the unix mode.
     let raw =
         sevenz_rust2::Archive::read(&mut io::Cursor::new(&bytes), &sevenz_rust2::Password::empty()).unwrap();
     for e in &raw.files {

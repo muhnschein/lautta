@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Search area on `Core`: recursive search, cache and app-data clearing, per-location preferences.
 
 use crate::app::Core;
 use crate::error::{Error, ErrorKind, Result};
@@ -45,7 +44,6 @@ pub fn size_bounds(preset: &str) -> (Option<u64>, Option<u64>) {
     }
 }
 
-/// Today: since local midnight; week and month rolling; year from 1 January.
 pub fn date_lower_bound(preset: &str, now: DateTime<Local>) -> Option<SystemTime> {
     let midnight =
         |date: chrono::NaiveDate| Local.from_local_datetime(&date.and_hms_opt(0, 0, 0)?).earliest();
@@ -60,7 +58,6 @@ pub fn date_lower_bound(preset: &str, now: DateTime<Local>) -> Option<SystemTime
 }
 
 impl SearchRequest {
-    /// Empty request would list the whole tree; UI only does that on purpose.
     pub fn is_restricted(&self) -> bool {
         !self.text.trim().is_empty()
             || !self.types.is_empty()
@@ -175,7 +172,6 @@ fn remove_tree(dir: &Path) -> Result<()> {
 }
 
 impl Core {
-    /// Unlimited on local locations, the setting on remote ones.
     pub fn search_depth(&self, root: &Uri) -> Option<u32> {
         if self.locations.to_local_path(root).is_some() {
             None
@@ -241,7 +237,6 @@ impl Core {
         Ok(before.total())
     }
 
-    /// netvfs recreates its socket folder. Refused while transfers are unfinished.
     pub fn clear_app_data(&self) -> Result<()> {
         if self.engine.pending_summary() > 0 {
             return Err(Error::new(ErrorKind::Locked, "transfers are still running"));
@@ -271,8 +266,6 @@ impl Core {
     }
 
     pub fn set_location_prefs(&self, prefs: &LocationPrefs) -> Result<()> {
-        // Opt-out first: switching it off writes a row, which the store removes again below when
-        // all is default.
         self.dircache
             .set_disabled(&prefs.location_id, prefs.no_listing_cache)?;
         self.location_prefs.set(prefs)?;

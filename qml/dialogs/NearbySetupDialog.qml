@@ -6,7 +6,6 @@ import Lautta 1.0
 Dialog {
     id: dialog
 
-    // Account provider of the server found nearby: `sftp`, `smb`, …
     property string provider
 
     allowedOrientations: Orientation.All

@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Silica window sits in a Qt Quick window so the list
-// has a size and lays out rows.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import QtQuick.Window 2.2 as QtQuick
 import Sailfish.Silica 1.0
@@ -21,7 +20,6 @@ QtQuick.Window {
 
     ViewerTools { id: tools }
     TextDocument { id: warmUp }
-    // Same file as the page: plain lines to lay out beside its rows (fixtures here have no tabs).
     TextDocument { id: shownFile; uri: window.page ? window.page.uri : "" }
 
     Label {
@@ -85,7 +83,7 @@ QtQuick.Window {
     function showsItsLine(row, number) {
         var line = lineOf(number)
         plain.width = row.width
-        plain.text = line
+        plain.text = line.replace(/^[ \t]+(?=\S)/, "").replace(/ {2,}/g, function (run) { return run.replace(/ /g, "\u00a0") })
         expect(row.contentWidth > 0 && row.lineCount === plain.lineCount
                && Math.abs(row.contentWidth - plain.contentWidth) < 1,
                "line " + number + " " + JSON.stringify(line) + " is " + row.lineCount + " lines, " + row.contentWidth
@@ -119,8 +117,10 @@ QtQuick.Window {
     }
 
     function checkTabbed(shown) {
-        var tabbed = '&nbsp;&nbsp;&nbsp;&nbsp;<font color="' + colourOf("function") + '">echo</font>'
+        var tabbed = '<font color="' + colourOf("function") + '">echo</font>'
         expect(shown["2"].text.indexOf(tabbed) === 0, "the row with a tab: " + shown["2"].text)
+        expect(shown["2"].x > shown["1"].x && shown["2"].width < shown["1"].width,
+               "the tab's indent moves the row in: " + shown["2"].x + " " + shown["1"].x)
     }
 
     function checkLong(shown) {

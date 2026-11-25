@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Replays the shared golden sequences (`tests/bridge-contract/*.json`) against the fake, so
-//! this client and the real bridge agree on the protocol.
 
 use super::{Consent, FakeBridge};
 use crate::connect::Connection;
@@ -220,7 +218,6 @@ fn encode_array(elem: &str, v: &Json) -> Result<Value<'static>, String> {
     Ok(Value::Array(arr))
 }
 
-/// `a{sv}`: integers travel as `x`.
 fn encode_dict(v: &Json) -> Result<Value<'static>, String> {
     let obj = v
         .as_object()
@@ -303,8 +300,6 @@ fn body_fields(msg: &zbus::Message) -> Result<Vec<Json>, String> {
     };
     let s: Structure = body.deserialize().map_err(|e| e.to_string())?;
     let fields: Vec<Json> = s.fields().iter().map(decode).collect();
-    // zbus reads a one-struct body as that struct's fields; on the wire it is a single argument
-    // (`Stat`'s entry).
     let one_struct = sig.starts_with('(') && split_types(&sig).is_ok_and(|t| t.len() == 1);
     Ok(if one_struct {
         vec![Json::Array(fields)]
@@ -313,7 +308,6 @@ fn body_fields(msg: &zbus::Message) -> Result<Vec<Json>, String> {
     })
 }
 
-/// Byte arrays may be written as `{"bytes": ...}`; both sides compare as hex.
 fn normalise(v: &Json) -> Json {
     if v.as_object()
         .is_some_and(|o| o.len() == 1 && (o.contains_key("bytes") || o.contains_key("hex")))
@@ -374,7 +368,6 @@ fn match_arrays(e: &[Json], a: &[Json], binds: &mut Bindings) -> Result<(), Stri
     Ok(())
 }
 
-/// Replaces `"$name"` strings by their bindings.
 fn substitute(v: &Json, binds: &Bindings) -> Result<Json, String> {
     match v {
         Json::String(s) if s.starts_with('$') => binds
@@ -500,7 +493,6 @@ async fn signal_step(
         loop {
             let notified = inbox.arrived.notified();
             tokio::pin!(notified);
-            // Arm before looking, so that a signal pushed in between is not missed.
             notified.as_mut().enable();
             if let Some(args) = inbox.take(signal) {
                 return args;
