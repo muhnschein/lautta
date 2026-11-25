@@ -52,6 +52,7 @@ pub mod thumbs;
 pub mod thumbs_pdf;
 pub mod thumbs_text;
 pub(crate) mod zipaes;
+pub(crate) mod zipcrypto;
 
 pub mod org;
 pub mod search;
