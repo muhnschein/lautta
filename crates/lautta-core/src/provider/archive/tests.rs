@@ -331,6 +331,28 @@ async fn sevenz_lists_and_reads() {
     assert!(read_entry(&p, "empty.txt").await.is_empty());
 }
 
+#[tokio::test]
+async fn solid_zstd_7z_reads_every_entry() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut w = sevenz_rust2::ArchiveWriter::new(Cursor::new(Vec::new())).unwrap();
+    w.set_content_methods(vec![sevenz_rust2::encoder_options::ZstandardOptions::from_level(
+        1,
+    )
+    .into()]);
+    let files: [(&str, &[u8]); 3] = [("one", b"first"), ("two", b"second"), ("three", b"third")];
+    let entries = files
+        .iter()
+        .map(|(n, _)| sevenz_rust2::ArchiveEntry::new_file(n))
+        .collect();
+    let readers = files.iter().map(|(_, d)| (*d).into()).collect();
+    w.push_archive_entries(entries, readers).unwrap();
+    let data = w.finish().unwrap().into_inner();
+    let p = open_named("z.7z", &data, tmp.path()).await.unwrap();
+    for (name, want) in files.iter().rev() {
+        assert_eq!(read_entry(&p, name).await, *want, "{name}");
+    }
+}
+
 fn hostile_entries() -> Vec<(&'static str, &'static [u8])> {
     vec![
         ("../evil.txt", b"x"),

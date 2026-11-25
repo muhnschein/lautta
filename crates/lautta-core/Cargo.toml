@@ -51,7 +51,7 @@ tar = "0.4"
 xz2 = "0.1"
 bzip2 = "0.4"
 zstd = { version = "0.14", default-features = false }
-sevenz-rust2 = { version = "0.24", default-features = false, features = ["compress", "aes256"] }
+sevenz-rust2 = { version = "0.24", default-features = false, features = ["compress", "aes256", "bzip2", "deflate", "ppmd", "zstd"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -35,3 +35,35 @@ async fn sevenz_fixture_lists_and_reads() {
         .unwrap();
     assert_eq!(read_all(h.as_ref(), 1 << 20).await.unwrap(), b"# hello from 7z\n");
 }
+
+const SOLID: [(&str, &[u8]); 3] = [
+    ("deflate.7z", include_bytes!("fixtures/deflate.7z")),
+    ("bzip2.7z", include_bytes!("fixtures/bzip2.7z")),
+    ("ppmd.7z", include_bytes!("fixtures/ppmd.7z")),
+];
+
+#[tokio::test]
+async fn sevenz_codecs_read_every_entry_of_a_solid_block() {
+    for (name, bytes) in SOLID {
+        let tmp = tempfile::tempdir().unwrap();
+        let mem = MemoryProvider::default();
+        mem.add_file(name, bytes, 0);
+        let path = VPath::parse(name.as_bytes()).unwrap();
+        let p = ArchiveProvider::open(Arc::new(mem), path, tmp.path().to_path_buf(), None)
+            .await
+            .unwrap();
+        for (entry, want) in [
+            ("b.txt", &b"bravo bravo bravo\n"[..]),
+            ("a.txt", b"alpha alpha alpha\n"),
+        ] {
+            let h = p
+                .open_read(&VPath::parse(entry.as_bytes()).unwrap(), Lane::Bulk)
+                .await
+                .unwrap_or_else(|e| panic!("{name} {entry}: {e}"));
+            let got = read_all(h.as_ref(), 1 << 20)
+                .await
+                .unwrap_or_else(|e| panic!("{name} {entry}: {e}"));
+            assert_eq!(got, want, "{name} {entry}");
+        }
+    }
+}

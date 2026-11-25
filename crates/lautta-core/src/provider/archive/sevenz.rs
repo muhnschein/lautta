@@ -5,16 +5,19 @@ use super::{Loc, RawEntry};
 use crate::entry::Kind;
 use crate::error::{Error, ErrorKind, Result};
 use crate::password::Password;
-use sevenz_rust2::{ArchiveReader, EncoderMethod};
+use sevenz_rust2::{Archive, ArchiveReader, BlockDecoder, EncoderMethod};
 use std::fs::File;
 use std::io::{self, Write};
 use std::time::SystemTime;
 
 const UNIX_EXTENSION: u32 = 0x8000;
 
+fn key(password: Option<&Password>) -> sevenz_rust2::Password {
+    password.map_or_else(sevenz_rust2::Password::empty, |p| p.as_str().into())
+}
+
 fn open(file: File, password: Option<&Password>) -> Result<ArchiveReader<File>> {
-    let key = password.map_or_else(sevenz_rust2::Password::empty, |p| p.as_str().into());
-    ArchiveReader::new(file, key).map_err(map_err)
+    ArchiveReader::new(file, key(password)).map_err(map_err)
 }
 
 fn map_err(err: sevenz_rust2::Error) -> Error {
@@ -113,32 +116,46 @@ pub fn index(file: File, password: Option<&Password>) -> Result<(Vec<RawEntry>, 
     Ok((out, locked))
 }
 
-pub fn copy_entry(file: File, name: &str, out: &mut dyn Write, password: Option<&Password>) -> Result<()> {
-    let mut reader = open(file, password)?;
-    let mut found = false;
+pub fn copy_entry(
+    mut file: File,
+    name: &str,
+    out: &mut dyn Write,
+    password: Option<&Password>,
+) -> Result<()> {
+    let key = key(password);
+    let archive = Archive::read(&mut file, &key).map_err(map_err)?;
+    let index = archive
+        .files
+        .iter()
+        .position(|e| e.name() == name)
+        .ok_or_else(|| Error::new(ErrorKind::NotFound, "entry vanished from archive"))?;
+    let Some(block) = archive.stream_map.file_block_index[index] else {
+        return Ok(());
+    };
+    let wanted = &archive.files[index];
+    let threads = std::thread::available_parallelism().map_or(1, |n| u32::try_from(n.get()).unwrap_or(1));
     let mut failure: Option<io::Error> = None;
-    let res = reader.for_each_entries(|entry, data| {
-        if entry.name() != name {
-            return Ok(true);
-        }
-        found = true;
-        if let Err(e) = io::copy(data, out) {
-            failure = Some(e);
-        }
-        Ok(false)
-    });
+    let res =
+        BlockDecoder::new(threads, block, &archive, &key, &mut file).for_each_entries(&mut |entry, data| {
+            let target = std::ptr::eq(entry, wanted);
+            let copied = if target {
+                io::copy(data, out)
+            } else {
+                io::copy(data, &mut io::sink())
+            };
+            if let Err(e) = copied {
+                failure = Some(e);
+                return Ok(false);
+            }
+            Ok(!target)
+        });
     if let Some(e) = failure {
         if password.is_some() && e.kind() == io::ErrorKind::InvalidData {
             return Err(Error::kind(ErrorKind::WrongPassword));
         }
         return Err(from_io(e));
     }
-    res.map_err(map_err)?;
-    if found {
-        Ok(())
-    } else {
-        Err(Error::new(ErrorKind::NotFound, "entry vanished from archive"))
-    }
+    res.map_err(map_err).map(drop)
 }
 
 #[cfg(test)]
