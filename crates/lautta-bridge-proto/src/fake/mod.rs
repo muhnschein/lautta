@@ -66,18 +66,25 @@ impl FakeBridge {
 
     pub async fn serve_stream(&self, stream: UnixStream) -> Result<(), BridgeError> {
         let session = self.shared.new_session();
+        let conn = self.serve_session(stream, session.clone()).await?;
+        session.set_conn(conn);
+        Ok(())
+    }
+
+    /// Answers calls once built, before the caller has the connection.
+    async fn serve_session(
+        &self,
+        stream: UnixStream,
+        session: Arc<state::Session>,
+    ) -> Result<zbus::Connection, BridgeError> {
         let guid = zbus::Guid::generate();
         let conn = zbus::connection::Builder::unix_stream(stream)
             .server(guid)?
             .p2p()
-            .serve_at(
-                OBJECT_PATH,
-                iface::Checked::new(self.shared.clone(), session.clone()),
-            )?
+            .serve_at(OBJECT_PATH, iface::Checked::new(self.shared.clone(), session))?
             .build()
             .await?;
-        session.set_conn(conn);
-        Ok(())
+        Ok(conn)
     }
 
     /// Real app never creates this path; discovery tests do.
@@ -381,6 +388,8 @@ impl Drop for Listener {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::signals::Signal;
+    use futures::StreamExt;
 
     #[tokio::test]
     async fn locations_files_and_scripts_are_visible_to_the_test() {
@@ -408,6 +417,30 @@ mod tests {
         assert!(fake.locations().is_empty());
         assert_eq!(fake.session_count(), 0);
         assert!(fake.calls().is_empty() && fake.handoffs().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_client_with_an_answer_hears_of_every_later_change() {
+        let fake = FakeBridge::new();
+        let (client, server) = UnixStream::pair().unwrap();
+        // Session never gets its connection from `serve_stream`: as when that task stalls
+        // right after `build`.
+        let session = fake.shared.new_session();
+        let (served, conn) = tokio::join!(
+            fake.serve_session(server, session),
+            Connection::from_stream(client)
+        );
+        let (_served, conn) = (served.unwrap(), conn.unwrap());
+        let mut signals = conn.signals();
+        conn.proxy().hello("test").await.unwrap();
+        assert_eq!(conn.proxy().get_consent().await.unwrap(), "decided");
+
+        fake.set_consent(Consent::Unknown).await;
+        let heard = tokio::time::timeout(Duration::from_secs(30), signals.next()).await;
+        let Ok(Some(Ok(Signal::ConsentChanged(consent)))) = heard else {
+            panic!("no ConsentChanged: {heard:?}");
+        };
+        assert_eq!(consent, "unknown");
     }
 
     #[tokio::test]

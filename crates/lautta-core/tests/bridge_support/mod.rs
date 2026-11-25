@@ -37,6 +37,13 @@ pub fn quick_backoff(mut config: BridgeConfig) -> BridgeConfig {
 impl Rig {
     pub async fn ready() -> Rig {
         let rig = Rig::listening().await;
+        status(&rig.client, BridgeStatus::Ready).await;
+        rig
+    }
+
+    /// Without [`status`]'s guard: its timer would let a paused clock jump while sockets work.
+    pub async fn ready_on_paused_clock() -> Rig {
+        let rig = Rig::listening().await;
         rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
         rig
     }
@@ -45,7 +52,7 @@ impl Rig {
         let fake = FakeBridge::new();
         fake.add_account(1, "fake", "Fake 1", "fake.example").await;
         let rig = Rig::with_fake(fake, true, tune).await;
-        rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+        status(&rig.client, BridgeStatus::Ready).await;
         rig
     }
 
@@ -86,6 +93,17 @@ impl Rig {
             .await
             .unwrap()
     }
+}
+
+/// Hang guard of 30 s for real-clock tests; fails naming the status reached.
+pub async fn status(client: &BridgeClient, want: BridgeStatus) {
+    let reached = tokio::time::timeout(Duration::from_secs(30), client.wait_status(|s| s == want)).await;
+    assert_eq!(
+        reached,
+        Ok(want),
+        "bridge status never became {want:?}, still {:?}",
+        client.status()
+    );
 }
 
 /// Polls on the (possibly virtual) clock, up to 30 s: loaded runners are slow.

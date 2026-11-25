@@ -103,6 +103,9 @@ impl Interface for Checked {
         msg: &'call zbus::Message,
         name: MemberName<'call>,
     ) -> DispatchResult<'call> {
+        // Object server answers before `serve_stream` stores the connection; a signal sent
+        // in between would never reach a client that already has an answer.
+        self.0.session.attach(connection);
         let wanted = contract_methods().get(name.as_str());
         let body = msg.body();
         let given = body.signature();
