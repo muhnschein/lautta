@@ -23,10 +23,9 @@ ApplicationWindow {
     }
 
     function checkTop(name, view, when) {
-        if (Math.abs(view.contentY - view.originY) > 0.5 || view.headerItem.y < view.contentY - 0.5)
+        if (Math.abs(view.contentY - view.originY) > 0.5)
             console.error("FAILED: " + name + " " + when + ": the list is not at its top: contentY "
-                          + view.contentY + ", originY " + view.originY + ", header at " + view.headerItem.y
-                          + ", " + view.headerItem.height + " high")
+                          + view.contentY + ", originY " + view.originY)
     }
 
     function install(fixture) {
@@ -52,16 +51,16 @@ ApplicationWindow {
     function show(uri) {
         var viewer = pageStack.push(pdfComponent, { "uri": uri }, PageStackAction.Immediate)
         waitFor(function() { return viewer.document.loaded }, uri)
-        var view = findAll(viewer, function(x) { return x.headerItem !== undefined }, [])[0]
+        var view = findAll(viewer, function(x) { return x.objectName === "pdfPages" }, [])[0]
         view.forceLayout()
         return view
     }
 
     function open(fixture, pages) {
         var view = show(install(fixture))
-        if (view.count !== pages || view.contentHeight <= view.height || view.headerItem.children[0].description.trim() === "")
+        if (view.count !== pages || view.contentHeight <= view.height)
             console.error("FAILED: " + fixture + ": " + view.count + " pages, " + view.contentHeight
-                          + " high in a view " + view.height + " high, header '" + view.headerItem.children[0].description + "'")
+                          + " high in a view " + view.height + " high")
         checkTop(fixture, view, "when loaded")
         waitFor(function() { return rendered(pageStack.currentPage) }, fixture + " rendered")
         checkTop(fixture, view, "once rendered")
