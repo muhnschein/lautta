@@ -16,9 +16,7 @@ Page {
     id: page
 
     property var listModel: locations
-    // Tests set it.
     property var recentsStore: recents
-    // Sandbox cannot open Settings › Storage; netvfs can. Tests set it.
     property bool storageSettings: Bridge.storageSettings
     property real deviceFree: locations.deviceFree
     property real deviceTotal: locations.deviceTotal
@@ -29,7 +27,6 @@ Page {
     allowedOrientations: Orientation.All
 
     onDiscoveringChanged: Bridge.setDiscover(discovering)
-    // Rescans volumes: media watch can miss a mount inside sandbox.
     readonly property bool foreground: Qt.application.state === Qt.ApplicationActive
     onForegroundChanged: if (foreground && status === PageStatus.Active) locations.refresh()
     onStatusChanged: {
@@ -93,7 +90,6 @@ Page {
         pageStack.push(Qt.resolvedUrl("RecentsPage.qml"))
     }
 
-    // As SCR-38 Recents: a transferred file opens its folder.
     function openRecent(tile, tileSize) {
         if (tile.kind === "transferred")
             openDirectory(App.parentUri(tile.uri))
@@ -105,8 +101,6 @@ Page {
         pageStack.push(Qt.resolvedUrl("FavouritePage.qml"), { "uri": uri })
     }
 
-    // Row remorses start here: rows can be rebuilt during countdown, and a callback from a gone
-    // delegate cannot reach page models.
     function remorseRow(item, text, action) {
         item.remorseAction(text, action, Number(App.setting("remorse_seconds")) * 1000)
     }
@@ -205,7 +199,6 @@ Page {
             readonly property bool locked: kind === "volume" && model.status === "locked"
             readonly property bool notMounted: unmounted || locked
             readonly property string drive: model.drive || ""
-            // Tile whose menu is open.
             property int heldId: -1
             readonly property string subtitle: {
                 switch (kind) {

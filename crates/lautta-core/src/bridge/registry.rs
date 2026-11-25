@@ -1,15 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Routes signals to the waiting request. A signal can arrive before the method reply naming its id
-//! is processed (`ListBatch` right behind `List`): slots are created by whichever side comes first,
-//! events wait until the request subscribes.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use tokio::sync::mpsc;
 
-/// Slots for ids nobody has subscribed to yet; older ones are dropped.
 const MAX_BUFFERED_IDS: usize = 128;
-/// Requests that gave up: late signals are ignored.
 const MAX_IGNORED_IDS: usize = 256;
 
 enum Slot<T> {
@@ -41,7 +36,6 @@ impl<T> Default for Registry<T> {
 
 impl<T> Registry<T> {
     fn lock(&self) -> MutexGuard<'_, Inner<T>> {
-        // Every update is one step, so data stays consistent if a holder panicked.
         self.inner.lock().unwrap_or_else(PoisonError::into_inner)
     }
 

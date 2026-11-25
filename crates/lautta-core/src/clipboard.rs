@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Cut/copy clipboard. Copy persists across pastes, cut is consumed.
 
 use crate::error::{Error, ErrorKind, Result};
 use crate::uri::Uri;
@@ -62,7 +61,6 @@ impl Clipboard {
         }
     }
 
-    /// A folder cannot contain itself.
     pub fn can_paste_into(&self, dest: &Uri) -> bool {
         match &self.contents {
             Some(c) => !c.items.iter().any(|item| dest.is_inside(item)),

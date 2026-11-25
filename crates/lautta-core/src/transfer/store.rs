@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Persistence of the queue in `transfers` / `transfer_items`. All methods block; callers run them
-//! on blocking threads.
 
 use super::model::{
     kind_from_name, kind_name, operation_from_name, operation_name, ItemExtra, ItemState, Transfer,
@@ -13,9 +11,7 @@ use crate::uri::Uri;
 use rusqlite::{params, Connection, Row};
 use std::collections::HashMap;
 
-/// Progress is written at most this often per transfer.
 pub const PROGRESS_WRITE_INTERVAL_MS: i64 = 2000;
-/// History is kept this long.
 pub const DEFAULT_RETENTION_DAYS: u32 = 30;
 
 const DAY_MS: i64 = 86_400_000;
@@ -48,8 +44,6 @@ impl ProgressThrottle {
         }
     }
 
-    /// True (and remembered) when at least the interval passed since the
-    /// last write for this transfer.
     pub fn due(&mut self, id: TransferId, now_ms: i64) -> bool {
         match self.last.get(&id) {
             Some(prev) if now_ms - prev < self.interval_ms => false,
@@ -143,9 +137,6 @@ impl Store {
         self.apply(&[Write::Delete(id)])
     }
 
-    /// Loads everything in queue order. Items are loaded for unfinished and
-    /// failed transfers (resume, *Retry failed*); history rows come without
-    /// items.
     pub fn load_all(&self) -> Result<Vec<Transfer>> {
         let conn = self.db.lock();
         let mut transfers = {
@@ -168,7 +159,6 @@ impl Store {
         Ok(transfers)
     }
 
-    /// Deletes finished transfers older than the retention. Returns how many.
     pub fn purge_history(&self, now_ms: i64, retention_days: u32) -> Result<usize> {
         let cutoff = now_ms - i64::from(retention_days) * DAY_MS;
         let n = self.db.lock().execute(

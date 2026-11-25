@@ -65,7 +65,6 @@ ApplicationWindow {
         waitFor(function () { return folder.count === names.length }, "its files")
     }
 
-    // No render loop headless: lay out by hand.
     function rowsOf(flick) {
         flick.forceLayout()
         var out = []

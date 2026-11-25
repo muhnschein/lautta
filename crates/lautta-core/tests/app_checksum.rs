@@ -111,7 +111,6 @@ async fn folders_fifos_and_missing_files_are_refused() {
         .await
         .unwrap_err();
     assert_eq!(dir.kind, ErrorKind::IsADirectory);
-    // Would block forever if opened.
     let pipe = sum(&h, "lautta://user-documents/pipe", Algorithm::Sha256)
         .await
         .unwrap_err();
@@ -162,7 +161,6 @@ async fn server_hashes_what_it_lists() {
     );
     assert!(mem.calls().iter().any(|c| c.starts_with("checksum")));
     assert!(!mem.calls().iter().any(|c| c.starts_with("open_read")));
-    // Listed but refused: read through instead.
     assert_eq!(sum(&h, "lautta://nas/f", Algorithm::Md5).await.unwrap(), ABC_MD5);
     assert!(mem.calls().iter().any(|c| c.starts_with("open_read")));
 }
@@ -330,7 +328,6 @@ async fn folders_and_big_files_use_up_none_of_the_lists_read() {
     let h = home().await;
     let d = h.root.join("Documents");
     write(&d.join("a.iso"), b"abc");
-    // Sort before SHA256SUMS; each would take one of the 16 lists read.
     for i in 0..16 {
         std::fs::create_dir_all(d.join(format!("0d{i:02}.sha256"))).unwrap();
         write(
@@ -473,7 +470,6 @@ async fn verify_reads_a_list_of_exactly_the_largest_size() {
     let h = home().await;
     let d = h.root.join("Documents");
     write(&d.join("a"), b"abc");
-    // No newline at the end: one byte short loses the name.
     let last = format!("{ABC256}  a");
     let mut data = vec![b'#'; (1 << 20) - last.len() - 1];
     data.push(b'\n');

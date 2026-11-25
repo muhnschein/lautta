@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `Read + Seek` over a [`ReadHandle`] with 64 KiB block cache: remote zip needs ranged reads only.
 
 use crate::error::{Error, ErrorKind};
 use crate::provider::ReadHandle;
@@ -8,12 +7,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 pub const BLOCK: u64 = 64 * 1024;
-/// 2 MiB.
 const CACHE_BLOCKS: usize = 32;
 
 type Cache = Vec<(u64, Arc<Vec<u8>>)>;
 
-/// Survives a trip through `std::io`.
 pub fn to_io(err: Error) -> io::Error {
     io::Error::other(err)
 }
@@ -41,7 +38,6 @@ pub struct BlockSource {
 }
 
 impl BlockSource {
-    /// `first_block` seeds block 0 when the caller already read the head.
     pub fn new(
         handle: Arc<dyn ReadHandle>,
         rt: tokio::runtime::Handle,

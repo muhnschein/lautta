@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// F-RCT-03: newest Recents as tiles, last tile opens SCR-38 Recents.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -9,18 +8,14 @@ import "../FileIcons.js" as FileIcons
 Item {
     id: strip
 
-    // `lautta_core::app_home::RecentTile` objects.
     property var tiles: []
-    // Tile whose menu is open; -1: none.
     property int heldId: -1
     readonly property int cells: 4
     readonly property real gap: Theme.paddingSmall
-    // Portrait width decides: landscape keeps tile size, strip stays left.
     readonly property real tileSize: Math.floor((Math.min(Screen.width, Screen.height) - 2 * Theme.horizontalPageMargin
                                                  - (cells - 1) * gap) / cells)
     readonly property real cellHeight: tileSize + Theme.paddingSmall / 2 + captionFont.lineSpacing
 
-    // Finger down on a tile; let go elsewhere.
     signal touched(var tile)
     signal letGo()
     signal opened(var tile, int tileSize)
@@ -38,7 +33,6 @@ Item {
         }
     }
 
-    // Press between tiles stays here: row behind has nothing to open.
     MouseArea {
         anchors.fill: parent
     }
@@ -93,7 +87,7 @@ Item {
                     y: strip.tileSize + Theme.paddingSmall / 2
                     width: strip.tileSize
                     horizontalAlignment: implicitWidth > width ? Text.AlignLeft : Text.AlignHCenter
-                    truncationMode: TruncationMode.Fade
+                    elide: Text.ElideMiddle
                     textFormat: Text.PlainText
                     text: cell.tile.name
                     font.pixelSize: Theme.fontSizeExtraSmall

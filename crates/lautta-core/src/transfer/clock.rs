@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Injectable wall clock (ms since Unix epoch): persistence throttling, retention and expiry
-//! testable without sleeping.
 
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
@@ -18,7 +16,6 @@ impl Clock for SystemClock {
     }
 }
 
-/// Moved by hand (tests, deterministic output).
 #[derive(Debug, Default)]
 pub struct ManualClock {
     now: AtomicI64,

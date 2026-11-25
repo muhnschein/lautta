@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Value types of the bridge client.
 
 use crate::locations::ConnectionState;
 use crate::paths::AppPaths;
@@ -17,7 +16,6 @@ use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BridgeStatus {
-    /// No socket, or nothing answers: standalone, no message.
     Absent,
     Connecting,
     ConsentUnknown,
@@ -35,7 +33,6 @@ impl BridgeStatus {
     }
 }
 
-/// Whether the user chose in Settings what Lautta may do; the levels come per location.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Consent {
     Unknown,
@@ -43,7 +40,6 @@ pub enum Consent {
 }
 
 impl Consent {
-    /// Anything unrecognised is `Unknown`: nothing shown.
     pub fn from_wire(s: &str) -> Consent {
         match s {
             "decided" => Consent::Decided,
@@ -73,7 +69,6 @@ impl Attention {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteLocation {
     pub id: LocationId,
-    /// Bridge's id (`account:1`).
     pub bridge_id: String,
     pub provider: String,
     pub name: String,
@@ -82,17 +77,12 @@ pub struct RemoteLocation {
     pub user: Option<String>,
     pub account_id: Option<i64>,
     pub start_path: VPath,
-    /// Never contains a secret.
     pub url: Option<String>,
     pub attention: Attention,
     pub connection: ConnectionState,
-    /// What the user lets Lautta do there; missing or unknown: `read`, so Lautta offers nothing the
-    /// bridge would refuse.
     pub access: Level,
 }
 
-/// Missing or unknown state is [`ConnectionState::Unknown`]: a bridge not reporting states shows
-/// none rather than a wrong one.
 fn connection_from_wire(state: Option<&str>, error: Option<String>) -> ConnectionState {
     match state {
         Some(location_state::DISCONNECTED) => ConnectionState::Disconnected,
@@ -109,13 +99,11 @@ pub fn location_id(bridge_id: &str) -> LocationId {
     format!("{LOCATION_PREFIX}{bridge_id}")
 }
 
-/// Ids without the prefix are taken as bridge ids.
 pub fn bridge_id(location: &str) -> &str {
     location.strip_prefix(LOCATION_PREFIX).unwrap_or(location)
 }
 
 impl RemoteLocation {
-    /// A location with an odd `info` still appears (unknown keys ignored; missing ones unknown).
     pub fn from_wire(w: &WireLocation) -> RemoteLocation {
         let str_of = |k: &str| w.info.get(k).and_then(|v| value_str(v));
         let int_of = |k: &str| w.info.get(k).and_then(|v| value_i64(v));
@@ -147,13 +135,11 @@ impl RemoteLocation {
     }
 }
 
-/// Tapping prefills *Connect to server*; nothing connects automatically.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NearbyServer {
     pub name: String,
     pub provider: String,
     pub host: String,
-    /// 0 for the provider's default.
     pub port: u16,
 }
 
@@ -171,21 +157,17 @@ impl NearbyServer {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DriveKind {
     Card,
-    /// Also one the bridge names in a way this app does not know.
     Usb,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Drive {
-    /// Bridge's id (`mmcblk1p1`, `sda1`); opaque.
     pub id: String,
     pub label: String,
     pub uuid: String,
     pub mount_point: Option<PathBuf>,
     pub kind: DriveKind,
-    /// Bytes, -1 when unknown.
     pub size: i64,
-    /// Locked LUKS device: Settings › Storage unlocks it; bridge never mounts it.
     pub locked: bool,
 }
 
@@ -216,9 +198,6 @@ impl Drive {
         }
     }
 
-    /// Folder below the UDisks2 media folder, as Settings mounts it (udisks'
-    /// `calculate_mount_point`): label with `/` as `_`, else UUID, else `disk`. Also the name shown
-    /// while unmounted, when labelled.
     pub fn mount_name(&self) -> String {
         if !self.label.is_empty() {
             self.label.replace('/', "_")
@@ -234,18 +213,14 @@ impl Drive {
 pub struct BridgeConfig {
     pub socket: PathBuf,
     pub client_name: String,
-    /// Waits before reconnect attempts after a loss; the last repeats.
     pub backoff: Vec<Duration>,
     pub poll_interval: Option<Duration>,
-    /// A bridge that accepts a connection but does not answer within this is as good as gone;
-    /// `None` waits forever (tests on a paused clock).
     pub handshake_timeout: Option<Duration>,
     pub foreground: bool,
     pub nearby_settle: Duration,
 }
 
 impl BridgeConfig {
-    /// Socket of `paths`, `Hello("lautta <version>")`, backoff 1, 2, 4, 8 s then 15 s.
     pub fn for_app(paths: &AppPaths) -> BridgeConfig {
         BridgeConfig {
             socket: paths.bridge_socket(),
@@ -345,7 +320,6 @@ mod tests {
             state(OptsBuilder::new().str("state", "failed")),
             ConnectionState::Failed(String::new())
         );
-        // Older bridges send none; a newer bridge's state is not guessed at.
         assert_eq!(state(OptsBuilder::new()), ConnectionState::Unknown);
         assert_eq!(
             state(OptsBuilder::new().str("state", "suspended")),

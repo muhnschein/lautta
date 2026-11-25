@@ -18,7 +18,6 @@ fn env() -> Env {
     Env { root, loc, trash }
 }
 
-/// The same setup twice: renames work, and as in the sandbox.
 fn both() -> [Env; 2] {
     let plain = env();
     let mut sandboxed = env();
@@ -27,7 +26,6 @@ fn both() -> [Env; 2] {
 }
 
 impl Trash {
-    /// As in the sandbox: every rename between two folders fails with `EXDEV`.
     fn across_mounts(self) -> Trash {
         Trash {
             rename: |_, _| Err(Error::kind(ErrorKind::CrossesDevice)),
@@ -56,7 +54,6 @@ impl Env {
         |u: &Uri| Some(self.loc.join(OsStr::from_bytes(u.path.as_bytes())))
     }
 
-    /// Row with a bin name in a location; the code ignores that column.
     fn row_with_a_bin(&self, stored: &str, name: &str) -> i64 {
         let conn = self.trash.db.lock();
         conn.execute(
@@ -131,7 +128,6 @@ fn assert_project(dir: &Path, when: SystemTime) {
     assert_eq!(std::fs::read_link(dir.join("link")).unwrap(), Path::new("sub/f"));
 }
 
-/// A named pipe: a kind of file that is not copied.
 fn fifo(path: &Path) {
     rustix::fs::mknodat(
         rustix::fs::CWD,
@@ -143,7 +139,6 @@ fn fifo(path: &Path) {
     .unwrap();
 }
 
-/// A temp folder on another file system than `near`, if the host has one.
 fn other_device(near: &Path) -> Option<tempfile::TempDir> {
     let dir = tempfile::tempdir_in("/dev/shm").ok()?;
     (!sys::same_device(dir.path(), near).unwrap_or(true)).then_some(dir)
@@ -449,8 +444,6 @@ fn restore_of_a_vanished_item_drops_the_stale_row() {
 
 #[test]
 fn restore_across_real_mounts() {
-    // Sailjail: app data folder and ~/Documents are different mounts, so a rename between them
-    // fails with EXDEV.
     let e = env();
     let shm = other_device(&e.loc).expect("host tests need /dev/shm on its own device");
     let trash = Trash::new(shm.path().join("trash"), e.trash.db.clone());
@@ -615,8 +608,6 @@ fn tidy_of_a_trash_folder_that_does_not_exist_is_fine() {
 
 #[test]
 fn a_row_that_names_a_bin_is_an_item_of_the_trash_folder() {
-    // Nothing moves such an item into the trash folder: its row lists as one of the trash folder
-    // and finds nothing there.
     let e = env();
     let id = e.row_with_a_bin("s-old", "old");
     let item = e.trash.get(id).unwrap();

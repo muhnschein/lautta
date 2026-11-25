@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Filesystem types and capabilities from `statfs`. vfat/exFAT: case-insensitive, restricted names,
-//! no symlinks, hard links or permissions.
 
 use crate::entry::{cap, Capabilities};
 use std::path::Path;
@@ -35,7 +33,6 @@ impl FsKind {
         }
     }
 
-    /// FAT family: no POSIX semantics.
     pub fn is_fat_like(self) -> bool {
         matches!(self, FsKind::Vfat | FsKind::Exfat)
     }
@@ -66,7 +63,6 @@ impl FsKind {
     }
 }
 
-/// `Other(0)` when `statfs` fails (callers assume POSIX).
 pub fn fs_kind(path: &Path) -> FsKind {
     match crate::sys::fs_magic(path) {
         Ok(m) => FsKind::from_magic(m),

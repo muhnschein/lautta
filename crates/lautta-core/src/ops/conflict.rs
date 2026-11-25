@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Conflict choices and resolution. Default is never *Replace*; folders default to *Merge*,
-//! everything else to *Keep both* (never loses data, needs no timestamps).
 
 use super::names::{keep_both_for, NameRules};
 use super::{Conflict, ConflictChoice, Plan, PlanItem};
@@ -21,7 +19,6 @@ pub struct Side {
 pub struct ConflictContext {
     pub dest_can_resume: bool,
     pub same_item: bool,
-    /// Destination keeps existing items as they are: nothing replaced or resumed.
     pub dest_add_only: bool,
 }
 
@@ -45,7 +42,6 @@ pub fn make_conflict(src: Side, dst: Side, ctx: ConflictContext) -> Conflict {
     conflict
 }
 
-/// Choices that change the existing item.
 pub fn replaces(c: ConflictChoice) -> bool {
     matches!(
         c,
@@ -125,7 +121,6 @@ impl ConflictPolicy {
         self.remembered.insert(ConflictType::of(c), choice);
     }
 
-    /// A remembered *Resume* does not apply to a file that is not a prefix.
     pub fn choice_for(&self, c: &Conflict) -> Option<ConflictChoice> {
         self.remembered
             .get(&ConflictType::of(c))
@@ -147,9 +142,6 @@ pub fn unresolved(plan: &Plan) -> Vec<usize> {
         .collect()
 }
 
-/// A choice on a folder carries to its children: *Skip* and *Replace* mark them (their own
-/// conflicts disappear into the folder's), *Keep both* moves the whole subtree to the new name and
-/// clears the children's conflicts, *Merge* leaves them to be answered one by one.
 pub async fn resolve(
     plan: &mut Plan,
     index: usize,
@@ -214,8 +206,6 @@ async fn apply_one(
     Ok(1)
 }
 
-/// Parents come first, so the children of a folder follow it directly and share its destination
-/// prefix.
 fn subtree_end(items: &[PlanItem], index: usize) -> usize {
     if items[index].kind != Kind::Dir {
         return index + 1;

@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Listing order: natural, case-insensitive name order over lowercased NFC text with byte-order
-//! tiebreak; size, modified and type orders; folders-first toggle; stable. Runs in core, off the
-//! GUI thread.
 
 use crate::entry::Entry;
 use crate::mime::{self, FileCategory};
@@ -18,7 +15,6 @@ pub enum SortKey {
 }
 
 impl SortKey {
-    /// Stable identifier used in the database and settings.
     pub fn as_str(self) -> &'static str {
         match self {
             SortKey::Name => "name",
@@ -56,8 +52,6 @@ impl Default for SortOptions {
     }
 }
 
-/// Lowercased NFC form of a name; invalid UTF-8 is decoded lossily (the raw
-/// bytes still break ties).
 pub fn fold_name(name: &[u8]) -> String {
     String::from_utf8_lossy(name)
         .nfc()
@@ -65,8 +59,6 @@ pub fn fold_name(name: &[u8]) -> String {
         .to_lowercase()
 }
 
-/// Natural order: runs of ASCII digits compare by numeric value, everything
-/// else bytewise (UTF-8 byte order equals code point order).
 pub fn natural_cmp(a: &str, b: &str) -> Ordering {
     let (a, b) = (a.as_bytes(), b.as_bytes());
     let (mut i, mut j) = (0, 0);
@@ -104,8 +96,6 @@ fn cmp_digit_runs(a: &[u8], b: &[u8]) -> Ordering {
     a.len().cmp(&b.len()).then_with(|| a.cmp(b))
 }
 
-/// Per-entry data derived once and reused across re-sorts (keeps 20 000-entry
-/// sorts allocation-free in the comparator).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SortRecord {
     pub name_key: String,
@@ -114,7 +104,6 @@ pub struct SortRecord {
 }
 
 impl SortRecord {
-    /// Placeholder left behind when a record moves to a new listing.
     pub fn empty() -> SortRecord {
         SortRecord {
             name_key: String::new(),
@@ -136,8 +125,6 @@ fn name_order(ea: &Entry, ra: &SortRecord, eb: &Entry, rb: &SortRecord) -> Order
     natural_cmp(&ra.name_key, &rb.name_key).then_with(|| ea.name.cmp(&eb.name))
 }
 
-/// Total order of two entries under `opts`. Descending reverses the key order
-/// only; folders stay first and ties fall back to ascending name order.
 pub fn compare_entries(
     ea: &Entry,
     ra: &SortRecord,
@@ -238,7 +225,6 @@ mod tests {
         e.push(Entry::new(b"a\xff", Kind::File));
         e.push(Entry::new(b"a\xfe", Kind::File));
         let p = sort_permutation(&e, &SortOptions::default());
-        // Both invalid names fold to "a\u{fffd}"; raw bytes decide.
         assert_eq!(p, [0, 2, 1]);
     }
 
@@ -300,7 +286,6 @@ mod tests {
             key: SortKey::Type,
             ..SortOptions::default()
         };
-        // Image (jpg < png), Audio, Text, Archive, Other.
         assert_eq!(
             names(&e, &sort_permutation(&e, &o)),
             ["c.jpg", "b.png", "a.mp3", "a.txt", "z.txt", "d.zip", "noext"]

@@ -4,9 +4,7 @@ use crate::json::{from_json, json_value_to_qvariant, to_json};
 use crate::runtime::{core, handle, spawn_then};
 use lautta_core::clipboard::{Clipboard, ClipboardMode};
 use lautta_core::entry::Capabilities;
-use lautta_core::mime::{
-    category_of_name, extension_of, from_extension, viewer_for_name, FileCategory, Viewer,
-};
+use lautta_core::mime::{category_of_name, viewer_of, Viewer};
 use lautta_core::settings::Settings;
 use lautta_core::transfer::scheduler::is_bridge_location;
 use lautta_core::trash::now_secs;
@@ -32,7 +30,6 @@ pub struct App {
     loadSettings: qt_method!(fn(&mut self, json: QString)),
     setting: qt_method!(fn(&self, key: QString) -> QVariant),
     setSetting: qt_method!(fn(&mut self, key: QString, value_json: QString) -> bool),
-    /// Names of volumes without label, translated.
     setVolumeNames: qt_method!(fn(&self, card: QString, usb: QString)),
 
     childUri: qt_method!(fn(&self, parent: QString, name: QString) -> QString),
@@ -42,17 +39,13 @@ pub struct App {
     locationName: qt_method!(fn(&self, uri: QString) -> QString),
     isLocal: qt_method!(fn(&self, uri: QString) -> bool),
     isFavourite: qt_method!(fn(&self, uri: QString) -> bool),
-    /// True for a server URI, even a gone one.
     isRemote: qt_method!(fn(&self, uri: QString) -> bool),
-    /// Items there can be renamed or deleted: false where netvfs grants less than full access.
     canChange: qt_method!(fn(&self, uri: QString) -> bool),
     canAddTo: qt_method!(fn(&self, folder_uri: QString) -> bool),
     localUrl: qt_method!(fn(&self, uri: QString) -> QString),
     categoryOf: qt_method!(fn(&self, name_or_uri: QString) -> QString),
-    /// JSON `lautta_core::app_home::RecentTile` of the file at `uri`; empty: no such uri.
     tileOf: qt_method!(fn(&self, uri: QString) -> QString),
     viewerFor: qt_method!(fn(&self, name_or_uri: QString, mime: QString) -> QString),
-    /// `[{ id, label }]` JSON of `common` or `more` checksum algorithms.
     checksumAlgorithms: qt_method!(fn(&self, group: QString) -> QString),
     isChecksumList: qt_method!(fn(&self, name_or_uri: QString) -> bool),
 
@@ -68,7 +61,6 @@ pub struct App {
     externalFailed: qt_signal!(uri: QString, kind: QString, message: QString),
 
     clipboard: Clipboard,
-    /// Items copied from a locked archive keep it open.
     clipboard_hold: lautta_core::app_archives::ArchiveHold,
 }
 
@@ -124,7 +116,6 @@ impl App {
         let map = from_json(&json.to_string()).unwrap_or_default();
         core.apply_settings(Settings::from_map(&map));
         self.publish_settings();
-        // Retention known: purge Trash, clear its half-made copies.
         handle().spawn_blocking(move || {
             if let Err(e) = core.tidy_trash(now_secs()) {
                 log::warn!("tidying the Trash failed: {e}");
@@ -270,22 +261,13 @@ impl App {
     }
 
     fn viewerFor(&self, name_or_uri: QString, mime: QString) -> QString {
+        let local = match (core(), parse_uri(&name_or_uri)) {
+            (Some(c), Some(u)) => c.locations.to_local_path(&u),
+            _ => None,
+        };
         let name = name_part(&name_or_uri.to_string());
-        let category = category_of_name(&name);
-        let mime = if mime.is_empty() {
-            extension_of(&name)
-                .and_then(|e| from_extension(&e))
-                .map(|(m, _)| m.to_owned())
-                .unwrap_or_default()
-        } else {
-            mime.to_string()
-        };
-        let category = if category == FileCategory::Other && !mime.is_empty() {
-            lautta_core::mime::category_from_mime(&mime)
-        } else {
-            category
-        };
-        QString::from(viewer_name(viewer_for_name(&name, category, &mime)))
+        let viewer = viewer_of(&name, &mime.to_string(), local.as_deref());
+        QString::from(viewer_name(viewer))
     }
 
     fn set_clipboard(&mut self, mode: ClipboardMode, uris_json: QString) -> bool {
@@ -341,7 +323,6 @@ impl App {
         QString::from(to_json(&items).as_str())
     }
 
-    /// A cut is consumed.
     fn takeClipboard(&mut self) -> QString {
         let taken = self.clipboard.take();
         self.publish_clipboard();
@@ -354,7 +335,6 @@ impl App {
         QString::from(to_json(&value).as_str())
     }
 
-    /// Remote files copied to ~/Downloads/Lautta/Opened first.
     fn prepareExternal(&self, uri: QString) {
         let (Some(core), Some(u)) = (core(), parse_uri(&uri)) else {
             return;

@@ -30,7 +30,6 @@ function withArgs(texts, first, second) {
     })
 }
 
-// r: { kind, direction, title, itemsTotal, destName }
 function forms(r) {
     var one = r.itemsTotal <= 1
     var n = r.itemsTotal
@@ -129,7 +128,6 @@ function forms(r) {
         qsTrId("lautta-xfr-title-uploaded-one")], r.title, r.destName)
 }
 
-// r: { kind, direction, state, title, itemsTotal, destName }
 function title(r) {
     return forms(r)[r.state === "completed" ? ENDED : IMPERATIVE]
 }
@@ -252,7 +250,6 @@ function directionIcon(direction) {
     }
 }
 
-// Unfinished item of a cancelled task never runs.
 function itemState(state, transferState) {
     return transferState === "canceled" && state === "pending" ? "canceled" : state
 }
@@ -275,7 +272,6 @@ function itemIcon(state) {
     }
 }
 
-// Tasks stopped by closing app: they resume at next start only with setting `auto_resume`.
 function pendingBody(autoResume) {
     return autoResume
         //% "They resume when you open Lautta again."
@@ -292,7 +288,6 @@ function pendingCover(count, autoResume) {
         : qsTrId("lautta-xfr-cover-stopped", count)
 }
 
-// op: task kind (copy, move, delete, compress, extract).
 function itemRunning(op, direction) {
     if (direction === "upload")
         //% "Uploading"
@@ -348,7 +343,6 @@ function itemStatus(state, kind, sizeBytes, direction, op) {
     return kind === "dir" || sizeBytes <= 0 ? label : label + " · " + size(sizeBytes)
 }
 
-// mode: Transfers.barMode; s: lead transfer's summary; others: count of further unfinished.
 function barTitle(mode, s) {
     if (mode === "done")
         return ended(s)
@@ -388,7 +382,6 @@ function barDetail(mode, s, others, questions) {
     return others > 0 ? text + " · " + qsTrId("lautta-xfr-bar-more", others) : text
 }
 
-// Why a transfer stopped: netvfs now grants only `level` on `place`.
 function refused(level, place) {
     switch (level) {
     case "read":

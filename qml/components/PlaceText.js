@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 .pragma library
 
-// Name found by composing the line with a mark in its place.
 function around(compose, name) {
     var mark = "\u0001"
     var marked = compose(mark)

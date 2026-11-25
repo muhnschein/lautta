@@ -1,29 +1,21 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! EXIF for the image viewer's info panel and thumbnails, read with `kamadak-exif`.
-//! Best effort: missing or malformed fields are absent.
 
 use exif::{Exif, In, Reader, Tag, Value};
 use std::io::Cursor;
 
-/// Text fields are trimmed; numbers are in display units.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ExifInfo {
     pub make: Option<String>,
     pub model: Option<String>,
     pub lens: Option<String>,
-    /// `YYYY-MM-DD HH:MM:SS` as recorded (no time zone).
     pub date_taken: Option<String>,
-    /// `1/250 s` or `2 s`.
     pub exposure: Option<String>,
-    /// `f/2.8`
     pub aperture: Option<String>,
     pub iso: Option<u32>,
     pub focal_length_mm: Option<f64>,
     pub width: Option<u32>,
     pub height: Option<u32>,
-    /// 1-8 (1 = upright).
     pub orientation: Option<u8>,
-    /// Decimal degrees, south and west negative.
     pub gps: Option<(f64, f64)>,
     pub has_thumbnail: bool,
 }
@@ -59,7 +51,6 @@ fn rational(exif: &Exif, tag: Tag) -> Option<f64> {
     }
 }
 
-/// `1/250 s` for fast shutters, `2 s` / `1.5 s` for long ones.
 pub fn format_exposure(seconds: f64) -> Option<String> {
     if !seconds.is_finite() || seconds <= 0.0 {
         return None;
@@ -71,7 +62,6 @@ pub fn format_exposure(seconds: f64) -> Option<String> {
     Some(format!("1/{} s", (1.0 / seconds).round() as u64))
 }
 
-/// `2024:03:05 12:34:56` to `2024-03-05 12:34:56`.
 fn format_date(raw: &str) -> String {
     let mut chars: Vec<char> = raw.chars().collect();
     if chars.len() >= 10 && chars[4] == ':' && chars[7] == ':' {
@@ -150,7 +140,6 @@ pub fn exif_thumbnail(bytes: &[u8]) -> Option<Vec<u8>> {
     Some(exif.buf().get(start..end)?.to_vec())
 }
 
-/// Hand-assembled EXIF for tests of this module and of `thumbs`.
 #[cfg(test)]
 pub(crate) mod testutil {
     pub struct Spec {

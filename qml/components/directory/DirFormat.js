@@ -6,7 +6,6 @@ function _sameDay(a, b) {
     return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
-// "Today 09:14", "Yesterday", "12 Sep", "12 Sep 2024"; ms < 0 means unknown.
 function modified(ms) {
     if (ms === undefined || ms < 0)
         return ""
@@ -61,7 +60,6 @@ function subtitle(isDir, isSymlink, size, modifiedMs) {
     return parts.join(" · ")
 }
 
-// "uploading:42" (kind:percent).
 function transferText(state, locationName) {
     var kind = state.split(":")[0]
     var percent = parseInt(state.split(":")[1] || "0", 10)

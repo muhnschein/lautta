@@ -489,7 +489,6 @@ async fn a_vanished_volume_waits_until_it_is_back() {
 
 #[tokio::test]
 async fn resumes_a_partial_destination_file_when_capable() {
-    // Partial deliberately mismatches the source: committed bytes must not be written again.
     let r = rig();
     r.local.add_file("big", b"0123456789", 1);
     let temp = String::from_utf8(temp_name_for(b"big", 1, 0)).unwrap();
@@ -1253,8 +1252,6 @@ async fn persisted_rows_follow_the_state_changes() {
     assert_eq!(item_state, "done");
 }
 
-/// Local folder whose `server_copy` parks its copying thread on the first progress report until
-/// `release`, and which signals each `remove_file`.
 struct Parking {
     inner: LocalProvider,
     park: Mutex<Option<(tokio::sync::oneshot::Sender<()>, std::sync::mpsc::Receiver<()>)>>,
@@ -1449,8 +1446,6 @@ async fn settled_or_asking(e: &Engine, id: TransferId) -> TransferSummary {
         .unwrap()
 }
 
-/// Pause lands while the item's last step (here: rename out of the temporary name) already runs
-/// and cannot be taken back.
 async fn pause_during_last_step(op: &str, path: &str, p: Plan) {
     let r = rig();
     r.local.add_file("f", b"hello", 1);
@@ -1487,7 +1482,6 @@ async fn pause_while_a_folder_is_made_does_not_ask_about_it() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn pause_while_an_item_goes_to_the_trash_trashes_it_once() {
-    /// Pauses its transfer from inside the trash call: the pause lands mid-step.
     struct PausingTrash(std::sync::OnceLock<Engine>, Mutex<u32>);
     #[async_trait::async_trait]
     impl Trasher for PausingTrash {
@@ -1562,7 +1556,6 @@ async fn a_final_rename_that_fails_and_retries_can_be_paused_again() {
     assert_eq!(settled(&r.engine, id).await.state, TransferState::Completed);
 }
 
-/// Pause lands in a step that is still abortable after a point of no return fell through.
 async fn pause_after_fallback(
     r: Rig,
     hold: lautta_core::provider::memory::Hold,

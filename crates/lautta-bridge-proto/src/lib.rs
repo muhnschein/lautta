@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Client of netvfs `org.netvfs.Bridge1`: wire types, proxy, and (feature `fake`) an
-//! in-process fake bridge replaying the shared contract sequences.
 #![forbid(unsafe_code)]
 
 pub mod access;

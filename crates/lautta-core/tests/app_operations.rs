@@ -934,6 +934,27 @@ async fn extract_follows_the_macos_rule() {
 }
 
 #[tokio::test]
+async fn single_compressed_file_extracts_and_browses_as_its_one_file() {
+    use std::io::Write;
+    let h = home().await;
+    let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+    gz.write_all(b"line one\nline two\n").unwrap();
+    write(&h.root.join("Documents/notes.txt.gz"), &gz.finish().unwrap());
+    let archive = uri("lautta://user-documents/notes.txt.gz");
+
+    finish(&h, h.core.extract(&archive, None).await.unwrap()).await;
+    assert_eq!(
+        std::fs::read(h.root.join("Documents/notes.txt")).unwrap(),
+        b"line one\nline two\n"
+    );
+
+    let (location, _hold) = h.core.open_archive(&archive, None).await.unwrap();
+    let inner = Uri::root(location).join(b"notes.txt").unwrap();
+    let entry = h.core.stat(&inner).await.unwrap();
+    assert_eq!((entry.name.as_slice(), entry.size), (&b"notes.txt"[..], Some(18)));
+}
+
+#[tokio::test]
 async fn extract_never_merges_into_a_folder_made_meanwhile() {
     let h = home().await;
     write(&h.root.join("Documents/one.txt"), b"one");
@@ -965,7 +986,6 @@ async fn extract_never_merges_into_a_folder_made_meanwhile() {
     let bytes = std::fs::read(h.root.join("Documents/many.zip")).unwrap();
     mem.add_file("many.zip", &bytes, 1_700_000_000_000);
     let zip = uri("lautta://nas/many.zip");
-    // Not listed yet, there by the time it is made: a race, or a name differing only in case.
     mem.fail_next("make_dir", "many", Error::kind(ErrorKind::AlreadyExists));
     let err = h.core.extract(&zip, None).await.err().map(|e| e.kind);
     assert_eq!(err, Some(ErrorKind::AlreadyExists));
@@ -1020,7 +1040,6 @@ async fn compress_and_extract_need_a_folder_whose_permissions_allow_adding() {
         .unwrap();
     let dir = h.root.join("Documents/locked");
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
-    // root passes every permission check.
     let allowed = lautta_core::sys::effective_ids().0 == 0;
     let may_add = h.core.may_add_to(&locked);
     let compressed = h
@@ -1063,7 +1082,6 @@ fn pw(text: &str) -> Option<Password> {
     Password::new(text)
 }
 
-/// Closing takes milliseconds; the timeout only guards against a hang.
 async fn until_closed(h: &Home, id: &str, mut changed: tokio::sync::watch::Receiver<u64>) {
     let closed = async {
         while h.core.location(id).is_some() {
