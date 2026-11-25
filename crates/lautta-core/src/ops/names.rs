@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Name handling: "keep both" names, names invalid on the destination and their safe replacements,
-//! case-only rename detection.
 
 use crate::entry::{cap, Capabilities};
 use crate::vpath::validate_name;
@@ -11,15 +9,12 @@ const RESERVED_CHARS: &[u8] = b"<>:\"/\\|?*";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NameRules {
-    /// vfat/exFAT/SMB rules: reserved characters, trailing dots and spaces, device names, UTF-8
-    /// only.
     pub restricted: bool,
     pub max_bytes: usize,
     pub case_insensitive: bool,
 }
 
 impl NameRules {
-    /// POSIX-like: any byte but `/` and NUL, 255 bytes.
     pub fn permissive() -> NameRules {
         NameRules {
             restricted: false,
@@ -42,8 +37,6 @@ impl NameRules {
     }
 }
 
-/// Dotfiles have no extension; `.tar.gz` style double extensions stay together; folders never
-/// split.
 pub fn split_extension(name: &[u8], is_dir: bool) -> (&[u8], &[u8]) {
     if is_dir {
         return (name, &[]);
@@ -60,7 +53,6 @@ pub fn split_extension(name: &[u8], is_dir: bool) -> (&[u8], &[u8]) {
     (stem, &name[last..])
 }
 
-/// The extension must be short and free of spaces so "Mr. Smith" is not split.
 fn last_extension_start(name: &[u8]) -> Option<usize> {
     let dot = name.iter().rposition(|b| *b == b'.')?;
     let ext = &name[dot + 1..];
@@ -82,7 +74,6 @@ pub fn keep_both_for(name: &[u8], is_dir: bool, taken: &dyn Fn(&[u8]) -> bool) -
     numbered_name(name, is_dir, taken)
 }
 
-/// Candidates tried before giving up and using a number nothing probably has.
 const KEEP_BOTH_TRIES: u32 = 100_000;
 
 fn numbered_name(name: &[u8], is_dir: bool, taken: &dyn Fn(&[u8]) -> bool) -> Vec<u8> {
@@ -118,7 +109,6 @@ fn is_device_name(stem: &str) -> bool {
     matches!(digit, Some(d) if d.len() == 1 && matches!(d.as_bytes()[0], b'1'..=b'9'))
 }
 
-/// The part before the first dot decides whether a name is a device name.
 fn device_prefix_len(name: &str) -> Option<usize> {
     let end = name.find('.').unwrap_or(name.len());
     is_device_name(&name[..end]).then_some(end)
@@ -207,7 +197,6 @@ fn truncate_utf8(bytes: &[u8], max: usize) -> &[u8] {
         return bytes;
     }
     let mut end = max;
-    // A UTF-8 continuation byte has the bit pattern 10xxxxxx.
     while end > 0 && (bytes[end] & 0xC0) == 0x80 {
         end -= 1;
     }

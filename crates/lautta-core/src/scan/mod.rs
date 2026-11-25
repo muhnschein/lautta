@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Document scanning: photos of pages become one PDF. Pure CPU, call from blocking contexts.
 
 pub mod detect;
 pub mod pdf;
@@ -9,7 +8,6 @@ pub mod warp;
 
 use serde::{Deserialize, Serialize};
 
-/// Position in the upright photo, both axes 0..1.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Point {
     pub x: f32,
@@ -22,11 +20,9 @@ impl Point {
     }
 }
 
-/// Page corners: top left, top right, bottom right, bottom left.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Quad(pub [Point; 4]);
 
-/// Corners closer than this to each other on either diagonal make no page.
 const MIN_AREA: f32 = 0.0004;
 
 impl Quad {
@@ -41,8 +37,6 @@ impl Quad {
         *self == Quad::FULL
     }
 
-    /// Flat `[x0, y0, … x3, y3]`, corners clamped into the photo. `None` unless eight finite
-    /// numbers forming a convex shape with corners in clockwise order.
     pub fn from_flat(values: &[f32]) -> Option<Quad> {
         let v: &[f32; 8] = values.try_into().ok()?;
         if v.iter().any(|n| !n.is_finite()) {
@@ -58,7 +52,6 @@ impl Quad {
         [p[0].x, p[0].y, p[1].x, p[1].y, p[2].x, p[2].y, p[3].x, p[3].y]
     }
 
-    /// Clockwise on screen (y down), every corner a left turn, not degenerate.
     pub fn is_page(&self) -> bool {
         let p = &self.0;
         let turns_right = (0..4).all(|i| {
@@ -68,7 +61,6 @@ impl Quad {
         turns_right && self.area() >= MIN_AREA
     }
 
-    /// Shoelace formula; positive for clockwise corners on screen.
     pub fn area(&self) -> f32 {
         let p = &self.0;
         (0..4)
@@ -134,13 +126,9 @@ mod tests {
             Quad::from_flat(&[0.0, 0.0, f32::NAN, 0.0, 1.0, 1.0, 0.0, 1.0]),
             None
         );
-        // Counter-clockwise.
         assert_eq!(Quad::from_flat(&[0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0]), None);
-        // Crossed: top corners swapped.
         assert_eq!(Quad::from_flat(&[1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0]), None);
-        // Dent: bottom right corner pulled past the diagonal.
         assert_eq!(Quad::from_flat(&[0.0, 0.0, 1.0, 0.0, 0.2, 0.2, 0.0, 1.0]), None);
-        // All corners in one spot.
         assert_eq!(
             Quad::from_flat(&[0.5, 0.5, 0.51, 0.5, 0.51, 0.51, 0.5, 0.51]),
             None

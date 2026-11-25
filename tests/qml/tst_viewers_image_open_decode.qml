@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Viewer shows the opened image alone until the folder's listing has it, then makes the folder's
-// view: that view takes the picture the first one decoded. Hidden image keeps it alone until the
-// test shows hidden files; cache hit is synchronous, so ready the moment the view is made. Its
-// neighbour, made while the shown image is already there, loads too.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0

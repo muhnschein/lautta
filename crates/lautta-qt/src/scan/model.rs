@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Pages of one scan for QML. Made when the scan starts, destroyed when it is saved or left: the
-//! photos go with it.
 
 use super::rows::{Rows, Step};
 use super::worker::{self, Event, Job, Msg};
@@ -34,10 +32,8 @@ struct Running {
 pub struct ScanModel {
     base: qt_base_class!(trait QAbstractListModel),
     count: qt_property!(i32; NOTIFY countChanged),
-    /// Photos or changes still being worked on.
     busy: qt_property!(bool; NOTIFY busyChanged),
     saving: qt_property!(bool; NOTIFY savingChanged),
-    /// Of saving, 0..=1.
     progress: qt_property!(f64; NOTIFY progressChanged),
     countChanged: qt_signal!(),
     busyChanged: qt_signal!(),
@@ -55,7 +51,6 @@ pub struct ScanModel {
     save: qt_method!(fn(&mut self, dest_uri: QString, name: QString)),
     pageJson: qt_method!(fn(&self, index: i32) -> QString),
 
-    /// Page at `index` has a new photo: new page, or retaken one.
     photoReady: qt_signal!(index: i32),
     saved: qt_signal!(uri: QString),
     failed: qt_signal!(kind: QString, message: QString),
@@ -109,7 +104,6 @@ impl ScanModel {
         self.failed(kind, message);
     }
 
-    /// Session and its worker, made on first use.
     fn running(&mut self) -> Option<&mut Running> {
         if self.running.is_none() {
             let core = core()?;
@@ -160,8 +154,6 @@ impl ScanModel {
         Some(page.id)
     }
 
-    /// Queues `job` for the page at `index`; out of range is ignored: the page was removed while
-    /// the tap was on its way.
     fn queue_for(&mut self, index: i32, job: impl FnOnce(u32) -> Job) {
         if let Some(id) = self.id_at(index) {
             self.queue(job(id));
@@ -232,7 +224,6 @@ impl ScanModel {
         }
     }
 
-    /// Where the camera writes its next photo.
     fn shotPath(&mut self) -> QString {
         let Some(running) = self.running() else {
             return QString::default();
@@ -242,7 +233,6 @@ impl ScanModel {
         QString::from(path.display().to_string().as_str())
     }
 
-    /// `path` may be a `file://` URL.
     fn add(&mut self, path: QString) {
         self.queue(Job::Add(local_path(&path.to_string())));
     }
@@ -263,7 +253,6 @@ impl ScanModel {
         self.queue_for(index, |id| Job::Turn(id, quarters));
     }
 
-    /// `[x0, y0, … x3, y3]`, each 0..1 of the photo, from top left clockwise.
     fn setCorners(&mut self, index: i32, corners_json: QString) {
         let corners: Option<Vec<f32>> = from_json(&corners_json.to_string());
         match corners.and_then(|c| Quad::from_flat(&c)) {
@@ -293,7 +282,6 @@ impl ScanModel {
             usize::try_from(to).unwrap_or_default(),
         );
         let top = QModelIndex::default();
-        // Qt names the place before the move: past `to` when moving down.
         self.begin_move_rows(top, from, from, top, if to > from { to + 1 } else { to });
         let page = self.rows.pages.remove(a);
         self.rows.pages.insert(b, page);

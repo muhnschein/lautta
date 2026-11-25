@@ -11,8 +11,6 @@ DockedPanel {
     readonly property var ctx: Selection.context(owner ? owner.model : {})
     readonly property int count: owner ? owner.model.selectedCount : 0
     readonly property bool waiting: owner ? owner.selectionWaiting : false
-    // Ending selection zeroes `count` while panel fades out: no switch to no-selection set on the
-    // way.
     property var buttons: Selection.panelButtons(0, {})
 
     function refreshButtons() {

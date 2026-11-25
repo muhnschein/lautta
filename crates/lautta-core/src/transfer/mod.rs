@@ -1,13 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Transfers: queue, scheduler, engine, progress.
-//!
-//! - [`model`]: states and transition table
-//! - [`store`]: persistence and retention
-//! - [`scheduler`]: pure scheduling decisions
-//! - [`conflict`]: run-time conflict decisions
-//! - [`exec`]: how one item moves its bytes
-//! - [`engine`]: runs everything with tokio
-//! - [`progress`]: rate and ETA
 
 pub mod clock;
 pub mod conflict;
@@ -32,22 +23,15 @@ pub use model::{
 pub use scheduler::Scheduler;
 pub use store::Store;
 
-/// Moves a local item to the *Trash*. Supplied by the caller (`trash.rs`) so the engine stays free
-/// of that policy.
 #[async_trait]
 pub trait Trasher: Send + Sync {
-    /// Returns `true` when the item (and everything below it) was trashed and
-    /// `false` when this location does not trash, so the engine deletes
-    /// permanently.
     async fn trash(&self, uri: &Uri) -> Result<bool>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransferEvent {
     Added(TransferId),
-    /// State, counters or order changed; re-read the summary.
     Changed(TransferId),
-    /// Aggregate progress, at most 4 times a second per transfer.
     Progress {
         id: TransferId,
         bytes_done: u64,
@@ -55,12 +39,10 @@ pub enum TransferEvent {
         eta_secs: Option<u64>,
     },
     Finished(TransferId),
-    /// A conflict in item `item` needs an answer.
     NeedsAnswer {
         id: TransferId,
         item: u32,
     },
-    /// Whether any transfer is active: drives `KeepAlive`.
     Busy(bool),
 }
 

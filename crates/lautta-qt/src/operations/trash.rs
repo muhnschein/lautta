@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Call `reload()` when the page opens; it also purges past retention.
 
 use super::error_parts;
 use crate::runtime::{core, spawn_then};

@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Process-wide core and tokio runtime. [`spawn_then`] is the one way Qt layer runs async work:
-//! result returns to the GUI thread.
 
 use lautta_core::app::Core;
 use lautta_core::paths::AppPaths;
@@ -13,8 +11,6 @@ static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 static CORE: OnceLock<Arc<Core>> = OnceLock::new();
 static START_ERROR: OnceLock<String> = OnceLock::new();
 
-/// Two workers for orchestration, bridge client and scheduler; blocking file system work goes to
-/// `spawn_blocking`.
 fn runtime() -> &'static Runtime {
     RUNTIME.get_or_init(|| {
         match tokio::runtime::Builder::new_multi_thread()
@@ -53,12 +49,10 @@ pub fn start_error() -> String {
     START_ERROR.get().cloned().unwrap_or_default()
 }
 
-/// Facades are created only after [`init`] succeeded.
 pub fn core() -> Option<Arc<Core>> {
     CORE.get().cloned()
 }
 
-/// `done` runs on the calling (GUI) thread. Result dropped if that thread's event loop is gone.
 pub fn spawn_then<T, F, D>(fut: F, done: D)
 where
     T: Send + 'static,

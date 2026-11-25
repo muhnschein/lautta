@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Where the app keeps things.
 
 use std::path::{Path, PathBuf};
 
 pub const ORGANIZATION: &str = "org.netvfs";
 pub const APPLICATION: &str = "lautta";
 
-/// Tests point `home` at a temp dir.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppPaths {
     pub home: PathBuf,
@@ -44,7 +42,6 @@ impl AppPaths {
         self.data_dir().join("trash")
     }
 
-    /// Owned by netvfs; the app never creates it.
     pub fn bridge_socket(&self) -> PathBuf {
         self.data_dir().join("netvfs/bridge.sock")
     }
@@ -57,7 +54,6 @@ impl AppPaths {
         self.cache_dir().join("dircache")
     }
 
-    /// Photos and pages of a scan in progress.
     pub fn scan_dir(&self) -> PathBuf {
         self.cache_dir().join("scan")
     }

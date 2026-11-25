@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! In-process fake: in-memory file tree per location, scripted consent, latency, failures,
-//! disconnects. Replays the shared contract sequences ([`replay`]).
 
 mod args;
 mod fail;
@@ -36,7 +34,6 @@ pub const DEFAULT_CAPS: &[&str] = &[
     "Checksums",
 ];
 
-/// Clones share all state.
 #[derive(Clone)]
 pub struct FakeBridge {
     shared: Arc<Shared>,
@@ -80,7 +77,6 @@ impl FakeBridge {
         Ok(())
     }
 
-    /// Real app never creates this path; discovery tests do.
     pub fn listen(&self, path: &Path) -> std::io::Result<Listener> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
@@ -100,7 +96,6 @@ impl FakeBridge {
                 }
                 let serving = me.clone();
                 tokio::spawn(async move {
-                    // A client that hangs up during the handshake is not an error here.
                     let _ = serving.serve_stream(stream).await;
                 });
             }
@@ -111,8 +106,6 @@ impl FakeBridge {
         })
     }
 
-    /// While `false`, connections are accepted and closed at once (crashing bridge), so reconnects
-    /// can be counted.
     pub fn set_accepting(&self, accepting: bool) {
         self.shared.with(|s| s.accepting = accepting);
     }
@@ -138,16 +131,11 @@ impl FakeBridge {
         self.shared.with(|s| version.clone_into(&mut s.bridge_version));
     }
 
-    /// `None`: bridge without `GetFeatures`; answers `UnknownMethod` to it and
-    /// `OpenStorageSettings`. Drive methods answer only while it names [`crate::feature::DRIVES`]
-    /// (not by default).
     pub fn set_features(&self, features: Option<&[&str]>) {
         let features = features.map(|f| f.iter().map(|n| (*n).to_owned()).collect());
         self.shared.with(|s| s.features = features);
     }
 
-    /// Tells every client (`DrivesChanged`). Drive methods exist only while
-    /// [`FakeBridge::set_features`] names [`crate::feature::DRIVES`].
     pub async fn set_drives(&self, drives: Vec<FakeDrive>) {
         self.shared.with(|s| s.drives = drives);
         self.shared.broadcast_drives().await;
@@ -157,8 +145,6 @@ impl FakeBridge {
         self.shared.with(|s| s.drives.clone())
     }
 
-    /// With a root, `Mount` makes the drive's folder there and `Unmount` removes it, as udisks
-    /// does; default: mounted below `/run/media/user`, no folder made.
     pub fn set_mount_root(&self, root: Option<&std::path::Path>) {
         self.shared
             .with(|s| s.mount_root = root.map(std::path::Path::to_path_buf));
@@ -168,15 +154,10 @@ impl FakeBridge {
         self.shared.with(|s| s.consent)
     }
 
-    /// Changes what the user decided for this app, as the bridge does: `ConsentChanged` when
-    /// `GetConsent` would say otherwise; when any location allows less, every client is
-    /// disconnected, else `LocationsChanged`.
     pub async fn set_consent(&self, consent: Consent) {
         self.shared.decide(|s| s.consent = consent).await;
     }
 
-    /// Location `id` at `level` (`None`: not allowed) instead of what [`FakeBridge::set_consent`]
-    /// says; as there.
     pub async fn set_access(&self, id: &str, level: Option<Level>) {
         self.shared
             .decide(|s| {
@@ -185,7 +166,6 @@ impl FakeBridge {
             .await;
     }
 
-    /// Times the user was asked (first `Hello` while `unknown`, `RequestConsent`).
     pub fn consent_requests(&self) -> u32 {
         self.shared.with(|s| s.consent_requests)
     }
@@ -229,8 +209,6 @@ impl FakeBridge {
         self.shared.broadcast_locations().await;
     }
 
-    /// Tells every client if changed. Unscripted, a location stays disconnected until a call
-    /// needs a connection, and again after `Disconnect`.
     pub async fn set_state(&self, id: &str, state: &str, error: Option<&str>) {
         if self.shared.with(|s| s.set_state(id, state, error)) {
             self.shared.broadcast_locations().await;
@@ -296,7 +274,6 @@ impl FakeBridge {
             .with(|s| s.trees.get(loc).is_some_and(|t| t.node(path).is_some()))
     }
 
-    /// Virtual time under a paused clock.
     pub fn set_latency(&self, latency: Duration) {
         self.shared.with(|s| s.latency = latency);
     }
@@ -328,12 +305,10 @@ impl FakeBridge {
         self.shared.with(|s| s.calls.clone())
     }
 
-    /// `Cancel` calls that stopped a running job.
     pub fn jobs_canceled(&self) -> usize {
         self.shared.with(|s| s.jobs_canceled)
     }
 
-    /// `ListLocations` answers sent so far.
     pub fn location_replies(&self) -> usize {
         self.shared.with(|s| s.location_replies)
     }
@@ -359,7 +334,6 @@ impl FakeBridge {
     }
 }
 
-/// Dropping closes and removes the socket (bridge gone).
 pub struct Listener {
     path: PathBuf,
     task: tokio::task::JoinHandle<()>,

@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Pages as the screen shows them. Removing and moving happen here at once; the session follows
-//! through its queue and reports its pages after every job, some of them still behind.
 
 use lautta_core::scan::session::PageInfo;
 use std::collections::HashSet;
@@ -14,7 +12,6 @@ pub enum Step {
 #[derive(Default)]
 pub struct Rows {
     pub pages: Vec<PageInfo>,
-    /// Removed on screen; the session may still report them.
     gone: HashSet<u32>,
 }
 
@@ -29,8 +26,6 @@ impl Rows {
         page
     }
 
-    /// What brings the screen up to the session's report: changed pages in place, unknown ones
-    /// at the end. Order on screen stays: moves were made here first.
     pub fn steps(&self, reported: &[PageInfo]) -> Vec<Step> {
         reported
             .iter()
@@ -77,7 +72,6 @@ mod tests {
             pages: vec![page(2, "b"), page(1, "a")],
             ..Rows::default()
         };
-        // Session has not moved yet.
         assert_eq!(rows.steps(&[page(1, "a2"), page(2, "b")]), [Step::Change(1)]);
     }
 
@@ -89,7 +83,6 @@ mod tests {
         };
         assert_eq!(rows.forget(0), page(1, "a"));
         assert_eq!(rows.pages, [page(2, "b")]);
-        // Session still has page 1 when an earlier job reports.
         assert_eq!(rows.steps(&[page(1, "a"), page(2, "b")]), []);
         assert_eq!(
             rows.steps(&[page(2, "b"), page(3, "c")]),

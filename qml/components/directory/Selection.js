@@ -34,7 +34,6 @@ function buttonIcon(id) {
     return "image://theme/icon-m-dismiss"
 }
 
-// What folder `model` allows, for the selection's files.
 function context(model) {
     return { "isDir": false, "changeable": model.changeable, "readable": model.readable, "writable": model.writable }
 }
@@ -65,8 +64,6 @@ function dragStart(anchor, selected) {
     return { "anchor": anchor, "target": !selected, "from": anchor, "to": anchor - 1 }
 }
 
-// `before(i)` = state of item i before drag. Item entering range flips unless already target state;
-// one leaving flips back on same condition.
 function dragTo(drag, index, before) {
     var next = {
         "anchor": drag.anchor,

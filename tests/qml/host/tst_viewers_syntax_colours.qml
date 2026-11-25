@@ -11,7 +11,6 @@ Item {
 
     property var schemes: []
 
-    // Theme stub; `marking` theme makes readable colours translucent to tell them.
     function theme(highlight, scheme, marking) {
         return {
             "highlightColor": highlight,

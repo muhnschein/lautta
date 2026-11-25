@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! One forwarding task carries engine `TransferEvent`s to the GUI thread (queued callback), then to
-//! the `Transfers` singleton and live models via a listener registry.
 
 use crate::runtime::{core, handle};
 use lautta_core::transfer::throttle::{forward_throttled, Forwarded};
@@ -17,11 +15,8 @@ thread_local! {
 
 static FORWARDER: Once = Once::new();
 
-/// Pages re-read every item of a transfer on `Changed`: at most this often per transfer.
 const CHANGED_EVERY: Duration = Duration::from_millis(250);
 
-/// Synthetic "something else changed, reload" event (history cleared, start-up restore, missed
-/// events).
 pub const RELOAD: i64 = 0;
 
 pub fn is_reload(ev: &TransferEvent) -> bool {
@@ -32,7 +27,6 @@ pub fn listen(f: impl FnMut(&TransferEvent) -> bool + 'static) {
     LISTENERS.with(|l| l.borrow_mut().push(Box::new(f)));
 }
 
-/// Listeners added meanwhile are kept.
 pub fn dispatch(ev: &TransferEvent) {
     let mut current = LISTENERS.with(|l| std::mem::take(&mut *l.borrow_mut()));
     current.retain_mut(|f| f(ev));
@@ -43,14 +37,12 @@ pub fn dispatch(ev: &TransferEvent) {
     });
 }
 
-/// Next event-loop turn: callers are often inside a borrow of a listener.
 pub fn reload() {
     qmetaobject::single_shot(std::time::Duration::from_millis(0), || {
         dispatch(&TransferEvent::Changed(RELOAD));
     });
 }
 
-/// Once. Call on the GUI thread.
 pub fn ensure_forwarder() {
     FORWARDER.call_once(|| {
         let Some(core) = core() else { return };

@@ -1,10 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Provider for local folders. A `VPath` maps under a root and never contains `..`, so it cannot
-//! leave the root lexically. Symlinks are not rewritten: one pointing outside the sandbox is
-//! flagged `NOT_ACCESSIBLE`.
-//!
-//! Blocking calls run on `spawn_blocking`; heavy ones (listing, copying, hashing) first take a
-//! permit from a semaphore shared by all local providers (4 permits).
 
 mod copy;
 mod entries;
@@ -38,7 +32,6 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
 
 pub const LIST_BATCH: usize = 256;
-/// Concurrent heavy blocking tasks across all local providers.
 pub const IO_PERMITS: usize = 4;
 
 pub fn new_io_semaphore() -> Arc<Semaphore> {
@@ -55,7 +48,6 @@ pub struct LocalProvider {
 }
 
 impl LocalProvider {
-    /// Minus `Write` on a read-only mount.
     pub fn new(root: PathBuf) -> LocalProvider {
         let mut caps = fs_kind(&root).capabilities();
         if sys::statvfs(&root).map(|v| v.read_only).unwrap_or(false) {
@@ -81,7 +73,6 @@ impl LocalProvider {
         self
     }
 
-    /// Tests, forced policies.
     pub fn with_capabilities(mut self, caps: Capabilities) -> LocalProvider {
         self.caps = caps;
         self
@@ -92,7 +83,6 @@ impl LocalProvider {
         self
     }
 
-    /// Tests.
     pub fn with_batch(mut self, batch: usize) -> LocalProvider {
         self.batch = batch.max(1);
         self
@@ -148,7 +138,6 @@ where
         .map_err(|e| Error::new(ErrorKind::Internal, format!("blocking task failed: {e}")))?
 }
 
-/// [`blocking`] that stops `f` when this future is dropped (task aborted): see [`Stop`].
 async fn stoppable<T, F>(f: F) -> Result<T>
 where
     T: Send + 'static,
@@ -186,7 +175,6 @@ fn send_batch(out: &mpsc::Sender<Vec<Entry>>, batch: Vec<Entry>) -> Result<()> {
         .map_err(|_| Error::kind(ErrorKind::Canceled))
 }
 
-/// A hidden sibling name for intermediate steps (case-only rename, copy temp).
 fn unique_sibling(path: &Path) -> PathBuf {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -194,7 +182,6 @@ fn unique_sibling(path: &Path) -> PathBuf {
     path.with_file_name(name)
 }
 
-/// Unicode lowercase when valid UTF-8, else ASCII.
 fn fold_case(name: &OsStr) -> Vec<u8> {
     match name.to_str() {
         Some(s) => s.to_lowercase().into_bytes(),
@@ -217,8 +204,6 @@ fn rename_noreplace_compat(from: &Path, to: &Path) -> Result<()> {
     }
 }
 
-/// Link + unlink is atomic w.r.t. the destination (link fails if it exists); directories and
-/// filesystems without hard links get a plain exists-check.
 fn rename_noreplace_fallback(from: &Path, to: &Path) -> Result<()> {
     if !sys::stat(from, false)?.is_dir() {
         match std::fs::hard_link(from, to) {
@@ -241,8 +226,6 @@ fn unlink_source(from: &Path, to: &Path) -> Result<()> {
     Ok(())
 }
 
-/// On a case-insensitive filesystem `to` resolves to `from` itself, so the move goes through an
-/// intermediate name.
 fn rename_case_only(from: &Path, to: &Path, mode: RenameMode) -> Result<()> {
     if let Ok(existing) = sys::stat(to, false) {
         let me = sys::stat(from, false)?;
@@ -283,7 +266,6 @@ fn open_for_upload(dst: &Path, opts: &WriteOptions) -> std::io::Result<File> {
     oo.open(dst)
 }
 
-/// Partial file must be at least `offset` long; excess is discarded.
 fn position_for_resume(dst: &mut File, offset: u64) -> Result<()> {
     if dst.metadata()?.len() < offset {
         return Err(Error::new(
@@ -311,8 +293,6 @@ fn upload_blocking(
     } else {
         0
     };
-    // Caller's file offset is irrelevant: regular files read from `opts.offset`; pipes as they
-    // come.
     if is_regular(&srcf) || opts.offset > 0 {
         srcf.seek(SeekFrom::Start(opts.offset))?;
     }
@@ -364,7 +344,6 @@ fn download_blocking(
     Ok(())
 }
 
-/// Written to a temp sibling, renamed into place: failure never leaves a partial destination.
 fn copy_blocking(
     from: &Path,
     to: &Path,
@@ -518,7 +497,7 @@ impl Provider for LocalProvider {
 
     async fn read_link(&self, path: &VPath) -> Result<Vec<u8>> {
         let real = self.real_path(path);
-        let target = blocking(move || Ok(std::fs::read_link(real)?)).await?; // NOSONAR: runs on the blocking pool
+        let target = blocking(move || Ok(std::fs::read_link(real)?)).await?; // NOSONAR
         Ok(target.into_os_string().into_vec())
     }
 
@@ -526,7 +505,7 @@ impl Provider for LocalProvider {
         self.require_write()?;
         let real = self.real_path(path);
         blocking(move || {
-            let made = std::fs::create_dir(&real); // NOSONAR: runs on the blocking pool
+            let made = std::fs::create_dir(&real); // NOSONAR
             match made {
                 Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && !exclusive && real.is_dir() => {
                     Ok(())
@@ -541,7 +520,7 @@ impl Provider for LocalProvider {
         self.require_write()?;
         let real = self.real_path(path);
         blocking(move || {
-            OpenOptions::new().write(true).create_new(true).open(real)?; // NOSONAR: runs on the blocking pool
+            OpenOptions::new().write(true).create_new(true).open(real)?; // NOSONAR
             Ok(())
         })
         .await
@@ -553,7 +532,7 @@ impl Provider for LocalProvider {
             return Err(Error::kind(ErrorKind::IsADirectory));
         }
         let real = self.real_path(path);
-        blocking(move || Ok(std::fs::remove_file(real)?)).await // NOSONAR: runs on the blocking pool
+        blocking(move || Ok(std::fs::remove_file(real)?)).await // NOSONAR
     }
 
     async fn remove_dir(&self, path: &VPath) -> Result<()> {
@@ -562,7 +541,7 @@ impl Provider for LocalProvider {
             return Err(Error::kind(ErrorKind::PermissionDenied));
         }
         let real = self.real_path(path);
-        blocking(move || Ok(std::fs::remove_dir(real)?)).await // NOSONAR: runs on the blocking pool
+        blocking(move || Ok(std::fs::remove_dir(real)?)).await // NOSONAR
     }
 
     async fn rename(&self, from: &VPath, to: &VPath, mode: RenameMode) -> Result<()> {
@@ -590,7 +569,7 @@ impl Provider for LocalProvider {
             }
             if let Some(mode) = changes.mode {
                 let permissions = std::fs::Permissions::from_mode(mode & 0o7777);
-                std::fs::set_permissions(&real, permissions)?; // NOSONAR: runs on the blocking pool
+                std::fs::set_permissions(&real, permissions)?; // NOSONAR
             }
             if let Some(t) = changes.modified {
                 sys::set_mtime(&real, t)?;
@@ -615,14 +594,14 @@ impl Provider for LocalProvider {
         self.require_write()?;
         self.require_cap(cap::HARDLINKS)?;
         let (a, b) = (self.real_path(existing), self.real_path(new_path));
-        blocking(move || Ok(std::fs::hard_link(a, b)?)).await // NOSONAR: runs on the blocking pool
+        blocking(move || Ok(std::fs::hard_link(a, b)?)).await // NOSONAR
     }
 
     async fn open_read(&self, path: &VPath, _lane: Lane) -> Result<Box<dyn ReadHandle>> {
         let real = self.real_path(path);
         blocking(move || {
-            let file = File::open(real)?; // NOSONAR: runs on the blocking pool
-            let meta = file.metadata()?; // NOSONAR: runs on the blocking pool
+            let file = File::open(real)?; // NOSONAR
+            let meta = file.metadata()?; // NOSONAR
             if meta.is_dir() {
                 return Err(Error::kind(ErrorKind::IsADirectory));
             }
@@ -637,8 +616,8 @@ impl Provider for LocalProvider {
     async fn open_local(&self, path: &VPath) -> Result<Option<OwnedFd>> {
         let real = self.real_path(path);
         blocking(move || {
-            let file = File::open(real)?; // NOSONAR: runs on the blocking pool
-            let meta = file.metadata()?; // NOSONAR: runs on the blocking pool
+            let file = File::open(real)?; // NOSONAR
+            let meta = file.metadata()?; // NOSONAR
             if !meta.is_file() {
                 return Err(Error::kind(ErrorKind::IsADirectory));
             }

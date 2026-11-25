@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Zip central directory parser and entry reader. The `zip` crate reads every entry's local header
-//! on open, touching the whole file just to list it. This reads end-of-central-directory and
-//! central directory (2-3 ranged reads), local header only on open. WinZip AES entries open with
-//! the password ([`crate::zipaes`]); legacy ZipCrypto ones not at all.
 
 use super::blocks::{from_io, BlockReader, BlockSource};
 use super::{Loc, RawEntry};
@@ -39,7 +35,6 @@ pub struct ZipLoc {
 const FLAG_ENCRYPTED: u16 = 0x0001;
 
 impl ZipLoc {
-    /// WinZip AES: opens with the password.
     pub fn aes(&self) -> Option<AesField> {
         self.aes
             .filter(|_| self.flags & FLAG_ENCRYPTED != 0 && self.method == zipaes::METHOD)
@@ -219,7 +214,6 @@ fn extra_fields(mut extra: &[u8]) -> Vec<(u16, &[u8])> {
     out
 }
 
-/// zip64 field holds, in order, only the values that were `0xFFFFFFFF` in the fixed header.
 fn apply_zip64(data: &[u8], size: &mut u64, compressed: &mut u64, offset: &mut u64) {
     let mut at = 0;
     for slot in [size, compressed, offset] {
@@ -292,7 +286,6 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     era * 146_097 + doe - 719_468
 }
 
-/// Positioned at the entry's stored bytes, `loc.compressed` of them.
 fn stored_data(src: &Arc<BlockSource>, loc: &ZipLoc) -> Result<io::Take<BlockReader>> {
     let mut reader = src.reader();
     let head = reader.read_exact_at(loc.header_offset, 30).map_err(from_io)?;
@@ -313,8 +306,6 @@ fn needs_password(password: Option<&Password>) -> Result<&Password> {
     password.ok_or_else(|| Error::kind(ErrorKind::PasswordRequired))
 }
 
-/// First AES entry decides: `PasswordRequired` without a password, `WrongPassword` with a wrong one.
-/// Archives without one take no password.
 pub fn check_password(
     src: &Arc<BlockSource>,
     entries: &[RawEntry],
@@ -374,16 +365,11 @@ pub fn open_entry(
     Ok(Box::new(Checked::new(stream, loc, finish)))
 }
 
-/// Bounds output to declared size and requires data to end there, verifies CRC-32 (AE-2: the AES
-/// tag instead): bombs and corrupt entries cannot pass. AE-2 sizes are not under its tag: lowered
-/// size must fail, not cut entry short.
 struct Checked {
     inner: io::Take<Box<dyn Read + Send>>,
     crc: flate2::Crc,
-    /// `None`: AE-2 stores no CRC.
     expect_crc: Option<u32>,
     expect_len: u64,
-    /// Checks the AES tag even when decompression stops before the last stored byte.
     finish: Option<Finish>,
 }
 
@@ -428,7 +414,6 @@ mod tests {
 
     #[test]
     fn dos_time_conversion() {
-        // 2024-03-05 12:34:56
         let date = ((2024 - 1980) << 9) | (3 << 5) | 5;
         let time = (12 << 11) | (34 << 5) | (56 / 2);
         let secs = |tz: &FixedOffset| {
@@ -478,7 +463,7 @@ mod tests {
         assert!(parse_directory(&[1, 2, 3], 1).is_err());
         let mut b = CENTRAL_SIG.to_le_bytes().to_vec();
         b.extend_from_slice(&[0u8; 60]);
-        b[28] = 0xFF; // name longer than the buffer
+        b[28] = 0xFF;
         assert!(parse_directory(&b, 1).is_err());
     }
 }

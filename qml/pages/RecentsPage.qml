@@ -19,7 +19,6 @@ Page {
     //% "Recents"
     readonly property string coverTitle: qsTrId("lautta-recents-title")
     readonly property var coverModel: listModel
-    // View options' View, as folders without their own.
     readonly property bool gridMode: JSON.parse(App.settingsJson).view_mode === "grid"
     readonly property real tileWidth: Math.min(Screen.width, Screen.height) / gridMetrics.portraitColumns
     readonly property int columns: GridRows.columns(width, tileWidth, gridMetrics.portraitColumns)
@@ -27,7 +26,6 @@ Page {
 
     allowedOrientations: Orientation.All
 
-    // Model and delegate change together: a list row never gets a grid row's roles.
     function showMode() {
         list.model = null
         list.delegate = gridMode ? gridRow : listRow
@@ -74,7 +72,6 @@ Page {
         Component.onCompleted: reload()
     }
 
-    // Roles of every row, whatever the model; no delegate made.
     DelegateModel {
         id: dates
 
@@ -87,7 +84,6 @@ Page {
         onChanged: page.fitGrid()
     }
 
-    // `dateGroup`, `first`, `count`: one row of tiles, all of one date group.
     ListModel {
         id: gridRows
     }
@@ -215,10 +211,8 @@ Page {
 
             readonly property int first: model.first
             readonly property int end: model.first + model.count
-            // Tile whose menu is open.
             property int heldId: -1
 
-            // `first` may not have followed the model yet.
             function regroup() {
                 var all = rowCells.items
                 var to = Math.min(end, all.count)
@@ -350,7 +344,6 @@ Page {
                 onChanged: row.regroup()
             }
 
-            // Press between tiles stays here: no row to open.
             MouseArea {
                 anchors.fill: parent
             }

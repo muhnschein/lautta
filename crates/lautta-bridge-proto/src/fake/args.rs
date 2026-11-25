@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Argument validation as the real bridge does it (netvfs `args.cpp`): malformed call is
-//! `InvalidArgs`, bad path `InvalidName`.
 
 use super::fail::Fail;
 use super::tree::normalize;
@@ -14,7 +12,6 @@ const MAX_ID: usize = 64;
 
 pub type Dict = HashMap<String, OwnedValue>;
 
-/// `[A-Za-z0-9_]{1,64}`, never a path.
 pub fn drive(id: &str) -> Result<String, Fail> {
     let ok =
         !id.is_empty() && id.len() <= MAX_ID && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');
@@ -42,7 +39,6 @@ pub fn path(raw: &[u8]) -> Result<Vec<u8>, Fail> {
     Ok(normalize(raw)?)
 }
 
-/// Lane names; empty selects the method's default.
 pub fn lane(given: &str, default: &'static str) -> Result<&'static str, Fail> {
     match given {
         "" => Ok(default),
@@ -75,7 +71,6 @@ pub fn read_size(max: u32) -> Result<usize, Fail> {
     Ok(max as usize)
 }
 
-/// A token of `[a-z0-9-]`.
 pub fn token(s: &str, max: usize) -> Result<String, Fail> {
     let ok = !s.is_empty()
         && s.len() <= max
@@ -159,7 +154,6 @@ pub enum Disposition {
 #[derive(Debug, PartialEq, Eq)]
 pub struct TransferOpts {
     pub offset: i64,
-    /// -1: unknown.
     pub size: i64,
     pub lane: &'static str,
     pub disposition: Disposition,
