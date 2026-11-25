@@ -841,18 +841,14 @@ async fn purge_step(
         return Some(());
     }
     let current = account_ids(list);
-    let gone: Vec<String> = match known.as_ref() {
-        Some(k) => k.difference(&current).cloned().collect(),
-        None => {
-            let c = core.clone();
-            let remembered = tokio::task::spawn_blocking(move || c.remembered_accounts())
-                .await
-                .ok()
-                .and_then(|r| r.ok())
-                .unwrap_or_default();
-            remembered.difference(&current).cloned().collect()
-        }
-    };
+    let c = core.clone();
+    let mut seen = tokio::task::spawn_blocking(move || c.remembered_accounts())
+        .await
+        .ok()
+        .and_then(|r| r.ok())
+        .unwrap_or_default();
+    seen.extend(known.take().unwrap_or_default());
+    let gone: Vec<String> = seen.difference(&current).cloned().collect();
     *known = Some(current);
     let mut removed = Vec::new();
     for id in gone {
