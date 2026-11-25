@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Run-time conflict decisions. Planner may already have found a conflict, but only the destination
-//! at write time is authoritative, so the engine asks `decide` for every item. Pure logic.
 
 use crate::entry::{Entry, Kind};
 use crate::ops::conflict::replaces;
@@ -9,7 +7,6 @@ use crate::ops::{Conflict, ConflictChoice, PlanItem};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct WriteMode {
     pub replace: bool,
-    /// Continue the partial destination file in place (*Resume*).
     pub resume: bool,
     pub merge: bool,
 }
@@ -26,8 +23,6 @@ fn is_real_dir(e: &Entry) -> bool {
     e.kind == Kind::Dir
 }
 
-/// Default choice is never *Replace*, so it is not listed first. `add_only`: destination keeps
-/// existing items as they are.
 pub fn build_conflict(plan: &PlanItem, dst: &Entry, can_resume: bool, add_only: bool) -> Conflict {
     let src_is_dir = plan.kind == Kind::Dir;
     let dst_is_dir = is_real_dir(dst);
@@ -72,7 +67,6 @@ pub fn build_conflict(plan: &PlanItem, dst: &Entry, can_resume: bool, add_only: 
     }
 }
 
-/// `default` is the "apply to all remaining" answer.
 pub fn decide(
     plan: &PlanItem,
     dst: Option<&Entry>,
@@ -94,8 +88,6 @@ pub fn decide(
     match choice {
         Some(ConflictChoice::Skip) => Decision::Skip,
         Some(ConflictChoice::KeepBoth) => Decision::KeepBoth,
-        // A folder "replaced" or "replaced if newer" merges: replacing a
-        // whole tree would destroy files the user did not mention.
         Some(ConflictChoice::Merge | ConflictChoice::Replace | ConflictChoice::ReplaceIfNewer)
             if both_dirs =>
         {
@@ -118,8 +110,6 @@ pub fn decide(
     }
 }
 
-/// *Keep both*: `name 2.ext`, `name 3.ext`. Folders and dot files keep their whole name as the
-/// stem.
 pub fn numbered_name(name: &[u8], n: u32, is_dir: bool) -> Vec<u8> {
     let dot = if is_dir {
         None
@@ -331,7 +321,6 @@ mod tests {
             Decision::Ask(_)
         ));
         for choice in [ConflictChoice::ReplaceIfNewer, ConflictChoice::Merge] {
-            // The source is newer, yet a file cannot replace a folder.
             assert!(matches!(
                 decide(&resolved(file(1), choice), Some(&d), None, true, false),
                 Decision::Ask(_)

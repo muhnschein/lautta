@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Nemo.Thumbnailer draws a PDF or video only when given
-// `mimeType`.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -135,7 +134,6 @@ Item {
         Item {
             id: textTile
 
-            // `icon` inside AppIcon is its own property, not this file's id.
             readonly property Item fileIcon: icon
 
             Label {

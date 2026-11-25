@@ -90,7 +90,6 @@ ApplicationWindow {
                 if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), win.source)
                         || !tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), win.folder + "transfer-cancel.md"))
                     return win.fail("fixtures")
-                // Same name in target: transfer waits for an answer, stays cancellable.
                 Transfers.queueCopy(JSON.stringify([win.source]), win.folder)
                 win.next()
                 break
@@ -127,7 +126,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 4:
-                // Menu closes long before the remorse runs out, as on the phone.
                 if (win.row.menuOpen)
                     break
                 if (win.state() !== "waiting")

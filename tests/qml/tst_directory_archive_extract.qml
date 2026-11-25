@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Headless: no finger, no render loop; pulley and header looks unproven here.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -74,7 +73,6 @@ ApplicationWindow {
         }, JSON.stringify(name) + " to be a '" + kind + "' in " + model.uri)
     }
 
-    // Pulley entry `name` of `page`, shown or not; null when absent.
     function pulleyEntry(page, name) {
         var menus = findAll(page, function (x) { return x._isPullDownMenu === true }, [])
         if (!expect(menus.length === 1, "one pulley: " + menus.length))

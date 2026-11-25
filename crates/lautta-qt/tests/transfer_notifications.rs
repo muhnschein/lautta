@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Conflict notifications of `TransferNotifications.qml` against real transfers on a temporary
-//! home. Host has no Nemo.Notifications: stub module records what is on screen. Stub's `close()`
-//! emits no `closed`, like Nemo's own: only user's dismiss or tap does.
 
 const STUB_QMLDIR: &str =
     "module Nemo.Notifications\nNotification 1.0 Notification.qml\nNoteLog 1.0 NoteLog.js\n";

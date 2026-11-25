@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Run with `--qml-check -F <folder>` by tools/ci/check-rpm.sh (target, installed package).
 import QtQuick 2.6
 import Lautta 1.0
 

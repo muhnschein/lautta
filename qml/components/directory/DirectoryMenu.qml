@@ -14,7 +14,6 @@ PullDownMenu {
     readonly property bool writable: owner ? owner.model.writable : false
     readonly property bool readable: owner ? owner.model.readable : false
     readonly property bool makes: picking && writable && !owner.atRoot
-    // Inside a compressed file: the file itself, else "".
     readonly property string archiveUri: owner ? Operations.archiveSource(owner.uri) : ""
 
     visible: !picking || makes

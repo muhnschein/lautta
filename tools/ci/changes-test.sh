@@ -1,7 +1,5 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-2.1-or-later
-# tools/ci/changes.sh skips the build and test jobs for docs alone, never for
-# anything else. Costly mistake: code read as docs, CI green without a test.
 set -u
 script=$(cd "$(dirname "$0")" && pwd)/changes.sh
 status=0
@@ -18,7 +16,6 @@ check() {
     fi
 }
 
-# says WANT WHY FILES (one per line)
 says() {
     want=$1 why=$2 files=$3
     check "$want" "$(printf '%s\n' "$files" | "$script" --classify)" "$why"
@@ -41,11 +38,9 @@ says true "a file only named like docs runs" "CHANGELOG.md.orig"
 says true "an empty line runs" ""
 check true "$("$script" --classify < /dev/null)" "no input runs"
 
-# Whole script in a scratch repository.
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 g() { git -C "$work" -c user.name=t -c user.email=t@t "$@" > /dev/null 2>&1; }
-# event WANT WHY EVENT [BEFORE]
 event() {
     want=$1 why=$2 name=$3 before=${4:-}
     check "$want" "$(cd "$work" && EVENT=$name BEFORE=$before "$script" 2> /dev/null)" "$why"

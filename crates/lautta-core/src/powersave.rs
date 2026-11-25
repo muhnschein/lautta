@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! mce's battery saving into [`Core::set_power_save`]: `get_psm_state`, then each
-//! `psm_state_ind`. Sailjail's Base permission lets apps call one and hear the other.
 
 use crate::app::Core;
 use futures::StreamExt;
@@ -11,7 +9,6 @@ use zbus::{Connection, MatchRule, MessageStream};
 
 const MCE: &str = "com.nokia.mce";
 
-/// `connect` gives the system bus. Off when it or mce is missing (host, SDK).
 pub fn spawn<F>(core: &Arc<Core>, connect: F)
 where
     F: Future<Output = zbus::Result<Connection>> + Send + 'static,
@@ -28,7 +25,6 @@ where
     });
 }
 
-/// Returns when `core` is gone or the connection ends.
 pub async fn follow_owned(conn: Connection, core: Weak<Core>) -> zbus::Result<()> {
     let conn = &conn;
     let rule = MatchRule::builder()
@@ -36,7 +32,6 @@ pub async fn follow_owned(conn: Connection, core: Weak<Core>) -> zbus::Result<()
         .interface("com.nokia.mce.signal")?
         .member("psm_state_ind")?
         .build();
-    // Subscribed before asking: no change slips between the two.
     let mut changes = MessageStream::for_match_rule(rule, conn, None).await?;
     let reply = conn
         .call_method(

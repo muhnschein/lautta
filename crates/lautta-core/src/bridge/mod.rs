@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! netvfs bridge client. Requests go through [`crate::provider::netvfs::NetvfsProvider`].
 
 mod client;
 pub(crate) mod convert;

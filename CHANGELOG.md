@@ -4,6 +4,9 @@
 
 - An empty folder says *Pull down to add*, as the pulley entry is called, and mentions paste only when something on the clipboard can be pasted there. *Paste here* on the clipboard bar now also shows in folders you opened before copying ([#192](https://github.com/muhnschein/lautta/issues/192)).
 - Small things: *More* in the image viewer shows icons, as *More actions* does; *Checksums* names its file; *Settings › Transfers* asks before operations of "Over 1000 items or 1 GB", no longer "953.7 MB" ([#214](https://github.com/muhnschein/lautta/issues/214)).
+- Long code lines in the text viewer wrap at their own indent, so wrapped parts line up with the code above them ([#211](https://github.com/muhnschein/lautta/issues/211)).
+- In the audio player, elapsed and total time sit on one line under the slider, at its two ends ([#212](https://github.com/muhnschein/lautta/issues/212)).
+- The image viewer's first-time hint *Swipe down to go to previous view* sits above the toolbar, no longer over Delete, Open with, Share and More ([#213](https://github.com/muhnschein/lautta/issues/213)).
 - The Home page shows only how much space is free on the phone and on memory cards and USB drives, as "12 GB free", no longer "12 GB free of 50 GB".
 - The start page is called *Home* now, no longer *Browse*, and its settings are *Home page*. What you hid or reordered there stays as it was ([#143](https://github.com/muhnschein/lautta/issues/143)).
 - Saving files shared to Lautta works like a folder in the app: *Save here* on top, what gets saved below it, then the folder with its path to tap your way up, or to *Locations* by the house. Folders open in place; files show dimmed, so you see what is there already. It opens where you saved last (Downloads the first time), *Locations* lists the last three folders you saved to, and the pulley makes a new folder. *Save here* is off where Lautta may not add files ([#95](https://github.com/muhnschein/lautta/issues/95)).

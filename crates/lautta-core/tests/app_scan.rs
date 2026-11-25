@@ -130,7 +130,6 @@ async fn cut_upload_leaves_no_file_behind() {
         .unwrap_err();
     assert_eq!(e.kind, ErrorKind::ConnectionLost);
     assert_eq!(mem.paths(), ["scans"]);
-    // Upload done, last step fails: the hidden file goes too.
     mem.fail_next(
         "rename",
         "scans/.contract.pdf.lautta-part",

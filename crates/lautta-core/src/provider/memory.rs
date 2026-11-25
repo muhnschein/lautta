@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! In-memory provider: test double for planners, transfers, search and sync. Configurable
-//! capabilities exercise capability-driven behaviour without a real filesystem or bridge.
 
 use super::{
     AttributeChanges, CopyOptions, Disposition, Lane, ProgressSink, Provider, ReadHandle, ReadOptions,
@@ -38,24 +36,18 @@ enum Node {
 #[derive(Default)]
 struct State {
     nodes: BTreeMap<VPath, Node>,
-    /// Keyed by path and operation name (`"list"`, `"stat"`, …).
     failures: HashMap<(String, VPath), Vec<Error>>,
     calls: Vec<String>,
-    /// `checksum` answers these instead of hashing: a server that lies.
     checksums: HashMap<VPath, Vec<u8>>,
     holds: HashMap<(String, VPath), (oneshot::Sender<()>, oneshot::Receiver<()>)>,
-    /// Where the location sits on its server: absolute link targets below it resolve into the tree,
-    /// others point outside (empty: `/`).
     root_at: Vec<u8>,
 }
 
-/// See [`MemoryProvider::hold_next`].
 pub struct Hold {
     pub reached: oneshot::Receiver<()>,
     pub release: oneshot::Sender<()>,
 }
 
-/// The root always exists.
 #[derive(Clone)]
 pub struct MemoryProvider {
     state: Arc<Mutex<State>>,
@@ -96,8 +88,6 @@ impl MemoryProvider {
         }
     }
 
-    /// Location starts at `dir` of its server (`/home/alice` for SFTP): absolute link targets are
-    /// written against the server root; relative ones may climb out of `dir` and back.
     pub fn rooted_at(self, dir: &str) -> MemoryProvider {
         self.lock().root_at = dir.trim_end_matches('/').as_bytes().to_vec();
         self
@@ -175,12 +165,10 @@ impl MemoryProvider {
             .collect()
     }
 
-    /// `checksum` of `path` answers `digest`, whatever the algorithm.
     pub fn answer_checksum(&self, path: &str, digest: &[u8]) {
         self.lock().checksums.insert(Self::vp(path), digest.to_vec());
     }
 
-    /// Queued, consumed in order.
     pub fn fail_next(&self, op: &str, path: &str, err: Error) {
         self.lock()
             .failures
@@ -189,8 +177,6 @@ impl MemoryProvider {
             .push(err);
     }
 
-    /// Next `op` on `path` does its work, signals `reached`, then waits for `release` (or its
-    /// drop): like a blocking call already running, aborting the caller cannot undo the work.
     pub fn hold_next(&self, op: &str, path: &str) -> Hold {
         let (reached_tx, reached) = oneshot::channel();
         let (release, release_rx) = oneshot::channel();
@@ -205,7 +191,6 @@ impl MemoryProvider {
         let Some((reached, mut release)) = hold else {
             return;
         };
-        // `reached` only once parked on `release`: an abort sent after it always lands.
         let mut reached = Some(reached);
         std::future::poll_fn(|cx| match std::pin::Pin::new(&mut release).poll(cx) {
             std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
@@ -317,11 +302,8 @@ fn ensure_parents(st: &mut State, p: &VPath) {
     }
 }
 
-/// Links followed per lookup before giving up.
 const MAX_HOPS: usize = 40;
 
-/// Follows links among the folders as a real filesystem does; last component too with
-/// `follow_last`. Reads use this; changes address nodes themselves.
 fn canonical(st: &State, path: &VPath, follow_last: bool) -> VPath {
     let names: Vec<&[u8]> = path.components().collect();
     let mut cur = VPath::root();
@@ -343,9 +325,6 @@ fn canonical(st: &State, path: &VPath, follow_last: bool) -> VPath {
     cur
 }
 
-/// Where a link leads, as the server resolves it: relative from the link's folder, absolute from
-/// the server root, `..` past the location included. `None` outside the location (`root_at` on the
-/// server).
 fn resolve_link(link: &VPath, target: &[u8], root_at: &[u8]) -> Option<VPath> {
     let from = if target.first() == Some(&b'/') {
         Vec::new()

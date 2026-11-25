@@ -2,7 +2,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
-// Row's or tile's brief highlight when owner says `flashed(uri)` for this item.
 Rectangle {
     id: flash
 
@@ -16,7 +15,6 @@ Rectangle {
 
     Connections {
         target: flash.owner
-        // Owner may come after: unknown signal until then.
         ignoreUnknownSignals: true
         onFlashed: if (itemUri === flash.uri) fade.restart()
     }

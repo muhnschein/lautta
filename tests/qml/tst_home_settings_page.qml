@@ -101,7 +101,6 @@ QtQuick.Window {
         return out.join(", ")
     }
 
-    // Headless: no render loop; list shorter than window, make all delegates.
     function delegates() {
         page.listView.cacheBuffer = 100000
         page.listView.forceLayout()
@@ -251,7 +250,6 @@ QtQuick.Window {
                     window.carry()
                 break
             case 2:
-                // A second model reads the store, and again on each write: the move is stored once it shows there.
                 if (!window.stored)
                     window.stored = storedModel.createObject(window)
                 if (window.stored.count === 0 || window.rowOf(window.stored, window.folder) !== window.fromRow + 1)

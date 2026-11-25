@@ -41,7 +41,6 @@ Item {
     property Item moreActionsPage
     property var toMove: []
     property var made: []
-    // Bottom of the view under clipboard, selection or activity panel.
     readonly property real coveredHeight: panelSpace.height
     readonly property real backTapWidth: Theme.itemSizeSmall
 
@@ -64,14 +63,11 @@ Item {
         dir.clearSelection()
     }
 
-    // Finger down on a file: an image starts decoding for the viewer. Not while selecting.
     function itemPressed(itemUri, isDir, mimeType) {
         if (!selecting && !isDir)
             prefetch.start(itemUri, mimeType)
     }
 
-    // tileSize: size the item's thumbnail shows at, 0 while it shows none (thumbnailer cache
-    // has none yet).
     function openItem(itemUri, isDir, mimeType, tileSize) {
         if (isDir)
             openFolder(itemUri)
@@ -108,7 +104,6 @@ Item {
         })
     }
 
-    // Scan left or saved: its photos go.
     function endScan(scan, savedUri) {
         scan.destroy()
         if (savedUri)
@@ -156,7 +151,6 @@ Item {
         return shown
     }
 
-    // Silica keeps one remorse item per row for all its timers: `action` belongs to this one only.
     function onceCanceled(remorse, action) {
         var done = function () {
             remorse.canceled.disconnect(canceled)
@@ -199,14 +193,11 @@ Item {
         var f = flickable
         var row = gridMode ? GridRows.rowOf(index, grid.columns) : index
         f.positionViewAtIndex(row, ListView.Contain)
-        // Panels cover the view's bottom; footer leaves room to scroll a row above them.
         var covered = f.indexAt(f.width / 2, f.contentY + f.height - coveredHeight)
         if (coveredHeight > 0 && covered >= 0 && row >= covered)
             f.contentY = Math.min(f.contentY + coveredHeight, f.originY + f.contentHeight - f.height)
     }
 
-    // New items of this folder light up once the listing that follows has them; rows made before
-    // it may not stay. `relist`: nothing lists them anew otherwise.
     function landed(uris, relist) {
         var bare = function (u) { return u.replace(/\/+$/, "") }
         var here = uris.filter(function (u) { return bare(App.parentUri(u)) === bare(view.uri) })
@@ -225,13 +216,11 @@ Item {
         if (found.length === 0)
             return
         var rows = found.map(function (u) { return dir.indexOf(u) })
-        // Last first: first new item stays in view, as many after it as fit.
         showIndex(Math.max.apply(null, rows))
         showIndex(Math.min.apply(null, rows))
         found.forEach(function (u) { view.flashed(u) })
     }
 
-    // Rows come and go at the end only: a new count as model would start grid anew at its top.
     function fitGridRows() {
         var wanted = gridMode ? GridRows.rowCount(dir.count, grid.columns) : 0
         if (gridRows.count > wanted)
@@ -243,7 +232,6 @@ Item {
             gridRows.append(more)
     }
 
-    // Popup holds one remorse: a new one first runs the pending one, as Silica does when page goes.
     function settleRemorse() {
         if (remorsePopup.active)
             remorsePopup.trigger()
@@ -319,8 +307,6 @@ Item {
         return pageStack.push(url, properties)
     }
 
-    // Trash after remorse timer; for good (volumes, servers, Trash off) once dialog accepted, no
-    // timer.
     function remove(uris, listItem) {
         var action = function () {
             Operations.remove(JSON.stringify(uris))
@@ -374,7 +360,6 @@ Item {
         case "delete": remove(uris, listItem); break
         case "more": moreActions(info); break
         case "moveToNewFolder": newFolder(uris); break
-        // CompressDialog takes the list itself, not its JSON text.
         case "compress": openDialog("../../dialogs/CompressDialog.qml", { "uris": uris }); break
         case "extract": Operations.extract(uris[0], ""); break
         case "checksums": openDialog("../../pages/ChecksumsPage.qml", { "uri": uris[0] }); break
@@ -398,7 +383,6 @@ Item {
             endSelection()
     }
 
-    // Add only: folders listed, files not.
     function hiddenTitle() {
         //% "Files here are hidden"
         return qsTrId("lautta-dir-hidden")
@@ -565,7 +549,6 @@ Item {
         onTriggered: dir.refresh()
     }
 
-    // Server folder not watched: relisted when a transfer ends.
     Connections {
         target: Transfers
         onLanded: view.landed(JSON.parse(urisJson), true)
@@ -784,7 +767,6 @@ Item {
                 else
                     view.openItem(model.uri, model.isDir, model.mimeType, tileIcon.thumbnailReady ? Math.round(tileIcon.width) : 0)
             }
-            // Add only: no Select, as in the pulley.
             onPressAndHold: {
                 prefetch.stop()
                 if (dir.readable && !view.picking)
@@ -882,7 +864,6 @@ Item {
         }
     }
 
-    // Measures only rows the view makes, never every name of a large folder.
     Component {
         id: gridRowDelegate
 
@@ -891,10 +872,8 @@ Item {
 
             readonly property int first: index * grid.columns
             readonly property int end: (index + 1) * grid.columns
-            // Stays while a drag holds its cell, even out of view (DragSelect).
             readonly property bool holding: !!dragSelect.holder && dragSelect.holder.parent === gridRow
 
-            // `first` may not have followed columns yet.
             function regroup() {
                 var all = rowCells.items
                 var span = GridRows.span(index, grid.columns, all.count)
@@ -950,14 +929,11 @@ Item {
         id: gridRows
     }
 
-    // PullDownMenu draws at top of its flickable: on list or grid it would come out under header.
-    // Host never scrolls, so header stays; list and grid stop at top and a pull goes on to host.
     SilicaFlickable {
         id: pulleyHost
 
         objectName: "folderPulleyHost"
         anchors.fill: parent
-        // A flickable's content is 0x0 until told; anchors to parent go to it.
         contentWidth: width
         contentHeight: height
 
@@ -965,8 +941,6 @@ Item {
             owner: view
         }
 
-        // Not the list's header: list keeps contentY when header grows, so a late notice scrolled
-        // list from top. Stacked by anchors, not Column: height follows at once, not next polish.
         Item {
             id: top
 
@@ -1178,7 +1152,6 @@ Item {
             VerticalScrollDecorator { }
         }
 
-        // GridView gives every cell one height.
         SilicaListView {
             id: grid
 
@@ -1239,8 +1212,6 @@ Item {
         height: (view.selecting || clipboardPanel.open ? Theme.itemSizeLarge : 0) + activityBar.space
     }
 
-    // States sit in content of list or grid, as Silica's ViewPlaceholder: pulley moves them with
-    // content. As siblings they stayed put.
     Item {
         id: stateLayer
 
@@ -1265,7 +1236,6 @@ Item {
             objectName: "folderPlaceholder"
             visible: kind.length > 0
             x: Theme.horizontalPageMargin
-            // Lifted when tall (warning in landscape) so buttons stay on screen.
             y: Math.max(0, Math.min(Math.round(parent.height * 0.38), parent.height - height - Theme.paddingLarge))
             level: ServerWarning.level(dir.errorKind)
             title: view.placeholderTitle(kind, dir.errorKind)

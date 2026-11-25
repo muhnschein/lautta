@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Shared state of the fake bridge and of one client session.
 
 use super::tree::Tree;
 use crate::access::{self, After, Level, Own};
@@ -15,19 +14,14 @@ use std::time::Duration;
 use tokio::time::Instant;
 use zbus::zvariant::{OwnedValue, Value};
 
-/// What the user decided for this app, for every account location.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Consent {
-    /// Not decided yet.
     Unknown,
-    /// No account.
     Denied,
-    /// Every account at this level.
     Allowed(Level),
 }
 
 impl Consent {
-    /// Word of a contract sequence (as in netvfs `bridge.conf`).
     pub fn as_str(self) -> &'static str {
         match self {
             Consent::Unknown => "unknown",
@@ -44,7 +38,6 @@ impl Consent {
         }
     }
 
-    /// What `GetConsent` and `ConsentChanged` say: `unknown` or `decided`.
     pub fn wire(self) -> &'static str {
         match self {
             Consent::Unknown => "unknown",
@@ -147,23 +140,18 @@ impl InfoValue {
             InfoValue::Bytes(b) => Value::from(b.clone()),
             InfoValue::Strings(s) => Value::from(s.clone()),
         };
-        // only fd values fail; plain values hold none
         OwnedValue::try_from(v).unwrap_or_else(|_| OwnedValue::from(0u8))
     }
 }
 
-/// Memory card or USB drive of the fake.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FakeDrive {
     pub id: String,
     pub label: String,
-    /// Empty when not mounted.
     pub mount_point: Vec<u8>,
-    /// `sd` or `usb`.
     pub kind: String,
     pub size: i64,
     pub uuid: String,
-    /// LUKS device not unlocked: listed as `locked`, never mounted.
     pub locked: bool,
 }
 
@@ -238,17 +226,13 @@ pub struct LocationRec {
 
 pub struct State {
     pub consent: Consent,
-    /// Per location, overriding [`State::consent`]: `None` not allowed.
     pub access: HashMap<String, Option<Level>>,
-    /// What the app added at an add level.
     pub own: HashMap<(String, Vec<u8>), Own>,
     pub consent_requests: u32,
     pub auto_consent: Option<Consent>,
     pub bridge_version: String,
-    /// `None`: bridge without `GetFeatures`; answers `UnknownMethod`.
     pub features: Option<Vec<String>>,
     pub drives: Vec<FakeDrive>,
-    /// Where `Mount` makes the drive's folder; `None`: below `/run/media/user`, not made.
     pub mount_root: Option<PathBuf>,
     pub locations: BTreeMap<String, LocationRec>,
     pub trees: HashMap<String, Tree>,
@@ -301,15 +285,12 @@ impl Default for State {
 }
 
 impl State {
-    /// Bridges not naming the drive methods answer `UnknownMethod`.
     pub fn offers_drives(&self) -> bool {
         self.features
             .as_ref()
             .is_some_and(|f| f.iter().any(|n| n == feature::DRIVES))
     }
 
-    /// Returns (mount point before, after); `None` for an unknown drive. Mounted below the
-    /// mount root by label, else UUID, else id.
     pub fn mount(&mut self, drive: &str, mount: bool) -> Option<(Vec<u8>, Vec<u8>)> {
         let root = self
             .mount_root
@@ -330,8 +311,6 @@ impl State {
         Some((std::mem::replace(&mut d.mount_point, wanted.clone()), wanted))
     }
 
-    /// Without a `state` in `info` the location is disconnected, as the bridge lists one it has not
-    /// connected to.
     pub fn add_location(&mut self, id: &str, provider: &str, name: &str, mut info: Vec<(String, InfoValue)>) {
         if !info.iter().any(|(k, _)| k == location_state::KEY) {
             info.push((
@@ -350,7 +329,6 @@ impl State {
         self.trees.entry(id.to_owned()).or_default();
     }
 
-    /// Whether that changed anything.
     pub fn set_state(&mut self, id: &str, state: &str, error: Option<&str>) -> bool {
         let Some(rec) = self.locations.get_mut(id) else {
             return false;
@@ -381,7 +359,6 @@ impl State {
         self.trees.entry(loc.to_owned()).or_default()
     }
 
-    /// Locations the app may use, each with its level.
     pub fn wire_locations(&self) -> Vec<WireLocation> {
         self.locations
             .iter()
@@ -406,7 +383,6 @@ impl State {
             .collect()
     }
 
-    /// What the app may do in location `id`; `None` while undecided or not allowed.
     pub fn level(&self, id: &str) -> Option<Level> {
         let default = match self.consent {
             Consent::Unknown => return None,
@@ -423,8 +399,6 @@ impl State {
             .unwrap_or(Own::No)
     }
 
-    /// Records what a finished `call` (`error`: bare name of its failure) made of `path` in `loc`;
-    /// nothing at a level that changes anything.
     pub fn after_call(&mut self, loc: &str, path: &[u8], call: After, error: Option<&str>) {
         if self.level(loc).is_none_or(Level::changes) {
             return;
@@ -488,7 +462,6 @@ pub struct Session {
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    // a panic while holding the lock cannot leave the data inconsistent here
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
@@ -565,7 +538,6 @@ impl Session {
         })
     }
 
-    /// Client gone: jobs canceled, handles closed, as the real bridge does.
     pub fn shut(&self) {
         self.with(|s| {
             for flag in s.jobs.values() {

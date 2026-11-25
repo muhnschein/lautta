@@ -35,7 +35,6 @@ function tallest(items) {
     return height
 }
 
-// Grid under section headers: a row holds one section's items only. `sections`: section of each item.
 function sectionRows(sections, columns) {
     var rows = []
     if (columns <= 0)
@@ -50,8 +49,6 @@ function sectionRows(sections, columns) {
     return rows
 }
 
-// Changes rows in place: a ListModel made anew starts its view at the top. `set` of same values
-// changes nothing; at `count` it appends.
 function fitRows(model, rows) {
     for (var i = 0; i < rows.length; ++i)
         model.set(i, rows[i])

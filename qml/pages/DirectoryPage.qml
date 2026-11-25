@@ -40,7 +40,6 @@ Page {
 
     allowedOrientations: Orientation.All
 
-    // A locked compressed file stays open, its password in memory, while a page shows it.
     Component.onCompleted: Operations.holdArchive(uri)
     Component.onDestruction: Operations.releaseArchive(uri)
 
