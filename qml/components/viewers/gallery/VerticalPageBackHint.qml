@@ -13,6 +13,7 @@ Loader {
     id: root
 
     property bool pageActive
+    property real bottomMargin
 
     anchors.fill: parent
     active: counter.active
@@ -40,6 +41,7 @@ Loader {
                 //% "Swipe down to go to previous view"
                 text: qsTrId("lautta-viewers-image-back-hint")
                 anchors.bottom: parent.bottom
+                anchors.bottomMargin: root.bottomMargin
                 opacity: touchInteractionHint.running ? 1.0 : 0.0
                 Behavior on opacity { FadeAnimation { duration: 1000 } }
                 textColor: Theme.highlightFromColor(Theme.highlightColor, Theme.LightOnDark)
