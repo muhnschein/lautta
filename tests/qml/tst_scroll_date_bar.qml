@@ -107,7 +107,8 @@ ApplicationWindow {
             tools.mouse(bar, "move", at.x, at.y + i * 40)
         expect(listView.contentY > before + 1, "dragging the pill down scrolls the list down")
         tools.mouse(bar, "release", at.x, at.y + 240)
-        waitFor(function () { return Math.abs(handle.width - width) < 0.5 }, "the pill to narrow")
+        expect(!bar.dragging, "let go, the pill is no longer held")
+        waitFor(function () { return handle.room === 0 }, "the pill to give back the thumb's room")
     }
 
     initialPage: Component {
