@@ -15,6 +15,7 @@ use crate::provider::SpaceInfo;
 use crate::settings::{LocationPrefs, Settings};
 use crate::thumbs::{app_thumbnail_url, thumbnail_source, ThumbSettings, ThumbSource};
 use crate::thumbs_text::{thumb_monospace, type_icon};
+use crate::transfer::scheduler::is_bridge_location;
 use crate::uri::Uri;
 use crate::volumes::VolumeWords;
 use crate::vpath::{display_name, VPath};
@@ -246,10 +247,11 @@ fn location_of(uri: &str) -> Option<&str> {
 
 impl Core {
     pub fn place_of(&self, uri: &Uri) -> String {
-        let name = self
-            .location(&uri.location)
-            .map(|l| l.name)
-            .unwrap_or_else(|| uri.location.clone());
+        let location = self.location(&uri.location);
+        if location.is_none() && is_bridge_location(&uri.location) {
+            return format!("/{}", uri.path.display());
+        }
+        let name = location.map(|l| l.name).unwrap_or_else(|| uri.location.clone());
         if uri.path.is_root() {
             return name;
         }

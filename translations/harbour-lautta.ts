@@ -2626,5 +2626,9 @@
         <source>Edit favourite</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-place-server">
+        <source>Server</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>
