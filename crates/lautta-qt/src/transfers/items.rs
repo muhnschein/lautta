@@ -372,8 +372,8 @@ mod tests {
         assert_eq!(v["bytesDone"], 5);
         assert_eq!(v["itemsDone"], 1);
         assert_eq!(v["eta"], -1);
-        assert!(v["destination"].as_str().unwrap().starts_with("file://"));
-        assert!(v["sourceAddress"].as_str().unwrap().ends_with("/Documents"));
+        assert_eq!(v["destination"], "Downloads");
+        assert_eq!(v["sourceAddress"], "Documents");
         assert_eq!(v["verifyChecksums"], false);
     }
 }
