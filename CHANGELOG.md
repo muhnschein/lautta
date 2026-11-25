@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A server file opened from two places at once, such as *Open with* in a viewer while a share of it runs, downloads once and both get the same copy ([#155](https://github.com/muhnschein/lautta/issues/155)).
 - Small things: *More* in the image viewer shows icons, as *More actions* does; *Checksums* names its file; *Settings › Transfers* asks before operations of "Over 1000 items or 1 GB", no longer "953.7 MB" ([#214](https://github.com/muhnschein/lautta/issues/214)).
 - Long code lines in the text viewer wrap at their own indent, so wrapped parts line up with the code above them ([#211](https://github.com/muhnschein/lautta/issues/211)).
 - In the audio player, elapsed and total time sit on one line under the slider, at its two ends ([#212](https://github.com/muhnschein/lautta/issues/212)).
