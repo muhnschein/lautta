@@ -10,7 +10,6 @@ Item {
             console.error("FAILED: " + what)
     }
 
-    // Theme stub: distinct colours, so each key shows where it came from.
     readonly property var theme: ({
         "highlightColor": Qt.rgba(0.4, 0.8, 1, 1),
         "highlightBackgroundColor": Qt.rgba(0, 0, 1, 1),

@@ -82,7 +82,6 @@ ApplicationWindow {
         return views.length === 1 ? views[0] : null
     }
 
-    // No render loop headless: lay out by hand.
     function layOut() {
         var views = findAll(window.contentItem, function (x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < views.length; ++i)

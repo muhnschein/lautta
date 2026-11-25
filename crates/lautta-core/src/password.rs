@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Passwords of compressed files: memory only, wiped on drop. Never stored, logged (`Debug` hides
-//! the text) or sent.
 
 use std::fmt;
 use zeroize::Zeroizing;
@@ -9,12 +7,10 @@ use zeroize::Zeroizing;
 pub struct Password(Zeroizing<String>);
 
 impl Password {
-    /// Empty text is no password.
     pub fn new(text: &str) -> Option<Password> {
         Password::from_text(text.to_owned())
     }
 
-    /// Takes `text` without a copy left behind.
     pub fn from_text(text: String) -> Option<Password> {
         let text = Zeroizing::new(text);
         (!text.is_empty()).then(|| Password(text))
@@ -35,10 +31,8 @@ impl fmt::Debug for Password {
     }
 }
 
-/// Longer text is cut for the estimate: zxcvbn's matching grows faster than linear.
 const WEIGH_CHARS: usize = 64;
 
-/// Guessable with little effort (zxcvbn score below 3 of 4). A hint only; nothing is refused.
 pub fn is_weak(text: &str) -> bool {
     if text.is_empty() {
         return false;

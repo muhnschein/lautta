@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Archives built in memory with the crates the readers use.
 
 use super::*;
 use crate::provider::memory::MemoryProvider;
@@ -43,7 +42,6 @@ fn tar_add(b: &mut tar::Builder<Vec<u8>>, name: &str, data: &[u8], kind: tar::En
     h.set_mode(0o644);
     h.set_mtime(1_700_000_000);
     h.set_entry_type(kind);
-    // Raw name bytes: builder setters refuse `..`, hostile archives do not.
     h.as_old_mut().name[..name.len()].copy_from_slice(name.as_bytes());
     h.set_cksum();
     b.append(&h, data).unwrap();
@@ -593,13 +591,13 @@ async fn unsupported_zip_method_and_encryption_are_refused() {
     let central = [0x50, 0x4b, 0x01, 0x02];
     let mut data = zip_bytes(&[("f", b"hello")], zip::CompressionMethod::Stored);
     let cd = data.windows(4).rposition(|w| w == central).unwrap();
-    data[cd + 8] |= 1; // general purpose flag bit 0: encrypted
+    data[cd + 8] |= 1;
     let p = open_named("e.zip", &data, tmp.path()).await.unwrap();
     let err = p.open_read(&vp("f"), Lane::Bulk).await.err();
     assert_eq!(err.map(|e| e.kind), Some(ErrorKind::Unsupported));
     let mut data = zip_bytes(&[("f", b"hello")], zip::CompressionMethod::Stored);
     let cd = data.windows(4).rposition(|w| w == central).unwrap();
-    data[cd + 10] = 12; // compression method: bzip2
+    data[cd + 10] = 12;
     let p = open_named("m.zip", &data, tmp.path()).await.unwrap();
     let err = p.open_read(&vp("f"), Lane::Bulk).await.err();
     assert_eq!(err.map(|e| e.kind), Some(ErrorKind::Unsupported));

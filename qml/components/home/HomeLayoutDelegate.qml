@@ -77,8 +77,6 @@ ListItem {
         body.y = fingerY - grabY - (delegate.y - startY)
     }
 
-    // Row under finger counted from carry start, not asked of list: list lays out next frame, a
-    // second move would read stale rows.
     function carryTo(y) {
         if (!carried)
             return
@@ -156,7 +154,6 @@ ListItem {
             truncationMode: TruncationMode.Fade
         }
 
-        // preventStealing: list does not scroll under a vertical drag.
         MouseArea {
             id: grip
 

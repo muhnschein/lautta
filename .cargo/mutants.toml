@@ -1,22 +1,8 @@
-# Exclusion = mutant provably changing no observable behaviour. `exclude_re` matches
-# "path:line:col: description". Pattern names column, not line: edits don't shift it onto
-# a real mutant (`(start + k) % n` in Scheduler::compute, column 38, must be caught).
 exclude_re = [
-    # `self.cursor % n` -> `self.cursor + n`: start only used as `(start + k) % n`;
-    # (c + n + k) % n == (c % n + k) % n, picks identical.
     'transfer/scheduler\.rs:\d+:33: replace % with \+ in Scheduler::compute',
-    # `(l + 1) % n` -> `(l + 1) + n` for stored cursor: only read back as `cursor % n`,
-    # unchanged by adding n; raw cursor never exposed.
     'transfer/scheduler\.rs:\d+:55: replace % with \+ in Scheduler::compute',
-    # apply_one `plan.items[index + 1..end]` -> `index * 1..end`: range then covers the
-    # folder itself, but `mark_children` skips items with a resolution and `apply_one`
-    # has set the folder's own, so no effect.
     'ops/conflict\.rs:\d+:49: replace \+ with \* in apply_one',
-    # replace_with_fresh keeps a sort record only for an unchanged entry, and that record
-    # equals `SortRecord::for_entry` of it: never keeping one rebuilds identical records.
     'listing\.rs:\d+:29: replace match guard with false',
-    # same_entries is a shortcut: false runs full refresh, which on identical entries ends
-    # in same state and no changes (identical_refresh_yields_no_changes).
     'listing\.rs:\d+:9: replace ListingState::same_entries -> bool with false',
     'listing\.rs:\d+:25: replace match guard with false',
     'listing\.rs:\d+:25: delete ! in ListingState::same_entries',

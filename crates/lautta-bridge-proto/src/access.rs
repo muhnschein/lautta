@@ -1,26 +1,16 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Access levels: what the user lets an app do in one account (`access` of a location's info), and what each level allows before a call reaches the server.
-//!
-//! Add levels (`read-add`, `add`) never change or remove what others put there. What the app added itself stays its own until it renames or removes it (the bridge: for a day): an upload to a temporary name can be finished, resumed, renamed into place or cleaned up.
 
-/// The location info key of the level.
 pub const KEY: &str = "access";
 
-/// What an app may do in one account.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Level {
-    /// `full`: anything.
     Full,
-    /// `read-add`: read everything, add new items.
     ReadAdd,
-    /// `read`: read everything.
     Read,
-    /// `add`: see folders, add new items.
     Add,
 }
 
 impl Level {
-    /// The stored and wire word.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -31,7 +21,6 @@ impl Level {
         }
     }
 
-    /// The level of a word.
     #[must_use]
     pub fn parse(word: &str) -> Option<Self> {
         match word {
@@ -43,25 +32,21 @@ impl Level {
         }
     }
 
-    /// Reads what others put there.
     #[must_use]
     pub const fn reads(self) -> bool {
         !matches!(self, Self::Add)
     }
 
-    /// Adds new items.
     #[must_use]
     pub const fn adds(self) -> bool {
         !matches!(self, Self::Read)
     }
 
-    /// Changes or removes what others put there.
     #[must_use]
     pub const fn changes(self) -> bool {
         matches!(self, Self::Full)
     }
 
-    /// Allows all that `other` allows.
     #[must_use]
     pub const fn covers(self, other: Self) -> bool {
         (self.reads() || !other.reads())
@@ -70,62 +55,38 @@ impl Level {
     }
 }
 
-/// What a call does to a location.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Op {
-    /// `SpaceInfo`, `Capabilities`, `Disconnect`.
     Info,
-    /// `List`, `Walk`.
     Browse,
-    /// `Stat`.
     Look,
-    /// `ReadLink`.
     ReadLink,
-    /// `OpenRead`, `Download`, `Checksum`, a copy's source.
     Read,
-    /// `MakeDir`.
     MakeDir,
-    /// `Upload` of a new file, a copy's destination without replace.
     Create,
-    /// `Upload` that truncates or resumes.
     Rewrite,
-    /// `Rename` without replace.
     Rename,
-    /// `RemoveFile`, `RemoveDir`.
     Remove,
-    /// `SetAttributes`.
     SetAttributes,
-    /// `RemoveTree`, `MakeSymlink`, `MakeHardlink`, anything that replaces.
     Unrestricted,
 }
 
-/// Whether the item is the app's own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Own {
-    /// No.
     No,
-    /// Added, not completely written yet.
     Writing,
-    /// Added and written.
     Written,
 }
 
-/// The decision.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Verdict {
-    /// Allowed.
     Allow,
-    /// Allowed; folders only are listed.
     FoldersOnly,
-    /// Allowed when the item is a folder.
     IfFolder,
-    /// Refused; `NotFound` when the item does not exist.
     DenyUnlessMissing,
-    /// Refused.
     Deny,
 }
 
-/// What `level` allows for `op` on an item that is `own`.
 #[must_use]
 pub fn check(level: Level, op: Op, own: Own) -> Verdict {
     let mine = own != Own::No;
@@ -147,28 +108,21 @@ pub fn check(level: Level, op: Op, own: Own) -> Verdict {
     }
 }
 
-/// Wire entry kinds (`WireEntry::kind`).
 const DIRECTORY: u8 = 2;
 const SYMLINK: u8 = 3;
 
-/// Whether an entry of kind `kind` (target `target`) is shown as a folder.
 #[must_use]
 pub const fn is_folder(kind: u8, target: u8) -> bool {
     kind == DIRECTORY || (kind == SYMLINK && target == DIRECTORY)
 }
 
-/// What a finished call makes of the item's ownership.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum After {
-    /// It tried to create the item.
     Created,
-    /// It wrote the app's item again.
     Rewritten,
-    /// It renamed or removed the app's item.
     Gone,
 }
 
-/// The item's ownership after a call that ended with `error` (bare error name; `None`: success).
 #[must_use]
 pub fn after(before: Own, call: After, error: Option<&str>) -> Own {
     match (call, error) {
@@ -180,7 +134,6 @@ pub fn after(before: Own, call: After, error: Option<&str>) -> Own {
     }
 }
 
-/// Errors after which a create left nothing behind: refused, or failed before writing.
 fn made_nothing(error: &str) -> bool {
     matches!(
         error,

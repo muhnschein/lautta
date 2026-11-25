@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! One task per scan runs its jobs in the order they were queued; picture work on blocking
-//! threads. Ends when the queue's sender is dropped, taking the session's files along.
 
 use lautta_core::app::Core;
 use lautta_core::scan::pdf::created_now;
@@ -11,16 +9,13 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 use tokio::sync::mpsc::UnboundedReceiver;
 
-/// Share of the progress bar for writing pages; the rest is the copy into the folder.
 const BUILD_SHARE: f64 = 0.9;
 
-/// Bar while `done` of `total` bytes are in the folder; size unknown: bar waits where writing ended.
 fn copy_progress(done: u64, total: Option<u64>) -> f64 {
     let share = total.map_or(0.0, |t| done as f64 / t.max(1) as f64);
     BUILD_SHARE + (1.0 - BUILD_SHARE) * share
 }
 
-/// Pages are named by id: places on screen run ahead of the session's.
 pub enum Job {
     Add(PathBuf),
     Retake(u32, PathBuf),
@@ -35,20 +30,14 @@ pub enum Job {
 #[derive(Debug)]
 pub enum Event {
     Changed,
-    /// Page has a new photo: new page, or retaken one.
     Photo(u32),
     Saved(Uri),
-    Failed {
-        error: Error,
-        saving: bool,
-    },
+    Failed { error: Error, saving: bool },
 }
 
 #[derive(Debug)]
 pub enum Msg {
-    /// Saving, 0..=1.
     Progress(f64),
-    /// One per job.
     Done { pages: Vec<PageInfo>, event: Event },
 }
 

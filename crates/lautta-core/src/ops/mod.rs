@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! File operations: planning, conflicts, names, bulk rename. Types shared by the planner and the
-//! transfer engine.
 
 pub mod conflict;
 pub mod names;
@@ -19,7 +17,6 @@ pub enum OperationKind {
     Extract,
 }
 
-/// The default is never `Replace`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ConflictChoice {
     Replace,
@@ -40,7 +37,6 @@ pub struct Conflict {
     pub dst_mtime_ms: Option<i64>,
     pub resumable: bool,
     pub choices: Vec<ConflictChoice>,
-    /// Destination keeps existing items as they are (access level `read-add`, `add`).
     #[serde(default)]
     pub add_only: bool,
 }
@@ -78,9 +74,7 @@ pub struct Plan {
     pub destination: Uri,
     pub items: Vec<PlanItem>,
     pub totals: PlanTotals,
-    /// Over 1 000 items or 1 GB (configurable) a summary sheet is shown.
     pub needs_summary: bool,
-    /// Locked archive an extract reads, open until the plan starts or is dropped.
     #[serde(skip)]
     pub hold: crate::app_archives::ArchiveHold,
 }

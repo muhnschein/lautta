@@ -1,15 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Read-only archive provider: zip, tar, tar.gz/bz2/xz/zst, 7z as a location.
-//!
-//! * zip via `Read + Seek` adapter with 64 KiB block cache ([`blocks`]): ranged reads only, central
-//!   directory first, then opened entries.
-//! * plain tar indexed the same way (headers only).
-//! * compressed tar and 7z need a full read: downloaded once to a cache file, indexed from there.
-//!
-//! Names that could leave the archive (`..`, absolute, drive letters, NUL) are never indexed;
-//! counted by [`ArchiveProvider::skipped_entries`].
-//!
-//! Locked (AES zip or 7z): opens only with the password, held here until the provider drops.
 
 mod blocks;
 mod sevenz;
@@ -41,8 +30,6 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use tokio::sync::mpsc;
 
-/// Entries up to this size decompress into memory in `open_read`; larger go to an unlinked temp
-/// file in the cache dir.
 pub const MEMORY_LIMIT: u64 = 16 * 1024 * 1024;
 const LIST_BATCH: usize = 256;
 const MAX_HOPS: usize = 8;
@@ -68,7 +55,6 @@ enum Loc {
     Implicit,
     Zip(zipdir::ZipLoc),
     TarAt(u64),
-    /// Data offset in the decompressed stream of a compressed tar.
     TarStream(u64),
     SevenZ(String),
 }
@@ -113,7 +99,6 @@ pub struct ArchiveEntry {
     pub size: u64,
 }
 
-/// `arc-<16 hex>`: location id of the archive opened from `source_uri`.
 pub fn archive_location_id_str(source_uri: &str) -> String {
     let digest = Sha256::digest(source_uri.as_bytes());
     format!("arc-{}", hex::encode(&digest[..8]))
@@ -160,8 +145,6 @@ fn has_ustar(block: &[u8]) -> bool {
     block.get(257..262) == Some(b"ustar")
 }
 
-/// Magic numbers first (512+ bytes useful), extension only where magic cannot tell (old-style tar,
-/// compressed tar).
 pub fn detect_format(head: &[u8], name: &[u8]) -> Option<ArchiveFormat> {
     if let Some(comp) = compression_magic(head) {
         let is_tar = has_tar_extension(name) || has_ustar(&tarfmt::decompressed_head(comp, head, 512));
@@ -183,7 +166,6 @@ pub fn is_archive(head: &[u8], name: &[u8]) -> bool {
     detect_format(head, name).is_some()
 }
 
-/// Rejects absolute paths, `..` components (also behind a backslash), NUL and drive prefixes.
 fn sanitize(raw: &[u8]) -> Option<VPath> {
     if raw.first() == Some(&b'/') || raw.contains(&0) {
         return None;
@@ -201,7 +183,6 @@ fn sanitize(raw: &[u8]) -> Option<VPath> {
     VPath::parse(raw).ok()
 }
 
-/// Stays inside the archive; absolute targets resolve from the archive root.
 fn resolve_link(parent: &VPath, target: &[u8]) -> Option<VPath> {
     let mut parts: Vec<&[u8]> = if target.first() == Some(&b'/') {
         Vec::new()
@@ -265,7 +246,6 @@ impl Index {
         }
     }
 
-    /// False when an ancestor is not a folder or a folder would become a file.
     fn insert(&mut self, path: VPath, node: Node) -> bool {
         for ancestor in path.ancestors().into_iter().skip(1) {
             match self.nodes.get(&ancestor) {
@@ -303,7 +283,6 @@ impl Drop for CacheFile {
 
 struct Inner {
     format: ArchiveFormat,
-    /// Only while the archive needs it.
     password: Option<Password>,
     index: Index,
     blocks: Option<Arc<BlockSource>>,
@@ -456,9 +435,6 @@ pub struct ArchiveProvider {
 }
 
 impl ArchiveProvider {
-    /// `cache_dir` receives the downloaded copy of non-zip archives and large extracted entries.
-    /// Locked archive: `PasswordRequired` without `password`, `WrongPassword` with a wrong one.
-    /// Unlocked one drops `password`.
     pub async fn open(
         source: Arc<dyn Provider>,
         path: VPath,
@@ -496,22 +472,18 @@ impl ArchiveProvider {
         self.inner.format
     }
 
-    /// Opened with its password.
     pub fn locked(&self) -> bool {
         self.inner.password.is_some()
     }
 
-    /// Never listed, never extractable (includes names colliding with a folder).
     pub fn skipped_entries(&self) -> usize {
         self.inner.index.skipped
     }
 
-    /// Zip and plain tar; 0 for downloaded archives.
     pub fn source_reads(&self) -> u64 {
         self.inner.blocks.as_ref().map_or(0, |b| b.read_count())
     }
 
-    /// Parents before children.
     pub fn entries(&self) -> Vec<ArchiveEntry> {
         self.inner
             .index
@@ -635,7 +607,6 @@ async fn download_to_cache(source: &dyn Provider, path: &VPath, dir: &Path) -> R
     }
 }
 
-/// Drops the first `skip` bytes; reports progress every 64 KiB.
 struct SinkWriter<W: Write> {
     inner: W,
     skip: u64,
@@ -685,7 +656,6 @@ impl<W: Write> Write for SinkWriter<W> {
     }
 }
 
-/// More than `cap` is an error (lying size field).
 struct CapWriter {
     buf: Vec<u8>,
     cap: u64,
@@ -761,7 +731,6 @@ impl ReadHandle for TempFileHandle {
     }
 }
 
-/// `len` bytes of `file` from `at`, by positioned reads.
 struct FileRange {
     file: Arc<File>,
     at: u64,
@@ -795,7 +764,6 @@ fn extract_to_temp(inner: &Inner, node: &Node) -> Result<File> {
         .write(true)
         .create_new(true)
         .open(&path)?;
-    // Unlinked at once: the data lives as long as the handle and cannot leak.
     std::fs::remove_file(&path)?;
     let mut writer = io::BufWriter::new(&file);
     inner.copy_node(node, &mut writer)?;
@@ -890,7 +858,7 @@ impl Provider for ArchiveProvider {
         self.run(move |inner| -> Result<Box<dyn ReadHandle>> {
             if node.size > MEMORY_LIMIT {
                 let file = extract_to_temp(inner, &node)?;
-                let size = file.metadata()?.len(); // NOSONAR: runs on the blocking pool
+                let size = file.metadata()?.len(); // NOSONAR
                 return Ok(Box::new(TempFileHandle {
                     file: Arc::new(file),
                     size,

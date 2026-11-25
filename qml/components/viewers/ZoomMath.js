@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Silica's ZoomableFlickable is private (not a Harbour
-// import): rules written anew.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 .pragma library
 
 var doubleTapFactor = 3
@@ -26,8 +25,6 @@ function follow(content, previous, center, oldSize, newSize, viewport) {
     return moved
 }
 
-// `view`: zoom, zoomed, contentX/Y, contentWidth/Height, width, height, implicitWidth/Height,
-// minimum, maximum. Below minimum nothing moves; `zoomed` stays until pinch ends (settled()).
 function pinch(view, factor, center, previous) {
     var byWidth = view.width < view.height
     var implicitSide = byWidth ? view.implicitWidth : view.implicitHeight

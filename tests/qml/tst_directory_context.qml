@@ -51,7 +51,6 @@ ApplicationWindow {
         return out
     }
 
-    // No render loop headless: lay out by hand.
     function layOut(root) {
         var views = findAll(root, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < views.length; ++i)
@@ -121,7 +120,6 @@ ApplicationWindow {
         var ids = JSON.stringify(page.actions.map(function(a) { return a.id }))
         if (ids !== JSON.stringify(["favourite", "compress", "checksums", "moveToNewFolder"]))
             return fail("More actions: " + ids)
-        // Headless window shows the first rows only.
         var got = JSON.stringify(rows.map(function(r) { return [r.text, r.icon] }))
         var want = JSON.stringify([[Actions.text("favourite"), "image://theme/icon-m-favorite"],
                                    [Actions.text("compress"), glyph("archive")],

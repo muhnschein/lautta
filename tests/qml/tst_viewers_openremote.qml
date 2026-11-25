@@ -25,7 +25,6 @@ ApplicationWindow {
         if (!waitFor(function () { return !page.working && page.errorKind !== "" }, "an unknown server's error"))
             return
 
-        // Share: fetched file goes to the opener, then the page goes.
         if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), localFile)) {
             console.error("FAILED: fixture")
             return

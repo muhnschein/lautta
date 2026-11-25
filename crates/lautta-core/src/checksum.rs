@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! File checksums: algorithms, one-pass hashing off the async workers, cancellation, progress.
-//! Lists of checksums (`SHA256SUMS`, `x.sha256`, SFV, …): [`list`].
 
 pub mod list;
 
@@ -13,9 +11,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Notify;
 
-/// Read size; also the most a remote read asks for at once.
 pub const CHUNK: usize = 1 << 20;
-/// Progress at most this often (≤ 4 Hz, battery).
 const PROGRESS_EVERY: Duration = Duration::from_millis(250);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -36,14 +32,12 @@ pub enum Algorithm {
 }
 
 impl Algorithm {
-    /// Section Common, most used first.
     pub const COMMON: [Algorithm; 4] = [
         Algorithm::Sha256,
         Algorithm::Md5,
         Algorithm::Sha1,
         Algorithm::Sha512,
     ];
-    /// Section More.
     pub const MORE: [Algorithm; 9] = [
         Algorithm::Sha224,
         Algorithm::Sha384,
@@ -60,7 +54,6 @@ impl Algorithm {
         Self::COMMON.into_iter().chain(Self::MORE)
     }
 
-    /// Stable id: QML ⇄ core, netvfs `checksum_algorithms`.
     pub fn id(self) -> &'static str {
         match self {
             Algorithm::Sha256 => "sha256",
@@ -79,7 +72,6 @@ impl Algorithm {
         }
     }
 
-    /// Name on screen; not translated.
     pub fn label(self) -> &'static str {
         match self {
             Algorithm::Sha256 => "SHA-256",
@@ -98,7 +90,6 @@ impl Algorithm {
         }
     }
 
-    /// Id or label, any case, `-` and `_` ignored (`SHA-256`, `sha256`, `SHA3_256`).
     pub fn parse(name: &str) -> Option<Algorithm> {
         let key: String = name
             .chars()
@@ -108,7 +99,6 @@ impl Algorithm {
         Algorithm::all().find(|a| a.id().replace('-', "") == key)
     }
 
-    /// Digest length in bytes.
     pub fn digest_len(self) -> usize {
         match self {
             Algorithm::Crc32 => 4,
@@ -125,8 +115,8 @@ impl Algorithm {
     pub fn hasher(self) -> Hasher {
         Hasher(match self {
             Algorithm::Sha256 => State::Sha256(sha2::Sha256::new()),
-            Algorithm::Md5 => State::Md5(md5::Md5::new()), // NOSONAR: user-chosen file checksum
-            Algorithm::Sha1 => State::Sha1(sha1::Sha1::new()), // NOSONAR: user-chosen file checksum
+            Algorithm::Md5 => State::Md5(md5::Md5::new()), // NOSONAR
+            Algorithm::Sha1 => State::Sha1(sha1::Sha1::new()), // NOSONAR
             Algorithm::Sha512 => State::Sha512(sha2::Sha512::new()),
             Algorithm::Sha224 => State::Sha224(sha2::Sha224::new()),
             Algorithm::Sha384 => State::Sha384(sha2::Sha384::new()),
@@ -157,8 +147,6 @@ enum State {
     Xxh128(Box<xxhash_rust::xxh3::Xxh3>),
 }
 
-/// One running digest. Integer digests (CRC32, xxHash) come out big-endian, as `crc32`, `xxhsum`
-/// print them.
 pub struct Hasher(State);
 
 impl Hasher {
@@ -201,12 +189,10 @@ impl Hasher {
     }
 }
 
-/// Lowercase hex, as checksum tools print it.
 pub fn to_hex(digest: &[u8]) -> String {
     hex::encode(digest)
 }
 
-/// Stops a running checksum: the read ends at the next chunk, the call returns `Canceled`.
 #[derive(Clone, Default)]
 pub struct Cancel(Arc<CancelInner>);
 
@@ -234,7 +220,6 @@ impl Cancel {
         }
     }
 
-    /// Resolves once [`Cancel::cancel`] ran.
     pub async fn canceled(&self) {
         loop {
             let woken = self.0.notify.notified();
@@ -245,7 +230,6 @@ impl Cancel {
         }
     }
 
-    /// Runs `work` until it ends or this is canceled.
     pub async fn run<T>(&self, work: impl std::future::Future<Output = Result<T>>) -> Result<T> {
         tokio::select! {
             res = work => res,
@@ -254,7 +238,6 @@ impl Cancel {
     }
 }
 
-/// Reports progress at most every [`PROGRESS_EVERY`]; the end always.
 struct Throttle {
     sink: ProgressSink,
     total: Option<u64>,
@@ -291,7 +274,6 @@ impl Throttle {
     }
 }
 
-/// Blocking: hashes `reader` to its end. Call on a blocking thread only.
 pub fn digest_reader(
     mut reader: impl Read,
     algorithm: Algorithm,
@@ -319,7 +301,6 @@ pub fn digest_reader(
     Ok(hasher.finish())
 }
 
-/// Reads `handle` on the caller's task while a blocking thread hashes the chunk before.
 pub async fn digest_handle(
     handle: Box<dyn ReadHandle>,
     algorithm: Algorithm,

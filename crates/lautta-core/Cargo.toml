@@ -32,24 +32,19 @@ blake2 = "0.11"
 blake3 = { version = "1", default-features = false, features = ["std"] }
 crc32fast = "1"
 xxhash-rust = { version = "0.8", features = ["xxh64", "xxh3"] }
-# WinZip AES for zip entries (`zipaes.rs`); RustCrypto primitives, as 7z AES in sevenz-rust2.
 aes = "0.9"
 ctr = "0.10"
 hmac = "0.13"
 pbkdf2 = { version = "0.13", default-features = false, features = ["hmac"] }
 getrandom = "0.4"
 zeroize = "1"
-# Weak-password hint on the Compress page; pure Rust, port of Dropbox's zxcvbn.
 zxcvbn = { version = "3", default-features = false }
 hex = "0.4"
 notify = { version = "6", default-features = false }
 image = { version = "0.24", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 kamadak-exif = "0.5"
-# Audio tags and covers for the media player and audio thumbnails; pure Rust, fuzzed upstream.
 lofty = "0.25"
 pulldown-cmark = { version = "0.9", default-features = false }
-# Text viewer highlighting: parsing with the bundled grammars and the
-# pure-Rust regex engine only; no oniguruma (C), no theme or grammar loading.
 syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "regex-fancy"] }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 tar = "0.4"

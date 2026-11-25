@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Locked compressed file from QML, in the real Qt event loop of `qml_check`: made with a
-//! password, asked for it on open and extract (none, then a wrong one), open while a page or the
-//! clipboard holds it, closed after; extract with the password lands beside it.
 
 const FLOW: &str = r#"
 import QtQuick 2.6

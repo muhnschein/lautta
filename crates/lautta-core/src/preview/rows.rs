@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Text viewer rows. One Text item of a megabyte is slow to lay out and draw: viewer shows a row
-//! per line, and a line over [`ROW_LENGTH`] columns goes on over further rows. Columns are UTF-16
-//! units as QML counts them, tabs expanded.
 
 use super::highlight::columns;
 use std::ops::Range;
@@ -10,24 +7,21 @@ pub const ROW_LENGTH: usize = 1000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Row<'a> {
-    /// Line number from 1 on a line's first row, 0 on the rows it goes on over.
     pub number: usize,
-    /// Tabs expanded to spaces.
     pub text: &'a str,
-    /// Line from 0.
     pub line: usize,
-    /// Column of `text` in its line.
     pub start: usize,
+    pub indent: usize,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct Span {
     line: usize,
     start: usize,
+    indent: usize,
     bytes: Range<usize>,
 }
 
-/// Rows of a text split at `\n`; empty text is one empty line. Default: no text, no rows.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TextRows {
     shown: String,
@@ -60,20 +54,22 @@ impl TextRows {
             }
             column += width;
         }
+        let first = self.rows.len();
         let mut row = Span {
             line,
             start: 0,
+            indent: 0,
             bytes: begin..begin,
         };
         let mut column = 0;
         for (at, c) in self.shown[begin..].char_indices() {
-            // A char past the row's end (a surrogate pair across it too) starts the next row.
             if column + c.len_utf16() - row.start > ROW_LENGTH {
                 let cut = begin + at;
                 row.bytes.end = cut;
                 let next = Span {
                     line,
                     start: column,
+                    indent: 0,
                     bytes: cut..cut,
                 };
                 self.rows.push(std::mem::replace(&mut row, next));
@@ -82,6 +78,12 @@ impl TextRows {
         }
         row.bytes.end = self.shown.len();
         self.rows.push(row);
+        let lead = &self.shown[self.rows[first].bytes.clone()];
+        let spaces = lead.len() - lead.trim_start_matches(' ').len();
+        let indent = if spaces < lead.len() { spaces } else { 0 };
+        for span in &mut self.rows[first..] {
+            span.indent = indent;
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -103,6 +105,7 @@ impl TextRows {
             text: self.shown.get(span.bytes.clone())?,
             line: span.line,
             start: span.start,
+            indent: span.indent,
         })
     }
 }
@@ -181,6 +184,28 @@ mod tests {
     }
 
     #[test]
+    fn rows_of_a_line_share_its_indent() {
+        let indents = |text: &str| -> Vec<usize> {
+            let rows = TextRows::new(text);
+            (0..rows.len())
+                .filter_map(|i| rows.row(i))
+                .map(|r| r.indent)
+                .collect()
+        };
+        assert_eq!(indents("a\n    b\n\tc\n  \n"), [0, 4, 4, 0, 0]);
+        assert_eq!(
+            indents(&format!("  {}", "x".repeat(1500))),
+            [2, 2],
+            "a long line goes on at its indent"
+        );
+        assert_eq!(
+            indents(&format!("{}x", " ".repeat(1200))),
+            [0, 0],
+            "first row all blank: no indent"
+        );
+    }
+
+    #[test]
     fn pair_not_cut() {
         let emoji = TextRows::new(&format!("{}\u{1F600}e", "d".repeat(999)));
         assert_eq!(lengths(&emoji), [999, 3]);
@@ -191,7 +216,6 @@ mod tests {
 
     #[test]
     fn tab_across_row_end_is_cut_as_spaces() {
-        // Pair pushed to row 2 moves its end off a tab stop.
         let rows = TextRows::new(&format!("{}\u{1F600}{}\tx", "d".repeat(999), "d".repeat(997)));
         assert_eq!(lengths(&rows), [999, 1000, 2]);
         assert_eq!(rows.row(2).map(|r| (r.text, r.start)), Some((" x", 1999)));

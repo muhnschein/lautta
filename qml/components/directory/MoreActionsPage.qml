@@ -12,8 +12,6 @@ Page {
     property var owner
     property var info: ({})
     property bool selection
-    // Fixed when page opens: ending selection must not change rows or header while a dialog takes
-    // page's place.
     property int count: 1
     readonly property var ctx: ({
         "isDir": info.isDir,

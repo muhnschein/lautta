@@ -36,7 +36,6 @@ async fn sevenz_fixture_lists_and_reads() {
     assert_eq!(read_all(h.as_ref(), 1 << 20).await.unwrap(), b"# hello from 7z\n");
 }
 
-/// Made by 7-Zip (p7zip 16.02): `7z a -ms=on -m0=<codec>`, a.txt and b.txt in one solid block.
 const SOLID: [(&str, &[u8]); 3] = [
     ("deflate.7z", include_bytes!("fixtures/deflate.7z")),
     ("bzip2.7z", include_bytes!("fixtures/bzip2.7z")),

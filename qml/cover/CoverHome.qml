@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// SCR-58 on Home: free space of phone and mounted volumes, below them newest Recents as tiles;
-// none: Home's places.
 import QtQuick 2.6
 import QtQml 2.2
 import Sailfish.Silica 1.0
@@ -10,7 +8,6 @@ import "../components/home/HomeText.js" as HomeText
 Item {
     id: root
 
-    // SCR-01 Home rows.
     property var rows
     property real deviceFree: -1
     property real deviceTotal: -1
@@ -29,7 +26,6 @@ Item {
     readonly property var places: seen.filter(function (r) { return r.icon.length > 0 }).map(function (r) {
         return { "placeIcon": r.icon }
     })
-    // Only volumes tell a size; unmounted ones no free space.
     readonly property var storage: {
         var cells = []
         if (deviceTotal > 0)
@@ -55,8 +51,6 @@ Item {
         }
     }
 
-    // Phone alone: icon and free space on one line, centred, same gap below as above. More: two to a
-    // row, free space under icon.
     Item {
         id: cells
 
