@@ -2,7 +2,7 @@
 
 mod bridge_support;
 
-use bridge_support::{config, eventually};
+use bridge_support::{config, eventually, status};
 use lautta_bridge_proto::fake::{Consent, FakeBridge, FakeDrive, Listener};
 use lautta_core::app::Core;
 use lautta_core::app_home::{LayoutRow, RecentLook, RecentTile, Row, SECTION_KIND};
@@ -63,12 +63,7 @@ async fn account_fake() -> FakeBridge {
 async fn ready_env() -> (FakeBridge, Env) {
     let fake = account_fake().await;
     let e = env(Some(&fake), &["Documents"]).await;
-    e.core
-        .bridge
-        .as_ref()
-        .unwrap()
-        .wait_status(|s| s == BridgeStatus::Ready)
-        .await;
+    status(e.core.bridge.as_ref().unwrap(), BridgeStatus::Ready).await;
     eventually("the account", || e.core.location("nv-account:1").is_some()).await;
     (fake, e)
 }
@@ -905,14 +900,14 @@ async fn consent_row_until_decided_and_nothing_when_denied() {
     fake.set_consent(Consent::Unknown).await;
     let e = env(Some(&fake), &["Documents"]).await;
     let client = e.core.bridge.clone().unwrap();
-    client.wait_status(|s| s == BridgeStatus::ConsentUnknown).await;
+    status(&client, BridgeStatus::ConsentUnknown).await;
     let rows = e.core.home_rows().await;
     let servers = of(&rows, "servers");
     assert_eq!(servers.len(), 1);
     assert_eq!((servers[0].kind, servers[0].icon.as_str()), ("consent", "server"));
 
     fake.set_consent(Consent::Denied).await;
-    client.wait_status(|s| s == BridgeStatus::Ready).await;
+    status(&client, BridgeStatus::Ready).await;
     assert!(of(&e.core.home_rows().await, "servers").is_empty());
     assert_eq!(
         section_of(&e.core.home_layout_rows().await, "servers"),
@@ -936,7 +931,7 @@ async fn reconnecting_shows_a_notice_and_busy_rows() {
     fake.set_accepting(false);
     fake.disconnect_clients().await;
     let client = e.core.bridge.clone().unwrap();
-    client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
+    status(&client, BridgeStatus::Reconnecting).await;
     eventually("busy rows", || {
         e.core
             .location("nv-account:1")
@@ -1064,10 +1059,10 @@ async fn withdrawn_consent_and_lost_connection_purge_nothing() {
     let client = e.core.bridge.clone().unwrap();
     purged(&purges, 1).await;
     fake.set_consent(Consent::Unknown).await;
-    client.wait_status(|s| s == BridgeStatus::ConsentUnknown).await;
+    status(&client, BridgeStatus::ConsentUnknown).await;
     eventually("the list is cleared", || client.locations().is_empty()).await;
     fake.set_consent(Consent::Allowed(Level::Full)).await;
-    client.wait_status(|s| s == BridgeStatus::Ready).await;
+    status(&client, BridgeStatus::Ready).await;
     fake.add_account(3, "sftp", "Office", "office.home").await;
     eventually("third account", || e.core.location("nv-account:3").is_some()).await;
     remember_account(&e.core, 3);
@@ -1082,13 +1077,27 @@ async fn withdrawn_consent_and_lost_connection_purge_nothing() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_account_gone_before_the_purge_saw_it_listed_is_purged_on_the_next_change() {
+    let (fake, e) = ready_env().await;
+    remember_account(&e.core, 1);
+    let purges = counted_purge(&e.core);
+    purged(&purges, 1).await;
+    remember_account(&e.core, 3);
+    fake.add_account(4, "sftp", "Office", "office.home").await;
+    purged(&purges, 2).await;
+    assert!(!remembered(&e.core, 3));
+    assert!(remembered(&e.core, 1));
+    assert_eq!(purges.load(Ordering::SeqCst), 2, "nothing else purged");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn accounts_the_app_may_not_use_are_not_purged() {
     let fake = account_fake().await;
     fake.add_account(2, "sftp", "Office", "office.home").await;
     fake.set_access("account:2", None).await;
     let e = env(Some(&fake), &["Documents"]).await;
     let client = e.core.bridge.clone().unwrap();
-    client.wait_status(|s| s == BridgeStatus::Ready).await;
+    status(&client, BridgeStatus::Ready).await;
     eventually("the account", || e.core.location("nv-account:1").is_some()).await;
     remember_account(&e.core, 1);
     remember_account(&e.core, 2);
@@ -1217,12 +1226,7 @@ async fn the_volumes_switch_is_there_without_volumes() {
 async fn the_servers_switch_is_there_while_the_bridge_is_without_servers() {
     let fake = FakeBridge::new();
     let e = env(Some(&fake), &["Documents"]).await;
-    e.core
-        .bridge
-        .as_ref()
-        .unwrap()
-        .wait_status(|s| s == BridgeStatus::Ready)
-        .await;
+    status(e.core.bridge.as_ref().unwrap(), BridgeStatus::Ready).await;
     assert_eq!(
         section_of(&e.core.home_layout_rows().await, "servers"),
         [switch(true)],
@@ -1289,12 +1293,7 @@ async fn the_servers_switch_hides_servers_that_come_later_and_restores_the_rows(
 async fn the_settings_list_keeps_the_sections_in_home_order() {
     let fake = account_fake().await;
     let e = env(Some(&fake), &["Documents", "android_storage/DCIM"]).await;
-    e.core
-        .bridge
-        .as_ref()
-        .unwrap()
-        .wait_status(|s| s == BridgeStatus::Ready)
-        .await;
+    status(e.core.bridge.as_ref().unwrap(), BridgeStatus::Ready).await;
     eventually("the account", || e.core.location("nv-account:1").is_some()).await;
     e.core
         .favourites
@@ -1371,7 +1370,7 @@ async fn servers_off_hides_the_consent_notice_too() {
     fake.set_consent(Consent::Unknown).await;
     let e = env(Some(&fake), &["Documents"]).await;
     let client = e.core.bridge.clone().unwrap();
-    client.wait_status(|s| s == BridgeStatus::ConsentUnknown).await;
+    status(&client, BridgeStatus::ConsentUnknown).await;
     assert_eq!(
         section_of(&e.core.home_layout_rows().await, "servers"),
         [switch(true)],

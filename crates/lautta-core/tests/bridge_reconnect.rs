@@ -2,7 +2,7 @@
 
 mod bridge_support;
 
-use bridge_support::{eventually, quick_backoff, Rig, ACCOUNT};
+use bridge_support::{eventually, quick_backoff, status, Rig, ACCOUNT};
 use lautta_bridge_proto::fake::FakeBridge;
 use lautta_bridge_proto::WireNearby;
 use lautta_core::bridge::{BridgeClient, BridgeStatus};
@@ -34,7 +34,7 @@ async fn a_lost_connection_is_re_established() {
 
     rig.fake.set_accepting(false);
     rig.fake.disconnect_clients().await;
-    rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
+    status(&rig.client, BridgeStatus::Reconnecting).await;
     assert_eq!(rig.client.locations().len(), 1);
     let e = provider
         .stat(&VPath::root(), true, Lane::Interactive)
@@ -44,7 +44,7 @@ async fn a_lost_connection_is_re_established() {
     assert!(e.kind.is_transient(), "transfers wait and resume");
 
     rig.fake.set_accepting(true);
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    status(&rig.client, BridgeStatus::Ready).await;
     assert_eq!(rig.fake.calls_of("Hello").len(), 2, "a new session");
     provider
         .stat(&VPath::root(), true, Lane::Interactive)
@@ -107,12 +107,12 @@ async fn a_poke_skips_the_remaining_wait() {
     .await;
     rig.fake.set_accepting(false);
     rig.fake.disconnect_clients().await;
-    rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
+    status(&rig.client, BridgeStatus::Reconnecting).await;
     sleep(ms(100)).await;
     rig.fake.set_accepting(true);
     rig.client.poke();
     let t0 = Instant::now();
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    status(&rig.client, BridgeStatus::Ready).await;
     assert!(t0.elapsed() < secs(5), "{:?}", t0.elapsed());
 }
 
@@ -125,9 +125,9 @@ async fn a_missing_socket_is_polled_while_in_the_foreground() {
         c
     })
     .await;
-    rig.client.wait_status(|s| s == BridgeStatus::Absent).await;
+    status(&rig.client, BridgeStatus::Absent).await;
     rig.listen();
-    rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
+    status(&rig.client, BridgeStatus::Ready).await;
 }
 
 #[tokio::test]
@@ -135,12 +135,12 @@ async fn a_socket_without_a_bridge_behind_it_is_standalone_not_an_error() {
     let rig = Rig::ready_with(quick_backoff).await;
     rig.fake.set_accepting(false);
     rig.fake.disconnect_clients().await;
-    rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
+    status(&rig.client, BridgeStatus::Reconnecting).await;
     assert!(rig.paths.bridge_socket().exists());
 
     let fresh = BridgeClient::start(bridge_support::config(&rig.paths)).unwrap();
     eventually("an attempt", || fresh.connection_attempts() >= 1).await;
-    fresh.wait_status(|s| s == BridgeStatus::Absent).await;
+    status(&fresh, BridgeStatus::Absent).await;
     assert!(fresh.locations().is_empty());
     let e = fresh
         .provider(ACCOUNT)
@@ -167,8 +167,8 @@ async fn a_silent_bridge_is_given_up_on_after_the_handshake_timeout() {
     config.handshake_timeout = Some(ms(300));
     let t0 = Instant::now();
     let client = BridgeClient::start(config).unwrap();
-    client.wait_status(|s| s == BridgeStatus::Connecting).await;
-    client.wait_status(|s| s == BridgeStatus::Absent).await;
+    status(&client, BridgeStatus::Connecting).await;
+    status(&client, BridgeStatus::Absent).await;
     assert!(t0.elapsed() >= ms(295), "gave up after {:?}", t0.elapsed());
     assert_eq!(client.connection_attempts(), 1);
     client.shutdown();
@@ -177,7 +177,7 @@ async fn a_silent_bridge_is_given_up_on_after_the_handshake_timeout() {
 
 #[tokio::test(start_paused = true)]
 async fn the_default_schedule_is_1_2_4_8_then_every_15_seconds() {
-    let mut rig = Rig::ready().await;
+    let mut rig = Rig::ready_on_paused_clock().await;
     drop(rig.listener.take());
     rig.fake.disconnect_clients().await;
     rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
@@ -203,7 +203,7 @@ async fn the_default_schedule_is_1_2_4_8_then_every_15_seconds() {
 
 #[tokio::test(start_paused = true)]
 async fn after_a_reconnect_the_backoff_starts_over() {
-    let mut rig = Rig::ready().await;
+    let mut rig = Rig::ready_on_paused_clock().await;
     drop(rig.listener.take());
     rig.fake.disconnect_clients().await;
     rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;
@@ -234,7 +234,7 @@ async fn after_a_reconnect_the_backoff_starts_over() {
 
 #[tokio::test(start_paused = true)]
 async fn the_background_holds_every_attempt_on_a_paused_clock() {
-    let mut rig = Rig::ready().await;
+    let mut rig = Rig::ready_on_paused_clock().await;
     drop(rig.listener.take());
     rig.fake.disconnect_clients().await;
     rig.client.wait_status(|s| s == BridgeStatus::Reconnecting).await;

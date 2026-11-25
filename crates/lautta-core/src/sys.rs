@@ -65,12 +65,14 @@ impl FileStat {
 }
 
 pub fn timestamp(sec: i64, nsec: u32) -> SystemTime {
-    let nanos = Duration::from_nanos(u64::from(nsec));
-    if sec >= 0 {
-        SystemTime::UNIX_EPOCH + Duration::from_secs(sec.unsigned_abs()) + nanos
+    let whole = if sec >= 0 {
+        SystemTime::UNIX_EPOCH + Duration::from_secs(sec.unsigned_abs())
     } else {
-        SystemTime::UNIX_EPOCH - Duration::from_secs(sec.unsigned_abs()) + nanos
-    }
+        SystemTime::UNIX_EPOCH - Duration::from_secs(sec.unsigned_abs())
+    };
+    whole
+        .checked_add(Duration::from_nanos(u64::from(nsec)))
+        .unwrap_or(whole)
 }
 
 pub fn stat(path: &Path, follow: bool) -> io::Result<FileStat> {
@@ -396,6 +398,14 @@ mod tests {
         let f = d.path().join(std::ffi::OsStr::from_bytes(b"\xc3\x28"));
         std::fs::write(&f, "x").unwrap();
         assert_eq!(stat(&f, true).unwrap().size, 1);
+    }
+
+    #[test]
+    fn timestamp_at_the_limits_does_not_overflow() {
+        let top = SystemTime::UNIX_EPOCH + Duration::from_secs(i64::MAX.unsigned_abs());
+        assert_eq!(timestamp(i64::MAX, u32::MAX), top);
+        let bottom = SystemTime::UNIX_EPOCH - Duration::from_secs(i64::MIN.unsigned_abs());
+        assert_eq!(timestamp(i64::MIN, 5), bottom + Duration::from_nanos(5));
     }
 
     #[test]

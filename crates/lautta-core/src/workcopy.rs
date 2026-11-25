@@ -8,11 +8,12 @@ use crate::provider::{no_progress, Lane, Provider, ReadOptions};
 use crate::transfer::clock::Clock;
 use crate::uri::Uri;
 use rusqlite::{params, Connection, OptionalExtension, Row};
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::os::fd::OwnedFd;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 pub const EXPIRY_MS: i64 = 24 * 60 * 60 * 1000;
 
@@ -41,6 +42,56 @@ pub struct WorkingCopies {
     db: Db,
     paths: AppPaths,
     clock: Arc<dyn Clock>,
+    opening: Opening,
+}
+
+#[derive(Clone, Default)]
+struct Opening(Arc<Mutex<HashMap<String, Queue>>>);
+
+struct Queue {
+    slot: Arc<tokio::sync::Mutex<Option<WorkingCopy>>>,
+    users: usize,
+}
+
+struct Turn {
+    opening: Opening,
+    key: String,
+    slot: Arc<tokio::sync::Mutex<Option<WorkingCopy>>>,
+}
+
+impl Opening {
+    fn map(&self) -> MutexGuard<'_, HashMap<String, Queue>> {
+        match self.0.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        }
+    }
+
+    fn join(&self, key: String) -> Turn {
+        let mut map = self.map();
+        let q = map.entry(key.clone()).or_insert_with(|| Queue {
+            slot: Arc::default(),
+            users: 0,
+        });
+        q.users += 1;
+        Turn {
+            opening: self.clone(),
+            key,
+            slot: q.slot.clone(),
+        }
+    }
+}
+
+impl Drop for Turn {
+    fn drop(&mut self) {
+        let mut map = self.opening.map();
+        if let Some(q) = map.get_mut(&self.key) {
+            q.users -= 1;
+            if q.users == 0 {
+                map.remove(&self.key);
+            }
+        }
+    }
 }
 
 pub(crate) async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T> + Send + 'static) -> Result<T> {
@@ -78,10 +129,26 @@ fn unique_dir(base: &Path, now_ms: i64) -> Result<PathBuf> {
 
 impl WorkingCopies {
     pub fn new(db: Db, paths: AppPaths, clock: Arc<dyn Clock>) -> WorkingCopies {
-        WorkingCopies { db, paths, clock }
+        WorkingCopies {
+            db,
+            paths,
+            clock,
+            opening: Opening::default(),
+        }
     }
 
     pub async fn open_for_view(&self, provider: &dyn Provider, remote: &Uri) -> Result<WorkingCopy> {
+        let turn = self.opening.join(remote.to_string());
+        let mut made = turn.slot.lock().await;
+        if let Some(c) = made.as_ref() {
+            return Ok(c.clone());
+        }
+        let c = self.open_now(provider, remote).await?;
+        *made = Some(c.clone());
+        Ok(c)
+    }
+
+    async fn open_now(&self, provider: &dyn Provider, remote: &Uri) -> Result<WorkingCopy> {
         if let Some(existing) = self.reuse(remote).await? {
             return self.refresh(provider, existing).await;
         }
@@ -459,6 +526,118 @@ mod tests {
         let fresh = r.wc.open_for_view(&r.remote, &uri("f")).await.unwrap();
         assert!(fresh.local_path.exists(), "downloaded again");
         assert_eq!(r.wc.list().await.unwrap(), vec![fresh]);
+    }
+
+    fn spawn_open(r: &Rig, path: &str) -> tokio::task::JoinHandle<Result<WorkingCopy>> {
+        let (wc, remote, u) = (r.wc.clone(), r.remote.clone(), uri(path));
+        tokio::spawn(async move { wc.open_for_view(&remote, &u).await })
+    }
+
+    fn downloads(r: &Rig) -> usize {
+        let calls = r.remote.calls();
+        calls.iter().filter(|c| c.starts_with("download_into ")).count()
+    }
+
+    async fn unhung<T>(step: impl std::future::Future<Output = T>) -> T {
+        tokio::time::timeout(std::time::Duration::from_secs(10), step)
+            .await
+            .expect("step hangs")
+    }
+
+    #[tokio::test]
+    async fn overlapping_opens_of_one_file_download_it_once() {
+        let r = rig();
+        r.remote.add_file("clip.mp4", b"v1", 1000);
+        let hold = r.remote.hold_next("stat", "clip.mp4");
+        let first = spawn_open(&r, "clip.mp4");
+        unhung(hold.reached).await.unwrap();
+        let u = uri("clip.mp4");
+        let mut second = std::pin::pin!(r.wc.open_for_view(&r.remote, &u));
+        assert!(
+            futures::poll!(second.as_mut()).is_pending(),
+            "queued behind first"
+        );
+        hold.release.send(()).unwrap();
+        let a = unhung(first).await.unwrap().unwrap();
+        let b = unhung(second).await.unwrap();
+        assert_eq!(b, a, "same copy");
+        assert_eq!(downloads(&r), 1);
+        assert_eq!(r.wc.list().await.unwrap(), vec![a.clone()]);
+        let opened = AppPaths::new(r.home.path()).opened_dir();
+        assert_eq!(std::fs::read_dir(opened).unwrap().count(), 1);
+        r.remote.add_file("clip.mp4", b"version two", 2000);
+        let later = r.wc.open_for_view(&r.remote, &u).await.unwrap();
+        assert_eq!(std::fs::read(&later.local_path).unwrap(), b"version two");
+        assert_eq!(
+            (later.id, downloads(&r)),
+            (a.id, 2),
+            "open after them downloads again"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_open_queued_behind_a_failed_one_downloads_for_the_rest_of_the_queue() {
+        let r = rig();
+        r.remote.add_file("f", b"v1", 1000);
+        let old = r.wc.open_for_view(&r.remote, &uri("f")).await.unwrap();
+        r.remote.add_file("f", b"version two", 2000);
+        r.remote
+            .fail_next("download_into", "f", Error::kind(ErrorKind::TimedOut));
+        let hold = r.remote.hold_next("stat", "f");
+        let first = spawn_open(&r, "f");
+        unhung(hold.reached).await.unwrap();
+        let u = uri("f");
+        let mut second = std::pin::pin!(r.wc.open_for_view(&r.remote, &u));
+        assert!(
+            futures::poll!(second.as_mut()).is_pending(),
+            "queued behind first"
+        );
+        let second_hold = r.remote.hold_next("stat", "f");
+        hold.release.send(()).unwrap();
+        assert_eq!(
+            unhung(first).await.unwrap().unwrap_err().kind,
+            ErrorKind::TimedOut
+        );
+        unhung(async {
+            tokio::select! {
+                _ = second.as_mut() => panic!("second open must wait in its stat"),
+                got = second_hold.reached => got.unwrap(),
+            }
+        })
+        .await;
+        let mut third = std::pin::pin!(r.wc.open_for_view(&r.remote, &u));
+        assert!(
+            futures::poll!(third.as_mut()).is_pending(),
+            "queued behind second"
+        );
+        second_hold.release.send(()).unwrap();
+        let b = unhung(second).await.unwrap();
+        assert_eq!(unhung(third).await.unwrap(), b, "same copy");
+        assert_eq!(std::fs::read(&b.local_path).unwrap(), b"version two");
+        assert_eq!((b.id, b.local_size), (old.id, 11), "refreshed in place");
+        assert_eq!(downloads(&r), 3, "first copy, failed one, then one for both");
+        assert_eq!(r.wc.list().await.unwrap(), vec![b]);
+    }
+
+    #[tokio::test]
+    async fn an_open_queued_behind_a_cancelled_one_downloads_itself() {
+        let r = rig();
+        r.remote.add_file("f", b"data", 1000);
+        let hold = r.remote.hold_next("stat", "f");
+        let first = spawn_open(&r, "f");
+        unhung(hold.reached).await.unwrap();
+        let u = uri("f");
+        let mut second = std::pin::pin!(r.wc.open_for_view(&r.remote, &u));
+        assert!(
+            futures::poll!(second.as_mut()).is_pending(),
+            "queued behind first"
+        );
+        first.abort();
+        assert!(unhung(first).await.unwrap_err().is_cancelled());
+        let b = unhung(second).await.unwrap();
+        assert_eq!(std::fs::read(&b.local_path).unwrap(), b"data");
+        assert_eq!(downloads(&r), 1);
+        assert_eq!(r.wc.list().await.unwrap(), vec![b]);
     }
 
     #[tokio::test]

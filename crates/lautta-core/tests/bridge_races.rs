@@ -2,7 +2,7 @@
 
 mod bridge_support;
 
-use bridge_support::{eventually, Rig};
+use bridge_support::{eventually, status, Rig};
 use lautta_bridge_proto::fake::Consent;
 use lautta_core::bridge::{BridgeStatus, Level};
 use lautta_core::provider::{no_progress, Lane, Provider, WriteOptions};
@@ -15,9 +15,7 @@ use std::time::Duration;
 async fn a_late_location_list_does_not_resurrect_a_withdrawn_consent() {
     let rig = Rig::ready().await;
     rig.fake.set_consent(Consent::Unknown).await;
-    rig.client
-        .wait_status(|s| s == BridgeStatus::ConsentUnknown)
-        .await;
+    status(&rig.client, BridgeStatus::ConsentUnknown).await;
 
     rig.fake.set_latency(Duration::from_millis(300));
     let replies = rig.fake.location_replies();
@@ -34,9 +32,7 @@ async fn a_late_location_list_does_not_resurrect_a_withdrawn_consent() {
         .provider()
         .stat(&VPath::root(), false, Lane::Interactive)
         .await;
-    rig.client
-        .wait_status(|s| s == BridgeStatus::ConsentUnknown)
-        .await;
+    status(&rig.client, BridgeStatus::ConsentUnknown).await;
     assert!(
         rig.client.locations().is_empty(),
         "nothing is shown without consent"

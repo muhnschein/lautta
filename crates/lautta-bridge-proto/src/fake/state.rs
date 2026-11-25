@@ -488,6 +488,10 @@ impl Session {
         *lock(&self.conn) = Some(conn);
     }
 
+    pub fn attach(&self, conn: &zbus::Connection) {
+        lock(&self.conn).get_or_insert_with(|| conn.clone());
+    }
+
     pub fn conn(&self) -> Option<zbus::Connection> {
         lock(&self.conn).clone()
     }
