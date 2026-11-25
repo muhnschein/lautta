@@ -142,7 +142,8 @@ Page {
         section.criteria: ViewSection.FullString
         section.delegate: Item {
             width: list.width
-            height: sectionHeader.height
+            height: deviceSpace.visible ? Math.max(sectionHeader.height, deviceSpace.y + deviceSpace.height + Theme.paddingSmall)
+                                        : sectionHeader.height
 
             HeaderBand {
                 objectName: "recentsHeaderBand"
@@ -155,14 +156,17 @@ Page {
                 text: HomeText.sectionTitle(section)
             }
             Label {
+                id: deviceSpace
+
                 objectName: "deviceSpace"
                 visible: section === "device" && text.length > 0
-                anchors.baseline: sectionHeader.baseline
                 x: Theme.horizontalPageMargin
-                width: sectionHeader.width - sectionHeader.contentWidth - Theme.paddingLarge
+                y: sectionHeader.y + sectionHeader.baselineOffset + Theme.paddingSmall
+                width: parent.width - 2 * x
+                horizontalAlignment: Text.AlignRight
                 truncationMode: TruncationMode.Fade
                 text: HomeText.deviceLine(page.deviceFree, page.deviceTotal)
-                font.pixelSize: Theme.fontSizeSmall
+                font.pixelSize: Theme.fontSizeExtraSmall
                 color: Theme.secondaryColor
             }
         }

@@ -546,7 +546,7 @@ Features: F-APP-01 Cover, F-XFR-10 Transfer cover, F-XFR-09 Notifications
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-58 Cover (page / tasks) | Cover on Home page: free space, newest recents as tiles |
+| 1 | SCR-58 Cover (page / tasks) | Cover on Home page: lanes of Lautta glyphs, glide once |
 | 2 | SCR-58 Cover (page / tasks) | Cover in a folder: name, first items as tiles |
 | 3 | SCR-58 Cover (page / tasks) | Task running: count, percent, rate, cover fills from the left; actions Pause all, Activity |
 | 4 | SCR-21 Activity | Activity pulley: Pause all |

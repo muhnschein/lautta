@@ -187,102 +187,79 @@ ApplicationWindow {
 
     function checkAsleep() {
         expect(cover.kind === "home", "Home on top: its cover, not " + cover.kind)
-        expect(named(frame, "coverGrid").length === 0 && named(frame, "storageCell").length === 0,
+        expect(named(frame, "coverGrid").length === 0 && named(frame, "coverLanes").length === 0,
                "nothing is built while the cover is out of sight")
         expect(texts(frame, "coverHeader") === "", "nor a header: " + texts(frame, "coverHeader"))
     }
 
-    function checkHome() {
-        expect(named(frame, "coverHeader").length === 0, "Home's cover has no header")
-        var cells = named(frame, "storageCell")
-        var icons = named(frame, "storageIcon").map(function (x) { return x.icon.replace("image://theme/icon-m-", "") }).join("|")
-        expect(icons === "device|sd-card|sd-card", "phone and each mounted volume show by their icon: " + icons)
-        expect(texts(frame, "storageFree") === "lautta-cover-free|lautta-cover-free|lautta-cover-free",
-               "each tells its free space: " + texts(frame, "storageFree"))
-        var amounts = named(frame, "storageFree").map(function (x) { return x.amount }).join("|")
-        expect(amounts.indexOf("39 GB|30 GB|") === 0, "in whole numbers while there is plenty: " + amounts)
-        if (!expect(cells.length === 3, "three cells"))
-            return
-        var margin = Math.round(Theme.paddingLarge)
-        var wide = (frame.width - 2 * Theme.paddingLarge - Theme.paddingMedium) / 2
-        var glyph = named(cells[0], "storageIcon")[0]
-        var free = named(cells[0], "storageFree")[0]
-        var high = Theme.iconSizeSmallPlus + (cells[0].height - glyph.height)
-        expect(cells.every(function (c) { return c.width === wide && c.height === cells[0].height }) && wide > 0
-               && cells[0].height > Theme.iconSizeSmallPlus,
-               "two cells share the cover's width between its margins: " + cells[0].width + ", not " + wide)
-        expect(cells.map(at).join(" ") === [margin + "," + margin, Math.round(margin + wide + Theme.paddingMedium) + "," + margin,
-                                            margin + "," + Math.round(margin + high + Theme.paddingSmall)].join(" "),
-               "two to a row from the top margin, the third below the first: " + cells.map(at).join(" "))
-        expect(glyph.width === Theme.iconSizeSmallPlus && Math.round(glyph.x) === Math.round((wide - glyph.width) / 2) && glyph.y === 0
-               && free.y === glyph.height && Math.round(free.x) === Math.round((wide - free.width) / 2) && free.width > 0,
-               "icon centred in its cell, free space centred below it: " + glyph.x + ", " + free.x + ", " + free.y)
-        frame.width = 40 * Theme.paddingLarge
-        expect(free.x > 0 && Math.abs(free.x - (cells[0].width - free.width) / 2) < 1 && free.width === free.implicitWidth,
-               "free space that fits stands centred under its icon: " + free.x + ", " + free.width + " in " + cells[0].width)
-        frame.width = 10 * Theme.paddingLarge
-        var storage = named(frame, "storage")[0]
-
-        var grid = named(frame, "coverGrid")[0]
-        var tiles = named(frame, "coverTile")
-        if (!expect(grid !== undefined && tiles.length === 5, "the newest recents are tiles: " + tiles.length))
-            return
-        expect(Math.round(grid.mapToItem(frame, 0, 0).y) === Math.round(margin + 2 * high + Theme.paddingSmall + Theme.paddingLarge)
-               && Math.round(storage.y + storage.height) === Math.round(margin + 2 * high + Theme.paddingSmall),
-               "tiles as far below the cells as those are from the top: " + grid.mapToItem(frame, 0, 0).y)
-        var side = Math.floor((frame.width - 2 * Theme.paddingSmall) / 3)
-        expect(tiles.every(function (t) { return t.width === side && t.height === side }) && side > 0,
-               "three tiles fill the cover from edge to edge: " + tiles[0].width + ", not " + side)
-        var x = 0
-        var y = Math.round(grid.mapToItem(frame, 0, 0).y)
-        var step = side + Math.round(Theme.paddingSmall)
-        expect(tiles.map(at).join(" ") === [x + "," + y, (x + step) + "," + y, (x + 2 * step) + "," + y,
-                                            x + "," + (y + step), (x + step) + "," + (y + step)].join(" "),
-               "three to a row, rows apart as columns are: " + tiles.map(at).join(" "))
-        expect(tiles.map(function (t) { return t.category }).join(",") === "image,text,image,image,image",
-               "a tile shows its file's type: " + tiles.map(function (t) { return t.category }).join(","))
-        expect(named(frame, "placeGlyph").length === 0 && named(frame, "fileGlyph").length === 5, "recents draw file glyphs")
+    function glideOf(lanes) {
+        var parts = lanes.data
+        for (var i = 0; i < parts.length; ++i) {
+            if (parts[i].objectName === "laneGlide")
+                return parts[i]
+        }
+        return null
     }
 
-    function checkPlaces() {
-        home.listModel.setProperty(0, "tiles", "")
-        var tiles = named(frame, "coverTile")
-        expect(tiles.length === 6 && tiles.map(function (t) { return t.placeIcon }).join(",")
-               === "image://theme/icon-m-favorite,file-folder,image://theme/icon-m-usb,image://theme/icon-m-sd-card,image://theme/icon-m-sd-card,image://theme/icon-m-sd-card",
-               "without recents Home's places are the tiles: " + tiles.map(function (t) { return t.placeIcon }).join(","))
-        expect(named(frame, "placeGlyph").length === 6 && named(frame, "fileGlyph").length === 0, "each draws its place's icon only")
-        var more = JSON.parse(JSON.stringify(home.listModel.get(5)))
-        home.listModel.append(more)
-        home.listModel.append(more)
-        expect(named(frame, "storageCell").length === 4, "four cells at most: " + named(frame, "storageCell").length)
-        home.listModel.remove(home.listModel.count - 2, 2)
-        home.deviceTotal = -1
-        var icons = named(frame, "storageIcon").map(function (x) { return x.icon.replace("image://theme/icon-m-", "") }).join("|")
-        expect(icons === "sd-card|sd-card", "unknown phone space has no cell: " + icons)
-        home.listModel.remove(5)
-        var cells = named(frame, "storageCell")
-        if (!expect(cells.length === 1 && named(frame, "coverTile").length === 5, "an ejected volume leaves the cover: " + cells.length))
+    function laneXs() {
+        return named(frame, "coverLane").sort(function (a, b) { return a.lane - b.lane }).map(function (l) { return l.x })
+    }
+
+    function checkHome() {
+        expect(named(frame, "coverHeader").length === 0, "Home's cover has no header")
+        var lanes = named(frame, "coverLanes")
+        if (!expect(lanes.length === 1, "Home's cover is the lanes: " + lanes.length))
             return
-        var glyph = named(cells[0], "storageIcon")[0]
-        var free = named(cells[0], "storageFree")[0]
-        frame.width = 20 * Theme.paddingLarge
-        var wide = frame.width - 2 * Theme.paddingLarge
-        expect(cells[0].width === wide && cells[0].height === Theme.iconSizeSmall && glyph.width === Theme.iconSizeSmall,
-               "alone it is one line as high as its small icon: " + cells[0].width + ", " + cells[0].height + ", " + glyph.width)
-        expect(Math.round(free.x) === Math.round(glyph.x + glyph.width + Theme.paddingSmall)
-               && Math.abs(glyph.x - (wide - free.x - free.width)) < 1 && glyph.x > 0
-               && Math.abs(free.y + free.height / 2 - cells[0].height / 2) < 1,
-               "icon and free space side by side, centred on the cover: " + glyph.x + ", " + free.x + ", " + free.width + ", " + free.y)
-        frame.width = 10 * Theme.paddingLarge
-        var grid = named(frame, "coverGrid")[0]
-        expect(Math.round(grid.mapToItem(frame, 0, 0).y) === Math.round(Theme.paddingLarge + Theme.iconSizeSmall + Theme.paddingLarge),
-               "tiles as far below that line as it is from the top: " + grid.mapToItem(frame, 0, 0).y)
-        var left = home.listModel.get(5).free
-        home.listModel.setProperty(5, "free", -1)
-        expect(named(frame, "storageCell").length === 0 && Math.round(grid.mapToItem(frame, 0, 0).y) === 0,
-               "no space known: tiles from the top: " + grid.mapToItem(frame, 0, 0).y)
-        home.listModel.setProperty(5, "free", left)
-        home.deviceTotal = 128000000000
+        expect(lanes[0].width === frame.width && lanes[0].height === frame.height && lanes[0].clip,
+               "they fill the cover and stay inside it: " + lanes[0].width + "x" + lanes[0].height)
+        expect(named(frame, "coverTile").length === 0 && named(frame, "fileGlyph").length === 0
+               && named(frame, "textPreview").length === 0 && named(frame, "coverGrid").length === 0,
+               "no recents, files or previews on it, though Home has recents")
+        var field = named(frame, "laneField")[0]
+        var mid = field.mapToItem(frame, field.width / 2, field.height / 2)
+        expect(field.rotation === -18 && Math.abs(mid.x - frame.width / 2) < 1 && Math.abs(mid.y - frame.height / 2) < 1,
+               "lanes tilted, centred on the cover: " + field.rotation + " " + mid.x + "," + mid.y)
+        var rows = named(field, "coverLane").sort(function (a, b) { return a.lane - b.lane })
+        if (!expect(rows.length === 13, "thirteen lanes: " + rows.length))
+            return
+        var size = Math.round(26 * frame.width / 234)
+        var lit = []
+        var apps = []
+        var odd = 0
+        for (var i = 0; i < rows.length; ++i) {
+            var glyphs = named(rows[i], "laneGlyph")
+            expect(glyphs.length === 11, "eleven glyphs in lane " + i + ": " + glyphs.length)
+            var high = glyphs.filter(function (g) { return String(g.color) === String(Theme.highlightColor) }).length
+            if (high === glyphs.length)
+                lit.push(i)
+            else
+                expect(high === 0, "a lane is lit whole or not at all: lane " + i)
+            apps.push(glyphs.filter(function (g) { return g.icon === "lautta" })
+                      .map(function (g) { return Math.round(g.x / lanes[0].step) }).sort(function (a, b) { return a - b }).join(" "))
+            odd += glyphs.filter(function (g) { return g.icon.length === 0 || g.icon.indexOf(":") >= 0 || g.iconSize !== size }).length
+        }
+        expect(lit.join(",") === "1,5,9", "every fourth lane lit: " + lit.join(","))
+        expect(apps.join(",") === ",0 4 8,,,,1 5 9,,,,2 6 10,,,", "the Lautta glyph rides only in lit lanes, a step further each: " + apps.join(","))
+        expect(odd === 0, "all glyphs are our own, one size: " + odd)
+        expect(rows[1].opacity === 1 && rows[0].opacity < 1 && rows[3].opacity < 1 && rows[3].opacity !== rows[0].opacity,
+               "lit lanes full, others faint: " + rows.map(function (r) { return r.opacity }).join(","))
+        var glide = glideOf(lanes[0])
+        if (!expect(glide !== null && glide.loops === 1, "one glide, played once"))
+            return
+        if (!waitFor(function () { return !glide.running && lanes[0].glide === 1 }, "the glide to end"))
+            return
+        var rest = laneXs()
+        lanes[0].glide = 0
+        var before = laneXs()
+        lanes[0].glide = 1
+        var moved = rest.map(function (x, i) { return Math.round((x - before[i]) / lanes[0].step) }).join(",")
+        expect(moved === "1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1", "lanes glide one glyph, neighbours opposite ways: " + moved)
+        cover.live = false
+        expect(named(frame, "coverLanes").length === 0, "hidden cover drops the lanes")
+        cover.live = true
+        var again = named(frame, "coverLanes")
+        expect(again.length === 1 && again[0].glide < 1 && glideOf(again[0]).running, "shown again, it glides again")
+        waitFor(function () { return !glideOf(again[0]).running }, "the second glide to end")
     }
 
     function checkFolder() {
@@ -291,7 +268,7 @@ ApplicationWindow {
         if (!waitFor(function () { return page.coverModel.count === total && named(frame, "coverTile").length >= 9 }, "the folder's tiles"))
             return
         expect(cover.kind === "grid" && texts(frame, "coverHeader") === "Cover121", "a folder's cover is headed by its name: " + texts(frame, "coverHeader"))
-        expect(named(frame, "storageCell").length === 0, "Home's cells are gone")
+        expect(named(frame, "coverLanes").length === 0, "Home's lanes are gone")
         var tiles = named(frame, "coverTile")
         expect(tiles.slice(0, 3).map(function (t) { return t.isDir + ":" + t.category }).join(",") === "true:folder,true:folder,false:markdown",
                "tiles follow the folder's order, folders first: "
@@ -307,9 +284,8 @@ ApplicationWindow {
                    "its type icon in the corner: " + note.typeIcon)
         }
         expect(named(tiles[0], "textPreview").length === 0 && named(tiles[0], "fileGlyph").length === 1, "a folder keeps its glyph")
-        expect(tiles.every(function (t) { return t.placeIcon === "" }) && named(frame, "placeGlyph").length === 0
-               && named(frame, "fileGlyph").length + named(frame, "textPreview").length >= 9,
-               "a folder's tiles draw file glyphs or text, none a place's")
+        expect(named(frame, "fileGlyph").length + named(frame, "textPreview").length >= 9,
+               "a folder's tiles draw file glyphs or text")
         var wide = Math.floor((frame.width - 2 * Theme.paddingSmall) / 3)
         expect(Math.round(tiles[0].mapToItem(frame, 0, 0).x) === 0 && tiles[0].width === wide
                && Math.round(tiles[2].mapToItem(frame, 0, 0).x + tiles[2].width) >= Math.round(frame.width) - 2,
@@ -405,7 +381,7 @@ ApplicationWindow {
                && tiles[1].thumbnailSource.indexOf("photo.jpg") > 0,
                "a recent photo's tile asks for its picture: " + tiles[1].thumbnailSource)
         popTo(1)
-        expect(cover.kind === "home" && named(frame, "storageCell").length > 0 && named(frame, "coverHeader").length === 0,
+        expect(cover.kind === "home" && named(frame, "coverLanes").length === 1 && named(frame, "coverHeader").length === 0,
                "back on Home its cover is back")
     }
 
@@ -477,11 +453,11 @@ ApplicationWindow {
 
     function checkTasksWin() {
         cover.tasks.activeCount = 1
-        expect(cover.kind === "tasks" && named(frame, "coverGrid").length === 0 && named(frame, "storageCell").length === 0,
+        expect(cover.kind === "tasks" && named(frame, "coverGrid").length === 0 && named(frame, "coverLanes").length === 0,
                "a running task takes the cover: " + cover.kind)
         expect(texts(frame, "coverHeader") === "lautta-xfr-cover-count", "one header only, the tasks': " + texts(frame, "coverHeader"))
         cover.tasks.activeCount = 0
-        expect(cover.kind === "home" && named(frame, "coverGrid").length === 1, "the page's cover is back once it ends")
+        expect(cover.kind === "home" && named(frame, "coverLanes").length === 1, "the page's cover is back once it ends")
     }
 
     Timer {
@@ -497,7 +473,6 @@ ApplicationWindow {
             cover.live = true
             win.checkHome()
             win.checkTasksWin()
-            win.checkPlaces()
             win.checkFolder()
             win.checkFile()
             win.checkLists()
