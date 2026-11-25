@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Compress, then extract from QML, in the real Qt event loop of `qml_check`: the top folder lands
-//! beside the archive under a free name; a damaged archive fails and leaves nothing. Work starts
-//! once `Transfers` has loaded stored tasks, as in the app: a load during a task runs it twice.
 
 const FLOW: &str = r#"
 import QtQuick 2.6
@@ -61,7 +58,6 @@ Item {
 }
 "#;
 
-/// One stored entry whose CRC-32 does not match its data.
 fn bad_zip(name: &[u8], data: &[u8]) -> Vec<u8> {
     let le16 = |v: usize| u16::try_from(v).unwrap().to_le_bytes();
     let le32 = |v: usize| u32::try_from(v).unwrap().to_le_bytes();

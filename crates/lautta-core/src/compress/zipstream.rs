@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Zip writer needing only `Write` (no `Seek`), so archives go straight into a pipe. Data
-//! descriptors; zip64 when a size is unknown or ≥ 4 GiB. With a password every file and link is
-//! WinZip AES-256 (AE-2); folders carry no data. Names stay readable: zip cannot hide them.
 
 use super::{EntryMeta, MemberWriter};
 use crate::entry::Kind;
@@ -61,7 +58,6 @@ pub(crate) struct ZipStream<W: Write> {
     level: u32,
     password: Option<Password>,
     members: Vec<Member>,
-    /// Test knob: write every file entry as zip64.
     force_zip64: bool,
 }
 
@@ -98,7 +94,6 @@ impl<W: Write> ZipStream<W> {
     }
 }
 
-/// UTC, clamped to 1980..2107.
 pub(crate) fn dos_datetime(t: SystemTime) -> (u16, u16) {
     let secs = t
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -155,7 +150,6 @@ fn io_invalid(msg: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, msg.to_owned())
 }
 
-/// Version needed to extract: 2.0 plain, 4.5 zip64, 5.1 AES.
 fn version_needed(m: &Member, zip64: bool) -> u16 {
     if m.aes.is_some() {
         51
@@ -174,7 +168,6 @@ fn extras(m: &Member) -> Vec<u8> {
     extra
 }
 
-/// Deflates `data` into `out`; returns `out` for what comes after.
 fn deflate_into<O: Write>(out: O, level: u32, data: &mut dyn Read, crc: &mut flate2::Crc) -> io::Result<O> {
     let mut enc = flate2::write::DeflateEncoder::new(out, flate2::Compression::new(level));
     let mut buf = vec![0u8; 64 * 1024];
@@ -196,7 +189,6 @@ impl<W: Write> ZipStream<W> {
             extra.extend_from_slice(&[1, 0, 16, 0]);
             extra.extend_from_slice(&[0u8; 16]);
         }
-        // With a zip64 extra the fixed size fields must read 0xFFFFFFFF.
         let (crc, csize, usize_) = match (descriptor, m.local_zip64) {
             (false, _) => (m.crc, m.compressed as u32, m.size as u32),
             (true, false) => (0, 0, 0),
@@ -217,7 +209,6 @@ impl<W: Write> ZipStream<W> {
         self.out.write_all(&extra)
     }
 
-    /// Data of `method`; behind AES when there is a password and data.
     fn new_member(&mut self, meta: &EntryMeta, name: Vec<u8>, method: u16, descriptor: bool) -> Member {
         let mut flags = if std::str::from_utf8(&name).is_ok() {
             FLAG_UTF8
@@ -418,7 +409,7 @@ mod tests {
 
     #[test]
     fn dos_dates_match_known_instants() {
-        let t = SystemTime::UNIX_EPOCH + Duration::from_secs(1_709_642_096); // 2024-03-05 12:34:56 UTC
+        let t = SystemTime::UNIX_EPOCH + Duration::from_secs(1_709_642_096);
         let (date, time) = dos_datetime(t);
         assert_eq!((date >> 9) + 1980, 2024);
         assert_eq!((date >> 5) & 0xF, 3);

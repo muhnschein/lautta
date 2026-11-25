@@ -136,7 +136,6 @@ fn bad_numbers_are_dropped() {
 
 #[test]
 fn a_big_file_costs_only_its_tag_blocks() {
-    // ~20 MB of audio after the tag: parser must seek past it, not read it.
     let file = tagged_mp3(Some(&jpeg(64, [9, 9, 9])));
     let mut big = file.clone();
     big.extend(std::iter::repeat_n(0u8, 20 * 1024 * 1024));
@@ -166,7 +165,6 @@ fn range_reader_reads_and_seeks_like_a_cursor() {
     let mut calls = 0;
     let mut r = RangeReader::new(data.len() as u64, u64::MAX, |off, max| {
         calls += 1;
-        // Short reads: at most 1000 bytes per call.
         let s = off as usize;
         Ok(data[s..(s + max.min(1000)).min(data.len())].to_vec())
     });
@@ -236,7 +234,6 @@ fn folder_cover_prefers_cover_then_folder_then_front() {
 #[test]
 fn a_field_missing_from_the_main_tag_comes_from_another_tag() {
     let mut file = mp3(&[("TIT2", "Ice Road")], None, 8);
-    // ID3v1 at the end: title, artist, album (30 bytes each), year, comment, genre.
     let field = |s: &str, n: usize| {
         let mut f = s.as_bytes().to_vec();
         f.resize(n, 0);
@@ -272,7 +269,6 @@ fn the_front_cover_wins_over_earlier_pictures() {
 
 #[test]
 fn a_few_megabyte_cover_fits_the_budget() {
-    // 16 MiB promised, written out: READ_BUDGET could drift with the code.
     const BUDGET: u64 = 16 * 1024 * 1024;
     assert_eq!(READ_BUDGET, BUDGET);
     let mut art = jpeg(8, [9, 9, 9]);
@@ -299,7 +295,6 @@ fn fetches_never_ask_past_the_block_and_extra_bytes_are_dropped() {
     let mut asked = Vec::new();
     let mut r = RangeReader::new(data.len() as u64, u64::MAX, |off, max| {
         asked.push((off, max));
-        // Short read, then 50 bytes more than asked: a server can send either.
         let s = off as usize;
         let n = if max > 1000 { 1000 } else { max + 50 };
         Ok(data[s..(s + n).min(data.len())].to_vec())

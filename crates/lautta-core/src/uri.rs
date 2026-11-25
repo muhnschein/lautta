@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Internal URIs `lautta://<locationId>/<path>` with percent-encoded path bytes.
 
 use crate::error::{Error, ErrorKind, Result};
 use crate::vpath::VPath;
@@ -8,7 +7,6 @@ use std::fmt;
 
 const SCHEME: &str = "lautta://";
 
-/// Bytes kept literally: unreserved characters and `/`.
 const PATH_SET: &AsciiSet = &CONTROLS
     .add(b' ')
     .add(b'"')
@@ -26,8 +24,6 @@ const PATH_SET: &AsciiSet = &CONTROLS
     .add(b'|')
     .add(b'}');
 
-/// Location identifiers: `user-documents`, `android-dcim`, `vol-<uuid>`, `nv-<bridge id>`,
-/// `arc-<hash>`.
 pub type LocationId = String;
 
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

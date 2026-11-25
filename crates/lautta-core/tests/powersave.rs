@@ -9,7 +9,6 @@ use std::time::Duration;
 use zbus::connection::Builder;
 use zbus::{Connection, Guid, MessageStream};
 
-/// Fake mce on the other end of a socket pair: answers `get_psm_state` with `start`.
 async fn fake_mce(start: bool) -> (Connection, Connection) {
     let (a, b) = tokio::net::UnixStream::pair().unwrap();
     let server = Builder::unix_stream(a)

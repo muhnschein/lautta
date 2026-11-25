@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Peer-to-peer unix socket with fd passing, no bus daemon. No other socket is ever opened.
 
 use crate::errors::BridgeError;
 use crate::proxy::Bridge1Proxy;
@@ -28,7 +27,6 @@ pub async fn connect(socket_path: &Path) -> Result<Connection, BridgeError> {
 }
 
 impl Connection {
-    /// Used by [`connect`] and the fake bridge.
     pub async fn from_stream(stream: UnixStream) -> Result<Connection, BridgeError> {
         let conn = zbus::connection::Builder::unix_stream(stream)
             .p2p()
@@ -50,7 +48,6 @@ impl Connection {
         let _ = self.conn.clone().close().await;
     }
 
-    /// Create before the first call or signals are missed.
     pub fn signals(&self) -> SignalStream {
         SignalStream {
             inner: zbus::MessageStream::from(&self.conn),

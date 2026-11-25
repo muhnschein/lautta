@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Operations area on `Core`: plan summaries, pending plans, conflicts, compress and extract,
-//! Trash, share. Qt-free.
 
 use crate::app::{Core, Started};
 use crate::app_directory::file_url;
@@ -44,8 +42,6 @@ fn join_err(e: tokio::task::JoinError) -> Error {
     Error::new(ErrorKind::Internal, e.to_string())
 }
 
-/// A plan is lent out while a conflict answer works on it across awaits; starting it meanwhile
-/// waits for it to come back, discarding it meanwhile drops it on return.
 #[derive(Default)]
 pub struct PendingPlans {
     next: AtomicU64,
@@ -89,7 +85,6 @@ impl PendingPlans {
         loop {
             let returned = self.returned.notified();
             let mut returned = std::pin::pin!(returned);
-            // Registered before looking, so a return in between is not missed.
             returned.as_mut().enable();
             if let Ok(plan) = self.take_unless_lent(id) {
                 return plan;
@@ -189,7 +184,6 @@ pub struct PlanSummary {
     pub origin: Option<Origin>,
     pub free_bytes: Option<u64>,
     pub renames: Vec<RenamePair>,
-    /// Offered only when both sides keep POSIX modes.
     pub permissions_supported: bool,
     pub options: StartOptions,
 }
@@ -224,7 +218,6 @@ fn rebase(uri: &Uri, old_root: &Uri, new_root: &Uri) -> Uri {
     }
 }
 
-/// Every renamed item and what lies below it goes back to the source's own name.
 pub fn revert_suggested_names(plan: &mut Plan) {
     for i in 0..plan.items.len() {
         if plan.items[i].proposed_name.is_none() {
@@ -255,7 +248,6 @@ pub struct ConflictEntry {
     pub conflict: Conflict,
     pub source_look: RecentLook,
     pub destination_look: RecentLook,
-    /// Never `Replace`.
     pub default_choice: ConflictChoice,
 }
 
@@ -318,14 +310,10 @@ pub struct TrashEntry {
     pub size: Option<u64>,
     pub trashed_at: i64,
     pub days_left: i64,
-    /// Stored copy has no extension; the system thumbnailer goes by this.
     pub mime_type: String,
     pub thumbnail_source: String,
 }
 
-/// Original name decides ([`thumbnail_source`]); the stored copy lost it. Empty: thumbnails off,
-/// rule says none, or stored item is no regular file. A trashed link would show its target, maybe
-/// outside the sandbox.
 fn trash_thumbnail(item: &TrashItem, settings: &Settings) -> String {
     let kind = if item.is_dir { Kind::Dir } else { Kind::File };
     let mut entry = Entry::new(item.original_uri.name().unwrap_or_default(), kind);
@@ -434,7 +422,6 @@ impl Core {
     pub async fn plan_summary(&self, plan: &Plan) -> PlanSummary {
         let dest = &plan.destination;
         let free_bytes = match self.provider(&dest.location) {
-            // Extract's new folder is made on start: until then, its parent's space.
             Ok(p) => match p.space(&dest.path).await {
                 Ok(s) => Some(s.free),
                 Err(_) => match dest.path.parent() {
@@ -482,8 +469,6 @@ impl Core {
         }
     }
 
-    /// Options differ from the settings for this start only: settings are put back right after
-    /// queueing.
     pub async fn start_plan_with(&self, mut plan: Plan, options: StartOptions) -> Result<TransferId> {
         if !options.suggested_names {
             revert_suggested_names(&mut plan);
@@ -551,10 +536,6 @@ impl Core {
         })
     }
 
-    /// Next to the archive, as macOS does: a single top item (folder or file) comes out as is,
-    /// anything else in a new folder named after the archive. Taken name gets a number: nothing
-    /// merges, nothing is replaced.
-    /// `password` only for a locked archive not open yet.
     pub async fn extract(&self, archive: &Uri, password: Option<Password>) -> Result<Started> {
         let folder = archive
             .parent()
@@ -579,7 +560,6 @@ impl Core {
                 let name = archive_folder_name(&archive.name().map(display_name).unwrap_or_default());
                 let name = free_dir_name(name.as_bytes(), &taken);
                 let dest = folder.join(&name)?;
-                // Exclusive: a folder made meanwhile fails the extract rather than merging.
                 target.make_dir(&dest.path, true).await?;
                 let sources = many
                     .iter()
@@ -589,8 +569,6 @@ impl Core {
             }
         };
         let planned = self.plan(OperationKind::Copy, sources, dest.clone()).await;
-        // Planner needs the folder; start_plan makes it again, so an unstarted summary leaves none.
-        // Best effort: nothing is in it yet.
         if made {
             let _ = target.remove_dir(&dest.path).await;
         }
@@ -608,8 +586,6 @@ impl Core {
         self.start_plan(plan).await.map(Started::Transfer)
     }
 
-    /// Failed or canceled run leaves no partial file. `opts`: kind, password, progress, cancel; the
-    /// rest is filled here.
     pub async fn compress_to(
         &self,
         sources: &[Uri],
@@ -802,7 +778,6 @@ fn part_path(path: &Path) -> PathBuf {
     path.with_file_name(format!(".{name}.lautta-part"))
 }
 
-/// Whichever side fails, the half-written file is removed.
 async fn compress_remote(
     core: &Core,
     sources: &[Uri],

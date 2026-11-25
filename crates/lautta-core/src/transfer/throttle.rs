@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Engine events on their way to the GUI: `Changed` per transfer at most once per window, since
-//! each makes the pages re-read every item (a 5,000-file copy sends one per file).
 
 use super::{TransferEvent, TransferId};
 use std::collections::HashMap;
@@ -8,15 +6,12 @@ use std::time::Duration;
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::time::Instant;
 
-/// What `forward_throttled` hands on: an event, or `Lagged` when the receiver missed some.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Forwarded {
     Event(TransferEvent),
     Lagged,
 }
 
-/// First `Changed(id)` at once, later ones of that id held until `every` has passed; a held one
-/// goes out then. Other events pass at once, in order.
 pub async fn forward_throttled(
     mut rx: broadcast::Receiver<TransferEvent>,
     every: Duration,

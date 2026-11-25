@@ -1,6 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Qt 5.6: moves in a tight loop share a millisecond; a
-// move with the previous move's time scrolls nothing. Each move of a drag on a SilicaFlickable must
-// scroll at once.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0

@@ -1,6 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Silica's ZoomableFlickable is private (not a Harbour
-// import); behaviour written anew, rules in ZoomMath.js. Fitted: flickable takes no drags, so
-// swipes reach the views around. Taps near edges left to swipes.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "ZoomMath.js" as ZoomMath
@@ -77,7 +75,6 @@ SilicaFlickable {
         animation.start()
     }
 
-    // No press delay: it would keep touches from pinch area.
     pressDelay: 0
     contentWidth: Math.max(width, content.width)
     contentHeight: Math.max(height, content.height)
@@ -134,8 +131,6 @@ SilicaFlickable {
             y: flickable.contentY + Theme.paddingLarge
             width: flickable.width - 2 * Theme.paddingLarge
             height: flickable.height - 2 * Theme.paddingLarge
-            // Zoom on finger lift: zooming disables flickable, and mid-press it leaves area taking
-            // next tap for this one's end (Qt 5.6).
             property bool doubleTapped
             property real tappedX
             property real tappedY

@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Images via image://lautta-file/ (EXIF
-// orientation applied by provider).
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -14,12 +13,9 @@ FullscreenContentPage {
     readonly property string coverKind: "file"
     readonly property string coverUri: currentUri
     property string folderUri: App.parentUri(uri)
-    // Size the opener showed this image's thumbnail at, 0 for none: that cached tile shows while
-    // it decodes.
     property int tileSize
 
     property bool listed
-    // indexOf is a method: images.count makes the binding follow the listing.
     readonly property bool inFolder: images.count > 0 && (listed || images.indexOf(uri) >= 0)
     readonly property var slideshow: viewLoader.item
     readonly property string currentUri: slideshow && slideshow.currentItem ? slideshow.currentItem.imageUri : uri
@@ -37,7 +33,6 @@ FullscreenContentPage {
             Operations.remove(JSON.stringify([target]))
         }
         if (Operations.deletesPermanently(JSON.stringify([target]))) {
-            // Last image accepted leaves the viewer too: stack cannot pop while dialog closes.
             var props = { "uris": [target] }
             var below = pageStack.previousPage(page)
             if (page.total <= 1 && below) {
@@ -130,8 +125,6 @@ FullscreenContentPage {
 
     onCurrentUriChanged: tools.noteViewed(currentUri)
 
-    // New view once listing comes: PagedView slides on model swap; currentIndex skips the slide
-    // only as binding at creation.
     Loader {
         id: viewLoader
         anchors.fill: parent
@@ -161,8 +154,6 @@ FullscreenContentPage {
         }
     }
 
-    // Declared after the view: children are destroyed in order, PagedView crashes when its model
-    // goes first.
     ImageListModel {
         id: images
         folderUri: page.folderUri

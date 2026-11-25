@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Tinted with ambience primary colour: uncoloured theme
-// glyphs vanish on a light ambience.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "FileIcons.js" as FileIcons

@@ -4,7 +4,6 @@ import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components/operations/Json.js" as Json
 
-// Compressed file lands beside the items. Password goes to Operations.compress; not kept.
 Dialog {
     id: dialog
 
@@ -14,7 +13,6 @@ Dialog {
     readonly property bool takesPassword: format === "zip" || format === "7z"
     readonly property string password: takesPassword ? passwordField.text : ""
     readonly property bool passwordsMatch: !takesPassword || passwordField.text === confirmField.text
-    // A hint only: nothing is refused.
     readonly property bool weakPassword: takesPassword && Operations.weakPassword(passwordField.text)
 
     readonly property var formats: [
@@ -49,7 +47,6 @@ Dialog {
         Operations.compress(JSON.stringify(uris), folderUri, nameField.text.trim(), format, password)
         forget()
     }
-    // Set once: bound, Silica reports a canAccept binding loop.
     Component.onCompleted: nameField.text = defaultName()
     Component.onDestruction: forget()
 
@@ -136,7 +133,6 @@ Dialog {
                         TextEditorLabel {
                             width: parent.width
                             editor: passwordField
-                            // Silica's orange (Away presence), as row warnings.
                             color: dialog.weakPassword ? Theme.presenceColor(Theme.PresenceAway)
                                                        : highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
                         }

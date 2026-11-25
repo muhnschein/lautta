@@ -11,7 +11,6 @@ Item {
     readonly property real gap: Theme.paddingSmall
     readonly property real nameLineHeight: nameFont.lineSpacing
     readonly property real captionHeight: captionFont.lineSpacing
-    // Cut is measured, not laid out by Qt: a line must not end at the very edge.
     readonly property real nameMargin: Theme.paddingSmall / 2
 
     function cellHeight(cellWidth, textHeight) {

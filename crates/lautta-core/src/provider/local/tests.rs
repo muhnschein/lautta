@@ -189,7 +189,7 @@ async fn listing_stops_when_the_consumer_goes_away() {
 async fn permission_denied_is_reported_when_not_root() {
     use std::os::unix::fs::PermissionsExt;
     if sys::effective_ids().0 == 0 {
-        return; // root ignores permission bits; nothing to observe
+        return;
     }
     let (d, p) = setup();
     let locked = d.path().join("locked");
@@ -1088,8 +1088,6 @@ async fn server_copy_refuses_special_files() {
     assert_eq!(e.kind, ErrorKind::Unsupported);
 }
 
-/// Progress sink that parks the copying thread on its first report until `release`; counts the
-/// reports after it.
 struct Gate {
     sink: ProgressSink,
     reached: tokio::sync::oneshot::Receiver<()>,
@@ -1123,8 +1121,6 @@ fn gate() -> Gate {
     }
 }
 
-/// Drops `call` while its thread is parked in `g`, then lets the thread go and waits until it let
-/// go of its permit.
 async fn drop_while_parked<F>(sem: &Semaphore, call: F, g: Gate) -> Arc<AtomicU64>
 where
     F: std::future::Future + Send + 'static,
@@ -1301,8 +1297,6 @@ async fn space_reports_free_and_total() {
 
 #[tokio::test]
 async fn caller_file_offsets_are_ignored() {
-    // Regular files are read and written at explicit offsets: an fd left at its end (after a
-    // download) still uploads the whole file, and a download fills a reused fd from the start.
     use std::io::{Read, Seek, SeekFrom, Write};
     let (d, p) = setup();
     let mut scratch = tempfile::tempfile().unwrap();

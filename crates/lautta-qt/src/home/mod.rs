@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Facades over `lautta_core::app_home`.
 
 mod bridge;
 mod favourites;
@@ -45,8 +44,6 @@ cpp! {{
     #include <QtCore/QEventLoop>
 }}
 
-/// Runs the Qt event loop for `ms`. For tests driving a scenario from a synchronous script (host
-/// has no widgets to `exec` an engine).
 pub fn pump_events(ms: i32) {
     let until = std::time::Instant::now() + std::time::Duration::from_millis(u64::try_from(ms).unwrap_or(0));
     while std::time::Instant::now() < until {
@@ -81,7 +78,6 @@ pub(crate) fn cell_data(rows: &[Vec<Cell>], row: i32, role: i32) -> QVariant {
         .unwrap_or_default()
 }
 
-/// Ends a facade's background tasks on drop: they wait on [`Guard::subscribe`]'s receiver.
 pub(crate) struct Guard(watch::Sender<()>);
 
 impl Default for Guard {
@@ -102,7 +98,6 @@ fn store_channel() -> &'static watch::Sender<u64> {
     STORE.get_or_init(|| watch::channel(0).0)
 }
 
-/// Stores have no change notification of their own.
 pub(crate) fn store_changed() {
     store_channel().send_modify(|g| *g += 1);
 }
@@ -113,7 +108,6 @@ pub(crate) fn store_subscribe() -> watch::Receiver<u64> {
 
 const SETTLE: Duration = Duration::from_millis(80);
 
-/// Ends with `guard` or when a source is gone.
 pub(crate) fn watch_sources<T: QObject + 'static>(
     me: QPointer<T>,
     core: &Arc<Core>,
@@ -150,7 +144,6 @@ pub(crate) fn watch_sources<T: QObject + 'static>(
     });
 }
 
-/// False when the bridge is gone. Never completes without a bridge.
 async fn changed<T>(rx: &mut Option<watch::Receiver<T>>) -> bool {
     match rx {
         Some(rx) => rx.changed().await.is_ok(),

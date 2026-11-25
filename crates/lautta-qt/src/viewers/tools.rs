@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Helpers for the viewer pages (Recents notes) and QML tests.
 
 use super::parse_uri;
 use crate::runtime::core;
@@ -28,17 +27,10 @@ pub struct ViewerTools {
     base: qt_base_class!(trait QObject),
     noteViewed: qt_method!(fn(&self, uri: QString)),
     noteOpened: qt_method!(fn(&self, uri: QString)),
-    /// Test support: pumps the event loop so async viewer results arrive during a test.
     pump: qt_method!(fn(&self, ms: i32)),
-    /// Test support: copies local `sourceUrl` (`file://`) to the local path of `destUri`.
     installFixture: qt_method!(fn(&self, source_url: QString, dest_uri: QString) -> bool),
-    /// Test support: as `installFixture`, content `times` over: a large file from a small one.
     installRepeated: qt_method!(fn(&self, source_url: QString, dest_uri: QString, times: i32) -> bool),
-    /// Test support: sets mtime of local `uri` to `ms` since epoch.
     setModified: qt_method!(fn(&self, uri: QString, ms: f64) -> bool),
-    /// Test support: finger `kind` ("press", "move", "release") at (`x`, `y`) of `item`, sent as
-    /// the mouse event Qt makes of a touch, so gestures run through real mouse areas and
-    /// flickables. Gives a windowless tree a window first.
     mouse: qt_method!(fn(&self, item: QVariant, kind: QString, x: f64, y: f64) -> bool),
 }
 
@@ -79,7 +71,6 @@ impl ViewerTools {
                 return false;
             QQuickWindow *window = target->window();
             if (!window) {
-                // QML checks create scenes without a window (the app's comes from SailfishApp).
                 QQuickItem *root = target;
                 while (root->parentItem())
                     root = root->parentItem();
@@ -88,10 +79,6 @@ impl ViewerTools {
                 root->setParentItem(window->contentItem());
                 QObject::connect(root, &QObject::destroyed, window, &QObject::deleteLater);
             }
-            // Event times: wall clock, at least one touch frame (16 ms) after the last. Qt 5.6 on
-            // target: a move in the same millisecond as the one before scrolls no flickable until a
-            // later-timed move, so drag length would follow runner speed. Flickables measure speed
-            // by these times.
             static QElapsedTimer clock;
             static qint64 last = 0;
             if (!clock.isValid())
@@ -137,7 +124,6 @@ impl ViewerTools {
     }
 }
 
-/// Local source of a `file://` URL and local target of a Lautta URI.
 fn fixture_paths(source_url: &QString, dest_uri: &QString) -> Option<(PathBuf, PathBuf)> {
     let (core, dest) = (core()?, parse_uri(dest_uri)?);
     let source = PathBuf::from(source_url.to_string().strip_prefix("file://")?);
