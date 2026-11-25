@@ -1472,6 +1472,7 @@ dependencies = [
  "lautta-bridge-proto",
  "lautta-core",
  "lautta-pdf",
+ "libc",
  "log",
  "qmetaobject",
  "qttypes",
