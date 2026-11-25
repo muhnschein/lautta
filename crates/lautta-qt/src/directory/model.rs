@@ -75,6 +75,10 @@ fn is_connectivity(kind: ErrorKind) -> bool {
     )
 }
 
+fn lost_bridge(kind: ErrorKind) -> bool {
+    matches!(kind, ErrorKind::ConnectionLost | ErrorKind::BridgeUnavailable)
+}
+
 fn level_of(core: &Core, location: &str) -> Option<Level> {
     core.bridge.as_ref()?.access(location)
 }
@@ -193,7 +197,10 @@ pub struct DirectoryModel {
     watcher: Option<DirWatch>,
     settings_watch: Option<Guard>,
     level: Option<Level>,
-    level_watch: Option<Guard>,
+    bridge_watch: Option<Guard>,
+    bridge_ready: u64,
+    listing_ready: u64,
+    relist_when_ready: bool,
     transfer_states: HashMap<Vec<u8>, String>,
     counts: HashMap<Vec<u8>, CountSlot>,
     previews: HashMap<Vec<u8>, PreviewSlot>,
@@ -229,10 +236,10 @@ impl DirectoryModel {
         self.apply_prefs_state();
         self.flags = core.capability_flags(&dir.location);
         self.adds = core.may_add_to(&dir);
-        self.level = level_of(&core, &dir.location);
-        if self.level_watch.is_none() {
-            self.watch_level(&core);
+        if self.bridge_watch.is_none() {
+            self.watch_bridge(&core);
         }
+        self.level = level_of(&core, &dir.location);
         self.local_dir = core.locations.to_local_path(&dir);
         self.folderCounts = self.local_dir.is_some();
         let location = core.location(&dir.location);
@@ -304,6 +311,8 @@ impl DirectoryModel {
 
     fn next_listing(&mut self) -> u64 {
         self.listing += 1;
+        self.listing_ready = self.bridge_ready;
+        self.relist_when_ready = false;
         self.listing
     }
 
@@ -335,29 +344,59 @@ impl DirectoryModel {
         self.watcher = Some(watcher);
     }
 
-    fn watch_level(&mut self, core: &Core) {
-        let Some(mut changes) = core.bridge.as_ref().map(|c| c.watch_locations()) else {
+    fn watch_bridge(&mut self, core: &Core) {
+        let Some(bridge) = core.bridge.as_ref() else {
             return;
         };
+        let mut locations = bridge.watch_locations();
+        let mut status = bridge.watch_status();
         let guard = Guard::default();
         let mut stop = guard.subscribe();
         let me = QPointer::from(&*self);
-        let cb = queued_callback(move |()| {
+        let cb = queued_callback(move |ready: bool| {
             if let Some(m) = me.as_pinned() {
-                m.borrow_mut().follow_level();
+                let mut m = m.borrow_mut();
+                if ready {
+                    m.on_bridge_ready();
+                } else {
+                    m.follow_level();
+                }
             }
         });
         runtime::handle().spawn(async move {
             loop {
                 tokio::select! {
-                    r = changes.changed() => if r.is_err() { return },
+                    r = locations.changed() => {
+                        if r.is_err() { return }
+                        locations.borrow_and_update();
+                        cb(false);
+                    }
+                    r = status.changed() => {
+                        if r.is_err() { return }
+                        if status.borrow_and_update().is_ready() {
+                            cb(true);
+                        }
+                    }
                     _ = stop.changed() => return,
                 }
-                changes.borrow_and_update();
-                cb(());
             }
         });
-        self.level_watch = Some(guard);
+        self.bridge_watch = Some(guard);
+    }
+
+    fn on_bridge_ready(&mut self) {
+        self.bridge_ready += 1;
+        if std::mem::take(&mut self.relist_when_ready) {
+            self.refresh();
+        }
+    }
+
+    fn relist_once_bridge_ready(&mut self) {
+        if self.bridge_ready == self.listing_ready {
+            self.relist_when_ready = true;
+        } else {
+            self.refresh();
+        }
     }
 
     fn follow_level(&mut self) {
@@ -461,7 +500,12 @@ impl DirectoryModel {
                 }
             },
             ListEvent::Done(Ok(())) => self.finish_ok(),
-            ListEvent::Done(Err(e)) => self.fail(&e),
+            ListEvent::Done(Err(e)) => {
+                self.fail(&e);
+                if lost_bridge(e.kind) {
+                    self.relist_once_bridge_ready();
+                }
+            }
         }
         self.publish();
     }
@@ -1169,6 +1213,83 @@ mod tests {
             cachedAt: -1.0,
             ..DirectoryModel::default()
         }
+    }
+
+    fn on_server() -> DirectoryModel {
+        DirectoryModel {
+            dir: Uri::parse("lautta://nv-account:1/").ok(),
+            ..opened()
+        }
+    }
+
+    fn refused() -> ListEvent {
+        ListEvent::Done(Err(Error::new(
+            ErrorKind::ConnectionLost,
+            "reconnecting to the bridge",
+        )))
+    }
+
+    #[test]
+    fn a_listing_refused_while_the_bridge_reconnects_lists_again_once_it_is_ready() {
+        let mut m = on_server();
+        let first = relist(&mut m);
+        m.on_event(m.generation, first, refused());
+        assert!(!m.loading, "refused listing ends");
+        m.on_bridge_ready();
+        assert!(m.loading, "bridge ready: folder lists again");
+    }
+
+    #[test]
+    fn a_listing_refused_before_the_bridge_was_ready_lists_again_when_the_news_of_ready_came_first() {
+        let mut m = on_server();
+        let first = relist(&mut m);
+        m.on_bridge_ready();
+        assert!(m.loading, "still the first listing");
+        m.on_event(m.generation, first, refused());
+        assert!(
+            m.loading,
+            "bridge ready since the listing began: lists again at once"
+        );
+    }
+
+    #[test]
+    fn a_listing_cut_by_a_lost_bridge_waits_for_the_next_ready() {
+        let mut m = on_server();
+        m.on_bridge_ready();
+        let first = relist(&mut m);
+        m.on_event(m.generation, first, lost());
+        assert!(!m.loading, "bridge not back yet: no listing");
+        m.on_bridge_ready();
+        assert!(m.loading, "bridge back: lists again");
+        let again = relist(&mut m);
+        m.on_event(m.generation, again, lost());
+        assert!(!m.loading, "lost again: waits, no loop");
+        m.on_bridge_ready();
+        assert!(m.loading, "and lists once the bridge is back");
+    }
+
+    #[test]
+    fn a_listing_that_fails_for_another_reason_is_not_listed_again_when_the_bridge_is_ready() {
+        let mut m = on_server();
+        let first = relist(&mut m);
+        m.on_event(
+            m.generation,
+            first,
+            ListEvent::Done(Err(Error::new(ErrorKind::PermissionDenied, "no"))),
+        );
+        m.on_bridge_ready();
+        assert!(!m.loading);
+    }
+
+    #[test]
+    fn a_folder_listed_since_is_not_listed_again_when_the_bridge_is_ready() {
+        let mut m = on_server();
+        let first = relist(&mut m);
+        m.on_event(m.generation, first, refused());
+        let again = relist(&mut m);
+        m.on_event(m.generation, again, ListEvent::Done(Ok(())));
+        m.on_bridge_ready();
+        assert!(!m.loading);
     }
 
     fn relist(m: &mut DirectoryModel) -> u64 {

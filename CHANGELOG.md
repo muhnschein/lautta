@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Sharing a file from a server offers the same apps as sharing a file on this device, such as Bluetooth. Before, the share sheet listed only apps that take any file, such as *Save to Lautta* ([#153](https://github.com/muhnschein/lautta/issues/153)).
+- A server folder you have open lists again by itself once Lautta is connected to netvfs again, for example after you change the account's access in *Settings*. Before, it could keep an error or the files of the old access until you left it and came back ([#235](https://github.com/muhnschein/lautta/issues/235), [#172](https://github.com/muhnschein/lautta/issues/172)).
 - A conflict that comes up right after you tap *Start* on the plan summary opens its screen by itself, as later ones do. Before, it waited behind *Answer* in the activity bar ([#188](https://github.com/muhnschein/lautta/issues/188)).
 - Zips locked the old way (ZipCrypto), as many older tools still make them, now open and extract after asking for the password on the *Locked file* page. A wrong password asks again ([#167](https://github.com/muhnschein/lautta/issues/167)).
 - Before you allow Lautta to use network locations, a favourite or recent item on a server reads *Server › /Photos*, no longer an internal id such as *nv-account:23 › Photos* ([#107](https://github.com/muhnschein/lautta/issues/107)).
