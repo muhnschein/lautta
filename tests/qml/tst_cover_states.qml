@@ -72,6 +72,8 @@ ApplicationWindow {
     }
 
     Component { id: folderPage; DirectoryPage {} }
+    Component { id: plainDialog; Dialog {} }
+    Component { id: lateCover; CoverPage { live: false } }
     Component { id: plainPage; Page {} }
     Component {
         id: slowPage
@@ -406,6 +408,24 @@ ApplicationWindow {
                "back on Home its cover is back")
     }
 
+    function checkDialogClosing() {
+        var below = pageStack.currentPage
+        var dialog = pageStack.push(plainDialog)
+        if (!waitFor(function () { return pageStack.currentPage === dialog && !pageStack.busy }, "the dialog to open"))
+            return
+        dialog.accept()
+        if (!expect(pageStack.busy && pageStack.currentPage === dialog
+                    && pageStack.find(function (page) { return page === dialog }) === null,
+                    "the closing dialog is still the current page, but out of the stack"))
+            return
+        var late = lateCover.createObject(frame)
+        expect(late.source === below && late.kind === "home",
+               "a cover made while a dialog closes shows the page below it: " + late.source + " " + late.kind)
+        late.destroy()
+        waitFor(function () { return pageStack.currentPage === below && !pageStack.busy }, "the dialog to close")
+        expect(cover.kind === "home", "the cover is Home's once it closed: " + cover.kind)
+    }
+
     function checkTaskCover() {
         var root = tasks.parent
         expect(tasks.mode === "idle" && !tasks.active, "no task: idle")
@@ -479,6 +499,7 @@ ApplicationWindow {
             win.checkFolder()
             win.checkFile()
             win.checkLists()
+            win.checkDialogClosing()
             win.checkTaskCover()
             win.reachedEnd = true
             win.scenarioRunning = false
