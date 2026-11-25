@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A server file opened from two places at once, such as *Open with* in a viewer while a share of it runs, downloads once and both get the same copy ([#155](https://github.com/muhnschein/lautta/issues/155)).
 - A tar file with an entry dated out of range (such as before 1901 or far in the future) no longer closes Lautta: it opens, and that entry shows no date ([#156](https://github.com/muhnschein/lautta/issues/156)).
 - Zip files with a file of 4 GB or more inside open and extract, and *Compress* to Zip writes such files with their right size, so other apps open the zip ([#166](https://github.com/muhnschein/lautta/issues/166)).
 - When you remove an account in *Settings › Accounts*, Lautta forgets its favourites, recents and settings even if you removed it right after adding it. Before, they could stay behind ([#230](https://github.com/muhnschein/lautta/issues/230)).
