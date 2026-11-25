@@ -40,8 +40,8 @@ ApplicationWindow {
     }
 
     function flickDown() {
-        list.flick(0, -4000)
-        return waitFor(function () { return list.movingVertically && bar.active }, "the list to move")
+        listView.flick(0, -4000)
+        return waitFor(function () { return listView.movingVertically && bar.active }, "the list to move")
     }
 
     function checkShowsEveryTime() {
@@ -49,22 +49,22 @@ ApplicationWindow {
         if (!flickDown())
             return
         expect(waitFor(function () { return bar.opacity === 1 }, "the pill to show"), "moving shows the pill")
-        list.cancelFlick()
-        waitFor(function () { return !list.movingVertically }, "the list to stop")
+        listView.cancelFlick()
+        waitFor(function () { return !listView.movingVertically }, "the list to stop")
         expect(bar.hiding && bar.visible, "stopped, the pill stays a moment before it fades")
         if (!flickDown())
             return
         expect(bar.hiding === false, "moving again while it waits to fade: the fade is called off at once")
         expect(waitFor(function () { return bar.opacity === 1 }, "the pill to show again"), "and the pill is fully back")
-        list.cancelFlick()
+        listView.cancelFlick()
         waitFor(function () { return !bar.visible }, "the pill to fade out")
         expect(bar.opacity === 0, "then it fades out")
         if (!flickDown())
             return
         expect(bar.hiding === false, "faded out, moving again shows the pill with no wait")
-        waitFor(function () { return bar.opacity === 1 || !list.movingVertically }, "the pill to show or the list to stop")
-        expect(bar.opacity === 1 && list.movingVertically, "the pill is fully shown while the list still moves")
-        list.cancelFlick()
+        waitFor(function () { return bar.opacity === 1 || !listView.movingVertically }, "the pill to show or the list to stop")
+        expect(bar.opacity === 1 && listView.movingVertically, "the pill is fully shown while the list still moves")
+        listView.cancelFlick()
         waitFor(function () { return !bar.visible }, "the pill to fade out")
     }
 
@@ -88,24 +88,24 @@ ApplicationWindow {
         if (!flickDown())
             return
         waitFor(function () { return bar.opacity === 1 }, "the pill to show")
-        list.cancelFlick()
+        listView.cancelFlick()
         var handle = named("scrollDateHandle")
         var text = named("scrollDateText")
         var right = handle.x + handle.width
         var width = handle.width
         var textX = text.mapToItem(bar, 0, 0).x
-        var at = handle.mapToItem(win.contentItem, handle.width / 2, handle.height / 2)
-        tools.mouse(win.contentItem, "press", at.x, at.y)
+        var at = handle.mapToItem(bar, handle.width / 2, handle.height / 2)
+        tools.mouse(bar, "press", at.x, at.y)
         expect(bar.dragging, "a press on the pill grabs it")
         waitFor(function () { return handle.width >= width + Theme.itemSizeMedium - 0.5 }, "the pill to widen")
         expect(Math.abs(handle.x + handle.width - right) < 0.5, "held, the pill keeps its right edge")
         expect(text.mapToItem(bar, 0, 0).x < textX - Theme.itemSizeMedium + 0.5,
                "and its words move left, clear of the thumb")
-        var before = list.contentY
+        var before = listView.contentY
         for (var i = 1; i <= 6; ++i)
-            tools.mouse(win.contentItem, "move", at.x, at.y + i * 40)
-        expect(list.contentY > before + 1, "dragging the pill down scrolls the list down")
-        tools.mouse(win.contentItem, "release", at.x, at.y + 240)
+            tools.mouse(bar, "move", at.x, at.y + i * 40)
+        expect(listView.contentY > before + 1, "dragging the pill down scrolls the list down")
+        tools.mouse(bar, "release", at.x, at.y + 240)
         waitFor(function () { return Math.abs(handle.width - width) < 0.5 }, "the pill to narrow")
     }
 
@@ -125,26 +125,28 @@ ApplicationWindow {
                         text: index
                     }
                 }
-                Component.onCompleted: win.list = view
+                Component.onCompleted: win.listView = view
             }
             ScrollDateBar {
                 id: dateBar
 
                 flickable: view
                 rowDate: function (index) { return { "inProgress": false, "at": win.now - index * win.day } }
-                Component.onCompleted: win.bar = dateBar
+                Component.onCompleted: win.dateBar = dateBar
             }
         }
     }
 
-    property var list
-    property var bar
+    property var listView
+    property var dateBar
+    readonly property var bar: dateBar
 
     Timer {
         interval: 100
+        repeat: true
         running: !win.reachedEnd
         onTriggered: {
-            if (!win.list || !win.bar)
+            if (!win.listView || !win.dateBar)
                 return
             running = false
             win.checkShowsEveryTime()
