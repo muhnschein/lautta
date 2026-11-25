@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Sharing a file from a server, or one file picked with *Select*, offers the same apps as sharing it from its menu on this device, such as Bluetooth. Before, the share sheet listed only apps that take any file, such as *Save to Lautta* ([#153](https://github.com/muhnschein/lautta/issues/153)).
+- Sharing a file from a server offers the same apps as sharing a file on this device, such as Bluetooth. Before, the share sheet listed only apps that take any file, such as *Save to Lautta* ([#153](https://github.com/muhnschein/lautta/issues/153)).
 - Zips locked the old way (ZipCrypto), as many older tools still make them, now open and extract after asking for the password on the *Locked file* page. A wrong password asks again ([#167](https://github.com/muhnschein/lautta/issues/167)).
 - Before you allow Lautta to use network locations, a favourite or recent item on a server reads *Server › /Photos*, no longer an internal id such as *nv-account:23 › Photos* ([#107](https://github.com/muhnschein/lautta/issues/107)).
 - With every task paused, Lautta's cover shows how far they got, as *Activity* does, no longer 0% and an empty bar ([#124](https://github.com/muhnschein/lautta/issues/124)).
