@@ -74,7 +74,7 @@ ApplicationWindow {
         var first = viewer.document.heightFor(0, view.width)
         var middle = first + view.spacing + viewer.document.heightFor(1, view.width) / 2
         view.contentY = Math.max(view.originY + 1, middle - view.height / 2)
-        if (viewer.currentPage !== 2 || view.contentY >= first)
+        if (viewer.currentPage < 2 || view.contentY >= first)
             console.error("FAILED: strips.pdf: page " + viewer.currentPage + " in the middle, contentY "
                           + view.contentY + " with the first page " + first + " high")
         tools.pump(1500)

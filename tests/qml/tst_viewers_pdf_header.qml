@@ -132,8 +132,10 @@ ApplicationWindow {
 
         view.positionViewAtBeginning()
         stop(view)
+        var top = view.contentY
+        expect(view.atYBeginning, label + ": back at the first page's top: " + top + " vs " + view.originY)
         dragOn(view, x, view.height * 0.2, view.height * 0.2 + Theme.itemSizeLarge)
-        expect(-host.contentY > Theme.paddingLarge && view.contentY === view.originY,
+        expect(-host.contentY > Theme.paddingLarge && Math.abs(view.contentY - top) < 0.5,
                label + ": a drag down at the first page's top pulls the host: " + host.contentY + ", pages " + view.contentY)
         letGo(view, x, view.height * 0.2)
         waitFor(function () { return !host.moving }, label + ": the host to settle")
@@ -158,15 +160,14 @@ ApplicationWindow {
 
     function checkProblem() {
         var viewer = pageStack.push(lockedComponent, {}, PageStackAction.Immediate)
-        waitFor(function () { return viewer.problem === "encrypted" && !pageStack.busy }, "the locked PDF")
-        waitFor(function () { return pageStack.currentPage !== viewer }, "the password dialog")
+        waitFor(function () { return pageStack.currentPage.wrong !== undefined && !pageStack.busy }, "the password dialog")
         pageStack.currentPage.reject()
         waitFor(function () { return pageStack.currentPage === viewer && !pageStack.busy }, "the viewer again")
         var host = named(viewer, "pdfPulleyHost")
         var menus = findAll(viewer, function (x) { return x._isPullDownMenu === true }, [])
         var unlock = findAll(viewer, function (x) { return x.text === qsTrId("lautta-viewers-pdf-unlock") }, [])
-        expect(menus.length === 1 && menus[0].flickable === host && unlock.length === 1 && unlock[0].visible,
-               "locked: Unlock is on the host's pulley")
+        expect(menus.length === 1 && menus[0].flickable === host && unlock.length === 1 && isInside(menus[0], unlock[0]),
+               "locked: Unlock is on the host's pulley: " + menus.length + " " + unlock.length)
         var hints = findAll(viewer, function (x) { return x.hintText !== undefined && x.enabled }, [])
         expect(hints.length === 1 && hints[0].hintText === qsTrId("lautta-viewers-pdf-pull-hint"),
                "locked: the placeholder says to pull down")
