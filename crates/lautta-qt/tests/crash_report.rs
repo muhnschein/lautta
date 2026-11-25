@@ -66,3 +66,27 @@ fn a_crash_in_qml_check_names_its_thread_and_frames_and_keeps_the_results() {
         "results printed before the crash are kept: {stdout}"
     );
 }
+
+#[test]
+fn report_crashes_takes_over_every_fatal_signal_once() {
+    lautta_qt::report_crashes();
+    for sig in [
+        libc::SIGSEGV,
+        libc::SIGBUS,
+        libc::SIGILL,
+        libc::SIGFPE,
+        libc::SIGABRT,
+    ] {
+        let mut now: libc::sigaction = unsafe { std::mem::zeroed() };
+        assert_eq!(unsafe { libc::sigaction(sig, std::ptr::null(), &mut now) }, 0);
+        assert!(
+            now.sa_sigaction != libc::SIG_DFL && now.sa_sigaction != libc::SIG_IGN,
+            "signal {sig} has a handler"
+        );
+        assert_ne!(
+            now.sa_flags & libc::SA_RESETHAND,
+            0,
+            "signal {sig} goes back to its default after one report"
+        );
+    }
+}

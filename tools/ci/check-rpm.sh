@@ -141,6 +141,8 @@ sb2 -t "$TARGET" env HOME="$crash" QT_QPA_PLATFORM=minimal sh -c '
 if ! grep -q '^CRASH   signal 11 in thread ' "$crash/log.err" || ! grep -q 'harbour-lautta(.*\[0x' "$crash/log.err"; then
     cat "$crash/log.out" "$crash/log.err"
     fail "QML check killed by SIGSEGV printed no backtrace"
+else
+    sed -n '/^CRASH/,$p' "$crash/log.err"
 fi
 home="$PWD/.qml-home"
 rm -rf "$home"
