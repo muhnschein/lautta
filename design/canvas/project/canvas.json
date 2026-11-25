@@ -849,6 +849,14 @@
       "w": 860,
       "x": 4700,
       "y": 50000
+    },
+    "CoverIconLanesBig.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Cover idea 4b \u00b7 drift lanes with the Lautta tile",
+      "w": 860,
+      "x": 5640,
+      "y": 50000
     }
   },
   "createdOnFiles": {
@@ -1087,7 +1095,8 @@
     "CoverIconLanes.dc.html",
     "CoverIconBento.dc.html",
     "HomeDiskFree.dc.html",
-    "AppGlyph.dc.html"
+    "AppGlyph.dc.html",
+    "CoverIconLanesBig.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"
