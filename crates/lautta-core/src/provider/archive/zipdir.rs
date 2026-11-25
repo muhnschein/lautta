@@ -368,6 +368,7 @@ pub fn open_entry(
 struct Checked {
     inner: io::Take<Box<dyn Read + Send>>,
     crc: flate2::Crc,
+    len: u64,
     expect_crc: Option<u32>,
     expect_len: u64,
     finish: Option<Finish>,
@@ -378,6 +379,7 @@ impl Checked {
         Checked {
             inner: inner.take(loc.size),
             crc: flate2::Crc::new(),
+            len: 0,
             expect_crc: loc.aes().is_none_or(|a| a.has_crc()).then_some(loc.crc),
             expect_len: loc.size,
             finish,
@@ -390,6 +392,7 @@ impl Read for Checked {
         let n = self.inner.read(out)?;
         if n > 0 {
             self.crc.update(&out[..n]);
+            self.len += n as u64;
             return Ok(n);
         }
         let more = self.inner.limit() == 0 && self.inner.get_mut().read(&mut [0u8; 1])? > 0;
@@ -397,7 +400,7 @@ impl Read for Checked {
             finish()?;
         }
         let crc_ok = self.expect_crc.is_none_or(|c| c == self.crc.sum());
-        if more || self.crc.amount() as u64 != self.expect_len || !crc_ok {
+        if more || self.len != self.expect_len || !crc_ok {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "zip entry checksum mismatch",
@@ -456,6 +459,39 @@ mod tests {
         let fields = extra_fields(&extra);
         assert_eq!(fields.len(), 1);
         assert_eq!(fields[0].0, 1);
+    }
+
+    #[test]
+    fn entries_past_4_gib_pass_the_size_check() {
+        const LEN: u64 = (1 << 32) + 3;
+        let mib = vec![0u8; 1 << 20];
+        let mut crc = crc32fast::Hasher::new();
+        let mut chunk = crc32fast::Hasher::new();
+        chunk.update(&mib);
+        for _ in 0..LEN >> 20 {
+            crc.combine(&chunk);
+        }
+        crc.update(&mib[..3]);
+        let loc = ZipLoc {
+            method: 0,
+            flags: 0,
+            crc: crc.finalize(),
+            compressed: LEN,
+            size: LEN,
+            header_offset: 0,
+            aes: None,
+        };
+        let mut r = Checked::new(Box::new(io::repeat(0).take(LEN)), &loc, None);
+        let mut buf = vec![0u8; 1 << 20];
+        let mut total = 0u64;
+        loop {
+            match r.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => total += n as u64,
+                Err(e) => panic!("after {total} bytes: {e}"),
+            }
+        }
+        assert_eq!(total, LEN);
     }
 
     #[test]
