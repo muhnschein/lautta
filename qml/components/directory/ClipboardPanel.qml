@@ -60,7 +60,7 @@ DockedPanel {
         DockButton {
             id: pasteButton
 
-            visible: owner ? owner.model.writable && App.canPasteInto(owner.uri) : false
+            visible: owner ? owner.canPaste : false
             width: visible ? Theme.itemSizeMedium : 0
             icon: "image://theme/icon-m-clipboard"
             accent: true
