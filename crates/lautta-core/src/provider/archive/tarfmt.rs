@@ -39,7 +39,7 @@ fn raw_entry<R: Read>(entry: &tar::Entry<'_, R>, loc: Loc) -> Option<RawEntry> {
     let mtime = header
         .mtime()
         .ok()
-        .map(|s| SystemTime::UNIX_EPOCH + Duration::from_secs(s));
+        .and_then(|s| SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(s)));
     Some(RawEntry {
         name: entry.path_bytes().into_owned(),
         kind,

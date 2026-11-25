@@ -35,6 +35,9 @@ opt-level = 3
 [profile.dev.package.regex-syntax]
 opt-level = 3
 
+[profile.dev.package.zlib-rs]
+opt-level = 3
+
 [profile.release]
 panic = "unwind"
 lto = "fat"

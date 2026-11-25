@@ -522,6 +522,35 @@ fn zip_writer_handles_unknown_sizes_and_forced_zip64() {
     }
 }
 
+#[test]
+fn zip_writer_records_files_past_4_gib() {
+    const LEN: u64 = (1 << 32) + 3;
+    let meta = |name: &str, size: u64| EntryMeta {
+        path: name.as_bytes().to_vec(),
+        kind: Kind::File,
+        size: Some(size),
+        mtime: None,
+        mode: None,
+        link: None,
+    };
+    let sink = SharedBuf::default();
+    let mut w: Box<dyn MemberWriter> = Box::new(ZipStream::new(sink.clone(), 1, None));
+    w.member(&meta("big", LEN), &mut io::repeat(0).take(LEN)).unwrap();
+    w.finish().unwrap();
+    let bytes = sink.bytes();
+    let mut z = zip::ZipArchive::new(io::Cursor::new(bytes.clone())).unwrap();
+    let big = z.by_index_raw(0).unwrap();
+    assert_eq!(big.size(), LEN);
+    let at = usize::try_from(big.data_start().unwrap() + big.compressed_size()).unwrap();
+    assert_eq!(bytes[at..at + 4], *b"PK\x07\x08");
+    let size = u64::from_le_bytes(bytes[at + 16..at + 24].try_into().unwrap());
+    assert_eq!(size, LEN, "zip64 descriptor");
+
+    let mut w = ZipStream::new(io::sink(), 1, None);
+    let grew = w.member(&meta("grew", 3), &mut io::repeat(0).take(LEN));
+    assert_eq!(grew.map_err(|e| e.kind()).err(), Some(io::ErrorKind::InvalidData));
+}
+
 fn version_needed(zip: &[u8], name: &[u8]) -> u16 {
     let u16_at = |at: usize| u16::from_le_bytes([zip[at], zip[at + 1]]);
     (0..zip.len() - 46)
