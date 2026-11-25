@@ -245,7 +245,7 @@ pub(super) fn summary_json(core: &lautta_core::app::Core, id: i64, book: &Progre
         "finishedMs": s.finished_ms,
         "direction": direction,
         "destination": core.locations.display_address(&s.dest),
-        "destName": loc_name(&s.dest),
+        "destName": core.display_title(&s.dest),
         "sourceAddress": source_dir.as_ref().map(|u| core.locations.display_address(u)),
         "sourceName": source_dir.as_ref().map(loc_name),
         "verifyChecksums": s.options.verify_checksums,

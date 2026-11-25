@@ -255,9 +255,61 @@ async fn compressed_tar_is_recognised_without_tar_extension() {
     let data = compressed(Compression::Gzip, &tar_bytes(&SAMPLE));
     let p = open_named("backup.dat", &data, tmp.path()).await.unwrap();
     assert_eq!(p.format(), ArchiveFormat::Tar(Compression::Gzip));
-    let plain_gz = compressed(Compression::Gzip, b"just some text, not a tar");
-    let err = open_named("notes.txt.gz", &plain_gz, tmp.path()).await.err();
-    assert_eq!(err.map(|e| e.kind), Some(ErrorKind::Unsupported));
+}
+
+#[tokio::test]
+async fn single_compressed_files_open_as_one_file() {
+    let text = noise(300_000, 11);
+    for (comp, name, inner) in [
+        (Compression::Gzip, "log.gz", "log"),
+        (Compression::Bzip2, "notes.txt.bz2", "notes.txt"),
+        (Compression::Xz, "dump.sql.xz", "dump.sql"),
+        (Compression::Zstd, "data.json.zst", "data.json"),
+    ] {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = tmp.path().join("cache");
+        let p = open_named(name, &compressed(comp, &text), &cache).await.unwrap();
+        assert_eq!(p.format(), ArchiveFormat::Single(comp), "{name}");
+        let root = list_all(&p, &VPath::root(), Lane::Interactive).await.unwrap();
+        assert_eq!(names(&root), [inner], "{name}");
+        assert_eq!(root[0].size, Some(text.len() as u64), "{name}");
+        assert_eq!(read_entry(&p, inner).await, text, "{name}");
+        assert_eq!(read_entry(&p, inner).await, text, "{name}: read again");
+        drop(p);
+        assert_eq!(
+            std::fs::read_dir(&cache).unwrap().count(),
+            0,
+            "cache file removed on close"
+        );
+    }
+}
+
+#[tokio::test]
+async fn corrupt_single_compressed_file_fails_to_open() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = compressed(Compression::Gzip, &noise(100_000, 3));
+    let err = open_named("log.gz", &data[..data.len() / 2], tmp.path())
+        .await
+        .err();
+    assert_eq!(err.map(|e| e.kind), Some(ErrorKind::ProtocolError));
+}
+
+#[test]
+fn single_name_drops_only_the_compression_extension() {
+    for (archive, inner) in [
+        ("log.gz", "log"),
+        ("A.TXT.GZ", "A.TXT"),
+        ("x.gzip", "x"),
+        ("x.bz2", "x"),
+        ("x.xz", "x"),
+        ("x.zst", "x"),
+        ("x.zstd", "x"),
+        (".gz", ".gz"),
+        ("data", "data"),
+        ("pic.svgz", "pic.svgz"),
+    ] {
+        assert_eq!(single_name(archive.as_bytes()), inner.as_bytes(), "{archive}");
+    }
 }
 
 #[tokio::test]
@@ -581,6 +633,13 @@ fn detection_by_magic_and_extension() {
     ] {
         let c = compressed(comp, &tar);
         assert_eq!(detect_format(&c, b"x"), Some(ArchiveFormat::Tar(comp)));
+        let single = compressed(comp, b"plain text, no tar");
+        assert_eq!(detect_format(&single, b"x"), Some(ArchiveFormat::Single(comp)));
+        assert_eq!(
+            detect_format(&single, b"x.tar.gz"),
+            Some(ArchiveFormat::Tar(comp)),
+            "tar extension wins over a head that is no tar"
+        );
     }
     assert_eq!(detect_format(b"plain text", b"x.zip"), None);
     assert!(!is_archive(b"", b""));

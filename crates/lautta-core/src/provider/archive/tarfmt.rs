@@ -77,6 +77,19 @@ pub fn index_stream(input: impl Read) -> Result<Vec<RawEntry>> {
     Ok(out)
 }
 
+pub fn index_single(mut input: impl Read, name: Vec<u8>) -> Result<RawEntry> {
+    let size = io::copy(&mut input, &mut io::sink()).map_err(tar_err)?;
+    Ok(RawEntry {
+        name,
+        kind: Kind::File,
+        size,
+        mtime: None,
+        mode: None,
+        link: None,
+        loc: Loc::TarStream(0),
+    })
+}
+
 pub struct Spill {
     comp: Compression,
     dir: PathBuf,

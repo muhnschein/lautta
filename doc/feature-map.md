@@ -40,7 +40,7 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | **viewer** | built-in page for image, video, audio, text, Markdown, PDF | "preview" (grid tile thumbnail) |
 | **thumbnail** | grid/list image of file; **text thumb** = first lines of text file | |
 | **working copy** | local copy of remote file for another app (`Downloads/Lautta/Opened`, 24 h) | "cache" |
-| **archive** | zip, tar(.gz/.bz2/.xz/.zst), 7z opened read-only as location; on screen "compressed file" | "archive" on screen |
+| **archive** | zip, tar(.gz/.bz2/.xz/.zst), 7z, single .gz/.bz2/.xz/.zst file (one entry, name minus extension) opened read-only as location; on screen "compressed file" | "archive" on screen |
 | **scan** | camera → pages → one PDF | |
 | **share target** | Lautta in Sailfish share sheet: "Save here" folder browser | share *out* = Share action |
 | **cover** | app cover: current folder, or task progress | |
