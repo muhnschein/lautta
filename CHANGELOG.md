@@ -3,9 +3,14 @@
 ## Unreleased
 
 - Markdown files with thousands of nested quotes or lists open in a moment instead of taking over a gigabyte of memory. Lists nested more than 8 deep and quotes more than 9 deep show at that depth, so their text stays on screen ([#162](https://github.com/muhnschein/lautta/issues/162)).
+- Videos ending in .ts, as TV and camera recordings do, show the video icon in folders on this device and open in the video player, no longer as code in the text viewer. TypeScript files ending in .ts still open as code. .mts and .m2ts files are videos too ([#160](https://github.com/muhnschein/lautta/issues/160)).
+- A compressed single file such as log.gz, dump.sql.xz, data.json.zst or a .bz2 file opens like other compressed files, with that one file inside to view or extract. It no longer fails with "not a supported archive" ([#159](https://github.com/muhnschein/lautta/issues/159)).
 - Small things: *More* in the image viewer shows icons, as *More actions* does; *Checksums* names its file; *Settings › Transfers* asks before operations of "Over 1000 items or 1 GB", no longer "953.7 MB" ([#214](https://github.com/muhnschein/lautta/issues/214)).
 - Long code lines in the text viewer wrap at their own indent, so wrapped parts line up with the code above them ([#211](https://github.com/muhnschein/lautta/issues/211)).
 - In the audio player, elapsed and total time sit on one line under the slider, at its two ends ([#212](https://github.com/muhnschein/lautta/issues/212)).
+- The image viewer's first-time hint *Swipe down to go to previous view* sits above the toolbar, no longer over Delete, Open with, Share and More ([#213](https://github.com/muhnschein/lautta/issues/213)).
+- Times of files inside a Zip are right when the Zip has no Unix times, as in ones made with Python; they were off by the phone's offset from UTC ([#206](https://github.com/muhnschein/lautta/issues/206)).
+- Copy and move tasks name the folder the items went to, not the place it is in: *Copied notes.txt to Mixed*, no longer *to Pictures* ([#207](https://github.com/muhnschein/lautta/issues/207)).
 - The Home page shows only how much space is free on the phone and on memory cards and USB drives, as "12 GB free", no longer "12 GB free of 50 GB".
 - The start page is called *Home* now, no longer *Browse*, and its settings are *Home page*. What you hid or reordered there stays as it was ([#143](https://github.com/muhnschein/lautta/issues/143)).
 - Saving files shared to Lautta works like a folder in the app: *Save here* on top, what gets saved below it, then the folder with its path to tap your way up, or to *Locations* by the house. Folders open in place; files show dimmed, so you see what is there already. It opens where you saved last (Downloads the first time), *Locations* lists the last three folders you saved to, and the pulley makes a new folder. *Save here* is off where Lautta may not add files ([#95](https://github.com/muhnschein/lautta/issues/95)).
