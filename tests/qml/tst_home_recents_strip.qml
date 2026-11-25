@@ -137,6 +137,7 @@ ApplicationWindow {
         var longName = named(tiles[2], "recentTileName")[0]
         expect(longName.width === tiles[2].width && longName.implicitWidth > longName.width && longName.horizontalAlignment === Text.AlignLeft,
                "a long name is cut at its tile, starting at its left")
+        expect(longName.elide === Text.ElideMiddle && longName.truncated, "a long name loses its middle to an ellipsis")
         var shortName = named(tiles[0], "recentTileName")[0]
         expect(shortName.implicitWidth <= shortName.width && shortName.horizontalAlignment === Text.AlignHCenter, "a short name sits in the middle")
         var glyphs = tiles.map(function(t) { return named(t, "fileGlyph")[0] })

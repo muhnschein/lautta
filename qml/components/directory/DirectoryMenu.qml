@@ -15,8 +15,10 @@ PullDownMenu {
     readonly property bool readable: owner ? owner.model.readable : false
     readonly property bool makes: picking && writable && !owner.atRoot
     readonly property string archiveUri: owner ? Operations.archiveSource(owner.uri) : ""
+    property bool favourite
 
     visible: !picking || makes
+    onActiveChanged: if (active && owner) favourite = App.isFavourite(owner.uri)
 
     MenuItem {
         visible: menu.selecting
@@ -60,11 +62,11 @@ PullDownMenu {
     MenuItem {
         objectName: "folderMenuFavourite"
         visible: menu.browsing
-        text: ContextActions.text("favourite")
+        text: ContextActions.text("favourite", { "favourite": menu.favourite })
         onClicked: menu.owner.runAction("favourite", [menu.owner.uri], {}, null)
     }
     MenuItem {
-        visible: menu.browsing && menu.writable && App.clipboardCount > 0 && App.canPasteInto(owner ? owner.uri : "")
+        visible: menu.browsing && (owner ? owner.canPaste : false)
         //% "Paste %n items"
         text: qsTrId("lautta-dir-menu-paste", App.clipboardCount)
         onClicked: menu.owner.paste()

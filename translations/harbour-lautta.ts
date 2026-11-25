@@ -1401,7 +1401,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-empty-hint">
-        <source>Pull down to create a folder or paste</source>
+        <source>Pull down to add</source>
+        <oldsource>Pull down to create a folder or paste</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-dir-empty-hint-readonly">
@@ -2615,6 +2616,14 @@
     </message>
     <message id="lautta-settings-large-mb">
         <source>Over %1 items or %2 MB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-empty-hint-paste">
+        <source>Pull down to add or paste</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-dir-act-edit-favourite">
+        <source>Edit favourite</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
