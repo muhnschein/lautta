@@ -450,7 +450,6 @@ async fn an_older_bridge_is_not_asked_for_drives() {
         rig.fake
             .set_drives(vec![FakeDrive::new("sda1", "STICK", "usb", 8)])
             .await;
-        // Signals are taken in order: once the account is in, a drive listing would have been asked.
         rig.fake.add_account(2, "fake", "Fake 2", "fake2.example").await;
         eventually("the second account", || rig.client.locations().len() == 2).await;
         assert!(rig.fake.calls_of("ListDrives").is_empty(), "{features:?}");

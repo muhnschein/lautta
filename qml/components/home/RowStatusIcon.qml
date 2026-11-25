@@ -9,11 +9,8 @@ Item {
     property bool highlighted
 
     readonly property real dotSize: Theme.paddingMedium
-    // Silica's orange (Away presence): reads on dark and light ambience.
     readonly property color warningColor: Theme.presenceColor(Theme.PresenceAway)
     property bool appActive: Qt.application.state === Qt.ApplicationActive
-    // Pulse only while row busy, page on screen, app in front. Same binding as Silica's
-    // BusyIndicator.
     readonly property bool pulsing: indicator === "busy" && visible && appActive
 
     property real glow: 1.0

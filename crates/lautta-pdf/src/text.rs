@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Text search. The interpreter's device keeps only each glyph's Unicode text and an approximate
-//! box; paths, images and Type 3 glyph programs are skipped.
 
 use crate::{PageRect, PageSize, PdfDocument, PdfError};
 use hayro::hayro_interpret::font::{Glyph, GlyphRun};
@@ -12,11 +10,9 @@ use hayro::hayro_interpret::{
 };
 use hayro::kurbo::{Affine, BezPath, Point, Rect};
 
-/// Text after this is not searched.
 pub const MAX_PAGE_CHARS: usize = 200_000;
 pub const MAX_PAGE_HITS: usize = 1_000;
 
-// Glyph space lengths: 1000 units per em.
 const DESCENT: f64 = -200.0;
 const ASCENT: f64 = 800.0;
 const DEFAULT_ADVANCE: f32 = 500.0;
@@ -30,9 +26,6 @@ pub struct TextHit {
 }
 
 impl PdfDocument {
-    /// Content stream order. Case-insensitive (Unicode lowercase); a whitespace run in the query
-    /// matches any whitespace run in the text, outer whitespace ignored. Empty query finds nothing.
-    /// At most [`MAX_PAGE_HITS`] hits in the first [`MAX_PAGE_CHARS`] characters.
     pub fn search_page(&self, index: usize, query: &str) -> Result<Vec<TextHit>, PdfError> {
         let size = *self.sizes.get(index).ok_or(PdfError::NoSuchPage)?;
         let page = self.pdf.pages().get(index).ok_or(PdfError::NoSuchPage)?;
@@ -83,7 +76,6 @@ enum Gap {
 fn gap(last: Placed, origin: Point) -> Gap {
     let at = last.inverse * origin;
     let along = at.x - last.advance;
-    // written so a degenerate transform (NaN) breaks the line
     let same_line = at.y.abs() <= LINE_SHIFT && along >= -LINE_BACK;
     if !same_line {
         Gap::Line
@@ -159,7 +151,6 @@ impl<'a> Device<'a> for TextSink {
             .iter()
             .map(|g| props.transform * g.transform())
             .collect();
-        // fill and stroke draws a run twice; overprinted (fake bold) text repeats it too
         if transforms != self.last_run {
             for (glyph, transform) in run.glyphs().iter().zip(&transforms) {
                 self.glyph(glyph, *transform);
@@ -178,8 +169,6 @@ impl<'a> Device<'a> for TextSink {
     fn pop_transparency_group(&mut self) {}
 }
 
-/// Lowercases `chars`, turns each whitespace run into one space, passes on every resulting char
-/// with the index of the char it comes from.
 fn fold(chars: impl Iterator<Item = char>, mut out: impl FnMut(char, usize)) {
     let mut after_space = false;
     for (i, c) in chars.enumerate() {
@@ -195,7 +184,6 @@ fn fold(chars: impl Iterator<Item = char>, mut out: impl FnMut(char, usize)) {
 
 fn find(chars: &[TextChar], needle: &str, size: PageSize) -> Vec<TextHit> {
     let mut text = String::new();
-    // per folded char: where it starts in `text`, and its char in `chars`
     let mut starts = Vec::new();
     let mut sources = Vec::new();
     fold(chars.iter().map(|c| c.ch), |c, i| {

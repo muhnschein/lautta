@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Facades: folder list model, header path model, folder picker roots.
 
 mod model;
 mod path;

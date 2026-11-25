@@ -78,7 +78,6 @@ Page {
                 labels: SettingsText.days(values)
             }
             ComboBox {
-                // Two keys at once: no SettingCombo.
                 objectName: "largeOpsBox"
 
                 readonly property real items: Number(page.setting("large_op_items"))

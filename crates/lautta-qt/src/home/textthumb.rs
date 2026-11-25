@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! First lines of one text file for a tile outside a folder (Recents); folder grid asks its
-//! `DirectoryModel`. Empty `uri`: nothing asked. Request goes when `uri` changes or object goes.
 
 use crate::directory::cancel_text;
 use crate::runtime::{core, handle, spawn_then};
@@ -48,7 +46,6 @@ impl TextThumb {
         });
     }
 
-    /// Only the pending request counts: keys are never reused.
     fn made(&mut self, key: &str, text: Option<String>) {
         if self.pending.as_deref() == Some(key) {
             self.pending = None;

@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Finger down on an image in Search, Recents and Home favourites: its decode for the viewer
-// starts; hold or let go off the row drops it. Not for folders (named like images), folder
-// favourites or transferred files.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -66,7 +63,6 @@ ApplicationWindow {
         return out
     }
 
-    // No render loop headless: lay out by hand.
     function row(page, name) {
         findAll(page, function (x) { return x.forceLayout !== undefined }, []).forEach(function (v) { v.forceLayout() })
         var labels = findAll(page, function (x) {
@@ -83,7 +79,6 @@ ApplicationWindow {
         var r = row(page, name)
         if (!expect(r !== null, name + " row found"))
             return
-        // Screen headless is small: row to the list's top, finger inside both.
         var list = r.parent
         while (list && list.positionViewAtIndex === undefined)
             list = list.parent

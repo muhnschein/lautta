@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! First test builds the catalogue like the RPM (`lrelease -idbased`) and has the real QML engine
-//! read it. Others run `tools/english-plurals.py` on catalogues with a form missing or a message it
-//! must not guess.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -61,7 +58,6 @@ const GERMAN: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 </TS>
 "#;
 
-/// Grid's message (German has it) and paste entry's (it has not).
 const LAYERS: &str = r#"import QtQuick 2.6
 QtObject {
     Component.onCompleted: {
@@ -74,8 +70,6 @@ QtObject {
 }
 "#;
 
-/// User's language over engineering English, falling back to English plural forms (install order of
-/// `lauttaInstallTranslations`).
 fn german_over_english(ts: &str) -> i32 {
     let dir = tempfile::tempdir().unwrap();
     release(ts, dir.path(), "harbour-lautta");
@@ -100,8 +94,6 @@ fn plural_singular(ts: &str, id: &str) -> String {
     )
 }
 
-/// Qt takes one application per process: every run is in this test. Failing runs log QML errors on
-/// purpose.
 #[test]
 fn the_built_catalogue_has_english_plural_forms() {
     let home = tempfile::tempdir().unwrap();
@@ -122,7 +114,6 @@ fn the_built_catalogue_has_english_plural_forms() {
         "a language without the message hides a wrong singular"
     );
 
-    // Without the language lrelease writes no plural rules: every n reads the first form.
     let no_rules = ts.replacen(" language=\"en\"", "", 1);
     assert_ne!(no_rules, ts);
     assert_ne!(
@@ -131,7 +122,6 @@ fn the_built_catalogue_has_english_plural_forms() {
         "a catalogue without a language goes unnoticed"
     );
 
-    // Folder without the engineering English catalogue fails the check itself.
     let empty = tempfile::tempdir().unwrap();
     let nothing = empty.path().join("nothing.qml");
     std::fs::write(&nothing, "import QtQuick 2.6\nQtObject {}\n").unwrap();
@@ -142,7 +132,6 @@ fn the_built_catalogue_has_english_plural_forms() {
     );
 }
 
-/// stdio ASCII as in a locale without UTF-8. Returns exit code, stderr, filled catalogue (stdout).
 fn fill(text: &str) -> (i32, String, String) {
     let mut child = Command::new("python3")
         .arg(root().join("tools/english-plurals.py"))
@@ -162,8 +151,6 @@ fn fill(text: &str) -> (i32, String, String) {
     )
 }
 
-/// As lupdate writes them: `(id, source, forms)`; no forms = new message (empty form), numerus when
-/// source has `%n`.
 fn lupdate_output(messages: &[(&str, &str, &[&str])]) -> String {
     let mut ts = String::from(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!DOCTYPE TS>\n<TS version=\"2.1\" language=\"en\">\n<context>\n    <name></name>\n",
@@ -369,8 +356,6 @@ fn the_script_fills_stdin_and_takes_no_file() {
     }
 }
 
-/// Words the shipped English keeps one way: British spelling, straight apostrophes, sizes as
-/// `Format.formatFileSize` writes them, no tool jargon.
 fn style_breaks(ts: &str) -> Vec<String> {
     const BANNED: [&str; 9] = [
         "Canceled",
@@ -398,7 +383,6 @@ fn the_catalogue_keeps_one_spelling() {
     assert_eq!(style_breaks(broken), ["Canceled", "it\u{2019}s"]);
 }
 
-/// Ids whose English went missing: `//%` not on the line right above its `qsTrId`.
 fn without_english(ts: &str) -> Vec<String> {
     ts.split("<message id=\"")
         .skip(1)

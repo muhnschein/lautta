@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! PDF viewer on `Core`. Panic in CPU work (PDF tripping hayro) fails that request, not the app.
 
 use crate::app::Core;
 use crate::error::{Error, ErrorKind, Result};
@@ -17,7 +16,6 @@ use tokio::sync::mpsc;
 pub use lautta_pdf::{Link, LinkTarget, OutlineItem, PageRect, PageSize, PdfError, TextHit};
 
 const KEPT_DOCUMENTS: usize = 2;
-/// Stops there to bound memory.
 pub const MAX_SEARCH_HITS: usize = 10_000;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -101,7 +99,6 @@ pub struct HitArea {
     pub current: bool,
 }
 
-/// Pages may arrive in any order.
 #[derive(Debug, Default)]
 pub struct PdfSearchResults {
     pages: BTreeMap<usize, Vec<TextHit>>,
@@ -111,7 +108,6 @@ pub struct PdfSearchResults {
 }
 
 impl PdfSearchResults {
-    /// First hit to arrive becomes current: [`Core::search_pdf`] starts at the page being read.
     pub fn add(&mut self, page: PageHits) {
         self.searched += 1;
         if page.hits.is_empty() {
@@ -198,7 +194,6 @@ fn search_pages(
         if cancel.load(Ordering::Relaxed) {
             return;
         }
-        // Only fails for a page the document does not have.
         let mut hits = doc.search_page(page, query).unwrap_or_default();
         hits.truncate(left);
         left -= hits.len();
@@ -208,7 +203,6 @@ fn search_pages(
     }
 }
 
-/// URI may arrive percent-encoded once more (QML helpers).
 pub fn parse_page_id(id: &str) -> Option<(Uri, usize)> {
     let (uri_part, query) = id.rsplit_once('?')?;
     let page = query.strip_prefix("page=")?.parse().ok()?;
@@ -221,7 +215,6 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
         .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))
 }
 
-/// `lost` runs after a panic.
 fn caught<T>(
     work: impl FnOnce() -> std::result::Result<T, PdfError>,
     lost: impl FnOnce(),
@@ -232,8 +225,6 @@ fn caught<T>(
     })
 }
 
-/// After a panic the document is not kept: hayro unwraps its locks, a poisoned lock would trip
-/// every later use.
 async fn run_on<T: Send + 'static>(
     doc: Arc<PdfDocument>,
     work: impl FnOnce(&PdfDocument) -> std::result::Result<T, PdfError> + Send + 'static,
@@ -242,8 +233,6 @@ async fn run_on<T: Send + 'static>(
 }
 
 impl Core {
-    /// Always parsed afresh so a changed file is seen. `password` used for this parse only, never
-    /// stored.
     pub async fn open_pdf(
         &self,
         uri: &Uri,
@@ -258,8 +247,6 @@ impl Core {
             return Err(PdfError::TooLarge.into());
         }
         let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
-        // File grown past the limit since the stat is cut there and usually fails to parse; nothing
-        // larger is held.
         let bytes = crate::provider::read_all(handle.as_ref(), MAX_PDF_BYTES).await?;
         let password = password.map(str::to_owned);
         let (doc, outline) = blocking(move || {
@@ -311,8 +298,6 @@ impl Core {
         self.on_document(uri, move |doc| doc.render(page, width)).await
     }
 
-    /// Matching is `lautta-pdf`'s. Blank query searches nothing. Encrypted PDF is searchable only
-    /// while kept after unlocking.
     pub async fn search_pdf(
         &self,
         uri: &Uri,
@@ -334,7 +319,6 @@ impl Core {
         .await
     }
 
-    /// Own pages and http(s) URIs only.
     pub async fn pdf_links(&self, uri: &Uri, page: usize) -> std::result::Result<Vec<Link>, PdfFailure> {
         self.on_document(uri, move |doc| doc.links(page)).await
     }
@@ -347,7 +331,6 @@ impl Core {
         run_on(self.pdf_document(uri).await?, work).await
     }
 
-    /// Encrypted one fails to reopen: password not kept.
     async fn pdf_document(&self, uri: &Uri) -> std::result::Result<Arc<PdfDocument>, PdfFailure> {
         if let Some(doc) = kept(uri) {
             return Ok(doc);
@@ -367,7 +350,6 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
 
-    /// Kept list is process-wide.
     static KEPT_LIST: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     fn parse(width: u32) -> Arc<PdfDocument> {

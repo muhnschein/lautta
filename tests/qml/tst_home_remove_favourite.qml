@@ -44,7 +44,6 @@ ApplicationWindow {
     }
 
     function favouriteRow() {
-        // No render loop headless: lay out by hand.
         var views = findAll(win.contentItem, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < views.length; ++i)
             views[i].forceLayout()

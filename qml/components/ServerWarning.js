@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Server problems the user must fix in Settings, shown as
-// warning on SCR-51 and in folder placeholder. Identity change = security level.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 .pragma library
 .import "ErrorText.js" as ErrorText
 

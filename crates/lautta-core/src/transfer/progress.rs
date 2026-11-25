@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Aggregate progress: smoothed rate (EWMA) and ETA. Pure arithmetic.
 
-/// Smoothing factor of the exponentially weighted moving average. 0.3 reacts
-/// within a few samples yet hides single-chunk bursts.
 pub const DEFAULT_ALPHA: f64 = 0.3;
 
-/// Rates below this (bytes/s) give no ETA: the number would be meaningless.
 const MIN_RATE_FOR_ETA: f64 = 1.0;
 
 #[derive(Debug, Clone)]
@@ -30,8 +26,6 @@ impl RateEstimator {
         }
     }
 
-    /// Samples that do not move time forward are ignored; a decrease in bytes (file restart)
-    /// re-bases without a negative rate.
     pub fn sample(&mut self, now_ms: i64, bytes_done: u64) {
         let Some((t0, b0)) = self.last else {
             self.last = Some((now_ms, bytes_done));
@@ -49,7 +43,6 @@ impl RateEstimator {
         });
     }
 
-    /// 0 before two samples.
     pub fn rate(&self) -> u64 {
         self.rate.map_or(0, |r| r.max(0.0) as u64)
     }
@@ -62,7 +55,6 @@ impl RateEstimator {
         Some((remaining as f64 / r).ceil() as u64)
     }
 
-    /// After a pause the old rate says nothing.
     pub fn reset(&mut self) {
         self.rate = None;
         self.last = None;

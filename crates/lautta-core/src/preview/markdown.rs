@@ -1,39 +1,22 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Markdown to Qt rich-text subset for the reading viewer, styled with ambience colours from
-//! [`Style`]. Wraps to viewer width, code blocks too.
-//!
-//! Source untrusted: text escaped, raw HTML shown as escaped text, images become alt text (no
-//! resource requested), link targets limited to safe schemes, colours only checked `#hex`.
-//!
-//! Qt Quick text paints background of a table, an empty cell, or a text run, never a full cell
-//! with text: code panel = table background, quote bar and table rules = empty cells.
 
 use super::highlight::{self, ColouredText, Palette};
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag};
 use std::collections::HashSet;
 use std::time::Instant;
 
-/// Other targets shown as plain text.
 const SAFE_SCHEMES: [&str; 4] = ["http", "https", "mailto", "ftp"];
 
-/// Qt never breaks lines of plain `<pre>`; `pre-wrap` keeps spaces and breaks and wraps long lines.
 const PRE: &str = "<pre style=\"white-space: pre-wrap; margin: 0px; ";
 
-/// [`crate::fonts::MONO_FAMILY`], quoted: name has a space.
 const MONO: &str = "font-family: 'JetBrains Mono'";
 
-/// Bigger sizes in a style string are refused.
 const MAX_PX: u32 = 400;
 
 const DEFAULT_GAP: u32 = 12;
 
-/// Rich text per block, in bytes. Viewer lays out each block on its own and only those on screen:
-/// one Qt text of a 1 MiB file blocks GUI thread for seconds.
 pub const BLOCK_BYTES: usize = 8 * 1024;
 
-/// Colours and sizes from ambience: `md-heading`, `md-accent`, `md-secondary`, `md-tint`, `md-rule`
-/// (`#rrggbb` or `#aarrggbb`), `md-gap`, `md-code` (px), plus [`Palette`] classes for fenced code.
-/// Missing or bad values: Qt's look for that part.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Style {
     heading: Option<String>,
@@ -138,19 +121,16 @@ fn align_attr(a: Alignment) -> &'static str {
     }
 }
 
-/// `color: …; ` or nothing.
 fn color(c: &Option<String>) -> String {
     c.as_deref().map(|c| format!("color: {c}; ")).unwrap_or_default()
 }
 
-/// ` bgcolor="…"` or nothing.
 fn bgcolor(c: &Option<String>) -> String {
     c.as_deref()
         .map(|c| format!(" bgcolor=\"{c}\""))
         .unwrap_or_default()
 }
 
-/// Indices of `Start(List)` events whose items carry a task marker.
 fn task_lists(events: &[Event<'_>]) -> HashSet<usize> {
     let mut open = Vec::new();
     let mut tasks = HashSet::new();
@@ -171,7 +151,6 @@ fn task_lists(events: &[Event<'_>]) -> HashSet<usize> {
 enum List {
     Bullets,
     Numbers,
-    /// Items as lines with ☐/☑: Qt draws list bullets even with `list-style-type: none`.
     Tasks,
 }
 
@@ -180,15 +159,11 @@ struct Code {
     text: String,
 }
 
-/// How viewer shows a block: Qt rich text draws no quote bar or code panel worth having.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlockKind {
     Text,
-    /// Space above.
     Heading,
-    /// Bar on the left, secondary colour.
     Quote,
-    /// Tinted panel.
     Code,
 }
 
@@ -203,16 +178,13 @@ impl BlockKind {
     }
 }
 
-/// One top-level element, or a part of a big one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Block {
     pub html: String,
     pub kind: BlockKind,
-    /// Next block goes on this one: no space between.
     pub joined: bool,
 }
 
-/// Open block a split closes and opens again in next block.
 enum Open {
     Quote(String),
     Bullets(String),
@@ -251,18 +223,13 @@ struct Renderer<'s> {
     blocks: Vec<Block>,
     out: String,
     kind: BlockKind,
-    /// Open top-level elements and those inside them; 1 inside a top-level one.
     depth: usize,
     open: Vec<Open>,
-    /// Inline tags open: no split inside them.
     inline: usize,
     deadline: Instant,
     lists: Vec<List>,
-    /// Task line `<p>` open.
     task_line: bool,
-    /// Done task's secondary-colour span open.
     done_span: bool,
-    /// Paragraphs on current task line; later ones start on a new line.
     task_paragraphs: u32,
     code: Option<Code>,
     aligns: Vec<Alignment>,
@@ -270,7 +237,6 @@ struct Renderer<'s> {
     in_head: bool,
     body_rows: usize,
     image_alt: Option<String>,
-    /// One flag per open link: target refused, so no `</a>`.
     refused_links: Vec<bool>,
 }
 
@@ -308,7 +274,6 @@ impl<'s> Renderer<'s> {
         } else {
             for piece in pieces(t, self.block_bytes) {
                 push_escaped(&mut self.out, piece);
-                // Mid-text only in a paragraph: headings and table cells cannot open again.
                 if self.inline == 0 && matches!(self.open.last(), Some(Open::Paragraph(_))) {
                     self.split_if_full();
                 }
@@ -316,8 +281,6 @@ impl<'s> Renderer<'s> {
         }
     }
 
-    /// Ends block once full: closes open blocks and opens them again in next. Only between blocks or
-    /// text runs, never inside a task line or inline markup.
     fn split_if_full(&mut self) {
         if self.out.len() < self.block_bytes || self.task_line || self.image_alt.is_some() {
             return;
@@ -339,7 +302,6 @@ impl<'s> Renderer<'s> {
                 joined,
             });
         } else if !joined {
-            // Element filled its last part exactly: that part ends it.
             if let Some(last) = self.blocks.last_mut() {
                 last.joined = false;
             }
@@ -372,7 +334,6 @@ impl<'s> Renderer<'s> {
         }
     }
 
-    /// Block inside a task item ends its line first: Qt nests no blocks in `<p>`.
     fn close_task_line(&mut self) {
         self.close_done_span();
         if self.task_line {
@@ -500,7 +461,6 @@ impl<'s> Renderer<'s> {
         }
     }
 
-    /// Line past highlight's line limit, so never coloured, on panels of its own.
     fn long_code_line(&mut self, line: &str, last_line: bool) {
         let mut parts = pieces(line, self.block_bytes / 2).peekable();
         while let Some(part) = parts.next() {
@@ -508,7 +468,6 @@ impl<'s> Renderer<'s> {
         }
     }
 
-    /// One tinted panel; panels of one code block touch. Top-level: a block each, viewer draws panel.
     fn code_panel(&mut self, body: &str, last: bool) {
         if self.top_level() {
             let size = self
@@ -613,7 +572,6 @@ impl<'s> Renderer<'s> {
         if ok {
             self.out.push_str("<a href=\"");
             push_escaped(&mut self.out, url.trim());
-            // Text.linkColor left links blue on host Qt 5.15: colour stated here.
             match &self.style.accent {
                 Some(accent) => self.out.push_str(&format!("\" style=\"color: {accent}\">")),
                 None => self.out.push_str("\">"),
@@ -632,7 +590,6 @@ impl<'s> Renderer<'s> {
         )));
     }
 
-    /// Row of one empty cell across the table: Qt Quick paints empty cells whole.
     fn rule_row(&mut self, colour: &Option<String>) {
         if colour.is_some() {
             self.out.push_str(&format!(
@@ -660,7 +617,6 @@ impl<'s> Renderer<'s> {
             let colour = color(&self.style.accent);
             self.out.push_str(&format!(
                 "<th{} style=\"{colour}font-weight: normal\">",
-                // Qt centres a header cell unless told.
                 align_attr(if align == Alignment::None {
                     Alignment::Left
                 } else {
@@ -713,7 +669,6 @@ impl<'s> Renderer<'s> {
             Tag::Emphasis => self.out.push_str("</em>"),
             Tag::Strong => self.out.push_str("</strong>"),
             Tag::Strikethrough => self.out.push_str("</s>"),
-            // Guard pops for refused links too.
             Tag::Link(..) if self.refused_links.pop() == Some(false) => self.out.push_str("</a>"),
             Tag::Image(..) => self.end_image(),
             _ => {}
@@ -745,7 +700,6 @@ impl<'s> Renderer<'s> {
         self.out.push_str("</code>");
     }
 
-    /// Top-level elements become blocks of their own.
     fn event(&mut self, event: Event<'_>, task_list: bool) {
         match &event {
             Event::Start(tag) => {
@@ -793,7 +747,6 @@ impl<'s> Renderer<'s> {
     }
 }
 
-/// Line `index` of `doc`, escaped, coloured runs in `<span style="color: …">`; plain past its colours.
 fn push_coloured(out: &mut String, doc: &ColouredText, index: usize, palette: &Palette) {
     let line = doc.line(index).unwrap_or_default();
     let mut from = 0;
@@ -822,8 +775,6 @@ fn kind_of(tag: &Tag<'_>) -> BlockKind {
     }
 }
 
-/// Pieces of `text` of at most `max` bytes (one char more when a char is longer), cut after a space
-/// in their second half where there is one, else at a char boundary.
 fn pieces(text: &str, max: usize) -> impl Iterator<Item = &str> {
     let mut rest = text;
     std::iter::from_fn(move || {
@@ -849,10 +800,6 @@ fn pieces(text: &str, max: usize) -> impl Iterator<Item = &str> {
     })
 }
 
-/// Rich-text blocks: one per top-level element, big ones split at about [`BLOCK_BYTES`] between
-/// blocks or text runs (open lists, quotes, tables, paragraphs close at a split and open again).
-/// Total: any input yields blocks; no source text reaches output unescaped. Blocking: fenced code
-/// is coloured within [`highlight::LIMITS`].
 pub fn render(md: &str, style: &Style) -> Vec<Block> {
     render_in(md, style, BLOCK_BYTES)
 }
@@ -872,8 +819,6 @@ fn render_in(md: &str, style: &Style, block_bytes: usize) -> Vec<Block> {
     r.blocks
 }
 
-/// Plain text in the reading font, in blocks of about [`BLOCK_BYTES`] cut at line breaks where
-/// one is near: escaped, line breaks and spaces kept, long lines wrap.
 pub fn render_prose(text: &str) -> Vec<Block> {
     let mut blocks = Vec::new();
     let mut rest = text;
@@ -905,7 +850,6 @@ mod tests {
     const SPEC: &str = "md-heading=#111111,md-accent=#222222,md-secondary=#333333,md-tint=#44444444,\
                         md-rule=#555555,md-gap=16,md-code=20,keyword=#ff0000,string=#00ff00";
 
-    /// Qt's look: no colours, default gap.
     fn html(blocks: &[Block]) -> String {
         blocks.iter().map(|b| b.html.as_str()).collect()
     }
@@ -1355,7 +1299,6 @@ mod tests {
         assert!(blocks.iter().all(|b| b.html.len() <= BLOCK_BYTES + 64));
     }
 
-    /// Text between tags, entities as written.
     fn visible(html: &str) -> String {
         let mut out = String::new();
         let mut in_tag = false;
@@ -1440,7 +1383,6 @@ mod tests {
         }
         let whole = render_in(&md, &style, usize::MAX);
         assert!(whole.len() < blocks.len() && whole.iter().all(|b| !b.joined));
-        // Code panels break lines between them, so line breaks aside.
         let text = |html: &str| visible(html).replace('\n', "");
         let (split, single) = (text(&html(&blocks)), text(&html(&whole)));
         let at = split

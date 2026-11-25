@@ -1,12 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Planning: recursive scan, totals, conflicts, symlinks, destination names.
-//!
-//! Copy and move plans list a folder before its children (the engine creates folders as it goes);
-//! delete plans list children before their folder. A move across locations is planned like a copy;
-//! the engine deletes each source after its copy is verified, source folders last in reverse order.
-//!
-//! A destination name invalid there is replaced in `dst` already, and `proposed_name` records that
-//! the plan changed it, so every conflict check and child path uses the name that will be created.
 
 use super::conflict::{make_conflict, ConflictContext, Side};
 use super::names::{safe_name, NameRules};
@@ -27,8 +19,6 @@ pub const DEFAULT_THRESHOLD_BYTES: u64 = 1 << 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LinkPolicy {
-    /// As links when the destination supports them and both sides are the same kind of provider;
-    /// otherwise the target is copied.
     #[default]
     Auto,
     AsLinks,
@@ -40,7 +30,6 @@ pub struct PlanOptions {
     pub threshold_items: u64,
     pub threshold_bytes: u64,
     pub link_policy: LinkPolicy,
-    /// Same kind of provider: both local, both bridge, ... `None`: true when it is one location.
     pub same_provider_kind: Option<bool>,
     pub dest_is_local: bool,
 }
@@ -132,7 +121,6 @@ fn check_cancel(cancel: &AtomicBool) -> Result<()> {
     Ok(())
 }
 
-/// Children sorted by name so plans are deterministic.
 async fn children(provider: &dyn Provider, dir: &VPath) -> Result<Vec<Entry>> {
     let mut entries = list_all(provider, dir, Lane::Bulk).await?;
     entries.sort_by(|a, b| a.name.cmp(&b.name));
@@ -190,7 +178,6 @@ struct DeleteScan<'a> {
 }
 
 impl DeleteScan<'_> {
-    /// Post-order: children first. Symlinks are removed, never followed.
     fn walk(&mut self, src: Uri, entry: Entry) -> BoxFuture<'_, Result<()>> {
         Box::pin(async move {
             check_cancel(self.cancel)?;
@@ -252,8 +239,6 @@ async fn plan_transfer(
     Ok(scan.items)
 }
 
-/// `real` is the path that is listed (the resolved target for a followed symlink), `src` the path
-/// recorded in the plan.
 struct Node {
     src: Uri,
     real: VPath,
@@ -261,10 +246,6 @@ struct Node {
     seen: Seen,
 }
 
-/// The path a node is listed at, or for a link whose target is not a path of the location
-/// (absolute, or climbing out of it), that target. Such a target names the server's file system,
-/// not the location's (an SFTP location starts at the home folder); the server follows it, so the
-/// folder is listed through the link.
 #[derive(Clone, PartialEq, Eq)]
 enum Seen {
     Path(VPath),
@@ -273,11 +254,8 @@ enum Seen {
 
 #[derive(Clone, Copy)]
 struct Frame {
-    /// False below a folder that is new.
     check_dst: bool,
     link_depth: usize,
-    /// Below a link listed through itself ([`Seen::Target`]): paths here are not where the server
-    /// keeps the items, so the targets of links here cannot be worked out from them.
     through_link: bool,
 }
 
@@ -298,7 +276,6 @@ struct Scan<'a> {
     as_links: bool,
     rename_move: bool,
     items: Vec<PlanItem>,
-    /// Destination path (normalised) to item index, for collisions inside the plan.
     planned: HashMap<Vec<u8>, usize>,
 }
 
@@ -386,7 +363,6 @@ impl Scan<'_> {
         frame: Frame,
         mut ancestors: Vec<Seen>,
     ) -> Result<()> {
-        // A folder that is its own ancestor (reached through a link) is a loop.
         if ancestors.contains(&node.seen) {
             return Ok(());
         }
@@ -443,7 +419,6 @@ impl Scan<'_> {
             Err(e) if e.kind == ErrorKind::NotFound => return Ok(()),
             Err(e) => return Err(e.about(&node.src)),
         };
-        // Providers may answer a dangling link with the link itself.
         if target.kind == Kind::Symlink {
             return Ok(());
         }
@@ -551,7 +526,6 @@ impl Scan<'_> {
         match self.dst.stat(&dst.path, false, Lane::Bulk).await {
             Ok(e) => Ok(Some(e)),
             Err(e) if matches!(e.kind, ErrorKind::NotFound | ErrorKind::NotADirectory) => Ok(None),
-            // A file the level hides: the run keeps both.
             Err(e) if e.kind == ErrorKind::PermissionDenied && !self.dst_caps.readable() => Ok(None),
             Err(e) => Err(e.about(dst)),
         }
@@ -566,9 +540,6 @@ fn side_of(e: &Entry) -> Side {
     }
 }
 
-/// `None` when the target climbs out of the location, and for an absolute target: a location is a
-/// folder of the server's file system (the home folder of an SFTP account, a local user folder),
-/// not its root.
 pub fn resolve_link(real: &VPath, target: &[u8]) -> Option<VPath> {
     if target.first() == Some(&b'/') {
         return None;
@@ -1205,7 +1176,6 @@ mod tests {
             .unwrap();
         assert_eq!(dsts(&p), vec!["dst/s", "dst/s/l", "dst/s/l/x"]);
         assert_eq!(p.items[1].kind, Kind::Dir);
-        // An absolute target is the server's path: read through the link.
         assert_eq!(p.items[2].src, uri("m", "s/l/x"));
     }
 
@@ -1272,10 +1242,6 @@ mod tests {
         )
         .await
         .unwrap();
-        // `loop` is the location root, which holds only `a` again: skipped. `self` is `a` itself,
-        // which only its absolute target can tell: it is copied once, and the second time round its
-        // target is known. Below `self` the server's paths are unknown, so `loop` there is told
-        // only by its target: one more round, then each is known.
         assert_eq!(
             dsts(&p),
             vec![
@@ -1294,8 +1260,6 @@ mod tests {
 
     #[tokio::test]
     async fn links_that_climb_out_are_followed_through_the_link() {
-        // From `/home/alice/nas`, `../../alice/src/alpha` leaves the location and comes back into
-        // it; `back` inside it leads to itself.
         let mem = MemoryProvider::default().rooted_at("/home/alice");
         let r = StaticResolver::default().with("m", Arc::new(mem.clone()));
         mem.add_file("src/alpha/x", b"1", 1);
@@ -1305,7 +1269,6 @@ mod tests {
         let p = plan_with(OperationKind::Copy, &["nas"], "dst", &r, &follow())
             .await
             .unwrap();
-        // `back` is copied once; the second time round its target is known.
         assert_eq!(
             dsts(&p),
             vec![
@@ -1322,8 +1285,6 @@ mod tests {
 
     #[tokio::test]
     async fn absolute_links_are_followed_through_the_link() {
-        // An SFTP location starts at the home folder: `/home/alice/src/alpha` is `src/alpha` there,
-        // never `home/alice/src/alpha`.
         let mem = MemoryProvider::default().rooted_at("/home/alice");
         let r = StaticResolver::default().with("m", Arc::new(mem.clone()));
         mem.add_file("src/alpha/x", b"1", 1);
@@ -1365,7 +1326,6 @@ mod tests {
         let p = plan_with(OperationKind::Copy, &["s"], "dst", &r, &follow())
             .await
             .unwrap();
-        // d45 .. d6 hold links 1..=40 deep; the 41st link is skipped.
         let deepest = p.items.iter().map(|i| i.dst.path.depth()).max().unwrap();
         assert_eq!(deepest, 2 + MAX_LINK_DEPTH);
         assert!(!dsts(&p).iter().any(|d| d.ends_with("leaf")));

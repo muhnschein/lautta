@@ -1,19 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Text thumbnails: first lines of a text, code or Markdown file drawn by the grid in QML, plus the
-//! type icon. [`crate::thumbs::thumbnail_source`] picks the files; this turns the first
-//! [`TEXT_THUMB_BYTES`] into the text shown.
 
 use crate::mime::looks_like_text;
 use crate::preview::text::text_kind;
 
-/// Tile shows about five lines.
 pub const TEXT_THUMB_BYTES: u64 = 512;
-/// Spaces per tab.
 const TAB: &str = "    ";
 
-/// `None` when not text (NUL, control characters, not UTF-8) or blank: the glyph shows. Character
-/// cut at end of head is dropped; line breaks become `\n`, tabs spaces, other control characters
-/// go.
 pub fn thumb_text(head: &[u8]) -> Option<String> {
     let head = head.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(head);
     if !looks_like_text(head) {
@@ -42,12 +34,10 @@ pub fn thumb_text(head: &[u8]) -> Option<String> {
     (!trimmed.trim_start().is_empty()).then(|| trimmed.to_owned())
 }
 
-/// Monospace for code, configuration, logs and data, as the text viewer shows them.
 pub fn thumb_monospace(name: &[u8]) -> bool {
     text_kind(name).monospace()
 }
 
-/// The type icon of a text thumbnail: an app icon name, `qml/icons/types/`.
 pub fn type_icon(name: &[u8]) -> &'static str {
     let lower = String::from_utf8_lossy(name).to_lowercase();
     let ext = lower.rsplit_once('.').map_or("", |(_, e)| e);
@@ -100,7 +90,6 @@ mod tests {
 
     #[test]
     fn a_character_cut_by_the_read_is_dropped() {
-        // "Utö" with its last byte missing.
         assert_eq!(thumb_text(b"Ut\xC3").as_deref(), Some("Ut"));
         assert_eq!(thumb_text("Utö".as_bytes()).as_deref(), Some("Utö"));
     }

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! One live bridge connection: proxy plus routing of listing and job signals to waiting requests.
 
 use super::convert::{entry_from_wire, finished_error, map_error};
 use super::registry::Registry;
@@ -111,13 +110,11 @@ impl Link {
         if let Ok(rt) = tokio::runtime::Handle::try_current() {
             let link = self.clone();
             rt.spawn(async move {
-                // Connection may be gone already, which cancels everything.
                 let _ = link.proxy().cancel(id).await;
             });
         }
     }
 
-    /// Dropping the future cancels the request at the bridge.
     pub(crate) async fn list(
         self: &Arc<Self>,
         loc: &str,
@@ -150,7 +147,6 @@ impl Link {
         Err(lost())
     }
 
-    /// Dropping the future cancels the job at the bridge.
     pub(crate) async fn run_job<F>(self: &Arc<Self>, start: F, progress: &ProgressSink) -> Result<JobOutcome>
     where
         F: Future<Output = ProxyResult<u32>>,
@@ -235,7 +231,6 @@ mod tests {
     async fn listing_signals_go_to_their_request_even_when_early() {
         let link = link().await;
         let batch = vec![WireEntry::unknown(b"a", 1)];
-        // Batch arrives before anyone has subscribed to request 4.
         assert!(link
             .route(Signal::ListBatch {
                 req: 4,
