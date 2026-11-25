@@ -17,6 +17,8 @@ const DEFAULT_GAP: u32 = 12;
 
 pub const BLOCK_BYTES: usize = 8 * 1024;
 
+const MAX_NESTING: usize = 8;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Style {
     heading: Option<String>,
@@ -225,6 +227,7 @@ struct Renderer<'s> {
     kind: BlockKind,
     depth: usize,
     open: Vec<Open>,
+    flat: usize,
     inline: usize,
     deadline: Instant,
     lists: Vec<List>,
@@ -250,6 +253,7 @@ impl<'s> Renderer<'s> {
             kind: BlockKind::Text,
             depth: 0,
             open: Vec::new(),
+            flat: 0,
             inline: 0,
             deadline: Instant::now() + highlight::LIMITS.budget,
             lists: Vec::new(),
@@ -320,6 +324,34 @@ impl<'s> Renderer<'s> {
     fn pop_open(&mut self) {
         if let Some(open) = self.open.pop() {
             self.out.push_str(open.close());
+        }
+    }
+
+    fn nest(&mut self, html: &str, open: Open) {
+        let item = matches!(open, Open::Item);
+        if self.flat > 0 || (!item && self.nesting() >= MAX_NESTING) {
+            self.flat += 1;
+            if item && !self.out.ends_with('>') {
+                self.out.push_str("<br/>");
+            }
+        } else {
+            self.out.push_str(html);
+            self.open.push(open);
+        }
+    }
+
+    fn nesting(&self) -> usize {
+        self.open
+            .iter()
+            .filter(|open| !matches!(open, Open::Item))
+            .count()
+    }
+
+    fn unnest(&mut self) {
+        if self.flat > 0 {
+            self.flat -= 1;
+        } else {
+            self.pop_open();
         }
     }
 
@@ -407,10 +439,11 @@ impl<'s> Renderer<'s> {
             return;
         }
         let gap = self.style.gap;
-        self.push_open(Open::Quote(format!(
+        let html = format!(
             "<blockquote style=\"{}margin-top: 0px; margin-bottom: {gap}px; margin-left: {gap}px; margin-right: 0px\">",
             color(&self.style.secondary)
-        )));
+        );
+        self.nest(&html, Open::Quote(html.clone()));
     }
 
     fn start_code(&mut self, kind: &CodeBlockKind<'_>) {
@@ -507,22 +540,24 @@ impl<'s> Renderer<'s> {
         let margins = format!(" style=\"margin-top: 0px; margin-bottom: {bottom}px\"");
         match (kind, first) {
             (List::Tasks, _) => {}
-            (List::Bullets, _) => self.push_open(Open::Bullets(format!("<ul{margins}>"))),
+            (List::Bullets, _) => {
+                let html = format!("<ul{margins}>");
+                self.nest(&html, Open::Bullets(html.clone()));
+            }
             (_, Some(n)) if n != 1 => {
-                self.out.push_str(&format!("<ol start=\"{n}\"{margins}>"));
-                self.open.push(Open::Numbers { next: n, margins });
+                self.nest(
+                    &format!("<ol start=\"{n}\"{margins}>"),
+                    Open::Numbers { next: n, margins },
+                );
             }
-            _ => {
-                self.out.push_str(&format!("<ol{margins}>"));
-                self.open.push(Open::Numbers { next: 1, margins });
-            }
+            _ => self.nest(&format!("<ol{margins}>"), Open::Numbers { next: 1, margins }),
         }
         self.lists.push(kind);
     }
 
     fn end_list(&mut self) {
         if self.lists.pop() != Some(List::Tasks) {
-            self.pop_open();
+            self.unnest();
         }
     }
 
@@ -531,7 +566,7 @@ impl<'s> Renderer<'s> {
             if let Some(Open::Numbers { next, .. }) = self.open.last_mut() {
                 *next += 1;
             }
-            self.push_open(Open::Item);
+            self.nest("<li>", Open::Item);
             return;
         }
         let gap = self.style.gap;
@@ -548,7 +583,7 @@ impl<'s> Renderer<'s> {
         if self.in_tasks() {
             self.close_task_line();
         } else {
-            self.pop_open();
+            self.unnest();
         }
     }
 
@@ -632,7 +667,8 @@ impl<'s> Renderer<'s> {
         match tag {
             Tag::Paragraph | Tag::FootnoteDefinition(_) => self.end_paragraph(),
             Tag::Heading(level, _, _) => self.out.push_str(&format!("</h{}>", heading_number(level))),
-            Tag::BlockQuote | Tag::Table(_) => self.pop_open(),
+            Tag::BlockQuote => self.unnest(),
+            Tag::Table(_) => self.pop_open(),
             Tag::CodeBlock(_) => self.end_code(),
             Tag::List(_) => self.end_list(),
             Tag::Item => self.end_item(),
@@ -1257,6 +1293,72 @@ mod tests {
         let tasks = "- [ ] ".repeat(500) + "x";
         assert!(plain(&tasks).contains('x'));
         assert_eq!(plain(""), "");
+    }
+
+    #[test]
+    fn deep_nesting_renders_flat_in_output_linear_to_input() {
+        let lines: String = (0..300)
+            .map(|i| format!("{}- item{i}\n", "  ".repeat(i)))
+            .collect();
+        for md in [
+            "> ".repeat(3000) + "x",
+            "- ".repeat(3000) + "x",
+            "1. ".repeat(2000) + "x",
+            "> - ".repeat(1500) + "x",
+            lines.clone() + "  x",
+        ] {
+            let md = md + "\n\n# h\n\n- after\n";
+            let blocks = render(&md, &Style::parse(SPEC));
+            let total: usize = blocks.iter().map(|b| b.html.len()).sum();
+            assert!(total < 2 * md.len(), "{total} bytes from {}", md.len());
+            for block in &blocks {
+                balanced(&block.html);
+                assert_eq!(
+                    block.html.matches("<blockquote").count(),
+                    block.html.matches("</blockquote>").count()
+                );
+            }
+            assert!(visible(&html(&blocks)).contains("xh"), "{md:.20}");
+            let last = &blocks[blocks.len() - 1].html;
+            assert!(last.starts_with("<ul"), "nesting ends with its element: {last}");
+        }
+        let html = plain(&lines);
+        assert_eq!(
+            (html.matches("<ul").count(), html.matches("<li>").count()),
+            (MAX_NESTING, MAX_NESTING),
+            "list on the last level keeps its item: {html}"
+        );
+        assert!(
+            html.contains("item298<br/>item299</li>"),
+            "flat items keep a line each"
+        );
+        assert!(
+            !plain(&("- ".repeat(100) + "x")).contains("<br/>"),
+            "empty items add no lines"
+        );
+    }
+
+    #[test]
+    fn nesting_past_the_limit_stays_in_the_deepest_quote_or_list() {
+        let quotes = |depth: usize| plain(&("> ".repeat(depth) + "x")).matches("<blockquote").count();
+        assert_eq!(
+            quotes(MAX_NESTING),
+            MAX_NESTING - 1,
+            "top-level quote is the viewer's bar"
+        );
+        assert_eq!(quotes(MAX_NESTING + 1), MAX_NESTING);
+        assert_eq!(quotes(MAX_NESTING + 2), MAX_NESTING);
+        assert_eq!(quotes(5000), MAX_NESTING);
+        let mixed = plain(&("> > ".to_owned() + &"- ".repeat(40) + "x"));
+        assert_eq!(
+            (
+                mixed.matches("<blockquote").count(),
+                mixed.matches("<ul").count(),
+                mixed.matches("<li>").count()
+            ),
+            (1, MAX_NESTING - 1, MAX_NESTING - 1),
+            "{mixed}"
+        );
     }
 
     #[test]

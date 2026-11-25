@@ -19,7 +19,8 @@ Page {
         "readable": owner ? owner.model.readable : false,
         "writable": owner ? owner.model.writable : false,
         "archive": count === 1 && info.isDir === false && App.viewerFor(info.uri || "", info.mimeType || "") === "archive",
-        "checksumList": count === 1 && info.isDir === false && App.isChecksumList(info.uri || "")
+        "checksumList": count === 1 && info.isDir === false && App.isChecksumList(info.uri || ""),
+        "favourite": count === 1 && App.isFavourite(info.uri || "")
     })
     readonly property var actions: selection ? Selection.moreRows(count, ctx) : Actions.more(ctx)
 

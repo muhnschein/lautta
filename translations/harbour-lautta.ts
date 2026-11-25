@@ -2622,5 +2622,9 @@
         <source>Pull down to add or paste</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-dir-act-edit-favourite">
+        <source>Edit favourite</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>
