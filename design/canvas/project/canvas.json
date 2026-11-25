@@ -761,6 +761,38 @@
       "w": 400,
       "x": 2880,
       "y": 14440
+    },
+    "RecentsDates.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Recents \u00b7 date while scrolling",
+      "w": 400,
+      "x": 2880,
+      "y": 0
+    },
+    "RecentsGridDates.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Recents grid \u00b7 date while scrolling",
+      "w": 400,
+      "x": 3360,
+      "y": 0
+    },
+    "TransfersDatesRunning.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Activity \u00b7 running tasks at the top",
+      "w": 400,
+      "x": 5260,
+      "y": 6580
+    },
+    "TransfersDates.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Activity \u00b7 date while scrolling",
+      "w": 400,
+      "x": 5740,
+      "y": 6580
     }
   },
   "createdOnFiles": {
@@ -884,6 +916,8 @@
     "HomeServerMenu.dc.html",
     "HomeVolume.dc.html",
     "Recents.dc.html",
+    "RecentsDates.dc.html",
+    "RecentsGridDates.dc.html",
     "NearbySetup.dc.html",
     "FavouriteEdit.dc.html",
     "ShareTarget.dc.html",
@@ -945,6 +979,8 @@
     "ActivityBar.dc.html",
     "ActivityBarQuestion.dc.html",
     "ActivityBarDone.dc.html",
+    "TransfersDatesRunning.dc.html",
+    "TransfersDates.dc.html",
     "ScanEntry.dc.html",
     "NewScanType.dc.html",
     "NewScan.dc.html",

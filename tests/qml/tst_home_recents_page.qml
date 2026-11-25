@@ -87,6 +87,97 @@ ApplicationWindow {
         return found.map(function(x) { return x.text })
     }
 
+    function inside(ancestor, item) {
+        for (var p = item; p; p = p.parent) {
+            if (p === ancestor)
+                return true
+        }
+        return false
+    }
+
+    function checkHeaderPinned() {
+        var host = findAll(win.page, function(x) { return x.objectName === "recentsPulleyHost" })[0]
+        var header = findAll(win.page, function(x) { return x.objectName === "recentsHeader" })[0]
+        var view = findAll(win.page, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined })[0]
+        var menus = findAll(win.page, function(x) { return x._isPullDownMenu === true })
+        if (!host || !header || !view)
+            return fail("the page has a pulley host, a header and a list")
+        if (view.headerItem !== null || inside(view.contentItem, header))
+            return fail("the header is not part of the list")
+        if (menus.length !== 1 || menus[0].flickable !== host || view.pullDownMenu)
+            return fail("the one pulley is the host's, not the list's")
+        if (view.boundsBehavior !== Flickable.StopAtBounds)
+            return fail("the list stops at its top, so a pull goes on to the host")
+        if (host.contentHeight !== host.height || header.mapToItem(win.page, 0, 0).y !== 0)
+            return fail("the host does not scroll and the header is at the top of the page")
+        if (Math.abs(view.mapToItem(win.page, 0, 0).y - header.height) > 0.5 || !view.clip)
+            return fail("the list starts under the header and is cut there")
+        if (view.quickScroll)
+            return fail("the date pill is the quick way through the list, not Silica's quick scroll arrows")
+        view.contentY = view.originY + view.height
+        var stays = header.mapToItem(win.page, 0, 0).y === 0 && host.contentY === 0
+        view.contentY = view.originY
+        if (!stays)
+            return fail("the header stays when the list scrolls")
+        return true
+    }
+
+    function checkWords(bar) {
+        var now = Date.now()
+        var today = new Date()
+        var at = function (daysBack) {
+            return new Date(today.getFullYear(), today.getMonth(), today.getDate() - daysBack, 12).getTime()
+        }
+        var expectWords = function (row, text, english, description, what) {
+            var got = bar.words(row, now)
+            if ((got.text !== text && got.text !== english) || got.description !== description)
+                return fail(what + ": " + JSON.stringify(got))
+            return true
+        }
+        var day = function (ms) { return Format.formatDate(new Date(ms), Formatter.DateMediumWithoutYear) }
+        var month = new Date(at(40))
+        return expectWords({ "inProgress": true, "at": at(0) }, "lautta-date-in-progress", "In progress", "", "a running task")
+            && expectWords({ "inProgress": false, "at": at(0) }, "lautta-date-today", "Today", day(at(0)), "today")
+            && expectWords({ "inProgress": false, "at": at(1) }, "lautta-date-yesterday", "Yesterday", day(at(1)), "yesterday")
+            && expectWords({ "inProgress": false, "at": at(4) }, Qt.locale().standaloneDayName(new Date(at(4)).getDay(), Locale.LongFormat),
+                           "", day(at(4)), "four days back: the weekday")
+            && expectWords({ "inProgress": false, "at": at(40) }, Format.formatDate(month, Format.MonthNameStandalone),
+                           "", String(month.getFullYear()), "forty days back: month and year")
+    }
+
+    function checkTopRow(bar, view, index, what) {
+        var item = null
+        for (var y = view.originY; y < view.originY + view.contentHeight && !item; y += 2) {
+            if (view.indexAt(view.width / 2, y) === index)
+                item = y
+        }
+        if (item === null)
+            return fail(what + ": row " + index + " is not in the list")
+        view.contentY = item
+        var got = bar.rowAtTop()
+        view.contentY = view.originY
+        if (got !== index)
+            return fail(what + ": the row at the top is " + index + ", got " + got)
+        return true
+    }
+
+    function checkDateBar(grid) {
+        var bar = findAll(win.page, function(x) { return x.objectName === "scrollDateBar" })[0]
+        var view = findAll(win.page, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined })[0]
+        if (!bar || bar.flickable !== view)
+            return fail("the date bar follows the list")
+        if (bar.visible || bar.active)
+            return fail("the date bar hides while the list stands still")
+        if (!checkWords(bar))
+            return false
+        var shown = grid ? 2 : 5
+        var row = bar.rowDate(shown)
+        var want = grid ? 3 : 4
+        if (!row || row.at !== want || row.inProgress)
+            return fail((grid ? "grid row " : "row ") + shown + " is dated by its recent, at " + want + ": " + JSON.stringify(row))
+        return checkTopRow(bar, view, shown, grid ? "grid" : "list")
+    }
+
     function matches(got) {
         if (got.length !== expected.length)
             return false
@@ -226,6 +317,8 @@ ApplicationWindow {
             switch (win.step) {
             case 0:
                 if (win.page && win.checkPage() === true) {
+                    if (win.checkHeaderPinned() !== true || win.checkDateBar(false) !== true)
+                        return
                     if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/notes-crlf.txt"), "lautta://user-documents/notes.txt")
                             || !tools.installFixture(Qt.resolvedUrl("host/fixtures/short-lines.txt"), "lautta://user-documents/a.txt"))
                         return win.fail("fixture")
@@ -236,6 +329,8 @@ ApplicationWindow {
                 break
             case 1:
                 if (win.checkGrid() === true) {
+                    if (win.checkHeaderPinned() !== true || win.checkDateBar(true) !== true)
+                        return
                     var drawn = win.pdfThumbnail()
                     if (!drawn)
                         return win.fail("letter.pdf's tile asks the system thumbnailer")
