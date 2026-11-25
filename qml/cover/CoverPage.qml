@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// SCR-58. Shows what a tap opens: page on top, or the nearest one below it that tells a cover
-// (`coverKind`: "home", "grid" with `coverTitle` and `coverModel`, "file" with `coverUri`).
-// Nothing built while cover is out of sight.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -9,7 +6,6 @@ import Lautta 1.0
 CoverBackground {
     id: cover
 
-    // Tests set it.
     property bool live: status === Cover.Active
     readonly property var source: {
         if (typeof pageStack === "undefined" || !pageStack)
@@ -23,7 +19,6 @@ CoverBackground {
     readonly property bool transferring: transferCover.active
     readonly property string kind: transferring ? "tasks" : (source ? source.coverKind : "")
 
-    // Page on top changes before its cover's content goes: no reading what new page lacks.
     function told(name, fallback) {
         return source && source[name] !== undefined ? source[name] : fallback
     }

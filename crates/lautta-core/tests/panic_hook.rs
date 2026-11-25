@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Each case runs in a child (this binary again for one test): hook is process-wide, abort takes
-//! the whole process.
 
 use lautta_core::panics::{abort_outside_catch, catch, Panicked};
 use std::os::unix::process::ExitStatusExt;

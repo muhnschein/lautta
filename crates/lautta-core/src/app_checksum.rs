@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Checksums of one file and Verify files of a checksum list. Reading and hashing never run on
-//! the caller's thread; every call stops on [`Cancel`].
 
 use crate::app::Core;
 use crate::checksum::list::{self, ListEntry};
@@ -12,10 +10,8 @@ use crate::uri::Uri;
 use crate::vpath::VPath;
 use std::sync::Arc;
 
-/// Lists read per folder when looking for one naming a file.
 const MAX_LISTS: usize = 16;
 
-/// A list next to a file that names it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Listed {
     pub list_name: Vec<u8>,
@@ -23,7 +19,6 @@ pub struct Listed {
     pub digest: Vec<u8>,
 }
 
-/// What lists say about a computed digest: matching list, else first that differs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Verdict {
     Matches(Vec<u8>),
@@ -43,14 +38,12 @@ pub enum ItemState {
     Matches,
     Differs,
     Missing,
-    /// Outside the list's folder, a link, or not a regular file: never opened.
     NotChecked,
     Failed(ErrorKind),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VerifyEvent {
-    /// Names in list order; indexes below refer to it.
     Listed(Vec<Vec<u8>>),
     Progress {
         index: usize,
@@ -63,7 +56,6 @@ pub enum VerifyEvent {
     },
 }
 
-/// `name` from a list in `dir`, if it stays inside `dir` (no absolute path, no `..`, no NUL).
 pub fn resolve(dir: &Uri, name: &[u8]) -> Option<Uri> {
     if name.first() == Some(&b'/') {
         return None;
@@ -73,8 +65,6 @@ pub fn resolve(dir: &Uri, name: &[u8]) -> Option<Uri> {
 }
 
 impl Core {
-    /// Digest of regular file `uri`. Local files: hashed from an fd on a blocking thread; server
-    /// files: server computes it when it can, else read through and hashed here.
     pub async fn checksum(
         &self,
         uri: &Uri,
@@ -88,7 +78,6 @@ impl Core {
             .await
     }
 
-    /// Lists in `file`'s folder that name it.
     pub async fn lists_naming(&self, file: &Uri, cancel: &Cancel) -> Result<Vec<Listed>> {
         let (Some(dir), Some(name)) = (file.parent(), file.name()) else {
             return Ok(Vec::new());
@@ -105,7 +94,6 @@ impl Core {
                         && list::list_kind(&e.name).is_some()
                 })
                 .collect();
-            // Lists named after the file first (`x.iso.sha256`), then the rest by name.
             lists.sort_by_key(|e| (!e.name.starts_with(name), e.name.clone()));
             let mut out = Vec::new();
             for entry in lists.into_iter().take(MAX_LISTS) {
@@ -131,7 +119,6 @@ impl Core {
         cancel.run(work).await
     }
 
-    /// Checks every file `list` names, in list order.
     pub async fn verify_list(
         &self,
         list: &Uri,
@@ -172,7 +159,6 @@ async fn read_list(provider: &dyn Provider, path: &VPath, name: &[u8]) -> Result
     list::parse(name, &data)
 }
 
-/// `Canceled` ends the whole run; other errors only mark the item.
 async fn check_entry(
     provider: Arc<dyn Provider>,
     dir: &Uri,
@@ -207,7 +193,6 @@ async fn file_digest(
     progress: ProgressSink,
     cancel: &Cancel,
 ) -> Result<Vec<u8>> {
-    // Opening a FIFO or device would block or never end: regular files only.
     let entry = provider.stat(path, true, Lane::Interactive).await?;
     if entry.kind != Kind::File && entry.target_kind != Kind::File {
         return Err(Error::kind(if entry.kind == Kind::Dir {

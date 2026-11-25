@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Supervisor: finds the socket, connects, says `Hello`, follows consent, locations and drives;
-//! reconnects with backoff in the foreground.
 
 use super::client::Inner;
 use super::link::{rpc, Link};
@@ -26,7 +24,6 @@ pub(super) async fn supervise(inner: Arc<Inner>) {
     let mut attempt = 0usize;
     loop {
         if wait_foreground(&inner).await {
-            // Coming back is itself the poke; a second one would skip the next backoff.
             inner.wake.notified().now_or_never();
         }
         if !lost && !socket_present(&inner.config.socket).await {
@@ -41,7 +38,6 @@ pub(super) async fn supervise(inner: Arc<Inner>) {
             Attempt::Ended => {
                 lost = true;
                 attempt = 0;
-                // A poke from before the loss must not skip the first backoff.
                 inner.wake.notified().now_or_never();
                 inner.set_status(BridgeStatus::Reconnecting);
                 wait_or_wake(&inner, inner.config.backoff_for(0)).await;
@@ -123,7 +119,6 @@ async fn attempt_session(inner: &Arc<Inner>, lost: bool) -> Attempt {
     let Some(Ok(conn)) = bounded(limit, lautta_bridge_proto::connect(&inner.config.socket)).await else {
         return Attempt::Failed;
     };
-    // Subscribed before the first call so no signal is missed.
     let mut signals = conn.signals();
     let link = Link::new(conn.clone());
     let shaken = bounded(limit, handshake(inner, &link))
@@ -156,8 +151,6 @@ async fn handshake(inner: &Arc<Inner>, link: &Arc<Link>) -> Result<(), Attempt> 
     Ok(())
 }
 
-/// Bridge without `GetFeatures` offers no optional parts; app works without them. Only a lost
-/// connection fails the handshake.
 fn features(answer: Result<Vec<String>, BridgeError>) -> Result<Vec<String>, Attempt> {
     match answer {
         Ok(features) => Ok(features),
@@ -175,7 +168,6 @@ async fn run_signals(inner: &Arc<Inner>, link: &Arc<Link>, signals: &mut SignalS
     while let Some(item) = signals.next().await {
         match item {
             Ok(signal) => handle_signal(inner, link, signal),
-            // A signal this client cannot read is skipped, not fatal.
             Err(BridgeError::Protocol(m)) => log::warn!("unreadable bridge signal: {m}"),
             Err(_) => break,
         }
@@ -195,7 +187,6 @@ fn teardown(inner: &Arc<Inner>, link: &Arc<Link>) {
         *n = Arc::new(Vec::new());
         changed
     });
-    // Without the bridge nothing mounts them.
     publish(&inner.drives, Vec::new());
 }
 
@@ -223,8 +214,6 @@ fn consent_decided(inner: &Inner) -> bool {
     inner.info().consent == Some(Consent::Decided)
 }
 
-/// Nothing but status until the user decided. `Ready` follows the first list of locations so
-/// Servers never flashes empty.
 fn apply_consent(inner: &Arc<Inner>, link: &Arc<Link>, consent: Consent) {
     inner.info().consent = Some(consent);
     match consent {
@@ -237,7 +226,6 @@ fn apply_consent(inner: &Arc<Inner>, link: &Arc<Link>, consent: Consent) {
                     .link
                     .as_ref()
                     .is_some_and(|l| Arc::ptr_eq(l, &link2));
-                // Consent or connection may have changed meanwhile.
                 if current && consent_decided(&inner2) {
                     inner2.set_status(BridgeStatus::Ready);
                 }
@@ -246,7 +234,6 @@ fn apply_consent(inner: &Arc<Inner>, link: &Arc<Link>, consent: Consent) {
                 begin_settle(inner);
                 let link = link.clone();
                 tokio::spawn(async move {
-                    // Discovery is a convenience; a failure only leaves Nearby empty.
                     let _ = link.proxy().discover(true).await;
                 });
             }
@@ -268,7 +255,6 @@ fn show_nearby(inner: &Inner, list: Vec<NearbyServer>) {
     });
 }
 
-/// Servers shown stay until discovery has settled (see [`super::nearby`]).
 pub(super) fn begin_settle(inner: &Arc<Inner>) {
     let generation = inner.info().nearby.begin();
     let inner = inner.clone();
@@ -287,13 +273,11 @@ fn spawn_refresh(inner: &Arc<Inner>, link: &Arc<Link>) {
     tokio::spawn(async move { refresh_locations(&inner, &link).await });
 }
 
-/// Of overlapping refreshes the newest request wins.
 async fn refresh_locations(inner: &Arc<Inner>, link: &Arc<Link>) {
     let generation = inner.refreshes.fetch_add(1, Ordering::SeqCst) + 1;
     let wire = match rpc(link.proxy().list_locations().await) {
         Ok(wire) => wire,
         Err(e) => {
-            // Servers section stays as it is; say why, for the journal.
             log::warn!("bridge locations not listed: {e}");
             return;
         }
@@ -315,7 +299,6 @@ async fn refresh_locations(inner: &Arc<Inner>, link: &Arc<Link>) {
     });
 }
 
-/// Needs no consent.
 fn spawn_drives(inner: &Arc<Inner>, link: &Arc<Link>) {
     if !inner.info().features.iter().any(|f| f == feature::DRIVES) {
         return;
@@ -325,7 +308,6 @@ fn spawn_drives(inner: &Arc<Inner>, link: &Arc<Link>) {
     tokio::spawn(async move { refresh_drives(&inner, &link).await });
 }
 
-/// Of overlapping `ListDrives` the newest request wins, only while its connection is current.
 async fn refresh_drives(inner: &Arc<Inner>, link: &Arc<Link>) {
     let generation = inner.drive_refreshes.fetch_add(1, Ordering::SeqCst) + 1;
     let wire = match rpc(link.proxy().list_drives().await) {

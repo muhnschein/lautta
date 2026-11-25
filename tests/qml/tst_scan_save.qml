@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Save dialog of a scan: name, pages in a grid, held
-// page dragged to a new place, saved as PDF into the folder; a failed save keeps the pages.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -17,7 +16,6 @@ ApplicationWindow {
     property var dialog
     property var tile
     property var ended: []
-    // Null once the scan is destroyed.
     property QtObject scan
 
     ViewerTools { id: tools }
@@ -81,7 +79,6 @@ ApplicationWindow {
         return got === english || got === id
     }
 
-    // Tiles in the order the grid shows them.
     function tiles() {
         var found = findAll(win.dialog, function(x) { return x.objectName === "pageTile" }, [])
         found.sort(function(a, b) { return a.y !== b.y ? a.y - b.y : a.x - b.x })
@@ -103,7 +100,6 @@ ApplicationWindow {
         return JSON.stringify(out)
     }
 
-    // Middle of the grid cell `index`, seen from `item`.
     function cell(item, index) {
         var grid = named(win.dialog, "pageGrid")
         return item.mapFromItem(grid, (index % 2 + 0.5) * grid.cellWidth, (Math.floor(index / 2) + 0.5) * grid.cellHeight)
@@ -125,7 +121,6 @@ ApplicationWindow {
         running: win.scenarioRunning
         onTriggered: {
             win.waited++
-            // Hang guard: emulated target needs seconds per picture.
             if (win.waited > 600)
                 return win.fail("step " + win.step + " timed out")
             var all, at, field, grid, header, content
@@ -176,7 +171,6 @@ ApplicationWindow {
                 field.text = "Contract"
                 if (!win.dialog.canAccept || field.errorHighlight)
                     return win.fail("a plain name is taken")
-                // A tap opens the page.
                 tools.mouse(all[1], "press", all[1].width / 2, all[1].height / 2)
                 tools.mouse(all[1], "release", all[1].width / 2, all[1].height / 2)
                 win.next()
@@ -198,7 +192,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 5:
-                // Held for a second without moving: the page comes loose.
                 if (!win.tile.held)
                     break
                 if (win.waited < 9)
@@ -214,18 +207,15 @@ ApplicationWindow {
                 win.next()
                 break
             case 6:
-                // Cells settle after the move.
                 grid = named(win.dialog, "pageGrid")
                 if (win.tile.x !== 0 || win.tile.y !== grid.cellHeight)
                     break
                 content = win.tile.contentItem
-                // Finger still on the spot of the page it took.
                 if (Math.abs(win.tile.x + content.x + win.tile.width / 2 + 4 - 0.5 * grid.cellWidth) > 1
                         || Math.abs(win.tile.y + content.y + win.tile.height / 2 + 6 - 1.5 * grid.cellHeight) > 1)
                     return win.fail("page stays under the finger: " + content.x + ", " + content.y)
                 if (numbers() !== '["1","2","3"]')
                     return win.fail("numbers follow the places: " + numbers())
-                // Over the plus tile: no place for a page.
                 at = cell(win.tile, 3)
                 tools.mouse(win.tile, "move", at.x, at.y)
                 if (ids() !== "[2,3,1]")
@@ -240,7 +230,6 @@ ApplicationWindow {
                 grid = named(win.dialog, "pageGrid")
                 if (win.tile.x !== grid.cellWidth || win.tile.y !== 0)
                     break
-                // Let go inside its own cell, where a tap opens the page.
                 tools.mouse(win.tile, "move", win.tile.width / 2, win.tile.height / 2)
                 tools.mouse(win.tile, "release", win.tile.width / 2, win.tile.height / 2)
                 if (win.tile.held || win.tile.contentItem.x !== 0 || win.tile.contentItem.y !== 0 || win.tile.contentItem.scale !== 1
@@ -261,7 +250,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 9:
-                // Nothing may happen: finger moved before the second was up. Half a second longer.
                 if (win.waited < 15)
                     break
                 if (win.tile.held)
@@ -294,7 +282,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 12:
-                // Silica has the saving page ready before it lets the dialog go on.
                 if (!win.dialog.acceptDestinationInstance || !win.dialog.canAccept)
                     break
                 win.dialog.accept()
@@ -344,7 +331,6 @@ ApplicationWindow {
                 win.next()
                 break
             case 18:
-                // Folder is not there: save fails, dialog comes back.
                 var back = win.onTop("addPage")
                 if (!back || back === win.dialog)
                     break

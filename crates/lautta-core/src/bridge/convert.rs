@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Bridge wire types to core types.
 
 use crate::entry::{cap, ms_to_system_time, Capabilities, Entry, EntryFlags, Kind};
 use crate::error::{Error, ErrorKind};
 use lautta_bridge_proto::{BridgeError, WireCapabilities, WireEntry};
 use std::collections::{BTreeSet, HashMap};
 
-/// netvfs names map one-to-one, a lost socket is `ConnectionLost`, malformed calls cannot be the
-/// user's doing.
 pub fn map_error(e: BridgeError) -> Error {
     match e {
         BridgeError::Remote {
@@ -45,7 +42,6 @@ fn non_empty(s: &str) -> Option<String> {
     (!s.is_empty()).then(|| s.to_owned())
 }
 
-/// `-1` and empty values are unknown.
 pub fn entry_from_wire(w: &WireEntry) -> Entry {
     let kind = Kind::from_wire(w.kind);
     let mut e = Entry::new(&w.name, kind);
@@ -74,8 +70,6 @@ const RENAMED: [(&str, &str); 6] = [
     ("WindowsNames", cap::RESTRICTED_NAMES),
 ];
 
-/// Bridge flag names stay in `raw`; bridge has no read-only flag, a location is writable unless an
-/// operation says otherwise.
 pub fn capabilities_from_wire(w: &WireCapabilities) -> Capabilities {
     let mut raw: BTreeSet<String> = w.flags.iter().cloned().collect();
     for (netvfs, app) in RENAMED {

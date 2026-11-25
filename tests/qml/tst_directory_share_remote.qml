@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Share on a server file: Getting page first, its file to the folder's share sheet.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -75,7 +74,6 @@ ApplicationWindow {
                 }, [])
                 if (shares.length !== 1)
                     return win.fail("one share action, got " + shares.length)
-                // ShareAction keeps a file URL as its path.
                 var got = shares[0].resources.length === 1 ? String(shares[0].resources[0]) : ""
                 if (got !== win.fetchedUrl && "file://" + got !== win.fetchedUrl)
                     return win.fail("share sheet gets the fetched file: " + JSON.stringify(shares[0].resources))

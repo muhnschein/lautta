@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Nearby servers across a discovery restart.
-//!
-//! netvfs reports an empty cache right after `Discover(true)`, servers return one answer at a time.
-//! While discovery settles, shown servers stay and new ones join; once settled, the newest list is
-//! taken as is.
 
 use super::types::NearbyServer;
 

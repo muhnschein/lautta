@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Must fail: proves a reported failure fails the check on the target.
 import QtQuick 2.6
 
 QtObject {

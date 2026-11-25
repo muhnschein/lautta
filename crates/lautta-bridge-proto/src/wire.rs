@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Paths and names are `ay` (raw bytes), never `s`.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -7,13 +6,9 @@ use zbus::zvariant::{OwnedValue, Type, Value};
 
 pub const OBJECT_PATH: &str = "/org/netvfs/Bridge";
 pub const INTERFACE: &str = "org.netvfs.Bridge1";
-/// Largest `Read` the bridge accepts.
 pub const MAX_READ_BYTES: u32 = 1 << 20;
-/// Largest `ListBatch` size the bridge accepts.
 pub const MAX_LIST_BATCH: u32 = 512;
 
-/// `ay` decoded in one copy; zvariant decodes `Vec<u8>` byte by byte (about 30 ms per MiB on a
-/// desktop CPU).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Bytes(pub Vec<u8>);
 
@@ -47,7 +42,6 @@ pub mod entry_flags {
     pub const TARGET_UNKNOWN: u16 = 0x10;
 }
 
-/// `(ayyyxxxxixxssqays)`; -1 or empty means unknown.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Type)]
 pub struct WireEntry {
     pub name: Vec<u8>,
@@ -85,7 +79,6 @@ impl WireEntry {
     }
 }
 
-/// `(asasx)`
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Type)]
 pub struct WireCapabilities {
     pub flags: Vec<String>,
@@ -93,64 +86,40 @@ pub struct WireCapabilities {
     pub max_name_bytes: i64,
 }
 
-/// Info key `state` of `ListLocations`, with `stateError` (bare error name) when
-/// [`FAILED`](location_state::FAILED).
 pub mod location_state {
     pub const KEY: &str = "state";
     pub const ERROR_KEY: &str = "stateError";
-    /// No connection of the consumer's pool established or being established.
     pub const DISCONNECTED: &str = "disconnected";
-    /// None is established, at least one is being established.
     pub const CONNECTING: &str = "connecting";
-    /// At least one is established (connected and authenticated).
     pub const CONNECTED: &str = "connected";
-    /// As [`DISCONNECTED`], but the last attempt to connect failed.
     pub const FAILED: &str = "failed";
 }
 
-/// Names `GetFeatures` answers. Unknown names are ignored; a bridge without `GetFeatures` offers
-/// none.
 pub mod feature {
-    /// `OpenStorageSettings`.
     pub const STORAGE_SETTINGS: &str = "storage-settings";
-    /// `ListDrives`, `Mount`, `Unmount`, `DrivesChanged`.
     pub const DRIVES: &str = "drives";
 }
 
-/// `(ssaya{sv})`: memory card or USB drive, mounted or not.
 #[derive(Debug, Serialize, Deserialize, Type)]
 pub struct WireDrive {
-    /// Opaque to consumers (`mmcblk1p1`, `sda1`).
     pub id: String,
-    /// Filesystem label (locked drive: LUKS header's); empty without one.
     pub label: String,
-    /// Empty when not mounted.
     pub mount_point: Vec<u8>,
-    /// [`drive_info`] keys; unknown ones are ignored.
     pub info: HashMap<String, OwnedValue>,
 }
 
 pub mod drive_info {
-    /// `s`: [`KIND_SD`] or [`KIND_USB`].
     pub const KIND: &str = "kind";
-    /// `x`: bytes.
     pub const SIZE: &str = "size";
-    /// `s`: `vfat`, `exfat`, `ext4`, …
     pub const FS_TYPE: &str = "fsType";
-    /// `b`.
     pub const READ_ONLY: &str = "readOnly";
-    /// `s`, when known.
     pub const UUID: &str = "uuid";
-    /// `s`: vendor and model, when known.
     pub const MODEL: &str = "model";
-    /// `b`: LUKS device not unlocked; `Mount` answers `Unsupported`.
     pub const LOCKED: &str = "locked";
     pub const KIND_SD: &str = "sd";
     pub const KIND_USB: &str = "usb";
 }
 
-/// `(sssa{sv})`: id, provider, display name, info (`kind`, `host`, `path`,
-/// `attention`, `state`, …).
 #[derive(Debug, Serialize, Deserialize, Type)]
 pub struct WireLocation {
     pub id: String,
@@ -159,7 +128,6 @@ pub struct WireLocation {
     pub info: HashMap<String, OwnedValue>,
 }
 
-/// `(sssq)`: a discovered server; port 0 is the provider's default.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct WireNearby {
     pub name: String,
@@ -168,7 +136,6 @@ pub struct WireNearby {
     pub port: u16,
 }
 
-/// `(ay(ayyyxxxxixxssqays))` of `WalkBatch`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct WireWalkItem {
     pub path: Vec<u8>,
@@ -209,11 +176,9 @@ impl OptsBuilder {
         self.0
     }
 
-    /// For server-side messages and test fixtures.
     pub fn build_owned(self) -> HashMap<String, OwnedValue> {
         self.0
             .into_iter()
-            // only fd values fail; plain values hold none
             .filter_map(|(k, v)| OwnedValue::try_from(v).ok().map(|o| (k, o)))
             .collect()
     }

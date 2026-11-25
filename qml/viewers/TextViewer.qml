@@ -39,7 +39,6 @@ Page {
 
     Notice { id: notice }
 
-    // Stronger than Page.highContrast; opaque enough for text over any wallpaper.
     Rectangle {
         objectName: "textBackdrop"
         anchors.fill: parent
@@ -59,7 +58,6 @@ Page {
         anchors.fill: parent
         model: doc.rowCount
         clip: true
-        // Never sideways: sideways-flickable list keeps swipe-back from page stack.
         flickableDirection: Flickable.VerticalFlick
 
         PullDownMenu {
@@ -80,8 +78,6 @@ Page {
 
             PageHeader {
                 title: page.fileName
-                // List at top when text arrives; ListView keeps contentY when header grows, so
-                // description line is there, blank, from the start.
                 description: doc.loaded
                              //% "Read-only · %1"
                              ? qsTrId("lautta-viewers-read-only").arg(Format.formatFileSize(doc.size))
@@ -90,6 +86,9 @@ Page {
         }
 
         delegate: Item {
+            readonly property real room: width - page.gutter - Theme.horizontalPageMargin
+            readonly property real indent: Math.min(doc.rowIndent(index) * page.charWidth, room / 2)
+
             width: view.width
             height: Math.max(line.implicitHeight, Theme.fontSizeExtraSmall * 1.4)
 
@@ -105,11 +104,8 @@ Page {
             }
             Label {
                 id: line
-                x: page.gutter
-                // Never implicitWidth: wrapping makes it depend on width again (binding loop).
-                width: parent.width - page.gutter - Theme.horizontalPageMargin
-                // Row characters come back escaped from core with colours: file never read as
-                // markup.
+                x: page.gutter + parent.indent
+                width: parent.room - parent.indent
                 text: doc.styledRow(index, doc.highlighted ? page.colours : "")
                 font.family: App.monoFont
                 font.pixelSize: Theme.fontSizeExtraSmall

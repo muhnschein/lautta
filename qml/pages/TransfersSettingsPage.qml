@@ -78,7 +78,6 @@ Page {
                 labels: SettingsText.days(values)
             }
             ComboBox {
-                // Two keys at once: no SettingCombo.
                 objectName: "largeOpsBox"
 
                 readonly property real items: Number(page.setting("large_op_items"))
@@ -86,15 +85,13 @@ Page {
 
                 //% "Ask before large operations"
                 label: qsTrId("lautta-settings-large")
-                //% "Over %1 items or %2"
-                value: qsTrId("lautta-settings-large-value").arg(items).arg(Format.formatFileSize(bytes))
+                value: SettingsText.largeOperation(items, bytes)
                 menu: ContextMenu {
                     Repeater {
                         model: page.largeOps
 
                         MenuItem {
-                            text: qsTrId("lautta-settings-large-value").arg(modelData[0])
-                                  .arg(Format.formatFileSize(modelData[1]))
+                            text: SettingsText.largeOperation(modelData[0], modelData[1])
                             onClicked: {
                                 App.setSetting("large_op_items", JSON.stringify(modelData[0]))
                                 App.setSetting("large_op_bytes", JSON.stringify(modelData[1]))

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Settings → Storage: cache sizes and clearing; clearing recents.
 
 use crate::runtime::{blocking_then, core};
 use qmetaobject::prelude::*;
@@ -8,7 +7,6 @@ use qmetaobject::QPointer;
 #[derive(QObject, Default)]
 pub struct CacheInfo {
     base: qt_base_class!(trait QObject),
-    /// 0 until the first `refresh()` answers.
     cacheBytes: qt_property!(i64; NOTIFY changed),
     thumbnailBytes: qt_property!(i64; NOTIFY changed),
     listingBytes: qt_property!(i64; NOTIFY changed),
@@ -24,7 +22,6 @@ pub struct CacheInfo {
     cacheCleared: qt_signal!(freedBytes: i64),
     appDataCleared: qt_signal!(),
     recentsCleared: qt_signal!(),
-    /// `Locked` while transfers are unfinished.
     failed: qt_signal!(kind: QString, message: QString),
 }
 

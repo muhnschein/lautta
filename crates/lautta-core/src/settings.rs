@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Global preferences with defaults and limits, and per-location preferences in the app database.
-//!
-//! Qt layer keeps simple global values in dconf (`Nemo.Configuration`); [`Settings::to_map`] and
-//! [`Settings::from_map`] are the generic bridge: flat string keys, JSON values, bad or unknown
-//! entries ignored.
 
 use crate::db::Db;
 use crate::error::Result;
@@ -26,7 +21,6 @@ pub const SHARE_FOLDERS_MAX: usize = 3;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    // View options: one set for every folder.
     pub sort_key: String,
     pub sort_descending: bool,
     pub folders_first: bool,
@@ -35,14 +29,11 @@ pub struct Settings {
 
     pub thumbnails_local: bool,
     pub thumbnails_remote: bool,
-    /// Largest remote file read whole for a thumbnail. No lower limit for metered connections: app
-    /// cannot tell one.
     pub thumbnail_max_remote_mb: u64,
 
     pub thumbnail_cache_mb: u64,
     pub listing_cache_days: u32,
 
-    // Trash (stored as `recently_deleted`) and remorse timer.
     pub recently_deleted: bool,
     pub recently_deleted_retention_days: u32,
     pub remorse_seconds: u32,
@@ -58,7 +49,6 @@ pub struct Settings {
     pub large_op_bytes: u64,
 
     pub recents_enabled: bool,
-    /// Depth limit of remote searches.
     pub search_remote_depth: u32,
 
     pub share_folders: Vec<String>,
@@ -101,7 +91,6 @@ fn clamp<T: Ord>(v: T, range: (T, T)) -> T {
 }
 
 impl Settings {
-    /// Forces every value into its allowed range.
     pub fn sanitise(&mut self) {
         let defaults = Settings::default();
         if !SORT_KEYS.contains(&self.sort_key.as_str()) {
@@ -145,12 +134,9 @@ impl Settings {
     }
 
     pub fn to_json(&self) -> String {
-        // Plain data with string keys: serialisation cannot fail.
         serde_json::to_string(self).unwrap_or_else(|_| "{}".to_owned())
     }
 
-    /// Parses JSON; a document that is not an object yields defaults, bad
-    /// keys are ignored one by one.
     pub fn from_json(json: &str) -> Settings {
         match serde_json::from_str::<Value>(json) {
             Ok(Value::Object(obj)) => Settings::from_map(&obj.into_iter().collect::<BTreeMap<_, _>>()),
@@ -165,9 +151,6 @@ impl Settings {
         }
     }
 
-    /// Starts from the defaults and applies every entry that has a known key
-    /// and the right type; then sanitises. Unknown keys and mistyped values
-    /// are ignored so a stale or hand-edited store never breaks the app.
     pub fn from_map(map: &BTreeMap<String, Value>) -> Settings {
         let mut current = Settings::default();
         for (key, value) in map {
@@ -184,8 +167,6 @@ impl Settings {
         current.sanitised()
     }
 
-    /// Sets one key from the UI; `false` when the key is unknown or the
-    /// value has the wrong type (settings unchanged).
     pub fn set(&mut self, key: &str, value: Value) -> bool {
         let mut map = self.to_map();
         if !map.contains_key(key) {
@@ -210,7 +191,6 @@ pub struct LocationPrefs {
     pub start_folder: Option<Uri>,
     pub no_listing_cache: bool,
     pub no_thumb_cache: bool,
-    /// Bulk lanes for this remote location (1..=6); `None` uses the global.
     pub bulk_lanes: Option<u32>,
 }
 
@@ -226,7 +206,6 @@ impl LocationPrefs {
         }
     }
 
-    /// Blank names count as no override; lane sizes are clamped.
     fn normalised(&self) -> LocationPrefs {
         let mut p = self.clone();
         p.display_name = p
@@ -253,7 +232,6 @@ fn build(raw: RawPrefs) -> LocationPrefs {
     LocationPrefs {
         location_id: raw.0,
         display_name: raw.1,
-        // A malformed stored URI is dropped rather than failing the page.
         start_folder: raw.2.and_then(|s| Uri::parse(&s).ok()),
         no_listing_cache: raw.3 != 0,
         no_thumb_cache: raw.4 != 0,

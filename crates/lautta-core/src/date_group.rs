@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Date sections of Activity and Recents. Calendar days in the device's time zone: yesterday starts
-//! at last midnight, not 24 hours ago; today counts as one of the 7 and of the 30.
 
 use chrono::{Local, TimeZone};
 
@@ -26,7 +24,6 @@ impl DateGroup {
         }
     }
 
-    /// A day after today (clock moved back) is today.
     pub fn of_days_ago(days_ago: i64) -> DateGroup {
         match days_ago {
             i64::MIN..=0 => DateGroup::Today,
@@ -37,14 +34,10 @@ impl DateGroup {
         }
     }
 
-    /// Each instant gets its own UTC offset, so a daylight saving change in between moves no
-    /// midnight.
     pub fn at_in<Tz: TimeZone>(tz: &Tz, at_ms: i64, now_ms: i64) -> DateGroup {
         let day = |ms: i64| tz.timestamp_millis_opt(ms).single().map(|t| t.date_naive());
         let days_ago = match (day(at_ms), day(now_ms)) {
             (Some(at), Some(today)) => today.signed_duration_since(at).num_days(),
-            // Beyond chrono's calendar (some 260,000 years out): only which side of now it is on
-            // matters.
             _ if at_ms > now_ms => 0,
             _ => i64::MAX,
         };

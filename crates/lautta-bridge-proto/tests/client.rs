@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Client against the fake: errors with details, malformed calls, ordered signals,
-//! disconnects.
 #![cfg(feature = "fake")]
 
 use futures::StreamExt;

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Favourites and recents. Stores wrap [`Db`] and are blocking: call them from `spawn_blocking`.
 
 pub mod favourites;
 pub mod recents;
@@ -24,8 +23,6 @@ pub(crate) fn parse_uri(s: &str) -> Result<Uri> {
     Uri::parse(s).map_err(|_| Error::new(ErrorKind::Internal, "stored URI is malformed"))
 }
 
-/// Every URI of a location starts with this, so a purge can compare prefixes without LIKE wildcards
-/// (ids contain `_`).
 pub(crate) fn location_prefix(location: &str) -> String {
     format!("lautta://{location}/")
 }
@@ -39,7 +36,6 @@ pub(crate) fn descendant_prefix(uri: &Uri) -> String {
     }
 }
 
-/// `table` is always a literal.
 pub(crate) fn next_position(conn: &Connection, table: &'static str) -> Result<i64> {
     let max: Option<i64> = conn.query_row(&format!("SELECT max(position) FROM {table}"), [], |r| r.get(0))?;
     Ok(max.map_or(0, |m| m + 1))
@@ -77,7 +73,6 @@ pub(crate) fn move_to(conn: &Connection, table: &'static str, id: i64, index: us
     write_order(conn, table, &ids)
 }
 
-/// A row that would collide with an existing one replaces it. `table` is always a literal.
 pub(crate) fn rewrite_uris(conn: &Connection, table: &'static str, old: &Uri, new: &Uri) -> Result<usize> {
     let old_s = old.to_string();
     let old_prefix = descendant_prefix(old);

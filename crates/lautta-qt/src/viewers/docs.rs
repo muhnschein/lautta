@@ -16,7 +16,6 @@ pub fn register() {
     qml_register_type::<MarkdownDocument>(&crate::qml_uri(), 1, 0, &crate::cstr("MarkdownDocument"));
 }
 
-/// `text` as shown: LF breaks, no final break.
 #[derive(QObject, Default)]
 pub struct TextDocument {
     base: qt_base_class!(trait QObject),
@@ -25,29 +24,21 @@ pub struct TextDocument {
     loading: qt_property!(bool; NOTIFY stateChanged),
     loaded: qt_property!(bool; NOTIFY stateChanged),
     text: qt_property!(QString; NOTIFY stateChanged),
-    /// Only the first MiB is shown.
     truncated: qt_property!(bool; NOTIFY stateChanged),
     validUtf8: qt_property!(bool; NOTIFY stateChanged),
-    /// -1 when unknown.
     size: qt_property!(f64; NOTIFY stateChanged),
     errorKind: qt_property!(QString; NOTIFY stateChanged),
     errorMessage: qt_property!(QString; NOTIFY stateChanged),
-    /// Viewer rows of `text`; 0 until loaded.
     rowCount: qt_property!(i32; NOTIFY stateChanged),
     lineCount: qt_property!(i32; NOTIFY stateChanged),
-    /// Colour grammar, "" without.
     syntax: qt_property!(QString; NOTIFY colouredChanged),
-    /// First lines (or all) have colours; may come after the text.
     highlighted: qt_property!(bool; NOTIFY colouredChanged),
     stateChanged: qt_signal!(),
-    /// Own signal: colours coming late must not make the text's rows anew (TextViewer.qml).
     colouredChanged: qt_signal!(),
 
     reload: qt_method!(fn(&mut self)),
-    /// Line number from 1 on a line's first row, 0 on rows a long line goes on over or past them.
     rowNumber: qt_method!(fn(&self, index: i32) -> i32),
-    /// Row `index` as StyledText: every character escaped, whitespace kept, tabs expanded, coloured
-    /// per `colours` (`class=#rrggbb,…`, SyntaxColours.js). Empty past the rows.
+    rowIndent: qt_method!(fn(&self, index: i32) -> i32),
     styledRow: qt_method!(fn(&self, index: i32, colours: QString) -> QString),
 
     generation: u64,
@@ -152,14 +143,23 @@ impl TextDocument {
         i32::try_from(number).unwrap_or(i32::MAX)
     }
 
+    fn rowIndent(&self, index: i32) -> i32 {
+        let indent = usize::try_from(index)
+            .ok()
+            .and_then(|i| self.rows.row(i))
+            .map_or(0, |r| r.indent);
+        i32::try_from(indent).unwrap_or(i32::MAX)
+    }
+
     fn styledRow(&self, index: i32, colours: QString) -> QString {
         let Some(row) = usize::try_from(index).ok().and_then(|i| self.rows.row(i)) else {
             return QString::default();
         };
+        let skip = if row.start == 0 { row.indent } else { 0 };
         let palette = Palette::parse(&colours.to_string());
         QString::from(
             self.lines
-                .styled_row(row.line, row.start, row.text, &palette)
+                .styled_row(row.line, row.start + skip, &row.text[skip..], &palette)
                 .as_str(),
         )
     }
@@ -185,28 +185,22 @@ impl TextDocument {
     }
 }
 
-/// Reading viewer's rich text: Markdown, or `.txt` as prose.
 #[derive(QObject, Default)]
 pub struct MarkdownDocument {
     base: qt_base_class!(trait QObject),
     uri: qt_property!(QString; WRITE setUri NOTIFY uriChanged),
     uriChanged: qt_signal!(),
-    /// [`Style`] spec: ambience colours and sizes (ReadingStyle.js).
     colours: qt_property!(QString; WRITE setColours NOTIFY coloursChanged),
     coloursChanged: qt_signal!(),
     loading: qt_property!(bool; NOTIFY stateChanged),
-    /// Rich-text blocks; view lays out only those on screen.
     blockCount: qt_property!(i32; NOTIFY stateChanged),
     truncated: qt_property!(bool; NOTIFY stateChanged),
     errorKind: qt_property!(QString; NOTIFY stateChanged),
     errorMessage: qt_property!(QString; NOTIFY stateChanged),
     stateChanged: qt_signal!(),
     reload: qt_method!(fn(&mut self)),
-    /// Empty past the blocks.
     block: qt_method!(fn(&self, index: i32) -> QString),
-    /// `text`, `heading`, `quote` or `code`: what the view draws around a block.
     blockKind: qt_method!(fn(&self, index: i32) -> QString),
-    /// Next block continues this one: no gap between them.
     blockJoined: qt_method!(fn(&self, index: i32) -> bool),
     generation: u64,
     blocks: Vec<Block>,

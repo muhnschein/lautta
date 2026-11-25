@@ -1,17 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Runs host QML tests (tests/qml/host/tst_*.qml) against the real Lautta types with a temporary
-//! home. No Silica on host.
 
 use std::path::PathBuf;
 use std::process::Command;
 
-// Child: the one QML file it checks, and the file it creates once that passed (a child whose
-// libtest filter matched nothing exits 0 too).
 const FILE_VAR: &str = "LAUTTA_QML_HOST_FILE";
 const PASSED_VAR: &str = "LAUTTA_QML_HOST_PASSED";
 
-/// Each file in its own child process, all at once: one Qt app per process, files mostly wait on
-/// timers.
 #[test]
 fn host_qml_tests_pass() {
     if let (Ok(file), Ok(passed)) = (std::env::var(FILE_VAR), std::env::var(PASSED_VAR)) {
@@ -73,7 +67,6 @@ fn check_one(file: &str) {
     }
     std::env::set_var("HOME", home.path());
     std::env::set_var("QT_QPA_PLATFORM", "offscreen");
-    // No system fonts: bundled one must load from `-F`, as on phone.
     let fonts_conf = home.path().join("fonts.conf");
     std::fs::write(&fonts_conf, "<fontconfig></fontconfig>").unwrap();
     std::env::set_var("FONTCONFIG_FILE", &fonts_conf);

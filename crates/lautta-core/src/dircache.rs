@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Directory listing cache: small in-memory LRU in front of the `dircache` table. Listings older
-//! than seven days are never returned. A location can opt out (`location_prefs.no_listing_cache`),
-//! which also purges what is stored.
 
 use crate::db::Db;
 use crate::entry::{ms_to_system_time, system_time_to_ms, Entry, EntryFlags, Kind};
@@ -15,7 +12,6 @@ use std::sync::{Arc, Mutex, MutexGuard};
 pub const MAX_AGE_MS: i64 = 7 * 24 * 60 * 60 * 1000;
 pub const DEFAULT_FRESH_MS: i64 = 30_000;
 
-/// Injectable for tests.
 pub type Clock = Arc<dyn Fn() -> i64 + Send + Sync>;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -154,7 +150,6 @@ impl DirCache {
                 Ok(Some((fetched_ms, entries)))
             }
             Err(_) => {
-                // A row from a damaged write or an older format is only a cache.
                 self.remove_key(inner, key)?;
                 Ok(None)
             }
@@ -263,7 +258,6 @@ fn load_disabled(db: &Db) -> Result<HashSet<LocationId>> {
     Ok(out)
 }
 
-/// Names and etags are bytes: stored as text when valid UTF-8, as hex otherwise.
 #[derive(Serialize, Deserialize)]
 struct EntryDto {
     #[serde(default, skip_serializing_if = "String::is_empty")]

@@ -13,7 +13,6 @@ Item {
             console.error("FAILED: " + what)
     }
 
-    // Bounded: a test of "nothing happened" waits the whole time.
     function wait(ms) { tools.pump(ms) }
 
     function until(cond, what) {
@@ -45,8 +44,6 @@ Item {
 
     property int changes
     property bool asking: true
-    // Name bindings evaluated: a count must not make a row re-read its other roles.
-    // Object, not int: a counter property the binding reads would loop.
     readonly property var nameReads: ({ "n": 0 })
 
     function read(value) {
