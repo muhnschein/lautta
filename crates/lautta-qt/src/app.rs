@@ -38,6 +38,7 @@ pub struct App {
     displayAddress: qt_method!(fn(&self, uri: QString) -> QString),
     locationName: qt_method!(fn(&self, uri: QString) -> QString),
     isLocal: qt_method!(fn(&self, uri: QString) -> bool),
+    isFavourite: qt_method!(fn(&self, uri: QString) -> bool),
     isRemote: qt_method!(fn(&self, uri: QString) -> bool),
     canChange: qt_method!(fn(&self, uri: QString) -> bool),
     canAddTo: qt_method!(fn(&self, folder_uri: QString) -> bool),
@@ -206,6 +207,10 @@ impl App {
 
     fn isLocal(&self, uri: QString) -> bool {
         matches!((core(), parse_uri(&uri)), (Some(c), Some(u)) if c.locations.to_local_path(&u).is_some())
+    }
+
+    fn isFavourite(&self, uri: QString) -> bool {
+        matches!((core(), parse_uri(&uri)), (Some(c), Some(u)) if c.favourites.is_favourite(&u).unwrap_or(false))
     }
 
     fn isRemote(&self, uri: QString) -> bool {

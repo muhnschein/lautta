@@ -99,6 +99,7 @@ impl Interface for Checked {
         msg: &'call zbus::Message,
         name: MemberName<'call>,
     ) -> DispatchResult<'call> {
+        self.0.session.attach(connection);
         let wanted = contract_methods().get(name.as_str());
         let body = msg.body();
         let given = body.signature();

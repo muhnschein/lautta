@@ -87,7 +87,7 @@ Item {
                     y: strip.tileSize + Theme.paddingSmall / 2
                     width: strip.tileSize
                     horizontalAlignment: implicitWidth > width ? Text.AlignLeft : Text.AlignHCenter
-                    truncationMode: TruncationMode.Fade
+                    elide: Text.ElideMiddle
                     textFormat: Text.PlainText
                     text: cell.tile.name
                     font.pixelSize: Theme.fontSizeExtraSmall
