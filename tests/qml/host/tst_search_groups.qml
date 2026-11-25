@@ -21,6 +21,8 @@ QtObject {
         var groups = [group("done", { "key": "@device", "kind": "device", "name": "" }), group("searching")]
         same(SearchGroups.find(groups, "nv-nas"), groups[1], "find by key")
         same(SearchGroups.find(groups, "nv-office"), null, "unknown key finds nothing")
+        same(SearchGroups.withoutRows([{ "key": "a", "rows": 2 }, { "key": "b", "rows": 0 }, { "key": "c" }])
+             .map(function (g) { return g.key }), ["b", "c"], "groups without rows get a line of their own")
         same(SearchGroups.name(groups[0]), "lautta-search-group-device", "the device has its own name")
         same(SearchGroups.name(groups[1]), "NAS", "a server keeps its name")
         same(SearchGroups.name(null), "", "no group, no name")

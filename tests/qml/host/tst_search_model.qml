@@ -154,6 +154,7 @@ Item {
         var groups = JSON.parse(model.groupsJson)
         check(groups.length === 1 && groups[0].key === "@device" && groups[0].kind === "device",
               "device scope is one group: " + model.groupsJson)
+        check(groups[0].rows === 1, "the group counts its rows: " + model.groupsJson)
         check(groups[0].state === "done" && groups[0].hits === 1 && groups[0].folders >= 4,
               "the group reports its outcome: " + model.groupsJson)
         check(rows.count === 1, "one hit on the whole device: " + names())

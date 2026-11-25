@@ -14,6 +14,10 @@ function find(groups, key) {
     return null
 }
 
+function withoutRows(groups) {
+    return groups.filter(function (g) { return !(g.rows > 0) })
+}
+
 function name(group) {
     if (!group)
         return ""

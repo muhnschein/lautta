@@ -46,6 +46,7 @@ struct GroupState {
     folders: u64,
     hits: u64,
     errors: u64,
+    rows: usize,
     #[serde(rename = "errorKind")]
     error_kind: String,
 }
@@ -391,6 +392,7 @@ impl SearchModel {
                 folders: 0,
                 hits: 0,
                 errors: 0,
+                rows: 0,
                 error_kind: String::new(),
             })
             .collect();
@@ -501,8 +503,11 @@ impl SearchModel {
         self.rows.splice(at..at, rows);
         self.end_insert_rows();
         self.group_sizes[group] += n;
+        if let Some(g) = self.groups.get_mut(group) {
+            g.rows = self.group_sizes[group];
+        }
         self.hitCount = self.rows.len() as i32;
-        self.progressChanged();
+        self.publish_groups();
     }
 }
 

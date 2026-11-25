@@ -440,47 +440,23 @@ Page {
                     fontSize: Theme.fontSizeSmall
                 }
 
-                Row {
-                    objectName: "searchGroupStatus"
+                GroupHeader {
                     visible: page.wide
-                    x: Theme.horizontalPageMargin
-                    width: groupName.x - x - Theme.paddingMedium
-                    anchors {
-                        verticalCenter: parent.verticalCenter
-                        verticalCenterOffset: Theme.paddingMedium / 2
-                    }
-                    spacing: Theme.paddingSmall
-
-                    BusyIndicator {
-                        size: BusyIndicatorSize.ExtraSmall
-                        running: visible
-                        visible: page.wide && group !== null && group.state === "searching"
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-                    Label {
-                        width: parent.width
-                        text: SearchGroups.status(group)
-                        truncationMode: TruncationMode.Fade
-                        font.pixelSize: Theme.fontSizeExtraSmall
-                        color: SearchGroups.failed(group) ? Theme.errorColor : Theme.secondaryColor
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
+                    group: parent.group
                 }
+            }
+        }
 
-                Label {
-                    id: groupName
+        footer: Column {
+            width: list.width
 
-                    objectName: "searchGroupName"
-                    visible: page.wide
-                    anchors {
-                        right: parent.right
-                        rightMargin: Theme.horizontalPageMargin
-                        verticalCenter: parent.verticalCenter
-                        verticalCenterOffset: Theme.paddingMedium / 2
-                    }
-                    text: SearchGroups.name(group)
-                    color: Theme.highlightColor
-                    font.pixelSize: Theme.fontSizeSmall
+            Repeater {
+                model: page.wide ? SearchGroups.withoutRows(page.groups) : []
+
+                GroupHeader {
+                    objectName: "searchGroupFooter"
+                    width: list.width
+                    group: modelData
                 }
             }
         }
