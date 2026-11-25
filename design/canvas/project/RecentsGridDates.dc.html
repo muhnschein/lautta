@@ -112,12 +112,11 @@ body{margin:0}
 .di-l{flex:1;text-align:right;color:var(--sec)}
 .di-v{flex:1;color:var(--pri);word-break:break-all}
 .note{background:rgba(20,30,40,.92);color:#fff;padding:12px 16px;display:flex;gap:12px;align-items:flex-start;border-radius:6px}
-.sbar{position:absolute;right:0;width:6px;height:90px;background:var(--hl);opacity:.85}
 .pin{position:absolute;left:0;right:0;top:0;z-index:2;background:var(--hldim)}
 .scr{position:absolute;left:0;right:0;bottom:0;overflow:hidden}
-.sbl{position:absolute;right:12px;padding:8px 14px 8px 22px;text-align:right;background:linear-gradient(90deg,transparent,var(--ov) 28%);pointer-events:none}
-.sbl-t{font-size:26px;font-weight:300;color:var(--hl);line-height:1.1}
-.sbl-d{font-size:15px;color:var(--hl2)}
+.sbl{position:absolute;right:12px;padding:6px 18px;border-radius:10px;background:var(--hl);color:#fff;text-align:left;pointer-events:none;z-index:3}
+.sbl-t{font-size:21px;line-height:1.25}
+.sbl-d{font-size:21px;line-height:1.25}
 .tile{display:block;position:relative;aspect-ratio:1}
 .cap{font-size:13px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:3px 2px 0}
 .capp{font-size:12px;text-align:center;color:var(--sec);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 2px 6px}
@@ -132,7 +131,7 @@ body{margin:0}
 <div class="sh">Older</div>
 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0 6px;padding:0 12px"><a href="ImageViewer.dc.html"><span class="tile" style="background:linear-gradient(135deg,#2c3e56,#7f6fa8)"></span><div class="cap">IMG_1980.jpg</div><div class="capp">NAS</div></a><a href="ImageViewer.dc.html"><span class="tile" style="background:linear-gradient(135deg,#3f7a6e,#9ad1b8)"></span><div class="cap">IMG_1979.jpg</div><div class="capp">NAS</div></a><a href="ImageViewer.dc.html"><span class="tile" style="background:linear-gradient(135deg,#6b8f5a,#d1d98a)"></span><div class="cap">IMG_1975.jpg</div><div class="capp">Office</div></a></div>
 </div>
-<div class="sbar" style="top: 200px"></div><div class="sbl" style="top: 200px"><div class="sbl-t">Sunday</div><div class="sbl-d">22 Nov</div></div>
+<div class="sbl" style="top: 200px"><div class="sbl-t">Sunday</div><div class="sbl-d">22 Nov</div></div>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":400,"height":860}}'>

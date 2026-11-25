@@ -94,7 +94,13 @@ Item {
         width: Math.max(dateText.implicitWidth, dateDescription.implicitWidth) + 2 * Theme.paddingLarge
         height: lines.height + 2 * Theme.paddingSmall
         radius: Theme.paddingMedium
-        color: Theme.highlightBackgroundColor
+        color: Theme.overlayBackgroundColor
+
+        Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            color: Theme.rgba(Theme.highlightBackgroundColor, 0.75)
+        }
 
         Column {
             id: lines
