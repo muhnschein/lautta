@@ -63,6 +63,14 @@ Item {
         check(keptPlayer === null && keptOutput === null, "both go once the player leaves loading")
 
         page = pageComponent.createObject(root)
+        page.player.status = loading
+        keptOutput = page.output
+        check(tools.keepWhileLoading(page.player, keptOutput), "output kept without its player")
+        page.destroy()
+        until(function() { return keptOutput === null })
+        check(keptOutput === null, "kept output goes with its player, still loading")
+
+        page = pageComponent.createObject(root)
         page.player.status = buffered
         check(!tools.keepWhileLoading(page.player, page.output), "loaded player: nothing kept")
         check(page.output.parent === page, "output stays on its page")

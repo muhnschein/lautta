@@ -160,7 +160,7 @@ cpp! {{
         if (index < 0)
             return false;
         const QMetaProperty status = meta->property(index);
-        if (!status.hasNotifySignal() || lauttaEnumValue(status.read(source)) != QMediaPlayer::LoadingMedia)
+        if (lauttaEnumValue(status.read(source)) != QMediaPlayer::LoadingMedia)
             return false;
         QQmlEngine::setObjectOwnership(obj, QQmlEngine::CppOwnership);
         if (QQuickItem *item = qobject_cast<QQuickItem *>(obj))
