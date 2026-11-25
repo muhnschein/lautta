@@ -793,6 +793,86 @@
       "w": 400,
       "x": 5740,
       "y": 6580
+    },
+    "SearchA4.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Search A \u00b7 before typing, from a folder",
+      "w": 400,
+      "x": 0,
+      "y": 40360
+    },
+    "SearchA1.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Search A \u00b7 everywhere, list",
+      "w": 400,
+      "x": 480,
+      "y": 40360
+    },
+    "SearchA2.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Search A \u00b7 grid (View options: grid)",
+      "w": 400,
+      "x": 960,
+      "y": 40360
+    },
+    "SearchA3.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Search A \u00b7 pill opens its choices inline",
+      "w": 400,
+      "x": 1440,
+      "y": 40360
+    },
+    "SearchSettingsIndex.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Settings \u203a Search \u00b7 index per location",
+      "w": 400,
+      "x": 1920,
+      "y": 40360
+    },
+    "SearchB1.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Search B \u00b7 by location, top hits",
+      "w": 400,
+      "x": 0,
+      "y": 41820
+    },
+    "SearchB2.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Search B \u00b7 one location, all hits",
+      "w": 400,
+      "x": 480,
+      "y": 41820
+    },
+    "SearchC1.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Search C \u00b7 filter this folder, then go deeper",
+      "w": 400,
+      "x": 960,
+      "y": 41820
+    },
+    "SearchC2.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Search C \u00b7 subfolders, pills appear",
+      "w": 400,
+      "x": 1440,
+      "y": 41820
+    },
+    "SearchArchitecture.dc.html": {
+      "h": 1640,
+      "is_interactive": true,
+      "title": "Search \u00b7 how it finds things (architecture)",
+      "w": 860,
+      "x": 0,
+      "y": 43280
     }
   },
   "createdOnFiles": {
@@ -907,6 +987,30 @@
       "w": 240,
       "x": 0,
       "y": 17960
+    },
+    "r13": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Search redesign (#43) \u00b7 option A: pills under the field, results follow View options",
+      "w": 240,
+      "x": 0,
+      "y": 40060
+    },
+    "r14": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Search redesign (#43) \u00b7 option B: by location \u00b7 option C: filter this folder, then go deeper",
+      "w": 240,
+      "x": 0,
+      "y": 41520
+    },
+    "r15": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Search redesign (#43) \u00b7 architecture: index, remotes, netvfs API",
+      "w": 240,
+      "x": 0,
+      "y": 42980
     }
   },
   "order": [
@@ -1008,7 +1112,17 @@
     "AccessAddOnly.dc.html",
     "AccessPicker.dc.html",
     "AccessNarrowed.dc.html",
-    "AccessAbout.dc.html"
+    "AccessAbout.dc.html",
+    "SearchA4.dc.html",
+    "SearchA1.dc.html",
+    "SearchA2.dc.html",
+    "SearchA3.dc.html",
+    "SearchSettingsIndex.dc.html",
+    "SearchB1.dc.html",
+    "SearchB2.dc.html",
+    "SearchC1.dc.html",
+    "SearchC2.dc.html",
+    "SearchArchitecture.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"
