@@ -119,14 +119,21 @@ pub(crate) fn watch_sources<T: QObject + 'static>(
             on_change(&mut model.borrow_mut());
         }
     });
-    let core = core.clone();
+    handle().spawn(source_changes(core, guard, move || notify(())));
+}
+
+fn source_changes(
+    core: &Core,
+    guard: &Guard,
+    notify: impl Fn() + Send + 'static,
+) -> impl std::future::Future<Output = ()> + Send + 'static {
     let mut stop = guard.subscribe();
-    handle().spawn(async move {
-        let mut locations = core.locations.subscribe();
-        let mut store = store_subscribe();
-        let mut status = core.bridge.as_ref().map(|b| b.watch_status());
-        let mut nearby = core.bridge.as_ref().map(|b| b.watch_nearby());
-        let mut drives = core.bridge.as_ref().map(|b| b.watch_drives());
+    let mut locations = core.locations.subscribe();
+    let mut store = store_subscribe();
+    let mut status = core.bridge.as_ref().map(|b| b.watch_status());
+    let mut nearby = core.bridge.as_ref().map(|b| b.watch_nearby());
+    let mut drives = core.bridge.as_ref().map(|b| b.watch_drives());
+    async move {
         loop {
             tokio::select! {
                 r = locations.changed() => if r.is_err() { return },
@@ -139,9 +146,9 @@ pub(crate) fn watch_sources<T: QObject + 'static>(
             tokio::time::sleep(SETTLE).await;
             locations.borrow_and_update();
             store.borrow_and_update();
-            notify(());
+            notify();
         }
-    });
+    }
 }
 
 async fn changed<T>(rx: &mut Option<watch::Receiver<T>>) -> bool {
@@ -191,6 +198,44 @@ mod tests {
         assert!(!cell_data(&rows, 0, FIRST_ROLE + 3).is_valid());
         assert!(!cell_data(&rows, -1, FIRST_ROLE).is_valid());
         assert!(!cell_data(&rows, 0, 3).is_valid());
+    }
+
+    #[test]
+    fn a_change_made_before_the_watch_first_runs_is_seen() {
+        use lautta_core::locations::{Location, LocationKind, LocationRegistry};
+        use lautta_core::paths::AppPaths;
+        use lautta_core::provider::memory::MemoryProvider;
+        let dir = tempfile::tempdir().unwrap();
+        let paths = AppPaths::new(dir.path());
+        let registry = LocationRegistry::with_media_root(paths.clone(), dir.path().join("media"));
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            let core = Core::open_with(paths, registry).await.unwrap();
+            let guard = Guard::default();
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+            let watching = source_changes(&core, &guard, move || {
+                let _ = tx.send(());
+            });
+            core.locations.register(
+                Location::remote(
+                    "nv-qt-watch",
+                    LocationKind::Server {
+                        provider: "sftp".into(),
+                    },
+                    "NAS",
+                    None,
+                ),
+                Arc::new(MemoryProvider::default()),
+            );
+            tokio::spawn(watching);
+            tokio::time::timeout(Duration::from_secs(10), rx.recv())
+                .await
+                .expect("the change is seen")
+                .expect("the watch runs");
+        });
     }
 
     #[test]
