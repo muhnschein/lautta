@@ -1082,6 +1082,20 @@ async fn withdrawn_consent_and_lost_connection_purge_nothing() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_account_gone_before_the_purge_saw_it_listed_is_purged_on_the_next_change() {
+    let (fake, e) = ready_env().await;
+    remember_account(&e.core, 1);
+    let purges = counted_purge(&e.core);
+    purged(&purges, 1).await;
+    remember_account(&e.core, 3);
+    fake.add_account(4, "sftp", "Office", "office.home").await;
+    purged(&purges, 2).await;
+    assert!(!remembered(&e.core, 3));
+    assert!(remembered(&e.core, 1));
+    assert_eq!(purges.load(Ordering::SeqCst), 2, "nothing else purged");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn accounts_the_app_may_not_use_are_not_purged() {
     let fake = account_fake().await;
     fake.add_account(2, "sftp", "Office", "office.home").await;
