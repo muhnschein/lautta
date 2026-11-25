@@ -216,6 +216,7 @@ impl ProgressBook {
 
     pub fn aggregate(&self, list: &[TransferSummary]) -> Aggregate {
         let mut a = Aggregate::default();
+        let (mut paused_done, mut paused_total) = (0, 0);
         for s in list {
             match group_of(s.state) {
                 TransferGroup::Active => {
@@ -226,9 +227,16 @@ impl ProgressBook {
                     a.rate += rate;
                 }
                 TransferGroup::Waiting => a.waiting += 1,
-                TransferGroup::Paused => a.paused += 1,
+                TransferGroup::Paused => {
+                    a.paused += 1;
+                    paused_done += self.of(s).0;
+                    paused_total += s.bytes_total;
+                }
                 _ => {}
             }
+        }
+        if a.active == 0 {
+            (a.bytes_done, a.bytes_total) = (paused_done, paused_total);
         }
         a.unfinished = a.active + a.waiting + a.paused;
         a.eta_secs = (a.rate > 0).then(|| a.bytes_total.saturating_sub(a.bytes_done) / a.rate);
@@ -490,6 +498,24 @@ mod tests {
         let (done, rate, eta) = book.of(&list[2]);
         assert_eq!((done, rate, eta), (99, 0, None));
         assert_eq!(book.of(&list[0]), (300, 100, Some(7)));
+    }
+
+    #[test]
+    fn with_nothing_moving_aggregate_shows_paused_progress() {
+        use TransferState::*;
+        let mut book = ProgressBook::default();
+        let list = vec![
+            summary(1, Paused, 10, 1000),
+            summary(2, Paused, 0, 200),
+            summary(3, Waiting(WaitReason::Network), 40, 100),
+            summary(4, Completed, 10, 10),
+        ];
+        book.update(1, 880, 300, Some(1));
+        let a = book.aggregate(&list);
+        assert_eq!((a.active, a.paused), (0, 2));
+        assert_eq!(a.bytes_done, 880, "paused at its live bytes");
+        assert_eq!(a.bytes_total, 1200, "waiting and finished do not count");
+        assert_eq!((a.rate, a.eta_secs), (0, None));
     }
 
     #[test]

@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Before you allow Lautta to use network locations, a favourite or recent item on a server reads *Server › /Photos*, no longer an internal id such as *nv-account:23 › Photos* ([#107](https://github.com/muhnschein/lautta/issues/107)).
+- With every task paused, Lautta's cover shows how far they got, as *Activity* does, no longer 0% and an empty bar ([#124](https://github.com/muhnschein/lautta/issues/124)).
 - A video the phone cannot decode, such as some CAVS or 10-bit H.264 files, no longer freezes Lautta when you leave the player ([#161](https://github.com/muhnschein/lautta/issues/161)).
 - A server file opened from two places at once, such as *Open with* in a viewer while a share of it runs, downloads once and both get the same copy ([#155](https://github.com/muhnschein/lautta/issues/155)).
 - A tar file with an entry dated out of range (such as before 1901 or far in the future) no longer closes Lautta: it opens, and that entry shows no date ([#156](https://github.com/muhnschein/lautta/issues/156)).
