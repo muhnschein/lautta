@@ -243,34 +243,10 @@ Page {
         onTriggered: page.renderZoom = page.zoom
     }
 
-    SearchField {
-        id: searchField
-
-        anchors { top: parent.top; left: parent.left; right: parent.right }
-        visible: page.searchMode
-        //% "Search the text"
-        placeholderText: qsTrId("lautta-viewers-pdf-search-placeholder")
-        inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
-        EnterKey.iconSource: "image://theme/icon-m-enter-close"
-        EnterKey.onClicked: focus = false
-        onTextChanged: {
-            if (text.trim() === "") {
-                typing.stop()
-                doc.stopSearch()
-            } else {
-                typing.restart()
-            }
-        }
-        rightItem: IconButton {
-            icon.source: "image://theme/icon-m-close"
-            onClicked: page.closeSearch()
-        }
-    }
-
     PinchArea {
         anchors {
-            top: page.searchMode ? searchField.bottom : parent.top
-            bottom: page.searchMode ? hitBar.top : parent.bottom
+            top: parent.top
+            bottom: page.searchMode ? searchBar.top : parent.bottom
             left: parent.left
             right: parent.right
         }
@@ -285,6 +261,7 @@ Page {
         SilicaListView {
             id: view
 
+            objectName: "pdfPages"
             anchors.fill: parent
             model: doc.loaded ? doc.pageCount : 0
             clip: true
@@ -369,39 +346,69 @@ Page {
         }
     }
 
-    Item {
-        id: hitBar
+    Column {
+        id: searchBar
 
+        objectName: "pdfSearchBar"
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-        height: Theme.itemSizeMedium
         visible: page.searchMode
 
-        IconButton {
-            anchors { left: parent.left; leftMargin: Theme.horizontalPageMargin; verticalCenter: parent.verticalCenter }
-            enabled: doc.hitCount > 0
-            icon.source: "image://theme/icon-m-up"
-            onClicked: page.previousHit()
+        SearchField {
+            id: searchField
+
+            width: parent.width
+            //% "Search the text"
+            placeholderText: qsTrId("lautta-viewers-pdf-search-placeholder")
+            inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
+            EnterKey.iconSource: "image://theme/icon-m-enter-close"
+            EnterKey.onClicked: focus = false
+            onTextChanged: {
+                if (text.trim() === "") {
+                    typing.stop()
+                    doc.stopSearch()
+                } else {
+                    typing.restart()
+                }
+            }
+            rightItem: IconButton {
+                icon.source: "image://theme/icon-m-close"
+                onClicked: page.closeSearch()
+            }
         }
 
-        BusyIndicator {
-            anchors { right: hitLabel.left; rightMargin: Theme.paddingMedium; verticalCenter: parent.verticalCenter }
-            size: BusyIndicatorSize.ExtraSmall
-            running: doc.searching
-        }
+        Item {
+            id: hitBar
 
-        Label {
-            id: hitLabel
-            anchors.centerIn: parent
-            font.pixelSize: Theme.fontSizeSmall
-            color: Theme.highlightColor
-            text: page.hitText()
-        }
+            width: parent.width
+            height: Theme.itemSizeMedium
 
-        IconButton {
-            anchors { right: parent.right; rightMargin: Theme.horizontalPageMargin; verticalCenter: parent.verticalCenter }
-            enabled: doc.hitCount > 0
-            icon.source: "image://theme/icon-m-down"
-            onClicked: page.nextHit()
+            IconButton {
+                anchors { left: parent.left; leftMargin: Theme.horizontalPageMargin; verticalCenter: parent.verticalCenter }
+                enabled: doc.hitCount > 0
+                icon.source: "image://theme/icon-m-up"
+                onClicked: page.previousHit()
+            }
+
+            BusyIndicator {
+                anchors { right: hitLabel.left; rightMargin: Theme.paddingMedium; verticalCenter: parent.verticalCenter }
+                size: BusyIndicatorSize.ExtraSmall
+                running: doc.searching
+            }
+
+            Label {
+                id: hitLabel
+                anchors.centerIn: parent
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.highlightColor
+                text: page.hitText()
+            }
+
+            IconButton {
+                anchors { right: parent.right; rightMargin: Theme.horizontalPageMargin; verticalCenter: parent.verticalCenter }
+                enabled: doc.hitCount > 0
+                icon.source: "image://theme/icon-m-down"
+                onClicked: page.nextHit()
+            }
         }
     }
 
@@ -409,7 +416,7 @@ Page {
         id: back
 
         anchors {
-            bottom: page.searchMode ? hitBar.top : parent.bottom
+            bottom: page.searchMode ? searchBar.top : parent.bottom
             bottomMargin: Theme.paddingLarge * 2
             horizontalCenter: parent.horizontalCenter
         }
@@ -450,7 +457,7 @@ Page {
 
     Rectangle {
         anchors {
-            bottom: back.visible ? back.top : (page.searchMode ? hitBar.top : parent.bottom)
+            bottom: back.visible ? back.top : (page.searchMode ? searchBar.top : parent.bottom)
             bottomMargin: Theme.paddingLarge * 2
             horizontalCenter: parent.horizontalCenter
         }
