@@ -793,6 +793,54 @@
       "w": 400,
       "x": 5740,
       "y": 6580
+    },
+    "CoverIconTiles.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Cover idea 1 \u00b7 tile wall",
+      "w": 860,
+      "x": 0,
+      "y": 50000
+    },
+    "CoverIconStickers.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Cover idea 2 \u00b7 sticker sheet",
+      "w": 860,
+      "x": 940,
+      "y": 50000
+    },
+    "CoverIconWave.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Cover idea 3 \u00b7 ferry wave",
+      "w": 860,
+      "x": 1880,
+      "y": 50000
+    },
+    "CoverIconLanes.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Cover idea 4 \u00b7 drift lanes",
+      "w": 860,
+      "x": 2820,
+      "y": 50000
+    },
+    "CoverIconBento.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Cover idea 5 \u00b7 bento",
+      "w": 860,
+      "x": 3760,
+      "y": 50000
+    },
+    "HomeDiskFree.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Home \u00b7 disk free under On this device",
+      "w": 860,
+      "x": 0,
+      "y": 51480
     }
   },
   "createdOnFiles": {
@@ -907,6 +955,22 @@
       "w": 240,
       "x": 0,
       "y": 17960
+    },
+    "r16": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Cover redesign \u00b7 playful icon grid, idle and browse (no previews, no free space)",
+      "w": 240,
+      "x": 0,
+      "y": 49700
+    },
+    "r17": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Home \u00b7 disk free under On this device (now vs. proposed)",
+      "w": 240,
+      "x": 0,
+      "y": 51180
     }
   },
   "order": [
@@ -1008,7 +1072,13 @@
     "AccessAddOnly.dc.html",
     "AccessPicker.dc.html",
     "AccessNarrowed.dc.html",
-    "AccessAbout.dc.html"
+    "AccessAbout.dc.html",
+    "CoverIconTiles.dc.html",
+    "CoverIconStickers.dc.html",
+    "CoverIconWave.dc.html",
+    "CoverIconLanes.dc.html",
+    "CoverIconBento.dc.html",
+    "HomeDiskFree.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"
