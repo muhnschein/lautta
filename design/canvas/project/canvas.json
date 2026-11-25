@@ -841,6 +841,14 @@
       "w": 860,
       "x": 0,
       "y": 51480
+    },
+    "AppGlyph.dc.html": {
+      "h": 520,
+      "is_interactive": true,
+      "title": "Lautta glyph \u00b7 app icon as a line glyph",
+      "w": 860,
+      "x": 4700,
+      "y": 50000
     }
   },
   "createdOnFiles": {
@@ -1078,7 +1086,8 @@
     "CoverIconWave.dc.html",
     "CoverIconLanes.dc.html",
     "CoverIconBento.dc.html",
-    "HomeDiskFree.dc.html"
+    "HomeDiskFree.dc.html",
+    "AppGlyph.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"

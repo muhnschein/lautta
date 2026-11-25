@@ -1,0 +1,3 @@
+<!-- SPDX-License-Identifier: LGPL-2.1-or-later -->
+<!-- Lautta app icon as a one-colour line glyph (80 grid, like file-*-80.svg): shape, two page lines, wave with 0.6 fill below. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M11 42.5H31C34 42.5 35.5 44 37 46.5S40 51 43 51H66.8A29 29 0 0 1 40 69A29 29 0 0 1 11 40Z" fill="#ffffff" fill-opacity="0.6" stroke="none"/><path d="M12.5 11H40A29 29 0 0 1 69 40A29 29 0 0 1 40 69A29 29 0 0 1 11 40V12.5A1.5 1.5 0 0 1 12.5 11Z"/><path d="M23.5 25H41"/><path d="M23.5 33H55" stroke-opacity="0.6"/><path d="M11 42.5H31C34 42.5 35.5 44 37 46.5S40 51 43 51H66.8"/></svg>
