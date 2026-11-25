@@ -687,7 +687,7 @@ async fn unsupported_zip_method_and_encryption_are_refused() {
     let central = [0x50, 0x4b, 0x01, 0x02];
     let mut data = zip_bytes(&[("f", b"hello")], zip::CompressionMethod::Stored);
     let cd = data.windows(4).rposition(|w| w == central).unwrap();
-    data[cd + 8] |= 1;
+    data[cd + 8] |= 0x41;
     let p = open_named("e.zip", &data, tmp.path()).await.unwrap();
     let err = p.open_read(&vp("f"), Lane::Bulk).await.err();
     assert_eq!(err.map(|e| e.kind), Some(ErrorKind::Unsupported));
