@@ -138,6 +138,7 @@ Page {
                 bottom: parent.bottom
             }
             clip: true
+            quickScroll: false
 
             section.property: "dateGroup"
             section.criteria: ViewSection.FullString

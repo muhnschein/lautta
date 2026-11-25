@@ -161,6 +161,7 @@ Page {
                 bottom: parent.bottom
             }
             clip: true
+            quickScroll: false
             model: page.listModel
 
             section {

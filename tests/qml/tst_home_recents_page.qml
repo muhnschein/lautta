@@ -112,6 +112,8 @@ ApplicationWindow {
             return fail("the host does not scroll and the header is at the top of the page")
         if (Math.abs(view.mapToItem(win.page, 0, 0).y - header.height) > 0.5 || !view.clip)
             return fail("the list starts under the header and is cut there")
+        if (view.quickScroll)
+            return fail("the date pill is the quick way through the list, not Silica's quick scroll arrows")
         view.contentY = view.originY + view.height
         var stays = header.mapToItem(win.page, 0, 0).y === 0 && host.contentY === 0
         view.contentY = view.originY

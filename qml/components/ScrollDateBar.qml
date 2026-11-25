@@ -73,7 +73,12 @@ Item {
         refresh()
     }
 
-    Behavior on opacity { FadeAnimation { duration: bar.active ? 100 : 400 } }
+    Behavior on opacity {
+        SequentialAnimation {
+            PauseAnimation { duration: bar.active ? 0 : 600 }
+            FadeAnimation { duration: bar.active ? 100 : 400 }
+        }
+    }
 
     Connections {
         target: bar.active ? bar.flickable : null
