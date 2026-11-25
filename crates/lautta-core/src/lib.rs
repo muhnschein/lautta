@@ -46,6 +46,7 @@ pub mod workcopy;
 pub mod checksum;
 pub mod compress;
 pub mod password;
+pub mod pdf_pages;
 pub mod preview;
 pub mod scan;
 pub mod thumbs;

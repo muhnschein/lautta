@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The PDF viewer has *Pages* in its pulley: all pages as small pictures, the page you are on marked. Tap one to go there. It helps most in long PDFs and in scans, which have no table of contents ([#140](https://github.com/muhnschein/lautta/issues/140)).
 - In *Recents* and *Activity* the page title stays at the top while you scroll, as in folders. While you scroll, a date shows by the scroll handle on the right: *Today*, *Yesterday*, the weekday for the last week, then month and year. Drag the handle to jump through the list ([#194](https://github.com/muhnschein/lautta/issues/194)).
 - Sharing a file from a server offers the same apps as sharing a file on this device, such as Bluetooth. Before, the share sheet listed only apps that take any file, such as *Save to Lautta* ([#153](https://github.com/muhnschein/lautta/issues/153)).
 - A server folder you have open lists again by itself once Lautta is connected to netvfs again, for example after you change the account's access in *Settings*. Before, it could keep an error or the files of the old access until you left it and came back ([#235](https://github.com/muhnschein/lautta/issues/235), [#172](https://github.com/muhnschein/lautta/issues/172)).

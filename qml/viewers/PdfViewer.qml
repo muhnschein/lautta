@@ -77,6 +77,19 @@ Page {
         })
     }
 
+    function showPages() {
+        var pages = pageStack.push(pagesPage, {
+            "uri": uri,
+            "fileName": fileName,
+            "pageCount": doc.pageCount,
+            "currentPage": currentPage - 1
+        })
+        pages.chosen.connect(function(index) {
+            pageStack.pop(page)
+            showPage(index, -1)
+        })
+    }
+
     function askPassword() {
         asked = true
         wantPassword = false
@@ -229,6 +242,11 @@ Page {
         PdfContentsPage { }
     }
 
+    Component {
+        id: pagesPage
+        PdfPagesPage { }
+    }
+
     ExternalActions {
         id: external
         uri: page.uri
@@ -285,6 +303,7 @@ Page {
         SilicaListView {
             id: view
 
+            objectName: "pdfPages"
             anchors.fill: parent
             model: doc.loaded ? doc.pageCount : 0
             clip: true
@@ -314,6 +333,12 @@ Page {
                     //% "Search"
                     text: qsTrId("lautta-viewers-pdf-search")
                     onClicked: page.openSearch()
+                }
+                MenuItem {
+                    visible: doc.loaded
+                    //% "Pages"
+                    text: qsTrId("lautta-viewers-pdf-pages-menu")
+                    onClicked: page.showPages()
                 }
                 MenuItem {
                     visible: doc.loaded

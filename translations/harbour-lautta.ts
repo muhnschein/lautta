@@ -2630,5 +2630,13 @@
         <source>Server</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-viewers-pdf-pages-title">
+        <source>Pages</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-pages-menu">
+        <source>Pages</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>
