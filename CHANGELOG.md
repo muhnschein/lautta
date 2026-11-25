@@ -3,6 +3,7 @@
 ## Unreleased
 
 - In the PDF viewer the header with the file name stays at the top while you read, as in folders, so a pull on it opens the pulley on any page. It no longer shows the page count ([#147](https://github.com/muhnschein/lautta/issues/147)).
+- In grid view, the first row of a folder sits a little lower, with some space between it and the header.
 - In *Recents* and *Activity* the page title stays at the top while you scroll, as in folders. While you scroll, a date shows by the scroll handle on the right: *Today*, *Yesterday*, the weekday for the last week, then month and year. Drag the handle to jump through the list ([#194](https://github.com/muhnschein/lautta/issues/194)).
 - Sharing a file from a server offers the same apps as sharing a file on this device, such as Bluetooth. Before, the share sheet listed only apps that take any file, such as *Save to Lautta* ([#153](https://github.com/muhnschein/lautta/issues/153)).
 - A server folder you have open lists again by itself once Lautta is connected to netvfs again, for example after you change the account's access in *Settings*. Before, it could keep an error or the files of the old access until you left it and came back ([#235](https://github.com/muhnschein/lautta/issues/235), [#172](https://github.com/muhnschein/lautta/issues/172)).
