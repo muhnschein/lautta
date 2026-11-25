@@ -56,6 +56,13 @@ Page {
             remote.seek(target)
     }
 
+    function keepPipelineIfStuck() {
+        var media = local ? localPlayer : remote.mediaObject
+        tools.keepWhileLoading(media, output)
+        if (local)
+            tools.keepWhileLoading(media, localPlayer)
+    }
+
     allowedOrientations: Orientation.All
 
     MM.MediaPlayer {
@@ -83,6 +90,7 @@ Page {
             localPlayer.stop()
         else
             remote.stop()
+        keepPipelineIfStuck()
     }
 
     DisplayBlanking {
@@ -113,6 +121,7 @@ Page {
     }
 
     MM.VideoOutput {
+        id: output
         anchors.fill: parent
         visible: page.video
         source: page.local ? localPlayer : remote

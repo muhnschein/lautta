@@ -26,8 +26,11 @@ cpp! {{
     #include <QtCore/QCoreApplication>
     #include <QtCore/QEvent>
     #include <QtCore/QIODevice>
+    #include <QtCore/QMetaProperty>
     #include <QtCore/QUrl>
     #include <QtCore/QVariant>
+    #include <QtQml/QQmlEngine>
+    #include <QtQuick/QQuickItem>
 
     class LauttaMediaDevice : public QIODevice {
     public:
@@ -139,15 +142,57 @@ cpp! {{
         m->device->releaseLater();
     }
 
+    static int lauttaEnumValue(const QVariant &v)
+    {
+        if (QMetaType::typeFlags(v.userType()) & QMetaType::IsEnumeration)
+            return *static_cast<const int *>(v.constData());
+        return v.toInt();
+    }
+
+    static bool lauttaKeepWhileLoading(QObject *source, QObject *obj)
+    {
+        if (!source || !obj)
+            return false;
+        const QMetaObject *meta = source->metaObject();
+        int index = meta->indexOfProperty("mediaStatus");
+        if (index < 0)
+            index = meta->indexOfProperty("status");
+        if (index < 0)
+            return false;
+        const QMetaProperty status = meta->property(index);
+        if (lauttaEnumValue(status.read(source)) != QMediaPlayer::LoadingMedia)
+            return false;
+        QQmlEngine::setObjectOwnership(obj, QQmlEngine::CppOwnership);
+        if (QQuickItem *item = qobject_cast<QQuickItem *>(obj))
+            item->setParentItem(nullptr);
+        obj->setParent(nullptr);
+        const QMetaMethod drop = obj->metaObject()->method(obj->metaObject()->indexOfSlot("deleteLater()"));
+        QObject::connect(source, status.notifySignal(), obj, drop);
+        if (source != obj)
+            QObject::connect(source, &QObject::destroyed, obj, &QObject::deleteLater);
+        return true;
+    }
+
     static void lauttaMediaFree(LauttaMedia *m)
     {
         m->player->stop();
-        m->player->setMedia(QMediaContent());
-        delete m->player;
-        delete m->device;
+        if (lauttaKeepWhileLoading(m->player, m->player)) {
+            if (m->device)
+                m->device->setParent(m->player);
+        } else {
+            m->player->setMedia(QMediaContent());
+            delete m->player;
+            delete m->device;
+        }
         delete m;
     }
 }}
+
+pub(crate) fn keep_while_loading(source: &QVariant, obj: &QVariant) -> bool {
+    cpp!(unsafe [source as "const QVariant*", obj as "const QVariant*"] -> bool as "bool" {
+        return lauttaKeepWhileLoading(qvariant_cast<QObject *>(*source), qvariant_cast<QObject *>(*obj));
+    })
+}
 
 fn reader_ptr(r: Arc<ReadAhead>) -> *mut c_void {
     Arc::into_raw(r) as *mut c_void

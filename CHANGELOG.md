@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A video the phone cannot decode, such as some CAVS or 10-bit H.264 files, no longer freezes Lautta when you leave the player ([#161](https://github.com/muhnschein/lautta/issues/161)).
 - A server file opened from two places at once, such as *Open with* in a viewer while a share of it runs, downloads once and both get the same copy ([#155](https://github.com/muhnschein/lautta/issues/155)).
 - A tar file with an entry dated out of range (such as before 1901 or far in the future) no longer closes Lautta: it opens, and that entry shows no date ([#156](https://github.com/muhnschein/lautta/issues/156)).
 - Zip files with a file of 4 GB or more inside open and extract, and *Compress* to Zip writes such files with their right size, so other apps open the zip ([#166](https://github.com/muhnschein/lautta/issues/166)).

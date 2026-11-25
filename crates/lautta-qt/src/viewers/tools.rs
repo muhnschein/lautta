@@ -27,6 +27,7 @@ pub struct ViewerTools {
     base: qt_base_class!(trait QObject),
     noteViewed: qt_method!(fn(&self, uri: QString)),
     noteOpened: qt_method!(fn(&self, uri: QString)),
+    keepWhileLoading: qt_method!(fn(&self, source: QVariant, obj: QVariant) -> bool),
     pump: qt_method!(fn(&self, ms: i32)),
     installFixture: qt_method!(fn(&self, source_url: QString, dest_uri: QString) -> bool),
     installRepeated: qt_method!(fn(&self, source_url: QString, dest_uri: QString, times: i32) -> bool),
@@ -47,6 +48,10 @@ impl ViewerTools {
 
     fn noteOpened(&self, uri: QString) {
         self.note(uri, RecentKind::Opened);
+    }
+
+    fn keepWhileLoading(&self, source: QVariant, obj: QVariant) -> bool {
+        super::media::keep_while_loading(&source, &obj)
     }
 
     fn pump(&self, ms: i32) {
