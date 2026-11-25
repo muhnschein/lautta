@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- An empty folder says *Pull down to add*, as the pulley entry is called, and mentions paste only when something on the clipboard can be pasted there. *Paste here* on the clipboard bar now also shows in folders you opened before copying ([#192](https://github.com/muhnschein/lautta/issues/192)).
 - Videos ending in .ts, as TV and camera recordings do, show the video icon in folders on this device and open in the video player, no longer as code in the text viewer. TypeScript files ending in .ts still open as code. .mts and .m2ts files are videos too ([#160](https://github.com/muhnschein/lautta/issues/160)).
 - A compressed single file such as log.gz, dump.sql.xz, data.json.zst or a .bz2 file opens like other compressed files, with that one file inside to view or extract. It no longer fails with "not a supported archive" ([#159](https://github.com/muhnschein/lautta/issues/159)).
 - 7z files packed with Deflate, BZip2, PPMd or Zstandard extract now, and so does every file of a solid 7z, not only the first ([#157](https://github.com/muhnschein/lautta/issues/157)).
