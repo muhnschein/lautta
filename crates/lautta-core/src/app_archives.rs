@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Compressed files as locations. A locked one (password in memory) stays open while an
-//! [`ArchiveHold`] lives or an unfinished transfer reads from it; then its location goes, and the
-//! password with it. Unlocked ones stay for the session.
 
 use crate::app::Core;
 use crate::error::Result;
@@ -15,7 +12,6 @@ use std::fmt;
 use std::sync::{Arc, Mutex, PoisonError};
 use tokio::runtime::Handle;
 
-/// Locked archive location id → live holds.
 #[derive(Clone, Default)]
 pub(crate) struct LockedArchives(Arc<Mutex<HashMap<String, usize>>>);
 
@@ -25,8 +21,6 @@ impl LockedArchives {
     }
 }
 
-/// Keeps a locked archive open: held by a page showing it, the clipboard, an extract waiting for
-/// its summary. Clones share one hold. Empty for anything else.
 #[derive(Clone, Default)]
 pub struct ArchiveHold(Option<Arc<Held>>);
 
@@ -46,7 +40,6 @@ impl fmt::Debug for ArchiveHold {
     }
 }
 
-/// Not part of what a plan does: plans compare equal whatever they hold.
 impl PartialEq for ArchiveHold {
     fn eq(&self, _: &ArchiveHold) -> bool {
         true
@@ -85,8 +78,6 @@ fn readers(engine: &Engine, id: &str) -> Vec<TransferId> {
         .collect()
 }
 
-/// Closes unheld locked archives; for those a transfer still reads, waits for it, then checks again.
-/// Needs the tokio runtime.
 fn close_idle(locked: &LockedArchives, engine: &Engine, locations: &LocationRegistry) {
     let idle: Vec<String> = locked.with(|m| {
         m.iter()
@@ -97,7 +88,6 @@ fn close_idle(locked: &LockedArchives, engine: &Engine, locations: &LocationRegi
     for id in idle {
         let busy = readers(engine, &id);
         if busy.is_empty() {
-            // Under the lock: a hold taken meanwhile keeps it.
             locked.with(|m| {
                 if m.get(&id) == Some(&0) {
                     m.remove(&id);
@@ -109,7 +99,6 @@ fn close_idle(locked: &LockedArchives, engine: &Engine, locations: &LocationRegi
         let (locked, engine, locations) = (locked.clone(), engine.clone(), locations.clone());
         tokio::spawn(async move {
             for t in busy {
-                // Gone from the engine counts as finished.
                 let _ = engine.wait_for(t, |s| s.state.is_finished()).await;
             }
             close_idle(&locked, &engine, &locations);
@@ -118,8 +107,6 @@ fn close_idle(locked: &LockedArchives, engine: &Engine, locations: &LocationRegi
 }
 
 impl Core {
-    /// Location id of the archive at `uri`, opened once, and a hold on it. `password` only for a
-    /// locked one: see [`ArchiveProvider::open`].
     pub async fn open_archive(&self, uri: &Uri, password: Option<Password>) -> Result<(String, ArchiveHold)> {
         let id = archive_location_id(uri);
         if let Some(hold) = self.hold_if_open(&id) {
@@ -146,13 +133,10 @@ impl Core {
         Ok((id, hold))
     }
 
-    /// Another hold on open archive location `id`; empty for an unlocked or closed one. Needs the
-    /// tokio runtime.
     pub fn hold_archive(&self, id: &str) -> ArchiveHold {
         self.hold_if_open(id).unwrap_or_default()
     }
 
-    /// `None`: not open.
     fn hold_if_open(&self, id: &str) -> Option<ArchiveHold> {
         let locked = self
             .locked_archives
@@ -163,7 +147,6 @@ impl Core {
         self.locations.get(id).map(|_| ArchiveHold::default())
     }
 
-    /// For a hold already counted.
     fn held(&self, id: &str) -> ArchiveHold {
         ArchiveHold(Some(Arc::new(Held {
             id: id.to_owned(),

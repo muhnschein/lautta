@@ -226,7 +226,6 @@ async fn the_folders_images_come_in_the_folders_order() {
     assert!(list[0].size.is_some());
 }
 
-/// `exif_jpeg` plus an IFD1 thumbnail, then `image` (its SOI dropped).
 fn camera_jpeg(orientation: u16, thumb: &[u8], image: &[u8]) -> Vec<u8> {
     let mut tiff = vec![b'I', b'I', 0x2a, 0, 8, 0, 0, 0, 1, 0];
     tiff.extend_from_slice(&[0x12, 0x01, 3, 0, 1, 0, 0, 0]);
@@ -268,7 +267,6 @@ fn png(w: u32, h: u32) -> Vec<u8> {
     out.into_inner()
 }
 
-/// `image` behind an EXIF segment with `orientation` and no thumbnail.
 fn exif_photo(orientation: u16, image: &[u8]) -> Vec<u8> {
     let mut out = exif_jpeg(orientation);
     out.truncate(out.len() - 2);
@@ -276,7 +274,6 @@ fn exif_photo(orientation: u16, image: &[u8]) -> Vec<u8> {
     out
 }
 
-/// `segments` put right after the image's SOI.
 fn with_segments(image: &[u8], segments: &[u8]) -> Vec<u8> {
     let mut out = image[..2].to_vec();
     out.extend_from_slice(segments);
@@ -284,7 +281,6 @@ fn with_segments(image: &[u8], segments: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Clear image's size; panics unless every pixel is clear.
 fn clear_dims(bytes: &[u8]) -> (u32, u32) {
     let img = image::load_from_memory(bytes).unwrap().to_rgba8();
     assert!(img.pixels().all(|p| p.0[3] == 0), "not clear");
@@ -330,7 +326,6 @@ async fn without_a_camera_thumbnail_the_preview_is_a_clear_image_of_the_upright_
 async fn images_of_unknown_size_have_no_preview() {
     let h = home().await;
     let pics = h.root.join("Pictures");
-    // Frame header after the scan sits in entropy data: not read.
     let scan_first = [
         0xff, 0xd8, 0xff, 0xda, 0, 8, 1, 2, 3, 4, 5, 6, 0xff, 0xc0, 0, 17, 8, 0, 30, 0, 40, 3, 1, 0x22, 0, 2,
         0x11, 1, 3, 0x11, 1, 0xff, 0xd9,
@@ -378,8 +373,6 @@ fn open_reads(nas: &MemoryProvider) -> usize {
     nas.calls().iter().filter(|c| c.starts_with("open_read")).count()
 }
 
-/// Two jobs that hold the location's queue until `gate` gets permits. Semaphore, not Notify:
-/// the jobs may not have run yet when released.
 fn block_queue(jobs: &lautta_core::thumbs::ThumbJobs) -> Arc<tokio::sync::Semaphore> {
     let gate = Arc::new(tokio::sync::Semaphore::new(0));
     for i in 0..2 {
@@ -446,8 +439,6 @@ async fn a_thumbnail_asked_again_right_after_a_cancel_is_still_made() {
     h.nas.add_file("p/a.jpg", &jpeg(1000, 500), 9_000);
     let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
     let u = uri("lautta://nv-nas/p/a.jpg");
-    // Rotation: delegate's old request goes, new one of another size in the same bucket comes,
-    // before the aborted job has let go of its slot.
     previews.request(h.core.clone(), u.clone(), 300).cancel();
     let again = previews.request(h.core.clone(), u, 400);
     let bytes = again.rx.await.unwrap().expect("made, not canceled");
@@ -1159,7 +1150,6 @@ async fn a_text_thumbnail_cancelled_while_queued_never_runs() {
     let h = home().await;
     h.nas.add_file("a.txt", b"hei", 0);
     let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();
-    // Semaphore, not Notify: blocking jobs may not have run yet when released.
     let gate = Arc::new(tokio::sync::Semaphore::new(0));
     for i in 0..2 {
         let g = gate.clone();
@@ -1416,7 +1406,6 @@ fn tagged(cover: Option<[u8; 3]>) -> Vec<u8> {
     )
 }
 
-/// Mean colour of a decoded thumbnail, to tell which picture it came from.
 fn tint(bytes: &[u8]) -> [u8; 3] {
     let img = thumb_pixels(bytes);
     let n = u64::from(img.width() * img.height());
@@ -1669,11 +1658,9 @@ async fn the_glow_is_a_small_soft_copy_of_the_cover() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn folder_pictures_up_to_the_limit_are_covers_larger_ones_are_not() {
-    // The promised 16 MiB, written out: the constant itself could drift with the code.
     const LIMIT: u64 = 16 * 1024 * 1024;
     let h = home().await;
     let padded = |extra: u64| {
-        // Bytes after the JPEG's end marker are ignored by the decoder.
         let mut jpg = audio_fixture::jpeg(32, blue());
         jpg.resize((LIMIT + extra) as usize, 0);
         jpg
@@ -1727,14 +1714,12 @@ async fn a_cached_folder_listing_finds_the_folder_cover_without_listing_again() 
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_folder_picture_grown_past_the_limit_since_listing_is_no_cover() {
-    // The promised 16 MiB, written out.
     const LIMIT: usize = 16 * 1024 * 1024;
     let h = home().await;
     let mut jpg = audio_fixture::jpeg(32, blue());
     jpg.resize(LIMIT + 1, 0);
     h.nas.add_file("m/a.mp3", &tagged(None), 1);
     h.nas.add_file("m/cover.jpg", &jpg, 1);
-    // Listing from before it grew: small size, so only the read itself can tell.
     let entries = [listed("a.mp3", 9), listed("cover.jpg", 1000)];
     h.core.dircache.put(&uri("lautta://nv-nas/m"), &entries).unwrap();
     let previews = h.core.previews(&tokio::runtime::Handle::current()).unwrap();

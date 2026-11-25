@@ -48,8 +48,6 @@ Page {
         filled = true
     }
 
-    // Save once typing pauses (each save refreshes Home rows), and on page leave: at start of pop
-    // or when no transition.
     function flush() {
         if (labelTimer.running)
             save()

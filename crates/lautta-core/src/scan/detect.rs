@@ -1,51 +1,27 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Finds the page in a photo: the largest four-sided shape whose sides run along straight edges
-//! all the way round. Lines from a Hough search over colour edges on small copies; sides then
-//! moved onto the edge in the photo itself. No answer (page cut by the photo, too faint, a stack
-//! of like sheets) = caller keeps the whole picture.
 
 use super::{Point, Quad};
 use image::imageops::{self, FilterType};
 use image::RgbImage;
 use std::f32::consts::PI;
 
-/// Longer side of the small copies searched. Coarse one sees past print on a page that fills the
-/// photo; fine one finds a page further away. Larger page found wins.
 const SCALES: [u32; 2] = [320, 640];
-/// Smooths sensor noise and paper grain before edges.
 const BLUR_SIGMA: f32 = 1.0;
-/// Weakest edge kept: colour gradient, Sobel on 0..255 channels.
 const MIN_EDGE: f32 = 24.0;
-/// Hough angle steps over half a turn.
 const ANGLES: usize = 180;
-/// An edge pixel votes for lines this many angle steps either side of its own direction.
 const SPREAD: i32 = 5;
-/// Strongest lines tried as page sides.
 const MAX_LINES: usize = 48;
-/// Edge pixel counts for a line when their directions differ at most this much.
 const MATCH: f32 = 10.0 * PI / 180.0;
-/// Opposite sides lean at most this much against each other (perspective).
 const MAX_LEAN: f32 = 35.0 * PI / 180.0;
-/// Corners of a page seen at a slant stay within these angles.
 const MIN_CORNER: f32 = 40.0 * PI / 180.0;
-/// Share of the photo a page covers at least.
 const MIN_COVER: f32 = 0.03;
-/// Share of its length every side runs along an edge …
 const MIN_SIDE: f32 = 0.6;
-/// … and all four together.
 const MIN_MEAN: f32 = 0.75;
-/// Near each corner (this share of the side) edges cover at least MIN_END: a side running on
-/// past the page has none there.
 const END: f32 = 0.2;
 const MIN_END: f32 = 0.35;
-/// Points measured per side on the photo, and how far from the found side (in pixels of the
-/// small copy).
 const PROBES: usize = 24;
 const REACH: f32 = 1.5;
-/// Outermost edge at least this strong against the strongest wins: print near the page's edge
-/// is often sharper than the edge itself.
 const OUTER: f32 = 0.5;
-/// No edge on the photo where colour changes less (three samples summed, over two pixels).
 const MIN_RISE: f32 = 12.0;
 
 type V = (f32, f32);
@@ -58,13 +34,11 @@ fn add(a: V, b: V, k: f32) -> V {
     (a.0 + b.0 * k, a.1 + b.1 * k)
 }
 
-/// Difference of two undirected angles, 0..π/2.
 fn angle_gap(a: f32, b: f32) -> f32 {
     let d = (a - b).rem_euclid(PI);
     d.min(PI - d)
 }
 
-/// Straight line: points p with n·p = rho, n unit.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Line {
     n: V,
@@ -79,7 +53,6 @@ impl Line {
         }
     }
 
-    /// Direction of the normal, 0..π.
     fn angle(&self) -> f32 {
         self.n.1.atan2(self.n.0).rem_euclid(PI)
     }
@@ -99,12 +72,10 @@ impl Line {
         ))
     }
 
-    /// Signed distance of `p`, positive on the side `n` points to.
     fn off(&self, p: V) -> f32 {
         dot(self.n, p) - self.rho
     }
 
-    /// Total least squares through `points`, normal turned towards `towards`.
     fn fit(points: &[V], towards: V) -> Option<Line> {
         if points.len() < 2 {
             return None;
@@ -126,7 +97,6 @@ impl Line {
         Some(Line { n, rho: dot(n, m) })
     }
 
-    /// Part inside a `w` × `h` picture: start point and length.
     fn span(&self, w: f32, h: f32) -> Option<(V, f32)> {
         let foot = (self.n.0 * self.rho, self.n.1 * self.rho);
         let d = self.along();
@@ -146,11 +116,9 @@ impl Line {
     }
 }
 
-/// Thinned colour edges of a small picture.
 struct Edges {
     w: usize,
     h: usize,
-    /// Direction across the edge, 0..π; NaN off edges.
     angle: Vec<f32>,
 }
 
@@ -177,7 +145,6 @@ impl Edges {
                     yy += gy * gy;
                     xy += gx * gy;
                 }
-                // Di Zenzo: strongest change over all three channels, so tint counts too.
                 let half = 0.5 * (xx - yy);
                 mag[i] = (0.5 * (xx + yy) + (half * half + xy * xy).sqrt()).sqrt();
                 dir[i] = (0.5 * (2.0 * xy).atan2(xx - yy)).rem_euclid(PI);
@@ -190,7 +157,6 @@ impl Edges {
                 if mag[i] < MIN_EDGE {
                     continue;
                 }
-                // Kept where strongest across the edge.
                 let step = match ((dir[i] / (PI / 4.0)).round() as usize) % 4 {
                     0 => 1,
                     1 => w + 1,
@@ -205,7 +171,6 @@ impl Edges {
         Edges { w, h, angle }
     }
 
-    /// Edge pixel under `p` running at `angle` (of its normal).
     fn on(&self, p: V, angle: f32) -> bool {
         let (x, y) = (p.0.floor(), p.1.floor());
         if x < 0.0 || y < 0.0 || x >= self.w as f32 || y >= self.h as f32 {
@@ -214,7 +179,6 @@ impl Edges {
         angle_gap(self.angle[y as usize * self.w + x as usize], angle) <= MATCH
     }
 
-    /// Strongest lines, each with votes of a side of a small page at least.
     fn lines(&self) -> Vec<Line> {
         let reach = (self.w as f32).hypot(self.h as f32).ceil() as i32;
         let rows = (2 * reach + 1) as usize;
@@ -237,7 +201,6 @@ impl Edges {
                 votes[t * rows + r as usize] += 1;
             }
         }
-        // Across angle 0 = π the same line has rho negated.
         let at = |t: i32, r: i32| -> (u32, usize) {
             let (t, r) = if (0..ANGLES as i32).contains(&t) {
                 (t, r)
@@ -290,7 +253,6 @@ impl Edges {
         kept
     }
 
-    /// Hough line fitted to the edge pixels along it, twice, the second time closer.
     fn settle(&self, mut line: Line) -> Option<Line> {
         for width in [2.0, 1.0] {
             let (start, len) = line.span(self.w as f32, self.h as f32)?;
@@ -316,11 +278,9 @@ impl Edges {
     }
 }
 
-/// Where along a line edges run, counted from where it enters the picture.
 struct Track {
     line: Line,
     start: V,
-    /// Running count of steps with an edge.
     hits: Vec<u32>,
 }
 
@@ -339,7 +299,6 @@ impl Track {
         Some(Track { line, start, hits })
     }
 
-    /// Length between `a` and `b` (on the line), and steps with an edge there.
     fn between(&self, a: V, b: V) -> (f32, u32) {
         let d = self.line.along();
         let last = self.hits.len() - 1;
@@ -351,7 +310,6 @@ impl Track {
     }
 }
 
-/// Corners clockwise on screen from the one nearest the top left, if convex.
 fn clockwise(mut corners: [V; 4]) -> Option<[V; 4]> {
     let turn = |c: &[V; 4], i: usize| {
         let (a, b, p) = (c[i], c[(i + 1) % 4], c[(i + 2) % 4]);
@@ -384,7 +342,6 @@ fn area(c: &[V; 4]) -> f32 {
     twice.abs() / 2.0
 }
 
-/// Every corner between MIN_CORNER and its complement.
 fn square_enough(c: &[V; 4]) -> bool {
     (0..4).all(|i| {
         let (a, p, b) = (c[(i + 3) % 4], c[i], c[(i + 1) % 4]);
@@ -394,10 +351,8 @@ fn square_enough(c: &[V; 4]) -> bool {
     })
 }
 
-/// Why four lines make no page.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Miss {
-    /// A corner outside the picture, or two sides parallel.
     Open,
     Small,
     Slanted,
@@ -407,8 +362,6 @@ enum Miss {
     Sparse,
 }
 
-/// Page with sides on `sides` (in order round it) in a `w` × `h` picture: corners (corner k
-/// ends side k) and score, the area.
 fn judge(sides: [&Track; 4], w: f32, h: f32) -> Result<([V; 4], f32), Miss> {
     let inside = |p: &V| (-1.0..=w + 1.0).contains(&p.0) && (-1.0..=h + 1.0).contains(&p.1);
     let mut corners = [(0.0, 0.0); 4];
@@ -450,7 +403,6 @@ fn judge(sides: [&Track; 4], w: f32, h: f32) -> Result<([V; 4], f32), Miss> {
     Ok((corners, size))
 }
 
-/// Largest page on a small picture: its corners.
 fn best_quad(edges: &Edges) -> Option<[V; 4]> {
     let tracks: Vec<Track> = edges
         .lines()
@@ -459,7 +411,6 @@ fn best_quad(edges: &Edges) -> Option<[V; 4]> {
         .collect();
     let (w, h) = (edges.w as f32, edges.h as f32);
     let inside = |p: V| (0.0..=w).contains(&p.0) && (0.0..=h).contains(&p.1);
-    // Opposite sides: near parallel, not crossing in the picture.
     let mut pairs = Vec::new();
     for i in 0..tracks.len() {
         for j in i + 1..tracks.len() {
@@ -485,7 +436,6 @@ fn best_quad(edges: &Edges) -> Option<[V; 4]> {
     best.map(|(corners, _)| corners)
 }
 
-/// Colour at `p` (pixel centres at .5), bilinear, edge pixels repeated.
 fn sample(img: &RgbImage, p: V) -> [f32; 3] {
     let (w, h) = (img.width() as f32, img.height() as f32);
     let x = (p.0 - 0.5).clamp(0.0, w - 1.0);
@@ -498,8 +448,6 @@ fn sample(img: &RgbImage, p: V) -> [f32; 3] {
     [0, 1, 2].map(|k| (a[k] * (1.0 - fx) + b[k] * fx) * (1.0 - fy) + (c[k] * (1.0 - fx) + d[k] * fx) * fy)
 }
 
-/// Side from `a` to `b` of a page around `centre`, moved onto the outermost clear edge within
-/// `reach` on the photo.
 fn refine(photo: &RgbImage, a: V, b: V, centre: V, reach: f32) -> Option<Line> {
     let len = (b.0 - a.0).hypot(b.1 - a.1);
     let d = ((b.0 - a.0) / len, (b.1 - a.1) / len);
@@ -515,7 +463,6 @@ fn refine(photo: &RgbImage, a: V, b: V, centre: V, reach: f32) -> Option<Line> {
             (b.0 - a.0, b.1 - a.1),
             0.15 + 0.7 * j as f32 / (PROBES - 1) as f32,
         );
-        // Mean of three points along the side: text strokes count less.
         let colour = |o: f32| {
             [-2.0, 0.0, 2.0].iter().fold([0.0f32; 3], |sum, s| {
                 let c = sample(photo, add(add(p, d, *s), n, o));
@@ -548,7 +495,6 @@ fn refine(photo: &RgbImage, a: V, b: V, centre: V, reach: f32) -> Option<Line> {
     let line = Line::fit(&points, n)?;
     let mut off: Vec<f32> = points.iter().map(|p| line.off(*p).abs()).collect();
     off.sort_unstable_by(f32::total_cmp);
-    // Points off by more than three spreads (median deviation) are print or shadow.
     let limit = (3.0 * 1.4826 * off[off.len() / 2]).max(1.0);
     let kept: Vec<V> = points
         .into_iter()
@@ -560,8 +506,6 @@ fn refine(photo: &RgbImage, a: V, b: V, centre: V, reach: f32) -> Option<Line> {
     Line::fit(&kept, n)
 }
 
-/// Corners of the page on a copy of `photo` with `side` as its longer side, in photo pixels,
-/// and the copy's scale.
 fn coarse(photo: &RgbImage, side: u32) -> Option<([V; 4], f32)> {
     let long = photo.width().max(photo.height());
     let k = side as f32 / long as f32;
@@ -575,8 +519,6 @@ fn coarse(photo: &RgbImage, side: u32) -> Option<([V; 4], f32)> {
     Some((corners.map(|p| (p.0 * sx, p.1 * sy)), sx.max(sy)))
 }
 
-/// Corners where `sides` meet (corner k ends side k), unless one lies more than `2 × reach`
-/// from where it `was`: then a side caught something else.
 fn settled(sides: &[Line], was: &[V; 4], reach: f32) -> Option<[V; 4]> {
     let mut c = [(0.0, 0.0); 4];
     for k in 0..4 {
@@ -588,7 +530,6 @@ fn settled(sides: &[Line], was: &[V; 4], reach: f32) -> Option<[V; 4]> {
     Some(c)
 }
 
-/// `photo`: upright, any size.
 pub fn find_page(photo: &RgbImage) -> Option<Quad> {
     let long = photo.width().max(photo.height());
     let mut sides = SCALES.map(|s| s.min(long)).to_vec();

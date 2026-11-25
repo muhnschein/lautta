@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! netvfs provider: forwards to the bridge. Names and paths cross as bytes, local data as file
-//! descriptors only, and every request that can carry a lane hint carries one.
 
 use super::{
     no_progress, AttributeChanges, CopyOptions, Disposition, Lane, ProgressSink, Provider, ReadHandle,
@@ -22,16 +20,11 @@ use tokio::sync::mpsc;
 
 pub struct NetvfsProvider {
     client: BridgeClient,
-    /// The bridge's id (`account:1`).
     loc: String,
-    /// `None` until fetched from the bridge.
     caps: RwLock<Option<Capabilities>>,
 }
 
 impl NetvfsProvider {
-    /// A provider for `location` (`nv-account:1` or `account:1`). Capabilities come from
-    /// [`NetvfsProvider::refresh_capabilities`], which [`Provider::known_capabilities`] runs on
-    /// first use; until then only `Write` is assumed.
     pub fn new(client: BridgeClient, location: &str) -> NetvfsProvider {
         NetvfsProvider {
             client,
@@ -46,7 +39,6 @@ impl NetvfsProvider {
         Ok(provider)
     }
 
-    /// Internal location id (`nv-account:1`).
     pub fn location(&self) -> LocationId {
         location_id(&self.loc)
     }
@@ -71,8 +63,6 @@ impl NetvfsProvider {
         self.client.files_link()
     }
 
-    /// Removes a folder with everything below in one `RemoveTree` job; progress counts removed
-    /// entries.
     pub async fn remove_tree(&self, path: &VPath, progress: ProgressSink) -> Result<JobOutcome> {
         let link = self.link()?;
         link.run_job(link.proxy().remove_tree(&self.loc, path.as_bytes()), &progress)
@@ -86,8 +76,6 @@ impl BridgeClient {
     }
 }
 
-/// `Upload.opts` for `opts` (netvfs `args.cpp`): a resume sends the offset and
-/// the length counted from it; resuming at 0 is just a fresh write.
 fn upload_opts(opts: &WriteOptions) -> Opts {
     let resume = opts.disposition == Disposition::Resume && opts.offset > 0;
     let disposition = match opts.disposition {
@@ -131,8 +119,6 @@ fn to_i64(v: u64) -> i64 {
     i64::try_from(v).unwrap_or(i64::MAX)
 }
 
-/// The server's `caps` narrowed to what `level` lets Lautta do; not listed (`None`): unchanged, the
-/// bridge refuses.
 fn with_access(mut caps: Capabilities, level: Option<Level>) -> Capabilities {
     let flags: &[&str] = match level {
         None | Some(Level::Full) => &[],
@@ -156,8 +142,6 @@ impl Provider for NetvfsProvider {
         with_access(caps, self.client.access(&self.loc))
     }
 
-    /// Fetched once; a bridge that cannot answer yet leaves the assumed ones
-    /// and is asked again next time.
     async fn known_capabilities(&self) -> Capabilities {
         if !self.has_capabilities() {
             if let Err(e) = self.refresh_capabilities().await {
@@ -192,8 +176,6 @@ impl Provider for NetvfsProvider {
             .await)
     }
 
-    /// Empty upload from a pipe whose writer is already closed: bridge creates the file
-    /// exclusively.
     async fn make_file(&self, path: &VPath) -> Result<()> {
         let (reader, writer) = rustix::pipe::pipe_with(rustix::pipe::PipeFlags::CLOEXEC)?;
         drop(writer);
@@ -284,8 +266,6 @@ impl Provider for NetvfsProvider {
                 .proxy()
                 .upload(&self.loc, dst.as_bytes(), Fd::from(&src), &wire)
                 .await;
-            // The bridge holds its own copy now; keeping ours would hide a
-            // reader that stopped from a writer on the other end of a pipe.
             drop(src);
             started
         };
@@ -312,8 +292,6 @@ impl Provider for NetvfsProvider {
         link.run_job(start, &progress).await.map(|_| ())
     }
 
-    /// Single entries; folders are copied by the planner entry by entry (the
-    /// bridge's `recursive` option is not used).
     async fn server_copy(
         &self,
         from: &VPath,
@@ -360,7 +338,6 @@ impl ReadHandle for NetvfsReadHandle {
         self.size
     }
 
-    /// At most 1 MiB per call; a larger `max` is answered shorter.
     async fn read_at(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
         if max == 0 {
             return Ok(Vec::new());
@@ -393,7 +370,6 @@ impl Drop for NetvfsReadHandle {
             let link = self.link.clone();
             let handle = self.handle;
             rt.spawn(async move {
-                // Closed connection has closed its handles already.
                 let _ = link.proxy().close(handle).await;
             });
         }

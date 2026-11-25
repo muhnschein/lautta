@@ -1,9 +1,7 @@
 name: Mutation
-# Full mutation check, 8 shards. Weekly on main, by hand before a release, and on PRs
-# changing the mutation setup (a diff can't show what a new file or exclusion lets through).
 on:
   schedule:
-    - cron: '17 2 * * 1'  # Mondays 02:17 UTC
+    - cron: '17 2 * * 1'
   workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -21,7 +19,6 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 jobs:
-  # Scheduled run skipped when main unchanged since last success.
   changed:
     name: Main changed since the last run
     runs-on: ubuntu-24.04
@@ -57,24 +54,22 @@ jobs:
       matrix:
         shard: [0, 1, 2, 3, 4, 5, 6, 7]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
-      # Prebuilt, same version as install-host-deps.sh: building it takes minutes.
-      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+      - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91
         with:
           tool: cargo-mutants@25.0.1
       - name: Install dependencies
         run: ./tools/ci/install-host-deps.sh mutants
       - name: Mutation check
         run: make mutants MUTANTS_SHARD=${{ matrix.shard }}/8
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: failure()
         with:
           name: mutants-${{ matrix.shard }}
           path: mutants.out/*.txt
 
-  # Nobody watches scheduled runs: failure opens or updates an issue.
   report:
     name: Report a failed weekly run
     needs: mutation

@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! One error model for every provider: the netvfs error taxonomy plus local I/O mappings, one
-//! message table ([`crate::messages`]).
 
 use crate::uri::Uri;
 use std::fmt;
 
-/// Names from [`ErrorKind::name`] are netvfs `errorName()` strings, so `org.netvfs.Error.<Name>`
-/// maps one-to-one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ErrorKind {
     NotFound,
@@ -34,10 +30,8 @@ pub enum ErrorKind {
     RateLimited,
     BridgeUnavailable,
     Sandbox,
-    /// Disconnected or removed: items copied from it cannot be reached through it again.
     LocationGone,
     CrossesDevice,
-    /// Locked compressed file opened without its password.
     PasswordRequired,
     WrongPassword,
     Io,
@@ -115,8 +109,6 @@ impl ErrorKind {
         }
     }
 
-    /// Unknown names become [`ErrorKind::ProtocolError`] so an unexpected name never reads as
-    /// success.
     pub fn from_name(name: &str) -> ErrorKind {
         let bare = name.strip_prefix("org.netvfs.Error.").unwrap_or(name);
         ErrorKind::ALL
@@ -146,8 +138,6 @@ impl fmt::Display for ErrorKind {
     }
 }
 
-/// Message is from the source and never holds secrets; optional protocol detail for *Details*,
-/// optional retry hint, and the item it is about.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Error {
     pub kind: ErrorKind,
@@ -168,7 +158,6 @@ impl Error {
         }
     }
 
-    /// Unless an inner step named one.
     pub fn about(mut self, uri: &Uri) -> Error {
         if self.subject.is_none() {
             self.subject = Some(uri.clone());

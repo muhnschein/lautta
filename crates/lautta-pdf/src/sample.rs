@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Small valid PDFs built in code (feature `sample`), for tests here and in dependent crates.
 
-/// Every page has Helvetica (WinAnsiEncoding) as font `/F1`.
 #[derive(Clone)]
 pub struct Spec {
     pub w: u32,
@@ -21,8 +19,6 @@ pub fn page(w: u32, h: u32, content: &str) -> Spec {
     }
 }
 
-/// 12 pt Helvetica, baseline starting at `x`, `y` (PDF points from the bottom left). Latin-1
-/// letters written in WinAnsiEncoding.
 pub fn text(x: u32, y: u32, s: &str) -> String {
     let s: String = s
         .chars()
@@ -46,14 +42,11 @@ pub fn page_ref(index: usize) -> String {
     format!("{} 0 R", 3 + 2 * index)
 }
 
-/// `rect` is `x0 y0 x1 y1` in points; `target` e.g. `/Dest [3 0 R /Fit]` or `/A << /S /URI /URI
-/// (https://example.org) >>`.
 pub fn link(rect: [i32; 4], target: &str) -> String {
     let [x0, y0, x1, y1] = rect;
     format!("<< /Type /Annot /Subtype /Link /Rect [{x0} {y0} {x1} {y1}] {target} >>")
 }
 
-/// More than pages: catalog and page entries, further objects, an outline.
 pub struct Doc {
     pages: Vec<Spec>,
     catalog: String,
@@ -72,21 +65,18 @@ impl Doc {
         }
     }
 
-    /// Adds `entry` (e.g. `/Dests << ... >>`) to the catalog.
     pub fn catalog(&mut self, entry: &str) -> &mut Doc {
         self.catalog.push(' ');
         self.catalog.push_str(entry);
         self
     }
 
-    /// Adds `entry` (e.g. `/Annots [...]`) to page `index`.
     pub fn page_entry(&mut self, index: usize, entry: &str) -> &mut Doc {
         self.page_entries[index].push(' ');
         self.page_entries[index].push_str(entry);
         self
     }
 
-    /// Reference of the object added `k` objects from now; `ahead(0)` is the next [`Doc::object`].
     pub fn ahead(&self, k: usize) -> String {
         format!("{} 0 R", 3 + 2 * self.pages.len() + self.objects.len() + k)
     }
@@ -97,9 +87,6 @@ impl Doc {
         r
     }
 
-    /// `(title, level, target)` items in reading order, starting at level 0. Titles are PDF strings
-    /// such as `(Intro)`, targets entries such as `/Dest [3 0 R /Fit]`. Items get only `/Title`,
-    /// `/First`, `/Next`.
     pub fn outline(&mut self, items: &[(&str, u32, &str)]) -> &mut Doc {
         let root = self.ahead(0);
         let refs: Vec<String> = (0..items.len()).map(|k| self.ahead(1 + k)).collect();
@@ -168,9 +155,7 @@ impl Doc {
     }
 }
 
-/// Password that opens [`LOCKED_AES256`] and [`LOCKED_RC4`] as a reader.
 pub const LOCKED_PASSWORD: &str = "sesame";
 pub const LOCKED_OWNER_PASSWORD: &str = "owner-key";
-/// Two pages as in [`RED_SQUARE`] on 100×200 and an empty 300×150, AES-256 (made with pypdf).
 pub const LOCKED_AES256: &[u8] = include_bytes!("fixtures/locked-aes256.pdf");
 pub const LOCKED_RC4: &[u8] = include_bytes!("fixtures/locked-rc4.pdf");

@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `qml_check` fails a document when code it runs throws, wherever the throw site is, when it
-//! reports an error, and when a test document does not reach its end.
 
 use std::path::Path;
 
@@ -21,7 +19,6 @@ QtObject {
 }
 "#;
 
-/// Engine warnings that are no exceptions, one with "Error: " inside.
 const NOISY: &str = r#"import QtQuick 2.6
 Item {
     property var none
@@ -42,8 +39,6 @@ fn calling(how: &str) -> String {
     )
 }
 
-/// Qt takes one application per process: every run is in this test. Failing runs log QML errors on
-/// purpose.
 #[test]
 fn uncaught_exceptions_fail_the_document() {
     let home = tempfile::tempdir().unwrap();

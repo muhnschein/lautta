@@ -1,23 +1,18 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Photo's whole shape from its grid tile (square crop of its middle) while the photo decodes: tile
-// at its place, its edges drawn out over the rest, blur growing with distance; all slightly soft.
 import QtQuick 2.6
 
 ShaderEffect {
     id: fill
 
-    // Square item, centred in this; drawn here only.
     property Item tile
     readonly property real side: tile ? tile.width : 0
 
-    // Mipmapped: further out, blur reads coarser levels. Power of two: GLES 2 mipmaps no other size.
     property variant source: ShaderEffectSource {
         sourceItem: fill.tile
         hideSource: true
         mipmap: true
         textureSize: Qt.size(256, 256)
     }
-    // Shape in tile sides; tile side in pixels (mip level of a blur radius).
     property size extent: Qt.size(width / Math.max(1, side), height / Math.max(1, side))
     property real pixels: side
 

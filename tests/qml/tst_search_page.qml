@@ -63,7 +63,6 @@ ApplicationWindow {
         return false
     }
 
-    // No render loop headless: lay out by hand.
     function rowCount() {
         list.forceLayout()
         return list.count

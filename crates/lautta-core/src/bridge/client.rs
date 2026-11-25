@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Bridge client the app talks to. Connection kept by the supervisor in [`super::session`].
 
 use super::link::{rpc, Link};
 use super::nearby::Settle;
@@ -110,8 +109,6 @@ impl BridgeClient {
         *self.inner.status.borrow()
     }
 
-    /// Level of location `location` (`nv-account:1` or `account:1`) as last listed; `None` when not
-    /// listed.
     pub fn access(&self, location: &str) -> Option<Level> {
         let id = bridge_id(location);
         self.inner
@@ -172,7 +169,6 @@ impl BridgeClient {
         self.inner.info().bridge_version.clone()
     }
 
-    /// None while not connected or without `drives`.
     pub fn drives(&self) -> Arc<Vec<Drive>> {
         self.inner.drives.borrow().clone()
     }
@@ -181,12 +177,10 @@ impl BridgeClient {
         self.inner.drives.subscribe()
     }
 
-    /// False while there is no connection.
     pub fn offers(&self, feature: &str) -> bool {
         self.inner.info().features.iter().any(|f| f == feature)
     }
 
-    /// Background: no reconnect. Coming back checks for the socket at once.
     pub fn set_foreground(&self, foreground: bool) {
         let changed = self.inner.foreground.send_if_modified(|f| {
             let changed = *f != foreground;
@@ -221,7 +215,6 @@ impl BridgeClient {
         rpc(self.link()?.proxy().request_consent().await)
     }
 
-    /// Wish is kept and applied again after a reconnect.
     pub async fn discover(&self, on: bool) -> Result<()> {
         self.inner.discover.store(on, Ordering::SeqCst);
         match self.files_link() {
@@ -231,7 +224,6 @@ impl BridgeClient {
                 }
                 rpc(link.proxy().discover(on).await)
             }
-            // Applied when the bridge becomes ready.
             Err(_) => Ok(()),
         }
     }
@@ -248,8 +240,6 @@ impl BridgeClient {
             .await)
     }
 
-    /// Whether account `loc`, missing from the list, was removed. A missing account may also be one
-    /// this app may not use: `Disconnect` answers `NotFound` only for the first, without network work.
     pub async fn is_removed(&self, loc: &str) -> bool {
         let Ok(link) = self.files_link() else {
             return false;
@@ -260,18 +250,15 @@ impl BridgeClient {
         )
     }
 
-    /// Bridge opens Settings › Storage, which the sandbox cannot. Needs no consent.
     pub async fn open_storage_settings(&self) -> Result<()> {
         rpc(self.link()?.proxy().open_storage_settings().await)
     }
 
-    /// Needs no consent.
     pub async fn mount_drive(&self, drive: &str) -> Result<PathBuf> {
         let point = rpc(self.link()?.proxy().mount(drive).await)?;
         Ok(PathBuf::from(OsStr::from_bytes(&point)))
     }
 
-    /// Needs no consent.
     pub async fn unmount_drive(&self, drive: &str) -> Result<()> {
         rpc(self.link()?.proxy().unmount(drive).await)
     }

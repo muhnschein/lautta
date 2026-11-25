@@ -15,7 +15,6 @@ Rectangle {
     property string previewText
     property bool previewMono
     property string typeIcon
-    // Set: a place, drawn with this glyph.
     property string placeIcon
 
     objectName: "coverTile"

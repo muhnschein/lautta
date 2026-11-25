@@ -7,9 +7,7 @@ Column {
 
     property string title
     property string hint
-    // [{ text, action, primary }]
     property var buttons: []
-    // "", "warning" or "security" (ServerWarning.js)
     property string level
 
     readonly property bool warning: level.length > 0
@@ -70,7 +68,6 @@ Column {
         color: Theme.secondaryHighlightColor
     }
 
-    // Warning: buttons stacked, fix first and marked.
     Grid {
         anchors.horizontalCenter: parent.horizontalCenter
         columns: placeholder.warning ? 1 : Math.max(1, placeholder.buttons.length)

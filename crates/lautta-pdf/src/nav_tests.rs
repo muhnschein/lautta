@@ -106,7 +106,6 @@ fn a_nested_outline_is_read_depth_first_with_levels_and_pages() {
 #[test]
 fn named_destinations_are_looked_up_in_the_name_tree_and_the_dests_dictionary() {
     let mut doc = pages(3);
-    // A name tree of two leaves whose second one points back to the root.
     let (root, leaf, back) = (doc.ahead(0), doc.ahead(1), doc.ahead(2));
     doc.object(&format!("<< /Kids [{leaf} {back}] >>"));
     doc.object(&format!(
@@ -285,7 +284,6 @@ fn links_on_a_rotated_page_map_to_the_shown_page() {
         rotate: 90,
         content: String::new(),
     };
-    // Shown 256 x 128: the page's y runs left to right, its x top to bottom.
     let links = links_of(
         Doc::new(vec![turned]),
         &[

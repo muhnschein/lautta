@@ -2,7 +2,6 @@
 .pragma library
 .import "SyntaxColours.js" as SyntaxColours
 
-// Style spec for MarkdownDocument: syntax palette plus reading colours and sizes (markdown.rs Style).
 function colours(theme) {
     var own = {
         "md-heading": theme.highlightColor,

@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Transfer model: states with an explicit transition table, items, and the options that travel
-//! with a transfer.
 
 use crate::entry::Kind;
 use crate::error::{Error, ErrorKind, Result};
@@ -10,13 +8,11 @@ use serde::{Deserialize, Serialize};
 
 pub type TransferId = i64;
 
-/// Why a transfer is waiting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WaitReason {
     Bridge,
     Network,
     Question,
-    /// A removable volume vanished: "Insert the card to continue".
     Volume,
 }
 
@@ -49,8 +45,6 @@ pub enum TransferState {
     Running,
     Paused,
     Waiting(WaitReason),
-    /// Ended with at least one failed item or a fatal error. "Completed with N failures" is this
-    /// state with `items_done > 0`.
     Failed,
     Completed,
     Canceled,
@@ -89,7 +83,6 @@ impl TransferState {
         )
     }
 
-    /// `Failed` may only go back to `Queued` (retry); `Completed` and `Canceled` are terminal.
     pub fn can_transition(self, to: TransferState) -> bool {
         use TransferState::*;
         match (self, to) {
@@ -182,19 +175,13 @@ impl ItemState {
     }
 }
 
-/// Stored in the `options` column.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TransferOptions {
-    /// "Verify with checksums"; always on for moves between locations.
     pub verify_checksums: bool,
-    /// Default on.
     pub preserve_mtime: bool,
-    /// Only when both sides support modes.
     pub preserve_mode: bool,
-    /// "Apply to all remaining" answer.
     pub resolve_all: Option<ConflictChoice>,
-    /// Deletes go through the caller's [`super::Trasher`].
     pub trash: bool,
 }
 
@@ -210,7 +197,6 @@ impl Default for TransferOptions {
     }
 }
 
-/// Per-item data with no column of its own; JSON in `transfer_items.conflict`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ItemExtra {
     pub mtime_ms: Option<i64>,
@@ -226,7 +212,6 @@ pub struct TransferItem {
     pub seq: u32,
     pub plan: PlanItem,
     pub state: ItemState,
-    /// Bytes known to be at the destination temp file.
     pub committed: u64,
     pub temp_name: Option<Vec<u8>>,
     pub attempts: u32,
@@ -289,7 +274,6 @@ pub fn operation_from_name(s: &str) -> OperationKind {
     .unwrap_or(OperationKind::Copy)
 }
 
-/// What the UI lists: a transfer without its items.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransferSummary {
     pub id: TransferId,
@@ -330,8 +314,6 @@ pub struct Transfer {
 }
 
 impl Transfer {
-    /// Deletes are ordered children-first unless they go to the trash, where roots go first and
-    /// take their subtrees with them.
     pub fn from_plan(
         id: TransferId,
         plan: Plan,
@@ -400,7 +382,6 @@ impl Transfer {
         Ok(())
     }
 
-    /// Skipped items leave the byte total so progress still reaches 100 %.
     pub fn recount(&mut self) {
         self.items_total = self.items.len() as u64;
         self.items_done = self
@@ -423,7 +404,6 @@ impl Transfer {
             .sum();
     }
 
-    /// Keeps counters in step without a full recount (plans can hold 100 000 items).
     pub fn set_item_state(&mut self, seq: u32, to: ItemState) {
         let Some(item) = self.items.get_mut(seq as usize) else {
             return;
@@ -474,8 +454,6 @@ impl Transfer {
         self.items.iter().filter(|i| i.state == ItemState::NeedsAnswer)
     }
 
-    /// What it added to folders: items put straight into `dest`, plus `dest` itself for an extract
-    /// (may be a folder it made).
     pub fn landed(&self) -> Vec<Uri> {
         let mut out: Vec<Uri> = self
             .items
@@ -707,7 +685,6 @@ mod tests {
             (1, ItemState::Pending),
             (1, ItemState::Failed),
         ];
-        // (items_done, items_failed, bytes_total, bytes_done) after each step.
         let expected = [
             (0, 0, 60, 0),
             (1, 0, 60, 10),

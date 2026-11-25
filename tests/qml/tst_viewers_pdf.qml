@@ -16,7 +16,6 @@ ApplicationWindow {
         return ok
     }
 
-    // Target is emulated and slow: unlocking AES-256 takes seconds.
     function waitFor(done, what) {
         for (var i = 0; i < 300 && !done(); ++i)
             tools.pump(100)

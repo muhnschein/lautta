@@ -56,8 +56,6 @@ function icon(id) {
     return ""
 }
 
-// ctx: { isDir, changeable, readable, writable, archive, checksumList }; readable unless false. Compress and
-// Extract put their result beside the item: folder must be writable.
 function applicable(id, ctx) {
     var readable = ctx.readable !== false
     switch (id) {
@@ -89,12 +87,10 @@ function pick(order, ctx) {
     return out
 }
 
-// [{ id, text, icon }] of the long-press menu.
 function menu(ctx) {
     return pick(menuOrder, ctx)
 }
 
-// [{ id, text, icon }] of the More actions page.
 function more(ctx) {
     return pick(moreOrder, ctx)
 }

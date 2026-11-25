@@ -1,19 +1,5 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""English plural forms for `%n` messages of the engineering English catalogue.
-
-`english-plurals.py fill < in.ts > out.ts` gives each message with empty
-`<numerusform>`s two forms: singular (by rule) and plural (the source text). Filter, no
-file names. Adds `language="en"` when missing: lrelease writes no plural rules without it.
-
-Filled when the forms are not two non-empty ones with the source text last. A hand-corrected
-singular stays until the source changes.
-
-Rule: word after `%n` loses its plural ending, agreeing verbs follow ("are" -> "is");
-participles and a few others stay ("%n paused", "%n more"). Any other word or "(s)" is
-refused: message left, rest filled, run fails, write both forms by hand. Read the pairs
-printed to stderr: the rule knows no other verbs.
-"""
 import re
 import sys
 
@@ -23,11 +9,9 @@ FORM = re.compile(r"<numerusform>(.*?)</numerusform>", re.S)
 AFTER_N = re.compile(r"%n (\w+)")
 HEADER = re.compile(r"<TS ([^>]*)>")
 ENDINGS = (("ies", "y"), ("sses", "ss"), ("xes", "x"))
-# Plural endings with two singulars ("matches", "caches"): left to a hand.
 AMBIGUOUS = ("ches", "shes")
 STAYS = ("ed", "ing")
 STAYS_WORDS = ("more", "at")
-# Plural form, singular form. Apostrophe XML-escaped as lupdate writes it.
 VERBS = (
     ("are", "is"),
     ("were", "was"),
@@ -40,7 +24,6 @@ VERBS = (
 
 
 def one(noun):
-    """The singular of a noun in the plural; ValueError when `noun` is no such noun."""
     for ending, instead in ENDINGS:
         if noun.endswith(ending):
             return noun[: -len(ending)] + instead
@@ -52,7 +35,6 @@ def one(noun):
 
 
 def singular(source):
-    """`source` for n = 1."""
     found = AFTER_N.search(source)
     if not found:
         return source
@@ -64,12 +46,10 @@ def singular(source):
 
 
 def valid(source, forms):
-    """Two non-empty forms, the plural one the source text."""
     return len(forms) == 2 and all(forms) and forms[1] == source
 
 
 def filled(block, forms):
-    """`block` (one message) with `forms` as its finished translation."""
     head = block[: block.index("        <translation")]
     head = re.sub(r" {8}<oldsource>.*?</oldsource>\n", "", head, flags=re.S)
     lines = "".join(f"            <numerusform>{form}</numerusform>\n" for form in forms)
@@ -77,7 +57,6 @@ def filled(block, forms):
 
 
 def fill_message(match, made):
-    """Forms made go to `made` as (id, forms). ValueError on a message the rule must not guess."""
     block, name = match.group(0), match.group("id")
     source = SOURCE.search(block).group(1)
     if not match.group("numerus"):
@@ -97,7 +76,6 @@ def fill_message(match, made):
 
 
 def english(text):
-    """`text` with `language="en"` in its header; ValueError for another language."""
     header = HEADER.search(text)
     if header is None:
         raise ValueError("not a TS catalogue")
@@ -109,7 +87,6 @@ def english(text):
 
 
 def fill(text):
-    """(text, made as (id, forms), refused as texts)."""
     text = english(text)
     made, refused = [], []
 
@@ -127,7 +104,6 @@ def main(argv):
     if argv[1:] != ["fill"]:
         print("usage: english-plurals.py fill < in.ts > out.ts", file=sys.stderr)
         return 2
-    # UTF-8 whatever the locale says.
     for stream in (sys.stdin, sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8")
     try:

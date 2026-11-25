@@ -69,7 +69,6 @@ ApplicationWindow {
     }
 
     function rowOf(uri) {
-        // No render loop headless: lay out by hand.
         var views = findAll(win.contentItem, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < views.length; ++i)
             views[i].forceLayout()
@@ -147,7 +146,6 @@ ApplicationWindow {
                         || !tools.installFixture(Qt.resolvedUrl("host/fixtures/doc.md"), win.trashed))
                     return win.fail("fixtures")
                 App.setSetting("recently_deleted", JSON.stringify(false))
-                // Longer than a step may take: a wrong remorse leaves the file there.
                 App.setSetting("remorse_seconds", JSON.stringify(60))
                 win.reloadTrash()
                 win.next()

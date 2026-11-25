@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Corners and turn of one scanned page. Works on its
-// own copy: page changes on Done only.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -13,14 +12,11 @@ Dialog {
     property QtObject scan
     property int index
     property string picture
-    // As ScanModel's `corners`, of the unturned photo.
     property var corners: ScanMath.whole
     property int turns
     property int startTurns
     property string startCorners
-    // Corner under the finger, -1 none.
     property int grabbed: -1
-    // Finger on the dialog.
     property real fingerX
     property real fingerY
 
@@ -74,7 +70,6 @@ Dialog {
             margins: Theme.paddingLarge
         }
 
-        // Photo's own frame, turned as a whole: corners stay those of the unturned photo.
         Item {
             id: frame
 
@@ -114,7 +109,6 @@ Dialog {
                     height: Theme.itemSizeMedium
                     x: dialog.corners[2 * index] * frame.width - width / 2
                     y: dialog.corners[2 * index + 1] * frame.height - height / 2
-                    // Page swipes and Dialog's accept gesture stay away from a held corner.
                     preventStealing: true
                     onPressed: {
                         grabX = mouse.x - width / 2
@@ -146,7 +140,6 @@ Dialog {
         }
     }
 
-    // Held corner enlarged, round, above the finger so the thumb leaves it in sight.
     Item {
         id: loupe
 
@@ -183,7 +176,6 @@ Dialog {
             }
         }
 
-        // Cuts the lens round; Qt 5.6 clips to rectangles only.
         ShaderEffect {
             anchors.fill: parent
             property variant source: ShaderEffectSource {
@@ -238,7 +230,6 @@ Dialog {
         }
         spacing: Theme.paddingLarge * 2
 
-        // The app's own icons: the theme's rotate arrows read as undo and redo.
         IconButton {
             objectName: "rotateLeftButton"
             icon.source: FileIcons.source("rotate-left", Theme.pixelRatio)

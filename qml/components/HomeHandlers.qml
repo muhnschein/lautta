@@ -18,7 +18,6 @@ Item {
     Connections {
         target: Bridge
 
-        // Can arrive while a dialog closes.
         onMounted: {
             pages.push(Qt.resolvedUrl("../pages/DirectoryPage.qml"), { "uri": locationUri })
         }

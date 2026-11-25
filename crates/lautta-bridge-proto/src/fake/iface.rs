@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Checks in the real bridge's order (netvfs `session.cpp`): argument validation (`InvalidArgs`,
-//! `InvalidName`), `Hello` first, consent, scripted latency and failures, the operation.
 
 use super::args::{self, Dict};
 use super::fail::Fail;
@@ -63,8 +61,6 @@ fn parse_methods(xml: &str) -> HashMap<String, String> {
     table
 }
 
-/// Call whose signature differs from the contract fails with `InvalidArgs` as in the real bridge
-/// (zbus alone answers with its own error name).
 pub(super) struct Checked(Iface);
 
 impl Checked {
@@ -162,7 +158,6 @@ impl Iface {
         }
     }
 
-    /// Answer of a bridge without drive methods. The call is still recorded.
     fn require_drives(&self, method: &str) -> Result<(), Fail> {
         if self.shared.with(|s| s.offers_drives()) {
             Ok(())
@@ -172,8 +167,6 @@ impl Iface {
         }
     }
 
-    /// Tells every client of a change (`DrivesChanged`); with a mount root the folder comes and
-    /// goes as with udisks.
     async fn mount_or_unmount(&self, method: &str, drive: &str, mount: bool) -> Result<Vec<u8>, Fail> {
         self.require_drives(method)?;
         let drive = args::drive(drive)?;
@@ -197,8 +190,6 @@ impl Iface {
         Ok(after)
     }
 
-    /// What the app may do in `loc`: `NotFound` for an unknown location, `PermissionDenied`
-    /// (detail `denied`) for one it may not use.
     fn require_location(&self, loc: &str) -> Result<Level, Fail> {
         self.shared.with(|s| {
             if !s.locations.contains_key(loc) {
@@ -214,7 +205,6 @@ impl Iface {
         })
     }
 
-    /// `op` on `path` in `loc` by the level's rules ([`access::check`]): the verdict, or the refusal.
     fn admit(&self, loc: &str, path: &[u8], op: Op) -> Result<Verdict, Fail> {
         let level = self.require_location(loc)?;
         let own = self.shared.with(|s| s.own(loc, path));
@@ -224,14 +214,11 @@ impl Iface {
         }
     }
 
-    /// Records what a finished `call` made of `path` in `loc`.
     fn after<T>(&self, loc: &str, path: &[u8], call: After, result: &Result<T, Fail>) {
         self.shared
             .with(|s| s.after_call(loc, path, call, result.as_ref().err().map(Fail::bare)));
     }
 
-    /// `RemoveFile`, `RemoveDir`: an add level refuses another's item, but says `NotFound` for a
-    /// missing one.
     fn remove(
         &self,
         loc: &str,
@@ -247,8 +234,6 @@ impl Iface {
         result
     }
 
-    /// Call needing a connection of `loc`'s pool: location is connected until `Disconnect`; a
-    /// change is told.
     fn reach(&self, loc: &str) -> Result<(), Fail> {
         self.require_location(loc)?;
         self.set_state(loc, location_state::CONNECTED);
@@ -302,7 +287,6 @@ impl Iface {
     }
 }
 
-/// `PermissionDenied` for what `level` does not allow; the level as detail.
 fn refused(level: Level) -> Fail {
     let what = match level {
         Level::Full => "do this",
@@ -317,7 +301,6 @@ fn refused(level: Level) -> Fail {
     .with_detail(Some(level.as_str().to_owned()), None)
 }
 
-/// A copy's destination.
 fn copy_op(replace: bool) -> Op {
     if replace {
         Op::Unrestricted
@@ -371,7 +354,6 @@ impl Iface {
         Ok(features)
     }
 
-    /// List as of the call: with latency the consent may change before the answer arrives.
     async fn list_locations(&self) -> Result<Vec<WireLocation>, Fail> {
         let list = self.shared.with(|s| s.wire_locations());
         self.begin("ListLocations", "interactive", "", false).await?;
@@ -379,7 +361,6 @@ impl Iface {
         Ok(list)
     }
 
-    // One-element tuple keeps the reply a single struct argument on the wire.
     async fn capabilities(&self, loc: String) -> Result<(WireCapabilities,), Fail> {
         let loc = args::location(&loc)?;
         self.begin("Capabilities", "interactive", &loc, true).await?;
@@ -406,11 +387,9 @@ impl Iface {
         self.env(&ctxt);
         self.session.with(|s| s.discovering = on);
         if on {
-            // As netvfs' NearbyService: a start signals what is known right away, after the reply.
             let shared = self.shared.clone();
             tokio::spawn(async move { shared.broadcast_nearby().await });
         } else if !self.shared.any_discovering() {
-            // netvfs halts discovery when its last client stops and forgets what it found.
             self.shared.with(|s| s.nearby.clear());
         }
         Ok(())
@@ -680,7 +659,6 @@ impl Iface {
         let dst = args::path(&dst)?;
         let opts = args::copy_opts(&opts)?;
         self.begin("CopyAcross", "bulk", &src_loc, true).await?;
-        // Copy jobs connect outside the pools: no state change.
         self.admit(&src_loc, &src, Op::Read)?;
         self.admit(&dst_loc, &dst, copy_op(opts.replace))?;
         Ok(self.start_job(&ctxt, move |env, job, cancel| {
@@ -832,9 +810,6 @@ pub(super) fn context(session: &Session) -> Option<SignalContext<'static>> {
 }
 
 impl Shared {
-    /// Applies `change` to the user's decision as the bridge does: `ConsentChanged` when
-    /// `GetConsent` would say otherwise; when any location allows less, every client is
-    /// disconnected, else `LocationsChanged`.
     pub async fn decide(&self, change: impl FnOnce(&mut State)) {
         let (before, after, narrowed) = self.with(|s| {
             let ids: Vec<String> = s.locations.keys().cloned().collect();

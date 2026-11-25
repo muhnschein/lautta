@@ -5,7 +5,6 @@ use crate::{PageRect, PageSize, PdfDocument, PdfError, TextHit, MAX_PAGE_CHARS, 
 use hayro::hayro_interpret::hayro_cmap::BfString;
 use hayro::kurbo::{Affine, Point, Rect};
 
-/// Helvetica advance widths per 1000 units of font size.
 const HELLO: f32 = 722.0 + 556.0 + 222.0 + 222.0 + 556.0;
 const WORLD: f32 = 722.0 + 556.0 + 333.0 + 222.0 + 556.0;
 fn pt(units: f32) -> f32 {
@@ -34,7 +33,6 @@ fn only_area(hits: &[TextHit]) -> PageRect {
 #[test]
 fn a_word_is_found_where_it_is_shown() {
     let hits = search(&text(10, 50, "Hello world"), "hello");
-    // box spans the advance, 0.2 em below to 0.8 em above the baseline; y counts from the top
     let top = 100.0 - 50.0 - pt(800.0);
     assert_near(only_area(&hits), 0.05, top / 100.0, pt(HELLO) / 200.0, 0.12);
 }
@@ -215,7 +213,6 @@ fn a_ligature_shares_its_glyphs_area() {
 
 #[test]
 fn hits_after_lowercase_expansions_keep_their_areas() {
-    // 'İ' lowercases to two chars, 'i' and a combining dot.
     let chars = [glyph('İ', 0.0), glyph('x', 3.0)];
     let hits = find(&chars, "x", UNIT);
     assert_eq!(

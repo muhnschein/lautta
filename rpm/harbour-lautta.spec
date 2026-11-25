@@ -1,7 +1,4 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-# Built with `mb2 build` in the Sailfish OS SDK (tools/ci/build-rpm.sh).
-# Binary needs rustc 1.95, not in the SDK target: cross-built before mb2 by
-# tools/ci/cross-build.sh, installed from prebuilt/. No network during build.
 
 Name:       harbour-lautta
 Summary:    A file manager for Sailfish OS
@@ -27,7 +24,6 @@ Requires:   nemo-qml-plugin-configuration-qt5
 Requires:   qml(Nemo.KeepAlive)
 Requires:   qt5-qtdeclarative-import-multimedia
 Requires:   qt5-qtmultimedia
-# Icons are SVG.
 Requires:   qt5-qtsvg-plugin-imageformat-svg
 
 %define debug_package %{nil}

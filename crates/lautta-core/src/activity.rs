@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Activity bar state. Qt-free; `Transfers` feeds it queue and finish events.
 
 use crate::transfer::{TransferId, TransferState, TransferSummary, WaitReason};
 

@@ -1,18 +1,14 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Item count of a local folder for grid captions. Names only, no `stat`; hidden files left out
-//! unless shown.
 
 use std::io;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
-/// Bigger folder reports what was read and `capped`: bounds the work on a slow card.
 pub const COUNT_CAP: usize = 1000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FolderCount {
     pub shown: usize,
-    /// `shown` is a lower bound.
     pub capped: bool,
 }
 

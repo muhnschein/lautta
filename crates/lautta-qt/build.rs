@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Compiles C++ glue in `cpp!` blocks. Qt via QT_INCLUDE_PATH/QT_LIBRARY_PATH (rpm build: no target
-//! qmake under scratchbox2) or `qmake -query`. `sailfish` feature: libsailfishapp via
-//! SAILFISHAPP_INCLUDE_PATH (default /usr/include/sailfishapp).
 
 use std::process::Command;
 
