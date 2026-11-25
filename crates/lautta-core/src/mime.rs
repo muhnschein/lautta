@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 use crate::entry::{Entry, Kind};
+use std::io::Read;
+use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum FileCategory {
@@ -94,6 +96,7 @@ pub fn from_extension(ext: &str) -> Option<(&'static str, FileCategory)> {
         "wmv" => ("video/x-ms-wmv", Video),
         "flv" => ("video/x-flv", Video),
         "mpg" | "mpeg" => ("video/mpeg", Video),
+        "mts" | "m2ts" => (MPEG_TS, Video),
         "ogv" => ("video/ogg", Video),
         "mp3" => ("audio/mpeg", Audio),
         "flac" => ("audio/flac", Audio),
@@ -232,6 +235,21 @@ pub fn category_from_mime(mime: &str) -> FileCategory {
         .map_or(FileCategory::Other, |(_, cat)| *cat)
 }
 
+fn by_name(name: &[u8], content_type: Option<&str>) -> Option<(&'static str, FileCategory)> {
+    let ext = extension_of(name)?;
+    if ext == "ts" && content_type.is_some_and(|ct| category_from_mime(ct) == FileCategory::Video) {
+        return Some((MPEG_TS, FileCategory::Video));
+    }
+    from_extension(&ext)
+}
+
+pub fn category_of_typed(name: &[u8], content_type: Option<&str>) -> FileCategory {
+    match by_name(name, content_type) {
+        Some((_, category)) => category,
+        None => content_type.map_or(FileCategory::Other, category_from_mime),
+    }
+}
+
 pub fn category_of_name(name: &[u8]) -> FileCategory {
     extension_of(name)
         .and_then(|e| from_extension(&e))
@@ -245,24 +263,49 @@ pub fn category_of(entry: &Entry) -> FileCategory {
     if entry.kind == Kind::Special {
         return FileCategory::Other;
     }
-    let by_name = category_of_name(&entry.name);
-    if by_name != FileCategory::Other {
-        return by_name;
-    }
-    entry
-        .content_type
-        .as_deref()
-        .map_or(FileCategory::Other, category_from_mime)
+    category_of_typed(&entry.name, entry.content_type.as_deref())
 }
 
 pub fn mime_of(entry: &Entry) -> Option<String> {
     if entry.is_dir() {
         return Some("inode/directory".to_owned());
     }
-    extension_of(&entry.name)
-        .and_then(|e| from_extension(&e))
+    by_name(&entry.name, entry.content_type.as_deref())
         .map(|(m, _)| m.to_owned())
         .or_else(|| entry.content_type.clone())
+}
+
+const MPEG_TS: &str = "video/mp2t";
+
+const MPEG_TS_SNIFF_BYTES: u64 = 1024;
+
+pub fn is_mpeg_ts(head: &[u8]) -> bool {
+    [(188, 0), (192, 4)].into_iter().any(|(packet, sync_at)| {
+        let syncs: Vec<u8> = head.iter().skip(sync_at).step_by(packet).copied().collect();
+        syncs.len() >= 3 && syncs.iter().all(|b| *b == 0x47)
+    })
+}
+
+pub fn sniff_local(name: &[u8], path: &Path) -> Option<&'static str> {
+    if extension_of(name).as_deref() != Some("ts") || !std::fs::metadata(path).ok()?.is_file() {
+        return None;
+    }
+    let mut head = Vec::new();
+    std::fs::File::open(path)
+        .ok()?
+        .take(MPEG_TS_SNIFF_BYTES)
+        .read_to_end(&mut head)
+        .ok()?;
+    is_mpeg_ts(&head).then_some(MPEG_TS)
+}
+
+pub fn viewer_of(name: &[u8], mime: &str, local: Option<&Path>) -> Viewer {
+    let mime = match local.and_then(|path| sniff_local(name, path)) {
+        Some(sniffed) => sniffed,
+        None if mime.is_empty() => by_name(name, None).map_or("", |(m, _)| m),
+        None => mime,
+    };
+    viewer_for_name(name, category_of_typed(name, Some(mime)), mime)
 }
 
 const TEXT_SNIFF_MAX_CONTROL_PERCENT: usize = 2;
@@ -390,6 +433,9 @@ mod tests {
         let cases = [
             ("a.jpg", FileCategory::Image),
             ("a.mkv", FileCategory::Video),
+            ("a.MTS", FileCategory::Video),
+            ("a.m2ts", FileCategory::Video),
+            ("a.ts", FileCategory::Code),
             ("a.flac", FileCategory::Audio),
             ("a.txt", FileCategory::Text),
             ("a.rs", FileCategory::Code),
@@ -481,6 +527,106 @@ mod tests {
     }
 
     #[test]
+    fn ts_is_video_only_by_video_content_type() {
+        let mut e = file("rec.ts");
+        assert_eq!(mime_of(&e).as_deref(), Some("text/x-typescript"));
+        for (ct, cat, mime) in [
+            ("video/mp2t", FileCategory::Video, "video/mp2t"),
+            ("video/MP2T", FileCategory::Video, "video/mp2t"),
+            ("text/x-typescript", FileCategory::Code, "text/x-typescript"),
+            (
+                "application/octet-stream",
+                FileCategory::Code,
+                "text/x-typescript",
+            ),
+        ] {
+            e.content_type = Some(ct.into());
+            assert_eq!(category_of(&e), cat, "{ct}");
+            assert_eq!(mime_of(&e).as_deref(), Some(mime), "{ct}");
+        }
+        let mut e = file("a.rs");
+        e.content_type = Some("video/mp2t".into());
+        assert_eq!(
+            category_of(&e),
+            FileCategory::Code,
+            "only .ts asks the content type"
+        );
+    }
+
+    fn transport_stream(packet: usize, sync_at: usize, count: usize) -> Vec<u8> {
+        let mut bytes = vec![b'x'; packet * count];
+        for start in (0..bytes.len()).step_by(packet) {
+            bytes[start + sync_at] = 0x47;
+        }
+        bytes
+    }
+
+    #[test]
+    fn mpeg_ts_needs_three_sync_bytes_a_packet_apart() {
+        let ts = transport_stream(188, 0, 5);
+        assert!(is_mpeg_ts(&ts));
+        assert!(is_mpeg_ts(&ts[..2 * 188 + 1]), "three syncs");
+        assert!(!is_mpeg_ts(&ts[..2 * 188]), "two syncs");
+        assert!(is_mpeg_ts(&transport_stream(192, 4, 5)), "M2TS");
+        assert!(
+            !is_mpeg_ts(&transport_stream(192, 0, 5)),
+            "192-byte packets sync after time code"
+        );
+        let mut broken = ts.clone();
+        broken[3 * 188] = 0x46;
+        assert!(!is_mpeg_ts(&broken));
+        assert!(!is_mpeg_ts(b""));
+        assert!(!is_mpeg_ts("Gx\n".repeat(300).as_bytes()));
+        assert!(!is_mpeg_ts(b"export const answer: number = 42;\n"));
+    }
+
+    #[test]
+    fn local_ts_is_sniffed_by_content() {
+        let d = tempfile::tempdir().unwrap();
+        let ts = transport_stream(188, 0, 40);
+        let write = |name: &str, bytes: &[u8]| {
+            let p = d.path().join(name);
+            std::fs::write(&p, bytes).unwrap();
+            p
+        };
+        let video = write("rec.ts", &ts);
+        let m2ts = write("cam.ts", &transport_stream(192, 4, 40));
+        let code = write("app.ts", b"export function hello(name: string) {}\n");
+        let not_ts = write("rec.rs", &ts);
+        let dir = d.path().join("dir.ts");
+        std::fs::create_dir(&dir).unwrap();
+        assert_eq!(sniff_local(b"rec.ts", &video), Some("video/mp2t"));
+        assert_eq!(sniff_local(b"cam.TS", &m2ts), Some("video/mp2t"));
+        assert_eq!(sniff_local(b"app.ts", &code), None);
+        assert_eq!(sniff_local(b"rec.rs", &not_ts), None);
+        assert_eq!(sniff_local(b"dir.ts", &dir), None);
+        assert_eq!(sniff_local(b"gone.ts", &d.path().join("gone.ts")), None);
+
+        assert_eq!(viewer_of(b"rec.ts", "", Some(&video)), Viewer::Video);
+        assert_eq!(
+            viewer_of(b"rec.ts", "text/x-typescript", Some(&video)),
+            Viewer::Video,
+            "file beats a stale listed type"
+        );
+        assert_eq!(viewer_of(b"app.ts", "", Some(&code)), Viewer::Text);
+        assert_eq!(viewer_of(b"rec.rs", "", Some(&not_ts)), Viewer::Text);
+    }
+
+    #[test]
+    fn viewer_of_without_local_file() {
+        assert_eq!(viewer_of(b"a.ts", "", None), Viewer::Text);
+        assert_eq!(viewer_of(b"a.ts", "video/mp2t", None), Viewer::Video);
+        assert_eq!(viewer_of(b"a.m2ts", "", None), Viewer::Video);
+        assert_eq!(viewer_of(b"a.txt", "", None), Viewer::Prose);
+        assert_eq!(viewer_of(b"a.rar", "", None), Viewer::External);
+        assert_eq!(viewer_of(b"a.apk", "", None), Viewer::Archive);
+        assert_eq!(viewer_of(b"noext", "text/plain", None), Viewer::Text);
+        assert_eq!(viewer_of(b"noext", "image/png", None), Viewer::Image);
+        assert_eq!(viewer_of(b"noext", "image/heic", None), Viewer::External);
+        assert_eq!(viewer_of(b"noext", "", None), Viewer::External);
+    }
+
+    #[test]
     fn mime_table_categories() {
         let cases = [
             ("text/markdown", FileCategory::Markdown),
@@ -509,7 +655,7 @@ mod tests {
     fn extension_table_agrees_with_mime_table() {
         for ext in [
             "png", "mp4", "mp3", "txt", "md", "pdf", "json", "zip", "docx", "xlsx", "pptx", "odt", "sqlite",
-            "rpm", "apk", "rs", "html",
+            "rpm", "apk", "rs", "html", "m2ts",
         ] {
             let Some((mime, cat)) = from_extension(ext) else {
                 panic!("missing {ext}");
