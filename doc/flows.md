@@ -298,16 +298,18 @@ Features: F-XFR-01 Activity page, F-XFR-02 Task row menu, F-XFR-03 Task details,
 
 ### FL-19 Find a file (both modes)
 
-Search this folder and below.
+Search this folder and below, the device, or every location.
 
-Features: F-SRC-01 Search in folder, F-SRC-02 Search filters, F-SRC-03 Server search depth
+Features: F-SRC-01 Search, F-SRC-02 Search pills, F-SRC-03 Server search depth
 
 | # | Screen | Step |
 |---|---|---|
 | 1 | SCR-06 Folder pulley | Pull: Search |
 | 2 | SCR-25 Search | Search page |
 | 3 | SCR-25 Search | Results |
-| 4 | SCR-26 Search filters | Filters |
+| 4 | SCR-25 Search | Pills: scope, type, Modified, Size |
+| 5 | SCR-01 Home | Pull: Search |
+| 6 | SCR-25 Search | Results by location |
 
 ### FL-20 Restore from Trash (standalone)
 

@@ -400,6 +400,22 @@ mod scope {
     }
 
     #[tokio::test]
+    async fn a_failing_device_folder_leaves_the_rest_of_the_device_searched() {
+        let h = home().await;
+        write(&h.root.join("Documents/budget.ods"), b"x");
+        let broken = MemoryProvider::new(Capabilities::with(&[]));
+        broken.fail_next("list", "", Error::kind(ErrorKind::PermissionDenied));
+        h.core.locations.register(
+            Location::remote("user-broken", LocationKind::UserFolder, "Broken", None),
+            Arc::new(broken),
+        );
+        let (groups, seen) = run(&h, SearchScope::Device, None, "budget").await;
+        assert!(groups[0].roots.iter().any(|r| r.name == "Broken"), "{groups:?}");
+        let done = seen.done[&0].as_ref().expect("one readable root is enough");
+        assert_eq!((done.hits, done.errors), (1, 1));
+    }
+
+    #[tokio::test]
     async fn server_search_keeps_the_depth_setting() {
         let h = home().await;
         h.core.apply_settings(Settings {

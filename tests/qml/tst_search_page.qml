@@ -15,9 +15,7 @@ ApplicationWindow {
     property var heading
     property var field
     property var list
-    property var filters
-    property var dialog
-    property var searchModel
+    property var pills
     property real fieldY
 
     SearchTestSupport { id: support }
@@ -96,36 +94,18 @@ ApplicationWindow {
                "no flickable of the page has a pulley menu")
         expect(!within(field, list), "the search field is not inside the list")
         expect(list.headerItem === null, "the list has no header")
-        expect(within(field, heading) && within(filters, heading), "field and filter summary are in the heading")
+        expect(within(field, heading) && within(pills, heading), "field and pills are in the heading")
         expect(page.allowedOrientations === Orientation.All, "the page turns to landscape")
     }
 
-    function filtersShown() {
-        if (pageStack.busy || pageStack.currentPage === page)
-            return false
-        dialog = pageStack.currentPage
-        if (dialog.typeIds === undefined || dialog.searchModel === undefined) {
-            fail("the filter summary opens the filters")
-            return false
-        }
-        searchModel = dialog.searchModel
-        return true
-    }
-
-    function backOnPage() {
-        return !pageStack.busy && pageStack.currentPage === page
-    }
-
-    function nameField() {
-        return findAll(dialog, function (x) {
-            return x.echoMode !== undefined && x.label !== undefined && x.placeholderText !== undefined
+    function pill(name, type) {
+        return findAll(pills, function (x) {
+            return x.objectName === name && (type === undefined || x.type === type)
         }, [])[0]
     }
 
-    function typeBox() {
-        return findAll(dialog, function (x) {
-            return x.currentIndex !== undefined && (x.label === "lautta-filters-type" || x.label === "Type")
-        }, [])[0]
+    function choice(choices, value) {
+        return findAll(choices, function (x) { return x.objectName === "pillChoice" && x.value === value }, [])[0]
     }
 
     Component.onCompleted: {
@@ -157,10 +137,11 @@ ApplicationWindow {
                 win.heading = win.named("searchHeading")
                 win.field = win.named("searchField")
                 win.list = win.named("searchList")
-                win.filters = win.named("searchFilters")
-                if (!win.heading || !win.field || !win.list || !win.filters)
-                    return win.fail("heading, field, list and filter summary are found")
+                win.pills = win.named("searchPills")
+                if (!win.heading || !win.field || !win.list || !win.pills)
+                    return win.fail("heading, field, list and pills are found")
                 win.checkStructure()
+                win.expect(win.page.scope === "folder", "a folder's search starts in the folder: " + win.page.scope)
                 win.field.forceActiveFocus()
                 win.fieldY = win.field.mapToItem(win.page, 0, 0).y
                 win.field.text = "thesis"
@@ -178,46 +159,55 @@ ApplicationWindow {
                 if (win.rowCount() !== 3)
                     break
                 win.checkFieldKept("thesis_1", "second search")
-                win.filters.clicked(null)
+                win.field.text = "thesis"
                 win.next()
                 break
             case 3:
-                if (!win.filtersShown())
+                if (win.rowCount() !== 15)
                     break
-                var name = win.nameField()
-                win.expect(name.text === "thesis_1", "the filters start from the typed name: " + name.text)
-                name.text = "final"
-                win.dialog.accept()
+                var text = win.pill("typePill", "text")
+                if (!text)
+                    return win.fail("a Text pill")
+                text.clicked()
+                win.expect(text.checked, "the Text pill lights up")
                 win.next()
                 break
             case 4:
-                if (!win.backOnPage() || win.rowCount() !== 1)
+                if (win.rowCount() !== 3)
                     break
-                win.expect(win.field.text === "final", "the field shows the name the filters searched for: " + win.field.text)
-                win.field.forceActiveFocus()
-                win.field.text = "thesis"
+                win.checkFieldKept("thesis", "type pill")
+                win.pill("typePill", "text").clicked()
+                win.pill("datePill").clicked()
                 win.next()
                 break
             case 5:
                 if (win.rowCount() !== 15)
                     break
-                win.expect(win.searchModel.query === "thesis", "the query follows the field: " + win.searchModel.query)
-                win.checkFieldKept("thesis", "after the filters")
-                win.filters.clicked(null)
+                var dates = win.named("dateChoices")
+                win.expect(dates.shown && dates.height > 0, "the date pill opens its choices")
+                win.checkLayout("choices open")
+                win.choice(dates, "today").clicked()
+                win.expect(!dates.shown, "a choice closes the choices")
+                win.expect(win.pill("datePill").checked, "a chosen date lights its pill")
                 win.next()
                 break
             case 6:
-                if (!win.filtersShown())
+                if (win.waited < 8 || win.rowCount() !== 15)
                     break
-                win.nameField().text = ""
-                win.typeBox().currentIndex = 1
-                win.dialog.accept()
+                win.pill("scopePill").clicked()
+                var scopes = win.named("scopeChoices")
+                win.expect(scopes.shown, "the scope pill opens its choices")
+                var device = win.choice(scopes, "device")
+                if (!device || !win.choice(scopes, "folder"))
+                    return win.fail("scope choices name the folder and the device")
+                device.clicked()
                 win.next()
                 break
             case 7:
-                if (win.waited < 8 || !win.backOnPage() || win.rowCount() !== 2)
+                if (win.rowCount() < 15 || win.named("searchGroupName") === null)
                     break
-                win.expect(win.field.text === "", "the field shows the empty name: " + win.field.text)
+                win.expect(win.page.scope === "device" && win.page.wide, "the device scope is wide")
+                win.expect(win.named("searchGroupName").text.length > 0, "the device section is named")
                 win.field.forceActiveFocus()
                 win.deviceOrientation = Orientation.Landscape
                 win.next()

@@ -74,8 +74,7 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | SCR-22 | Task details | `pages/TransferDetailsPage.qml` | S | Activity row |
 | SCR-23 | Activity bar | `transfers/ActivityBar.qml` | S | Home, folder page while task runs |
 | SCR-24 | View options | `pages/ViewOptionsPage.qml` | S | folder pulley, Settings |
-| SCR-25 | Search | `pages/SearchPage.qml` | S | folder pulley Search |
-| SCR-26 | Search filters | `pages/SearchFiltersPage.qml` | S | Search summary row |
+| SCR-25 | Search | `pages/SearchPage.qml` | S | folder pulley Search, Home pulley Search |
 | SCR-27 | Image viewer | `viewers/ImageViewer.qml` (+ `gallery/`) | S | tap image |
 | SCR-28 | Image details | `viewers/ImageDetailsPage.qml` | S | image viewer (i) |
 | SCR-29 | Image More | `viewers/ImageMorePage.qml` | S | image viewer (…) |
@@ -230,8 +229,8 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 
 ### 3.9 Search
 
-- **F-SRC-01 Search in folder** — from folder pulley; type part of name or pattern (`*.pdf`); live results "Searching… N results", Stop; result opens item.
-- **F-SRC-02 Search filters** — Name match Contains/Pattern, Type (Any, Folders, Images, Videos, Audio, Documents, Compressed files, Text files), Size, Modified, Include hidden files, Search depth on servers, Recent searches.
+- **F-SRC-01 Search** — folder pulley (this folder and below) or Home pulley (whole device, or everywhere with servers); type part of name, wildcards make a pattern (`*.pdf`); live results "Searching… N results", Stop; result opens item; list or grid as View options; wide scope: section per location (This device, each memory card, each server) with its state (searching N folders, N results, nothing found, not reachable, not allowed, needs attention); recent searches per scope before typing.
+- **F-SRC-02 Search pills** — pill strip under field: scope (this folder, This device, Everywhere), types (Folders, Images, Videos, Audio, Documents, Archives, Text; several at once), Modified, Size (choices open inline under strip), Hidden.
 - **F-SRC-03 Server search depth** — Settings › Search ("N folders deep on servers"; device searches all).
 
 ### 3.10 Scan

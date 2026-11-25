@@ -22,6 +22,11 @@ Item {
             property int rowStart: matchStart
             property int rowLength: matchLength
             property string rowCategory: category
+            property string rowGroup: group
+            property string rowPlace: place
+            property string rowMime: mimeType
+            property string rowTypeIcon: typeIcon
+            property int rowGroupIndex: groupIndex
         }
     }
 
@@ -46,7 +51,6 @@ Item {
 
     function run(query, mode, types, size, date, hidden) {
         model.query = query
-        model.matchMode = mode
         model.types = JSON.stringify(types)
         model.sizePreset = size
         model.datePreset = date
@@ -142,6 +146,27 @@ Item {
         check(rows.count === 0 && model.hitCount === 0, "clear empties the list")
         model.clearRecent()
         check(JSON.parse(model.recentSearchesJson).length === 0, "recent searches cleared")
+
+        check(model.scope === "", "a new model searches its folder")
+        model.scope = "device"
+        check(JSON.parse(model.recentSearchesJson).length === 0, "the device keeps its own recent searches")
+        run("thesis_draft", "substring", [], "any", "any", false)
+        var groups = JSON.parse(model.groupsJson)
+        check(groups.length === 1 && groups[0].key === "@device" && groups[0].kind === "device",
+              "device scope is one group: " + model.groupsJson)
+        check(groups[0].state === "done" && groups[0].hits === 1 && groups[0].folders >= 4,
+              "the group reports its outcome: " + model.groupsJson)
+        check(rows.count === 1, "one hit on the whole device: " + names())
+        var d = rows.itemAt(0)
+        check(d.rowSection === "@device" && d.rowGroup === "@device" && d.rowGroupIndex === 0,
+              "device rows are sectioned by group: " + d.rowSection)
+        check(d.rowPlace === "Documents › srch_t1 › Uni", "place names the device folder: " + d.rowPlace)
+        check(d.rowMime.length > 0 && d.rowTypeIcon.length > 0, "rows carry their look: " + d.rowMime + " " + d.rowTypeIcon)
+        check(JSON.stringify(JSON.parse(model.recentSearchesJson)) === JSON.stringify(["thesis_draft"]),
+              "device recents: " + model.recentSearchesJson)
+        check(!model.hasServers(), "no servers without the bridge")
+        model.scope = "folder"
+        check(JSON.parse(model.recentSearchesJson).indexOf("thesis_draft") < 0, "folder recents stay apart")
 
         model.rootUri = "lautta://user-documents/nonexistent_dir"
         run("x", "substring", [], "any", "any", false)

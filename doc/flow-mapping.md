@@ -86,9 +86,9 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | F-VWR-09 PDF contents / go to page | S | FL-09 | SCR-33, SCR-34, SCR-35, SCR-36 |
 | F-VWR-10 PDF password | S | FL-09 | SCR-33, SCR-34, SCR-35, SCR-36 |
 | F-VWR-11 External fallback | S | — | — |
-| F-SRC-01 Search in folder | S | FL-19 | SCR-06, SCR-25, SCR-26 |
-| F-SRC-02 Search filters | S | FL-19 | SCR-06, SCR-25, SCR-26 |
-| F-SRC-03 Server search depth | S | FL-19, FL-26 | SCR-01, SCR-06, SCR-24, SCR-25, SCR-26, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
+| F-SRC-01 Search | S | FL-19 | SCR-01, SCR-06, SCR-25 |
+| F-SRC-02 Search pills | S | FL-19 | SCR-25 |
+| F-SRC-03 Server search depth | S | FL-19, FL-26 | SCR-01, SCR-06, SCR-24, SCR-25, SCR-41, SCR-42, SCR-43, SCR-44, SCR-45, SCR-46, SCR-47, SCR-48 |
 | F-SCN-01 Scan document | S | FL-23 | SCR-03, SCR-12, SCR-53, SCR-54, SCR-55, SCR-56, SCR-57 |
 | F-SCN-02 Page edge detection and crop | S | FL-23 | SCR-03, SCR-12, SCR-53, SCR-54, SCR-55, SCR-56, SCR-57 |
 | F-SCN-03 Page view | S | FL-23 | SCR-03, SCR-12, SCR-53, SCR-54, SCR-55, SCR-56, SCR-57 |
@@ -115,7 +115,7 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 
 | Screen | Flows |
 |---|---|
-| SCR-01 Home | FL-01, FL-02, FL-03, FL-21, FL-22, FL-26, FL-27, FL-28, FL-29, FL-30, FL-33, FL-36 |
+| SCR-01 Home | FL-01, FL-02, FL-03, FL-19, FL-21, FL-22, FL-26, FL-27, FL-28, FL-29, FL-30, FL-33, FL-36 |
 | SCR-02 Start error | FL-01 |
 | SCR-03 Folder page (list) | FL-02, FL-03, FL-06, FL-10, FL-11, FL-12, FL-13, FL-14, FL-16, FL-17, FL-23, FL-25, FL-29, FL-30, FL-37 |
 | SCR-04 Folder page (grid) | FL-04, FL-32 |
@@ -139,7 +139,6 @@ Which flows (`doc/flows.md`) reach each feature and screen (`doc/feature-map.md`
 | SCR-23 Activity bar | FL-14, FL-35 |
 | SCR-24 View options | FL-04, FL-26 |
 | SCR-25 Search | FL-19 |
-| SCR-26 Search filters | FL-19 |
 | SCR-27 Image viewer | FL-06, FL-32 |
 | SCR-28 Image details | FL-06 |
 | SCR-29 Image More | — |

@@ -429,7 +429,7 @@ impl Core {
             let before = total.folders;
             let progress_out = out.clone();
             let progress: search::FolderProgress = Arc::new(move |folders: u64| {
-                if folders % PROGRESS_EVERY_FOLDERS == 0 {
+                if folders.is_multiple_of(PROGRESS_EVERY_FOLDERS) {
                     let _ = progress_out.try_send(ScopeEvent::Progress {
                         group,
                         folders: before + folders,
