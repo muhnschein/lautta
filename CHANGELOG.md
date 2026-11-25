@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A tar file with an entry dated out of range (such as before 1901 or far in the future) no longer closes Lautta: it opens, and that entry shows no date ([#156](https://github.com/muhnschein/lautta/issues/156)).
 - Zip files with a file of 4 GB or more inside open and extract, and *Compress* to Zip writes such files with their right size, so other apps open the zip ([#166](https://github.com/muhnschein/lautta/issues/166)).
 - When you remove an account in *Settings › Accounts*, Lautta forgets its favourites, recents and settings even if you removed it right after adding it. Before, they could stay behind ([#230](https://github.com/muhnschein/lautta/issues/230)).
 - Markdown files with thousands of nested quotes or lists open in a moment instead of taking over a gigabyte of memory. Lists nested more than 8 deep and quotes more than 9 deep show at that depth, so their text stays on screen ([#162](https://github.com/muhnschein/lautta/issues/162)).
