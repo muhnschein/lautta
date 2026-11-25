@@ -164,6 +164,7 @@ pub struct DirectoryModel {
     hasCapability: qt_method!(fn(&self, flag: QString) -> bool),
     nameKind: qt_method!(fn(&self, name: QString) -> QString),
     kindOf: qt_method!(fn(&self, uri: QString) -> QString),
+    shareType: qt_method!(fn(&self, uris_json: QString) -> QString),
     requestCount: qt_method!(fn(&mut self, uri: QString)),
     requestPreview: qt_method!(fn(&mut self, uri: QString)),
     cancelPreview: qt_method!(fn(&mut self, uri: QString)),
@@ -915,6 +916,19 @@ impl DirectoryModel {
     fn kindOf(&self, uri: QString) -> QString {
         let name = self.name_of(&uri).unwrap_or_default();
         qs(kind_of(self.state.entry_named(&name)))
+    }
+
+    fn shareType(&self, uris_json: QString) -> QString {
+        let uris: Vec<String> = from_json(&uris_json.to_string()).unwrap_or_default();
+        let types: Vec<Option<String>> = uris
+            .iter()
+            .map(|u| {
+                self.name_of(&qs(u))
+                    .and_then(|name| self.state.entry_named(&name))
+                    .and_then(mime::mime_of)
+            })
+            .collect();
+        qs(&mime::share_type(types.iter().map(Option::as_deref)))
     }
 
     fn requestCount(&mut self, uri: QString) {

@@ -275,6 +275,23 @@ pub fn mime_of(entry: &Entry) -> Option<String> {
         .or_else(|| entry.content_type.clone())
 }
 
+pub const ANY_FILE: &str = "application/octet-stream";
+
+pub fn share_type<'a>(types: impl IntoIterator<Item = Option<&'a str>>) -> String {
+    let types: Option<Vec<&str>> = types.into_iter().collect();
+    let Some((first, rest)) = types.as_deref().and_then(<[&str]>::split_first) else {
+        return ANY_FILE.to_owned();
+    };
+    if rest.iter().all(|t| t == first) {
+        return (*first).to_owned();
+    }
+    let group = |t: &str| t.split_once('/').map(|(g, _)| g.to_owned());
+    match group(first) {
+        Some(g) if rest.iter().all(|t| group(t).as_ref() == Some(&g)) => format!("{g}/*"),
+        _ => ANY_FILE.to_owned(),
+    }
+}
+
 const MPEG_TS: &str = "video/mp2t";
 
 const MPEG_TS_SNIFF_BYTES: u64 = 1024;
@@ -414,6 +431,34 @@ mod tests {
 
     fn file(name: &str) -> Entry {
         Entry::new(name.as_bytes(), Kind::File)
+    }
+
+    #[test]
+    fn one_shared_file_keeps_its_type() {
+        assert_eq!(share_type([Some("video/mp4")]), "video/mp4");
+        assert_eq!(share_type([Some("image/jpeg"), Some("image/jpeg")]), "image/jpeg");
+    }
+
+    #[test]
+    fn shared_files_of_one_group_share_the_group() {
+        assert_eq!(share_type([Some("image/jpeg"), Some("image/png")]), "image/*");
+        assert_eq!(
+            share_type([Some("video/mp4"), Some("video/webm"), Some("video/mp4")]),
+            "video/*"
+        );
+    }
+
+    #[test]
+    fn mixed_or_unknown_shared_files_are_any_file() {
+        assert_eq!(share_type([Some("image/jpeg"), Some("video/mp4")]), ANY_FILE);
+        assert_eq!(
+            share_type([Some("image/jpeg"), Some("image/png"), Some("video/mp4")]),
+            ANY_FILE
+        );
+        assert_eq!(share_type([Some("image/jpeg"), None]), ANY_FILE);
+        assert_eq!(share_type([None]), ANY_FILE);
+        assert_eq!(share_type([Some("image"), Some("image/png")]), ANY_FILE);
+        assert_eq!(share_type(std::iter::empty()), ANY_FILE);
     }
 
     #[test]
