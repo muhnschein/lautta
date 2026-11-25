@@ -37,6 +37,15 @@ Item {
              ["share", "copy", "cut", "rename", "delete", "more"], "readable unless said")
     }
 
+    function testFavourite() {
+        same(Actions.text("favourite"), "lautta-dir-act-favourite", "not a favourite: Add to favourites")
+        same(Actions.text("favourite", { "favourite": true }), "lautta-dir-act-edit-favourite", "a favourite: Edit favourite")
+        same(Actions.more({ "isDir": true, "favourite": true })[0].text, "lautta-dir-act-edit-favourite",
+             "More actions of a favourite")
+        same(Actions.more({ "isDir": true, "favourite": false })[0].text, "lautta-dir-act-favourite",
+             "More actions of another folder")
+    }
+
     function testMore() {
         var ctxs = [{ "isDir": false, "changeable": true, "writable": true }, { "isDir": true, "changeable": true, "writable": true },
                     { "isDir": false, "changeable": false, "writable": true }, { "isDir": true, "changeable": false, "writable": false }]
@@ -122,6 +131,7 @@ Item {
 
     Component.onCompleted: {
         testMenu()
+        testFavourite()
         testMore()
         testExtract()
         testChecksums()
