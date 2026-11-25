@@ -84,9 +84,9 @@ pub fn from_extension(ext: &str) -> Option<(&'static str, FileCategory)> {
         "svg" | "svgz" => ("image/svg+xml", Image),
         "ico" => ("image/vnd.microsoft.icon", Image),
         "tif" | "tiff" => ("image/tiff", Image),
-        "heic" | "heif" => ("image/heic", Image),
-        "avif" => ("image/avif", Image),
-        "jxl" => ("image/jxl", Image),
+        "heic" | "heif" => ("image/heic", Other),
+        "avif" => ("image/avif", Other),
+        "jxl" => ("image/jxl", Other),
         "mp4" | "m4v" => ("video/mp4", Video),
         "mkv" => ("video/x-matroska", Video),
         "webm" => ("video/webm", Video),
@@ -176,6 +176,10 @@ const MIME_PREFIXES: &[(&str, FileCategory)] = &[
     ("text/css", FileCategory::Code),
     ("text/javascript", FileCategory::Code),
     ("text/", FileCategory::Text),
+    ("image/heic", FileCategory::Other),
+    ("image/heif", FileCategory::Other),
+    ("image/avif", FileCategory::Other),
+    ("image/jxl", FileCategory::Other),
     ("image/", FileCategory::Image),
     ("video/", FileCategory::Video),
     ("audio/", FileCategory::Audio),
@@ -481,13 +485,45 @@ mod tests {
     fn content_type_is_the_fallback() {
         let mut e = file("noext");
         assert_eq!(mime_of(&e), None);
-        e.content_type = Some("image/heic; charset=x".into());
+        e.content_type = Some("image/png; charset=x".into());
         assert_eq!(category_of(&e), FileCategory::Image);
-        assert_eq!(mime_of(&e).as_deref(), Some("image/heic; charset=x"));
+        assert_eq!(mime_of(&e).as_deref(), Some("image/png; charset=x"));
         let mut e = file("a.txt");
         e.content_type = Some("image/png".into());
         assert_eq!(category_of(&e), FileCategory::Text);
         assert_eq!(mime_of(&e).as_deref(), Some("text/plain"));
+    }
+
+    #[test]
+    fn images_without_qt_decoder_open_with_other_apps() {
+        for (name, mime) in [
+            ("a.heic", "image/heic"),
+            ("a.HEIF", "image/heic"),
+            ("a.avif", "image/avif"),
+            ("a.jxl", "image/jxl"),
+        ] {
+            let mut e = file(name);
+            assert_eq!(category_of(&e), FileCategory::Other, "{name}");
+            assert_eq!(mime_of(&e).as_deref(), Some(mime), "{name}");
+            e.content_type = Some(mime.into());
+            assert_eq!(category_of(&e), FileCategory::Other, "{name} from server");
+            assert_eq!(
+                viewer_for_name(name.as_bytes(), FileCategory::Other, mime),
+                Viewer::External
+            );
+        }
+        for mime in [
+            "image/heic",
+            "image/heif",
+            "image/avif",
+            "image/jxl",
+            "image/heic-sequence",
+        ] {
+            let mut e = file("noext");
+            e.content_type = Some(mime.into());
+            assert_eq!(category_of(&e), FileCategory::Other, "{mime}");
+        }
+        assert_eq!(category_from_mime("image/png"), FileCategory::Image);
     }
 
     #[test]
@@ -585,7 +621,8 @@ mod tests {
         assert_eq!(viewer_of(b"a.rar", "", None), Viewer::External);
         assert_eq!(viewer_of(b"a.apk", "", None), Viewer::Archive);
         assert_eq!(viewer_of(b"noext", "text/plain", None), Viewer::Text);
-        assert_eq!(viewer_of(b"noext", "image/heic", None), Viewer::Image);
+        assert_eq!(viewer_of(b"noext", "image/png", None), Viewer::Image);
+        assert_eq!(viewer_of(b"noext", "image/heic", None), Viewer::External);
         assert_eq!(viewer_of(b"noext", "", None), Viewer::External);
     }
 
