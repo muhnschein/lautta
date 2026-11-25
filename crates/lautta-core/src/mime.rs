@@ -82,7 +82,6 @@ pub fn from_extension(ext: &str) -> Option<(&'static str, FileCategory)> {
         "svg" | "svgz" => ("image/svg+xml", Image),
         "ico" => ("image/vnd.microsoft.icon", Image),
         "tif" | "tiff" => ("image/tiff", Image),
-        // Qt 5.6 on SFOS 5.2 has no decoder: shown as image they only fail.
         "heic" | "heif" => ("image/heic", Other),
         "avif" => ("image/avif", Other),
         "jxl" => ("image/jxl", Other),
