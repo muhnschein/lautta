@@ -64,7 +64,6 @@ impl FileStat {
     }
 }
 
-/// Bogus `nsec` (a second or more) at `i64::MAX` seconds would overflow: carry dropped.
 pub fn timestamp(sec: i64, nsec: u32) -> SystemTime {
     let whole = if sec >= 0 {
         SystemTime::UNIX_EPOCH + Duration::from_secs(sec.unsigned_abs())

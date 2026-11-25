@@ -358,7 +358,6 @@ async fn conflicting_entries_are_skipped_and_later_duplicates_win() {
 async fn tar_times_out_of_range_list_without_time() {
     let mut b = tar::Builder::new(Vec::new());
     tar_add(&mut b, "ok.txt", b"1", tar::EntryType::Regular);
-    // libarchive test_read_format_tar_pax_negative_time.tar: base-256 negative mtime.
     let negative = [
         0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x80, 0x0d, 0x5c, 0x80, 0x20,
     ];
