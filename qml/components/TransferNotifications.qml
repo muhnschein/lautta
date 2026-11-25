@@ -1,6 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Closed app: notification carries a D-Bus action on
-// org.netvfs.lautta that starts the app through ExecDBus. App exports no D-Bus object, so it comes
-// up on its main page.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Nemo.Notifications 1.0
 import Lautta 1.0
@@ -97,13 +95,11 @@ Item {
         note.publish()
     }
 
-    // Ended transfer keeps its unanswered items listed.
     function waitsForAnswer(id) {
         var s = summaryOf(id)
         return s !== null && s.finishedMs === null && JSON.parse(Transfers.questionsJson(id)).length > 0
     }
 
-    // Own close() emits no `closed`: destroy here.
     function closeAnswered() {
         for (var key in questionNotes) {
             var note = questionNotes[key]

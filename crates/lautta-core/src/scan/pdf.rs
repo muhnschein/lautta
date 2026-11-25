@@ -1,14 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Writes scanned pages as PDF 1.4: each page one picture filling it. Streams to any `Write`;
-//! objects in file order, cross-reference table at the end.
 
 use crate::error::Result;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use std::io::Write;
 
-/// Longer side of every page, in points: A4's 297 mm. Shorter side follows the picture, since a
-/// photo says nothing about the paper's real size.
 pub const LONG_SIDE_PT: f32 = 841.89;
 
 const CATALOG: usize = 1;
@@ -17,9 +13,7 @@ const INFO: usize = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pixels {
-    /// Baseline JPEG, gray or RGB.
     Jpeg { data: Vec<u8>, gray: bool },
-    /// One bit per pixel as from [`super::tone::pack_bits`].
     Bits(Vec<u8>),
 }
 
@@ -30,19 +24,16 @@ pub struct PageImage {
     pub pixels: Pixels,
 }
 
-/// Page size in points for a picture of `width` × `height` pixels.
 pub fn page_points(width: u32, height: u32) -> (f32, f32) {
     let (w, h) = (width.max(1) as f32, height.max(1) as f32);
     let scale = LONG_SIDE_PT / w.max(h);
     (w * scale, h * scale)
 }
 
-/// Now, as PDF writes dates.
 pub fn created_now() -> String {
     chrono::Utc::now().format("D:%Y%m%d%H%M%SZ").to_string()
 }
 
-/// PDF text string: UTF-16BE with byte order mark, as hex.
 fn text_string(text: &str) -> String {
     let mut out = String::from("<FEFF");
     for unit in text.encode_utf16() {
@@ -55,7 +46,6 @@ fn text_string(text: &str) -> String {
 pub struct PdfWriter<W: Write> {
     out: W,
     written: u64,
-    /// Byte offset of each object, index = object number.
     offsets: Vec<u64>,
     pages: Vec<usize>,
 }
@@ -68,7 +58,6 @@ impl<W: Write> PdfWriter<W> {
             offsets: vec![0; INFO + 1],
             pages: Vec::new(),
         };
-        // Second line: four bytes above 127 mark the file as binary.
         writer.put(b"%PDF-1.4\n%\xE2\xE3\xCF\xD3\n")?;
         Ok(writer)
     }
@@ -133,7 +122,6 @@ impl<W: Write> PdfWriter<W> {
         Ok(())
     }
 
-    /// `created`: PDF date, `D:YYYYMMDDHHmmSSZ`.
     pub fn finish(mut self, title: &str, created: &str) -> Result<W> {
         let kids: Vec<String> = self.pages.iter().map(|p| format!("{p} 0 R")).collect();
         self.object(
@@ -215,7 +203,6 @@ mod tests {
         writer.finish("Scan", "D:20261112101500Z").unwrap()
     }
 
-    /// Left half one colour, right half another.
     fn halves(w: u32, h: u32, left: [u8; 3], right: [u8; 3]) -> RgbImage {
         RgbImage::from_fn(w, h, |x, _| Rgb(if x < w / 2 { left } else { right }))
     }
@@ -324,8 +311,6 @@ mod tests {
             .contains("/Title <FEFF005300630061006E> /Producer (Lautta) /CreationDate (D:20261112101500Z)"));
         assert!(text.contains("/Type /Pages /Count 1 /Kids [6 0 R]"));
         assert!(text.contains("/BitsPerComponent 1 /Filter /FlateDecode"));
-        // Every table entry points at its object. Offsets count bytes, so the table is cut from
-        // the bytes: its text is plain ASCII.
         let marker = pdf.windows(10).rposition(|w| w == b"startxref\n").unwrap();
         let start: usize = String::from_utf8_lossy(&pdf[marker + 10..])
             .lines()

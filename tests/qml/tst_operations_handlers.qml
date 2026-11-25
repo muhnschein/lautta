@@ -44,7 +44,6 @@ ApplicationWindow {
         return expect(done(), "timed out waiting for " + what)
     }
 
-    // A large copy's plan summary that arrives while a dialog closes.
     function checkSummaryWhileDialogCloses() {
         var depth = pageStack.depth
         var dialog = pageStack.push(plainDialog)
@@ -69,7 +68,6 @@ ApplicationWindow {
         }, "the plan summary to open on an idle stack")
     }
 
-    // Shared files that arrive while a page still moves.
     function checkShareWhileDialogCloses() {
         var depth = pageStack.depth
         var dialog = pageStack.push(plainDialog)
@@ -86,7 +84,6 @@ ApplicationWindow {
                "share target once: depth " + pageStack.depth)
     }
 
-    // Password question for a compressed file that arrives while a page still moves.
     function checkLockedWhileDialogCloses() {
         var depth = pageStack.depth
         var dialog = pageStack.push(plainDialog)
@@ -128,7 +125,6 @@ ApplicationWindow {
         waitFor(function () { return !pageStack.busy }, "the page to close")
     }
 
-    // An opened compressed file shows once, even while a page still moves.
     function checkArchiveWhileDialogCloses() {
         var depth = pageStack.depth
         var dialog = pageStack.push(plainDialog)

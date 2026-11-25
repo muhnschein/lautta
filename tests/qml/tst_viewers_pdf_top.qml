@@ -44,7 +44,6 @@ ApplicationWindow {
         return done()
     }
 
-    // Every page image in view rendered: nothing left that loads.
     function rendered(viewer) {
         var pages = findAll(viewer, function(x) { return x.status !== undefined && String(x.source).indexOf("image://lautta-pdf/") === 0 }, [])
         return pages.length > 0 && pages.every(function(x) { return x.status === Image.Ready })
@@ -79,7 +78,6 @@ ApplicationWindow {
         if (viewer.currentPage !== 2 || view.contentY >= first)
             console.error("FAILED: strips.pdf: page " + viewer.currentPage + " in the middle, contentY "
                           + view.contentY + " with the first page " + first + " high")
-        // Position is kept 1 s after the last scroll.
         tools.pump(1500)
         pageStack.pop(null, PageStackAction.Immediate)
         checkTop("strips.pdf", show(uri), "reopened")

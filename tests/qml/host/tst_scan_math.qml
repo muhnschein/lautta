@@ -26,7 +26,6 @@ Item {
         check(!ScanMath.isPage([0, 0, 1, 0, 0.2, 0.2, 0, 1]), "dent")
         check(!ScanMath.isPage([0, 0, 1, 0, 1, 1]), "three corners")
         check(!ScanMath.isPage(null) && !ScanMath.isPage(undefined), "no corners")
-        // As lautta-core: two percent wide and high is the least.
         check(ScanMath.isPage([0, 0, 0.021, 0, 0.021, 0.021, 0, 0.021]), "smallest page")
         check(!ScanMath.isPage([0, 0, 0.019, 0, 0.019, 0.019, 0, 0.019]), "too small")
         check(!ScanMath.isPage([0, 0, 1, 0, 1, 0, 0, 0]), "flat")
@@ -55,7 +54,6 @@ Item {
     function checkFit() {
         var upright = ScanMath.fit(400, 600, 1600, 1200, 0)
         check(near(upright.width, 400) && near(upright.height, 300), "wide photo in tall box: " + JSON.stringify(upright))
-        // Turned: its 1200 side lies across the box, sizes stay those of the unturned photo.
         var turned = ScanMath.fit(400, 600, 1600, 1200, 1)
         check(near(turned.width, 533.333) && near(turned.height, 400), "turned once: " + JSON.stringify(turned))
         check(same(ScanMath.fit(400, 600, 1600, 1200, 2), upright), "turned twice as upright")
@@ -78,7 +76,6 @@ Item {
         var bottom = ScanMath.edge(c, 2, 400, 200)
         check(near(bottom.x, 300) && near(bottom.y, 200) && near(bottom.length, 200) && near(Math.abs(bottom.angle), 180),
               "bottom: " + JSON.stringify(bottom))
-        // Last edge closes the outline back to the first corner.
         var left = ScanMath.edge(c, 3, 400, 200)
         check(near(left.x, 100) && near(left.y, 200) && near(left.length, 100) && near(left.angle, -90),
               "left: " + JSON.stringify(left))
@@ -99,7 +96,6 @@ Item {
     }
 
     function checkLoupe() {
-        // Area 400 x 800, loupe 100, gap 20.
         var at = function(x, y) { return JSON.stringify(ScanMath.loupeAt(x, y, 100, 20, 400, 800)) }
         check(at(200, 500) === '{"x":150,"y":380}', "above the finger, centred: " + at(200, 500))
         check(at(200, 120) === '{"x":150,"y":0}', "just room above: " + at(200, 120))
@@ -110,7 +106,6 @@ Item {
         check(at(180, 50) === '{"x":200,"y":0}' && at(230, 50) === '{"x":110,"y":0}',
               "gap does not fit: pushed in, still off the finger: " + at(180, 50) + at(230, 50))
         check(at(380, 50) === '{"x":260,"y":0}', "left of the finger by the gap: " + at(380, 50))
-        // Loupe half the area wide: no room for the gap on either side.
         var narrow = function(x) { return JSON.stringify(ScanMath.loupeAt(x, 50, 100, 20, 200, 800)) }
         check(narrow(90) === '{"x":100,"y":0}' && narrow(110) === '{"x":0,"y":0}',
               "narrow area: loupe kept inside, finger left uncovered: " + narrow(90) + narrow(110))

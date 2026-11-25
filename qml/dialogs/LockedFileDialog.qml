@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Locked PDF or compressed file. Password goes to the caller; not kept.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 

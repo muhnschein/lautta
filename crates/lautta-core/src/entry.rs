@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Directory entries and location capabilities.
 
 use std::collections::BTreeSet;
 use std::time::SystemTime;
@@ -15,7 +14,6 @@ pub enum Kind {
 }
 
 impl Kind {
-    /// netvfs wire value (0 Unknown, 1 File, 2 Directory, 3 Symlink, 4 Special).
     pub fn from_wire(v: u8) -> Kind {
         match v {
             1 => Kind::File,
@@ -45,7 +43,6 @@ bitflags::bitflags! {
         const SYSTEM = 0x4;
         const NAME_NOT_UTF8 = 0x8;
         const TARGET_UNKNOWN = 0x10;
-        /// Local symlink pointing outside the sandbox.
         const NOT_ACCESSIBLE = 0x100;
     }
 }
@@ -124,8 +121,6 @@ pub fn ms_to_system_time(ms: i64) -> SystemTime {
     }
 }
 
-/// Local capabilities depend on the filesystem type (`statfs`); remote ones come from the bridge,
-/// flag strings kept verbatim in [`Capabilities::raw`].
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Capabilities {
     pub raw: BTreeSet<String>,
@@ -149,12 +144,8 @@ pub mod cap {
     pub const ATOMIC_RENAME_NOREPLACE: &str = "RenameNoReplace";
     pub const TRASH: &str = "Trash";
     pub const READ_ONLY: &str = "ReadOnly";
-    /// vfat/exFAT/SMB name rules.
     pub const RESTRICTED_NAMES: &str = "RestrictedNames";
-    /// Access level of a netvfs location, not a server's: existing items stay as they are
-    /// (`read-add`, `add`).
     pub const NO_CHANGE: &str = "NoChange";
-    /// Access level `add`: only folders are seen; files and their contents are not.
     pub const NO_READ: &str = "NoRead";
 }
 
@@ -170,17 +161,14 @@ impl Capabilities {
         self.raw.contains(flag)
     }
 
-    /// New items can be added.
     pub fn writable(&self) -> bool {
         self.has(cap::WRITE) && !self.has(cap::READ_ONLY)
     }
 
-    /// Existing items can be renamed, moved, replaced or deleted.
     pub fn changeable(&self) -> bool {
         self.writable() && !self.has(cap::NO_CHANGE)
     }
 
-    /// Files and what folders hold can be read.
     pub fn readable(&self) -> bool {
         !self.has(cap::NO_READ)
     }

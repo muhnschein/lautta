@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! In-memory file tree for one location. Errors use netvfs error names so they travel as
-//! `org.netvfs.Error.<Name>`.
 
 use crate::wire::{entry_flags, WireEntry};
 use std::collections::BTreeMap;
@@ -43,7 +41,6 @@ pub struct Counts {
     pub dirs: i64,
 }
 
-/// Normalised path (no empty or `.` components); `..` is refused (netvfs `Paths::normalize`).
 pub fn normalize(raw: &[u8]) -> TResult<Vec<u8>> {
     if raw.len() > 4096 {
         return err("InvalidName", "Path too long");
@@ -445,7 +442,6 @@ impl Tree {
         Ok(())
     }
 
-    /// Nodes below `path` (and `path` itself, relative path empty), for copying between locations.
     pub fn export(&self, path: &[u8], recursive: bool) -> TResult<Vec<(Vec<u8>, Node)>> {
         let root = match self.nodes.get(path) {
             Some(n) => n.clone(),
@@ -486,7 +482,6 @@ impl Tree {
         Ok(())
     }
 
-    /// Depth-first, children before their folder when `post_order`; depth 1 are the children.
     pub fn walk(&self, root: &[u8], max_depth: i64, post_order: bool) -> TResult<Vec<(Vec<u8>, WireEntry)>> {
         match self.nodes.get(root) {
             Some(Node::Dir { .. }) => {}
@@ -539,8 +534,6 @@ impl Tree {
         }
     }
 
-    /// `at` is where `data` starts; file is truncated to `at` first, so resuming rewrites nothing
-    /// before it.
     pub fn write_file(&mut self, path: &[u8], at: usize, data: &[u8], mtime_ms: Option<i64>) -> TResult<()> {
         self.require_parent_dir(path)?;
         let mtime = mtime_ms.unwrap_or(self.now_ms);

@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Text viewer rows. One Text item of a megabyte is slow to lay out and draw: viewer shows a row
-//! per line, and a line over [`ROW_LENGTH`] columns goes on over further rows. Columns are UTF-16
-//! units as QML counts them, tabs expanded.
 
 use super::highlight::columns;
 use std::ops::Range;
@@ -10,15 +7,10 @@ pub const ROW_LENGTH: usize = 1000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Row<'a> {
-    /// Line number from 1 on a line's first row, 0 on the rows it goes on over.
     pub number: usize,
-    /// Tabs expanded to spaces.
     pub text: &'a str,
-    /// Line from 0.
     pub line: usize,
-    /// Column of `text` in its line.
     pub start: usize,
-    /// Leading spaces of its line; 0 when its first row is blank.
     pub indent: usize,
 }
 
@@ -30,7 +22,6 @@ struct Span {
     bytes: Range<usize>,
 }
 
-/// Rows of a text split at `\n`; empty text is one empty line. Default: no text, no rows.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TextRows {
     shown: String,
@@ -72,7 +63,6 @@ impl TextRows {
         };
         let mut column = 0;
         for (at, c) in self.shown[begin..].char_indices() {
-            // A char past the row's end (a surrogate pair across it too) starts the next row.
             if column + c.len_utf16() - row.start > ROW_LENGTH {
                 let cut = begin + at;
                 row.bytes.end = cut;
@@ -226,7 +216,6 @@ mod tests {
 
     #[test]
     fn tab_across_row_end_is_cut_as_spaces() {
-        // Pair pushed to row 2 moves its end off a tab stop.
         let rows = TextRows::new(&format!("{}\u{1F600}{}\tx", "d".repeat(999), "d".repeat(997)));
         assert_eq!(lengths(&rows), [999, 1000, 2]);
         assert_eq!(rows.row(2).map(|r| (r.text, r.start)), Some((" x", 1999)));

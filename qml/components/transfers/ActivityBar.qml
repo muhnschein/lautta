@@ -17,7 +17,6 @@ Item {
     readonly property bool asking: mode === "question"
     property int questions
 
-    // Hidden keeps last summary so bar fades out with its text.
     function reload() {
         if (Transfers.barMode === "hidden")
             return

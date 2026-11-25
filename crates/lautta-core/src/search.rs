@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Recursive name search: substring or glob, type, size and date filters, results streamed per
-//! folder, cancelable. Walked by generic [`ListWalker`] (BFS over `Provider::list`) or a
-//! provider-specific [`TreeWalker`] such as the bridge's `Walk`.
 
 use crate::db::Db;
 use crate::entry::{Entry, Kind};
@@ -17,10 +14,8 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::mpsc;
 
-/// Listings in flight at once; remote locations cap their own lanes too.
 const WALK_CONCURRENCY: usize = 2;
 pub const RECENT_SEARCHES_PER_LOCATION: usize = 10;
-/// Defaults; caller decides which applies to a location.
 pub const REMOTE_DEPTH_DEFAULT: u32 = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -34,7 +29,6 @@ pub enum MatchMode {
 pub struct SearchQuery {
     pub text: String,
     pub mode: MatchMode,
-    /// Categories as returned by the `classify` closure; empty means any.
     pub types: BTreeSet<String>,
     pub min_size: Option<u64>,
     pub max_size: Option<u64>,
@@ -58,7 +52,6 @@ pub struct FolderListing {
 
 #[derive(Debug, Clone)]
 pub struct WalkOptions {
-    /// Deepest folder level listed, root = 0; `None` is unlimited.
     pub depth_limit: Option<u32>,
     pub include_hidden: bool,
     pub cancel: Arc<AtomicBool>,
@@ -67,12 +60,9 @@ pub struct WalkOptions {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct WalkStats {
     pub folders: u64,
-    /// Sub-folders that could not be listed; the search goes on without them.
     pub errors: u64,
 }
 
-/// Produces folder listings below `root`. A failure to list `root` itself is
-/// an error; unreadable sub-folders are counted in the stats.
 #[async_trait]
 pub trait TreeWalker: Send + Sync {
     async fn walk(
@@ -83,9 +73,6 @@ pub trait TreeWalker: Send + Sync {
     ) -> Result<WalkStats>;
 }
 
-/// Generic walker: breadth first over `Provider::list` with two listings in
-/// flight. Symlinked folders are never followed (loop safety) and a folder is
-/// listed at most once.
 pub struct ListWalker<'a> {
     resolver: &'a dyn ProviderResolver,
 }
@@ -238,12 +225,8 @@ pub struct SearchSummary {
     pub canceled: bool,
 }
 
-/// Depth, cancellation and an optional provider-specific walker (bridge `Walk`) replacing the
-/// generic listing.
 #[derive(Clone)]
 pub struct SearchOptions {
-    /// `None` is unlimited (local); remote locations use
-    /// [`REMOTE_DEPTH_DEFAULT`] unless the setting says otherwise.
     pub depth_limit: Option<u32>,
     pub cancel: Arc<AtomicBool>,
     pub walker: Option<Arc<dyn TreeWalker>>,
@@ -264,8 +247,6 @@ impl SearchOptions {
     }
 }
 
-/// Sends one batch of hits per folder that has any. Cancelling (the flag, or dropping the receiver)
-/// ends the search early with `canceled` set; not an error.
 pub async fn search(
     resolver: &dyn ProviderResolver,
     root: Uri,
@@ -287,8 +268,6 @@ pub async fn search(
         None => &list_walker,
     };
     let (matcher_ref, out_ref, cancel_ref) = (&matcher, &out, &options.cancel);
-    // `rx` moves in so it is dropped when the consumer stops; otherwise a
-    // walker blocked on a full channel would never finish.
     let consume = async move {
         let mut hits = 0u64;
         while let Some(listing) = rx.recv().await {
@@ -333,8 +312,6 @@ fn hits_in(
         .collect()
 }
 
-/// A local, extension-based classification for the type filter: `folder`,
-/// `image`, `video`, `audio`, `document`, `archive`, `text` or `other`.
 pub fn classify_by_extension(entry: &Entry) -> String {
     if entry.is_dir() {
         return "folder".to_owned();
@@ -363,8 +340,6 @@ impl RecentSearches {
         RecentSearches { db }
     }
 
-    /// Adds `query` (trimmed; blank is ignored) as the newest entry of
-    /// `location`, keeping the newest ten.
     pub fn add(&self, location: &str, query: &str) -> Result<()> {
         self.add_at(location, query, crate::org::now_ms())
     }

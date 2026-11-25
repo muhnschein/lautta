@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Viewers' data: text, Markdown, EXIF, audio tags. Pure or on a [`crate::provider::ReadHandle`];
-//! Qt side only renders.
 
 pub mod audio;
 pub mod exif;

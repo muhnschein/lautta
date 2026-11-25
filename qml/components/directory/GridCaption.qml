@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Lines stacked by bindings, not Column: a line that
-// comes moves next at once, not next polish.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
@@ -12,7 +11,6 @@ Item {
     property int minLines
     property bool emphasised
     property bool pressed
-    // 0..1: new item's tint, ambience colour over the plain one.
     property real glow
     readonly property var nameLines: visible && metrics ? metrics.nameLines(name, width) : []
     readonly property int captionLines: Math.max(captions.length, minLines)

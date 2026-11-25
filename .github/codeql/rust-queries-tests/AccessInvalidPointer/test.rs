@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Real dangling derefs stay reported; derive(QObject)'s own derefs do not.
 use qmetaobject::*;
 use std::ptr;
 
@@ -12,10 +11,9 @@ pub struct Widget {
 }
 
 impl Widget {
-    // Hand-written method of a QObject: rule still applies.
     pub fn poke(&self) -> i64 {
         let p: *const i64 = ptr::null();
-        unsafe { *p } // BAD: reported
+        unsafe { *p }
     }
 }
 
@@ -25,14 +23,13 @@ pub fn freed() -> i64 {
     std::mem::forget(b);
     unsafe {
         ptr::drop_in_place(p);
-        *p // BAD: reported
+        *p
     }
 }
 
-// Macro, but not derive(QObject): still reported.
 macro_rules! read_null {
     () => {
-        unsafe { *ptr::null::<i64>() } // BAD: reported
+        unsafe { *ptr::null::<i64>() }
     };
 }
 

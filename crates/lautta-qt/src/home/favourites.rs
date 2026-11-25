@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Roles: `itemId`, `uri`, `label`, `colour`, `place`, `isDir`, `icon` (chosen name, empty for
-//! default), `defaultIcon` (`Favourite::icon_source`: theme icon URL or glyph token).
 
 use super::{cell_data, error_parts, role_names, store_changed, Cell};
 use crate::json::to_json;
@@ -78,7 +76,6 @@ pub struct FavouritesModel {
 
     reload: qt_method!(fn(&mut self)),
     add: qt_method!(fn(&mut self, uri: QString, label: QString, colour: QString)),
-    /// `icon`: a name of `iconChoices`, empty for default.
     save:
         qt_method!(fn(&mut self, uri: QString, label: QString, colour: QString, icon: QString, isDir: bool)),
     edit: qt_method!(fn(&mut self, id: i32, label: QString, colour: QString)),
@@ -88,7 +85,6 @@ pub struct FavouritesModel {
     get: qt_method!(fn(&self, id: i32) -> QString),
     idOf: qt_method!(fn(&self, uri: QString) -> i32),
     placeOf: qt_method!(fn(&self, uri: QString) -> QString),
-    /// Theme names (`icon-m-<name>`), default star first.
     iconChoices: qt_method!(fn(&self) -> QVariantList),
     failed: qt_signal!(kind: QString, message: QString),
 
@@ -135,8 +131,6 @@ impl FavouritesModel {
         blocking_then(
             move || work(core),
             move |res| {
-                // Before the model check: a dialog's model may be gone, Home still must see the
-                // change.
                 store_changed();
                 let Some(model) = me.as_pinned() else { return };
                 let mut model = model.borrow_mut();

@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `org.netvfs.Error.<Name>` D-Bus errors: message first, `a{sv}` (`detail`, `retryAfterMs`)
-//! second.
 
 use crate::wire::{value_i64, value_str};
 use std::collections::HashMap;
@@ -40,7 +38,6 @@ impl BridgeError {
         }
     }
 
-    /// Bare name (`NotFound`, …) of a netvfs error.
     pub fn netvfs_name(&self) -> Option<&str> {
         match self {
             BridgeError::Remote { name, .. } => name.strip_prefix(NETVFS_ERROR_PREFIX),
@@ -48,7 +45,6 @@ impl BridgeError {
         }
     }
 
-    /// For `ListDone` / `JobFinished`: bare name, empty means success.
     pub fn from_bare(name: &str, message: &str, extra: &HashMap<String, OwnedValue>) -> Option<BridgeError> {
         if name.is_empty() {
             return None;

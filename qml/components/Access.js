@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 .pragma library
 
-// Name of netvfs access level `word`; "" for full or none.
 function name(word) {
     switch (word) {
     case "read":
