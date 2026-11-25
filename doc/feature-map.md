@@ -201,7 +201,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 
 ### 3.7 Activity (tasks)
 
-- **F-XFR-01 Activity page** — sections In progress, Today, Yesterday, Last 7 days, Last 30 days, Older; header counts running/paused/stopped.
+- **F-XFR-01 Activity page** — sections In progress, Today, Yesterday, Last 7 days, Last 30 days, Older; header counts running/paused/stopped, stays on top while list scrolls. While list moves: scroll handle on right edge with top row's date (In progress for running task; Today, Yesterday, weekday within 7 days, each with its day; then month over year); drag handle to scroll. *Code:* `ScrollDateBar.qml`, `ScrollDate.js`.
 - **F-XFR-02 Task row menu** — Pause, Resume, Move to the top of the queue, Retry failed, Cancel (remorse).
 - **F-XFR-03 Task details** — From, Destination, Started, Verify, Checksum, Size, Items; per-item Retry; pulley Cancel, Move up, Retry, Pause/Resume.
 - **F-XFR-04 Pause all / Resume all / Clear activity history** — Activity pulley.
@@ -247,7 +247,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-FAV-02 Edit favourite** — Label, Folder, Colour (Amber, Green, Red, Blue, Lime, Purple, Pink, Grey), Icon.
 - **F-FAV-03 Remove favourite** — row menu, remorse "Removing favourite".
 - **F-FAV-04 Reorder favourites** — Settings › Home page drag.
-- **F-RCT-01 Recents** — files opened, edited, transferred, under date groups; thumbnails as folders have them; list or grid as View options' View, in grid each date group starts its own row of tiles (name, place). Tap opens (transferred → its folder); menu Remove from recents; pulley Clear recents.
+- **F-RCT-01 Recents** — files opened, edited, transferred, under date groups; thumbnails as folders have them; list or grid as View options' View, in grid each date group starts its own row of tiles (name, place). Title stays on top while list scrolls; while list moves, scroll handle with top row's date as F-XFR-01. Tap opens (transferred → its folder); menu Remove from recents; pulley Clear recents.
 - **F-RCT-02 Recents off** — Settings › Recents "Remember recent files"; Home tiles hide.
 - **F-RCT-03 Recents on Home** — section Recents above Favourites: three newest files as tiles (thumbnail, a text file's first lines, or type glyph; name), fourth tile "All recents" opens SCR-38. Tap opens (transferred → its folder); long press: Remove from recents. No section while Recents are off or hold fewer than three files; switch "Newest recents" in Settings › Home page. *Code:* `RecentStrip.qml`, `app_home.rs` (`recent_tiles`).
 - **F-TRH-01 Trash** — items from user folders, "Kept for N days", "N days left", "From folder".

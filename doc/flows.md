@@ -290,8 +290,9 @@ Features: F-XFR-01 Activity page, F-XFR-02 Task row menu, F-XFR-03 Task details,
 | 1 | SCR-06 Folder pulley | Pull: Activity |
 | 2 | SCR-21 Activity | Activity empty |
 | 3 | SCR-21 Activity | Activity with tasks |
-| 4 | SCR-22 Task details | Task details: done of total, destination, started, verify, items |
-| 5 | SCR-21 Activity | Pull: Clear history, Resume all, Pause all |
+| 4 | SCR-21 Activity | Scrolling: title stays, date by scroll handle |
+| 5 | SCR-22 Task details | Task details: done of total, destination, started, verify, items |
+| 6 | SCR-21 Activity | Pull: Clear history, Resume all, Pause all |
 
 ## Find
 
@@ -333,7 +334,8 @@ Features: F-RCT-01 Recents, F-RCT-03 Recents on Home, F-HOM-11 Phone free space
 | 2 | SCR-01 Home | Long press on a tile: Remove from recents |
 | 3 | SCR-38 Recents | Tile All recents: Recents |
 | 4 | SCR-38 Recents | Grid when View options say Grid: tiles under date groups |
-| 5 | SCR-38 Recents | Menu: Remove from recents |
+| 5 | SCR-38 Recents | Scrolling: title stays, date by scroll handle |
+| 6 | SCR-38 Recents | Menu: Remove from recents |
 
 ### FL-22 Favourites (standalone)
 
