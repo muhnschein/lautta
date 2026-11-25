@@ -75,7 +75,7 @@ Item {
 
     Behavior on opacity {
         SequentialAnimation {
-            PauseAnimation { duration: bar.active ? 0 : 600 }
+            PauseAnimation { duration: bar.active ? 0 : 1800 }
             FadeAnimation { duration: bar.active ? 100 : 400 }
         }
     }
