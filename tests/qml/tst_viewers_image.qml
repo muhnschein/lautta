@@ -102,6 +102,11 @@ QtQuick.Window {
         expect(view.currentIndex === 0, "the opened image first in the folder's order: " + view.currentIndex)
         expect(view.overlay.active && view.overlay.opacity > 0, "the overlay shows at first")
         var more = named(view.overlay, "moreButton")
+        if (more !== null) {
+            var top = more.mapToItem(page, 0, 0).y
+            expect(page.height - view.overlay.toolbarSpace <= top,
+                   "the back hint sits above the toolbar: " + view.overlay.toolbarSpace + " " + top)
+        }
         if (expect(more !== null, "the overlay has More")) {
             expect(String(more.icon.source) === FileIcons.source("more", Theme.pixelRatio), "More shows the app's icon: " + more.icon.source)
             expect(more.icon.status === Image.Ready, "the More icon loaded: " + more.icon.status)
@@ -139,6 +144,7 @@ QtQuick.Window {
                 if (!window.tapSettled())
                     return
                 window.expect(!window.view.overlay.active, "a tap hides the overlay")
+                window.expect(window.view.overlay.toolbarSpace === 0, "no toolbar, the back hint at the bottom")
                 window.tapImage()
                 break
             case 2:
