@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Audio tags and cover for the media player and audio thumbnails, read with `lofty` inside
-//! [`crate::panics::catch`]: a file tripping the parser fails only its own read. Server files go
-//! through [`RangeReader`], which fetches only the blocks the parser reads, within [`READ_BUDGET`].
 
 use crate::entry::{Entry, Kind};
 use lofty::config::{apply_global_options, GlobalOptions, ParseOptions, ParsingMode};
@@ -12,15 +9,12 @@ use lofty::tag::Tag;
 use std::collections::HashMap;
 use std::io::{self, Read, Seek, SeekFrom};
 
-/// Most bytes one read of a file may fetch; also the parser's allocation limit.
 pub const READ_BUDGET: u64 = 16 * 1024 * 1024;
 const BLOCK: u64 = 64 * 1024;
 const MAX_TEXT_CHARS: usize = 200;
-/// Folder pictures shown when the file has none, best first; name matched without case.
 const FOLDER_COVER_STEMS: [&str; 3] = ["cover", "folder", "front"];
 const FOLDER_COVER_EXTS: [&str; 3] = ["jpg", "jpeg", "png"];
 
-/// Plain text: control and bidi-override characters dropped, at most 200 characters.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AudioTags {
     pub title: Option<String>,
@@ -34,11 +28,9 @@ pub struct AudioTags {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AudioRead {
     pub tags: AudioTags,
-    /// Encoded picture as stored (JPEG, PNG, …), not decoded.
     pub cover: Option<Vec<u8>>,
 }
 
-/// `None`: not an audio file lofty knows, broken, over budget, or the parser panicked.
 pub fn read_audio<R: Read + Seek>(reader: R, want_cover: bool) -> Option<AudioRead> {
     crate::panics::catch(move || parse(reader, want_cover))
         .ok()
@@ -46,7 +38,6 @@ pub fn read_audio<R: Read + Seek>(reader: R, want_cover: bool) -> Option<AudioRe
 }
 
 fn parse<R: Read + Seek>(reader: R, want_cover: bool) -> Option<AudioRead> {
-    // Thread-local in lofty: set on the thread that parses.
     apply_global_options(GlobalOptions::new().allocation_limit(READ_BUDGET as usize));
     let options = ParseOptions::new()
         .read_properties(false)
@@ -70,7 +61,6 @@ fn parse<R: Read + Seek>(reader: R, want_cover: bool) -> Option<AudioRead> {
     })
 }
 
-/// First tag having a field wins, primary tag first.
 fn merged(tags: &[&Tag]) -> AudioTags {
     let text = |get: fn(&Tag) -> Option<std::borrow::Cow<'_, str>>| tags.iter().find_map(|t| clean(&get(t)?));
     AudioTags {
@@ -85,7 +75,6 @@ fn merged(tags: &[&Tag]) -> AudioTags {
     }
 }
 
-/// Front cover first, else the first picture.
 fn cover(tags: &[&Tag]) -> Option<Vec<u8>> {
     let pictures = || {
         tags.iter()
@@ -113,8 +102,6 @@ pub fn clean(raw: &str) -> Option<String> {
     (!kept.is_empty()).then(|| kept.to_owned())
 }
 
-/// Folder picture for a file without its own: `cover`, `folder` or `front` with `.jpg`, `.jpeg`
-/// or `.png`, any case; regular files only.
 pub fn folder_cover(entries: &[Entry]) -> Option<&Entry> {
     let rank = |e: &Entry| -> Option<usize> {
         if e.kind != Kind::File {
@@ -132,9 +119,6 @@ pub fn folder_cover(entries: &[Entry]) -> Option<&Entry> {
         .map(|(_, e)| e)
 }
 
-/// Blocking `Read + Seek` over ranged reads (`fetch(offset, max)`, empty = end of file). Reads
-/// whole 64 KiB blocks and keeps them, so the parser's small reads cost no round trip each; fails
-/// once more than `budget` bytes would be fetched.
 pub struct RangeReader<F> {
     fetch: F,
     size: u64,

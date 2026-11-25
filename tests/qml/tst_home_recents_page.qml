@@ -75,11 +75,9 @@ ApplicationWindow {
     }
 
     function sections() {
-        // No render loop headless: lay out by hand.
         var views = findAll(win.page, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined })
         for (var i = 0; i < views.length; ++i) {
             views[i].cacheBuffer = 100000
-            // A scroll fills the view at once; a new cache buffer waits for a polish.
             views[i].contentY += 1
             views[i].contentY -= 1
             views[i].forceLayout()
@@ -120,7 +118,6 @@ ApplicationWindow {
         return checkIcons(findAll(win.page, function(x) { return x.objectName === "recentIcon" }), "list")
     }
 
-    // Icons in model order: list rows and grid tiles both come top to bottom, left to right.
     function checkIcons(icons, view) {
         if (icons.length !== rows.count)
             return fail(view + ": " + icons.length + " icons for " + rows.count + " rows")
@@ -141,7 +138,6 @@ ApplicationWindow {
         return item.mapToItem(win.page, 0, 0).y
     }
 
-    // Each date group's tiles under its header and above the next; a group starts its own row.
     function checkGrid() {
         var got = sections()
         if (!matches(got))
@@ -178,7 +174,6 @@ ApplicationWindow {
         }
         if (!checkPlaces())
             return false
-        // Page in a Loader: nothing on it counts as visible.
         var lines = findAll(win.page, function(x) { return x.objectName === "textPreview" })
         if (lines.length !== 1 || lines[0].text !== "line one\nline two")
             return waited > 100 ? fail("only notes.txt's tile shows its first lines: "
@@ -231,7 +226,6 @@ ApplicationWindow {
             switch (win.step) {
             case 0:
                 if (win.page && win.checkPage() === true) {
-                    // a.txt: text, but its row says no first lines (thumbnails off when listed).
                     if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/notes-crlf.txt"), "lautta://user-documents/notes.txt")
                             || !tools.installFixture(Qt.resolvedUrl("host/fixtures/short-lines.txt"), "lautta://user-documents/a.txt"))
                         return win.fail("fixture")
@@ -242,7 +236,6 @@ ApplicationWindow {
                 break
             case 1:
                 if (win.checkGrid() === true) {
-                    // Nemo draws the page and tells its size once.
                     var drawn = win.pdfThumbnail()
                     if (!drawn)
                         return win.fail("letter.pdf's tile asks the system thumbnailer")
@@ -267,7 +260,6 @@ ApplicationWindow {
                 }
                 break
             case 3:
-                // Tiles made anew join the drawn thumbnail: Nemo tells them no size.
                 var joined = win.pdfThumbnail()
                 if (joined) {
                     if (joined.implicitWidth !== 0 || Math.abs(joined.width - win.shownWidth) >= 1)

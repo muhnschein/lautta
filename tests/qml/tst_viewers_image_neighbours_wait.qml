@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Engine without incubation controller makes the neighbours' slots at once: right after the view
-// is made, the shown image is still loading and the neighbours exist. Same view again: shown
-// image ready at once (kept in Qt's cache). Broken image shown: neighbours load after its error.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0

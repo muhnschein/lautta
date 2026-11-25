@@ -37,7 +37,6 @@ ApplicationWindow {
         return null
     }
 
-    // AudioInfo is no Item: in the page's data, not its children.
     function infoOf(page) {
         for (var i = 0; i < page.data.length; ++i)
             if (page.data[i].trackTotal !== undefined)
@@ -62,6 +61,11 @@ ApplicationWindow {
         var box = find(page, "cover"), info = find(page, "trackInfo")
         check(Math.abs(box.x + box.width / 2 - page.width / 2) < 1, "cover centred across")
         check(info.y >= box.y + box.height, "track info below the cover")
+        var elapsed = find(page, "elapsedTime"), total = find(page, "totalTime")
+        check(elapsed && total, "time labels")
+        var at = elapsed.mapToItem(page, 0, 0), end = total.mapToItem(page, total.width, 0)
+        check(at.y === end.y, "elapsed and total time on one line: " + at.y + " " + end.y)
+        check(at.x < page.width / 2 && end.x > page.width / 2, "at the slider's two ends: " + at.x + " " + end.x)
 
         pageStack.replace(plain, {}, PageStackAction.Immediate)
         page = pageStack.currentPage

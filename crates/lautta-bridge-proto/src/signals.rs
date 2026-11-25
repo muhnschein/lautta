@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! One ordered stream (`Connection::signals`): per-signal proxy streams may be observed
-//! out of order (`ListBatch` before `ListDone`).
 
 use crate::errors::BridgeError;
 use crate::wire::{WireEntry, WireNearby, WireWalkItem, INTERFACE};
@@ -50,7 +48,6 @@ where
         .map_err(|e| BridgeError::Protocol(e.to_string()))
 }
 
-/// `Ok(None)` for other messages and unknown signals.
 pub fn decode_signal(msg: &Message) -> Result<Option<Signal>, BridgeError> {
     let header = msg.header();
     if header.primary().msg_type() != MessageType::Signal {

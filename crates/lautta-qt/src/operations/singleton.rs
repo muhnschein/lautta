@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! All methods take `&self`, state in cells: QML may call back from inside a signal handler while
-//! this object is on the stack.
 
 use super::{error_parts, parse_uri, parse_uris};
 use crate::json::{from_json, to_json};
@@ -30,9 +28,7 @@ enum Launched {
 #[derive(Default)]
 struct State {
     jobs: HashMap<i64, Arc<AtomicBool>>,
-    /// Archive location → holds of the pages showing it.
     pages: HashMap<String, Vec<ArchiveHold>>,
-    /// Archive location → hold from opening it, until its page holds it.
     opened: HashMap<String, ArchiveHold>,
 }
 
@@ -51,16 +47,13 @@ pub struct Operations {
     resolveConflict: qt_method!(fn(&self, plan_id: i32, index: i32, choice: QString, apply_to_all: bool)),
     remove: qt_method!(fn(&self, uris_json: QString)),
     deletesPermanently: qt_method!(fn(&self, uris_json: QString) -> bool),
-    /// Empty `password`: none.
     compress: qt_method!(
         fn(&self, uris_json: QString, dest_uri: QString, name: QString, kind: QString, password: QString)
     ),
     weakPassword: qt_method!(fn(&self, text: QString) -> bool),
     cancelJob: qt_method!(fn(&self, job_id: i32)),
-    /// Into the archive's folder: one top item as is, else a new folder named after it.
     extract: qt_method!(fn(&self, archive_uri: QString, password: QString)),
     openArchive: qt_method!(fn(&self, uri: QString, password: QString)),
-    /// A page shows `uri`: a locked archive stays open until the page lets go.
     holdArchive: qt_method!(fn(&self, uri: QString)),
     releaseArchive: qt_method!(fn(&self, uri: QString)),
     isArchive: qt_method!(fn(&self, uri: QString) -> bool),
@@ -71,7 +64,6 @@ pub struct Operations {
 
     needsSummary: qt_signal!(planId: i32, summaryJson: QString),
     started: qt_signal!(transferId: i64),
-    /// `subject`: URI the error is about, or empty.
     failed: qt_signal!(kind: QString, message: QString, subject: QString),
     removed: qt_signal!(trashedCount: i32, transferId: i64),
     conflictResolved: qt_signal!(planId: i32, remaining: i32),
@@ -79,7 +71,6 @@ pub struct Operations {
     jobProgress: qt_signal!(jobId: i32, done: i64, total: i64),
     jobFinished: qt_signal!(jobId: i32, ok: bool, resultUri: QString),
     archiveOpened: qt_signal!(uri: QString, rootUri: QString),
-    /// Archive `uri` needs its password for `action` ("open" or "extract"); `wrong`: one was wrong.
     locked: qt_signal!(uri: QString, action: QString, wrong: bool),
 
     pending: Arc<PendingPlans>,
@@ -110,7 +101,6 @@ fn password_of(text: &QString) -> Option<Password> {
     Password::from_text(text.to_string())
 }
 
-/// `Some(wrong)` for a password question.
 fn asks_password(e: &Error) -> Option<bool> {
     match e.kind {
         ErrorKind::PasswordRequired => Some(false),
@@ -312,7 +302,6 @@ impl Operations {
         );
     }
 
-    /// Items skipping the Trash, so the page asks first. Junk counts as permanent.
     fn deletesPermanently(&self, uris_json: QString) -> bool {
         match (core(), parse_uris(&uris_json)) {
             (Some(core), Some(items)) => items.iter().any(|u| !core.deletes_to_trash(u)),
@@ -505,7 +494,6 @@ impl Operations {
         }
     }
 
-    /// Paths may be `file://` URLs.
     fn probeShared(&self, paths_json: QString) -> QString {
         let paths: Vec<String> = from_json(&paths_json.to_string()).unwrap_or_default();
         let paths: Vec<std::path::PathBuf> = paths.iter().map(|p| local_path(p)).collect();

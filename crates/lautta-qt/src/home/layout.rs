@@ -1,10 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Settings › Home rows, hidden ones included, in Home order. Roles: `section`, `kind`, `item`,
-//! `name`, `hidden`, `place` (-1 for the switch of *Recents*, *Volumes* or *Servers*, which leads its
-//! section), `movable`, `nested`.
-//!
-//! Changes apply in place ([`steps`]) so scroll position and delegates survive. A dragged row moves
-//! at once ([`HomeLayoutModel::moveRow`]) and is stored behind it.
 
 use super::{cell_data, error_parts, role_names, store_changed, watch_sources, Cell, Guard};
 use crate::runtime::{core, spawn_then};
@@ -19,12 +13,10 @@ use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
-/// `place`, not `index`: a role named `index` hides the delegate's own `index` in QML.
 const COLUMNS: [&str; 8] = [
     "section", "kind", "item", "name", "hidden", "place", "movable", "nested",
 ];
 
-/// Volumes come and go, nearby servers are one switch.
 const MOVABLE: [&str; 4] = ["favourites", "device", "android", "servers"];
 
 fn cells(rows: &[LayoutRow]) -> Vec<Vec<Cell>> {
@@ -59,7 +51,6 @@ fn cell_at(rows: &[Vec<Cell>], row: i32, col: usize) -> Option<&Cell> {
     rows.get(usize::try_from(row).ok()?)?.get(col)
 }
 
-/// Places are those at the time of the step, after earlier steps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Step {
     Remove(usize),
@@ -84,10 +75,8 @@ fn keys(rows: &[Vec<Cell>]) -> Option<Vec<Key<'_>>> {
     (distinct.len() == keys.len()).then_some(keys)
 }
 
-/// `None` when a row's identity repeats: rows are then replaced as a whole.
 fn steps(old: &[Vec<Cell>], new: &[Vec<Cell>]) -> Option<Vec<Step>> {
     let (old_keys, new_keys) = (keys(old)?, keys(new)?);
-    // From the end: places of earlier rows stay valid.
     let mut out: Vec<Step> = (0..old_keys.len())
         .rev()
         .filter(|i| !new_keys.contains(&old_keys[*i]))
@@ -106,13 +95,10 @@ fn steps(old: &[Vec<Cell>], new: &[Vec<Cell>]) -> Option<Vec<Step>> {
             Some(_) => {}
         }
     }
-    // After every insertion: places are final.
     out.sort_by_key(|s| matches!(s, Step::Change(_)));
     Some(out)
 }
 
-/// Longest run already in order stays; every other row moves right behind the row it follows in
-/// `new`.
 fn moves(kept: &mut Vec<Key>, new: &[Key]) -> Vec<Step> {
     let order: Vec<Key> = new.iter().copied().filter(|k| kept.contains(k)).collect();
     let places: Vec<usize> = kept
@@ -174,7 +160,6 @@ fn carried(rows: &[Vec<Cell>], from: i32, to: i32) -> Option<(String, String, us
     Some((section, item, place))
 }
 
-/// After a move within the section the places stay where they were, rows changed.
 fn renumber(rows: &mut [Vec<Cell>], first: usize, last: usize, base: i64) {
     for (place, row) in (base..).zip(rows[first..=last].iter_mut()) {
         if let Some(cell) = row.get_mut(5) {
@@ -214,12 +199,8 @@ pub struct HomeLayoutModel {
     failed: qt_signal!(kind: QString, message: QString),
 
     rows: Vec<Vec<Cell>>,
-    /// Each change waits for the one before: switch and Restore defaults apply in order made.
     last: Option<oneshot::Receiver<()>>,
-    /// Older reload ending later is dropped (a switch would flip back). A change makes running
-    /// reloads old too.
     generation: u64,
-    /// Rows are read again only once all are stored: reading in between moves a dragged row back.
     pending: usize,
     watching: bool,
     guard: Guard,
@@ -234,7 +215,6 @@ async fn blocking(
 }
 
 impl HomeLayoutModel {
-    /// First call also starts following what Home follows.
     fn reload(&mut self) {
         self.generation += 1;
         let generation = self.generation;
@@ -282,7 +262,6 @@ impl HomeLayoutModel {
         match step {
             Step::Remove(i) => self.begin_remove_rows(i as i32, i as i32),
             Step::Insert(i) => self.begin_insert_rows(i as i32, i as i32),
-            // Qt names the place before the move: past `to` when moving down.
             Step::Move { from, to } => {
                 let top = QModelIndex::default();
                 let before = if to > from { to + 1 } else { to };

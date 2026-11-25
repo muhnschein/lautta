@@ -24,7 +24,6 @@ ListItem {
     readonly property var titleParts: TransferText.titleParts(r)
     readonly property bool toServer: TransferText.toServer(row.direction)
 
-    // Remorse callback made here: Silica destroys menu on close; closure made in it loses its scope.
     function cancelLater() {
         var id = row.transferId
         //% "Cancelling"

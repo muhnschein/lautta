@@ -849,7 +849,6 @@ async fn without_drives_the_volumes_are_as_before() {
     for e in [standalone, older] {
         let rows = e.core.home_rows().await;
         assert_eq!(volumes(&rows), [volume("SD", "ready", "", "vol-SD")]);
-        // Test media folder is no mount: kind unknown.
         assert_eq!(of(&rows, "volumes")[0].icon, "image://theme/icon-m-usb");
         assert!(e.core.mount_drive("mmcblk1p1").await.is_err());
     }
@@ -919,7 +918,6 @@ async fn consent_row_until_decided_and_nothing_when_denied() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn no_socket_means_no_servers_section() {
-    // No socket, never listen: dropping a `Listener` keeps a session that already connected.
     let e = open(None, true, &["Documents"]).await;
     assert_eq!(e.core.bridge.as_ref().unwrap().status(), BridgeStatus::Absent);
     let rows = e.core.home_rows().await;
@@ -1015,8 +1013,6 @@ fn remembered(core: &Core, n: i32) -> bool {
             .is_hidden("servers", &format!("nv-account:{n}"))
 }
 
-/// Purge task counting its purges. Account 9 is remembered but gone: its purge marks the first
-/// step done.
 fn counted_purge(core: &Arc<Core>) -> Arc<AtomicUsize> {
     remember_account(core, 9);
     let purges = Arc::new(AtomicUsize::new(0));
@@ -1067,7 +1063,6 @@ async fn withdrawn_consent_and_lost_connection_purge_nothing() {
     eventually("the list is cleared", || client.locations().is_empty()).await;
     fake.set_consent(Consent::Allowed(Level::Full)).await;
     status(&client, BridgeStatus::Ready).await;
-    // The task takes changes in order: once account 3's removal is purged, so would be 1.
     fake.add_account(3, "sftp", "Office", "office.home").await;
     eventually("third account", || e.core.location("nv-account:3").is_some()).await;
     remember_account(&e.core, 3);

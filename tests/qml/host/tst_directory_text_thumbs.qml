@@ -37,8 +37,6 @@ Item {
     ViewerTools { id: tools }
 
     property int changes
-    // Name bindings evaluated: a preview must not make a row re-read its other roles.
-    // Object, not int: a counter property the binding reads would loop.
     readonly property var nameReads: ({ "n": 0 })
 
     function read(value) {

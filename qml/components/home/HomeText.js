@@ -48,12 +48,10 @@ function rowName(kind, name) {
     return name
 }
 
-// Empty until space is known.
 function deviceLine(free, total) {
     return total > 0 ? volumeLine(free, total, "") : ""
 }
 
-// Whole number from 10 of its unit up; below, one decimal: there it is a tenth of what is left.
 function space(bytes) {
     var value = bytes
     while (value >= 1024)

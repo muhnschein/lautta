@@ -17,8 +17,6 @@ function kind(category, isDir) {
     return "document"
 }
 
-// 28-unit set at multiples of 28, 32-unit at multiples of 32, 80 px set at 80; elsewhere 28-unit,
-// soft edges.
 function setFor(px) {
     var side = Math.round(px)
     if (side % 28 === 0)
@@ -52,8 +50,6 @@ function source(name, pixelRatio) {
 var pageSizes = {}
 var pageSizeCount = 0
 
-// Size of a page thumbnail, kept per `key`: asked with a size, remembers it; asked with none, tells
-// the one kept ({ "width": 0, "height": 0 }: never seen).
 function pageSize(key, width, height) {
     if (width > 0 && height > 0) {
         if (pageSizes[key] === undefined && ++pageSizeCount > 2000) {

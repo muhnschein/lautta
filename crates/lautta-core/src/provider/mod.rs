@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! The one provider trait. UI and planner see only [`Provider`] + [`Capabilities`]; no
-//! provider-specific branches above this layer.
 
 pub mod archive;
 pub mod local;
@@ -16,7 +14,6 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::mpsc;
 
-/// Request lane hints for the bridge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Lane {
     Interactive,
@@ -36,7 +33,6 @@ impl Lane {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenameMode {
-    /// Fail with `AlreadyExists` if the destination exists (default).
     NoReplace,
     Replace,
 }
@@ -52,16 +48,13 @@ pub enum Disposition {
     #[default]
     Create,
     Truncate,
-    /// Append at `offset` (resume).
     Resume,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WriteOptions {
     pub disposition: Disposition,
-    /// Resume offset in source fd and destination.
     pub offset: u64,
-    /// Total size, required for FIFOs on backends that need a length.
     pub size: Option<u64>,
     pub modified: Option<SystemTime>,
     pub mode: Option<u32>,
@@ -69,7 +62,6 @@ pub struct WriteOptions {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ReadOptions {
-    /// Start offset (resume of downloads).
     pub offset: u64,
 }
 
@@ -86,7 +78,6 @@ pub struct SpaceInfo {
     pub used: u64,
 }
 
-/// Bytes done, total (if known).
 pub type ProgressSink = Arc<dyn Fn(u64, Option<u64>) + Send + Sync>;
 
 pub fn no_progress() -> ProgressSink {
@@ -96,9 +87,7 @@ pub fn no_progress() -> ProgressSink {
 #[async_trait]
 pub trait ReadHandle: Send + Sync {
     fn size(&self) -> Option<u64>;
-    /// Empty result means end of file.
     async fn read_at(&self, offset: u64, max: usize) -> Result<Vec<u8>>;
-    /// Read-ahead hint.
     async fn read_ahead(&self, _offset: u64, _bytes: u64) -> Result<()> {
         Ok(())
     }
@@ -128,8 +117,6 @@ pub async fn read_all(handle: &dyn ReadHandle, limit: u64) -> Result<Vec<u8>> {
 pub trait Provider: Send + Sync {
     fn capabilities(&self) -> Capabilities;
 
-    /// Capabilities once known: a bridge location learns them from the bridge on first use. Plans
-    /// and transfers decide with these (name rules, atomic writes, resume).
     async fn known_capabilities(&self) -> Capabilities {
         self.capabilities()
     }
@@ -146,7 +133,6 @@ pub trait Provider: Send + Sync {
     async fn make_symlink(&self, target: &[u8], link: &VPath) -> Result<()>;
     async fn make_hardlink(&self, existing: &VPath, new_path: &VPath) -> Result<()>;
     async fn open_read(&self, path: &VPath, lane: Lane) -> Result<Box<dyn ReadHandle>>;
-    /// Writes `dst` from `src`, an fd the caller opened.
     async fn upload_from(
         &self,
         src: OwnedFd,
@@ -154,7 +140,6 @@ pub trait Provider: Send + Sync {
         opts: WriteOptions,
         progress: ProgressSink,
     ) -> Result<()>;
-    /// Reads `src` into `dst`, an fd the caller opened.
     async fn download_into(
         &self,
         src: &VPath,
@@ -169,8 +154,6 @@ pub trait Provider: Send + Sync {
         opts: CopyOptions,
         progress: ProgressSink,
     ) -> Result<()>;
-    /// Read-only fd of a regular file on this phone, `None` where files are not local: a
-    /// transfer hands it to the destination as is, no scratch copy.
     async fn open_local(&self, _path: &VPath) -> Result<Option<OwnedFd>> {
         Ok(None)
     }
@@ -178,7 +161,6 @@ pub trait Provider: Send + Sync {
     async fn space(&self, dir: &VPath) -> Result<SpaceInfo>;
 }
 
-/// Tests and small folders.
 pub async fn list_all(provider: &dyn Provider, dir: &VPath, lane: Lane) -> Result<Vec<Entry>> {
     let (tx, mut rx) = mpsc::channel(16);
     let collect = async {
@@ -192,13 +174,10 @@ pub async fn list_all(provider: &dyn Provider, dir: &VPath, lane: Lane) -> Resul
     res.map(|()| all)
 }
 
-/// Resolves a location id to its provider. Implemented by the location registry; tests use
-/// [`StaticResolver`].
 pub trait ProviderResolver: Send + Sync {
     fn provider(&self, location: &str) -> Result<Arc<dyn Provider>>;
 }
 
-/// Tests, and the archive provider's nesting.
 #[derive(Default, Clone)]
 pub struct StaticResolver {
     pub providers: std::collections::HashMap<String, Arc<dyn Provider>>,

@@ -1,15 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Compressed files: zip, 7z, tar.xz, tar.gz written into a [`Sink`]. For remote destinations the
-//! caller passes a pipe's write end and uploads the read end meanwhile.
-//!
-//! * 7z needs to seek: written straight into a seekable sink, else built in a spool file first.
-//! * Folders are added recursively, children sorted by name: deterministic output.
-//! * Symlinks are stored as links in both formats, never followed: no cycles, nothing outside the
-//!   selection is read.
-//! * Special files (devices, sockets) are skipped and counted.
-//! * The zip writer is our own: the `zip` crate cannot write to a pipe.
-//! * A file that changes size while read aborts the run rather than writing a corrupt tar entry.
-//! * Password: zip and 7z only, AES-256. 7z hides names too; zip cannot. tar has no encryption.
 
 mod zipstream;
 
@@ -30,7 +19,6 @@ use tokio::sync::mpsc;
 
 const CHUNK: usize = 256 * 1024;
 const QUEUE: usize = 8;
-/// tar needs sizes up front; unknown-size files are spooled in memory up to this.
 const SPOOL_LIMIT: u64 = 64 * 1024 * 1024;
 const WRITER_GONE: &str = "archive writer stopped";
 
@@ -43,18 +31,15 @@ pub enum ArchiveKind {
 }
 
 impl ArchiveKind {
-    /// tar headers carry the size before the data.
     fn needs_size(self) -> bool {
         matches!(self, ArchiveKind::TarXz | ArchiveKind::TarGz)
     }
 
-    /// tar has no encryption.
     pub fn takes_password(self) -> bool {
         matches!(self, ArchiveKind::Zip | ArchiveKind::SevenZ)
     }
 }
 
-/// Where the compressed bytes go. [`Sink::into_file`] hands over a seekable file for 7z.
 pub trait Sink: Write + Send + 'static {
     fn into_file(self) -> std::result::Result<std::fs::File, Self>
     where
@@ -65,7 +50,6 @@ pub trait Sink: Write + Send + 'static {
 }
 
 impl Sink for std::fs::File {
-    /// A pipe cannot seek.
     fn into_file(mut self) -> std::result::Result<std::fs::File, Self> {
         match io::Seek::stream_position(&mut self) {
             Ok(_) => Ok(self),
@@ -77,14 +61,11 @@ impl Sink for std::fs::File {
 #[derive(Clone)]
 pub struct CompressOptions {
     pub kind: ArchiveKind,
-    /// Level 0-9 (default 6).
     pub level: u32,
     pub total_hint: Option<u64>,
-    /// 7z into an unseekable sink is built here first; `None`: system temp dir.
     pub spool_dir: Option<std::path::PathBuf>,
     pub progress: ProgressSink,
     pub cancel: Arc<AtomicBool>,
-    /// Zip and 7z only.
     pub password: Option<Password>,
 }
 
@@ -115,7 +96,6 @@ pub struct CompressStats {
 pub(crate) struct EntryMeta {
     pub path: Vec<u8>,
     pub kind: Kind,
-    /// File size when known; the data stream must then match it exactly.
     pub size: Option<u64>,
     pub mtime: Option<SystemTime>,
     pub mode: Option<u32>,
@@ -154,7 +134,6 @@ impl Read for ChunkReader<'_> {
                     self.pos = 0;
                 }
                 Some(Msg::EndData) => self.done = true,
-                // Not `Interrupted`: `io::copy` would retry that forever.
                 _ => return Err(io::Error::other("compression aborted")),
             }
         }
@@ -166,7 +145,6 @@ pub(crate) trait MemberWriter: Send {
     fn finish(self: Box<Self>) -> io::Result<()>;
 }
 
-/// tar inside a compressor `E`; `close` ends the compressed stream.
 struct Tar<E: Write> {
     builder: tar::Builder<E>,
     close: fn(E) -> io::Result<()>,
@@ -216,14 +194,10 @@ impl<E: Write + Send> MemberWriter for Tar<E> {
     }
 }
 
-/// 7z stores unix mode and type in the high half of the attributes when bit 15 is set.
 const SEVENZ_UNIX_EXTENSION: u32 = 0x8000;
 const SEVENZ_DIRECTORY: u32 = 0x10;
-/// Largest LZMA2 dictionary used (preset 6's); small files get a smaller one, so a folder of many
-/// small files does not set up 8 MiB match tables per file.
 const SEVENZ_DICT_MAX: u32 = 8 * 1024 * 1024;
 const SEVENZ_DICT_MIN: u32 = 64 * 1024;
-/// Key from 2^19 SHA-256 rounds, as 7-Zip makes it; the crate's default of 2^8 is far weaker.
 const SEVENZ_KEY_ROUNDS_POWER: u8 = 19;
 
 fn sevenz_dict(size: Option<u64>) -> u32 {
@@ -241,13 +215,10 @@ fn sevenz_err(e: sevenz_rust2::Error) -> io::Error {
     io::Error::other(format!("7z: {e}"))
 }
 
-/// Entries are compressed one by one (not solid): any file can be read without the ones before it.
 struct SevenZ<W: Sink> {
     archive: sevenz_rust2::ArchiveWriter<std::fs::File>,
     level: u32,
-    /// Unseekable sink: archive goes to a spool file, copied here at the end.
     forward: Option<W>,
-    /// One salt for the archive (one key, derived once); every entry gets its own IV.
     aes: Option<sevenz_rust2::encoder_options::AesEncoderOptions>,
 }
 
@@ -275,7 +246,6 @@ impl<W: Sink> SevenZ<W> {
         })
     }
 
-    /// AES first, as 7-Zip orders them; the header is then encrypted with it too.
     fn methods(
         &self,
         lzma: sevenz_rust2::encoder_options::Lzma2Options,
@@ -458,7 +428,6 @@ impl Walker<'_> {
         self.stats.dirs += 1;
         let mut children = crate::provider::list_all(item.provider.as_ref(), &item.path, Lane::Bulk).await?;
         children.sort_by(|a, b| b.name.cmp(&a.name));
-        // Reverse order on the stack: the alphabetically first child is popped first.
         for child in children {
             validate_name(&child.name)?;
             let mut name = item.name.clone();
@@ -593,8 +562,6 @@ async fn walk(
     Ok(walker.stats)
 }
 
-/// Blocks on `sink` only in a dedicated thread; sources are read async, backpressured by the sink's
-/// speed. Top-level names must be distinct.
 pub async fn compress<W: Sink>(
     resolver: &dyn ProviderResolver,
     sources: &[Uri],
@@ -625,7 +592,6 @@ pub async fn compress<W: Sink>(
         .map_err(|e| Error::new(ErrorKind::Internal, format!("archive writer failed: {e}")))?;
     match walked {
         Ok(stats) => written.map(|()| stats),
-        // The sink failed: its error is the real one.
         Err(e) if e.message == WRITER_GONE => Err(written.err().unwrap_or(e)),
         Err(e) => Err(e),
     }
@@ -638,7 +604,6 @@ pub struct ExtractItem {
     pub size: u64,
 }
 
-/// Parents before children.
 pub fn extract_plan(archive: &ArchiveProvider, under: &VPath) -> Result<Vec<ExtractItem>> {
     let all = archive.entries();
     let Some(root) = all.iter().find(|e| &e.path == under) else {

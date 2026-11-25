@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Silica's own is private, not a Harbour import. Dark
-// over fifth nearest the edge, clear towards image.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 

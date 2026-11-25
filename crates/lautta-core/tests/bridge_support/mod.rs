@@ -18,8 +18,6 @@ pub struct Rig {
     pub home: TempDir,
 }
 
-/// App defaults without polling and handshake timeout (a paused clock would fire it at the first
-/// idle moment).
 pub fn config(paths: &AppPaths) -> BridgeConfig {
     BridgeConfig {
         poll_interval: None,
@@ -41,7 +39,6 @@ impl Rig {
         rig
     }
 
-    /// Without [`status`]'s guard: its timer would let a paused clock jump while sockets work.
     pub async fn ready_on_paused_clock() -> Rig {
         let rig = Rig::listening().await;
         rig.client.wait_status(|s| s == BridgeStatus::Ready).await;
@@ -95,7 +92,6 @@ impl Rig {
     }
 }
 
-/// Hang guard of 30 s for real-clock tests; fails naming the status reached.
 pub async fn status(client: &BridgeClient, want: BridgeStatus) {
     let reached = tokio::time::timeout(Duration::from_secs(30), client.wait_status(|s| s == want)).await;
     assert_eq!(
@@ -106,7 +102,6 @@ pub async fn status(client: &BridgeClient, want: BridgeStatus) {
     );
 }
 
-/// Polls on the (possibly virtual) clock, up to 30 s: loaded runners are slow.
 pub async fn eventually(what: &str, mut cond: impl FnMut() -> bool) {
     for _ in 0..3000 {
         if cond() {

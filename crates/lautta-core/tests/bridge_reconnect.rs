@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Backoff schedule is checked on a paused clock while no I/O is in flight (idle runtime jumps a
-//! paused clock to the next timer, firing timeouts around I/O at once). Live-connection tests run
-//! real time at 1/20 of it.
 
 mod bridge_support;
 
@@ -65,7 +62,6 @@ async fn a_lost_connection_is_re_established() {
     eventually("nearby after the reconnect", || rig.client.nearby().len() == 1).await;
 }
 
-/// Real sockets and clock: no attempt comes early. The exact schedule is proven on the paused clock.
 #[tokio::test]
 async fn attempts_over_real_sockets_never_come_before_their_backoff() {
     let rig = Rig::ready_with(quick_backoff).await;
@@ -143,7 +139,6 @@ async fn a_socket_without_a_bridge_behind_it_is_standalone_not_an_error() {
     assert!(rig.paths.bridge_socket().exists());
 
     let fresh = BridgeClient::start(bridge_support::config(&rig.paths)).unwrap();
-    // Absent is also the status before the first look at the socket.
     eventually("an attempt", || fresh.connection_attempts() >= 1).await;
     status(&fresh, BridgeStatus::Absent).await;
     assert!(fresh.locations().is_empty());

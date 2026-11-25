@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Cover not checked: Silica incubates it asynchronously,
-// engine here has no incubation controller.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -41,7 +39,6 @@ Item {
         return out
     }
 
-    // No render loop headless: lay out by hand.
     function tagged(item) {
         var views = findAll(item, function (x) { return typeof x.forceLayout === "function" }, [])
         for (var i = 0; i < views.length; ++i)

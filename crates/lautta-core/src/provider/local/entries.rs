@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `Entry` construction from `statx` results.
 
 use super::names::Names;
 use crate::entry::{Entry, EntryFlags, Kind};
@@ -28,8 +27,6 @@ pub fn kind_of(st: &FileStat) -> Kind {
     }
 }
 
-/// True when the process may not write to something owned by `uid:gid` with `mode`. Supplementary
-/// groups not consulted: a file writable only by a secondary group shows read-only (safe side).
 pub fn is_readonly(mode: u32, uid: u32, gid: u32, euid: u32, egid: u32) -> bool {
     if euid == 0 {
         return false;
@@ -92,8 +89,6 @@ impl EntryBuilder {
         e
     }
 
-    /// Unreadable target, or missing outside the root (sandbox hides it): not accessible. Dangling
-    /// link inside root: link with unknown target.
     fn resolve_link(&self, e: &mut Entry, path: &Path) {
         match sys::stat(path, true) {
             Ok(t) => e.target_kind = kind_of(&t),
@@ -172,7 +167,6 @@ mod tests {
         assert!(!is_readonly(0o664, 0, 1000, 1001, 1000));
         assert!(is_readonly(0o644, 0, 0, 1001, 1001));
         assert!(!is_readonly(0o666, 0, 0, 1001, 1001));
-        // owner class wins even if group would allow
         assert!(is_readonly(0o464, 1000, 1000, 1000, 1000));
         assert!(!is_readonly(0o000, 5, 5, 0, 0));
     }
@@ -259,7 +253,6 @@ mod tests {
             assert!(e.flags.contains(EntryFlags::NOT_ACCESSIBLE), "{name}");
             assert!(!e.is_dir());
         }
-        // following an unresolvable link falls back to the link entry
         let e = b.stat_entry(&d.path().join("abs"), b"abs", true).unwrap();
         assert_eq!(e.kind, Kind::Symlink);
     }

@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Straightens the marked page: perspective map from its four corners onto a rectangle.
 
 use super::{Point, Quad};
 use image::{Rgb, RgbImage};
 
-/// Pixel size of the straightened page: mean of opposite sides, longer one at most `max_long`,
-/// never larger than the photo shows it.
 pub fn output_size(quad: &Quad, src_w: u32, src_h: u32, max_long: u32) -> (u32, u32) {
     let p = quad.0.map(|c| (c.x * src_w as f32, c.y * src_h as f32));
     let side = |a: usize, b: usize| (p[a].0 - p[b].0).hypot(p[a].1 - p[b].1);
@@ -16,7 +13,6 @@ pub fn output_size(quad: &Quad, src_w: u32, src_h: u32, max_long: u32) -> (u32, 
     (px(w), px(h))
 }
 
-/// Solves `m · x = b` in place (Gauss-Jordan, partial pivoting). `None` when singular.
 fn solve(mut m: [[f64; 9]; 8]) -> Option<[f64; 8]> {
     for col in 0..8 {
         let pivot = (col..8).max_by(|&a, &b| m[a][col].abs().total_cmp(&m[b][col].abs()))?;
@@ -41,12 +37,10 @@ fn solve(mut m: [[f64; 9]; 8]) -> Option<[f64; 8]> {
     Some(x)
 }
 
-/// Maps output pixel coordinates to photo pixel coordinates.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Homography([f64; 8]);
 
 impl Homography {
-    /// Output rectangle `w` × `h` onto `corners` (photo pixels, order of [`Quad`]).
     pub fn new(w: f64, h: f64, corners: [(f64, f64); 4]) -> Option<Homography> {
         let from = [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)];
         let mut m = [[0.0; 9]; 8];
@@ -65,7 +59,6 @@ impl Homography {
     }
 }
 
-/// Photo colour at a fractional pixel position (pixel centres at `.5`), edges repeated.
 fn sample(src: &RgbImage, x: f64, y: f64) -> Rgb<u8> {
     let (w, h) = (src.width(), src.height());
     let fx = (x - 0.5).clamp(0.0, f64::from(w - 1));
@@ -84,8 +77,6 @@ fn sample(src: &RgbImage, x: f64, y: f64) -> Rgb<u8> {
     Rgb(out)
 }
 
-/// The page inside `quad`, drawn `out_w` × `out_h`. Corners on one line, as in a photo with an
-/// empty side: white.
 pub fn warp(src: &RgbImage, quad: &Quad, out_w: u32, out_h: u32) -> RgbImage {
     let mut out = RgbImage::from_pixel(out_w, out_h, Rgb([255, 255, 255]));
     let (sw, sh) = (f64::from(src.width()), f64::from(src.height()));
@@ -108,7 +99,6 @@ mod tests {
         Quad::from_flat(&v).unwrap()
     }
 
-    /// Four colour fields: red, green over blue, yellow.
     fn fields(w: u32, h: u32) -> RgbImage {
         RgbImage::from_fn(w, h, |x, y| match (x < w / 2, y < h / 2) {
             (true, true) => Rgb([255, 0, 0]),
@@ -127,7 +117,6 @@ mod tests {
 
     #[test]
     fn size_is_the_mean_of_opposite_sides() {
-        // Top 200 px, bottom 400 px wide; both flanks 100·√2 px long.
         let trapezoid = quad([0.25, 0.0, 0.75, 0.0, 1.0, 1.0, 0.0, 1.0]);
         assert_eq!(output_size(&trapezoid, 400, 100, 10_000), (300, 141));
     }
@@ -153,7 +142,6 @@ mod tests {
                 "{f:?} -> {x},{y}"
             );
         }
-        // Perspective, not affine: the centre does not land on the mean of the corners.
         let (cx, cy) = h.apply(25.0, 15.0);
         assert!((cx - 55.0).abs() > 1.0 || (cy - 43.75).abs() > 1.0);
     }
@@ -184,7 +172,6 @@ mod tests {
     #[test]
     fn corner_order_turns_the_page() {
         let src = fields(40, 40);
-        // Page lies on its side: its top left is the photo's top right.
         let turned = Quad([
             Point::new(1.0, 0.0),
             Point::new(1.0, 1.0),
