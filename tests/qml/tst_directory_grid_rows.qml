@@ -115,17 +115,23 @@ ApplicationWindow {
                name + ": the cell ends a gap and half a padding under its last line: " + cell.implicitHeight + " vs " + bottom)
     }
 
+    function leadOf(row) {
+        return row.first === 0 ? Theme.paddingMedium : 0
+    }
+
     function checkRows(rows, label) {
         for (var r = 0; r < rows.length; ++r) {
             var cells = cellsOf(rows[r])
+            var lead = leadOf(rows[r])
             var tallest = 0
             for (var i = 0; i < cells.length; ++i) {
                 tallest = Math.max(tallest, cells[i].implicitHeight)
-                expect(cells[i].height === rows[r].height, label + ": a cell is as tall as its row " + r)
+                expect(Math.abs(cells[i].y - lead) < 0.5 && Math.abs(cells[i].height - (rows[r].height - lead)) < 0.5,
+                       label + ": a cell fills its row " + r + " under the row's lead: " + cells[i].y + " " + cells[i].height)
                 checkTight(cells[i], cells[i].itemName !== undefined ? cells[i].itemName : cells[i].name)
             }
-            expect(rows[r].height === tallest, label + ": row " + r + " is as tall as its tallest cell: "
-                   + rows[r].height + " vs " + tallest)
+            expect(rows[r].height === lead + tallest, label + ": row " + r + " is its lead plus its tallest cell: "
+                   + rows[r].height + " vs " + lead + " + " + tallest)
         }
     }
 
@@ -146,7 +152,7 @@ ApplicationWindow {
                "a folder's count has its line while it comes")
         waitFor(function () { return counted(rows) }, "the counts")
         same([rows[0].height, rows[1].height, rows[2].height],
-             [cellHeight(grid.cellWidth, 1, 1), cellHeight(grid.cellWidth, 2, 2), cellHeight(grid.cellWidth, 1, 2)],
+             [Theme.paddingMedium + cellHeight(grid.cellWidth, 1, 1), cellHeight(grid.cellWidth, 2, 2), cellHeight(grid.cellWidth, 1, 2)],
              "each row only as tall as what its tallest tile shows")
         expect(rows[0].height < rows[1].height, "a row of one-line names with a count is shorter than one with a two-line name")
         checkRows(rows, "portrait")

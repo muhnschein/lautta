@@ -9,6 +9,7 @@ Item {
 
     readonly property int portraitColumns: 3
     readonly property real gap: Theme.paddingSmall
+    readonly property real firstRowLead: Theme.paddingMedium
     readonly property real nameLineHeight: nameFont.lineSpacing
     readonly property real captionHeight: captionFont.lineSpacing
     readonly property real nameMargin: Theme.paddingSmall / 2

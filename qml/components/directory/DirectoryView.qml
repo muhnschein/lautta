@@ -745,8 +745,9 @@ Item {
             readonly property real gap: gridMetrics.gap
 
             x: (index % grid.columns) * width
+            y: parent ? parent.lead : 0
             width: grid.cellWidth
-            height: parent ? parent.height : implicitHeight
+            height: parent ? parent.height - y : implicitHeight
             enabled: view.offered(model.isDir)
             opacity: enabled ? 1 : Theme.opacityLow
             implicitHeight: gridMetrics.cellHeight(width, caption.implicitHeight)
@@ -873,6 +874,7 @@ Item {
             readonly property int first: index * grid.columns
             readonly property int end: (index + 1) * grid.columns
             readonly property bool holding: !!dragSelect.holder && dragSelect.holder.parent === gridRow
+            readonly property real lead: index === 0 ? gridMetrics.firstRowLead : 0
 
             function regroup() {
                 var all = rowCells.items
@@ -892,7 +894,7 @@ Item {
             }
 
             width: grid.width
-            height: GridRows.tallest(children)
+            height: lead + GridRows.tallest(children)
             onEndChanged: regroup()
             onHoldingChanged: DelegateModel.inPersistedItems = holding
             Component.onCompleted: regroup()
