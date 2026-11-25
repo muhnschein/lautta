@@ -11,6 +11,7 @@ use lautta_core::Uri;
 use qmetaobject::*;
 use std::os::unix::fs::PermissionsExt;
 use std::sync::Mutex;
+use std::time::Duration;
 
 static FAKE: Mutex<Option<FakeBridge>> = Mutex::new(None);
 
@@ -155,6 +156,7 @@ fn home_models_follow_the_core_and_the_bridge() {
         bridge.set_consent(Consent::Unknown).await;
         bridge.add_account(1, "sftp", "NAS", "nas.home").await;
         bridge.set_features(Some(&[feature::STORAGE_SETTINGS, feature::DRIVES]));
+        bridge.stall_narrowing(Duration::from_millis(150));
         bridge
             .set_drives(vec![FakeDrive::new("sda1", "STICK", "usb", 8)])
             .await;

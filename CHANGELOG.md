@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A server folder you have open lists again by itself once Lautta is connected to netvfs again, for example after you change the account's access in *Settings*. Before, it could keep an error or the files of the old access until you left it and came back ([#235](https://github.com/muhnschein/lautta/issues/235), [#172](https://github.com/muhnschein/lautta/issues/172)).
 - Before you allow Lautta to use network locations, a favourite or recent item on a server reads *Server › /Photos*, no longer an internal id such as *nv-account:23 › Photos* ([#107](https://github.com/muhnschein/lautta/issues/107)).
 - With every task paused, Lautta's cover shows how far they got, as *Activity* does, no longer 0% and an empty bar ([#124](https://github.com/muhnschein/lautta/issues/124)).
 - A video the phone cannot decode, such as some CAVS or 10-bit H.264 files, no longer freezes Lautta when you leave the player ([#161](https://github.com/muhnschein/lautta/issues/161)).
