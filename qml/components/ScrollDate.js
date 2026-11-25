@@ -3,13 +3,13 @@
 
 var dayMs = 86400000
 
-function _midnight(ms) {
+function _calendarDay(ms) {
     var d = new Date(ms)
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+    return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
 function daysAgo(atMs, nowMs) {
-    return Math.round((_midnight(nowMs) - _midnight(atMs)) / dayMs)
+    return (_calendarDay(nowMs) - _calendarDay(atMs)) / dayMs
 }
 
 function kind(atMs, nowMs) {
