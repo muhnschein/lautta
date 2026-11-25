@@ -231,7 +231,6 @@ pub fn category_from_mime(mime: &str) -> FileCategory {
         .map_or(FileCategory::Other, |(_, cat)| *cat)
 }
 
-/// `.ts` is TypeScript or MPEG-TS video (camera, TV recording): video content type makes it video.
 fn by_name(name: &[u8], content_type: Option<&str>) -> Option<(&'static str, FileCategory)> {
     let ext = extension_of(name)?;
     if ext == "ts" && content_type.is_some_and(|ct| category_from_mime(ct) == FileCategory::Video) {
@@ -240,7 +239,6 @@ fn by_name(name: &[u8], content_type: Option<&str>) -> Option<(&'static str, Fil
     from_extension(&ext)
 }
 
-/// By name, else by `content_type`.
 pub fn category_of_typed(name: &[u8], content_type: Option<&str>) -> FileCategory {
     match by_name(name, content_type) {
         Some((_, category)) => category,
@@ -275,11 +273,8 @@ pub fn mime_of(entry: &Entry) -> Option<String> {
 
 const MPEG_TS: &str = "video/mp2t";
 
-/// Enough for five MPEG-TS or M2TS packets.
 const MPEG_TS_SNIFF_BYTES: u64 = 1024;
 
-/// Sync byte 0x47 at every packet start in `head`, at least three: 188-byte TS packets, or
-/// 192-byte M2TS packets (4-byte time code first).
 pub fn is_mpeg_ts(head: &[u8]) -> bool {
     [(188, 0), (192, 4)].into_iter().any(|(packet, sync_at)| {
         let syncs: Vec<u8> = head.iter().skip(sync_at).step_by(packet).copied().collect();
@@ -287,7 +282,6 @@ pub fn is_mpeg_ts(head: &[u8]) -> bool {
     })
 }
 
-/// Content type of local regular file `path` whose name `.ts` leaves open; reads its head.
 pub fn sniff_local(name: &[u8], path: &Path) -> Option<&'static str> {
     if extension_of(name).as_deref() != Some("ts") || !std::fs::metadata(path).ok()?.is_file() {
         return None;
@@ -301,7 +295,6 @@ pub fn sniff_local(name: &[u8], path: &Path) -> Option<&'static str> {
     is_mpeg_ts(&head).then_some(MPEG_TS)
 }
 
-/// [`viewer_for_name`] for a file by name and listed type (empty: none). Local `.ts` is sniffed.
 pub fn viewer_of(name: &[u8], mime: &str, local: Option<&Path>) -> Viewer {
     let mime = match local.and_then(|path| sniff_local(name, path)) {
         Some(sniffed) => sniffed,
@@ -524,7 +517,6 @@ mod tests {
         );
     }
 
-    /// `count` packets of `packet` bytes, sync byte at `sync_at`.
     fn transport_stream(packet: usize, sync_at: usize, count: usize) -> Vec<u8> {
         let mut bytes = vec![b'x'; packet * count];
         for start in (0..bytes.len()).step_by(packet) {
