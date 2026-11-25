@@ -112,7 +112,9 @@ body{margin:0}
 .di-l{flex:1;text-align:right;color:var(--sec)}
 .di-v{flex:1;color:var(--pri);word-break:break-all}
 .note{background:rgba(20,30,40,.92);color:#fff;padding:12px 16px;display:flex;gap:12px;align-items:flex-start;border-radius:6px}
-.sbar{position:absolute;right:0;width:3px;height:64px;background:var(--hl);opacity:.9}
+.sbar{position:absolute;right:0;width:6px;height:90px;background:var(--hl);opacity:.85}
+.pin{position:absolute;left:0;right:0;top:0;z-index:2;background:var(--hldim)}
+.scr{position:absolute;left:0;right:0;bottom:0;overflow:hidden}
 .sbl{position:absolute;right:12px;padding:8px 14px 8px 22px;text-align:right;background:linear-gradient(90deg,transparent,var(--ov) 28%);pointer-events:none}
 .sbl-t{font-size:26px;font-weight:300;color:var(--hl);line-height:1.1}
 .sbl-d{font-size:15px;color:var(--hl2)}
@@ -122,20 +124,21 @@ body{margin:0}
 </style>
 </helmet>
 <div class="amb {{amb}}" style="width: 400px; height: 860px">
+<div class="pin"><div class="hdr"><div class="hdr-t">Activity</div><div class="hdr-d">3 running · 11.4 MB/s</div></div></div><div class="scr" style="top: 100px">
 <div style="margin-top: -24px"></div>
 <a class="li" href="TransferDetails.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Copied 14 items to Documents</span><span class="li-s" style="display: block">Completed · 18:02</span></span></a>
 <a class="li" href="TransferDetails.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Upload report.pdf to NAS</span><span class="li-s" style="display: block">Completed · 09:41</span></span></a>
-<div class="sh">Monday</div>
+<div class="sh">Last 7 days</div>
 <a class="li" href="TransferDetails.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Download holiday.mp4</span><span class="li-s" style="display: block">Completed · 21:15</span></span></a>
 <a class="li" href="TransferDetails.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Move 8 items to Office</span><span class="li-s" style="display: block">Completed · 12:30</span></span></a>
-<div class="sh">Saturday</div>
 <a class="li" href="TransferDetails.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Upload to NAS</span><span class="li-s" style="display: block">Completed with 2 failures · 10:04</span></span></a>
-<div class="sh">November 2026</div>
+<div class="sh">Last 30 days</div>
 <a class="li" href="TransferDetails.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Copied 120 items to SD card</span><span class="li-s" style="display: block">Completed · 14 Nov</span></span></a>
 <a class="li" href="TransferDetails.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Compressed photos.zip</span><span class="li-s" style="display: block">Completed · 9 Nov</span></span></a>
-<div class="sh">October 2026</div>
+<div class="sh">Older</div>
 <a class="li" href="TransferDetails.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Download thesis.pdf</span><span class="li-s" style="display: block">Completed · 28 Oct</span></span></a>
-<div class="sbar" style="top: 36px"></div><div class="sbl" style="top: 36px"><div class="sbl-t">Yesterday</div><div class="sbl-d">24 November</div></div>
+</div>
+<div class="sbar" style="top: 330px"></div><div class="sbl" style="top: 330px"><div class="sbl-t">Yesterday</div><div class="sbl-d">24 Nov</div></div>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":400,"height":860}}'>

@@ -93,23 +93,13 @@ Page {
         id: gridMetrics
     }
 
-    SilicaListView {
-        id: list
+    SilicaFlickable {
+        id: pulleyHost
 
+        objectName: "recentsPulleyHost"
         anchors.fill: parent
-
-        header: HeaderBand {
-            PageHeader {
-                //% "Recents"
-                title: qsTrId("lautta-recents-title")
-            }
-        }
-
-        section.property: "dateGroup"
-        section.criteria: ViewSection.FullString
-        section.delegate: DateSectionHeader {
-            group: section
-        }
+        contentWidth: width
+        contentHeight: height
 
         PullDownMenu {
             visible: recents.count > 0
@@ -126,21 +116,59 @@ Page {
             }
         }
 
-        ViewPlaceholder {
-            enabled: recents.loaded && recents.count === 0
-            text: page.recentsOn
-                  //% "No recents yet"
-                  ? qsTrId("lautta-recents-empty")
-                  //% "Recents are off"
-                  : qsTrId("lautta-recents-off")
-            hintText: page.recentsOn
-                      //% "Files you open, edit or transfer show up here"
-                      ? qsTrId("lautta-recents-empty-hint")
-                      //% "Turn them on in Settings"
-                      : qsTrId("lautta-recents-off-settings-hint")
+        HeaderBand {
+            id: top
+
+            objectName: "recentsHeader"
+            z: 1
+
+            PageHeader {
+                //% "Recents"
+                title: qsTrId("lautta-recents-title")
+            }
         }
 
-        VerticalScrollDecorator { }
+        SilicaListView {
+            id: list
+
+            anchors {
+                top: top.bottom
+                left: parent.left
+                right: parent.right
+                bottom: parent.bottom
+            }
+            clip: true
+
+            section.property: "dateGroup"
+            section.criteria: ViewSection.FullString
+            section.delegate: DateSectionHeader {
+                group: section
+            }
+
+            ViewPlaceholder {
+                enabled: recents.loaded && recents.count === 0
+                text: page.recentsOn
+                      //% "No recents yet"
+                      ? qsTrId("lautta-recents-empty")
+                      //% "Recents are off"
+                      : qsTrId("lautta-recents-off")
+                hintText: page.recentsOn
+                          //% "Files you open, edit or transfer show up here"
+                          ? qsTrId("lautta-recents-empty-hint")
+                          //% "Turn them on in Settings"
+                          : qsTrId("lautta-recents-off-settings-hint")
+            }
+        }
+
+        ScrollDateBar {
+            flickable: list
+            rowDate: function (index) {
+                var at = page.gridMode ? (index < gridRows.count ? gridRows.get(index).first : -1) : index
+                if (at < 0 || at >= dates.items.count)
+                    return null
+                return { "inProgress": false, "at": dates.items.get(at).model.at }
+            }
+        }
     }
 
     RemorsePopup {
