@@ -168,18 +168,25 @@ fn extras(m: &Member) -> Vec<u8> {
     extra
 }
 
-fn deflate_into<O: Write>(out: O, level: u32, data: &mut dyn Read, crc: &mut flate2::Crc) -> io::Result<O> {
+fn deflate_into<O: Write>(
+    out: O,
+    level: u32,
+    data: &mut dyn Read,
+    crc: &mut flate2::Crc,
+) -> io::Result<(O, u64)> {
     let mut enc = flate2::write::DeflateEncoder::new(out, flate2::Compression::new(level));
     let mut buf = vec![0u8; 64 * 1024];
+    let mut len = 0u64;
     loop {
         let n = data.read(&mut buf)?;
         if n == 0 {
             break;
         }
         crc.update(&buf[..n]);
+        len += n as u64;
         enc.write_all(&buf[..n])?;
     }
-    enc.finish()
+    Ok((enc.finish()?, len))
 }
 
 impl<W: Write> ZipStream<W> {
@@ -274,17 +281,19 @@ impl<W: Write> ZipStream<W> {
         let start = self.out.count;
         let mut crc = flate2::Crc::new();
         let level = self.level;
-        match self.password.clone() {
+        m.size = match self.password.clone() {
             Some(pw) => {
                 let enc = Encryptor::new(&mut self.out, &pw)?;
-                deflate_into(enc, level, data, &mut crc)?.finish()?;
+                let (enc, len) = deflate_into(enc, level, data, &mut crc)?;
+                enc.finish()?;
+                len
             }
             None => {
-                deflate_into(&mut self.out, level, data, &mut crc)?;
+                let (_, len) = deflate_into(&mut self.out, level, data, &mut crc)?;
                 m.crc = crc.sum();
+                len
             }
-        }
-        m.size = u64::from(crc.amount());
+        };
         m.compressed = self.out.count - start;
         if !m.local_zip64 && (m.size >= U32_MAX || m.compressed >= U32_MAX) {
             return Err(io_invalid("file grew past 4 GiB while being compressed"));
