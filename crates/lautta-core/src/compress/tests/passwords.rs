@@ -284,8 +284,148 @@ async fn ae1_entries_check_their_crc_and_ae2_ones_their_tag_only() {
     }
 }
 
+fn zip_crate_zipcrypto(files: &[(&str, &[u8], zip::CompressionMethod)], password: &str) -> Vec<u8> {
+    use zip::unstable::write::FileOptionsExt;
+    let mut w = zip::ZipWriter::new(io::Cursor::new(Vec::new()));
+    for (name, data, method) in files {
+        let opts = SimpleFileOptions::default()
+            .compression_method(*method)
+            .with_deprecated_encryption(password.as_bytes())
+            .unwrap();
+        w.start_file(*name, opts).unwrap();
+        w.write_all(data).unwrap();
+    }
+    w.add_directory("a/empty/", SimpleFileOptions::default()).unwrap();
+    w.finish().unwrap().into_inner()
+}
+
+fn passes_header_check(bytes: &[u8], name: &[u8], password: &str) -> bool {
+    let at = central_of(bytes, name);
+    let flags = u16::from_le_bytes([bytes[at + 8], bytes[at + 9]]);
+    let local = u32::from_le_bytes(bytes[at + 42..at + 46].try_into().unwrap()) as usize;
+    let check = if flags & 8 != 0 {
+        bytes[local + 11]
+    } else {
+        bytes[at + 19]
+    };
+    let name_len = u16::from_le_bytes([bytes[local + 26], bytes[local + 27]]) as usize;
+    let extra_len = u16::from_le_bytes([bytes[local + 28], bytes[local + 29]]) as usize;
+    let data = &bytes[local + 30 + name_len + extra_len..];
+    crate::zipcrypto::Decryptor::new(data, &pw(password), check).is_ok()
+}
+
+fn wrong_password_passing_header_check(bytes: &[u8], name: &[u8], right: &str) -> String {
+    (0..100_000)
+        .map(|i| format!("{right}{i}"))
+        .find(|p| passes_header_check(bytes, name, p))
+        .unwrap()
+}
+
 #[tokio::test]
-async fn zipcrypto_entries_stay_unsupported() {
+async fn zips_locked_with_zipcrypto_by_the_zip_crate_open_with_their_password_only() {
+    let tmp = tempfile::tempdir().unwrap();
+    let text = b"deflated text ".repeat(500);
+    let bytes = zip_crate_zipcrypto(
+        &[
+            ("a/deflated.txt", &text, zip::CompressionMethod::Deflated),
+            ("a/stored.bin", &noise(70_000, 9), zip::CompressionMethod::Stored),
+        ],
+        "pw",
+    );
+    assert_eq!(
+        kind_of(open("z.zip", &bytes, tmp.path(), None).await),
+        Some(ErrorKind::PasswordRequired)
+    );
+    assert_eq!(
+        kind_of(open("z.zip", &bytes, tmp.path(), Some("pW")).await),
+        Some(ErrorKind::WrongPassword)
+    );
+    let p = open("z.zip", &bytes, tmp.path(), Some("pw")).await.unwrap();
+    assert!(p.locked());
+    assert_eq!(read(&p, "a/deflated.txt").await.unwrap(), text);
+    assert_eq!(read(&p, "a/stored.bin").await.unwrap(), noise(70_000, 9));
+    assert_eq!(
+        p.stat(&vp("a/empty"), false, Lane::Bulk).await.unwrap().kind,
+        Kind::Dir
+    );
+}
+
+#[tokio::test]
+async fn zips_locked_with_zipcrypto_by_7zip_check_the_crc_byte() {
+    let tmp = tempfile::tempdir().unwrap();
+    let bytes = include_bytes!("zipcrypto-by-7zip-with-lautta.zip");
+    assert_eq!(
+        kind_of(open("o.zip", bytes, tmp.path(), Some("Lautta")).await),
+        Some(ErrorKind::WrongPassword)
+    );
+    let p = open("o.zip", bytes, tmp.path(), Some("lautta")).await.unwrap();
+    assert_eq!(
+        read(&p, "note.txt").await.unwrap(),
+        b"Hello from an old zip.\nThis note is locked with ZipCrypto.\n"
+    );
+    let table = read(&p, "table.csv").await.unwrap();
+    assert_eq!(table.len(), 8001);
+    assert!(table.starts_with(b"row,row,"));
+}
+
+#[tokio::test]
+async fn a_wrong_zipcrypto_password_that_passes_the_header_check_is_still_wrong() {
+    let tmp = tempfile::tempdir().unwrap();
+    let bytes = zip_crate_zipcrypto(
+        &[
+            ("big.bin", &noise(300_000, 3), zip::CompressionMethod::Stored),
+            (
+                "small.txt",
+                b"small and checked",
+                zip::CompressionMethod::Deflated,
+            ),
+        ],
+        "pw",
+    );
+    let wrong = wrong_password_passing_header_check(&bytes, b"small.txt", "pw");
+    assert_eq!(
+        kind_of(open("w.zip", &bytes, tmp.path(), Some(&wrong)).await),
+        Some(ErrorKind::WrongPassword)
+    );
+    let p = open("w.zip", &bytes, tmp.path(), Some("pw")).await.unwrap();
+    assert_eq!(read(&p, "small.txt").await.unwrap(), b"small and checked");
+}
+
+#[tokio::test]
+async fn a_big_zipcrypto_entry_read_with_a_wrong_password_fails_its_crc() {
+    let tmp = tempfile::tempdir().unwrap();
+    let big = noise(1_200_000, 4);
+    let bytes = zip_crate_zipcrypto(&[("big.bin", &big, zip::CompressionMethod::Stored)], "pw");
+    let wrong = wrong_password_passing_header_check(&bytes, b"big.bin", "pw");
+    let p = open("b.zip", &bytes, tmp.path(), Some(&wrong)).await.unwrap();
+    assert!(read(&p, "big.bin").await.is_err(), "garbage never reads as data");
+    let p = open("b.zip", &bytes, tmp.path(), Some("pw")).await.unwrap();
+    assert_eq!(read(&p, "big.bin").await.unwrap(), big);
+}
+
+#[tokio::test]
+async fn a_changed_byte_in_a_zipcrypto_entry_fails_its_read() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = noise(70_000, 11);
+    let mut bytes = zip_crate_zipcrypto(
+        &[
+            ("x.bin", &data, zip::CompressionMethod::Stored),
+            ("ok.txt", b"intact", zip::CompressionMethod::Stored),
+        ],
+        "pw",
+    );
+    let name = find(&bytes, b"x.bin", 0);
+    bytes[name + 5000] ^= 1;
+    let p = open("c.zip", &bytes, tmp.path(), Some("pw")).await.unwrap();
+    assert_eq!(read(&p, "ok.txt").await.unwrap(), b"intact");
+    assert!(
+        read(&p, "x.bin").await.is_err(),
+        "changed data never reads as data"
+    );
+}
+
+#[tokio::test]
+async fn zip_entries_with_pkware_strong_encryption_stay_unsupported() {
     let tmp = tempfile::tempdir().unwrap();
     let mut w = zip::ZipWriter::new(io::Cursor::new(Vec::new()));
     w.start_file("old.txt", SimpleFileOptions::default()).unwrap();
@@ -293,8 +433,8 @@ async fn zipcrypto_entries_stay_unsupported() {
     let mut bytes = w.finish().unwrap().into_inner();
     let local = find(&bytes, &[0x50, 0x4b, 0x03, 0x04], 0);
     let central = find(&bytes, &[0x50, 0x4b, 0x01, 0x02], 0);
-    bytes[local + 6] |= 1;
-    bytes[central + 8] |= 1;
+    bytes[local + 6] |= 0x41;
+    bytes[central + 8] |= 0x41;
     let p = open("old.zip", &bytes, tmp.path(), Some("pw")).await.unwrap();
     assert_eq!(kind_of(read(&p, "old.txt").await), Some(ErrorKind::Unsupported));
 }
