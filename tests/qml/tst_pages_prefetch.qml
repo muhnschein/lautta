@@ -75,18 +75,25 @@ ApplicationWindow {
         return null
     }
 
-    function press(page, name) {
+    function down(page, name) {
         var r = row(page, name)
         if (!expect(r !== null, name + " row found"))
-            return
+            return null
         var list = r.parent
         while (list && list.positionViewAtIndex === undefined)
             list = list.parent
         list.contentY = r.mapToItem(list.contentItem, 0, 0).y
-        var y = Math.min(r.height, list.height) / 2
         log = []
-        tools.mouse(r, "press", r.width / 2, y)
-        tools.mouse(r, "release", r.width / 2, y + list.height)
+        tools.mouse(r, "press", r.width / 2, Math.min(r.height, list.height) / 2)
+        return { "row": r, "list": list }
+    }
+
+    function press(page, name) {
+        var at = down(page, name)
+        if (!at)
+            return
+        tools.mouse(at.row, "release", at.row.width / 2, at.row.height + at.list.height)
+        expect(pageStack.currentPage === page && !pageStack.busy, name + ": letting go off the row opens nothing")
     }
 
     function starts(page, name, what) {
@@ -96,16 +103,26 @@ ApplicationWindow {
                what + ": finger down starts its decode, let go off the row drops it: " + JSON.stringify(log))
     }
 
+    function shown(page) {
+        return !pageStack.busy && pageStack.currentPage === page && page.status === PageStatus.Active
+    }
+
+    function back() {
+        var below = pageStack.previousPage()
+        pageStack.pop(null, PageStackAction.Immediate)
+        waitFor(function () { return shown(below) }, "the page below")
+    }
+
     function holdDrops(page, name, what) {
-        var r = row(page, name)
-        log = []
-        tools.mouse(r, "press", r.width / 2, Math.min(r.height, 20) / 2)
-        r.pressAndHold(null)
+        var at = down(page, name)
+        if (!at)
+            return
+        at.row.pressAndHold(null)
         expect(log.length === 2 && log[1].source === "" && log[1].status !== Image.Ready,
                what + ": hold drops it: " + JSON.stringify(log))
-        tools.mouse(r, "release", r.width / 2, r.height * 4)
-        if (r.menuOpen)
-            r.closeMenu()
+        tools.mouse(at.row, "release", at.row.width / 2, at.row.height * 4)
+        if (at.row.menuOpen)
+            at.row.closeMenu()
     }
 
     function startsNone(page, name, what) {
@@ -114,8 +131,8 @@ ApplicationWindow {
     }
 
     function open(url, props) {
-        pageStack.push(url, props, PageStackAction.Immediate)
-        var page = pageStack.currentPage
+        var page = pageStack.push(url, props, PageStackAction.Immediate)
+        waitFor(function () { return shown(page) }, url + " shown")
         prefetch = findAll(page, function (x) { return x.objectName === "viewerPrefetch" }, [])[0] || null
         expect(prefetch !== null, url + ": the page has a prefetch")
         return page
@@ -124,12 +141,17 @@ ApplicationWindow {
     function checkSearch() {
         var page = open(Qt.resolvedUrl("../../qml/pages/SearchPage.qml"), { "rootUri": folder.slice(0, -1) })
         var field = findAll(page, function (x) { return x.objectName === "searchField" }, [])[0]
+        var list = findAll(page, function (x) { return x.objectName === "searchList" }, [])[0]
+        var panel = findAll(page, function (x) { return x.dock === Dock.Bottom && x.visibleSize !== undefined }, [])[0]
         field.text = "a"
-        waitFor(function () { return row(page, "search.jpg") !== null && row(page, "album.jpg") !== null }, "search results")
+        waitFor(function () {
+            return !list.model.running && !panel.expanded
+                   && row(page, "search.jpg") !== null && row(page, "album.jpg") !== null
+        }, "search results, the progress panel closed")
         starts(page, "search.jpg", "search, image")
         holdDrops(page, "search.jpg", "search")
         startsNone(page, "album.jpg", "search, folder")
-        pageStack.pop(null, PageStackAction.Immediate)
+        back()
     }
 
     function checkRecents() {
@@ -137,7 +159,7 @@ ApplicationWindow {
         starts(page, "recent.jpg", "recents, image")
         holdDrops(page, "recent.jpg", "recents")
         startsNone(page, "sent.jpg", "recents, transferred")
-        pageStack.pop(null, PageStackAction.Immediate)
+        back()
     }
 
     function checkHome() {
@@ -159,7 +181,9 @@ ApplicationWindow {
             installed = tools.installFixture(Qt.resolvedUrl("host/fixtures/photo.jpg"), folder + names[i]) && installed
         if (!expect(installed, "fixtures installed"))
             return
-        pageStack.push(rootComponent, {}, PageStackAction.Immediate)
+        var root = pageStack.push(rootComponent, {}, PageStackAction.Immediate)
+        if (!waitFor(function () { return shown(root) }, "the root page"))
+            return
         checkSearch()
         checkRecents()
         checkHome()
