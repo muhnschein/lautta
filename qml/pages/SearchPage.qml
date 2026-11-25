@@ -122,7 +122,7 @@ Page {
         showMode()
     }
     onColumnsChanged: fitGrid()
-    Component.onCompleted: showMode()
+    Component.onCompleted: if (gridMode) showMode()
 
     SearchModel {
         id: searchModel
@@ -412,6 +412,8 @@ Page {
         }
         visible: !recentView.visible
         clip: true
+        model: searchModel
+        delegate: listRow
 
         section {
             property: "section"

@@ -186,7 +186,7 @@ ApplicationWindow {
                 var dates = win.named("dateChoices")
                 win.expect(dates.shown && dates.height > 0, "the date pill opens its choices")
                 win.checkLayout("choices open")
-                win.choice(dates, "today").clicked()
+                win.choice(dates, "today").clicked(null)
                 win.expect(!dates.shown, "a choice closes the choices")
                 win.expect(win.pill("datePill").checked, "a chosen date lights its pill")
                 win.next()
@@ -200,7 +200,7 @@ ApplicationWindow {
                 var device = win.choice(scopes, "device")
                 if (!device || !win.choice(scopes, "folder"))
                     return win.fail("scope choices name the folder and the device")
-                device.clicked()
+                device.clicked(null)
                 win.next()
                 break
             case 7:
