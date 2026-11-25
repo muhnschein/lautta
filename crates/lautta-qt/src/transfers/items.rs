@@ -245,7 +245,7 @@ pub(super) fn summary_json(core: &lautta_core::app::Core, id: i64, book: &Progre
         "finishedMs": s.finished_ms,
         "direction": direction,
         "destination": core.locations.display_address(&s.dest),
-        "destName": loc_name(&s.dest),
+        "destName": core.display_title(&s.dest),
         "sourceAddress": source_dir.as_ref().map(|u| core.locations.display_address(u)),
         "sourceName": source_dir.as_ref().map(loc_name),
         "verifyChecksums": s.options.verify_checksums,
@@ -372,8 +372,8 @@ mod tests {
         assert_eq!(v["bytesDone"], 5);
         assert_eq!(v["itemsDone"], 1);
         assert_eq!(v["eta"], -1);
-        assert!(v["destination"].as_str().unwrap().starts_with("file://"));
-        assert!(v["sourceAddress"].as_str().unwrap().ends_with("/Documents"));
+        assert_eq!(v["destination"], "Downloads");
+        assert_eq!(v["sourceAddress"], "Documents");
         assert_eq!(v["verifyChecksums"], false);
     }
 }

@@ -83,11 +83,7 @@ async fn the_list_groups_questions_and_history() {
     assert_eq!(rows[0].direction.name(), "local");
     assert_eq!(rows[0].kind_name(), "copy");
     assert_eq!(rows[0].summary.title, "a.txt");
-    assert!(
-        rows[0].dest_address.starts_with("file://"),
-        "{}",
-        rows[0].dest_address
-    );
+    assert_eq!(rows[0].dest_address, "Downloads");
 
     let questions = h.core.question_list(id).unwrap();
     assert_eq!(questions.len(), 1);
@@ -118,6 +114,40 @@ async fn the_list_groups_questions_and_history() {
     assert_eq!(h.core.clear_history(), 1);
     assert!(h.core.transfer_rows(&book).is_empty());
     assert_eq!(h.core.clear_history(), 0);
+}
+
+#[tokio::test]
+async fn a_task_names_the_folder_it_copies_to() {
+    let h = home().await;
+    write(&h.root.join("Documents/a.txt"), b"a");
+    std::fs::create_dir_all(h.root.join("Downloads/Inbox")).unwrap();
+    for dest in ["lautta://user-downloads/Inbox", "lautta://user-downloads/"] {
+        let started = h
+            .core
+            .copy_or_move(
+                OperationKind::Copy,
+                vec![uri("lautta://user-documents/a.txt")],
+                uri(dest),
+            )
+            .await
+            .unwrap();
+        let Started::Transfer(id) = started else {
+            panic!("small copies start at once")
+        };
+        h.core
+            .engine
+            .wait_for(id, |s| s.state.is_finished())
+            .await
+            .unwrap();
+    }
+    let mut names: Vec<String> = h
+        .core
+        .transfer_rows(&ProgressBook::default())
+        .into_iter()
+        .map(|r| r.dest_name)
+        .collect();
+    names.sort();
+    assert_eq!(names, ["Downloads", "Inbox"]);
 }
 
 #[tokio::test]
