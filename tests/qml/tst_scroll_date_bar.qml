@@ -8,6 +8,7 @@ ApplicationWindow {
     id: win
 
     property bool reachedEnd
+    property bool scenarioRunning: true
     readonly property real day: 86400000
     readonly property real now: Date.now()
 
@@ -144,7 +145,7 @@ ApplicationWindow {
     Timer {
         interval: 100
         repeat: true
-        running: !win.reachedEnd
+        running: win.scenarioRunning
         onTriggered: {
             if (!win.listView || !win.dateBar)
                 return
@@ -153,6 +154,7 @@ ApplicationWindow {
             win.checkShape()
             win.checkDragMakesRoom()
             win.reachedEnd = true
+            win.scenarioRunning = false
         }
     }
 }
