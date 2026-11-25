@@ -68,7 +68,9 @@ ApplicationWindow {
 
     function checkMenu(viewer) {
         var entry = findAll(viewer, function (x) { return x.text === qsTrId("lautta-viewers-pdf-pages-menu") }, [])
-        expect(entry.length === 1 && entry[0].visible, "the pulley has Pages")
+        var menus = findAll(viewer, function (x) { return x._isPullDownMenu === true }, [])
+        expect(entry.length === 1 && menus.length === 1 && isInside(menus[0], entry[0]),
+               "the pulley has Pages: " + entry.length + " " + menus.length)
     }
 
     function checkPages(viewer, label) {

@@ -831,12 +831,13 @@ async fn page_thumbnails_are_small_and_follow_a_changed_file() {
         PdfFailure::Pdf(lautta_pdf::PdfError::NoSuchPage)
     );
     h.nas
-        .add_file("docs/thumbs-overview.pdf", &build(&[page(300, 100, "")]), 2);
+        .add_file("docs/thumbs-overview.pdf", &build(&[page(100, 200, "")]), 2);
     h.core.open_pdf(&u, None).await.unwrap();
     let changed = h.core.pdf_page_thumb(&u, 0, 300).await.unwrap();
+    assert_eq!((changed.width, changed.height), (225, 450));
     assert_eq!(
-        (changed.width, changed.height),
-        (300, 100),
+        changed.rgba[at..at + 4],
+        [255, 255, 255, 255],
         "the changed file, not the kept thumbnail"
     );
 }
