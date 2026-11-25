@@ -88,7 +88,6 @@ ApplicationWindow {
         return button ? button.visible : null
     }
 
-    // Page opened before the clipboard changes: what it offers follows the clipboard without a new page.
     function expectState(hint, paste, what) {
         waitFor(function () { return shownHint() === hint }, function () { return what + ": hint " + hint + ", not " + shownHint() })
         expect(pulleyPaste() === paste, what + ": pulley " + (paste ? "has" : "has no") + " Paste")

@@ -31,7 +31,6 @@ Item {
     readonly property var trail: path.trail
     readonly property bool selecting: selectionMode
     readonly property bool gridMode: dir.viewMode === "grid"
-    // Paste row, Paste here and empty hint. Reads clipboardCount: canPasteInto is a call, binds to nothing.
     readonly property bool canPaste: dir.writable && App.clipboardCount > 0 && App.canPasteInto(uri)
     property string pendingName
     readonly property Item flickable: gridMode ? grid : list
