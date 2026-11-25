@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Videos ending in .ts, as TV and camera recordings do, show the video icon in folders on this device and open in the video player, no longer as code in the text viewer. TypeScript files ending in .ts still open as code. .mts and .m2ts files are videos too ([#160](https://github.com/muhnschein/lautta/issues/160)).
 - A compressed single file such as log.gz, dump.sql.xz, data.json.zst or a .bz2 file opens like other compressed files, with that one file inside to view or extract. It no longer fails with "not a supported archive" ([#159](https://github.com/muhnschein/lautta/issues/159)).
 - Small things: *More* in the image viewer shows icons, as *More actions* does; *Checksums* names its file; *Settings › Transfers* asks before operations of "Over 1000 items or 1 GB", no longer "953.7 MB" ([#214](https://github.com/muhnschein/lautta/issues/214)).
 - Long code lines in the text viewer wrap at their own indent, so wrapped parts line up with the code above them ([#211](https://github.com/muhnschein/lautta/issues/211)).

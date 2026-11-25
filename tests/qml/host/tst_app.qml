@@ -33,6 +33,9 @@ QtObject {
         check(App.viewerFor("song.flac", "") === "audio", "audio viewer")
         check(App.viewerFor("report.pdf", "") === "pdf", "pdf has its own viewer")
         check(App.viewerFor("report.docx", "") === "external", "office documents go to Open with")
+        check(App.viewerFor("app.ts", "") === "text", ".ts without a video type is TypeScript")
+        check(App.viewerFor("rec.ts", "video/mp2t") === "video", ".ts with a video type is MPEG-TS")
+        check(App.viewerFor("clip.m2ts", "") === "video", "M2TS is video")
 
         check(App.setting("remorse_seconds") === 5, "default remorse")
         check(App.setSetting("remorse_seconds", JSON.stringify(8)), "setSetting accepts")
