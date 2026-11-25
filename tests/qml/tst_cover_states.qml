@@ -10,6 +10,7 @@ ApplicationWindow {
     id: win
 
     property bool scenarioRunning: true
+    property bool scenarioStarted
     property bool reachedEnd
     readonly property string base: "lautta://user-documents/Cover121/"
     readonly property var files: ["a.md", "b.md", "c.md", "d.md", "e.md", "f.md", "g.md", "h.md", "i.md", "j.md", "photo.jpg"]
@@ -485,8 +486,9 @@ ApplicationWindow {
 
     Timer {
         interval: 1
-        running: win.home !== undefined && win.home.status === PageStatus.Active && !pageStack.busy
+        running: !win.scenarioStarted && win.home !== undefined && win.home.status === PageStatus.Active && !pageStack.busy
         onTriggered: {
+            win.scenarioStarted = true
             if (!win.makeFolder()) {
                 win.scenarioRunning = false
                 return
