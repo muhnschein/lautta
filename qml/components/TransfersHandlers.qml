@@ -33,19 +33,21 @@ Item {
         if (dialogOpen || queue.length === 0)
             return
         var entry = queue.shift()
-        var dialog = pageStack.push(Qt.resolvedUrl("../dialogs/ConflictDialog.qml"), entry.props)
-        if (!dialog) {
-            delete asked[entry.key]
-            return
-        }
         dialogOpen = true
-        var done = function() {
-            delete asked[entry.key]
-            dialogOpen = false
-            next()
-        }
-        dialog.accepted.connect(done)
-        dialog.rejected.connect(done)
+        pages.push(Qt.resolvedUrl("../dialogs/ConflictDialog.qml"), entry.props, function (dialog) {
+            var done = function () {
+                delete asked[entry.key]
+                dialogOpen = false
+                next()
+            }
+            if (!dialog) {
+                delete asked[entry.key]
+                dialogOpen = false
+                return
+            }
+            dialog.accepted.connect(done)
+            dialog.rejected.connect(done)
+        })
     }
 
     function askFirstOpen(transferId) {
@@ -62,6 +64,10 @@ Item {
         else
             showTransfers()
         __silica_applicationwindow_instance.activate()
+    }
+
+    PageQueue {
+        id: pages
     }
 
     KeepAlive {
