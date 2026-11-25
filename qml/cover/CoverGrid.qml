@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Caption-less tiles of a model's first rows; last row fades out. Rows carry what a folder row
-// does (`isDir`, `category`, `thumbnailSource`, `mimeType`, text preview), or `uri` only, or `placeIcon`.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -18,7 +16,6 @@ Item {
         return row[name] === undefined || row[name] === null ? fallback : row[name]
     }
 
-    // `uri` only: core tells the rest.
     function told(row) {
         if (row.thumbnailSource !== undefined || row.placeIcon !== undefined || !row.uri)
             return row
@@ -40,7 +37,6 @@ Item {
         delegate: CoverTile {
             id: cell
 
-            // Folder rows bring their text; a recent's is asked here.
             readonly property bool ownText: row.textPreview !== undefined
             readonly property alias textAsked: lines.uri
             readonly property var row: grid.told(typeof modelData !== "undefined" ? modelData : model)
@@ -54,7 +50,6 @@ Item {
             previewText: ownText ? row.textPreview : lines.text
             previewMono: grid.field(row, "textPreviewMono", grid.field(row, "textMono", false))
             typeIcon: grid.field(row, "typeIcon", "")
-            // List view never asked for the text; folder model reads it once per file.
             Component.onCompleted: if (grid.field(row, "textThumb", false) && view.model.requestPreview)
                                        view.model.requestPreview(row.uri)
 

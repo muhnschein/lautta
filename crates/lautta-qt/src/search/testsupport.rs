@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Host QML tests: files below `$HOME` and a way to let queued results arrive (test runner spins
-//! the event loop only briefly). No page uses it.
 
 use cpp::cpp;
 use qmetaobject::prelude::*;
@@ -16,7 +14,6 @@ cpp! {{
 pub struct SearchTestSupport {
     base: qt_base_class!(trait QObject),
     spin: qt_method!(fn(&self, ms: i32)),
-    /// SDK check runs with an empty home inside the build sandbox.
     prepare: qt_method!(fn(&self)),
     write: qt_method!(fn(&self, rel: QString, text: QString, mtime_secs: i64) -> bool),
     exists: qt_method!(fn(&self, rel: QString) -> bool),
@@ -33,7 +30,6 @@ fn path_of(rel: &QString) -> Option<PathBuf> {
 
 impl SearchTestSupport {
     fn spin(&self, ms: i32) {
-        // SAFETY: plain Qt calls on the thread that owns the event loop.
         unsafe {
             cpp!([ms as "int"] {
                 QElapsedTimer t;

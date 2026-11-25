@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Checksums (SCR-61..63) and Verify files (SCR-64): `ChecksumModel` hashes one file with one
-//! algorithm, `VerifyModel` checks a checksum list. Work runs in core; results come back queued.
 
 use crate::json::to_json;
 use crate::operations::{error_parts, parse_uri};
@@ -19,7 +17,6 @@ pub fn register() {
     qml_register_type::<VerifyModel>(&crate::qml_uri(), 1, 0, &crate::cstr("VerifyModel"));
 }
 
-/// `[{ id, label }]` of `group` (`common` or `more`) as JSON.
 pub fn algorithms_json(group: &str) -> String {
     let list: &[Algorithm] = if group == "more" {
         &Algorithm::MORE
@@ -33,7 +30,6 @@ pub fn algorithms_json(group: &str) -> String {
     to_json(&rows)
 }
 
-/// Last path component of a URI or a plain name says it is a checksum list.
 pub fn is_checksum_list(name_or_uri: &str) -> bool {
     let name = match lautta_core::Uri::parse(name_or_uri) {
         Ok(uri) => uri.name().map(<[u8]>::to_vec).unwrap_or_default(),
@@ -42,7 +38,6 @@ pub fn is_checksum_list(name_or_uri: &str) -> bool {
     list::list_kind(&name).is_some()
 }
 
-/// Fraction done, -1 while the size is unknown.
 fn fraction(done: u64, total: Option<u64>) -> f64 {
     match total {
         Some(0) => 1.0,
@@ -55,7 +50,6 @@ fn lossy(name: &[u8]) -> QString {
     QString::from(String::from_utf8_lossy(name).as_ref())
 }
 
-/// Stops core work when the page (and its model) goes away.
 struct Running(Cancel);
 
 impl Drop for Running {
@@ -69,12 +63,10 @@ enum Step {
     Done(Result<(Vec<u8>, Option<Verdict>)>),
 }
 
-/// One file, one algorithm. `verdict`: `matches`, `differs` or empty, `verdictList` names the list.
 #[derive(QObject, Default)]
 pub struct ChecksumModel {
     base: qt_base_class!(trait QObject),
     uri: qt_property!(QString; NOTIFY changed),
-    /// Algorithm id (`sha256`, …).
     algorithm: qt_property!(QString; NOTIFY changed),
     label: qt_property!(QString; NOTIFY changed),
     running: qt_property!(bool; NOTIFY changed),
@@ -90,12 +82,10 @@ pub struct ChecksumModel {
     start: qt_method!(fn(&mut self) -> bool),
 
     run: Option<Running>,
-    /// Steps of an earlier run still queued are dropped.
     generation: u64,
 }
 
 impl ChecksumModel {
-    /// False when URI or algorithm is unknown; else starts, dropping any earlier run.
     fn start(&mut self) -> bool {
         let (Some(core), Some(uri), Some(algorithm)) = (
             core(),
@@ -120,7 +110,6 @@ impl ChecksumModel {
         handle().spawn(async move {
             let res = async {
                 let digest = core.checksum(&uri, algorithm, progress, &cancel).await?;
-                // A list that can't be read gives no verdict; the digest stands.
                 let listed = core.lists_naming(&uri, &cancel).await.unwrap_or_default();
                 cancel.check()?;
                 let v = verdict(&listed, algorithm, &digest);
@@ -211,17 +200,14 @@ pub struct Row {
     pub progress: f64,
 }
 
-/// What a [`VerifyEvent`] did to the rows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Change {
     Reset,
     Updated(usize),
-    /// Row moved from `.0` to `.1` (destination index before removal, as `beginMoveRows`).
     Moved(usize, usize),
     None,
 }
 
-/// Rows in list order, problems moved to the top as they are found (in order found).
 #[derive(Default)]
 pub struct VerifyRows {
     pub rows: Vec<Row>,
@@ -276,7 +262,6 @@ impl VerifyRows {
         }
     }
 
-    /// Carries out [`Change::Moved`]: model must announce it first.
     pub fn move_row(&mut self, from: usize, to: usize) {
         let row = self.rows.remove(from);
         self.rows.insert(to, row);
@@ -290,7 +275,6 @@ pub struct VerifyModel {
     base: qt_base_class!(trait QAbstractListModel),
     uri: qt_property!(QString; NOTIFY changed),
     running: qt_property!(bool; NOTIFY changed),
-    /// Rows done, of `count`.
     checked: qt_property!(i32; NOTIFY changed),
     count: qt_property!(i32; NOTIFY changed),
     errorKind: qt_property!(QString; NOTIFY changed),

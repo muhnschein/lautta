@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Host has no GStreamer backend, so no player ever loads: a stand-in with the player's `status`.
 import QtQuick 2.6
 import QtMultimedia 5.6 as MM
 import Lautta 1.0
@@ -19,6 +18,11 @@ Item {
             console.error("FAILED: " + what)
     }
 
+    function settleWithNothingToWaitFor() {
+        gc()
+        tools.pump(50)
+    }
+
     function until(done) {
         for (var i = 0; i < 200 && !done(); ++i)
             tools.pump(25)
@@ -30,11 +34,11 @@ Item {
     Component {
         id: pageComponent
         Item {
-            property alias player: player
+            property alias player: statusOnlyStandIn
             property alias output: output
 
             QtObject {
-                id: player
+                id: statusOnlyStandIn
                 property int status
             }
             Item { id: output }
@@ -51,11 +55,9 @@ Item {
         check(keptOutput.parent === null, "kept output leaves the page")
         page.destroy()
         until(function() { return page === null })
-        // Fixed wait: "nothing deletes them", no event to wait for (garbage collector, deferred deletes).
-        gc()
-        tools.pump(50)
+        settleWithNothingToWaitFor()
         check(page === null, "page gone")
-        check(keptPlayer !== null && keptOutput !== null, "player and output outlive the page while loading")
+        check(keptPlayer !== null && keptOutput !== null, "nothing deletes player and output while loading")
         keptPlayer.status = buffered
         until(function() { return keptPlayer === null && keptOutput === null })
         check(keptPlayer === null && keptOutput === null, "both go once the player leaves loading")

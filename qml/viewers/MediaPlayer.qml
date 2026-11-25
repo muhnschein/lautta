@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-// Named MediaPlayer: QtMultimedia types via `MM` prefix.
 import QtMultimedia 5.6 as MM
 import Nemo.KeepAlive 1.2
 import Lautta 1.0
@@ -25,12 +24,10 @@ Page {
     readonly property real duration: local ? localPlayer.duration : remote.duration
     readonly property string errorKind: local ? remote.playerErrorKind(localPlayer.error) : remote.errorKind
     property bool chrome: true
-    // Audio in landscape: cover left, the rest right.
     readonly property bool sideBySide: !video && isLandscape
     readonly property real paneX: sideBySide ? width / 2 : 0
     readonly property real paneWidth: sideBySide ? width / 2 : width
     readonly property string coverUrl: !video && info.cover !== "" ? "image://lautta-cover/" + uri : ""
-    // No title tag: file name without its extension.
     readonly property string trackTitle: {
         if (info.title !== "")
             return info.title
@@ -57,6 +54,13 @@ Page {
             localPlayer.seek(target)
         else
             remote.seek(target)
+    }
+
+    function keepPipelineIfStuck() {
+        var media = local ? localPlayer : remote.mediaObject
+        tools.keepWhileLoading(media, output)
+        if (local)
+            tools.keepWhileLoading(media, localPlayer)
     }
 
     allowedOrientations: Orientation.All
@@ -86,11 +90,7 @@ Page {
             localPlayer.stop()
         else
             remote.stop()
-        // Player stuck loading: tearing it or its output down would block the app.
-        var media = local ? localPlayer : remote.mediaObject
-        tools.keepWhileLoading(media, output)
-        if (local)
-            tools.keepWhileLoading(media, localPlayer)
+        keepPipelineIfStuck()
     }
 
     DisplayBlanking {
@@ -102,7 +102,6 @@ Page {
         color: page.video ? "black" : "transparent"
     }
 
-    // Glow: blurred, tiny copy of the cover stretched over the page, dimmed so text stays legible.
     Image {
         id: glow
 
@@ -161,7 +160,6 @@ Page {
         }
     }
 
-    // Space between header and controls; portrait centres cover and track info in it as one block.
     Item {
         id: stage
         x: page.paneX
@@ -302,8 +300,6 @@ Page {
             maximumValue: Math.max(1, page.duration)
             enabled: page.duration > 0
             handleVisible: page.duration > 0
-            valueText: ViewerText.clock(value)
-            label: page.duration > 0 ? ViewerText.clock(page.duration) : ""
             onReleased: page.seek(value)
 
             Binding {
@@ -311,6 +307,28 @@ Page {
                 property: "value"
                 value: page.position
                 when: !slider.down
+            }
+        }
+
+        Item {
+            width: parent.width
+            height: elapsed.height
+
+            Label {
+                id: elapsed
+
+                objectName: "elapsedTime"
+                x: slider.leftMargin
+                text: page.duration > 0 ? ViewerText.clock(slider.value) : ""
+                font.pixelSize: Theme.fontSizeSmall
+                color: slider.highlighted ? Theme.highlightColor : Theme.primaryColor
+            }
+            Label {
+                objectName: "totalTime"
+                x: parent.width - slider.rightMargin - width
+                text: page.duration > 0 ? ViewerText.clock(page.duration) : ""
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.secondaryColor
             }
         }
 

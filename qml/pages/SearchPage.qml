@@ -42,8 +42,6 @@ Page {
             searched = true
     }
 
-    // Model query set here, not bound: filters dialog sets it too, which would drop a binding. Text
-    // equal to the query is the dialog's own name coming back, already searched.
     function edited(text) {
         if (text === searchModel.query)
             return
@@ -79,8 +77,6 @@ Page {
         anchors.fill: heading
     }
 
-    // Field and filter summary sit above the list, not in its header: each search resets model,
-    // list makes first new row current and takes focus, so a header field lost the keyboard.
     Column {
         id: heading
 
@@ -152,7 +148,6 @@ Page {
             bottom: parent.bottom
             bottomMargin: progressPanel.visibleSize
         }
-        // Rows otherwise draw over heading when scrolled.
         clip: true
         model: searchModel
 

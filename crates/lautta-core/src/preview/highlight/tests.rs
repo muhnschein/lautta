@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Highlighting tests: grammar choice, classes of samples, state across lines, limits, and that Qt
-//! shows exactly the file's characters (model of Qt's StyledText parser reads output back).
 
 use super::*;
 
@@ -254,7 +252,6 @@ fn thread_cpu_time() -> Duration {
     Duration::new(t.tv_sec as u64, t.tv_nsec as u32)
 }
 
-/// Bound on this thread's CPU time: other tests stealing cores can't push it over.
 fn colour_against_the_clock(name: &str, text: String) -> ColouredText {
     let limits = Limits {
         budget: Duration::from_secs(2),
@@ -280,7 +277,6 @@ fn pathological_files_stay_within_their_limits() {
     assert_eq!((doc.coloured_lines(), doc.line_count()), (0, 1));
     let doc = colour_against_the_clock("x.sh", "echo \"$(echo \"$( [[ ${a[(((1\n".repeat(100_000));
     assert!(doc.coloured_lines() > 0);
-    // Markup openers just under the limit: tens of ms a line, so time runs out.
     let doc = colour_against_the_clock("x.md", ("*_[`<".repeat(800) + "\n").repeat(2000));
     assert!(doc.coloured_lines() > 0 && doc.coloured_lines() < doc.line_count());
     let doc = colour_against_the_clock("x.html", "<a href=\"".repeat(400).repeat(1000));
@@ -394,7 +390,6 @@ fn colours_follow_tabs_and_rows() {
         doc.styled_row(0, 0, "a   b", &p),
         "a<font color=\"#000001\">&nbsp;&nbsp;&nbsp;b</font>"
     );
-    // Columns are UTF-16 units: tab after an emoji is two columns.
     let doc = doc_of(&[
         ("\u{1F600}\t", Class::Plain),
         ("x", Class::Keyword),
@@ -423,8 +418,6 @@ fn colours_follow_tabs_and_rows() {
     }
 }
 
-/// Mirrors Qt 5.6 qquickstyledtext.cpp: fails on any tag but lautta's font tags, any entity but the
-/// five escapes, and NUL (where Qt stops).
 fn shown_by_qt(styled: &str) -> Vec<(char, Option<String>)> {
     let mut qt = QtParser {
         shown: Vec::new(),
@@ -521,8 +514,6 @@ impl QtParser {
     }
 }
 
-/// Rows as `preview::rows` makes them, with starts: tabs to next multiple of four, row ends after 1000
-/// columns or before (never inside a surrogate pair), UTF-16 units.
 fn rows_of(line: &str) -> Vec<(usize, String)> {
     let mut expanded = String::new();
     let mut column = 0;
@@ -550,7 +541,6 @@ fn rows_of(line: &str) -> Vec<(usize, String)> {
     rows
 }
 
-/// Whitespace as space, NUL as U+FFFD.
 fn expected(row: &str) -> String {
     row.chars()
         .map(|c| match c {
@@ -610,7 +600,6 @@ fn check_shown(doc: &ColouredText, index: usize, palette: &Palette) {
     }
 }
 
-/// Deterministic xorshift: failures reproduce.
 struct Rng(u64);
 
 impl Rng {
@@ -734,8 +723,6 @@ fn the_model_of_qt_catches_unescaped_text() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_job_colours_off_the_runtime() {
-    // Budget cannot run out: coverage build on busy runner can exceed LIMITS' 3 s, then `finish`
-    // races GRACE.
     let limits = Limits {
         budget: Duration::from_secs(600),
         ..LIMITS
@@ -747,8 +734,6 @@ async fn a_job_colours_off_the_runtime() {
     assert_eq!(doc.coloured_lines(), doc.line_count());
 }
 
-/// Job that colours `text` as markdown only once `go` is sent: "not ready yet" is certain. Budget
-/// cannot run out on a busy runner.
 fn gated_job(deadline: Instant) -> (ColourJob, std::sync::mpsc::Sender<()>) {
     let (go, gate) = std::sync::mpsc::channel::<()>();
     let limits = Limits {
@@ -775,7 +760,6 @@ async fn a_job_not_ready_comes_back_and_finishes_later() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_job_that_overruns_its_time_is_dropped() {
     let (job, go) = gated_job(Instant::now() + Duration::from_millis(50));
-    // Only if `finish` ignores the deadline: frees the job so the test fails instead of hanging.
     let late = go.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(30));

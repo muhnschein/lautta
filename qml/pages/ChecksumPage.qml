@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Checksum result (SCR-63): one algorithm of one file. Tap value copies it; a list in the same
-// folder that names the file adds Matches or Doesn't match. Leaving the page stops the read.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0

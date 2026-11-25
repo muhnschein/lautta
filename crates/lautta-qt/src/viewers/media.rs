@@ -1,15 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Plays a (remote) media file with QtMultimedia without downloading first.
-//!
-//! QML's `MediaPlayer` cannot take a `QIODevice`: this type owns a `QMediaPlayer` and exposes it as
-//! `mediaObject` (what `VideoOutput { source: mediaSource }` looks for). The player reads through a
-//! `QIODevice` subclass whose `readData` calls into Rust, where a [`ReadAhead`] keeps the next
-//! 4 MiB of the bridge read handle cached, fetched in the background.
-//!
-//! If the device's GStreamer backend cannot play from or seek in a `QIODevice`, the player reports
-//! a resource or format error and `MediaSource` falls back to download-then-play (`downloading`,
-//! `downloadProgress`), also selectable up front with `preferDownload`. `mode` tells which path is
-//! in use.
 
 use super::{parse_uri, qstr, run_then};
 use crate::runtime::{core, handle};
@@ -43,8 +32,6 @@ cpp! {{
     #include <QtQml/QQmlEngine>
     #include <QtQuick/QQuickItem>
 
-    // Random-access device over a Rust `ReadAhead`. Reads run on the GUI thread (Qt 5.6 `QGstAppSrc`)
-    // and block it only when the bytes are not cached yet (start, seek). Unbuffered: a held read must not come from QIODevice's buffer either.
     class LauttaMediaDevice : public QIODevice {
     public:
         LauttaMediaDevice(void *ctx, qint64 size) : m_ctx(ctx), m_size(size)
@@ -63,7 +50,6 @@ cpp! {{
             m_held = false;
             return QIODevice::seek(pos);
         }
-        // Reads give nothing until the next seek() or until the events posted so far are handled.
         void hold() { m_held = true; }
         void releaseLater() { QCoreApplication::postEvent(this, new QEvent(releaseEvent())); }
         bool held() const { return m_held; }
@@ -139,9 +125,6 @@ cpp! {{
         m->player->setMedia(QMediaContent(QUrl::fromLocalFile(path)));
     }
 
-    // Qt 5.6 QGstAppSrc reads and pushes on the GUI thread, queued from GStreamer's need-data. A
-    // read still queued when the seek flushes appsrc lands after the flush and is taken as data
-    // for the new position. Queued reads run first; those queued meanwhile get nothing.
     static void lauttaMediaSeek(LauttaMedia *m, qint64 ms)
     {
         if (!m->device) {
@@ -159,7 +142,6 @@ cpp! {{
         m->device->releaseLater();
     }
 
-    // Registered enum type: raw int, Qt 5.6 QVariant may not convert it to int.
     static int lauttaEnumValue(const QVariant &v)
     {
         if (QMetaType::typeFlags(v.userType()) & QMetaType::IsEnumeration)
@@ -167,10 +149,6 @@ cpp! {{
         return v.toInt();
     }
 
-    // gst-droid's video decoder can block its streaming thread for good on video it cannot decode
-    // (CAVS, 10-bit H.264): no preroll, status stays Loading. Pipeline teardown (player deleted,
-    // VideoOutput unbound or deleted) waits on that thread: GUI thread blocked. So `obj` lives on
-    // unparented, deleted on `source`'s next status change (away from Loading: notify only on change).
     static bool lauttaKeepWhileLoading(QObject *source, QObject *obj)
     {
         if (!source || !obj)
@@ -210,8 +188,6 @@ cpp! {{
     }
 }}
 
-/// `obj` outlives its parent while player `source` is stuck loading (`lauttaKeepWhileLoading`).
-/// Both are QObject variants; false when `source` is not loading.
 pub(crate) fn keep_while_loading(source: &QVariant, obj: &QVariant) -> bool {
     cpp!(unsafe [source as "const QVariant*", obj as "const QVariant*"] -> bool as "bool" {
         return lauttaKeepWhileLoading(qvariant_cast<QObject *>(*source), qvariant_cast<QObject *>(*obj));
@@ -223,12 +199,10 @@ fn reader_ptr(r: Arc<ReadAhead>) -> *mut c_void {
 }
 
 fn release_reader(ctx: *mut c_void) {
-    // SAFETY: `ctx` came from `reader_ptr` and the device releases it once.
     drop(unsafe { Arc::from_raw(ctx as *const ReadAhead) });
 }
 
 fn read_into(ctx: *mut c_void, off: i64, buf: *mut u8, want: i64) -> i64 {
-    // SAFETY: the device keeps the reader alive while it can call us.
     let reader = unsafe { &*(ctx as *const ReadAhead) };
     let (Ok(off), Ok(want)) = (u64::try_from(off), usize::try_from(want)) else {
         return -1;
@@ -236,7 +210,6 @@ fn read_into(ctx: *mut c_void, off: i64, buf: *mut u8, want: i64) -> i64 {
     match handle().block_on(reader.read(off, want)) {
         Ok(data) => {
             let n = data.len().min(want);
-            // SAFETY: Qt gives a buffer of at least `want` bytes.
             unsafe { std::ptr::copy_nonoverlapping(data.as_ptr(), buf, n) };
             i64::try_from(n).unwrap_or(-1)
         }
@@ -287,11 +260,9 @@ pub struct MediaSource {
     position: qt_property!(f64; NOTIFY changed),
     duration: qt_property!(f64; NOTIFY changed),
     loading: qt_property!(bool; NOTIFY changed),
-    /// `stream` (QIODevice) or `download` (fallback).
     mode: qt_property!(QString; NOTIFY changed),
     preferDownload: qt_property!(bool; WRITE setPreferDownload NOTIFY changed),
     downloading: qt_property!(bool; NOTIFY changed),
-    /// -1 when the size is unknown.
     downloadProgress: qt_property!(f64; NOTIFY changed),
     errorKind: qt_property!(QString; NOTIFY changed),
     errorMessage: qt_property!(QString; NOTIFY changed),
@@ -301,7 +272,6 @@ pub struct MediaSource {
     pause: qt_method!(fn(&mut self)),
     stop: qt_method!(fn(&mut self)),
     seek: qt_method!(fn(&mut self, ms: f64)),
-    /// Kind for a `QMediaPlayer::Error` code, for players outside this source.
     playerErrorKind: qt_method!(fn(&self, code: i32) -> QString),
 
     media: usize,
@@ -381,7 +351,6 @@ impl MediaSource {
         self.duration = duration;
         self.state = qstr(state);
         self.playing = state == "playing";
-        // Until this source's media is attached, the player's error is the previous source's.
         if code != 0 && self.opened {
             changed |= self.player_failed(code);
         }
@@ -507,7 +476,6 @@ impl MediaSource {
         }
     }
 
-    /// Copy into the private cache, then play that.
     fn start_download(&mut self) {
         let (Some(core), Some(uri)) = (core(), parse_uri(&self.uri)) else {
             return;
@@ -596,7 +564,6 @@ impl Drop for MediaSource {
     fn drop(&mut self) {
         if self.media != 0 {
             let m = self.player_ptr();
-            // Device (and its reader) goes with the player.
             cpp!(unsafe [m as "LauttaMedia*"] { lauttaMediaFree(m); });
         }
     }
@@ -667,9 +634,7 @@ mod tests {
             ReadAhead::new(Arc::from(h)).unwrap()
         });
         let ctx = reader_ptr(Arc::new(reader));
-        // Each step: bytes read, then the first byte. Small reads would fill a QIODevice buffer.
         let got = cpp!(unsafe [ctx as "void*"] -> QString as "QString" {
-            // Posted events need an application object.
             static int argc = 1;
             static char name[] = "test";
             static char *argv[] = {name, nullptr};

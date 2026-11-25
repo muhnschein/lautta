@@ -19,7 +19,6 @@ Item {
             console.error("FAILED: " + what)
     }
 
-    // Hang guard: work of milliseconds gets half a minute.
     function until(cond, what) {
         for (var i = 0; i < 600 && !cond(); ++i)
             tools.pump(50)

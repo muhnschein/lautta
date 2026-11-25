@@ -25,7 +25,6 @@ Item {
         tools.pump(25)
     }
 
-    // Every styled block on: colours must not stop wrapping.
     readonly property string style: "md-heading=#74d4ff,md-accent=#74d4ff,md-secondary=#99ffffff,md-tint=#2174d4ff,md-rule=#47ffffff,md-gap=24,md-code=20,keyword=#ff9be0"
 
     ViewerTools { id: tools }

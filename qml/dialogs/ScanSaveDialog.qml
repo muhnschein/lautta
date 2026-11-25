@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Name and page order of a scan before it is saved as
-// PDF into the folder it was started from. Cancel drops the scan.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -11,12 +10,9 @@ Dialog {
     id: dialog
 
     property string parentUri
-    // Folder view the scan belongs to; told when the scan is left.
     property Item owner
     property QtObject scan
-    // Name to start with; empty: "Scan" and today's date.
     property string name
-    // Why the last save failed, as an error kind; said once.
     property string failure
     property bool shown
     property bool handedOver
@@ -99,7 +95,6 @@ Dialog {
                 text: qsTrId("lautta-scan-pages")
             }
 
-            // Cells placed by hand: a held page must know where its cell is while cells move.
             Item {
                 id: grid
 
@@ -110,13 +105,11 @@ Dialog {
                 objectName: "pageGrid"
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * x
-                // Pages and the plus tile.
                 height: Math.ceil((dialog.pages + 1) / columns) * cellHeight
 
                 Repeater {
                     model: dialog.scan
 
-                    // Held for a second, the page follows the finger; pages it passes make room.
                     BackgroundItem {
                         id: tile
 
@@ -151,7 +144,6 @@ Dialog {
                         Behavior on y { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
                         preventStealing: held
                         highlighted: down || held
-                        // Finger stays on the spot of the page it took, wherever the cell goes.
                         contentItem.x: held ? fingerX - x - pressX : 0
                         contentItem.y: held ? fingerY - y - pressY : 0
                         contentItem.scale: held ? 1.05 : 1
@@ -226,7 +218,6 @@ Dialog {
                     height: grid.cellHeight
                     onClicked: dialog.addPage()
 
-                    // Room a page picture gets in its tile.
                     Item {
                         id: plusRoom
 

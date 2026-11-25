@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Transfers facade end to end on a temporary home. QML runs as a scenario (`scenarioRunning`) in
-//! the real Qt event loop of `qml_check`: each step acts once, then waits for its condition; fails
-//! by name when it never holds. Outcome (disk, engine) is checked here afterwards.
 
 const FLOW: &str = r#"
 import QtQuick 2.6

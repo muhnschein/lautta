@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Places the share target saves to; plain list of `core.locations.locations()`.
 
 use crate::home::{watch_sources, Guard};
 use crate::runtime::core;
@@ -36,7 +35,6 @@ struct Root {
     icon: &'static str,
     status: &'static str,
     attention: String,
-    /// False where the access level netvfs grants adds nothing.
     writable: bool,
 }
 
@@ -45,7 +43,6 @@ pub struct PickerRootsModel {
     base: qt_base_class!(trait QAbstractListModel),
     refresh: qt_method!(fn(&mut self)),
     hasRemote: qt_method!(fn(&self) -> bool),
-    /// Test aid: pumps the Qt event loop so async results arrive inside a synchronous QML test.
     pump: qt_method!(fn(&self, ms: i32)),
     rows: RefCell<Option<Vec<Root>>>,
     watching: Cell<bool>,
@@ -117,7 +114,6 @@ impl PickerRootsModel {
     }
 
     fn pump(&self, ms: i32) {
-        // SAFETY: plain Qt calls on the GUI thread without Rust pointers.
         unsafe {
             cpp!([ms as "int"] {
                 QElapsedTimer timer;

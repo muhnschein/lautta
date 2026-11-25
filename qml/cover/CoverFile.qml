@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// SCR-58 on a viewer: file's picture fills cover, name on dark fade; no picture: glyph.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -14,7 +13,6 @@ Item {
         var json = uri.length > 0 ? App.tileOf(uri) : ""
         return json.length > 0 ? JSON.parse(json) : ({ "name": "", "category": "file", "mimeType": "", "thumbnailSource": "" })
     }
-    // Tests set it.
     property bool pictured: picture.thumbnailReady
 
     FileIcon {

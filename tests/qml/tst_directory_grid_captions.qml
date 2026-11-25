@@ -68,7 +68,6 @@ ApplicationWindow {
         return null
     }
 
-    // No render loop headless: lay out by hand.
     function cells(view) {
         var out = []
         view.flickable.forceLayout()

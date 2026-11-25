@@ -174,7 +174,6 @@ QtQuick.Window {
                 var details = app.pageStack.currentPage
                 var preview = window.named(details, "detailsPreview")
                 window.expect(details !== window.page && preview !== null, "Details opens with its preview")
-                // Cache hit is synchronous; a new decode would still be loading here.
                 window.expect(preview !== null && preview.status === Image.Ready,
                               "the preview takes the viewer's decode: " + (preview ? preview.status : "-"))
                 break

@@ -7,8 +7,6 @@ Item {
     property bool reachedEnd
 
     property var events: []
-    // Name bindings evaluated: selecting or a transfer must not make a row re-read its other roles.
-    // Object, not int: a counter property the binding reads would loop.
     readonly property var nameReads: ({ "n": 0 })
 
     function read(value) {
@@ -40,7 +38,6 @@ Item {
         return null
     }
 
-    // Bounded: a test of "nothing happened" waits the whole time.
     function wait(ms) { pump.pump(ms) }
 
     function until(cond, what) {
