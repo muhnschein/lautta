@@ -267,12 +267,14 @@ ApplicationWindow {
         for (var i = 0; i < all.length; ++i) {
             var cell = all[i]
             var row = cell.parent
+            var lead = row.first === 0 ? Theme.paddingMedium : 0
             var tallest = 0
             for (var k = 0; k < row.children.length; ++k)
                 tallest = Math.max(tallest, row.children[k].implicitHeight)
-            expect(cell.height === row.height && row.height === tallest,
-                   cell.itemName + ": as tall as its row, which is as tall as its tallest cell: "
-                   + [cell.height, row.height, tallest])
+            expect(Math.abs(cell.y - lead) < 0.5 && Math.abs(cell.height - (row.height - lead)) < 0.5
+                   && Math.abs(row.height - (lead + tallest)) < 0.5,
+                   cell.itemName + ": fills its row under the row's lead, the row is its lead plus its tallest cell: "
+                   + [cell.y, cell.height, row.height, lead, tallest])
             expect(cell.height > grid.cellWidth, "cells are taller than wide: " + cell.height + " " + grid.cellWidth)
             var last = find(cell, "gridCaption" + (cell.captions.length - 1))
             var room = cell.implicitHeight - last.mapToItem(cell, 0, last.height).y

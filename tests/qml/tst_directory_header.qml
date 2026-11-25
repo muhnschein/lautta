@@ -128,6 +128,30 @@ ApplicationWindow {
         f.contentY = f.originY
     }
 
+    function checkFirstRow(view, label) {
+        var f = view.flickable
+        var header = named(view, "folderHeader")
+        if (!view.gridMode || !header)
+            return
+        f.contentY = f.originY
+        f.forceLayout()
+        var cells = findAll(f.contentItem, function (x) { return x.captions !== undefined && x.counting !== undefined && x.parent }, [])
+        var tops = []
+        for (var i = 0; i < cells.length; ++i) {
+            var top = Math.round(cells[i].mapToItem(view, 0, 0).y)
+            if (tops.indexOf(top) < 0)
+                tops.push(top)
+        }
+        tops.sort(function (a, b) { return a - b })
+        if (!expect(tops.length > 1, label + ": two rows of tiles: " + tops))
+            return
+        expect(Math.abs(tops[0] - header.height - Theme.paddingMedium) < 1,
+               label + ": the first row keeps a margin under the header: " + tops[0] + " vs " + header.height)
+        var second = cells.filter(function (c) { return Math.round(c.mapToItem(view, 0, 0).y) === tops[1] })[0]
+        expect(Math.abs(second.y) < 0.5 && Math.abs(second.height - second.parent.height) < 0.5,
+               label + ": later rows start at their top: " + second.y + " " + second.height + " " + second.parent.height)
+    }
+
     function checkSelectionHeight(view, label) {
         var f = view.flickable
         var header = named(view, "folderHeader")
@@ -267,6 +291,7 @@ ApplicationWindow {
         if (!view)
             return
         checkFixed(view, label)
+        checkFirstRow(view, label)
         checkSelectionHeight(view, label)
         checkPulley(view, label)
         checkGestures(view, label)
