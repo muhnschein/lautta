@@ -336,10 +336,7 @@ impl Core {
             rate,
             eta_secs,
             questions,
-            dest_name: self
-                .location(&s.dest.location)
-                .map(|l| l.name)
-                .unwrap_or_default(),
+            dest_name: self.display_title(&s.dest),
             dest_address: self.locations.display_address(&s.dest),
             summary: s,
         }

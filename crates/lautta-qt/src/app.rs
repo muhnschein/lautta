@@ -4,9 +4,7 @@ use crate::json::{from_json, json_value_to_qvariant, to_json};
 use crate::runtime::{core, handle, spawn_then};
 use lautta_core::clipboard::{Clipboard, ClipboardMode};
 use lautta_core::entry::Capabilities;
-use lautta_core::mime::{
-    category_of_name, extension_of, from_extension, viewer_for_name, FileCategory, Viewer,
-};
+use lautta_core::mime::{category_of_name, viewer_of, Viewer};
 use lautta_core::settings::Settings;
 use lautta_core::transfer::scheduler::is_bridge_location;
 use lautta_core::trash::now_secs;
@@ -258,22 +256,13 @@ impl App {
     }
 
     fn viewerFor(&self, name_or_uri: QString, mime: QString) -> QString {
+        let local = match (core(), parse_uri(&name_or_uri)) {
+            (Some(c), Some(u)) => c.locations.to_local_path(&u),
+            _ => None,
+        };
         let name = name_part(&name_or_uri.to_string());
-        let category = category_of_name(&name);
-        let mime = if mime.is_empty() {
-            extension_of(&name)
-                .and_then(|e| from_extension(&e))
-                .map(|(m, _)| m.to_owned())
-                .unwrap_or_default()
-        } else {
-            mime.to_string()
-        };
-        let category = if category == FileCategory::Other && !mime.is_empty() {
-            lautta_core::mime::category_from_mime(&mime)
-        } else {
-            category
-        };
-        QString::from(viewer_name(viewer_for_name(&name, category, &mime)))
+        let viewer = viewer_of(&name, &mime.to_string(), local.as_deref());
+        QString::from(viewer_name(viewer))
     }
 
     fn set_clipboard(&mut self, mode: ClipboardMode, uris_json: QString) -> bool {
