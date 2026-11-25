@@ -9,6 +9,7 @@ import "../components/viewers"
 import "../components/ErrorText.js" as ErrorText
 import "../components/FileIcons.js" as FileIcons
 import "../components/Open.js" as Open
+import "../components/PlaceText.js" as PlaceText
 import "../components/home/HomeText.js" as HomeText
 import "../components/home/RowStatus.js" as RowStatus
 
@@ -203,7 +204,7 @@ Page {
             readonly property string subtitle: {
                 switch (kind) {
                 case "favourite":
-                    return model.place
+                    return PlaceText.shown(model.place, App.isRemote(model.uri) && App.locationName(model.uri).length === 0)
                 case "volume":
                     return HomeText.volumeLine(model.free, model.total, model.fs)
                 case "nearby":

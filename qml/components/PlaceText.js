@@ -9,3 +9,11 @@ function around(compose, name) {
         return { "before": "", "rest": compose(name || ""), "named": false }
     return { "before": marked.substring(0, at), "rest": name + marked.substring(at + mark.length), "named": true }
 }
+
+function shown(place, unknownServer) {
+    if (!unknownServer)
+        return place
+    //% "Server"
+    var server = qsTrId("lautta-place-server")
+    return place.length === 0 || place === "/" ? server : server + " › " + place
+}

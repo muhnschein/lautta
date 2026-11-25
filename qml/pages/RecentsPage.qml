@@ -5,6 +5,7 @@ import Sailfish.Silica 1.0
 import Lautta 1.0
 import "../components"
 import "../components/Open.js" as Open
+import "../components/PlaceText.js" as PlaceText
 import "../components/home"
 import "../components/directory"
 import "../components/directory/GridRows.js" as GridRows
@@ -195,7 +196,7 @@ Page {
                 }
                 PlaceLabel {
                     width: parent.width
-                    text: model.place
+                    text: PlaceText.shown(model.place, App.isRemote(model.uri) && App.locationName(model.uri).length === 0)
                     remote: App.isRemote(model.uri)
                     color: row.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
                 }
@@ -330,7 +331,7 @@ Page {
                             left: tile.left
                             right: tile.right
                         }
-                        text: model.place
+                        text: PlaceText.shown(model.place, App.isRemote(model.uri) && App.locationName(model.uri).length === 0)
                         remote: App.isRemote(model.uri)
                         fontSize: Theme.fontSizeTiny
                         horizontalAlignment: Text.AlignHCenter

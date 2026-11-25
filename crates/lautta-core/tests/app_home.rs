@@ -917,6 +917,41 @@ async fn consent_row_until_decided_and_nothing_when_denied() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn before_consent_server_favourites_show_their_path_not_an_account_id() {
+    let fake = account_fake().await;
+    fake.set_consent(Consent::Unknown).await;
+    let e = env(Some(&fake), &["Documents"]).await;
+    let client = e.core.bridge.clone().unwrap();
+    status(&client, BridgeStatus::ConsentUnknown).await;
+    let favourites = &e.core.favourites;
+    favourites
+        .add(&uri("lautta://nv-account:1/Photos"), "Photo archive", None, true)
+        .unwrap();
+    favourites
+        .add(&uri("lautta://nv-account:1/"), "NAS", None, true)
+        .unwrap();
+    favourites
+        .add(&uri("lautta://nv-account:1/Photos/a b.jpg"), "Lake", None, false)
+        .unwrap();
+    let places =
+        |rows: &[Row]| -> Vec<String> { of(rows, "favourites").iter().map(|r| r.place.clone()).collect() };
+    assert_eq!(places(&e.core.home_rows().await), ["/Photos", "/", "/Photos"]);
+    assert_eq!(
+        e.core.place_of(&uri("lautta://vol-9-X/DCIM")),
+        "vol-9-X › DCIM",
+        "only server ids give way to the path"
+    );
+
+    fake.set_consent(Consent::Allowed(Level::Full)).await;
+    status(&client, BridgeStatus::Ready).await;
+    eventually("the account", || e.core.location("nv-account:1").is_some()).await;
+    assert_eq!(
+        places(&e.core.home_rows().await),
+        ["NAS › /Photos", "NAS", "NAS › /Photos"]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn no_socket_means_no_servers_section() {
     let e = open(None, true, &["Documents"]).await;
     assert_eq!(e.core.bridge.as_ref().unwrap().status(), BridgeStatus::Absent);
