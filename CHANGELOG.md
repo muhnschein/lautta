@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- HEIC, HEIF, AVIF and JPEG XL files no longer open in the image viewer only to say "Can't show this image": Sailfish OS has no decoder for them. They show the plain file icon and open with another app, like other files Lautta can't show ([#158](https://github.com/muhnschein/lautta/issues/158)).
 - An empty folder says *Pull down to add*, as the pulley entry is called, and mentions paste only when something on the clipboard can be pasted there. *Paste here* on the clipboard bar now also shows in folders you opened before copying ([#192](https://github.com/muhnschein/lautta/issues/192)).
 - Videos ending in .ts, as TV and camera recordings do, show the video icon in folders on this device and open in the video player, no longer as code in the text viewer. TypeScript files ending in .ts still open as code. .mts and .m2ts files are videos too ([#160](https://github.com/muhnschein/lautta/issues/160)).
 - A compressed single file such as log.gz, dump.sql.xz, data.json.zst or a .bz2 file opens like other compressed files, with that one file inside to view or extract. It no longer fails with "not a supported archive" ([#159](https://github.com/muhnschein/lautta/issues/159)).
