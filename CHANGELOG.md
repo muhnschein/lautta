@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Markdown files with thousands of nested quotes or lists open in a moment instead of taking over a gigabyte of memory. Lists nested deeper than 16 levels and quotes deeper than 33 show at that last level ([#162](https://github.com/muhnschein/lautta/issues/162)).
+- Markdown files with thousands of nested quotes or lists open in a moment instead of taking over a gigabyte of memory. Lists nested more than 8 deep and quotes more than 9 deep show at that depth, so their text stays on screen ([#162](https://github.com/muhnschein/lautta/issues/162)).
 - Small things: *More* in the image viewer shows icons, as *More actions* does; *Checksums* names its file; *Settings › Transfers* asks before operations of "Over 1000 items or 1 GB", no longer "953.7 MB" ([#214](https://github.com/muhnschein/lautta/issues/214)).
 - Long code lines in the text viewer wrap at their own indent, so wrapped parts line up with the code above them ([#211](https://github.com/muhnschein/lautta/issues/211)).
 - In the audio player, elapsed and total time sit on one line under the slider, at its two ends ([#212](https://github.com/muhnschein/lautta/issues/212)).

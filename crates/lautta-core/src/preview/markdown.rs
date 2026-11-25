@@ -17,7 +17,7 @@ const DEFAULT_GAP: u32 = 12;
 
 pub const BLOCK_BYTES: usize = 8 * 1024;
 
-const MAX_OPEN: usize = 32;
+const MAX_NESTING: usize = 8;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Style {
@@ -329,7 +329,7 @@ impl<'s> Renderer<'s> {
 
     fn nest(&mut self, html: &str, open: Open) {
         let item = matches!(open, Open::Item);
-        if self.flat > 0 || (self.open.len() >= MAX_OPEN && !item) {
+        if self.flat > 0 || (!item && self.nesting() >= MAX_NESTING) {
             self.flat += 1;
             if item && !self.out.ends_with('>') {
                 self.out.push_str("<br/>");
@@ -338,6 +338,13 @@ impl<'s> Renderer<'s> {
             self.out.push_str(html);
             self.open.push(open);
         }
+    }
+
+    fn nesting(&self) -> usize {
+        self.open
+            .iter()
+            .filter(|open| !matches!(open, Open::Item))
+            .count()
     }
 
     fn unnest(&mut self) {
@@ -1316,7 +1323,11 @@ mod tests {
             assert!(last.starts_with("<ul"), "nesting ends with its element: {last}");
         }
         let html = plain(&lines);
-        assert_eq!(html.matches("<li>").count(), MAX_OPEN / 2);
+        assert_eq!(
+            (html.matches("<ul").count(), html.matches("<li>").count()),
+            (MAX_NESTING, MAX_NESTING),
+            "list on the last level keeps its item: {html}"
+        );
         assert!(
             html.contains("item298<br/>item299</li>"),
             "flat items keep a line each"
@@ -1328,21 +1339,25 @@ mod tests {
     }
 
     #[test]
-    fn nesting_past_the_limit_stays_in_the_deepest_quote() {
+    fn nesting_past_the_limit_stays_in_the_deepest_quote_or_list() {
         let quotes = |depth: usize| plain(&("> ".repeat(depth) + "x")).matches("<blockquote").count();
         assert_eq!(
-            quotes(MAX_OPEN),
-            MAX_OPEN - 1,
+            quotes(MAX_NESTING),
+            MAX_NESTING - 1,
             "top-level quote is the viewer's bar"
         );
-        assert_eq!(quotes(MAX_OPEN + 1), MAX_OPEN);
-        assert_eq!(quotes(MAX_OPEN + 2), MAX_OPEN);
-        assert_eq!(quotes(5000), MAX_OPEN);
-        let lists = plain(&("> > ".to_owned() + &"- ".repeat(40) + "x"));
+        assert_eq!(quotes(MAX_NESTING + 1), MAX_NESTING);
+        assert_eq!(quotes(MAX_NESTING + 2), MAX_NESTING);
+        assert_eq!(quotes(5000), MAX_NESTING);
+        let mixed = plain(&("> > ".to_owned() + &"- ".repeat(40) + "x"));
         assert_eq!(
-            (lists.matches("<ul").count(), lists.matches("<li>").count()),
-            (MAX_OPEN / 2, MAX_OPEN / 2),
-            "list on the last level keeps its item: {lists}"
+            (
+                mixed.matches("<blockquote").count(),
+                mixed.matches("<ul").count(),
+                mixed.matches("<li>").count()
+            ),
+            (1, MAX_NESTING - 1, MAX_NESTING - 1),
+            "{mixed}"
         );
     }
 
