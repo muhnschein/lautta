@@ -196,7 +196,7 @@ Page {
                 }
                 PlaceLabel {
                     width: parent.width
-                    text: PlaceText.shown(model.place, App.isRemote(model.uri) && App.locationName(model.uri).length === 0)
+                    text: PlaceText.shown(model.place, App.isRemote(model.uri))
                     remote: App.isRemote(model.uri)
                     color: row.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
                 }
@@ -331,7 +331,7 @@ Page {
                             left: tile.left
                             right: tile.right
                         }
-                        text: PlaceText.shown(model.place, App.isRemote(model.uri) && App.locationName(model.uri).length === 0)
+                        text: PlaceText.shown(model.place, App.isRemote(model.uri))
                         remote: App.isRemote(model.uri)
                         fontSize: Theme.fontSizeTiny
                         horizontalAlignment: Text.AlignHCenter

@@ -10,8 +10,8 @@ function around(compose, name) {
     return { "before": marked.substring(0, at), "rest": name + marked.substring(at + mark.length), "named": true }
 }
 
-function shown(place, unknownServer) {
-    if (!unknownServer)
+function shown(place, remote) {
+    if (!remote || place.length > 0 && place.charAt(0) !== "/")
         return place
     //% "Server"
     var server = qsTrId("lautta-place-server")

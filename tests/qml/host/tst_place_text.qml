@@ -26,10 +26,12 @@ QtObject {
              { "before": "", "rest": "Deleted 4 items", "named": false }, "a line without the name")
         same(PlaceText.around(line("Copied to %1"), ""),
              { "before": "", "rest": "Copied to ", "named": false }, "no name to mark")
-        same(PlaceText.shown("NAS › /Photos", false), "NAS › /Photos", "a known place as it is")
-        same(PlaceText.shown("Documents", false), "Documents", "a place on this device as it is")
+        same(PlaceText.shown("NAS › /Photos", true), "NAS › /Photos", "a known server as it is")
+        same(PlaceText.shown("Documents › Uni", false), "Documents › Uni", "a place on this device as it is")
         same(PlaceText.shown("/Photos", true), "lautta-place-server › /Photos", "an unknown server named Server")
         same(PlaceText.shown("/", true), "lautta-place-server", "an unknown server's top folder")
+        same(PlaceText.shown("", true), "lautta-place-server", "a transferred item on an unknown server")
+        same(PlaceText.shown("", false), "", "no place on this device stays empty")
         reachedEnd = true
     }
 }

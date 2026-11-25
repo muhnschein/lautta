@@ -204,7 +204,7 @@ Page {
             readonly property string subtitle: {
                 switch (kind) {
                 case "favourite":
-                    return PlaceText.shown(model.place, App.isRemote(model.uri) && App.locationName(model.uri).length === 0)
+                    return PlaceText.shown(model.place, App.isRemote(model.uri))
                 case "volume":
                     return HomeText.volumeLine(model.free, model.total, model.fs)
                 case "nearby":
