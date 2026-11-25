@@ -172,6 +172,13 @@ Item {
         check(dir.uriAt(-1) === "" && dir.uriAt(dir.count) === "", "uriAt outside the rows")
         same([dir.kindOf(root.docs + "Zeta"), dir.kindOf(a), dir.kindOf(root.docs + "none"),
               dir.kindOf("lautta://user-downloads/Zeta"), dir.kindOf("garbage")], ["folder", "file", "", "", ""], "kindOf")
+        var png = root.docs + "Beta.png"
+        var md = root.docs + "notes.md"
+        function shareType(uris) { return dir.shareType(JSON.stringify(uris)) }
+        same([shareType([png]), shareType([png, png]), shareType([a, md]), shareType([a, png]),
+              shareType(["lautta://user-downloads/x.png"]), dir.shareType("garbage")],
+             ["image/png", "image/png", "text/*", "application/octet-stream", "application/octet-stream",
+              "application/octet-stream"], "shareType")
     }
 
     function testRename() {

@@ -77,6 +77,12 @@ ApplicationWindow {
                 var got = shares[0].resources.length === 1 ? String(shares[0].resources[0]) : ""
                 if (got !== win.fetchedUrl && "file://" + got !== win.fetchedUrl)
                     return win.fail("share sheet gets the fetched file: " + JSON.stringify(shares[0].resources))
+                var models = win.findAll(win.view, function (x) { return x.shareType !== undefined }, [])
+                if (models.length !== 1)
+                    return win.fail("one folder model, got " + models.length)
+                var type = models[0].shareType(JSON.stringify([win.remote]))
+                if (shares[0].mimeType !== type || type === "*/*")
+                    return win.fail("share sheet gets the file's share type " + type + ", got " + shares[0].mimeType)
                 win.reachedEnd = true
                 win.scenarioRunning = false
                 break
