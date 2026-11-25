@@ -15,8 +15,10 @@ PullDownMenu {
     readonly property bool readable: owner ? owner.model.readable : false
     readonly property bool makes: picking && writable && !owner.atRoot
     readonly property string archiveUri: owner ? Operations.archiveSource(owner.uri) : ""
+    property bool favourite
 
     visible: !picking || makes
+    onActiveChanged: if (active && owner) favourite = App.isFavourite(owner.uri)
 
     MenuItem {
         visible: menu.selecting
@@ -60,7 +62,7 @@ PullDownMenu {
     MenuItem {
         objectName: "folderMenuFavourite"
         visible: menu.browsing
-        text: ContextActions.text("favourite")
+        text: ContextActions.text("favourite", { "favourite": menu.favourite })
         onClicked: menu.owner.runAction("favourite", [menu.owner.uri], {}, null)
     }
     MenuItem {
