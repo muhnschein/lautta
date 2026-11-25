@@ -160,7 +160,7 @@ Retired, never reuse: F-SRV-08 Server question, F-SRV-09 Connect to server, F-SR
 - **F-DIR-04 Sort and filter** — sort by Name/Size/Modified/Type, Descending, Folders first, Show hidden files. *Entry:* View options (folder pulley or Settings).
 - **F-DIR-05 Thumbnails switch** — Show thumbnails (untrusted-file warning), Thumbnails from servers, largest server file, cache size.
 - **F-DIR-06 Path crumbs** — header shows house › folders above › folder name on one line, one size (list text), name in highlight colour. Tap folder: back to its page; no page of it on stack → it replaces pages inside it. Tap house: back to Home. House only while whole path fits and house stays right of page's left quarter; else "…" leads. Too long → farthest fold into "…": context menu under header, nearest first, as many as fit, last row Home (Home). Hidden while selecting. *Code:* `PathCrumbs.qml`, `PathFold.js`, `PathNav.js`.
-- **F-DIR-07 Folder states** — empty ("Pull down to create a folder or paste"), hidden (Add only: "Files here are hidden"), no access, sign-in failed (Update sign-in), not found, can't reach (Retry, Details).
+- **F-DIR-07 Folder states** — empty ("Pull down to add"; "Pull down to add or paste" while clipboard holds items that paste here), hidden (Add only: "Files here are hidden"), no access, sign-in failed (Update sign-in), not found, can't reach (Retry, Details).
 - **F-DIR-08 Large folder** — "N loaded · large folder: name order, thumbnails off", Stop.
 - **F-DIR-09 Live updates** — inotify refresh of local folders. *Code:* `watch.rs`.
 - **F-DIR-10 Listing cache** — cached folder visible at once, refreshed after. *Code:* `dircache.rs`; Storage › Keep stored listings.
