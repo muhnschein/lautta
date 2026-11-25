@@ -6,6 +6,7 @@ use crate::entry::Kind;
 use crate::error::{Error, ErrorKind, Result};
 use crate::password::Password;
 use crate::zipaes::{self, AesField, Decryptor};
+use crate::zipcrypto;
 use chrono::{DateTime, Local, Offset, TimeZone};
 use std::io::{self, Read, Seek, SeekFrom};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -20,6 +21,7 @@ const CENTRAL_SIG: u32 = 0x0201_4b50;
 const LOCAL_SIG: u32 = 0x0403_4b50;
 const CENTRAL_FIXED: usize = 46;
 const MAX_DIRECTORY: u64 = 256 * 1024 * 1024;
+const FULL_CHECK_MAX: u64 = 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ZipLoc {
@@ -33,11 +35,41 @@ pub struct ZipLoc {
 }
 
 const FLAG_ENCRYPTED: u16 = 0x0001;
+const FLAG_DESCRIPTOR: u16 = 0x0008;
+const FLAG_STRONG: u16 = 0x0040;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lock {
+    Open,
+    Aes(AesField),
+    ZipCrypto,
+    Strong,
+}
 
 impl ZipLoc {
     pub fn aes(&self) -> Option<AesField> {
         self.aes
             .filter(|_| self.flags & FLAG_ENCRYPTED != 0 && self.method == zipaes::METHOD)
+    }
+
+    pub fn lock(&self) -> Lock {
+        if self.flags & FLAG_ENCRYPTED == 0 {
+            Lock::Open
+        } else if let Some(aes) = self.aes() {
+            Lock::Aes(aes)
+        } else if self.flags & FLAG_STRONG != 0 {
+            Lock::Strong
+        } else {
+            Lock::ZipCrypto
+        }
+    }
+
+    fn zipcrypto_check(&self, local_time: u16) -> u8 {
+        if self.flags & FLAG_DESCRIPTOR != 0 {
+            local_time.to_be_bytes()[0]
+        } else {
+            self.crc.to_be_bytes()[0]
+        }
     }
 }
 
@@ -286,12 +318,13 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     era * 146_097 + doe - 719_468
 }
 
-fn stored_data(src: &Arc<BlockSource>, loc: &ZipLoc) -> Result<io::Take<BlockReader>> {
+fn stored_data(src: &Arc<BlockSource>, loc: &ZipLoc) -> Result<(io::Take<BlockReader>, u16)> {
     let mut reader = src.reader();
     let head = reader.read_exact_at(loc.header_offset, 30).map_err(from_io)?;
     if le32(&head, 0) != Some(LOCAL_SIG) {
         return Err(corrupt("bad local header"));
     }
+    let local_time = le16(&head, 10).unwrap_or(0);
     let name_len = u64::from(le16(&head, 26).unwrap_or(0));
     let extra_len = u64::from(le16(&head, 28).unwrap_or(0));
     let data_at = loc.header_offset + 30 + name_len + extra_len;
@@ -299,7 +332,7 @@ fn stored_data(src: &Arc<BlockSource>, loc: &ZipLoc) -> Result<io::Take<BlockRea
         return Err(corrupt("entry data out of range"));
     }
     reader.seek(SeekFrom::Start(data_at)).map_err(from_io)?;
-    Ok(reader.take(loc.compressed))
+    Ok((reader.take(loc.compressed), local_time))
 }
 
 fn needs_password(password: Option<&Password>) -> Result<&Password> {
@@ -311,20 +344,52 @@ pub fn check_password(
     entries: &[RawEntry],
     password: Option<&Password>,
 ) -> Result<bool> {
-    let locked = entries.iter().find_map(|e| match &e.loc {
-        Loc::Zip(z) => z.aes().map(|aes| (z, aes)),
-        _ => None,
-    });
-    let Some((loc, aes)) = locked else {
+    let zips = || {
+        entries.iter().filter_map(|e| match &e.loc {
+            Loc::Zip(z) => Some(z),
+            _ => None,
+        })
+    };
+    if let Some((loc, aes)) = zips().find_map(|z| z.aes().map(|aes| (z, aes))) {
+        Decryptor::new(
+            stored_data(src, loc)?.0,
+            loc.compressed,
+            needs_password(password)?,
+            aes.strength,
+        )?;
+        return Ok(true);
+    }
+    let Some(loc) = zips()
+        .filter(|z| z.lock() == Lock::ZipCrypto)
+        .min_by_key(|z| (!decodable(z.method), z.compressed))
+    else {
         return Ok(false);
     };
-    Decryptor::new(
-        stored_data(src, loc)?,
-        loc.compressed,
-        needs_password(password)?,
-        aes.strength,
-    )?;
-    Ok(true)
+    let (raw, local_time) = stored_data(src, loc)?;
+    let dec = zipcrypto::Decryptor::new(raw, needs_password(password)?, loc.zipcrypto_check(local_time))?;
+    if loc.compressed > FULL_CHECK_MAX || !decodable(loc.method) {
+        return Ok(true);
+    }
+    let mut entry = Checked::new(decode(loc.method, Box::new(dec))?, loc, None);
+    match io::copy(&mut entry, &mut io::sink()) {
+        Ok(_) => Ok(true),
+        Err(e) if matches!(e.kind(), io::ErrorKind::InvalidData | io::ErrorKind::InvalidInput) => {
+            Err(Error::kind(ErrorKind::WrongPassword))
+        }
+        Err(e) => Err(from_io(e)),
+    }
+}
+
+fn decodable(method: u16) -> bool {
+    matches!(method, 0 | 8)
+}
+
+fn decode(method: u16, data: Box<dyn Read + Send>) -> Result<Box<dyn Read + Send>> {
+    match method {
+        0 => Ok(data),
+        8 => Ok(Box::new(flate2::read::DeflateDecoder::new(data))),
+        m => Err(Error::new(ErrorKind::Unsupported, format!("zip method {m}"))),
+    }
 }
 
 struct Shared<R: Read>(Arc<Mutex<Decryptor<R>>>);
@@ -342,12 +407,9 @@ pub fn open_entry(
     loc: &ZipLoc,
     password: Option<&Password>,
 ) -> Result<Box<dyn Read + Send>> {
-    if loc.flags & FLAG_ENCRYPTED != 0 && loc.aes().is_none() {
-        return Err(Error::new(ErrorKind::Unsupported, "zip entry uses ZipCrypto"));
-    }
-    let raw = stored_data(src, loc)?;
-    let (method, data, finish): (u16, Box<dyn Read + Send>, Option<Finish>) = match loc.aes() {
-        Some(aes) => {
+    let (raw, local_time) = stored_data(src, loc)?;
+    let (method, data, finish): (u16, Box<dyn Read + Send>, Option<Finish>) = match loc.lock() {
+        Lock::Aes(aes) => {
             let dec = Decryptor::new(raw, loc.compressed, needs_password(password)?, aes.strength)?;
             let dec = Arc::new(Mutex::new(dec));
             let tail = Arc::clone(&dec);
@@ -355,14 +417,20 @@ pub fn open_entry(
                 Box::new(move || tail.lock().unwrap_or_else(PoisonError::into_inner).finish());
             (aes.method, Box::new(Shared(dec)), Some(finish))
         }
-        None => (loc.method, Box::new(raw), None),
+        Lock::ZipCrypto => {
+            let check = loc.zipcrypto_check(local_time);
+            let dec = zipcrypto::Decryptor::new(raw, needs_password(password)?, check)?;
+            (loc.method, Box::new(dec), None)
+        }
+        Lock::Strong => {
+            return Err(Error::new(
+                ErrorKind::Unsupported,
+                "zip entry uses PKWARE strong encryption",
+            ))
+        }
+        Lock::Open => (loc.method, Box::new(raw), None),
     };
-    let stream: Box<dyn Read + Send> = match method {
-        0 => data,
-        8 => Box::new(flate2::read::DeflateDecoder::new(data)),
-        m => return Err(Error::new(ErrorKind::Unsupported, format!("zip method {m}"))),
-    };
-    Ok(Box::new(Checked::new(stream, loc, finish)))
+    Ok(Box::new(Checked::new(decode(method, data)?, loc, finish)))
 }
 
 struct Checked {
