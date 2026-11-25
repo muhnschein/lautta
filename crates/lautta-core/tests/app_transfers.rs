@@ -121,6 +121,40 @@ async fn the_list_groups_questions_and_history() {
 }
 
 #[tokio::test]
+async fn a_task_names_the_folder_it_copies_to() {
+    let h = home().await;
+    write(&h.root.join("Documents/a.txt"), b"a");
+    std::fs::create_dir_all(h.root.join("Downloads/Inbox")).unwrap();
+    for dest in ["lautta://user-downloads/Inbox", "lautta://user-downloads/"] {
+        let started = h
+            .core
+            .copy_or_move(
+                OperationKind::Copy,
+                vec![uri("lautta://user-documents/a.txt")],
+                uri(dest),
+            )
+            .await
+            .unwrap();
+        let Started::Transfer(id) = started else {
+            panic!("small copies start at once")
+        };
+        h.core
+            .engine
+            .wait_for(id, |s| s.state.is_finished())
+            .await
+            .unwrap();
+    }
+    let mut names: Vec<String> = h
+        .core
+        .transfer_rows(&ProgressBook::default())
+        .into_iter()
+        .map(|r| r.dest_name)
+        .collect();
+    names.sort();
+    assert_eq!(names, ["Downloads", "Inbox"]);
+}
+
+#[tokio::test]
 async fn questions_carry_what_the_conflict_screen_shows() {
     let h = home().await;
     write(&h.root.join("Documents/a.txt"), b"new");
