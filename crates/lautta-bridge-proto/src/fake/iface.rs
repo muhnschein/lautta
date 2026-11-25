@@ -835,6 +835,11 @@ impl Shared {
             }
         }
         if narrowed {
+            let stall = self.with(|s| s.narrowing_stall);
+            if !stall.is_zero() {
+                self.broadcast_locations().await;
+                tokio::time::sleep(stall).await;
+            }
             for session in self.take_sessions() {
                 session.shut();
                 if let Some(conn) = session.take_conn() {

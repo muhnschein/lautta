@@ -8,12 +8,9 @@ CoverBackground {
 
     property bool live: status === Cover.Active
     readonly property var source: {
-        if (typeof pageStack === "undefined" || !pageStack)
+        if (typeof pageStack === "undefined" || !pageStack || !pageStack.currentPage)
             return null
-        var page = pageStack.currentPage
-        while (page && page.coverKind === undefined)
-            page = pageStack.previousPage(page)
-        return page ? page : null
+        return pageStack.find(function (page) { return page.coverKind !== undefined })
     }
     readonly property alias tasks: transferCover
     readonly property bool transferring: transferCover.active

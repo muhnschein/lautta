@@ -284,6 +284,10 @@ impl FakeBridge {
         self.shared.with(|s| s.latency = latency);
     }
 
+    pub fn stall_narrowing(&self, stall: Duration) {
+        self.shared.with(|s| s.narrowing_stall = stall);
+    }
+
     pub fn set_chunk_size(&self, bytes: usize) {
         self.shared.with(|s| s.chunk = bytes.max(1));
     }

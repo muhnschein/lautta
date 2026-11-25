@@ -329,12 +329,13 @@ Item {
         }
     }
 
-    function share(uris, mimeType) {
+    function share(uris) {
+        var type = dir.shareType(JSON.stringify(uris))
         if (uris.length === 1 && !App.isLocal(uris[0])) {
             var getting = openDialog("../../dialogs/OpenRemoteDialog.qml", { "uri": uris[0], "share": true })
             getting.fetched.connect(function (fileUrl) {
                 shareAction.resources = [fileUrl]
-                shareAction.mimeType = "*/*"
+                shareAction.mimeType = type
                 shareAction.trigger()
             })
             return
@@ -346,13 +347,13 @@ Item {
                 urls.push(url)
         }
         shareAction.resources = urls
-        shareAction.mimeType = uris.length === 1 ? mimeType : "*/*"
+        shareAction.mimeType = type
         shareAction.trigger()
     }
 
     function runAction(id, uris, info, listItem) {
         switch (id) {
-        case "share": share(uris, info.mimeType); break
+        case "share": share(uris); break
         case "copy": App.copy(JSON.stringify(uris)); break
         case "cut": App.cut(JSON.stringify(uris)); break
         case "rename": rename(info); break
