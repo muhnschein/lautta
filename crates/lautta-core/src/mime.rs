@@ -451,6 +451,10 @@ mod tests {
     #[test]
     fn mixed_or_unknown_shared_files_are_any_file() {
         assert_eq!(share_type([Some("image/jpeg"), Some("video/mp4")]), ANY_FILE);
+        assert_eq!(
+            share_type([Some("image/jpeg"), Some("image/png"), Some("video/mp4")]),
+            ANY_FILE
+        );
         assert_eq!(share_type([Some("image/jpeg"), None]), ANY_FILE);
         assert_eq!(share_type([None]), ANY_FILE);
         assert_eq!(share_type([Some("image"), Some("image/png")]), ANY_FILE);
