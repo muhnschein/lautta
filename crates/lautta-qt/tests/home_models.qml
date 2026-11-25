@@ -1,5 +1,3 @@
-// Scenario of home_models.rs: steps with action and condition; a step fails when its condition
-// does not hold within 30 seconds. Qt 5.15 on host: no Connections here.
 Item {
     id: root
 
@@ -224,7 +222,7 @@ Item {
             stage++
             acted = false
             waited = 0
-        } else if (++waited > 1200) {  // 30 s at 25 ms: a busy machine
+        } else if (++waited > 1200) {
             console.error("FAILED: " + s.label)
             stage = steps.length
         }
@@ -431,7 +429,6 @@ Item {
         step("a server comes while Servers is off",
              function() { FakeWorld.addAccount(2, "Office") },
              function() { return FakeWorld.locationKnown("nv-account:2") })
-        // A drive after the server: once the drive shows, the models have seen the server.
         step("that server shows nowhere",
              function() { FakeWorld.addDrive("mmcblk1p3", "SPARE", false) },
              function() {
@@ -605,8 +602,6 @@ Item {
         step("edit it",
              function() { favs.edit(favs.idOf(docs), "Papers", "#4fa3e5") },
              function() { return has("favourite", "Papers") && !has("favourite", "Docs") })
-        // Row remorse lives in its delegate: a change elsewhere in the list must not rebuild rows
-        // that stay.
         step("order favourites, keeping the other rows",
              function() {
                  row("favourite", "Papers").marked = true

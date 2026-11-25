@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! SQLite in WAL mode, schema versioned with `PRAGMA user_version`, forward migrations only.
 
 use crate::error::{Error, ErrorKind, Result};
 use rusqlite::Connection;
@@ -105,7 +104,6 @@ const MIGRATIONS: &[&str] = &[
         last_used_ms INTEGER NOT NULL
     );
     "#,
-    // 2: where reading stopped in a viewer, forgotten with recents.
     r#"
     CREATE TABLE reading_positions (
         uri TEXT PRIMARY KEY,
@@ -123,24 +121,19 @@ const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (section, item)
     );
     "#,
-    // 4: `trash_items.bin` unused; column stays, dropping it takes a migration of its own.
     r#"
     ALTER TABLE trash_items ADD COLUMN bin BLOB;
     "#,
-    // 5: files can be favourites too; earlier rows were folders.
     r#"
     ALTER TABLE favourites ADD COLUMN is_dir INTEGER NOT NULL DEFAULT 1;
     "#,
-    // 6: icon chosen for a favourite (a name of `org::favourites::ICONS`). NULL: the default icon.
     r#"
     ALTER TABLE favourites ADD COLUMN icon TEXT;
     "#,
-    // 7: `trash_drain` unused; table stays, dropping it takes a migration of its own.
     r#"
     CREATE TABLE trash_drain (due INTEGER NOT NULL);
     INSERT INTO trash_drain VALUES (1);
     "#,
-    // 8: no ad-hoc servers any more (every server is a netvfs account): their recents and data go.
     r#"
     DROP TABLE adhoc_servers;
     DELETE FROM favourites WHERE uri LIKE 'lautta://nv-adhoc:%';
@@ -151,8 +144,6 @@ const MIGRATIONS: &[&str] = &[
     DELETE FROM recent_searches WHERE location_id LIKE 'nv-adhoc:%';
     DELETE FROM reading_positions WHERE location_id LIKE 'nv-adhoc:%';
     "#,
-    // 9: Recents row of On this device became section Recents with a switch; a hidden row keeps
-    // it off.
     r#"
     INSERT OR REPLACE INTO browse_layout(section, item, hidden)
         SELECT 'recents', 'section', 1 FROM browse_layout
@@ -166,7 +157,6 @@ const MIGRATIONS: &[&str] = &[
 
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 
-/// All access is serialised; callers run on blocking threads, never the GUI thread.
 #[derive(Clone)]
 pub struct Db {
     conn: Arc<Mutex<Connection>>,
@@ -229,7 +219,6 @@ fn migrate(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Private files are 0600.
 fn restrict_mode(path: &Path) {
     use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
@@ -510,9 +499,6 @@ mod tests {
 
     #[test]
     fn a_device_database_at_schema_7_keeps_opening_with_its_trash_rows() {
-        // Device database is at schema 7 with trash rows that name a bin. A migration that ran
-        // there may not be dropped or renumbered, or this app would call that database newer than
-        // itself.
         const DEVICE_SCHEMA: usize = 7;
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("v7.db");

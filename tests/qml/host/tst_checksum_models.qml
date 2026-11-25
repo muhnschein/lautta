@@ -7,7 +7,6 @@ Item {
     id: root
     property bool reachedEnd
     readonly property string docs: "lautta://user-documents/"
-    // Over the 255-byte name limit: its check fails.
     readonly property string longName: new Array(301).join("n")
     readonly property string photoSha256: "eaf602095e76dac2dfdd976674990dbf2dede5e706d35f0aee2a9368b6407158"
 

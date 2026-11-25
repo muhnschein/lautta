@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Sailjail layout: every permitted folder and app data folder is its own bind mount, so
-//! `rename(2)` between them fails with `EXDEV`. Without root, two file systems (temp folder and
-//! `/dev/shm`) joined by symlinks stand in; host tests need `/dev/shm` on a file system of its own.
 
 use lautta_core::app::Core;
 use lautta_core::app_home::Row;

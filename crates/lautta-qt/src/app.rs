@@ -32,7 +32,6 @@ pub struct App {
     loadSettings: qt_method!(fn(&mut self, json: QString)),
     setting: qt_method!(fn(&self, key: QString) -> QVariant),
     setSetting: qt_method!(fn(&mut self, key: QString, value_json: QString) -> bool),
-    /// Names of volumes without label, translated.
     setVolumeNames: qt_method!(fn(&self, card: QString, usb: QString)),
 
     childUri: qt_method!(fn(&self, parent: QString, name: QString) -> QString),
@@ -41,17 +40,13 @@ pub struct App {
     displayAddress: qt_method!(fn(&self, uri: QString) -> QString),
     locationName: qt_method!(fn(&self, uri: QString) -> QString),
     isLocal: qt_method!(fn(&self, uri: QString) -> bool),
-    /// True for a server URI, even a gone one.
     isRemote: qt_method!(fn(&self, uri: QString) -> bool),
-    /// Items there can be renamed or deleted: false where netvfs grants less than full access.
     canChange: qt_method!(fn(&self, uri: QString) -> bool),
     canAddTo: qt_method!(fn(&self, folder_uri: QString) -> bool),
     localUrl: qt_method!(fn(&self, uri: QString) -> QString),
     categoryOf: qt_method!(fn(&self, name_or_uri: QString) -> QString),
-    /// JSON `lautta_core::app_home::RecentTile` of the file at `uri`; empty: no such uri.
     tileOf: qt_method!(fn(&self, uri: QString) -> QString),
     viewerFor: qt_method!(fn(&self, name_or_uri: QString, mime: QString) -> QString),
-    /// `[{ id, label }]` JSON of `common` or `more` checksum algorithms.
     checksumAlgorithms: qt_method!(fn(&self, group: QString) -> QString),
     isChecksumList: qt_method!(fn(&self, name_or_uri: QString) -> bool),
 
@@ -67,7 +62,6 @@ pub struct App {
     externalFailed: qt_signal!(uri: QString, kind: QString, message: QString),
 
     clipboard: Clipboard,
-    /// Items copied from a locked archive keep it open.
     clipboard_hold: lautta_core::app_archives::ArchiveHold,
 }
 
@@ -123,7 +117,6 @@ impl App {
         let map = from_json(&json.to_string()).unwrap_or_default();
         core.apply_settings(Settings::from_map(&map));
         self.publish_settings();
-        // Retention known: purge Trash, clear its half-made copies.
         handle().spawn_blocking(move || {
             if let Err(e) = core.tidy_trash(now_secs()) {
                 log::warn!("tidying the Trash failed: {e}");
@@ -336,7 +329,6 @@ impl App {
         QString::from(to_json(&items).as_str())
     }
 
-    /// A cut is consumed.
     fn takeClipboard(&mut self) -> QString {
         let taken = self.clipboard.take();
         self.publish_clipboard();
@@ -349,7 +341,6 @@ impl App {
         QString::from(to_json(&value).as_str())
     }
 
-    /// Remote files copied to ~/Downloads/Lautta/Opened first.
     fn prepareExternal(&self, uri: QString) {
         let (Some(core), Some(u)) = (core(), parse_uri(&uri)) else {
             return;

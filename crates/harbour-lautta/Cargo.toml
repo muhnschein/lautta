@@ -8,7 +8,6 @@ license.workspace = true
 publish.workspace = true
 
 [lints.rust]
-# Exported C `main` needs `#[no_mangle]`.
 unsafe_code = "allow"
 
 [lints.clippy]
@@ -17,7 +16,6 @@ all = { level = "deny", priority = -1 }
 [[bin]]
 name = "harbour-lautta"
 path = "src/main.rs"
-# no_main binary: the exported C main has no test harness.
 test = false
 
 [features]

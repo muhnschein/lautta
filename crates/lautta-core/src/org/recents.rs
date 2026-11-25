@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Recents: files opened, previewed or transferred; filterable, clearable, can be switched off.
-//! Also where reading stopped in a document, which goes with them.
 
 use super::{location_prefix, now_ms, parse_uri};
 use crate::db::Db;
@@ -9,8 +7,6 @@ use crate::uri::Uri;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-/// Rows kept, of recents and of reading positions each; older ones are dropped on `record` and
-/// `set_page`.
 pub const MAX_RECENTS: usize = 500;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -76,7 +72,6 @@ impl Recents {
         }
     }
 
-    /// Turning it off keeps existing rows; use [`Recents::clear`] to forget them.
     pub fn set_enabled(&self, on: bool) {
         self.enabled.store(on, Ordering::Relaxed);
     }
@@ -85,7 +80,6 @@ impl Recents {
         self.enabled.load(Ordering::Relaxed)
     }
 
-    /// The same (uri, kind) only moves to the top. No-op while recents are off.
     pub fn record(&self, uri: &Uri, name: &str, kind: RecentKind) -> Result<()> {
         self.record_at(uri, name, kind, now_ms())
     }

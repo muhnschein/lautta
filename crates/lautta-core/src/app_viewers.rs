@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Viewers area on `Core`: text, Markdown and EXIF sources, folder images, remote thumbnails and
-//! images, media playback. Qt-free.
 
 use crate::app::Core;
 use crate::entry::{Entry, Kind};
@@ -51,14 +49,12 @@ pub struct ViewedText {
     pub size: Option<u64>,
     pub truncated: bool,
     pub valid_utf8: bool,
-    /// Coloured when quick, else plain until `colouring` finishes.
     pub lines: ColouredText,
     pub colouring: Option<ColourJob>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedText {
-    /// Rich-text blocks, each laid out on its own.
     pub blocks: Vec<markdown::Block>,
     pub truncated: bool,
 }
@@ -71,7 +67,6 @@ pub struct ExifReport {
     pub info: Option<ExifInfo>,
 }
 
-/// Media player's track info. `cover`: where the player's picture comes from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AudioInfo {
     pub tags: AudioTags,
@@ -95,14 +90,9 @@ pub struct ImageItem {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FullImage {
     pub bytes: Arc<Vec<u8>>,
-    /// 1-8; 1 = none.
     pub orientation: u8,
 }
 
-/// Decode size for the image viewer, in the file's own orientation: the image shown whole on a
-/// `screen` (portrait width, height) turned either way. JPEG: libjpeg's 1/2, 1/4 or 1/8 step that
-/// still covers that, so the decoder scales in its IDCT; else the fit itself. `None`: as is (never
-/// scaled up).
 pub fn viewer_decode_size(bytes: &[u8], screen: (u32, u32)) -> Option<(u32, u32)> {
     let reader = image::io::Reader::new(std::io::Cursor::new(bytes))
         .with_guessed_format()
@@ -112,12 +102,10 @@ pub fn viewer_decode_size(bytes: &[u8], screen: (u32, u32)) -> Option<(u32, u32)
 }
 
 fn decode_size((w, h): (u32, u32), (sw, sh): (u32, u32), jpeg: bool) -> Option<(u32, u32)> {
-    // Zero width needs no check: it never needs scaling down.
     if h == 0 || sw == 0 || sh == 0 {
         return None;
     }
     let (w64, h64) = (u64::from(w), u64::from(h));
-    // Whole image in a `bw` x `bh` box, sides rounded up.
     let fit = |bw: u64, bh: u64| {
         if bw * h64 <= bh * w64 {
             (bw, (h64 * bw).div_ceil(w64))
@@ -139,9 +127,7 @@ fn decode_size((w, h): (u32, u32), (sw, sh): (u32, u32), jpeg: bool) -> Option<(
     Some(need)
 }
 
-/// Longer side of [`Core::viewer_preview`]'s clear shape: aspect kept within half a percent.
 const SHAPE_SIDE: u32 = 256;
-/// JPEG segments walked before giving up on the frame header.
 const MAX_JPEG_SEGMENTS: usize = 256;
 
 fn clear_shape((w, h): (u32, u32), side: u32) -> image::DynamicImage {
@@ -151,8 +137,6 @@ fn clear_shape((w, h): (u32, u32), side: u32) -> image::DynamicImage {
     image::DynamicImage::ImageRgba8(image::RgbaImage::new(scaled(w), scaled(h)))
 }
 
-/// Width and height in the file's orientation. JPEG: segment headers read one by one up to the
-/// frame header, which EXIF, ICC and XMP segments may push past `head`.
 async fn image_dimensions(handle: &dyn ReadHandle, head: &[u8]) -> Option<(u32, u32)> {
     if !head.starts_with(&[0xff, 0xd8]) {
         let reader = image::io::Reader::new(std::io::Cursor::new(head))
@@ -179,7 +163,6 @@ async fn image_dimensions(handle: &dyn ReadHandle, head: &[u8]) -> Option<(u32, 
     None
 }
 
-/// Server images kept after reading: the viewer's zoom and its neighbours ask again.
 pub const SHOWN_IMAGES: usize = 3;
 pub const SHOWN_IMAGES_BYTES: usize = 64 * 1000 * 1000;
 
@@ -194,7 +177,6 @@ impl ShownImages {
             .map(|(_, _, img)| img.clone())
     }
 
-    /// Newest first; oldest go past [`SHOWN_IMAGES`] or [`SHOWN_IMAGES_BYTES`].
     fn put(&self, uri: &Uri, size: Option<u64>, image: FullImage) {
         if image.bytes.len() > SHOWN_IMAGES_BYTES {
             return;
@@ -221,14 +203,10 @@ impl ShownImages {
 pub struct ThumbId {
     pub uri: Uri,
     pub size: u32,
-    /// Only what the cache holds, any size: a stand-in while the real one loads.
     pub cached: bool,
-    /// The image's EXIF thumbnail only: a stand-in while the image decodes.
     pub embedded: bool,
 }
 
-/// `<uri>?size=N[&cached=1|&embedded=1]`. Size is clamped. URI may arrive percent-encoded once
-/// more (QML helpers).
 pub fn parse_thumb_id(id: &str) -> Option<ThumbId> {
     let (uri_part, query) = id.rsplit_once('?')?;
     let (size, cached, embedded) = match query.split_once('&') {
@@ -265,17 +243,11 @@ fn display(uri: &Uri) -> String {
     uri.name().map(crate::vpath::display_name).unwrap_or_default()
 }
 
-/// How far the background reader runs ahead of the player.
 pub const READ_AHEAD_BYTES: usize = 4 * 1024 * 1024;
-/// One background read; also the most a seek waits behind one already sent.
 const PIECE_BYTES: usize = 512 * 1024;
-/// Read on a miss (start, seek), before the player gets its bytes.
 const FIRST_BYTES: usize = 256 * 1024;
-/// Pieces kept, oldest dropped first: read-ahead plus some behind for small seeks back.
 const KEEP_BYTES: usize = READ_AHEAD_BYTES + 2 * 1024 * 1024;
 
-/// Player reads small pieces on Qt's GUI thread (Qt 5.6 `QGstAppSrc`); a background task keeps
-/// [`READ_AHEAD_BYTES`] past the last read cached, so steady playback never waits on the provider.
 pub struct ReadAhead {
     handle: Arc<dyn ReadHandle>,
     size: u64,
@@ -284,7 +256,6 @@ pub struct ReadAhead {
 
 struct Shared {
     state: Mutex<Cache>,
-    /// Sent on every change a reader or the fetch task may wait for.
     changed: tokio::sync::watch::Sender<()>,
 }
 
@@ -292,15 +263,12 @@ struct Shared {
 struct Cache {
     pieces: VecDeque<(u64, Arc<Vec<u8>>)>,
     bytes: usize,
-    /// End of the player's last read.
     pos: u64,
-    /// Fetch task's generation: a task whose generation is gone stops.
     generation: u64,
     fetch: Option<Fetch>,
 }
 
 struct Fetch {
-    /// Next offset the task reads; bytes before it from the task's start are cached.
     next: u64,
     failed: bool,
     task: tokio::task::JoinHandle<()>,
@@ -326,7 +294,6 @@ impl Cache {
         }
     }
 
-    /// Fetch about to answer `offset` with the piece it reads now.
     fn fetching(&self, offset: u64) -> bool {
         self.fetch
             .as_ref()
@@ -342,7 +309,6 @@ impl Cache {
 }
 
 impl ReadAhead {
-    /// Size must be known (media streams have a length).
     pub fn new(handle: Arc<dyn ReadHandle>) -> Result<ReadAhead> {
         let size = handle
             .size()
@@ -361,8 +327,6 @@ impl ReadAhead {
         self.size
     }
 
-    /// Short only at the end of the file: Qt 5.6's `QGstAppSrc` pushes a short read as a full-size
-    /// buffer, and the bytes after it land at the wrong offsets. Needs a tokio runtime.
     pub async fn read(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
         let want = usize::try_from(self.size.saturating_sub(offset))
             .unwrap_or(usize::MAX)
@@ -382,7 +346,6 @@ impl ReadAhead {
 
     async fn read_piece(&self, offset: u64, max: usize) -> Result<Vec<u8>> {
         loop {
-            // Subscribed before the check: a piece landing after it still wakes this read.
             let mut changed = self.shared.changed.subscribe();
             {
                 let mut cache = lock(&self.shared.state);
@@ -439,7 +402,6 @@ impl Drop for ReadAhead {
     }
 }
 
-/// Reads [`PIECE_BYTES`] at a time while under [`READ_AHEAD_BYTES`] ahead of the player.
 async fn fetch(handle: Arc<dyn ReadHandle>, shared: Arc<Shared>, generation: u64, mut next: u64, size: u64) {
     let mut changed = shared.changed.subscribe();
     let mut hinted = next;
@@ -460,7 +422,6 @@ async fn fetch(handle: Arc<dyn ReadHandle>, shared: Arc<Shared>, generation: u64
         }
         if next >= hinted {
             hinted = next + READ_AHEAD_BYTES as u64;
-            // A failed hint only costs the provider's own prefetch.
             let _ = handle.read_ahead(next, READ_AHEAD_BYTES as u64).await;
         }
         let want = usize::try_from(size - next)
@@ -478,7 +439,6 @@ async fn fetch(handle: Arc<dyn ReadHandle>, shared: Arc<Shared>, generation: u64
                 cache.insert(at, data);
                 false
             }
-            // Reader repeats the read itself and sees the error.
             _ => true,
         };
         if let Some(f) = cache.fetch.as_mut() {
@@ -499,13 +459,9 @@ pub struct Previews {
     pdf: PdfThumbs,
     waiters: Mutex<HashMap<String, Waiting>>,
     next_waiter: AtomicU64,
-    /// Cover of the audio file last read for the player, by [`version_key`]: its cover request
-    /// then reads no file again.
     last_cover: Mutex<Option<(String, Arc<Vec<u8>>)>>,
 }
 
-/// What an image request makes. Covers serve the media player: any audio file, whatever the
-/// thumbnail settings; glow is the blurred backdrop drawn from the cover.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PreviewKind {
     Thumb,
@@ -513,8 +469,6 @@ pub enum PreviewKind {
     Glow,
 }
 
-/// `job`: [`ThumbJobs`] key, new per start: a cancelled job keeps its slot until its task wakes,
-/// maybe after the same thumbnail is asked for again.
 struct Waiting {
     job: String,
     waiters: Vec<(u64, ThumbSender)>,
@@ -528,17 +482,12 @@ pub struct TextTicket {
     pub key: String,
 }
 
-/// Image sizes are 16 or more.
 const TEXT_KEY_SIZE: u32 = 1;
-/// Empty entry: the audio file holds no cover (until it changes).
 const NO_COVER_KEY_SIZE: u32 = 2;
 const GLOW_KEY_SIZE: u32 = 3;
-/// Cover the glow is drawn from; glow itself is [`crate::thumbs::GLOW_SIDE`] square.
 const GLOW_FROM: u32 = 128;
-/// Largest folder picture (`cover.jpg`, …) read for a cover.
 pub const MAX_FOLDER_COVER_BYTES: u64 = 16 * 1024 * 1024;
 
-/// `cancel` (or the part kept after taking `rx`) drops the request when the delegate is gone.
 pub struct ThumbTicket {
     pub rx: oneshot::Receiver<ThumbResult>,
     pub cancel: ThumbCancel,
@@ -550,7 +499,6 @@ impl ThumbTicket {
     }
 }
 
-/// Job is cancelled when nobody else waits for the same thumbnail.
 #[derive(Clone)]
 pub struct ThumbCancel {
     previews: Arc<Previews>,
@@ -573,17 +521,14 @@ impl Previews {
         &self.jobs
     }
 
-    /// Requests for the same file and size share one job.
     pub fn request(self: &Arc<Self>, core: Arc<Core>, uri: Uri, size: u32) -> ThumbTicket {
         self.request_as(core, uri, size, false, PreviewKind::Thumb)
     }
 
-    /// Cached thumbnail of any size, never the file: fails at once when none was made.
     pub fn request_cached(self: &Arc<Self>, core: Arc<Core>, uri: Uri, size: u32) -> ThumbTicket {
         self.request_as(core, uri, size, true, PreviewKind::Thumb)
     }
 
-    /// Media player's cover or its glow; `size` ignored for glow.
     pub fn request_cover(
         self: &Arc<Self>,
         core: Arc<Core>,
@@ -644,7 +589,6 @@ impl Previews {
         }
     }
 
-    /// Each request its own job, so cancelling one leaves the others.
     pub fn request_text(self: &Arc<Self>, core: Arc<Core>, uri: Uri) -> TextTicket {
         let n = self.next_waiter.fetch_add(1, Ordering::Relaxed);
         let key = format!("text:{n}:{uri}");
@@ -691,7 +635,6 @@ impl Previews {
         thumb_text(&head)
     }
 
-    /// A cancelled job that still ended serves those waiting on its successor: same thumbnail.
     fn finish(&self, key: &str, result: ThumbResult) {
         let senders = lock(&self.waiters)
             .remove(key)
@@ -719,8 +662,6 @@ impl Previews {
         }
     }
 
-    /// App makes only server files' thumbnails; local ones are the system thumbnailer's. `size` is
-    /// one of [`THUMB_SIZES`].
     async fn make(&self, core: &Core, uri: &Uri, size: u32, cached: bool, kind: PreviewKind) -> ThumbResult {
         let file = ThumbFile::open(core, uri, cached).await?;
         let entry = &file.entry;
@@ -728,7 +669,6 @@ impl Previews {
             return Err(Error::kind(ErrorKind::IsADirectory));
         }
         let audio = category_of(entry) == FileCategory::Audio;
-        // Read when asked: a View options change holds from the next thumbnail on.
         let settings = ThumbSettings::new(&core.settings());
         if kind != PreviewKind::Thumb {
             if !audio {
@@ -755,7 +695,6 @@ impl Previews {
         }
         let larger = THUMB_SIZES.iter().filter(|s| **s > size);
         let bytes = if let Some(hit) = larger.filter_map(|s| self.cache.get(&key_of(*s))).next() {
-            // Cached pixels are upright already.
             tokio::task::spawn_blocking(move || render_thumbnail(&hit, size, 1))
                 .await
                 .map_err(|e| Error::new(ErrorKind::Internal, format!("thumbnail worker failed: {e}")))??
@@ -777,7 +716,6 @@ impl Previews {
             ));
         } else if audio {
             let (bytes, own) = self.audio_cover(core, &file, size).await?;
-            // A folder picture is kept under its own key: one change to it shows in every track.
             if own {
                 self.put(&key, &bytes);
             }
@@ -788,7 +726,6 @@ impl Previews {
                 let (dir, limit) = (self.cache.dir(), settings.pdf_limit());
                 self.pdf.make(dir, &version, handle.as_ref(), size, limit).await?
             } else {
-                // Battery saving: embedded EXIF thumbnail only, no whole file.
                 let max = if core.power_save() {
                     0
                 } else {
@@ -816,7 +753,6 @@ impl Previews {
         )
     }
 
-    /// Rendered cover at `size`: the file's own (`true`), else its folder's picture.
     async fn audio_cover(&self, core: &Core, file: &ThumbFile, size: u32) -> Result<(Vec<u8>, bool)> {
         let none_key = Self::key_of(file, NO_COVER_KEY_SIZE);
         if !self.cache.contains(&none_key) {
@@ -843,8 +779,6 @@ impl Previews {
         }
     }
 
-    /// `cover.jpg`, `folder.jpg` or `front.jpg` beside the file, rendered at `size` and kept by its
-    /// own name and change time. None when missing, too large or not an image.
     async fn folder_cover(&self, core: &Core, file: &ThumbFile, size: u32) -> Option<Vec<u8>> {
         let folder = Uri::parse(&file.key_uri).ok()?.parent()?;
         let entries = match core.dircache.get(&folder) {
@@ -894,7 +828,6 @@ impl Previews {
         Ok(Arc::new(glow))
     }
 
-    /// Player read the file: its cover serves the next cover request.
     fn remember_cover(&self, version: String, cover: Option<Vec<u8>>) {
         *lock(&self.last_cover) = cover.map(|c| (version, Arc::new(c)));
     }
@@ -906,8 +839,6 @@ async fn spawn_render<T: Send + 'static>(work: impl FnOnce() -> Result<T> + Send
         .map_err(|e| Error::new(ErrorKind::Internal, format!("thumbnail worker failed: {e}")))?
 }
 
-/// Tags (and cover when `want_cover`) of an audio file; only the parts the parser reads cross the
-/// network ([`audio::RangeReader`]). `None`: not readable as audio.
 async fn read_audio_of(handle: Arc<dyn ReadHandle>, want_cover: bool) -> Result<Option<AudioRead>> {
     let Some(size) = handle.size() else {
         return Ok(None);
@@ -940,8 +871,6 @@ struct ThumbFile {
 }
 
 impl ThumbFile {
-    /// `listed`: entry from the cached folder listing when there is one, so a viewer's placeholder
-    /// waits on no server round trip (those queue behind the full image's reads).
     async fn open(core: &Core, uri: &Uri, listed: bool) -> Result<ThumbFile> {
         let provider = core.provider(&uri.location)?;
         let entry = match listed.then(|| listed_file(core, uri)).flatten() {
@@ -978,7 +907,6 @@ impl Core {
         Ok(Arc::from(handle))
     }
 
-    /// Failures do not matter to the viewer.
     pub fn note_viewed(&self, uri: &Uri, kind: RecentKind) {
         if let Err(e) = self.recents.record(uri, &display(uri), kind) {
             log::debug!("recents not updated: {e}");
@@ -999,8 +927,6 @@ impl Core {
         })
     }
 
-    /// Colours come with the text if ready within [`highlight::FIRST_WAIT`], else text is plain and
-    /// colouring goes on.
     pub async fn view_text(&self, uri: &Uri) -> Result<ViewedText> {
         let loaded = self.load_text(uri).await?;
         let TextDoc {
@@ -1024,7 +950,6 @@ impl Core {
         })
     }
 
-    /// Reading viewer's rich text: `.txt` as prose, anything else as Markdown. Only the first MiB.
     pub async fn render_reading(&self, uri: &Uri, style: markdown::Style) -> Result<RenderedText> {
         let loaded = self.load_text(uri).await?;
         let prose = ptext::reads_as_prose(uri.path.name().unwrap_or_default());
@@ -1060,8 +985,6 @@ impl Core {
         })
     }
 
-    /// Tags of an audio file and where its cover comes from. A file lofty can't read has empty
-    /// tags, not an error: the player then shows its name.
     pub async fn audio_info(&self, uri: &Uri) -> Result<AudioInfo> {
         let provider = self.provider(&uri.location)?;
         let entry = provider.stat(&uri.path, true, Lane::Interactive).await?;
@@ -1121,9 +1044,6 @@ impl Core {
             .collect()
     }
 
-    /// Image viewer's stand-in while the image decodes: the camera's EXIF thumbnail, oriented, at
-    /// most `size`. Without one, a clear image of the photo's upright shape: the grid tile drawn
-    /// under it takes its place from that. Reads the file's head (and JPEG segment headers) only.
     pub async fn viewer_preview(&self, uri: &Uri, size: u32) -> Result<Vec<u8>> {
         let provider = self.provider(&uri.location)?;
         let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
@@ -1141,7 +1061,6 @@ impl Core {
             .map_err(|e| Error::new(ErrorKind::Internal, format!("thumbnail worker failed: {e}")))?
     }
 
-    /// Kept in [`ShownImages`] while its file keeps its size.
     pub async fn full_image(&self, uri: &Uri) -> Result<FullImage> {
         let provider = self.provider(&uri.location)?;
         let handle = provider.open_read(&uri.path, Lane::Interactive).await?;
@@ -1171,13 +1090,10 @@ impl Core {
         &self.shown_images
     }
 
-    /// Viewer closed: kept images go.
     pub fn forget_shown_images(&self) {
         lock(&self.shown_images.0).clear();
     }
 
-    /// Open cache takes the new budget, trimmed off the caller's thread; one opened later reads the
-    /// setting itself.
     pub(crate) fn follow_thumbnail_budget(&self, settings: &Settings) {
         let dir = self.paths.thumbs_dir();
         let list = lock(PREVIEWS.get_or_init(Mutex::default));
@@ -1210,7 +1126,6 @@ impl Core {
         Ok(previews)
     }
 
-    /// Fallback: copies a media file into the private cache so it plays from disk.
     pub async fn download_for_playback(&self, uri: &Uri, progress: ProgressSink) -> Result<PathBuf> {
         let provider = self.provider(&uri.location)?;
         let dir = self.paths.cache_dir().join("media");
@@ -1245,7 +1160,6 @@ impl Core {
 mod tests {
     use super::*;
 
-    /// Logs each `read_at` when called; each read then waits for one permit of `gate`.
     struct Gated {
         data: Vec<u8>,
         calls: std::sync::Mutex<Vec<(u64, usize)>>,
@@ -1253,7 +1167,6 @@ mod tests {
         gate: tokio::sync::Semaphore,
         hints: std::sync::Mutex<Vec<(u64, u64)>>,
         fail_at: std::sync::Mutex<Option<u64>>,
-        /// Claimed size beyond the data: a file that shrank since it was opened.
         missing: std::sync::atomic::AtomicU64,
     }
 
@@ -1274,7 +1187,6 @@ mod tests {
             self.calls.lock().unwrap().clone()
         }
 
-        /// Hang guard only: work of milliseconds.
         async fn until(&self, what: impl Fn(&[(u64, usize)]) -> bool) {
             let mut rx = self.called.subscribe();
             let wait = async {
@@ -1342,7 +1254,6 @@ mod tests {
             );
             next += len as u64;
         }
-        // Nothing to wait for: the fetch must stay idle once far enough ahead.
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         assert!(
             reach(&h.calls()) <= pos + (4 << 20) + (512 << 10),
@@ -1394,7 +1305,6 @@ mod tests {
         assert!(h.calls().contains(&(at, FIRST_BYTES)));
         let ahead = at + 4096 + READ_AHEAD_BYTES as u64;
         h.until(|c| reach(c) >= ahead).await;
-        // Nothing to wait for: the fetch must stay idle once far enough ahead of the seek.
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         assert!(reach(&h.calls()) <= ahead + PIECE_BYTES as u64);
     }
@@ -1405,7 +1315,6 @@ mod tests {
         let r = ReadAhead::new(h.clone()).unwrap();
         r.read(0, 4096).await.unwrap();
         h.until(|c| c.len() == 2).await;
-        // Fetch past its read and waiting for the lock when stopped: abort cannot reach it.
         let f = lock(&r.shared.state).fetch.take().unwrap();
         lock(&r.shared.state).stop_fetch();
         h.gate.add_permits(1);
@@ -1420,7 +1329,6 @@ mod tests {
         let r = ReadAhead::new(h.clone()).unwrap();
         r.read(0, 10).await.unwrap();
         h.until(|c| c.iter().any(|c| c.0 == 1 << 20)).await;
-        // Nothing to wait for: an empty read ends the fetch.
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         assert_eq!(h.calls().iter().filter(|c| c.0 == 1 << 20).count(), 1);
         assert!(r.read(1 << 20, 10).await.unwrap().is_empty(), "file ends early");
@@ -1447,7 +1355,6 @@ mod tests {
         let h = Gated::new(12 << 20, OPEN);
         let r = ReadAhead::new(h.clone()).unwrap();
         r.read(0, 10).await.unwrap();
-        // Player 4 MiB behind `upto`: fetch stops at the first piece end past it.
         let fill = |upto: u64| {
             let (h, r) = (h.clone(), &r);
             async move {
@@ -1499,7 +1406,6 @@ mod tests {
         h.until(|c| c.len() == 2).await;
         drop(r);
         h.gate.add_permits(OPEN - 1);
-        // Nothing to wait for: a stopped fetch reads nothing more.
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         assert_eq!(h.calls().len(), 2);
     }
@@ -1617,7 +1523,6 @@ mod tests {
 
     #[test]
     fn viewer_decodes_jpegs_at_the_libjpeg_step_that_covers_the_screen() {
-        // 4:3 shows widest turned: 1440x1080.
         assert_eq!(
             decode_size((4000, 3000), SCREEN, true),
             Some((2000, 1500)),
@@ -1658,9 +1563,7 @@ mod tests {
             Some((4560, 2000)),
             "eighth one row short"
         );
-        // 16:9 shows 1920x1080 turned.
         assert_eq!(decode_size((4000, 2250), SCREEN, true), Some((2000, 1125)));
-        // Panorama fills the long side: 2280 wide.
         assert_eq!(decode_size((8000, 2000), SCREEN, true), Some((4000, 1000)));
     }
 

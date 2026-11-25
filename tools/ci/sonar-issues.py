@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Lists every open SonarCloud issue and unreviewed security hotspot for this PR or
-branch; fails if any.
-
-Env: SONAR_TOKEN, SONAR_SCOPE ("pullRequest=<n>" or "branch=<name>").
-"""
 import base64
 import json
 import os
@@ -35,7 +30,6 @@ def location(item):
 
 
 def fetch_all(path, list_name):
-    """(items, total). Issues API stops at 10 000 results."""
     items = []
     page = 1
     while True:

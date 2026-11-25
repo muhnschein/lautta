@@ -1,13 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Page colours: gray with stretched contrast, and black-and-white that follows uneven light.
 
 use image::{GrayImage, Luma, RgbImage};
 
-/// Share of pixels allowed to clip at each end when stretching contrast.
 const CLIP: f64 = 0.01;
-/// A pixel this much darker than its surroundings is ink.
 const INK: u64 = 15;
-/// Surroundings: square with sides of one eighth of the page's longer side.
 const WINDOW_DIVISOR: u32 = 8;
 
 fn luma(p: &image::Rgb<u8>) -> u8 {
@@ -15,7 +11,6 @@ fn luma(p: &image::Rgb<u8>) -> u8 {
     ((r * 299 + g * 587 + b * 114 + 500) / 1000) as u8
 }
 
-/// Darkest and brightest level once [`CLIP`] of the pixels is cut off each end.
 fn levels(hist: &[u64; 256], total: u64) -> (u8, u8) {
     let cut = (total as f64 * CLIP) as u64;
     let edge = |levels: Box<dyn Iterator<Item = usize>>| {
@@ -31,7 +26,6 @@ fn levels(hist: &[u64; 256], total: u64) -> (u8, u8) {
     (edge(Box::new(0..256)), edge(Box::new((0..256).rev())))
 }
 
-/// Gray page, darkest parts black and brightest white.
 pub fn grayscale(src: &RgbImage) -> GrayImage {
     let mut out = GrayImage::from_fn(src.width(), src.height(), |x, y| {
         Luma([luma(src.get_pixel(x, y))])
@@ -51,7 +45,6 @@ pub fn grayscale(src: &RgbImage) -> GrayImage {
     out
 }
 
-/// Sums of all pixels above and left of each position; one row and column of zeros in front.
 fn integral(gray: &GrayImage) -> Vec<u64> {
     let (w, h) = (gray.width() as usize, gray.height() as usize);
     let mut sums = vec![0u64; (w + 1) * (h + 1)];
@@ -65,8 +58,6 @@ fn integral(gray: &GrayImage) -> Vec<u64> {
     sums
 }
 
-/// Ink where a pixel is [`INK`] percent darker than the mean around it (Bradley-Roth); 0 = ink,
-/// 255 = paper.
 pub fn black_white(gray: &GrayImage) -> GrayImage {
     let (w, h) = (gray.width() as usize, gray.height() as usize);
     let sums = integral(gray);
@@ -87,7 +78,6 @@ pub fn black_white(gray: &GrayImage) -> GrayImage {
     })
 }
 
-/// Rows packed to one bit per pixel, most significant bit first, 1 = paper; rows start on a byte.
 pub fn pack_bits(bw: &GrayImage) -> Vec<u8> {
     let (w, h) = (bw.width() as usize, bw.height() as usize);
     let stride = w.div_ceil(8);
@@ -130,7 +120,6 @@ mod tests {
 
     #[test]
     fn a_few_stray_pixels_do_not_set_the_range() {
-        // 1000 pixels: 5 black specks, 5 white ones, the rest between 100 and 200.
         let src = RgbImage::from_fn(100, 10, |x, y| {
             let v = match (x, y) {
                 (0..=4, 0) => 0,
@@ -155,7 +144,6 @@ mod tests {
         hist[120] = 978;
         hist[200] = 1;
         hist[250] = 10;
-        // Ten of a thousand may clip: level 10 and 250 go, 50 and 200 stay.
         assert_eq!(levels(&hist, 1000), (50, 200));
         hist[10] = 9;
         hist[250] = 11;
@@ -181,8 +169,6 @@ mod tests {
 
     #[test]
     fn ink_stays_ink_in_light_and_shadow() {
-        // Left half lit (paper 220, ink 120), right half in shadow (paper 110, ink 40): one
-        // level for the whole page would lose one side.
         let gray = GrayImage::from_fn(160, 80, |x, y| {
             let ink = y % 16 < 2 && x % 80 > 10 && x % 80 < 70;
             Luma([match (x < 80, ink) {
@@ -214,7 +200,6 @@ mod tests {
 
     #[test]
     fn window_reaches_right_and_down_too() {
-        // Corner pixel: dark enough against its three neighbours, not against one alone.
         let mut gray = GrayImage::from_pixel(16, 16, Luma([200]));
         gray.put_pixel(0, 0, Luma([155]));
         assert_eq!(black_white(&gray).get_pixel(0, 0)[0], 0);
@@ -222,8 +207,6 @@ mod tests {
 
     #[test]
     fn window_is_an_eighth_of_the_longer_side() {
-        // Dark block of 40 × 40 on a page of 320: window of 41 around its centre sees only
-        // the block, so the centre counts as paper of a dark area, not ink.
         let gray = GrayImage::from_fn(320, 80, |x, y| {
             Luma([if (140..180).contains(&x) && (20..60).contains(&y) {
                 60

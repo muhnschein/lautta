@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Recursive name search below a folder; results stream in per folder and are grouped by it.
 
 use crate::json::{from_json, to_json};
 use crate::runtime::{core, handle};
@@ -53,16 +52,10 @@ pub struct SearchModel {
     rootUri: qt_property!(QString; NOTIFY rootUriChanged WRITE set_root_uri),
     rootUriChanged: qt_signal!(),
     rootName: qt_property!(QString; NOTIFY rootUriChanged),
-    /// Blank with filters lists everything that passes them.
     query: qt_property!(QString; NOTIFY filtersChanged),
-    /// `substring` or `glob`.
     matchMode: qt_property!(QString; NOTIFY filtersChanged),
-    /// JSON array of `folder`, `image`, `video`, `audio`, `document`, `archive`, `text`; empty =
-    /// any.
     types: qt_property!(QString; NOTIFY filtersChanged),
-    /// `any`, `gt1m`, `gt10m`, `gt100m`, `lt100k`, `lt1m`.
     sizePreset: qt_property!(QString; NOTIFY filtersChanged),
-    /// `any`, `today`, `week`, `month`, `year`.
     datePreset: qt_property!(QString; NOTIFY filtersChanged),
     includeHidden: qt_property!(bool; NOTIFY filtersChanged),
     filtersChanged: qt_signal!(),
@@ -72,11 +65,9 @@ pub struct SearchModel {
     hitCount: qt_property!(i32; NOTIFY progressChanged),
     folderCount: qt_property!(i32; NOTIFY progressChanged),
     errorCount: qt_property!(i32; NOTIFY progressChanged),
-    /// `ErrorKind` name; empty when the search did not fail.
     errorKind: qt_property!(QString; NOTIFY progressChanged),
     errorMessage: qt_property!(QString; NOTIFY progressChanged),
     progressChanged: qt_signal!(),
-    /// -1 = unlimited.
     depthLimit: qt_property!(i32; NOTIFY progressChanged),
     recentSearchesJson: qt_property!(QString; NOTIFY recentChanged),
     recentChanged: qt_signal!(),
@@ -228,7 +219,6 @@ impl SearchModel {
         if let Some(flag) = self.cancel_flag.take() {
             flag.store(true, Ordering::Relaxed);
         }
-        // Late events of the stopped search are ignored.
         self.generation += 1;
         if self.running {
             self.running = false;
@@ -236,7 +226,6 @@ impl SearchModel {
         }
     }
 
-    /// False when nothing to search for or no root.
     fn start(&mut self) -> bool {
         let (Some(core), Some(root)) = (core(), self.root()) else {
             return false;

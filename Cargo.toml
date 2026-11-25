@@ -22,12 +22,10 @@ unsafe_code = "deny"
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
 
-# Small build folders.
 [profile.dev]
 debug = "line-tables-only"
 incremental = false
 
-# Text viewer grammars run regexes here; unoptimised too slow for host tests and emulated target.
 [profile.dev.package.syntect]
 opt-level = 3
 [profile.dev.package.fancy-regex]
@@ -37,8 +35,6 @@ opt-level = 3
 [profile.dev.package.regex-syntax]
 opt-level = 3
 
-# Unwind: PDF tripping the renderer fails that draw, not the app. Other panics abort via
-# `lautta_core::panics` hook.
 [profile.release]
 panic = "unwind"
 lto = "fat"
@@ -47,7 +43,5 @@ opt-level = 3
 strip = "symbols"
 debug = false
 
-# qttypes 0.2.12 links QtWidgets unconditionally; Harbour forbids it. third_party/qttypes puts the
-# link behind a feature.
 [patch.crates-io]
 qttypes = { path = "third_party/qttypes" }

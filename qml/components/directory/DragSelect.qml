@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Held delegate stays alive while its row scrolls out of
-// view: row is in DelegateModel's persisted items.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "Selection.js" as Selection
@@ -15,8 +14,6 @@ Item {
     property var before: ({})
     property point heldAt
     property point finger
-    // Scroll waits until finger moves: holding near an edge, or under the opening panel, must not
-    // scroll.
     property bool moved
     readonly property real speed: holder && moved
                                   ? Selection.autoScroll(finger.y, 0, view.height - bottomInset,

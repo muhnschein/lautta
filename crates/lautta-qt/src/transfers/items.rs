@@ -94,7 +94,6 @@ pub struct TransferItemsModel {
     transferIdChanged: qt_signal!(),
     count: qt_property!(i32; NOTIFY countChanged),
     countChanged: qt_signal!(),
-    /// Empty when the transfer is gone.
     summaryJson: qt_property!(QString; NOTIFY summaryChanged),
     summaryChanged: qt_signal!(),
     refresh: qt_method!(fn(&mut self)),
@@ -246,7 +245,7 @@ pub(super) fn summary_json(core: &lautta_core::app::Core, id: i64, book: &Progre
         "finishedMs": s.finished_ms,
         "direction": direction,
         "destination": core.locations.display_address(&s.dest),
-        "destName": loc_name(&s.dest),
+        "destName": core.display_title(&s.dest),
         "sourceAddress": source_dir.as_ref().map(|u| core.locations.display_address(u)),
         "sourceName": source_dir.as_ref().map(loc_name),
         "verifyChecksums": s.options.verify_checksums,
@@ -256,7 +255,6 @@ pub(super) fn summary_json(core: &lautta_core::app::Core, id: i64, book: &Progre
     })))
 }
 
-/// Level netvfs now grants where an item was refused, less than full, and that place's name.
 fn refused(core: &lautta_core::app::Core, id: i64) -> (&'static str, String) {
     let Some(item) = core.engine.first_refused(id) else {
         return ("", String::new());

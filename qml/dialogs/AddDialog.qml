@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later What to add to a folder. One switch at a time,
-// nothing preset; picked page takes this dialog's place.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
@@ -7,10 +6,8 @@ Dialog {
     id: dialog
 
     property string parentUri
-    // "folder", "scan", or "" until picked.
     property string choice
 
-    // Destination page once accepted: caller wires it up.
     signal picked(string choice, var page)
 
     function choose(which) {
@@ -23,7 +20,6 @@ Dialog {
                      : choice === "scan" ? Qt.resolvedUrl("../pages/ScanPage.qml")
                      : ""
     acceptDestinationAction: PageStackAction.Replace
-    // Only what both pages have: Silica may build the page before a pick-bound value follows.
     acceptDestinationProperties: ({ "parentUri": dialog.parentUri })
 
     onAccepted: picked(choice, acceptDestinationInstance)

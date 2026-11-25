@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Zip central directory parser and entry reader. The `zip` crate reads every entry's local header
-//! on open, touching the whole file just to list it. This reads end-of-central-directory and
-//! central directory (2-3 ranged reads), local header only on open. WinZip AES entries open with
-//! the password ([`crate::zipaes`]); legacy ZipCrypto ones not at all.
 
 use super::blocks::{from_io, BlockReader, BlockSource};
 use super::{Loc, RawEntry};
@@ -10,6 +6,7 @@ use crate::entry::Kind;
 use crate::error::{Error, ErrorKind, Result};
 use crate::password::Password;
 use crate::zipaes::{self, AesField, Decryptor};
+use chrono::{DateTime, Local, Offset, TimeZone};
 use std::io::{self, Read, Seek, SeekFrom};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime};
@@ -38,7 +35,6 @@ pub struct ZipLoc {
 const FLAG_ENCRYPTED: u16 = 0x0001;
 
 impl ZipLoc {
-    /// WinZip AES: opens with the password.
     pub fn aes(&self) -> Option<AesField> {
         self.aes
             .filter(|_| self.flags & FLAG_ENCRYPTED != 0 && self.method == zipaes::METHOD)
@@ -218,7 +214,6 @@ fn extra_fields(mut extra: &[u8]) -> Vec<(u16, &[u8])> {
     out
 }
 
-/// zip64 field holds, in order, only the values that were `0xFFFFFFFF` in the fixed header.
 fn apply_zip64(data: &[u8], size: &mut u64, compressed: &mut u64, offset: &mut u64) {
     let mut at = 0;
     for slot in [size, compressed, offset] {
@@ -260,15 +255,24 @@ fn classify(made_by: u16, attrs: u32, name: &[u8]) -> (Kind, Option<u32>) {
     }
 }
 
-/// Local time treated as UTC.
 pub fn dos_to_time(date: u16, time: u16) -> SystemTime {
+    dos_to_time_in(&Local, date, time)
+}
+
+fn dos_to_time_in<Tz: TimeZone>(tz: &Tz, date: u16, time: u16) -> SystemTime {
     let year = 1980 + i64::from(date >> 9);
     let month = i64::from((date >> 5) & 0xF).clamp(1, 12);
     let day = i64::from(date & 0x1F).max(1);
-    let secs = days_from_civil(year, month, day) * 86_400
+    let wall = days_from_civil(year, month, day) * 86_400
         + i64::from(time >> 11) * 3600
         + i64::from((time >> 5) & 0x3F) * 60
         + i64::from(time & 0x1F) * 2;
+    let offset = DateTime::from_timestamp(wall, 0).map_or(0, |t| {
+        tz.offset_from_utc_datetime(&t.naive_utc())
+            .fix()
+            .local_minus_utc()
+    });
+    let secs = wall - i64::from(offset);
     SystemTime::UNIX_EPOCH + Duration::from_secs(u64::try_from(secs).unwrap_or(0))
 }
 
@@ -282,7 +286,6 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     era * 146_097 + doe - 719_468
 }
 
-/// Positioned at the entry's stored bytes, `loc.compressed` of them.
 fn stored_data(src: &Arc<BlockSource>, loc: &ZipLoc) -> Result<io::Take<BlockReader>> {
     let mut reader = src.reader();
     let head = reader.read_exact_at(loc.header_offset, 30).map_err(from_io)?;
@@ -303,8 +306,6 @@ fn needs_password(password: Option<&Password>) -> Result<&Password> {
     password.ok_or_else(|| Error::kind(ErrorKind::PasswordRequired))
 }
 
-/// First AES entry decides: `PasswordRequired` without a password, `WrongPassword` with a wrong one.
-/// Archives without one take no password.
 pub fn check_password(
     src: &Arc<BlockSource>,
     entries: &[RawEntry],
@@ -364,16 +365,11 @@ pub fn open_entry(
     Ok(Box::new(Checked::new(stream, loc, finish)))
 }
 
-/// Bounds output to declared size and requires data to end there, verifies CRC-32 (AE-2: the AES
-/// tag instead): bombs and corrupt entries cannot pass. AE-2 sizes are not under its tag: lowered
-/// size must fail, not cut entry short.
 struct Checked {
     inner: io::Take<Box<dyn Read + Send>>,
     crc: flate2::Crc,
-    /// `None`: AE-2 stores no CRC.
     expect_crc: Option<u32>,
     expect_len: u64,
-    /// Checks the AES tag even when decompression stops before the last stored byte.
     finish: Option<Finish>,
 }
 
@@ -414,18 +410,24 @@ impl Read for Checked {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::FixedOffset;
 
     #[test]
     fn dos_time_conversion() {
-        // 2024-03-05 12:34:56
         let date = ((2024 - 1980) << 9) | (3 << 5) | 5;
         let time = (12 << 11) | (34 << 5) | (56 / 2);
-        let t = dos_to_time(date as u16, time as u16);
-        let secs = t
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        assert_eq!(secs, 1_709_642_096);
+        let secs = |tz: &FixedOffset| {
+            dos_to_time_in(tz, date as u16, time as u16)
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0)
+        };
+        assert_eq!(secs(&FixedOffset::east_opt(0).unwrap()), 1_709_642_096);
+        assert_eq!(secs(&FixedOffset::east_opt(3600).unwrap()), 1_709_642_096 - 3600);
+        assert_eq!(
+            secs(&FixedOffset::west_opt(5 * 3600).unwrap()),
+            1_709_642_096 + 5 * 3600
+        );
     }
 
     #[test]
@@ -461,7 +463,7 @@ mod tests {
         assert!(parse_directory(&[1, 2, 3], 1).is_err());
         let mut b = CENTRAL_SIG.to_le_bytes().to_vec();
         b.extend_from_slice(&[0u8; 60]);
-        b[28] = 0xFF; // name longer than the buffer
+        b[28] = 0xFF;
         assert!(parse_directory(&b, 1).is_err());
     }
 }

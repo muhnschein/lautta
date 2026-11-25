@@ -21,7 +21,6 @@ pub(crate) fn parse_uri(s: &QString) -> Option<Uri> {
     Uri::parse(&s.to_string()).ok()
 }
 
-/// `None` when any entry is not a URI.
 pub(crate) fn parse_uris(json: &QString) -> Option<Vec<Uri>> {
     let list: Vec<String> = from_json(&json.to_string())?;
     list.iter().map(|s| Uri::parse(s).ok()).collect()
