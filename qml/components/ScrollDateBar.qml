@@ -84,36 +84,36 @@ Item {
         id: handle
 
         objectName: "scrollDateHandle"
-        x: parent.width - width
+        x: parent.width - width - Theme.paddingMedium
         y: bar.progress * (parent.height - height)
-        width: bar.dragging ? Theme.paddingMedium : Theme.paddingSmall
-        height: Theme.itemSizeLarge
-        color: Theme.highlightColor
-        opacity: bar.dragging ? 1 : Theme.opacityHigh
-    }
+        width: Math.max(dateText.implicitWidth, dateDescription.implicitWidth) + 2 * Theme.paddingLarge
+        height: lines.height + 2 * Theme.paddingSmall
+        radius: Theme.paddingMedium
+        color: Theme.highlightBackgroundColor
 
-    Column {
-        objectName: "scrollDateLabel"
-        anchors {
-            right: handle.left
-            rightMargin: Theme.paddingLarge
-            verticalCenter: handle.verticalCenter
-        }
+        Column {
+            id: lines
 
-        Label {
-            objectName: "scrollDateText"
-            anchors.right: parent.right
-            text: bar.text
-            color: Theme.highlightColor
-            font.pixelSize: Theme.fontSizeLarge
-        }
-        Label {
-            objectName: "scrollDateDescription"
-            anchors.right: parent.right
-            visible: text.length > 0
-            text: bar.description
-            color: Theme.secondaryHighlightColor
-            font.pixelSize: Theme.fontSizeSmall
+            x: Theme.paddingLarge
+            anchors.verticalCenter: parent.verticalCenter
+
+            Label {
+                id: dateText
+
+                objectName: "scrollDateText"
+                text: bar.text
+                color: Theme.primaryColor
+                font.pixelSize: Theme.fontSizeMedium
+            }
+            Label {
+                id: dateDescription
+
+                objectName: "scrollDateDescription"
+                visible: text.length > 0
+                text: bar.description
+                color: Theme.primaryColor
+                font.pixelSize: Theme.fontSizeMedium
+            }
         }
     }
 
@@ -122,17 +122,18 @@ Item {
 
         property real grabbed
 
-        x: parent.width - width
-        width: Theme.itemSizeSmall
-        height: parent.height
+        x: handle.x - Theme.paddingLarge
+        y: handle.y - Theme.paddingLarge
+        width: parent.width - x
+        height: handle.height + 2 * Theme.paddingLarge
         enabled: bar.visible
         preventStealing: true
-        onPressed: grabbed = mouse.y - handle.y
+        onPressed: grabbed = mouse.y + drag.y - handle.y
         onPositionChanged: {
             if (!pressed)
                 return
             var travel = Math.max(1, bar.height - handle.height)
-            var at = Math.max(0, Math.min(1, (mouse.y - grabbed) / travel))
+            var at = Math.max(0, Math.min(1, (mouse.y + drag.y - grabbed) / travel))
             bar.flickable.cancelFlick()
             bar.flickable.contentY = bar.flickable.originY + at * bar.range
         }
