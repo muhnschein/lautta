@@ -64,7 +64,7 @@ PullDownMenu {
         onClicked: menu.owner.runAction("favourite", [menu.owner.uri], {}, null)
     }
     MenuItem {
-        visible: menu.browsing && menu.writable && App.clipboardCount > 0 && App.canPasteInto(owner ? owner.uri : "")
+        visible: menu.browsing && (owner ? owner.canPaste : false)
         //% "Paste %n items"
         text: qsTrId("lautta-dir-menu-paste", App.clipboardCount)
         onClicked: menu.owner.paste()
