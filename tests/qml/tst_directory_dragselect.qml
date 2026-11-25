@@ -122,7 +122,6 @@ ApplicationWindow {
         tools.mouse(flick(), "release", 0, 0)
     }
 
-    // Grid only: the row of the held cell says so.
     function hold(index) {
         press(index)
         return waitFor(function () { var c = cell(index); return c && c.parent.holding === true }, "item " + index + " held")

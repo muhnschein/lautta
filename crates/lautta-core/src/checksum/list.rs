@@ -1,24 +1,18 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Checksum lists: GNU `sha256sum` lines, BSD tags (`SHA256 (name) = hex`), one-hash files
-//! (`x.iso.sha256`), SFV, PGP clear-signed lists (signature not checked). Content is untrusted:
-//! size and entry caps, names stay bytes, unreadable lines are skipped.
 
 use super::Algorithm;
 use crate::error::{Error, ErrorKind, Result};
 
-/// Larger files are not read as lists.
 pub const MAX_BYTES: u64 = 1 << 20;
 pub const MAX_ENTRIES: usize = 10_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ListEntry {
-    /// As written: may hold `/`, `..` or be absolute; callers resolve it safely.
     pub name: Vec<u8>,
     pub algorithm: Algorithm,
     pub digest: Vec<u8>,
 }
 
-/// Lowercase extensions and `*sums` stems that name an algorithm.
 const HINTS: [(&str, Algorithm); 24] = [
     ("md5", Algorithm::Md5),
     ("md5sum", Algorithm::Md5),
@@ -46,11 +40,8 @@ const HINTS: [(&str, Algorithm); 24] = [
     ("crc32", Algorithm::Crc32),
 ];
 
-/// Names that are lists without naming an algorithm.
 const GENERIC: [&str; 3] = ["checksums", "checksum", "sums"];
 
-/// What a file name says about a list: `None` = not a list; `Some(None)` = list, algorithm from
-/// its lines.
 pub fn list_kind(file_name: &[u8]) -> Option<Option<Algorithm>> {
     let lower = String::from_utf8_lossy(file_name).to_lowercase();
     let mut name = lower.as_str();
@@ -66,8 +57,6 @@ pub fn list_kind(file_name: &[u8]) -> Option<Option<Algorithm>> {
     generic(name).then_some(None)
 }
 
-/// Parses `data` read from list `file_name`. Fails on more than [`MAX_BYTES`] or
-/// [`MAX_ENTRIES`].
 pub fn parse(file_name: &[u8], data: &[u8]) -> Result<Vec<ListEntry>> {
     if data.len() as u64 > MAX_BYTES {
         return Err(Error::new(ErrorKind::Unsupported, "checksum list too large"));
@@ -96,13 +85,12 @@ pub fn parse(file_name: &[u8], data: &[u8]) -> Result<Vec<ListEntry>> {
     Ok(out)
 }
 
-/// Lines of the list; of a PGP clear-signed one only the signed text, dash-escapes undone.
 fn body_lines(data: &[u8]) -> Vec<&[u8]> {
     let lines = data
         .split(|b| *b == b'\n')
         .map(|l| l.strip_suffix(b"\r").unwrap_or(l));
     let mut out = Vec::new();
-    let mut state = 0u8; // 0 plain, 1 armour header, 2 signed text
+    let mut state = 0u8;
     for line in lines {
         match state {
             0 if line == b"-----BEGIN PGP SIGNED MESSAGE-----" => state = 1,
@@ -116,13 +104,10 @@ fn body_lines(data: &[u8]) -> Vec<&[u8]> {
     out
 }
 
-/// Empty text gives an empty digest, which no algorithm has.
 fn hex_digest(text: &[u8]) -> Option<Vec<u8>> {
     hex::decode(text).ok()
 }
 
-/// Algorithm of an unlabelled digest: the name's hint if lengths agree, else the most used one
-/// of that length.
 fn by_length(len: usize, hint: Option<Algorithm>) -> Option<Algorithm> {
     if let Some(a) = hint.filter(|a| a.digest_len() == len) {
         return Some(a);
@@ -130,7 +115,6 @@ fn by_length(len: usize, hint: Option<Algorithm>) -> Option<Algorithm> {
     Algorithm::all().find(|a| a.digest_len() == len)
 }
 
-/// `SHA256 (name) = hex`, as `sha256sum --tag`, BSD `sha256`, `b2sum --tag`, `xxhsum --tag`.
 fn parse_tag(line: &[u8]) -> Option<ListEntry> {
     let open = line.iter().position(|b| *b == b'(')?;
     let close = line.windows(4).rposition(|w| w == b") = ")?;
@@ -149,7 +133,6 @@ fn parse_tag(line: &[u8]) -> Option<ListEntry> {
     })
 }
 
-/// `hex  name`, `hex *name` (binary mode), `\hex  esc\\aped\nname`.
 fn parse_gnu(line: &[u8], hint: Option<Algorithm>) -> Option<ListEntry> {
     let (escaped, line) = match line.strip_prefix(b"\\") {
         Some(rest) => (true, rest),
@@ -189,7 +172,6 @@ fn unescape(raw: &[u8]) -> Option<Vec<u8>> {
     Some(out)
 }
 
-/// `name crc32` per line; `;` starts a comment.
 fn parse_sfv(line: &[u8]) -> Option<ListEntry> {
     if line.first() == Some(&b';') {
         return None;
@@ -205,7 +187,6 @@ fn parse_sfv(line: &[u8]) -> Option<ListEntry> {
     })
 }
 
-/// `x.iso.sha256` holding only the digest: names `x.iso`.
 fn single_hash(file_name: &[u8], data: &[u8], hint: Option<Algorithm>) -> Option<ListEntry> {
     let text = body_lines(data)
         .into_iter()

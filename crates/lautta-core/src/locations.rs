@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Location registry: everything the user can browse, with the provider behind each. User folders
-//! and Android storage are found by looking at the home folder, shown only if they exist and are
-//! readable. Removable volumes come from [`crate::volumes`]; netvfs accounts are pushed in with [`LocationRegistry::set_remote`]; archives via `register`/`unregister`. Cheap to
-//! clone (shared state); implements [`ProviderResolver`]; follow changes with
-//! [`LocationRegistry::subscribe`].
 
 use crate::bridge::DriveKind;
 use crate::entry::cap;
@@ -74,18 +69,13 @@ pub enum LocationStatus {
     NeedsAttention,
 }
 
-/// Kept apart from [`LocationStatus`]: a server not connected (never used, closed when idle) is
-/// still browsable, opening it connects.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum ConnectionState {
-    /// Not a network location, or a bridge that does not tell: nothing is shown.
     #[default]
     Unknown,
     Disconnected,
     Connecting,
     Connected,
-    /// As disconnected, but the last attempt failed: the netvfs error name (`""` when the bridge
-    /// gave none).
     Failed(String),
 }
 
@@ -114,8 +104,6 @@ pub struct Location {
     pub kind: LocationKind,
     pub name: String,
     pub local_root: Option<PathBuf>,
-    /// May contain a user name but never a password; [`LocationRegistry::display_address`] strips
-    /// anything secret again.
     pub url: Option<String>,
     pub attention: Option<String>,
     pub status: LocationStatus,
@@ -177,9 +165,7 @@ struct State {
     volumes: Vec<Slot>,
     remote: Vec<Slot>,
     extra: Vec<Slot>,
-    /// URIs on them (clipboard, a page still open) are told apart from a missing item.
     gone: BTreeMap<String, String>,
-    /// What [`State::volumes`] was made from.
     vols: Vec<Volume>,
     words: VolumeWords,
 }
@@ -284,9 +270,6 @@ impl LocationRegistry {
             .collect()
     }
 
-    /// Deletes in user and Android folders go to the *Trash* whatever the mount: in the sandbox
-    /// each is a mount of its own, apart from `$HOME` (a tmpfs) and app data, and the trash copies
-    /// what it cannot rename.
     fn local_provider(&self, root: &Path, keeps_trash: bool) -> Arc<dyn Provider> {
         let mut provider = LocalProvider::new(root.to_path_buf()).with_semaphore(self.inner.io.clone());
         if keeps_trash {
@@ -296,7 +279,6 @@ impl LocationRegistry {
     }
 
     fn replace_slots(&self, group: fn(&mut State) -> &mut Vec<Slot>, found: Vec<Location>) -> bool {
-        // Deletes on removable volumes are permanent.
         let keeps_trash = !matches!(found.first().map(|l| &l.kind), Some(LocationKind::Volume));
         let old: Vec<Slot> = group(&mut self.state()).clone();
         let same =
@@ -360,7 +342,6 @@ impl LocationRegistry {
         changed
     }
 
-    /// Words for volumes without label, in the UI's language.
     pub fn set_volume_words(&self, words: VolumeWords) {
         let vols = {
             let mut state = self.state();
@@ -376,7 +357,6 @@ impl LocationRegistry {
         self.state().words.clone()
     }
 
-    /// Kind of drive behind volume location `id`.
     pub fn volume_kind(&self, id: &str) -> Option<DriveKind> {
         self.state()
             .vols
@@ -479,8 +459,6 @@ impl LocationRegistry {
             .map(|s| s.location.clone())
     }
 
-    /// `file://` and the absolute path for local locations, the netvfs URL plus path for remote
-    /// ones, without credentials, query or fragment.
     pub fn display_address(&self, uri: &Uri) -> String {
         let Some(loc) = self.get(&uri.location) else {
             return uri.to_string();
@@ -651,7 +629,6 @@ mod tests {
         std::fs::set_permissions(e.home.join("Music"), std::fs::Permissions::from_mode(0o000)).unwrap();
         e.reg.refresh();
         std::fs::set_permissions(e.home.join("Music"), std::fs::Permissions::from_mode(0o755)).unwrap();
-        // Root reads everything.
         let want: &[&str] = if sys::effective_ids().0 == 0 {
             &["user-documents", "user-music"]
         } else {
@@ -855,8 +832,6 @@ mod tests {
 
     #[test]
     fn folders_on_another_device_than_home_keep_a_trash() {
-        // Sailjail: $HOME is a tmpfs and every permitted folder is mounted on it from the real file
-        // system, so no folder is on $HOME's device.
         let e = env_with(&[]);
         let shm = tempfile::tempdir_in("/dev/shm").expect("host tests need a tmpfs at /dev/shm");
         assert!(!sys::same_device(shm.path(), &e.home).unwrap());
@@ -920,7 +895,6 @@ mod tests {
         assert_eq!(gone.kind, ErrorKind::LocationGone);
         assert!(gone.message.contains("NAS"), "{gone}");
         assert_eq!(e.reg.name("nv-1").as_deref(), Some("NAS"));
-        // A location never seen is unknown, not gone.
         assert_eq!(e.reg.provider("nv-9").err().unwrap().kind, ErrorKind::NotFound);
         assert_eq!(e.reg.name("nv-9"), None);
         assert_eq!(e.reg.name("user-documents").as_deref(), Some("Documents"));
@@ -1141,7 +1115,6 @@ mod tests {
     #[test]
     fn longest_root_wins_and_outsiders_are_rejected() {
         let e = env_with(&["Documents", "Music"]);
-        // A prefix of another name must not match: Documents vs Documents2
         std::fs::create_dir(e.home.join("Documents2")).unwrap();
         assert_eq!(e.reg.uri_for_local_path(&e.home.join("Documents2/x")), None);
         let nested = e.home.join("Documents/Shared");

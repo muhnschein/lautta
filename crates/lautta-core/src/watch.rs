@@ -1,12 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! inotify watching with debouncing.
-//!
-//! [`DirWatcher`] watches local folders (not recursively) while open in the browser and sends one
-//! [`WatchEvent::Changed`] per folder to each of its [`DirWatch`]es after changes were quiet for
-//! the debounce time.
-//!
-//! Raw `notify` events are handled on a small worker thread owning the debounce state; consumers
-//! get events through unbounded tokio channels. The thread stops when the watcher is dropped.
 
 use crate::error::{Error, ErrorKind, Result};
 use notify::event::{AccessKind, AccessMode};
@@ -80,7 +72,6 @@ pub(crate) fn map_notify_error(e: notify::Error) -> Error {
 pub(crate) fn raw_watcher() -> Result<(RecommendedWatcher, mpsc::Receiver<notify::Result<Event>>)> {
     let (tx, rx) = mpsc::channel();
     let watcher = notify::recommended_watcher(move |res| {
-        // The worker may already be gone during shutdown.
         let _ = tx.send(res);
     })
     .map_err(map_notify_error)?;
@@ -94,9 +85,6 @@ pub(crate) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     }
 }
 
-/// Stops when the raw channel closes (its watcher dropped) or `emit` returns false (consumer
-/// gone). Blocks while nothing is pending: no wakeups when idle. `classify` maps a raw event to
-/// the keys it touches; `emit` delivers a due key.
 pub(crate) fn spawn_worker<K, C, E>(
     raw: mpsc::Receiver<notify::Result<Event>>,
     delay: Duration,
@@ -149,8 +137,6 @@ fn changes_listing(kind: &EventKind) -> bool {
 
 type Subscribers = HashMap<PathBuf, Vec<(u64, UnboundedSender<WatchEvent>)>>;
 
-/// One inotify instance and one thread for all folders of the process: the kernel allows few
-/// instances per user (128 by default), shared by every app.
 #[derive(Clone)]
 pub struct DirWatcher {
     shared: Arc<Shared>,
@@ -162,7 +148,6 @@ struct Shared {
     next_id: AtomicU64,
 }
 
-/// Follows one folder until dropped.
 pub struct DirWatch {
     shared: Arc<Shared>,
     dir: PathBuf,
@@ -170,7 +155,6 @@ pub struct DirWatch {
 }
 
 impl DirWatcher {
-    /// Changes arrive after `debounce` of quiet.
     pub fn new(debounce: Duration) -> Result<DirWatcher> {
         let (watcher, raw) = raw_watcher()?;
         let subs: Arc<Mutex<Subscribers>> = Arc::default();
@@ -198,8 +182,6 @@ impl DirWatcher {
         })
     }
 
-    /// Changes of `dir` arrive on the receiver while the [`DirWatch`] lives. `NotFound` if it
-    /// does not exist.
     pub fn watch(&self, dir: &Path) -> Result<(DirWatch, UnboundedReceiver<WatchEvent>)> {
         let mut subs = lock(&self.shared.subs);
         if !subs.contains_key(dir) {
@@ -236,14 +218,12 @@ impl Drop for DirWatch {
             return;
         }
         subs.remove(&self.dir);
-        // Fails once the folder, and with it the kernel watch, is gone: nothing left to undo.
         let _ = lock(&self.shared.watcher).unwatch(&self.dir);
     }
 }
 
 fn dirs_touched<V>(watched: &HashMap<PathBuf, V>, ev: &Event) -> Vec<PathBuf> {
     if ev.need_rescan() {
-        // The kernel queue overflowed: assume everything changed.
         return watched.keys().cloned().collect();
     }
     if !changes_listing(&ev.kind) {
@@ -279,7 +259,6 @@ mod tests {
             .flatten()
     }
 
-    /// Channel ends; a channel that stays open but quiet is not closed.
     async fn closed<T>(rx: &mut UnboundedReceiver<T>) -> bool {
         let got = tokio::time::timeout(Duration::from_secs(30), rx.recv()).await;
         matches!(got, Ok(None))
@@ -385,8 +364,6 @@ mod tests {
         assert_eq!(got, [PathBuf::from("/w/a"), PathBuf::from("/w/b")]);
     }
 
-    /// One inotify event (`mkdir`): unlike a file write (create, modify, close), a stalled
-    /// runner cannot split it into two debounced reports.
     fn one_change(path: &Path) {
         std::fs::create_dir(path).unwrap();
     }
@@ -398,7 +375,6 @@ mod tests {
     #[tokio::test]
     async fn dir_watcher_reports_a_burst_once() {
         let d = tempfile::tempdir().unwrap();
-        // Long quiet time: a stalled writer on a loaded runner must not split the burst.
         let w = DirWatcher::new(Duration::from_secs(2)).unwrap();
         let (_watch, mut rx) = w.watch(d.path()).unwrap();
         for i in 0..10 {
@@ -408,7 +384,6 @@ mod tests {
         assert!(silent(&mut rx, 500).await, "the burst must collapse to one event");
     }
 
-    /// Fresh folder and watcher per change: a late event of one change can't stand in for another.
     async fn sees(act: impl FnOnce(&Path)) {
         let d = tempfile::tempdir().unwrap();
         std::fs::write(d.path().join("old"), "x").unwrap();

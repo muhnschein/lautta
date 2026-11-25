@@ -13,7 +13,6 @@ fn within(p: (f32, f32), c: &[(f32, f32); 4]) -> bool {
     })
 }
 
-/// Sheet with the given corners (relative) on a table; edges smooth (4 × 4 samples a pixel).
 fn photo(w: u32, h: u32, corners: [(f32, f32); 4], sheet: [u8; 3], table: [u8; 3]) -> RgbImage {
     RgbImage::from_fn(w, h, |x, y| {
         let mut on = 0u32;
@@ -75,7 +74,6 @@ fn strongly_turned_sheet_is_found_with_top_left_first() {
     assert_close(find_page(&photo(640, 480, diamond, PAPER, TABLE)), diamond, 0.004);
 }
 
-/// Sides leaning 10° and 20° to the middle: 20° apart is perspective, 40° no page.
 #[test]
 fn sides_converge_only_as_far_as_perspective_makes_them() {
     let photo_of = |top: (f32, f32)| {
@@ -107,7 +105,6 @@ fn picture_printed_on_the_sheet_is_not_the_page() {
 
 #[test]
 fn frame_printed_close_to_a_faint_edge_is_not_the_page() {
-    // Sharp black frame just inside a sheet barely lighter than the table.
     let square = [(0.2, 0.2), (0.8, 0.2), (0.8, 0.8), (0.2, 0.8)];
     let mut img = photo(1600, 1200, square, [215, 215, 215], [185, 185, 185]);
     let (l, t, r, b) = (334, 254, 1266, 946);
@@ -120,7 +117,6 @@ fn frame_printed_close_to_a_faint_edge_is_not_the_page() {
 
 #[test]
 fn table_edge_beyond_the_sheet_is_no_side() {
-    // Dark band across the photo above the sheet: the sheet's sides lead up to it.
     let square = [(0.25, 0.3), (0.75, 0.3), (0.75, 0.85), (0.25, 0.85)];
     let mut img = photo(640, 480, square, PAPER, [120, 120, 120]);
     fill(&mut img, 0..640, 0..96, [30, 30, 30]);
@@ -179,7 +175,6 @@ fn faint_sheet_is_not_a_page() {
 
 #[test]
 fn small_spot_is_not_a_page() {
-    // A little under, and over, a thirtieth of the photo.
     let spot = [(0.4, 0.4), (0.57, 0.4), (0.57, 0.57), (0.4, 0.57)];
     assert_eq!(find_page(&photo(640, 480, spot, PAPER, TABLE)), None);
     let page = [(0.4, 0.4), (0.6, 0.4), (0.6, 0.6), (0.4, 0.6)];
@@ -271,7 +266,6 @@ fn fit_runs_through_the_points_facing_the_given_way() {
     assert!(up.n.1 < 0.0);
     let down = Line::fit(&points, (0.0, 1.0)).unwrap();
     assert!(down.n.1 > 0.0 && (down.rho + up.rho).abs() < 1e-4);
-    // Least squares: middle of two parallel rows.
     let rows = [(0.0, 0.0), (10.0, 0.0), (0.0, 2.0), (10.0, 2.0)];
     let mid = Line::fit(&rows, (0.0, 1.0)).unwrap();
     assert!(near(mid.n, (0.0, 1.0)) && (mid.rho - 1.0).abs() < 1e-4, "{mid:?}");
@@ -298,7 +292,6 @@ fn span_is_the_part_inside_the_picture() {
         near(start, (3.0, 0.0)) && (len - 8.0).abs() < 1e-4,
         "{start:?} {len}"
     );
-    // On the border: still inside.
     let (start, len) = Line {
         n: (1.0, 0.0),
         rho: 0.0,
@@ -341,7 +334,6 @@ fn corners_turn_clockwise_from_top_left() {
     assert_eq!(clockwise(square), Some(square));
     let backwards = [(4.0, 4.0), (4.0, 0.0), (0.0, 0.0), (0.0, 4.0)];
     assert_eq!(clockwise(backwards), Some(square));
-    // Tie on x + y: the upper corner leads.
     let diamond = [(0.0, 5.0), (5.0, 0.0), (10.0, 5.0), (5.0, 10.0)];
     assert_eq!(
         clockwise(diamond),
@@ -359,7 +351,6 @@ fn area_and_corner_angles() {
     assert_eq!(area(&rect), 8.0);
     assert_eq!(area(&[rect[3], rect[2], rect[1], rect[0]]), 8.0);
     assert!(square_enough(&rect));
-    // Parallelogram with 45° corners passes, 35° ones do not.
     assert!(square_enough(&[(0.0, 0.0), (4.0, 0.0), (6.0, 2.0), (2.0, 2.0)]));
     let flat = 35f32.to_radians().tan().recip() * 2.0;
     assert!(!square_enough(&[
@@ -368,7 +359,6 @@ fn area_and_corner_angles() {
         (4.0 + flat, 2.0),
         (flat, 2.0)
     ]));
-    // One sharp corner and its blunt neighbour are enough to fail.
     assert!(!square_enough(&[
         (0.0, 0.0),
         (10.0, 0.0),
@@ -377,7 +367,6 @@ fn area_and_corner_angles() {
     ]));
 }
 
-/// Edges marked by hand: `marks` = (x range, y range, angle of the normal).
 fn edges(w: usize, h: usize, marks: &[(std::ops::Range<usize>, std::ops::Range<usize>, f32)]) -> Edges {
     let mut angle = vec![f32::NAN; w * h];
     for (xs, ys, a) in marks {
@@ -410,7 +399,6 @@ fn nothing_outside_the_picture_is_an_edge() {
 
 #[test]
 fn track_counts_edges_along_the_line_and_beside_it() {
-    // Row 10 marked from x 20 to 59, row 11 from 70 to 79, row 13 from 85 to 89 (too far).
     let e = edges(
         100,
         30,
@@ -440,7 +428,6 @@ fn track_counts_edges_along_the_line_and_beside_it() {
         10,
         "feet on the line count"
     );
-    // Edges at another angle do not count.
     let tilted = edges(100, 30, &[(20..60, 10..11, ACROSS + 0.3)]);
     let track = Track::new(
         &tilted,
@@ -463,7 +450,6 @@ fn track_counts_edges_along_the_line_and_beside_it() {
     assert_eq!(track.between((0.0, 10.5), (100.0, 10.5)).1, 40, "within MATCH");
 }
 
-/// Sides of a square from (20, 20) to (80, 80) in a 100 × 100 picture, top, right, bottom, left.
 fn square_lines() -> [Line; 4] {
     [
         Line {
@@ -494,7 +480,6 @@ fn judged(e: &Edges, lines: [Line; 4]) -> Result<([V; 4], f32), Miss> {
     )
 }
 
-/// Square's outline, with `gap` (x range, y range) left out of it.
 fn outline(gap: (std::ops::Range<usize>, std::ops::Range<usize>)) -> Edges {
     let mut e = edges(
         100,
@@ -524,7 +509,6 @@ fn judge_takes_a_square_with_edges_all_round() {
     assert!((size - 59.0 * 59.0).abs() < 1e-2, "{size}");
 }
 
-/// Diamond with every corner half a pixel outside the 100 × 100 picture.
 #[test]
 fn judge_takes_corners_up_to_a_pixel_outside() {
     let c = [(-0.5, 50.0), (50.0, -0.5), (100.5, 50.0), (50.0, 100.5)];
@@ -586,12 +570,10 @@ fn judge_says_why_lines_make_no_page() {
         },
     ];
     assert_eq!(judged(&full, small), Err(Miss::Small));
-    // Parallelogram leaning 39° off the horizontal.
     let mut slanted = square_lines();
     slanted[1] = Line::fit(&[(97.0, 20.5), (25.0, 79.5)], (1.0, 0.0)).unwrap();
     slanted[3] = Line::fit(&[(77.0, 20.5), (5.0, 79.5)], (-1.0, 0.0)).unwrap();
     assert_eq!(judged(&full, slanted), Err(Miss::Slanted));
-    // Bow tie: corners (10, 10), (90, 60), (90, 10), (10, 90).
     let through = |a: V, b: V| Line::fit(&[a, b], (0.0, 1.0)).unwrap();
     let crossed = [
         through((10.0, 90.0), (10.0, 10.0)),
@@ -600,7 +582,6 @@ fn judge_says_why_lines_make_no_page() {
         through((90.0, 10.0), (10.0, 90.0)),
     ];
     assert_eq!(judged(&full, crossed), Err(Miss::Crossed));
-    // Top side bare near its right corner: a fifth of it is 12 pixels, 9 or 7 of them missing.
     assert_eq!(
         judged(&outline((71..80, 20..21)), square_lines()),
         Err(Miss::BareEnd)
@@ -609,7 +590,6 @@ fn judge_says_why_lines_make_no_page() {
         judged(&outline((73..80, 20..21)), square_lines()).is_ok(),
         "7 of 12 missing"
     );
-    // Top side bare in the middle: ends fine, side not.
     assert_eq!(
         judged(&outline((30..55, 20..21)), square_lines()),
         Err(Miss::BareSide)
@@ -618,7 +598,6 @@ fn judge_says_why_lines_make_no_page() {
         judged(&outline((33..53, 20..21)), square_lines()).is_ok(),
         "20 of 59 missing"
     );
-    // Each side bare for 21 of 59 in the middle: sides pass, all four together not.
     let mut sparse = outline((0..0, 0..0));
     for (xs, ys) in [
         (39..60, 20..21),
@@ -662,7 +641,6 @@ fn edges_are_thin_and_lie_across_the_change() {
             && !e.on((5.0, -0.5), 0.0)
             && !e.on((5.0, 40.5), 0.0)
     );
-    // Same in the other direction.
     let img = imageops::blur(
         &photo(
             40,
@@ -677,8 +655,6 @@ fn edges_are_thin_and_lie_across_the_change() {
     let col: Vec<usize> = (0..60).filter(|y| !e.angle[y * 40 + 20].is_nan()).collect();
     assert_eq!(col.len(), 1, "{col:?}");
     assert!(angle_gap(e.angle[col[0] * 40 + 20], ACROSS) < 0.01);
-    // Diagonals are thinned along the diagonal: one pixel, or up to three where neighbours
-    // lie as far either side.
     let img = imageops::blur(
         &photo(
             60,
@@ -715,7 +691,6 @@ fn edges_are_thin_and_lie_across_the_change() {
             "row {y}: {row:?}"
         );
     }
-    // A faint step leaves no edge.
     let faint = Edges::new(&photo(
         60,
         40,
@@ -745,7 +720,6 @@ fn colour_change_alone_makes_an_edge() {
 
 #[test]
 fn hough_finds_long_lines_once_and_skips_short_ones() {
-    // Long line along row 30 (x 10..190), short one along column 150 (y 50..57).
     let e = edges(200, 100, &[(10..190, 30..31, ACROSS), (150..151, 50..57, 0.0)]);
     let lines = e.lines();
     assert_eq!(lines.len(), 1, "{lines:?}");
@@ -753,7 +727,6 @@ fn hough_finds_long_lines_once_and_skips_short_ones() {
         angle_gap(lines[0].angle(), ACROSS) < 1e-3 && (lines[0].off((100.0, 30.5))).abs() < 0.05,
         "{lines:?}"
     );
-    // Two parallel lines 6 apart are both kept; a twin 2 apart is not.
     let e = edges(
         200,
         100,
@@ -764,7 +737,6 @@ fn hough_finds_long_lines_once_and_skips_short_ones() {
         ],
     );
     assert_eq!(e.lines().len(), 2);
-    // Votes across angle 0 = π: steep line leaning either way.
     let lean = |a: f32| {
         let mut marks = Vec::new();
         for k in 0..80usize {
@@ -780,7 +752,6 @@ fn hough_finds_long_lines_once_and_skips_short_ones() {
     }
 }
 
-/// Votes needed grow with the picture: 4 % of its long side, at least 8.
 #[test]
 fn hough_needs_more_votes_on_larger_pictures() {
     let line = |len: usize| edges(300, 60, &[(100..100 + len, 30..31, ACROSS)]).lines().len();
@@ -794,7 +765,6 @@ fn settle_fits_the_edge_pixels_along_the_whole_line() {
         n: (0.0, 1.0),
         rho: 11.0,
     };
-    // Edges only near the far end of the line.
     let line = edges(100, 20, &[(80..96, 10..11, ACROSS)])
         .settle(coarse)
         .unwrap();
@@ -819,14 +789,12 @@ fn settle_looks_a_pixel_either_side_and_to_both_ends() {
         let e = edges(100, 20, &[(0..100, 10..11, ACROSS)]);
         assert!(e.settle(row(rho)).is_some(), "{rho}");
     }
-    // Eight edge pixels, four at each end: all count.
     let ends = edges(100, 20, &[(0..4, 10..11, ACROSS), (96..100, 10..11, ACROSS)]);
     assert!(ends.settle(row(10.5)).is_some());
 }
 
 #[test]
 fn many_lines_keep_the_strongest() {
-    // Columns 6 apart, each shorter than the one before.
     let marks: Vec<_> = (0..60)
         .map(|k| (6 * k + 3..6 * k + 4, 0..(190 - 2 * k), 0.0))
         .collect();
@@ -850,7 +818,6 @@ fn sample_blends_neighbours() {
     assert_eq!(sample(&img, (0.5, 1.5)), [0.0, 200.0, 50.0]);
     assert_eq!(sample(&img, (-3.0, 9.0)), [0.0, 200.0, 50.0]);
     assert_eq!(sample(&img, (1.25, 0.5)), [75.0, 0.0, 50.0]);
-    // Past the right and the bottom edge: the last pixels.
     assert_eq!(sample(&img, (5.0, 0.5)), [100.0, 0.0, 50.0]);
     assert_eq!(sample(&img, (0.5, 5.0)), [0.0, 200.0, 50.0]);
     let img = RgbImage::from_fn(3, 3, |x, y| Rgb([(x * 100) as u8, (y * 100) as u8, 0]));
@@ -859,32 +826,26 @@ fn sample_blends_neighbours() {
 
 #[test]
 fn refine_moves_onto_the_outermost_clear_edge() {
-    // Page edge at x = 100 (half as sharp), print line at x 106..111 (sharp), table left.
     let mut img = RgbImage::from_fn(200, 100, |x, _| Rgb(if x < 100 { [110; 3] } else { [210; 3] }));
     fill(&mut img, 106..111, 0..100, [20, 20, 20]);
     let line = refine(&img, (105.0, 10.0), (105.0, 90.0), (150.0, 50.0), 8.0).unwrap();
     assert!(line.off((100.0, 50.0)).abs() < 0.5, "{line:?}");
-    // Facing the other way round the side, outermost means the print's far edge.
     let line = refine(&img, (105.0, 90.0), (105.0, 10.0), (50.0, 50.0), 8.0).unwrap();
     assert!(line.off((111.0, 50.0)).abs() < 0.6, "{line:?}");
-    // The same whichever way the side runs.
     let line = refine(&img, (105.0, 10.0), (105.0, 90.0), (50.0, 50.0), 8.0).unwrap();
     assert!(line.off((111.0, 50.0)).abs() < 0.6, "{line:?}");
-    // Turned a quarter: page edge at y = 100, print below it.
     let mut img = RgbImage::from_fn(100, 200, |_, y| Rgb(if y < 100 { [110; 3] } else { [210; 3] }));
     fill(&mut img, 0..100, 106..111, [20, 20, 20]);
     let line = refine(&img, (10.0, 105.0), (90.0, 105.0), (50.0, 150.0), 8.0).unwrap();
     assert!(line.off((50.0, 100.0)).abs() < 0.5, "{line:?}");
     let line = refine(&img, (10.0, 105.0), (90.0, 105.0), (50.0, 50.0), 8.0).unwrap();
     assert!(line.off((50.0, 111.0)).abs() < 0.6, "{line:?}");
-    // A much fainter edge outside loses to the clear one.
     let mut img = RgbImage::from_fn(200, 100, |x, _| Rgb(if x < 100 { [200; 3] } else { [205; 3] }));
     fill(&mut img, 106..200, 0..100, [120, 120, 120]);
     let line = refine(&img, (105.0, 10.0), (105.0, 90.0), (150.0, 50.0), 8.0).unwrap();
     assert!(line.off((106.0, 50.0)).abs() < 0.6, "{line:?}");
 }
 
-/// Vertical edge between 60 and 220 at `x` (a fraction of pixel `x.floor()` dark).
 fn step_at(x: f32) -> RgbImage {
     RgbImage::from_fn(200, 100, |px, _| {
         let dark = (x - px as f32).clamp(0.0, 1.0);
@@ -901,10 +862,8 @@ fn refine_finds_the_edge_to_a_tenth_of_a_pixel() {
             "{x}: {line:?}"
         );
     }
-    // Edge as far out as `reach` reaches.
     let line = refine(&step_at(100.0), (108.0, 10.0), (108.0, 90.0), (150.0, 50.0), 7.5).unwrap();
     assert!(line.off((100.0, 50.0)).abs() < 0.1, "{line:?}");
-    // One pixel further: out of reach.
     assert_eq!(
         refine(&step_at(100.0), (109.0, 10.0), (109.0, 90.0), (150.0, 50.0), 7.5),
         None
@@ -914,7 +873,6 @@ fn refine_finds_the_edge_to_a_tenth_of_a_pixel() {
 #[test]
 fn refine_follows_slanted_sides_of_a_sheet() {
     let (w, h) = (640.0, 480.0);
-    // Sides a little off level, and at 45°.
     let diamond = [(0.5, 0.1), (0.8, 0.5), (0.5, 0.9), (0.2, 0.5)];
     for sheet in [SHEET, diamond] {
         let img = photo(640, 480, sheet, PAPER, TABLE);
@@ -922,7 +880,6 @@ fn refine_follows_slanted_sides_of_a_sheet() {
         let centre = c.iter().fold((0.0, 0.0), |s, p| add(s, *p, 0.25));
         for k in 0..4 {
             let (a, b) = (c[(k + 3) % 4], c[k]);
-            // Coarse side 2.5 px inside the sheet.
             let inward = |p: V| {
                 add(
                     p,
@@ -957,7 +914,6 @@ fn refine_sees_an_edge_in_any_one_colour() {
 
 #[test]
 fn refine_needs_the_edge_along_half_the_side() {
-    // Edge only for y < 40: 8 of the 24 probes along y 22..78.
     let img = RgbImage::from_fn(
         200,
         100,
@@ -967,8 +923,6 @@ fn refine_needs_the_edge_along_half_the_side() {
         refine(&img, (103.0, 10.0), (103.0, 90.0), (150.0, 50.0), 6.0),
         None
     );
-    // Half the probes from either end: 12 of 24, the last seeing the edge only in one of its
-    // three points.
     for half in [|y: u32| y < 47, |y: u32| y >= 53] {
         let img = RgbImage::from_fn(200, 100, |x, y| {
             Rgb([if x < 100 && half(y) { 60 } else { 220 }; 3])
@@ -982,7 +936,6 @@ fn refined_corners_stay_near_the_coarse_ones() {
     let was = [(79.5, 20.5), (79.5, 79.5), (20.5, 79.5), (20.5, 20.5)];
     let corners = settled(&square_lines(), &was, 5.0).unwrap();
     assert!(corners.iter().zip(was).all(|(c, w)| near(*c, w)), "{corners:?}");
-    // 8 px off with reach 5: still near; 11 px: a side caught something else.
     let shifted = |dx: f32, dy: f32| was.map(|p| (p.0 + dx, p.1 + dy));
     assert!(settled(&square_lines(), &shifted(8.0, 0.0), 5.0).is_some());
     assert!(settled(&square_lines(), &shifted(0.0, 8.0), 5.0).is_some());
@@ -995,7 +948,6 @@ fn refined_corners_stay_near_the_coarse_ones() {
 
 #[test]
 fn refine_drops_stray_points_and_gives_up_on_noise() {
-    // Straight edge at x = 100 with a dark blot crossing it at one probe.
     let mut img = RgbImage::from_fn(200, 100, |x, _| Rgb(if x < 100 { [60; 3] } else { [220; 3] }));
     fill(&mut img, 93..97, 40..44, [220, 220, 220]);
     let line = refine(&img, (102.0, 10.0), (102.0, 90.0), (150.0, 50.0), 6.0).unwrap();
@@ -1012,7 +964,6 @@ fn refine_drops_stray_points_and_gives_up_on_noise() {
 
 #[test]
 fn refine_keeps_points_within_three_spreads() {
-    // Edge wavers a pixel either way; rows 48..64 bulge 3 px in: they count and pull the side in.
     let img = RgbImage::from_fn(200, 100, |x, y| {
         let edge = match y {
             48..64 => 103,

@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Home facades with the real Qt event loop, a temporary HOME and a fake netvfs bridge. Scenario
-//! is a QML script (steps with action and condition); the fake bridge is driven through the `Fake`
-//! object. One engine per process, hence one test.
 
 #![allow(non_snake_case)]
 
@@ -87,7 +84,6 @@ impl FakeWorld {
         run(fake().remove_location(&id.to_string()));
     }
 
-    /// `level`: a level word, else not allowed.
     fn setAccess(&self, id: QString, level: QString) {
         run(fake().set_access(&id.to_string(), Level::parse(&level.to_string())));
     }
@@ -125,7 +121,6 @@ impl FakeWorld {
         fake().put_file(&location.to_string(), path.to_string().as_bytes(), b"x");
     }
 
-    /// Root may add files to any folder whatever its permissions.
     fn superuser(&self) -> bool {
         lautta_core::sys::effective_ids().0 == 0
     }
@@ -181,7 +176,6 @@ fn home_models_follow_the_core_and_the_bridge() {
         format!("import QtQuick 2.6\nimport Lautta 1.0\nimport FakeWorld 1.0\n{SCRIPT}"),
     )
     .unwrap();
-    // `qml_check` fails on any console.error: that is how a step fails.
     let rc = lautta_qt::qml_check(&[file.display().to_string()]);
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
     assert_eq!(rc, 0, "a step of the scenario failed (see output)");

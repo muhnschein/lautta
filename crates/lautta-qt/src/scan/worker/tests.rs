@@ -6,7 +6,6 @@ use lautta_pdf::PdfDocument;
 use std::time::Duration;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-/// Hang guard: jobs take milliseconds.
 const LONG: Duration = Duration::from_secs(60);
 
 struct Bench {
@@ -58,7 +57,6 @@ impl Bench {
             .expect("worker alive")
     }
 
-    /// Next job's outcome and the progress reported before it.
     async fn done(&mut self) -> (Vec<PageInfo>, Event, Vec<f64>) {
         let mut progress = Vec::new();
         loop {

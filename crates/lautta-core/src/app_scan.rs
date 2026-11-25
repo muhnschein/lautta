@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Scan area on `Core`: puts a finished scan into a folder. Qt-free.
 
 use crate::app::Core;
 use crate::app_operations::free_name;
@@ -23,8 +22,6 @@ pub fn pdf_file_name(name: &str) -> String {
 }
 
 impl Core {
-    /// Copies `pdf` into `dest_dir`, device folder or server, as `name` or the next free name.
-    /// Written under a hidden name first: a cut upload leaves no half PDF under the real one.
     pub async fn save_scan(
         &self,
         pdf: &Path,

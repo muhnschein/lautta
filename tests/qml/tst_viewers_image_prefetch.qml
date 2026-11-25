@@ -1,8 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// ViewerPrefetch decodes an image for the viewer, then lets go; viewer's photo made afterwards is
-// ready at once (Qt's pixmap cache, same request). Photo not fetched first still loads. Not for
-// other files; `stop()` drops a running one. Placeholder = camera's EXIF thumbnail, else clear
-// image of the photo's upright shape.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -25,7 +21,6 @@ ApplicationWindow {
 
     ViewerPrefetch { id: prefetch }
 
-    // Status as the source changes: Ready when let go after the decode, else stopped early.
     Connections {
         target: prefetch
         onSourceChanged: window.log.push({ "source": String(prefetch.source), "status": prefetch.status })

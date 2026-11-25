@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Page edges drawn over a picture of the same size.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "ScanMath.js" as ScanMath
@@ -6,7 +6,6 @@ import "ScanMath.js" as ScanMath
 Item {
     id: outline
 
-    // As ScanModel's `corners`.
     property var corners: ScanMath.whole
     property color color: Theme.highlightColor
     property real lineWidth: Math.max(2, Math.round(Theme.paddingSmall / 2))

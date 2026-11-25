@@ -1,13 +1,5 @@
 #!/bin/bash
 # SPDX-License-Identifier: LGPL-2.1-or-later
-# Builds harbour-lautta in a running SDK container and runs `--qml-check` on the given QML
-# files (real Silica, Qt 5.6). One cargo target folder per checkout: worktrees give
-# identical crate hashes and would mix builds.
-#
-#   tools/sdk-qml-check.sh [--no-build] <file.qml|dir>...
-#
-# Env: SDK_CONTAINER (default "sfos", started from the SDK image),
-#      TARGET (default SailfishOS-5.2.0.15-aarch64).
 set -euo pipefail
 container=${SDK_CONTAINER:-sfos}
 target=${TARGET:-SailfishOS-5.2.0.15-aarch64}
@@ -26,7 +18,6 @@ docker exec "$container" mkdir -p "$work" /home/mersdk/shared
     docker exec -i -u 0 "$container" bash -c "rm -rf '$work/src' && mkdir -p '$work/src' && tar -C '$work/src' -xf - && chown -R mersdk '$work'"
 
 if [[ "$build" == yes ]]; then
-    # One vendor folder for all work trees.
     lock_sum=$(sha256sum "$root/Cargo.lock" | cut -c1-16)
     if ! docker exec "$container" test -f "/home/mersdk/shared/vendor-$lock_sum.ok"; then
         tmp=$(mktemp -d)

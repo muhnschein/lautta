@@ -1,19 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Remote thumbnails, which files get one, and the thumbnail cache.
-//!
-//! * [`thumbnail_source`]: the one rule for which files get a thumbnail and who makes it; every
-//!   thumbnail list asks it.
-//! * [`remote_thumbnail`]: EXIF thumbnail from the first 64 KiB if any, else whole file (up to
-//!   View-options size, default 20 MB) decoded and scaled, orientation applied.
-//! * [`ThumbnailCache`]: on-disk LRU within View-options size (default 200 MB, changeable in use),
-//!   keyed by sha256(URI, size, mtime, etag). Sizes are [`THUMB_SIZES`]: grid zoom or rotation
-//!   reuses them, a smaller one is scaled from a larger without reading the file again.
-//! * [`ThumbJobs`]: at most two jobs in flight per location, newest first (visible delegates),
-//!   cancelable by key.
-//!
-//! Audio: cover inside the file, else its folder's `cover.jpg` (`app_viewers`), local and remote.
-//! Local images, videos and PDFs come from `Nemo.Thumbnailer` in QML, not here: it draws them in
-//! helper processes, so a crashing PDF leaves the app running. Server PDFs: [`crate::thumbs_pdf`].
 
 use crate::entry::{Entry, EntryFlags};
 use crate::error::{Error, ErrorKind, Result};
@@ -35,11 +20,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 pub const HEAD_BYTES: u64 = 64 * 1024;
-/// Images with more pixels than this are not decoded (memory bound).
 const MAX_PIXELS: u64 = 64_000_000;
 const JPEG_QUALITY: u8 = 85;
 pub const MAX_IN_FLIGHT_PER_LOCATION: usize = 2;
-/// Every server thumbnail is one of these; a request takes the smallest that covers it.
 pub const THUMB_SIZES: [u32; 4] = [128, 256, 512, 1024];
 
 pub fn thumb_bucket(size: u32) -> u32 {
@@ -52,19 +35,14 @@ pub fn thumb_bucket(size: u32) -> u32 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThumbSource {
     Icon,
-    /// `Nemo.Thumbnailer`, given the `file://` URL and MIME type: local images, videos, PDFs.
     System,
     App,
-    /// First lines drawn by the grid ([`crate::thumbs_text`]): non-empty text, code, Markdown.
     Text,
 }
 
-/// Settings deciding which files get a thumbnail, apart from the folder's *Show thumbnails*.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ThumbSettings {
-    /// *Thumbnails from servers*.
     pub remote: bool,
-    /// *Largest server file with a thumbnail*, in bytes.
     pub max_remote_bytes: u64,
 }
 
@@ -76,16 +54,11 @@ impl ThumbSettings {
         }
     }
 
-    /// Largest server PDF thumbnailed; nothing larger is read. Local PDFs have no limit: the system
-    /// thumbnailer reads them in its own process.
     pub fn pdf_limit(&self) -> u64 {
         self.max_remote_bytes.min(lautta_pdf::MAX_PDF_BYTES)
     }
 }
 
-/// `shown` is the folder's *Show thumbnails*. PDFs, text, code and Markdown follow the image
-/// switches: *Show thumbnails* locally, plus *Thumbnails from servers* remotely. Remote PDF over
-/// [`ThumbSettings::pdf_limit`] and empty text have none.
 pub fn thumbnail_source(entry: &Entry, local: bool, shown: bool, set: &ThumbSettings) -> ThumbSource {
     if !shown || entry.flags.contains(EntryFlags::NOT_ACCESSIBLE) {
         return ThumbSource::Icon;
@@ -106,14 +79,12 @@ pub fn thumbnail_source(entry: &Entry, local: bool, shown: bool, set: &ThumbSett
     }
 }
 
-/// QML adds `?size=N`.
 pub fn app_thumbnail_url(uri: &Uri) -> String {
     format!("image://lautta-thumb/{uri}")
 }
 
 pub fn thumb_key(uri: &str, size: u32, mtime_ms: Option<i64>, etag: Option<&[u8]>) -> String {
     let mut h = Sha256::new();
-    // Length prefixes keep the fields unambiguous.
     h.update((uri.len() as u64).to_le_bytes());
     h.update(uri.as_bytes());
     h.update(size.to_le_bytes());
@@ -155,8 +126,6 @@ pub(crate) fn encode(img: &DynamicImage) -> Result<Vec<u8>> {
     Ok(out.into_inner())
 }
 
-/// JPEG decoded at 1/2, 1/4 or 1/8 size while its longer side stays at least `target`: 12 MP
-/// photo to 512 px on OnePlus 6 takes 43 ms instead of 280.
 fn decode_at_least(bytes: &[u8], target: u32) -> image::ImageResult<DynamicImage> {
     if image::guess_format(bytes)? != ImageFormat::Jpeg {
         return image::load_from_memory(bytes);
@@ -167,7 +136,6 @@ fn decode_at_least(bytes: &[u8], target: u32) -> image::ImageResult<DynamicImage
     DynamicImage::from_decoder(decoder)
 }
 
-/// Never scales up. Pure CPU: call from a blocking context.
 pub fn render_thumbnail(bytes: &[u8], target: u32, orientation: u8) -> Result<Vec<u8>> {
     let target = target.max(1);
     let reader = image::io::Reader::new(Cursor::new(bytes))
@@ -189,10 +157,8 @@ pub fn render_thumbnail(bytes: &[u8], target: u32, orientation: u8) -> Result<Ve
     encode(&apply_orientation(img, orientation))
 }
 
-/// Side of the media player's backdrop; the page scales it up, so it is drawn small and soft.
 pub const GLOW_SIDE: u32 = 48;
 
-/// Blurred, small copy of a rendered cover for the media player's backdrop. JPEG.
 pub fn render_glow(cover: &[u8]) -> Result<Vec<u8>> {
     let img =
         image::load_from_memory(cover).map_err(|e| thumb_error(&format!("not a decodable image: {e}")))?;
@@ -201,13 +167,10 @@ pub fn render_glow(cover: &[u8]) -> Result<Vec<u8>> {
     encode(&DynamicImage::ImageRgb8(soft))
 }
 
-/// Without an EXIF thumbnail the whole file is read if at most `max_bytes`. Returns JPEG, or PNG
-/// for images with alpha.
 pub async fn remote_thumbnail(handle: &dyn ReadHandle, target_size: u32, max_bytes: u64) -> Result<Vec<u8>> {
     let head = read_all(handle, HEAD_BYTES).await?;
     let orientation = exif::orientation(&head);
     if let Some(thumb) = exif::exif_thumbnail(&head) {
-        // The embedded thumbnail is used as is when it needs no work.
         let rendered =
             tokio::task::spawn_blocking(move || render_thumbnail(&thumb, target_size, orientation))
                 .await
@@ -231,9 +194,7 @@ pub async fn remote_thumbnail(handle: &dyn ReadHandle, target_size: u32, max_byt
 
 #[derive(Default)]
 struct CacheIndex {
-    /// key to (bytes, recency sequence number)
     entries: HashMap<String, (u64, u64)>,
-    /// recency sequence number to key, oldest first
     order: BTreeMap<u64, String>,
     total: u64,
     next_seq: u64,
@@ -278,8 +239,6 @@ pub struct ThumbnailCache {
 }
 
 impl ThumbnailCache {
-    /// Opens (creating) `dir`; existing files count against the budget, the
-    /// oldest by modification time are evicted first.
     pub fn new(dir: impl Into<PathBuf>, max_bytes: u64) -> Result<ThumbnailCache> {
         let dir = dir.into();
         std::fs::create_dir_all(&dir)?;
@@ -327,8 +286,6 @@ impl ThumbnailCache {
         self.max_bytes.load(Ordering::Relaxed)
     }
 
-    /// Takes a new budget: a smaller one evicts the least recently used
-    /// thumbnails at once (file removals: call it off the UI thread).
     pub fn set_max_bytes(&self, max_bytes: u64) {
         self.max_bytes.store(max_bytes, Ordering::Relaxed);
         self.evict_to_budget(0);
@@ -350,7 +307,6 @@ impl ThumbnailCache {
         self.lock().entries.contains_key(key)
     }
 
-    /// Marks it most recently used.
     pub fn get(&self, key: &str) -> Option<Vec<u8>> {
         if !valid_key(key) || !self.lock().touch(key) {
             return None;
@@ -364,8 +320,6 @@ impl ThumbnailCache {
         }
     }
 
-    /// Stores an image, then evicts the least recently used ones until the
-    /// budget holds. An image larger than the whole budget is not stored.
     pub fn put(&self, key: &str, data: &[u8]) -> Result<()> {
         if !valid_key(key) {
             return Err(Error::new(ErrorKind::InvalidArgument, "bad thumbnail key"));
@@ -406,7 +360,6 @@ impl ThumbnailCache {
     }
 }
 
-/// Keys are hex digests; anything else could escape the cache directory.
 fn valid_key(key: &str) -> bool {
     !key.is_empty() && key.len() <= 128 && key.bytes().all(|b| b.is_ascii_alphanumeric())
 }
@@ -421,14 +374,12 @@ struct Pending {
 #[derive(Default)]
 struct LocationJobs {
     running: HashMap<String, futures::future::AbortHandle>,
-    /// Newest first: the most recent request is the visible one.
     pending: VecDeque<Pending>,
 }
 
 #[derive(Default)]
 struct JobState {
     locations: HashMap<String, LocationJobs>,
-    /// key to location, for every pending or running job
     keys: HashMap<String, String>,
 }
 
@@ -451,7 +402,6 @@ struct SlotGuard {
 
 impl Drop for SlotGuard {
     fn drop(&mut self) {
-        // Never polled: runtime shut down, maybe dropped it inside `pump` under the lock.
         if !self.started {
             return;
         }
@@ -479,7 +429,6 @@ fn pump(st: &mut JobState, shared: &SharedJobs, rt: &tokio::runtime::Handle, loc
             key: next.key.clone(),
             started: false,
         };
-        // Not tokio's abort: that drops a task unpolled, skipping its guard.
         let (job, abort) = futures::future::abortable(next.job);
         rt.spawn(async move {
             guard.started = true;
@@ -500,7 +449,6 @@ pub struct ThumbJobs {
 }
 
 impl ThumbJobs {
-    /// Jobs run on `rt`, which also lets non-async threads (the UI) submit.
     pub fn new(rt: tokio::runtime::Handle) -> ThumbJobs {
         ThumbJobs {
             state: Arc::default(),
@@ -512,8 +460,6 @@ impl ThumbJobs {
         &self.rt
     }
 
-    /// Queues `job` for `key` at `location`. Returns false (and drops `job`)
-    /// when `key` is already queued or running. Newer requests start first.
     pub fn request(&self, key: &str, location: &str, job: impl Future<Output = ()> + Send + 'static) -> bool {
         let mut st = lock_jobs(&self.state);
         if st.keys.contains_key(key) {
@@ -532,7 +478,6 @@ impl ThumbJobs {
         true
     }
 
-    /// Cancels a queued job (never runs) or aborts a running one. Returns whether `key` was known.
     pub fn cancel(&self, key: &str) -> bool {
         let aborted = {
             let mut st = lock_jobs(&self.state);
@@ -548,7 +493,6 @@ impl ThumbJobs {
                 loc.running.get(key).cloned()
             }
         };
-        // Outside the lock: the aborted task's guard takes it when dropped.
         if let Some(handle) = aborted {
             handle.abort();
         }
@@ -653,7 +597,6 @@ mod tests {
 
     #[test]
     fn every_orientation_maps_pixels_correctly() {
-        // 2x1 image: left pixel red, right pixel blue.
         let mut img = RgbImage::new(2, 1);
         img.put_pixel(0, 0, Rgb([255, 0, 0]));
         img.put_pixel(1, 0, Rgb([0, 0, 255]));
@@ -688,8 +631,6 @@ mod tests {
             thumbnail: Some(embedded),
             gps: false,
         };
-        // The "image" is garbage after the EXIF block: only the embedded
-        // thumbnail can have produced a result.
         let mut file = testutil::bare_jpeg(&spec);
         file.extend(vec![0u8; 3_000_000]);
         let out = remote_thumbnail(handle_for(&file).await.as_ref(), 80, LIMIT)
@@ -718,8 +659,6 @@ mod tests {
         assert_eq!(dims(&out), (120, 160));
     }
 
-    /// A file of `len` bytes that only decodes as a whole: a small JPEG
-    /// padded with zeros, no EXIF thumbnail.
     fn padded_jpeg(len: usize) -> Vec<u8> {
         let mut file = jpeg_of(64, 64, [9, 9, 9]);
         file.resize(len, 0);
@@ -742,7 +681,6 @@ mod tests {
         );
     }
 
-    /// A handle that does not know its size, as some servers' files.
     struct Unsized(Box<dyn ReadHandle>);
 
     #[async_trait::async_trait]
@@ -780,7 +718,6 @@ mod tests {
 
     #[test]
     fn decompression_bomb_dimensions_are_refused() {
-        // A PNG header claiming 20000x20000 pixels.
         let mut img = Cursor::new(Vec::new());
         DynamicImage::ImageLuma8(image::GrayImage::new(1, 1))
             .write_to(&mut img, ImageOutputFormat::Png)
@@ -1270,7 +1207,6 @@ mod tests {
         })
     }
 
-    /// A job that records itself, then waits for `gate`.
     fn gated(p: &Arc<Probe>, name: &str, gate: Arc<Notify>) -> impl Future<Output = ()> + Send + 'static {
         let p = Arc::clone(p);
         let name = name.to_owned();
@@ -1439,7 +1375,6 @@ mod tests {
             }
             settle().await;
         });
-        // Freed slots start "c" on a runtime that is shutting down.
         drop(rt);
         assert_eq!(started(&p), ["a", "b"], "c never ran");
     }

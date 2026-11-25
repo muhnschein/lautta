@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Viewers facades. Logic lives in `lautta_core::app_viewers`; these types only forward and
-//! publish.
 
 pub mod audio;
 pub mod docs;
@@ -33,7 +31,6 @@ pub(crate) fn qstr(s: &str) -> QString {
     QString::from(s)
 }
 
-/// `done` gets the object only if it still exists; nothing blocks the GUI thread.
 pub(crate) fn run_then<O, T, F>(me: &O, fut: F, done: impl FnOnce(&mut O, Result<T>) + 'static)
 where
     O: QObject + 'static,

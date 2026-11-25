@@ -27,7 +27,6 @@ Item {
     }
 
     Component.onCompleted: {
-        // connect(), not Connections: Qt 5.6 and 5.15 disagree on onFoo syntax.
         Transfers.failed.connect(function(kind, message) {
             root.lastKind = kind
             root.failedCount += 1

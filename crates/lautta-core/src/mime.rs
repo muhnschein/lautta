@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! MIME type and file category from extension and magic, and the viewer that handles a file.
 
 use crate::entry::{Entry, Kind};
 
@@ -23,7 +22,6 @@ pub enum FileCategory {
 }
 
 impl FileCategory {
-    /// QML maps it to a glyph (`FileIcons.kind`).
     pub fn icon_name(self) -> &'static str {
         match self {
             FileCategory::Folder => "folder",
@@ -45,13 +43,11 @@ impl FileCategory {
     }
 }
 
-/// Office documents go to *Open with* (`External`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Viewer {
     Image,
     Text,
     Markdown,
-    /// Plain prose (`.txt`) in reading viewer; View source shows it as [`Viewer::Text`].
     Prose,
     Audio,
     Video,
@@ -60,8 +56,6 @@ pub enum Viewer {
     External,
 }
 
-/// Lowercased ASCII extension. A leading dot alone (`.bashrc`) is not an extension; non-ASCII or
-/// very long suffixes are ignored.
 pub fn extension_of(name: &[u8]) -> Option<String> {
     let dot = name.iter().rposition(|b| *b == b'.')?;
     let ext = &name[dot + 1..];
@@ -73,7 +67,6 @@ pub fn extension_of(name: &[u8]) -> Option<String> {
 
 const MARKDOWN_EXTENSIONS: [&str; 6] = ["md", "markdown", "mkd", "mdown", "mdwn", "markdn"];
 
-/// `ext` lowercased.
 pub fn is_markdown_extension(ext: &str) -> bool {
     MARKDOWN_EXTENSIONS.contains(&ext)
 }
@@ -174,7 +167,6 @@ pub fn from_extension(ext: &str) -> Option<(&'static str, FileCategory)> {
     })
 }
 
-/// Longest-prefix-first table for provider-supplied MIME types.
 const MIME_PREFIXES: &[(&str, FileCategory)] = &[
     ("text/markdown", FileCategory::Markdown),
     ("text/x-", FileCategory::Code),
@@ -233,7 +225,6 @@ const MIME_PREFIXES: &[(&str, FileCategory)] = &[
     ("inode/directory", FileCategory::Folder),
 ];
 
-/// Parameters are ignored.
 pub fn category_from_mime(mime: &str) -> FileCategory {
     let base = mime.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
     MIME_PREFIXES
@@ -312,8 +303,6 @@ pub fn sniff(head: &[u8]) -> Option<&'static str> {
     looks_like_text(head).then_some("text/plain")
 }
 
-/// UTF-8 (a multi-byte character cut at the end of the sample is fine), no NUL, and almost no
-/// control characters.
 pub(crate) fn looks_like_text(head: &[u8]) -> bool {
     if head.is_empty() {
         return false;
@@ -335,7 +324,6 @@ pub(crate) fn looks_like_text(head: &[u8]) -> bool {
     control * 100 <= valid.chars().count() * TEXT_SNIFF_MAX_CONTROL_PERCENT
 }
 
-/// [`viewer_for`], with `.txt` read as prose.
 pub fn viewer_for_name(name: &[u8], category: FileCategory, mime: &str) -> Viewer {
     match viewer_for(category, mime) {
         Viewer::Text if crate::preview::text::reads_as_prose(name) => Viewer::Prose,
@@ -363,7 +351,6 @@ pub fn viewer_for(category: FileCategory, mime: &str) -> Viewer {
     }
 }
 
-/// rar is not one of them.
 fn archive_viewer(mime: &str) -> Viewer {
     if mime == "application/vnd.rar" {
         Viewer::External

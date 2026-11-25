@@ -1,5 +1,4 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later Copies to ~/Downloads/Lautta/Opened so sandboxed app
-// can read it.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.Configuration 1.0
@@ -10,7 +9,6 @@ Page {
     id: page
 
     property string uri
-    // Share: file goes to fetched() for opener's share sheet; no app opened.
     property bool share
 
     readonly property string fileName: App.nameOf(uri)

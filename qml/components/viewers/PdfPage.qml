@@ -38,7 +38,6 @@ Rectangle {
         cache: false
         smooth: true
         visible: status === Image.Ready
-        // About 40 MB for an A4 page at most: phone keeps two or three.
         sourceSize.width: Math.min(2560, Math.round(sheet.fitWidth * sheet.zoom))
         source: sheet.zoom > 1 && sheet.uri !== "" ? sheet.source() : ""
     }

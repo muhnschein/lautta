@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! D-Bus errors as the real bridge sends them: `org.netvfs.Error.<Name>` or `InvalidArgs`.
 
 use super::tree::TreeError;
 use std::collections::HashMap;
@@ -78,7 +77,7 @@ impl From<TreeError> for Fail {
 
 impl DBusError for Fail {
     fn create_reply(&self, msg: &Header<'_>) -> zbus::Result<Message> {
-        #[allow(deprecated)] // the only builder that replies from a header, which DBusError hands over
+        #[allow(deprecated)]
         let builder = zbus::message::Builder::error(msg, self.name())?;
         let extra = self.extra();
         if extra.is_empty() {

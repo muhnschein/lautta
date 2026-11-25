@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! `PdfDocument` and requests of `image://lautta-pdf/<uri>?page=N`, which render one page at the
-//! `Image`'s `sourceSize.width`. Rendering and searching are `lautta_core::app_pdf`'s; nothing here
-//! reaches the network.
 
 use super::images::{finished, on_cancel, Reply};
 use super::{parse_uri, qstr, run_then};
@@ -32,50 +29,33 @@ pub struct PdfDocument {
     loaded: qt_property!(bool; NOTIFY stateChanged),
     pageCount: qt_property!(i32; NOTIFY stateChanged),
     size: qt_property!(f64; NOTIFY stateChanged),
-    /// Core error kind when the file could not be read.
     errorKind: qt_property!(QString; NOTIFY stateChanged),
     errorMessage: qt_property!(QString; NOTIFY stateChanged),
-    /// "invalid", "encrypted", "empty" or "tooLarge"; empty otherwise.
     problem: qt_property!(QString; NOTIFY stateChanged),
-    /// Last `unlock` password did not open the PDF.
     wrongPassword: qt_property!(bool; NOTIFY stateChanged),
-    /// 0-based; -1 when unknown.
     lastPage: qt_property!(i32; NOTIFY stateChanged),
-    /// `[{title, level, page}]`, depth first; `page` from 0, -1 when the item goes nowhere in this
-    /// document.
     outline: qt_property!(QString; NOTIFY stateChanged),
     stateChanged: qt_signal!(),
-    /// After `requestLinks`; `[]` when none or unreadable.
     linksReady: qt_signal!(linkPage: i32, pageLinks: QString),
 
     heightFor: qt_method!(fn(&self, index: i32, width: f64) -> f64),
     reload: qt_method!(fn(&mut self)),
-    /// Password is not kept.
     unlock: qt_method!(fn(&mut self, password: QString)),
-    /// False when `index` is no page of the loaded document: nothing stored.
     rememberPage: qt_method!(fn(&self, index: i32) -> bool),
     requestLinks: qt_method!(fn(&self, index: i32)),
 
     searching: qt_property!(bool; NOTIFY searchChanged),
-    /// All pages once a search has run through.
     searchedPages: qt_property!(i32; NOTIFY searchChanged),
     hitCount: qt_property!(i32; NOTIFY searchChanged),
-    /// From 1 in page order; 0 when none.
     currentHit: qt_property!(i32; NOTIFY searchChanged),
-    /// 0-based; -1 when none.
     currentHitPage: qt_property!(i32; NOTIFY searchChanged),
-    /// Changes when hits arrive or another hit is shown, so `hitsJson` bindings re-evaluate.
     hitsRevision: qt_property!(i32; NOTIFY searchChanged),
     searchChanged: qt_signal!(),
 
-    /// From `fromPage` (0-based, the page being read) to the end, then from the first. Earlier hits
-    /// are forgotten; blank query searches nothing.
     search: qt_method!(fn(&mut self, query: QString, fromPage: i32)),
     stopSearch: qt_method!(fn(&mut self)),
     nextHit: qt_method!(fn(&mut self)),
     previousHit: qt_method!(fn(&mut self)),
-    /// JSON array of `x`, `y`, `width`, `height` (fractions of the page from top left) and
-    /// `current` (part of the hit shown).
     hitsJson: qt_method!(fn(&self, index: i32) -> QString),
 
     pages: Vec<PageSize>,
@@ -223,7 +203,6 @@ impl PdfDocument {
     }
 }
 
-/// Results published as they arrive. Late results of a stopped or replaced search are ignored.
 impl PdfDocument {
     fn search(&mut self, query: QString, fromPage: i32) {
         self.stop();
@@ -297,7 +276,6 @@ impl PdfDocument {
         qstr(&to_json(&areas))
     }
 
-    /// Late results are ignored; [`Self::publish`] shows the change.
     fn stop(&mut self) {
         if let Some(flag) = self.search_cancel.take() {
             flag.store(true, Ordering::Relaxed);
@@ -331,8 +309,6 @@ fn outline_json(items: &[OutlineItem]) -> String {
     to_json(&rows)
 }
 
-/// Area as fractions of the shown page. In-document link: `page` (from 0), `top` (fraction of
-/// target page height, -1 when not given), empty `uri`. Web link: `page` -1 and http(s) `uri`.
 fn links_json(links: &[Link]) -> String {
     let rows: Vec<_> = links
         .iter()
@@ -359,7 +335,6 @@ fn failure_text(f: &PdfFailure) -> String {
     }
 }
 
-/// [`DEFAULT_PAGE_WIDTH`] when the request gives no width.
 pub(crate) fn page_request(core: Arc<Core>, id: &str, width: i32, req: u64, reply: Reply) {
     let Some((uri, page)) = parse_page_id(id) else {
         reply.fail("bad page id");

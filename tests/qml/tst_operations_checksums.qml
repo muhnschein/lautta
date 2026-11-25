@@ -5,7 +5,6 @@ import Lautta 1.0
 import "../../qml/pages"
 import "../../qml/components/directory/ContextActions.js" as Actions
 
-// Checksums (SCR-61..63) and Verify files (SCR-64) from More actions and the selection.
 ApplicationWindow {
     id: window
     property bool reachedEnd
@@ -61,7 +60,6 @@ ApplicationWindow {
         return views.length === 1 ? views[0] : null
     }
 
-    // No render loop headless: lay out by hand.
     function layOut() {
         var views = findAll(window.contentItem, function (x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
         for (var i = 0; i < views.length; ++i)
@@ -100,7 +98,6 @@ ApplicationWindow {
         return p.rows !== undefined && p.uri !== undefined && p.algorithm === undefined
     }
 
-    // Header reading `text` sits right above row `index`: below row `index - 1`, if any.
     function sectionShown(page, index, text) {
         var list = findAll(page, function (x) { return x.positionViewAtIndex !== undefined }, [])[0]
         list.positionViewAtIndex(index, ListView.Contain)
@@ -119,7 +116,6 @@ ApplicationWindow {
         }).length === 1
     }
 
-    // Headless window shows a few rows: scroll the list until the row is made.
     function tapAlgorithm(page, id) {
         var label = page.rows.filter(function (r) { return r.id === id })[0].label
         var list = findAll(page, function (x) { return x.positionViewAtIndex !== undefined }, [])[0]
@@ -197,7 +193,6 @@ ApplicationWindow {
         var page = settled(function (p) { return p.model !== undefined && p.model.checked !== undefined }, "Verify files")
         expect(pageStack.depth === 2, "Verify files takes More's place: depth " + pageStack.depth)
         waitFor(function () { return !page.model.running }, "the files checked")
-        // Headless window shows a few rows: gather them from both ends of the list.
         var list = findAll(page, function (x) { return x.positionViewAtEnd !== undefined }, [])[0]
         layOut()
         var rows = named(page, "verifyRow")

@@ -1,12 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Photo without camera thumbnail: placeholder = clear image of its upright shape, grid tile (system
-// thumbnailer, square crop) under it, centred, side = shorter side the photo shows at, drawn only by
-// tile fill over the whole shape; all go once the photo shows. Camera thumbnail drawn over tile and
-// fill. Tile URL percent-encoded, none for size 0 or an image not on the device. Viewer shows the
-// opener's tile for the opened photo only.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-// Registers image://nemoThumbnail, as the folder grid's thumbnails do in the app.
 import Nemo.Thumbnailer 1.0
 import Lautta 1.0
 import "../../qml/viewers"
@@ -83,7 +77,6 @@ ApplicationWindow {
         expect(ViewerImage.tile(App, "lautta://nosuch/a.jpg", 170) === "", "image not on the device: no tile")
     }
 
-    // photo.jpg: 64x32, EXIF turned, upright 32x64. Name with space and '#' loads.
     function checkPortrait() {
         var g = gallery("a%20b%23c.jpg", 170)
         var shape = named(g, "placeholderImage")
@@ -103,7 +96,6 @@ ApplicationWindow {
                "portrait's tile fill: shape two tiles high, " + fill.extent + " of " + fill.pixels + " px")
         expect(fill.source.sourceItem === tile && fill.source.hideSource,
                "tile drawn by its fill only: " + fill.source.sourceItem + " hidden " + fill.source.hideSource)
-        // GLES 2 mipmaps power-of-two textures only.
         expect(fill.source.mipmap && fill.source.textureSize.width === 256 && fill.source.textureSize.height === 256,
                "tile fill blurs from mipmaps: " + fill.source.mipmap + " " + fill.source.textureSize)
         g.source = ViewerImage.source(folder + "a%20b%23c.jpg")
@@ -112,13 +104,11 @@ ApplicationWindow {
         g.destroy()
     }
 
-    // large-photo.jpg: 1280x960.
     function checkLandscape() {
         var g = gallery("wide.jpg", 340)
         var shape = named(g, "placeholderImage")
         var tile = named(g, "tileImage")
         waitFor(function () { return shape.status === Image.Ready && tile.status === Image.Ready }, "the landscape's tile")
-        // Centring snaps to whole pixels.
         expect(tile.visible && Math.abs(tile.x - 67.5) <= 0.5 && Math.abs(tile.y - 277.5) <= 0.5
                && tile.width === 405 && tile.height === 405,
                "landscape's tile: its middle, " + describe(tile))
@@ -157,9 +147,7 @@ ApplicationWindow {
         return slot && slot.item ? named(slot.item, "tileImage") : null
     }
 
-    // Photo alone until the folder's listing comes, then the folder's view: both have the tile.
     function checkViewerHandsSize() {
-        // As a url: Qt lowercases the provider's name.
         var want = String(Qt.resolvedUrl(ViewerImage.tile(App, folder + "a.jpg", 170)))
         var viewer = pageStack.push(viewerMaker, { "uri": folder + "a.jpg", "folderUri": folder, "tileSize": 170 },
                                     PageStackAction.Immediate)
