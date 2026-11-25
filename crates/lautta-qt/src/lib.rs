@@ -49,6 +49,54 @@ cpp! {{
 }}
 
 cpp! {{
+    #include <cstdio>
+    #include <cstring>
+    #include <csignal>
+    #include <execinfo.h>
+    #include <sys/prctl.h>
+    #include <unistd.h>
+
+    static void lauttaSay(const char *text)
+    {
+        const ssize_t written = ::write(STDERR_FILENO, text, std::strlen(text));
+        (void)written;
+    }
+
+    static void lauttaCrashTrace(int sig)
+    {
+        char number[4] = { 0, 0, 0, 0 };
+        int at = 0;
+        if (sig >= 10)
+            number[at++] = char('0' + sig / 10 % 10);
+        number[at] = char('0' + sig % 10);
+        char thread[17] = { 0 };
+        prctl(PR_GET_NAME, thread, 0, 0, 0);
+        lauttaSay("CRASH   signal ");
+        lauttaSay(number);
+        lauttaSay(" in thread ");
+        lauttaSay(thread);
+        lauttaSay("\n");
+        void *frames[64];
+        backtrace_symbols_fd(frames, backtrace(frames, 64), STDERR_FILENO);
+        std::raise(sig);
+    }
+
+    static void lauttaReportCrashes()
+    {
+        std::setvbuf(stdout, nullptr, _IOLBF, 0);
+        void *warm[1];
+        backtrace(warm, 1);
+        struct sigaction action;
+        std::memset(&action, 0, sizeof action);
+        action.sa_handler = lauttaCrashTrace;
+        action.sa_flags = SA_RESETHAND | SA_ONSTACK;
+        sigemptyset(&action.sa_mask);
+        for (int sig : { SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT })
+            sigaction(sig, &action, nullptr);
+    }
+}}
+
+cpp! {{
     #include <QtGui/QGuiApplication>
     #include <QtQuick/QQuickView>
     static void lauttaRegisterImageProviders(QQmlEngine *engine);
@@ -181,6 +229,7 @@ pub unsafe fn run(argc: c_int, argv: *mut *mut c_char) -> c_int {
     register_types();
     cpp!([argc as "int", argv as "char**"] -> c_int as "int" {
             if (argc > 1 && qstrcmp(argv[1], "--qml-check") == 0) {
+                lauttaReportCrashes();
                 rust!(LauttaWaitCoreCheck [] { wait_core() });
                 return lauttaQmlCheck(argc, argv);
             }
@@ -252,6 +301,10 @@ pub fn qml_uri() -> std::ffi::CString {
 
 pub fn cstr(s: &str) -> std::ffi::CString {
     std::ffi::CString::new(s).unwrap_or_default()
+}
+
+pub fn report_crashes() {
+    cpp!(unsafe [] { lauttaReportCrashes(); })
 }
 
 pub fn qml_check(args: &[String]) -> c_int {

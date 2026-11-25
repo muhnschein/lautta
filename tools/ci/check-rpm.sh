@@ -126,6 +126,22 @@ if qml_check "$share/canary.home" "$PWD/tests/qml/canary/tst_must_fail.qml" > "$
     cat "$share/canary.log"
     fail "QML check passed the canary test that reports a failure"
 fi
+crash="$share/crash"
+mkdir -p "$crash/Documents" "$crash/Downloads" "$crash/Pictures"
+sb2 -t "$TARGET" env HOME="$crash" QT_QPA_PLATFORM=minimal sh -c '
+    /usr/bin/harbour-lautta --qml-check "$1" > "$2.out" 2> "$2.err" &
+    pid=$!
+    tries=0
+    until grep -q "canary waits for its crash" "$2.err" || [ "$tries" -ge 120 ]; do
+        tries=$((tries + 1))
+        sleep 1
+    done
+    kill -SEGV "$pid"
+    wait "$pid"' sh "$PWD/tests/qml/canary/waits_for_crash.qml" "$crash/log" || true
+if ! grep -q '^CRASH   signal 11 in thread ' "$crash/log.err" || ! grep -q 'harbour-lautta(.*\[0x' "$crash/log.err"; then
+    cat "$crash/log.out" "$crash/log.err"
+    fail "QML check killed by SIGSEGV printed no backtrace"
+fi
 home="$PWD/.qml-home"
 rm -rf "$home"
 mkdir -p "$home"
