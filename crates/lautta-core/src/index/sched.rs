@@ -37,6 +37,10 @@ impl Conditions {
         }
     }
 
+    pub fn waits_for_wifi(&self) -> bool {
+        self.network == Network::Mobile && !self.index_on_mobile
+    }
+
     pub fn servers_allowed(&self) -> bool {
         match self.network {
             Network::Wifi | Network::Ethernet => self.app_active || self.on_charger(),
@@ -156,6 +160,12 @@ mod tests {
         assert!(mobile(c(false, false, true, Some(90), true), true).servers_allowed());
         assert!(!mobile(c(false, false, false, None, false), true).servers_allowed());
         assert!(!Conditions::default().index_on_mobile);
+        assert!(mobile(c(true, false, false, None, false), false).waits_for_wifi());
+        assert!(!mobile(c(true, false, false, None, false), true).waits_for_wifi());
+        assert!(
+            !c(true, false, false, None, false).waits_for_wifi(),
+            "only mobile data waits"
+        );
     }
 
     #[test]

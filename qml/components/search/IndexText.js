@@ -43,6 +43,9 @@ function status(row) {
     case "failed":
         //% "Not reachable"
         return qsTrId("lautta-index-state-unreachable")
+    case "wifi":
+        //% "Waiting for Wi-Fi"
+        return qsTrId("lautta-index-state-wifi")
     case "off":
         //% "Not indexed"
         return qsTrId("lautta-index-state-off")

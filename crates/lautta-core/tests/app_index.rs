@@ -418,6 +418,25 @@ async fn on_the_charger_servers_are_indexed_on_wifi_and_on_mobile_data_only_when
         c.network = Network::Mobile;
     });
     assert!(!index.servers_running(), "mobile data is off limits by default");
+    let waits = |core: &Core| -> Vec<(bool, bool)> {
+        core.index_status()
+            .into_iter()
+            .map(|s| (s.local, s.waits_for_wifi))
+            .collect()
+    };
+    assert!(
+        waits(&h.core).iter().all(|(local, waiting)| local != waiting),
+        "the server waits for Wi-Fi, the device does not: {:?}",
+        waits(&h.core)
+    );
+    changes.borrow_and_update();
+    h.core.index_set_conditions(|c| c.index_on_mobile = true);
+    assert!(changes.has_changed().unwrap(), "the settings page hears of it");
+    assert!(
+        waits(&h.core).iter().all(|(_, waiting)| !waiting),
+        "nothing waits once mobile data is allowed"
+    );
+    h.core.index_set_conditions(|c| c.index_on_mobile = false);
     h.core.index_set_conditions(|c| c.network = Network::Offline);
     assert!(!index.servers_running(), "no network, no server");
     h.core.index_set_conditions(|c| c.app_active = true);
