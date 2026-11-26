@@ -221,6 +221,8 @@ mod tests {
             ("dir-copy.svg", 128, 4.0),
             ("home.svg", 72, 3.0),
             ("home.svg", 48, 2.0),
+            ("lautta.svg", 72, 3.0),
+            ("lautta.svg", 168, 3.5),
         ] {
             let alpha = drawn(name, side, stroke);
             assert!(!alpha.is_empty(), "{name} at {side} px not drawn");
@@ -234,7 +236,7 @@ mod tests {
 
     #[test]
     fn provider_draws_nothing_but_svg_files() {
-        assert!(drawn("lautta-256.png", 96, 3.0).is_empty());
+        assert!(drawn("../../icons/86x86/harbour-lautta.png", 96, 3.0).is_empty());
     }
 
     #[test]

@@ -133,7 +133,7 @@ Page {
 
         header: HeaderBand {
             PageHeader {
-                //% "Home"
+                //% "Browse"
                 title: qsTrId("lautta-home-title")
             }
         }

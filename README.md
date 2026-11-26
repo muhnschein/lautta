@@ -15,7 +15,7 @@
 ## Screenshots
 
 <p>
-  <img src="store/screenshots/1-home.png" width="32%" alt="Home: recent files, favourites, phone folders and drives, one memory card locked">
+  <img src="store/screenshots/1-home.png" width="32%" alt="Browse: recent files, favourites, phone folders and drives, one memory card locked">
   <img src="store/screenshots/2-folder.png" width="32%" alt="A busy folder as a grid, four photos and videos selected">
   <img src="store/screenshots/3-text.png" width="32%" alt="A shell script from a server, with syntax colours">
 </p>

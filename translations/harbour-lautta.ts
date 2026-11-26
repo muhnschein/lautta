@@ -113,10 +113,6 @@
         <source>Waiting for your permission</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-about-access-unknown">
-        <source>Not asked yet</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-about-title">
         <source>About</source>
         <translation type="unfinished"></translation>
@@ -136,10 +132,6 @@
     </message>
     <message id="lautta-about-status">
         <source>Status</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-about-access">
-        <source>Access</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-about-licence">
@@ -2054,15 +2046,6 @@
         <source>Lautta may only add files here.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-about-access-per-server">
-        <source>Set per server</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-about-access-hint">
-        <source>Change it in Settings › Accounts › Apps using network locations.</source>
-        <oldsource>Change in Settings › Accounts › Apps using network locations › Lautta. Servers you add in Lautta always have full access.</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-nearby-set-up">
         <source>Set up</source>
         <translation type="unfinished"></translation>
@@ -2395,7 +2378,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-home-title">
-        <source>Home</source>
+        <source>Browse</source>
+        <oldsource>Home</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-home-settings">
@@ -2467,7 +2451,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-home-page">
-        <source>Home page</source>
+        <source>Browse page</source>
+        <oldsource>Home page</oldsource>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-home-volume-free">
