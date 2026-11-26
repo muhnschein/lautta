@@ -12,6 +12,7 @@ import "../components/Open.js" as Open
 import "../components/ErrorText.js" as ErrorText
 import "../components/search/SearchText.js" as SearchText
 import "../components/search/SearchGroups.js" as SearchGroups
+import "../components/search/Marks.js" as Marks
 
 Page {
     id: page
@@ -19,11 +20,42 @@ Page {
     property string rootUri
     property string scope: rootUri.length > 0 ? "folder" : (searchModel.hasServers() ? "everywhere" : "device")
     property bool searched
-    property string choosing: ""
-    property var types: []
+    property string typeFilter: ""
     property string datePreset: "any"
-    property string sizePreset: "any"
     property bool includeHidden
+    readonly property Item openMenu: scopeMenu.active ? scopeMenu
+                                     : typeMenu.active ? typeMenu
+                                     : dateMenu.active ? dateMenu : null
+    readonly property var typeChoices: [
+        //% "Any type"
+        { "value": "", "label": qsTrId("lautta-search-type-any") },
+        //% "Folders"
+        { "value": "folder", "label": qsTrId("lautta-filters-type-folder") },
+        //% "Images"
+        { "value": "image", "label": qsTrId("lautta-filters-type-image") },
+        //% "Videos"
+        { "value": "video", "label": qsTrId("lautta-filters-type-video") },
+        //% "Audio"
+        { "value": "audio", "label": qsTrId("lautta-filters-type-audio") },
+        //% "Documents"
+        { "value": "document", "label": qsTrId("lautta-filters-type-document") },
+        //% "Archives"
+        { "value": "archive", "label": qsTrId("lautta-search-pill-archive") },
+        //% "Text"
+        { "value": "text", "label": qsTrId("lautta-search-pill-text") }
+    ]
+    readonly property var dateChoices: [
+        //% "Any time"
+        { "value": "any", "label": qsTrId("lautta-filters-date-any") },
+        //% "Today"
+        { "value": "today", "label": qsTrId("lautta-filters-date-today") },
+        //% "Past week"
+        { "value": "week", "label": qsTrId("lautta-filters-date-week") },
+        //% "Past month"
+        { "value": "month", "label": qsTrId("lautta-filters-date-month") },
+        //% "This year"
+        { "value": "year", "label": qsTrId("lautta-filters-date-year") }
+    ]
     readonly property bool remote: App.isRemote(rootUri)
     readonly property bool wide: scope !== "folder"
     readonly property var groups: JSON.parse(searchModel.groupsJson || "[]")
@@ -45,9 +77,8 @@ Page {
     allowedOrientations: Orientation.All
 
     function start() {
-        searchModel.types = JSON.stringify(page.types)
+        searchModel.types = JSON.stringify(page.typeFilter === "" ? [] : [page.typeFilter])
         searchModel.datePreset = page.datePreset
-        searchModel.sizePreset = page.sizePreset
         searchModel.includeHidden = page.includeHidden
         if (searchModel.start()) {
             searched = true
@@ -69,23 +100,27 @@ Page {
         page.start()
     }
 
-    function toggleChoices(kind) {
-        page.choosing = page.choosing === kind ? "" : kind
+    function openMenuOf(menu) {
+        if (page.openMenu && page.openMenu !== menu)
+            page.openMenu.close()
+        if (!menu.active)
+            menu.open(stripHost)
+    }
+
+    function toggleMenu(menu) {
+        if (menu.active)
+            menu.close()
+        else
+            page.openMenuOf(menu)
     }
 
     function choose(kind, value) {
-        page.choosing = ""
         if (kind === "scope")
             page.scope = value
+        else if (kind === "type")
+            page.typeFilter = value
         else if (kind === "date")
             page.datePreset = value
-        else if (kind === "size")
-            page.sizePreset = value
-        page.refine()
-    }
-
-    function toggleType(type) {
-        page.types = SearchGroups.toggled(page.types, type)
         page.refine()
     }
 
@@ -156,139 +191,157 @@ Page {
 
     ListModel { id: gridRows }
 
-    HeaderBand {
-        anchors.fill: heading
-    }
+    SilicaFlickable {
+        id: pulleyHost
 
-    Column {
-        id: heading
+        objectName: "searchPulleyHost"
+        anchors.fill: parent
+        contentWidth: width
+        contentHeight: height
 
-        objectName: "searchHeading"
-        anchors {
-            top: parent.top
-            left: parent.left
-            right: parent.right
-        }
-
-        PageHeader {
-            //% "Search"
-            title: qsTrId("lautta-search-title")
-        }
-
-        SearchField {
-            id: searchField
-
-            objectName: "searchField"
-            width: parent.width
-            placeholderText: page.scope === "folder"
-                             //% "Search in %1"
-                             ? qsTrId("lautta-search-placeholder-in").arg(searchModel.rootName)
-                             //% "Search"
-                             : qsTrId("lautta-search-placeholder")
-            inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
-            EnterKey.iconSource: "image://theme/icon-m-enter-accept"
-            EnterKey.onClicked: {
-                typing.stop()
-                page.start()
-                focus = false
+        PullDownMenu {
+            MenuItem {
+                objectName: "searchSettingsItem"
+                //% "Search settings"
+                text: qsTrId("lautta-search-settings")
+                onClicked: pageStack.push(Qt.resolvedUrl("SearchSettingsPage.qml"))
             }
-            onTextChanged: page.edited(text)
-            Component.onCompleted: forceActiveFocus()
-        }
-
-        Flickable {
-            id: pillStrip
-
-            objectName: "searchPills"
-            width: parent.width
-            height: pills.height + Theme.paddingMedium
-            contentWidth: pills.width + 2 * Theme.horizontalPageMargin
-            flickableDirection: Flickable.HorizontalFlick
-            boundsBehavior: Flickable.StopAtBounds
-            clip: true
-
-            Row {
-                id: pills
-
-                x: Theme.horizontalPageMargin
-                spacing: Theme.paddingMedium
-
-                PillButton {
-                    objectName: "scopePill"
-                    icon: SearchGroups.scopeIcon(page.scope)
-                    text: SearchGroups.scopeName(page.scope, searchModel.rootName)
-                    checked: true
-                    open: page.choosing === "scope"
-                    onClicked: page.toggleChoices("scope")
-                }
-
-                Repeater {
-                    model: [
-                        //% "Folders"
-                        { "type": "folder", "label": qsTrId("lautta-filters-type-folder") },
-                        //% "Images"
-                        { "type": "image", "label": qsTrId("lautta-filters-type-image") },
-                        //% "Videos"
-                        { "type": "video", "label": qsTrId("lautta-filters-type-video") },
-                        //% "Audio"
-                        { "type": "audio", "label": qsTrId("lautta-filters-type-audio") },
-                        //% "Documents"
-                        { "type": "document", "label": qsTrId("lautta-filters-type-document") },
-                        //% "Archives"
-                        { "type": "archive", "label": qsTrId("lautta-search-pill-archive") },
-                        //% "Text"
-                        { "type": "text", "label": qsTrId("lautta-search-pill-text") }
-                    ]
-
-                    PillButton {
-                        objectName: "typePill"
-                        readonly property string type: modelData.type
-                        text: modelData.label
-                        checked: page.types.indexOf(modelData.type) >= 0
-                        onClicked: page.toggleType(modelData.type)
-                    }
-                }
-
-                PillButton {
-                    objectName: "datePill"
-                    text: page.datePreset === "any"
-                          //% "Modified"
-                          ? qsTrId("lautta-filters-modified")
-                          : dateChoices.labelOf(page.datePreset)
-                    checked: page.datePreset !== "any"
-                    open: page.choosing === "date"
-                    onClicked: page.toggleChoices("date")
-                }
-
-                PillButton {
-                    objectName: "sizePill"
-                    text: page.sizePreset === "any"
-                          //% "Size"
-                          ? qsTrId("lautta-filters-size")
-                          : sizeChoices.labelOf(page.sizePreset)
-                    checked: page.sizePreset !== "any"
-                    open: page.choosing === "size"
-                    onClicked: page.toggleChoices("size")
-                }
-
-                PillButton {
-                    objectName: "hiddenPill"
-                    //% "Hidden"
-                    text: qsTrId("lautta-search-pill-hidden")
-                    checked: page.includeHidden
-                    onClicked: {
-                        page.includeHidden = !page.includeHidden
-                        page.refine()
-                    }
+            MenuItem {
+                objectName: "clearRecentSearches"
+                visible: page.recentSearches.length > 0
+                //% "Clear recent searches"
+                text: qsTrId("lautta-search-clear-recent")
+                onClicked: {
+                    //% "Clearing recent searches"
+                    remorsePopup.execute(qsTrId("lautta-search-clearing-recent"), function () {
+                        searchModel.clearRecent()
+                    }, App.setting("remorse_seconds") * 1000)
                 }
             }
         }
 
-        PillChoices {
+        HeaderBand {
+            anchors.fill: heading
+        }
+
+        Item {
+            id: heading
+
+            objectName: "searchHeading"
+            anchors {
+                top: parent.top
+                left: parent.left
+                right: parent.right
+            }
+            height: stripHost.y + stripHost.height
+
+            PageHeader {
+                id: pageHeader
+
+                //% "Search"
+                title: qsTrId("lautta-search-title")
+            }
+
+            SearchField {
+                id: searchField
+
+                objectName: "searchField"
+                anchors.top: pageHeader.bottom
+                width: parent.width
+                placeholderText: page.scope === "folder"
+                                 //% "Search in %1"
+                                 ? qsTrId("lautta-search-placeholder-in").arg(searchModel.rootName)
+                                 //% "Search"
+                                 : qsTrId("lautta-search-placeholder")
+                inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
+                EnterKey.iconSource: "image://theme/icon-m-enter-accept"
+                EnterKey.onClicked: {
+                    typing.stop()
+                    page.start()
+                    focus = false
+                }
+                onTextChanged: page.edited(text)
+                Component.onCompleted: forceActiveFocus()
+            }
+
+            Item {
+                id: stripHost
+
+                objectName: "searchPillHost"
+                anchors.top: searchField.bottom
+                width: parent.width
+                height: pillStrip.height + (page.openMenu ? page.openMenu.height : 0)
+
+                Flickable {
+                    id: pillStrip
+
+                    objectName: "searchPills"
+                    width: parent.width
+                    height: pills.height + Theme.paddingMedium
+                    contentWidth: pills.width + 2 * Theme.horizontalPageMargin
+                    flickableDirection: Flickable.HorizontalFlick
+                    boundsBehavior: Flickable.StopAtBounds
+                    clip: true
+
+                    Row {
+                        id: pills
+
+                        x: Theme.horizontalPageMargin
+                        spacing: Theme.paddingMedium
+
+                        PillButton {
+                            objectName: "scopePill"
+                            icon: SearchGroups.scopeIcon(page.scope)
+                            text: SearchGroups.scopeName(page.scope, searchModel.rootName)
+                            checked: true
+                            open: scopeMenu.active
+                            onClicked: page.toggleMenu(scopeMenu)
+                            onPressAndHold: page.openMenuOf(scopeMenu)
+                        }
+
+                        PillButton {
+                            objectName: "typePill"
+                            text: page.typeFilter === ""
+                                  //% "Type"
+                                  ? qsTrId("lautta-search-pill-type")
+                                  : SearchGroups.labelOf(page.typeChoices, page.typeFilter)
+                            checked: page.typeFilter !== ""
+                            open: typeMenu.active
+                            onClicked: page.toggleMenu(typeMenu)
+                            onPressAndHold: page.openMenuOf(typeMenu)
+                        }
+
+                        PillButton {
+                            objectName: "datePill"
+                            text: page.datePreset === "any"
+                                  //% "Modified"
+                                  ? qsTrId("lautta-filters-modified")
+                                  : SearchGroups.labelOf(page.dateChoices, page.datePreset)
+                            checked: page.datePreset !== "any"
+                            open: dateMenu.active
+                            onClicked: page.toggleMenu(dateMenu)
+                            onPressAndHold: page.openMenuOf(dateMenu)
+                        }
+
+                        PillButton {
+                            objectName: "hiddenPill"
+                            //% "Hidden"
+                            text: qsTrId("lautta-search-pill-hidden")
+                            checked: page.includeHidden
+                            onClicked: {
+                                page.includeHidden = !page.includeHidden
+                                page.refine()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        PillMenu {
             id: scopeMenu
 
-            objectName: "scopeChoices"
-            shown: page.choosing === "scope"
+            objectName: "scopeMenu"
             current: page.scope
             choices: page.scopeChoices.map(function (s) {
                 return { "value": s, "label": SearchGroups.scopeName(s, searchModel.rootName) }
@@ -296,191 +349,169 @@ Page {
             onChosen: page.choose("scope", value)
         }
 
-        PillChoices {
-            id: dateChoices
+        PillMenu {
+            id: typeMenu
 
-            objectName: "dateChoices"
-            shown: page.choosing === "date"
+            objectName: "typeMenu"
+            current: page.typeFilter
+            choices: page.typeChoices
+            onChosen: page.choose("type", value)
+        }
+
+        PillMenu {
+            id: dateMenu
+
+            objectName: "dateMenu"
             current: page.datePreset
-            choices: [
-                //% "Any time"
-                { "value": "any", "label": qsTrId("lautta-filters-date-any") },
-                //% "Today"
-                { "value": "today", "label": qsTrId("lautta-filters-date-today") },
-                //% "Past week"
-                { "value": "week", "label": qsTrId("lautta-filters-date-week") },
-                //% "Past month"
-                { "value": "month", "label": qsTrId("lautta-filters-date-month") },
-                //% "This year"
-                { "value": "year", "label": qsTrId("lautta-filters-date-year") }
-            ]
+            choices: page.dateChoices
             onChosen: page.choose("date", value)
         }
 
-        PillChoices {
-            id: sizeChoices
+        SilicaFlickable {
+            id: recentView
 
-            objectName: "sizeChoices"
-            shown: page.choosing === "size"
-            current: page.sizePreset
-            choices: [
-                //% "Any size"
-                { "value": "any", "label": qsTrId("lautta-filters-size-any") },
-                //% "Larger than 1 MB"
-                { "value": "gt1m", "label": qsTrId("lautta-filters-size-gt1m") },
-                //% "Larger than 10 MB"
-                { "value": "gt10m", "label": qsTrId("lautta-filters-size-gt10m") },
-                //% "Larger than 100 MB"
-                { "value": "gt100m", "label": qsTrId("lautta-filters-size-gt100m") },
-                //% "Smaller than 100 kB"
-                { "value": "lt100k", "label": qsTrId("lautta-filters-size-lt100k") },
-                //% "Smaller than 1 MB"
-                { "value": "lt1m", "label": qsTrId("lautta-filters-size-lt1m") }
-            ]
-            onChosen: page.choose("size", value)
-        }
-    }
-
-    SilicaFlickable {
-        id: recentView
-
-        objectName: "searchRecents"
-        anchors {
-            top: heading.bottom
-            left: parent.left
-            right: parent.right
-            bottom: parent.bottom
-        }
-        visible: !page.searched && page.recentSearches.length > 0
-        contentHeight: recentColumn.height
-        clip: true
-
-        Column {
-            id: recentColumn
-
-            width: parent.width
-
-            SectionHeader {
-                //% "Recent searches"
-                text: qsTrId("lautta-filters-recent")
+            objectName: "searchRecents"
+            anchors {
+                top: heading.bottom
+                left: parent.left
+                right: parent.right
+                bottom: parent.bottom
             }
+            visible: !page.searched && page.recentSearches.length > 0
+            contentHeight: recentColumn.height
+            clip: true
 
-            Repeater {
-                model: page.recentSearches
+            Column {
+                id: recentColumn
 
-                BackgroundItem {
-                    objectName: "recentSearch"
-                    width: recentColumn.width
-                    height: Theme.itemSizeSmall
-                    onClicked: page.useRecent(modelData)
+                width: parent.width
 
-                    Image {
-                        id: clock
+                SectionHeader {
+                    //% "Recent searches"
+                    text: qsTrId("lautta-filters-recent")
+                }
 
-                        x: Theme.horizontalPageMargin
-                        anchors.verticalCenter: parent.verticalCenter
-                        source: "image://theme/icon-m-clock?" + (parent.highlighted ? Theme.highlightColor : Theme.primaryColor)
-                    }
-                    Label {
-                        anchors {
-                            left: clock.right
-                            leftMargin: Theme.paddingLarge
-                            right: parent.right
-                            rightMargin: Theme.horizontalPageMargin
-                            verticalCenter: parent.verticalCenter
+                Repeater {
+                    model: page.recentSearches
+
+                    BackgroundItem {
+                        objectName: "recentSearch"
+                        width: recentColumn.width
+                        height: Theme.itemSizeSmall
+                        onClicked: page.useRecent(modelData)
+
+                        Image {
+                            id: clock
+
+                            x: Theme.horizontalPageMargin
+                            anchors.verticalCenter: parent.verticalCenter
+                            source: "image://theme/icon-m-clock?" + (parent.highlighted ? Theme.highlightColor : Theme.primaryColor)
                         }
-                        text: modelData
-                        textFormat: Text.PlainText
-                        truncationMode: TruncationMode.Fade
-                        color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
+                        Label {
+                            anchors {
+                                left: clock.right
+                                leftMargin: Theme.paddingLarge
+                                right: parent.right
+                                rightMargin: Theme.horizontalPageMargin
+                                verticalCenter: parent.verticalCenter
+                            }
+                            text: modelData
+                            textFormat: Text.PlainText
+                            truncationMode: TruncationMode.Fade
+                            color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
+                        }
                     }
                 }
             }
+        }
+
+        SilicaListView {
+            id: list
+
+            objectName: "searchList"
+            anchors {
+                top: heading.bottom
+                left: parent.left
+                right: parent.right
+                bottom: parent.bottom
+                bottomMargin: progressPanel.visibleSize
+            }
+            visible: !recentView.visible
+            clip: true
+            model: searchModel
+            delegate: listRow
+
+            section {
+                property: "section"
+                criteria: ViewSection.FullString
+                delegate: Item {
+                    readonly property var group: page.wide ? SearchGroups.find(page.groups, section) : null
+
+                    width: list.width
+                    height: Theme.itemSizeSmall
+
+                    PlaceLabel {
+                        objectName: "searchSection"
+                        visible: !page.wide
+                        x: Theme.horizontalPageMargin
+                        width: parent.width - 2 * x
+                        anchors {
+                            verticalCenter: parent.verticalCenter
+                            verticalCenterOffset: Theme.paddingMedium / 2
+                        }
+                        text: page.wide ? "" : section
+                        remote: page.remote
+                        horizontalAlignment: Text.AlignRight
+                        color: Theme.highlightColor
+                        fontSize: Theme.fontSizeSmall
+                    }
+
+                    GroupHeader {
+                        visible: page.wide
+                        group: parent.group
+                    }
+                }
+            }
+
+            footer: Column {
+                width: list.width
+
+                Repeater {
+                    model: page.wide ? SearchGroups.withoutRows(page.groups) : []
+
+                    GroupHeader {
+                        objectName: "searchGroupFooter"
+                        width: list.width
+                        group: modelData
+                    }
+                }
+            }
+
+            ViewPlaceholder {
+                enabled: list.count === 0 && !searchModel.running && !recentView.visible
+                text: page.searched && searchModel.errorKind.length === 0
+                      //% "No matches"
+                      ? qsTrId("lautta-search-none")
+                      : (searchModel.errorKind.length > 0
+                         //% "Search failed"
+                         ? qsTrId("lautta-search-failed")
+                         //% "Search"
+                         : qsTrId("lautta-search-idle"))
+                hintText: page.searched
+                          ? (searchModel.errorKind.length > 0
+                             ? ErrorText.message(searchModel.errorKind, { "location": App.locationName(page.rootUri), "open": true })
+                             //% "Try another name or loosen the filters"
+                             : qsTrId("lautta-search-none-hint"))
+                          //% "Type part of a name, or a pattern such as *.pdf"
+                          : qsTrId("lautta-search-idle-hint")
+            }
+
+            VerticalScrollDecorator { }
         }
     }
 
-    SilicaListView {
-        id: list
-
-        objectName: "searchList"
-        anchors {
-            top: heading.bottom
-            left: parent.left
-            right: parent.right
-            bottom: parent.bottom
-            bottomMargin: progressPanel.visibleSize
-        }
-        visible: !recentView.visible
-        clip: true
-        model: searchModel
-        delegate: listRow
-
-        section {
-            property: "section"
-            criteria: ViewSection.FullString
-            delegate: Item {
-                readonly property var group: page.wide ? SearchGroups.find(page.groups, section) : null
-
-                width: list.width
-                height: Theme.itemSizeSmall
-
-                PlaceLabel {
-                    objectName: "searchSection"
-                    visible: !page.wide
-                    x: Theme.horizontalPageMargin
-                    width: parent.width - 2 * x
-                    anchors {
-                        verticalCenter: parent.verticalCenter
-                        verticalCenterOffset: Theme.paddingMedium / 2
-                    }
-                    text: page.wide ? "" : section
-                    remote: page.remote
-                    horizontalAlignment: Text.AlignRight
-                    color: Theme.highlightColor
-                    fontSize: Theme.fontSizeSmall
-                }
-
-                GroupHeader {
-                    visible: page.wide
-                    group: parent.group
-                }
-            }
-        }
-
-        footer: Column {
-            width: list.width
-
-            Repeater {
-                model: page.wide ? SearchGroups.withoutRows(page.groups) : []
-
-                GroupHeader {
-                    objectName: "searchGroupFooter"
-                    width: list.width
-                    group: modelData
-                }
-            }
-        }
-
-        ViewPlaceholder {
-            enabled: list.count === 0 && !searchModel.running && !recentView.visible
-            text: page.searched && searchModel.errorKind.length === 0
-                  //% "No matches"
-                  ? qsTrId("lautta-search-none")
-                  : (searchModel.errorKind.length > 0
-                     //% "Search failed"
-                     ? qsTrId("lautta-search-failed")
-                     //% "Search"
-                     : qsTrId("lautta-search-idle"))
-            hintText: page.searched
-                      ? (searchModel.errorKind.length > 0
-                         ? ErrorText.message(searchModel.errorKind, { "location": App.locationName(page.rootUri), "open": true })
-                         //% "Try another name or loosen the filters"
-                         : qsTrId("lautta-search-none-hint"))
-                      //% "Type part of a name, or a pattern such as *.pdf"
-                      : qsTrId("lautta-search-idle-hint")
-        }
-
-        VerticalScrollDecorator { }
+    RemorsePopup {
+        id: remorsePopup
     }
 
     Component {
@@ -517,10 +548,13 @@ Page {
                 }
 
                 Label {
+                    readonly property string marked: Marks.marked(model.name, Marks.needle(model.name, model.matchStart, model.matchLength),
+                                                                  String(Theme.highlightColor))
+
+                    objectName: "searchResultName"
                     width: parent.width
-                    textFormat: Text.StyledText
-                    text: SearchText.highlightedName(model.name, model.matchStart, model.matchLength,
-                                                     String(Theme.highlightColor))
+                    textFormat: marked.length > 0 ? Text.StyledText : Text.PlainText
+                    text: marked.length > 0 ? marked : model.name
                     truncationMode: TruncationMode.Fade
                     color: item.highlighted ? Theme.highlightColor : Theme.primaryColor
                 }
@@ -639,6 +673,7 @@ Page {
                         }
                         metrics: gridMetrics
                         name: model.name
+                        mark: Marks.needle(model.name, model.matchStart, model.matchLength)
                         emphasised: cell.highlighted
                         pressed: cell.highlighted
                     }
@@ -677,7 +712,6 @@ Page {
             }
         }
     }
-
     DockedPanel {
         id: progressPanel
 
@@ -688,37 +722,40 @@ Page {
         modal: false
         background: BarBackground { }
 
-        Row {
+        BusyIndicator {
+            id: busy
+
+            x: Theme.horizontalPageMargin
+            anchors.verticalCenter: parent.verticalCenter
+            size: BusyIndicatorSize.Small
+            running: searchModel.running
+        }
+        Label {
+            objectName: "searchProgress"
             anchors {
-                left: parent.left
-                right: parent.right
-                leftMargin: Theme.horizontalPageMargin
-                rightMargin: Theme.horizontalPageMargin
+                left: busy.right
+                leftMargin: Theme.paddingLarge
+                right: stopButton.left
+                rightMargin: Theme.paddingMedium
                 verticalCenter: parent.verticalCenter
             }
-            spacing: Theme.paddingLarge
+            //% "Searching… %n results"
+            text: qsTrId("lautta-search-progress", searchModel.hitCount)
+            color: Theme.secondaryColor
+            font.pixelSize: Theme.fontSizeSmall
+            truncationMode: TruncationMode.Fade
+        }
+        IconButton {
+            id: stopButton
 
-            BusyIndicator {
-                size: BusyIndicatorSize.Small
-                running: searchModel.running
-                anchors.verticalCenter: parent.verticalCenter
+            objectName: "searchStop"
+            anchors {
+                right: parent.right
+                rightMargin: Theme.horizontalPageMargin - Theme.paddingMedium
+                verticalCenter: parent.verticalCenter
             }
-            Label {
-                width: parent.width - parent.spacing * 2 - Theme.itemSizeSmall * 2
-                anchors.verticalCenter: parent.verticalCenter
-                //% "Searching… %n results"
-                text: qsTrId("lautta-search-progress", searchModel.hitCount)
-                color: Theme.secondaryColor
-                font.pixelSize: Theme.fontSizeSmall
-                truncationMode: TruncationMode.Fade
-            }
-            Button {
-                anchors.verticalCenter: parent.verticalCenter
-                preferredWidth: Theme.buttonWidthSmall
-                //% "Stop"
-                text: qsTrId("lautta-search-stop")
-                onClicked: searchModel.cancel()
-            }
+            icon.source: "image://theme/icon-m-stop"
+            onClicked: searchModel.cancel()
         }
     }
 }

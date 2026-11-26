@@ -174,34 +174,6 @@
         <source>Documents</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-filters-size">
-        <source>Size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-size-any">
-        <source>Any size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-size-gt1m">
-        <source>Larger than 1 MB</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-size-gt10m">
-        <source>Larger than 10 MB</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-size-gt100m">
-        <source>Larger than 100 MB</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-size-lt100k">
-        <source>Smaller than 100 kB</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-size-lt1m">
-        <source>Smaller than 1 MB</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-filters-modified">
         <source>Modified</source>
         <translation type="unfinished"></translation>
@@ -261,10 +233,6 @@
             <numerusform>Searching… %n result</numerusform>
             <numerusform>Searching… %n results</numerusform>
         </translation>
-    </message>
-    <message id="lautta-search-stop">
-        <source>Stop</source>
-        <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-days" numerus="yes">
         <source>%n days</source>
@@ -2620,6 +2588,26 @@
     </message>
     <message id="lautta-search-pill-hidden">
         <source>Hidden</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-type-any">
+        <source>Any type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-settings">
+        <source>Search settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-clear-recent">
+        <source>Clear recent searches</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-clearing-recent">
+        <source>Clearing recent searches</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-pill-type">
+        <source>Type</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

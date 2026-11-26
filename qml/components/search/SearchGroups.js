@@ -86,12 +86,10 @@ function scopeName(scope, folderName) {
     }
 }
 
-function toggled(list, value) {
-    var out = list.slice()
-    var at = out.indexOf(value)
-    if (at >= 0)
-        out.splice(at, 1)
-    else
-        out.push(value)
-    return out
+function labelOf(choices, value) {
+    for (var i = 0; i < choices.length; ++i) {
+        if (choices[i].value === value)
+            return choices[i].label
+    }
+    return ""
 }

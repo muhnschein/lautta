@@ -57,10 +57,10 @@ QtObject {
         same(["folder", "device", "everywhere"].map(function (s) { return SearchGroups.scopeName(s, "Uni") }),
              ["Uni", "lautta-search-group-device", "lautta-search-scope-everywhere"], "a name per scope")
 
-        var list = ["image"]
-        same(SearchGroups.toggled(list, "video"), ["image", "video"], "toggling adds")
-        same(SearchGroups.toggled(list, "image"), [], "toggling again removes")
-        same(list, ["image"], "toggling leaves the list it got alone")
+        var choices = [{ "value": "", "label": "Any type" }, { "value": "image", "label": "Images" }]
+        same(SearchGroups.labelOf(choices, "image"), "Images", "a choice's label")
+        same(SearchGroups.labelOf(choices, ""), "Any type", "the empty value has a label too")
+        same(SearchGroups.labelOf(choices, "video"), "", "an unknown value has none")
         reachedEnd = true
     }
 }

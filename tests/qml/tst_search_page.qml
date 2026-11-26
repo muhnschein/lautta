@@ -88,24 +88,48 @@ ApplicationWindow {
     }
 
     function checkStructure() {
-        expect(findAll(page, function (x) { return x._isPullDownMenu === true }, []).length === 0,
-               "the page has no pulley menu")
-        expect(findAll(page, function (x) { return x.pullDownMenu !== undefined && x.pullDownMenu !== null }, []).length === 0,
-               "no flickable of the page has a pulley menu")
+        var pulleys = findAll(page, function (x) { return x._isPullDownMenu === true }, []).filter(function (x, i, all) {
+            return all.indexOf(x) === i
+        })
+        expect(pulleys.length === 1, "the page has one pulley menu: " + pulleys.length)
+        expect(!list.pullDownMenu, "the pulley belongs to the page, not to the result list")
+        expect(named("searchSettingsItem") !== null, "the pulley opens the search settings")
+        expect(named("clearRecentSearches") !== null, "the pulley can clear recent searches")
         expect(!within(field, list), "the search field is not inside the list")
         expect(list.headerItem === null, "the list has no header")
         expect(within(field, heading) && within(pills, heading), "field and pills are in the heading")
         expect(page.allowedOrientations === Orientation.All, "the page turns to landscape")
     }
 
-    function pill(name, type) {
-        return findAll(pills, function (x) {
-            return x.objectName === name && (type === undefined || x.type === type)
-        }, [])[0]
+    function pill(name) {
+        return findAll(pills, function (x) { return x.objectName === name }, [])[0]
     }
 
-    function choice(choices, value) {
-        return findAll(choices, function (x) { return x.objectName === "pillChoice" && x.value === value }, [])[0]
+    function touch(name) {
+        return findAll(pill(name), function (x) { return x.preventStealing !== undefined }, [])[0]
+    }
+
+    function choice(menuName, value) {
+        var menu = named(menuName)
+        if (!menu)
+            return null
+        return findAll(menu, function (x) { return x.objectName === "pillChoice" && x.value === value }, [])[0]
+    }
+
+    function pick(menuName, value) {
+        var menu = named(menuName)
+        var item = choice(menuName, value)
+        if (!menu || !item || !menu._expanded)
+            return false
+        menu._activatedMenuItem(item)
+        return true
+    }
+
+    function marksShown() {
+        var names = findAll(list.contentItem, function (x) { return x.objectName === "searchResultName" }, [])
+        return names.length > 0 && names.every(function (n) {
+            return n.textFormat === Text.StyledText && n.text.indexOf("<b><font") >= 0
+        })
     }
 
     Component.onCompleted: {
@@ -165,45 +189,65 @@ ApplicationWindow {
             case 3:
                 if (win.rowCount() !== 15)
                     break
-                var text = win.pill("typePill", "text")
-                if (!text)
-                    return win.fail("a Text pill")
-                text.clicked()
-                win.expect(text.checked, "the Text pill lights up")
+                win.expect(win.marksShown(), "every result marks the match in bold highlight")
+                win.touch("typePill").clicked(null)
                 win.next()
                 break
             case 4:
-                if (win.rowCount() !== 3)
+                if (!win.named("typeMenu") || !win.named("typeMenu")._expanded)
                     break
-                win.checkFieldKept("thesis", "type pill")
-                win.pill("typePill", "text").clicked()
-                win.pill("datePill").clicked()
+                win.expect(win.named("searchPillHost").height > win.pills.height, "the type menu opens under the pills")
+                win.expect(win.pill("typePill").open, "the Type pill shows its menu is open")
+                if (!win.pick("typeMenu", "text"))
+                    return win.fail("the type menu offers Text")
                 win.next()
                 break
             case 5:
-                if (win.rowCount() !== 15)
+                if (win.rowCount() !== 3)
                     break
-                var dates = win.named("dateChoices")
-                win.expect(dates.shown && dates.height > 0, "the date pill opens its choices")
-                win.checkLayout("choices open")
-                win.choice(dates, "today").clicked(null)
-                win.expect(!dates.shown, "a choice closes the choices")
-                win.expect(win.pill("datePill").checked, "a chosen date lights its pill")
+                win.checkFieldKept("thesis", "type menu")
+                win.expect(win.pill("typePill").checked, "a chosen type lights the Type pill")
+                win.touch("datePill").pressAndHold(null)
                 win.next()
                 break
             case 6:
-                if (win.waited < 8 || win.rowCount() !== 15)
+                if (!win.named("dateMenu") || !win.named("dateMenu")._expanded)
                     break
-                win.pill("scopePill").clicked()
-                var scopes = win.named("scopeChoices")
-                win.expect(scopes.shown, "the scope pill opens its choices")
-                var device = win.choice(scopes, "device")
-                if (!device || !win.choice(scopes, "folder"))
-                    return win.fail("scope choices name the folder and the device")
-                device.clicked(null)
+                win.expect(win.named("typeMenu") === null, "one menu at a time")
+                win.checkLayout("menu open")
+                if (!win.pick("dateMenu", "today"))
+                    return win.fail("the date menu offers Today")
                 win.next()
                 break
             case 7:
+                if (win.waited < 8 || win.rowCount() !== 3 || win.named("dateMenu") !== null)
+                    break
+                win.expect(win.pill("datePill").checked, "a chosen date lights its pill")
+                win.touch("typePill").clicked(null)
+                win.next()
+                break
+            case 8:
+                if (!win.pick("typeMenu", ""))
+                    break
+                win.next()
+                break
+            case 9:
+                if (win.rowCount() !== 15)
+                    break
+                win.expect(!win.pill("typePill").checked, "any type dims the Type pill")
+                win.touch("scopePill").clicked(null)
+                win.next()
+                break
+            case 10:
+                if (!win.named("scopeMenu") || !win.named("scopeMenu")._expanded)
+                    break
+                if (!win.choice("scopeMenu", "folder"))
+                    return win.fail("the scope menu names the folder too")
+                if (!win.pick("scopeMenu", "device"))
+                    return win.fail("the scope menu offers This device")
+                win.next()
+                break
+            case 11:
                 if (win.rowCount() < 15 || win.named("searchGroupName") === null)
                     break
                 win.expect(win.page.scope === "device" && win.page.wide, "the device scope is wide")
@@ -212,7 +256,7 @@ ApplicationWindow {
                 win.deviceOrientation = Orientation.Landscape
                 win.next()
                 break
-            case 8:
+            case 12:
                 if (!win.page.isLandscape || win.page.orientationTransitionRunning)
                     break
                 win.expect(win.page.width > win.page.height, "landscape page is wide: " + win.page.width + "x" + win.page.height)

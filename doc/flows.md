@@ -307,7 +307,7 @@ Features: F-SRC-01 Search, F-SRC-02 Search pills, F-SRC-03 Server search depth
 | 1 | SCR-06 Folder pulley | Pull: Search |
 | 2 | SCR-25 Search | Search page |
 | 3 | SCR-25 Search | Results |
-| 4 | SCR-25 Search | Pills: scope, type, Modified, Size |
+| 4 | SCR-25 Search | Pills: scope, Type, Modified |
 | 5 | SCR-01 Home | Pull: Search |
 | 6 | SCR-25 Search | Results by location |
 

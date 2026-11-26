@@ -14,6 +14,7 @@ Item {
     readonly property color ink: lit ? Theme.highlightColor : Theme.primaryColor
 
     signal clicked()
+    signal pressAndHold()
 
     width: content.width + (icon !== "" ? Theme.paddingMedium + Theme.paddingLarge : 2 * Theme.paddingLarge)
     height: label.height + 2 * Theme.paddingMedium
@@ -62,5 +63,6 @@ Item {
         anchors.fill: parent
         anchors.margins: -Theme.paddingSmall
         onClicked: root.clicked()
+        onPressAndHold: root.pressAndHold()
     }
 }
