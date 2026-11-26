@@ -120,6 +120,7 @@ ApplicationWindow {
                 var views = win.findAll(win.page, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])
                 if (views.length !== 1 || !views[0].model.loaded || views[0].model.busy)
                     break
+                views[0].cacheBuffer = 100000
                 views[0].forceLayout()
                 var photoRow = win.rowOf(win.photo)
                 var paperRow = win.rowOf(win.paper)
@@ -159,6 +160,10 @@ ApplicationWindow {
                 win.next()
                 break
             case 4:
+                var shownList = win.findAll(win.page, function(x) { return x.forceLayout !== undefined && x.cacheBuffer !== undefined }, [])[0]
+                shownList.contentY += 1
+                shownList.contentY -= 1
+                shownList.forceLayout()
                 var again = win.rowOf(win.photo)
                 var paperAgain = win.rowOf(win.paper)
                 if (!again || !paperAgain)

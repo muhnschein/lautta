@@ -3,7 +3,7 @@
 use crate::app::Core;
 use crate::entry::{Entry, Kind};
 use crate::error::{Error, ErrorKind, Result};
-use crate::mime::{category_of, FileCategory};
+use crate::mime::{category_of, mime_of, shows_in_app, FileCategory};
 use crate::org::recents::RecentKind;
 use crate::preview::audio::{self, AudioRead, AudioTags, RangeReader};
 use crate::preview::exif::{self, ExifInfo};
@@ -1028,7 +1028,11 @@ impl Core {
         let hidden = prefs.show_hidden;
         let images: Vec<Entry> = all
             .into_iter()
-            .filter(|e| category_of(e) == FileCategory::Image && (hidden || !e.is_hidden()))
+            .filter(|e| {
+                category_of(e) == FileCategory::Image
+                    && shows_in_app(&mime_of(e).unwrap_or_default())
+                    && (hidden || !e.is_hidden())
+            })
             .collect();
         let order = sort_permutation(&images, &prefs.sort_options());
         order

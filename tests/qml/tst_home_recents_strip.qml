@@ -184,11 +184,15 @@ ApplicationWindow {
                "a volume's line tells free space only, not size: " + HomeText.volumeLine(42000000000, 128000000000, "exFAT"))
         expect(HomeText.volumeLine(-1, 128000000000, "") === "119 GB" && HomeText.volumeLine(-1, 128000000000, "exFAT") === "119 GB · exFAT",
                "a volume's size reads that way: " + HomeText.volumeLine(-1, 128000000000, "exFAT"))
-        expect(Math.round(space[0].mapToItem(view.contentItem, 0, space[0].baselineOffset).y)
-               === Math.round(device.mapToItem(view.contentItem, 0, device.baselineOffset).y),
-               "it stands on the line of On this device")
-        expect(left(space[0], view.contentItem) + space[0].width < left(device, view.contentItem) + device.width - device.contentWidth,
-               "it ends before the section's name")
+        expect(top(space[0], view.contentItem) > Math.round(device.mapToItem(view.contentItem, 0, device.baselineOffset).y),
+               "it stands below On this device")
+        expect(Math.abs(space[0].mapToItem(view.contentItem, space[0].width, 0).x - device.mapToItem(view.contentItem, device.width, 0).x) < 1
+               && space[0].horizontalAlignment === Text.AlignRight,
+               "right-aligned under the section's name: " + space[0].mapToItem(view.contentItem, space[0].width, 0).x + " "
+               + device.mapToItem(view.contentItem, device.width, 0).x)
+        expect(space[0].font.pixelSize < device.font.pixelSize, "smaller than the section's name")
+        expect(space[0].y + space[0].height < space[0].parent.height,
+               "the section header grows to hold it: " + (space[0].y + space[0].height) + " in " + space[0].parent.height)
         home.deviceTotal = -1
         expect(shownSpace().length === 0, "unknown space shows nothing")
         home.deviceTotal = 0

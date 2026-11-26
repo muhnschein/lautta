@@ -371,7 +371,7 @@ mod tests {
             "rows from before keep label and colour and have no icon chosen"
         );
         assert_eq!(list[0].icon_source(), "image://theme/icon-m-favorite");
-        assert_eq!(list[1].icon_source(), "file-document");
+        assert_eq!(list[1].icon_source(), "file-pdf");
         let uni = crate::uri::Uri::parse("lautta://user-documents/Uni").unwrap();
         let saved = favourites
             .save(&uni, "Uni", Some("#e7a33c"), Some("home"), true)
