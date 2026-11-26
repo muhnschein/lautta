@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- PDFs, spreadsheets, presentations, documents, text, code and Markdown files each have their own icon, and files Lautta doesn't know show a plain page. More formats are recognised: Office macro and template files, Apple Pages and Numbers, WordPerfect, Works and Lotus files, e-books (MOBI, AZW3, FB2), Access and dBASE databases, and subtitles (SRT, VTT, ASS, LRC), which open in the text viewer ([#44](https://github.com/muhnschein/lautta/issues/44)).
 - In grid view, the first row of a folder sits a little lower, with some space between it and the header.
 - In *Recents* and *Activity* the page title stays at the top while you scroll, as in folders. While you scroll, a date shows by the scroll handle on the right: *Today*, *Yesterday*, the weekday for the last week, then month and year. Drag the handle to jump through the list ([#194](https://github.com/muhnschein/lautta/issues/194)).
 - Sharing a file from a server offers the same apps as sharing a file on this device, such as Bluetooth. Before, the share sheet listed only apps that take any file, such as *Save to Lautta* ([#153](https://github.com/muhnschein/lautta/issues/153)).

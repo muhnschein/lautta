@@ -538,7 +538,7 @@ async fn file_favourites_name_their_folder_and_icon() {
     assert_eq!(
         shown,
         [
-            ("Thesis", "Documents › Uni", "file-document", true),
+            ("Thesis", "Documents › Uni", "file-pdf", true),
             ("Photo", "Documents", "file-image", true),
         ],
         "the folder a file is in, and the file's icon"

@@ -12,9 +12,16 @@ function kind(category, isDir) {
     case "archive":
     case "package":
     case "database":
+    case "text":
+    case "code":
+    case "markdown":
+    case "pdf":
+    case "document":
+    case "spreadsheet":
+    case "presentation":
         return category
     }
-    return "document"
+    return "file"
 }
 
 function setFor(px) {

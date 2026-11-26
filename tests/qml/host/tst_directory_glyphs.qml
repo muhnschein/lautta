@@ -38,8 +38,8 @@ Item {
                           "text", "code", "markdown", "pdf", "document", "spreadsheet", "presentation", "file", ""]
         same(categories.map(function (c) { return FileIcons.kind(c, false) }),
              ["folder", "image", "video", "audio", "archive", "package", "database",
-              "document", "document", "document", "document", "document", "document", "document", "document",
-              "document"], "the glyph of each category: text and office files share the document glyph")
+              "text", "code", "markdown", "pdf", "document", "spreadsheet", "presentation", "file",
+              "file"], "the glyph of each category, unknown ones the plain page")
         same(FileIcons.kind("image", true), "folder", "a folder is a folder, whatever its name says")
     }
 
@@ -52,7 +52,7 @@ Item {
         same(FileIcons.sized("dir-copy", 64), "dir-copy", "another app icon stays")
         same([FileIcons.glyph("pdf", false, 112), FileIcons.glyph("video", true, 96),
               FileIcons.glyph("archive", false, 84)],
-             ["file-document-28", "file-folder-32", "file-archive-28"], "the glyph of an item at a size")
+             ["file-pdf-28", "file-folder-32", "file-archive-28"], "the glyph of an item at a size")
     }
 
     Image {

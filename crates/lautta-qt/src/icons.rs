@@ -210,6 +210,8 @@ mod tests {
             ("file-folder-28.svg", 168, 3.0),
             ("file-document-28.svg", 168, 3.0),
             ("file-document-32.svg", 96, 3.0),
+            ("file-spreadsheet-28.svg", 168, 3.0),
+            ("file-presentation-32.svg", 96, 3.0),
             ("view-options.svg", 96, 3.0),
             ("file-folder-28.svg", 112, 3.5),
             ("dir-copy.svg", 128, 4.0),

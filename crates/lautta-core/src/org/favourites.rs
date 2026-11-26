@@ -69,7 +69,14 @@ impl Favourite {
             FileCategory::Archive => "file-archive",
             FileCategory::Package => "file-package",
             FileCategory::Database => "file-database",
-            _ => "file-document",
+            FileCategory::Text => "file-text",
+            FileCategory::Code => "file-code",
+            FileCategory::Markdown => "file-markdown",
+            FileCategory::Pdf => "file-pdf",
+            FileCategory::Document => "file-document",
+            FileCategory::Spreadsheet => "file-spreadsheet",
+            FileCategory::Presentation => "file-presentation",
+            FileCategory::Folder | FileCategory::Other => "file-file",
         }
     }
 }
@@ -474,7 +481,8 @@ mod tests {
     fn files_show_the_own_glyph_of_their_kind() {
         let f = store();
         let shown: Vec<_> = [
-            "a.jpg", "a.mp4", "a.mp3", "a.zip", "a.rpm", "a.sqlite", "a.pdf", "a.txt", "a",
+            "a.jpg", "a.mp4", "a.mp3", "a.zip", "a.rpm", "a.sqlite", "a.pdf", "a.txt", "a.rs", "a.md",
+            "a.odt", "a.ods", "a.odp", "a",
         ]
         .iter()
         .map(|n| {
@@ -491,9 +499,14 @@ mod tests {
                 "file-archive",
                 "file-package",
                 "file-database",
+                "file-pdf",
+                "file-text",
+                "file-code",
+                "file-markdown",
                 "file-document",
-                "file-document",
-                "file-document",
+                "file-spreadsheet",
+                "file-presentation",
+                "file-file",
             ],
             "the glyph the folder view shows for the file"
         );

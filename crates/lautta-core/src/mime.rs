@@ -163,6 +163,86 @@ pub fn from_extension(ext: &str) -> Option<(&'static str, FileCategory)> {
         ),
         "odp" => ("application/vnd.oasis.opendocument.presentation", Presentation),
         "sqlite" | "sqlite3" | "db" => ("application/vnd.sqlite3", Database),
+        "docm" => ("application/vnd.ms-word.document.macroEnabled.12", Document),
+        "dotx" => (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+            Document,
+        ),
+        "dotm" => ("application/vnd.ms-word.template.macroEnabled.12", Document),
+        "fodt" => ("application/vnd.oasis.opendocument.text-flat-xml", Document),
+        "sxw" => ("application/vnd.sun.xml.writer", Document),
+        "sdw" => ("application/vnd.stardivision.writer", Document),
+        "pages" => ("application/vnd.apple.pages", Document),
+        "wps" => ("application/vnd.ms-works", Document),
+        "wpd" | "wp" => ("application/vnd.wordperfect", Document),
+        "wri" => ("application/x-mswrite", Document),
+        "hwp" => ("application/x-hwp", Document),
+        "xps" => ("application/vnd.ms-xpsdocument", Document),
+        "mobi" => ("application/x-mobipocket-ebook", Document),
+        "azw3" => ("application/vnd.amazon.mobi8-ebook", Document),
+        "fb2" => ("application/x-fictionbook+xml", Document),
+        "lit" => ("application/x-ms-reader", Document),
+        "lrf" => ("application/x-sony-bbeb", Document),
+        "chm" => ("application/vnd.ms-htmlhelp", Document),
+        "ibooks" => ("application/x-ibooks+zip", Document),
+        "indd" => ("application/x-adobe-indesign", Document),
+        "idml" => ("application/vnd.adobe.indesign-idml-package", Document),
+        "mht" | "mhtml" => ("application/x-mimearchive", Document),
+        "xlsm" => ("application/vnd.ms-excel.sheet.macroEnabled.12", Spreadsheet),
+        "xlsb" => (
+            "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+            Spreadsheet,
+        ),
+        "xltx" => (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
+            Spreadsheet,
+        ),
+        "xlt" => ("application/vnd.ms-excel", Spreadsheet),
+        "xltm" => ("application/vnd.ms-excel.template.macroEnabled.12", Spreadsheet),
+        "numbers" => ("application/vnd.apple.numbers", Spreadsheet),
+        "fods" => (
+            "application/vnd.oasis.opendocument.spreadsheet-flat-xml",
+            Spreadsheet,
+        ),
+        "sxc" => ("application/vnd.sun.xml.calc", Spreadsheet),
+        "wk1" | "wk3" | "wk4" | "wks" | "123" => ("application/vnd.lotus-1-2-3", Spreadsheet),
+        "wq1" | "wq2" | "wb1" | "wb2" | "wb3" | "qpw" => ("application/x-quattropro", Spreadsheet),
+        "pptm" => (
+            "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+            Presentation,
+        ),
+        "ppsx" => (
+            "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+            Presentation,
+        ),
+        "ppsm" => (
+            "application/vnd.ms-powerpoint.slideshow.macroEnabled.12",
+            Presentation,
+        ),
+        "pps" => ("application/vnd.ms-powerpoint", Presentation),
+        "potx" => (
+            "application/vnd.openxmlformats-officedocument.presentationml.template",
+            Presentation,
+        ),
+        "potm" => (
+            "application/vnd.ms-powerpoint.template.macroEnabled.12",
+            Presentation,
+        ),
+        "thmx" => ("application/vnd.ms-officetheme", Presentation),
+        "fodp" => (
+            "application/vnd.oasis.opendocument.presentation-flat-xml",
+            Presentation,
+        ),
+        "sxi" => ("application/vnd.sun.xml.impress", Presentation),
+        "sdd" => ("application/vnd.stardivision.impress", Presentation),
+        "mdb" | "accdb" => ("application/x-msaccess", Database),
+        "dbf" => ("application/x-dbf", Database),
+        "odb" => ("application/vnd.oasis.opendocument.database", Database),
+        "sas7bdat" => ("application/x-sas-data", Database),
+        "srt" => ("application/x-subrip", Text),
+        "vtt" => ("text/vtt", Text),
+        "ass" | "ssa" => ("text/x-ssa", Text),
+        "lrc" => ("text/x-lrc", Text),
         "rpm" => ("application/x-rpm", Package),
         "apk" => ("application/vnd.android.package-archive", Package),
         _ => return None,
@@ -706,6 +786,51 @@ mod tests {
                 panic!("missing {ext}");
             };
             assert_eq!(category_from_mime(mime), cat, "{ext} / {mime}");
+        }
+    }
+
+    #[test]
+    fn office_ebook_database_and_subtitle_variants_get_their_category() {
+        use FileCategory::*;
+        let want: [(&[&str], FileCategory); 5] = [
+            (
+                &[
+                    "docm", "dotx", "dotm", "fodt", "sxw", "sdw", "pages", "wps", "wpd", "wp", "wri", "hwp",
+                    "xps", "mobi", "azw3", "fb2", "lit", "lrf", "chm", "ibooks", "indd", "idml", "mht",
+                    "mhtml",
+                ],
+                Document,
+            ),
+            (
+                &[
+                    "xlsm", "xlsb", "xltx", "xlt", "xltm", "numbers", "fods", "sxc", "wk1", "wk3", "wk4",
+                    "wks", "123", "wq1", "wq2", "wb1", "wb2", "wb3", "qpw",
+                ],
+                Spreadsheet,
+            ),
+            (
+                &[
+                    "pptm", "ppsx", "ppsm", "pps", "potx", "potm", "thmx", "fodp", "sxi", "sdd",
+                ],
+                Presentation,
+            ),
+            (&["mdb", "accdb", "dbf", "odb", "sas7bdat"], Database),
+            (&["srt", "vtt", "ass", "ssa", "lrc"], Text),
+        ];
+        for (exts, category) in want {
+            for ext in exts {
+                let name = format!("Some file.{}", ext.to_ascii_uppercase());
+                assert_eq!(category_of_name(name.as_bytes()), category, "{ext}");
+            }
+        }
+        assert_eq!(viewer_of(b"film.srt", "", None), Viewer::Text);
+        assert_eq!(viewer_of(b"sheet.xlsm", "", None), Viewer::External);
+    }
+
+    #[test]
+    fn names_shared_with_other_formats_stay_unknown() {
+        for name in ["id_ed25519.pub", "server.key", "graph.dot", "subs.sub"] {
+            assert_eq!(category_of_name(name.as_bytes()), FileCategory::Other, "{name}");
         }
     }
 
