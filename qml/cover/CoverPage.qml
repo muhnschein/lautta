@@ -37,7 +37,7 @@ CoverBackground {
         objectName: "coverContent"
         anchors.fill: parent
         active: cover.live && cover.source !== null
-        sourceComponent: cover.kind === "home" ? home : (cover.kind === "grid" ? grid : (cover.kind === "file" ? file : null))
+        sourceComponent: cover.kind === "home" ? home : (cover.kind === "grid" || cover.kind === "list" ? folder : (cover.kind === "file" ? file : null))
     }
 
     Component {
@@ -55,9 +55,13 @@ CoverBackground {
     }
 
     Component {
-        id: grid
+        id: folder
 
         Item {
+            readonly property bool rows: cover.kind === "list"
+            readonly property var items: cover.told("coverModel", null)
+            readonly property int count: rows ? lines.count : tiles.count
+
             CoverHeader {
                 id: header
 
@@ -67,6 +71,7 @@ CoverBackground {
                 id: tiles
 
                 objectName: "coverGrid"
+                visible: !parent.rows
                 anchors {
                     top: header.bottom
                     topMargin: Theme.paddingLarge
@@ -74,11 +79,19 @@ CoverBackground {
                     right: parent.right
                     bottom: parent.bottom
                 }
-                model: cover.told("coverModel", null)
+                model: parent.rows ? null : parent.items
+            }
+            CoverList {
+                id: lines
+
+                objectName: "coverList"
+                visible: parent.rows
+                anchors.fill: tiles
+                model: parent.rows ? parent.items : null
             }
             Label {
                 objectName: "coverEmpty"
-                visible: tiles.count === 0 && tiles.model !== null && tiles.model.loading !== true
+                visible: parent.count === 0 && parent.items !== null && parent.items.loading !== true
                 anchors.centerIn: parent
                 width: parent.width - 2 * Theme.paddingMedium
                 horizontalAlignment: Text.AlignHCenter
