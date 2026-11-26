@@ -154,43 +154,6 @@
         <source>Source code</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-filters-accept">
-        <source>Search</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-cancel">
-        <source>Cancel</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-in">
-        <source>Search in %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-name">
-        <source>Name</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-match">
-        <source>Match</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-match-substring">
-        <source>Contains</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-match-glob">
-        <source>Pattern</source>
-        <oldsource>Glob</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-type">
-        <source>Type</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-type-any">
-        <source>Any</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-filters-type-folder">
         <source>Folders</source>
         <translation type="unfinished"></translation>
@@ -209,43 +172,6 @@
     </message>
     <message id="lautta-filters-type-document">
         <source>Documents</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-type-archive">
-        <source>Compressed files</source>
-        <oldsource>Archives</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-type-text">
-        <source>Text files</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-size">
-        <source>Size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-size-any">
-        <source>Any size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-size-gt1m">
-        <source>Larger than 1 MB</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-size-gt10m">
-        <source>Larger than 10 MB</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-size-gt100m">
-        <source>Larger than 100 MB</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-size-lt100k">
-        <source>Smaller than 100 kB</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-size-lt1m">
-        <source>Smaller than 1 MB</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-filters-modified">
@@ -272,36 +198,8 @@
         <source>This year</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-filters-hidden">
-        <source>Include hidden files</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-filters-depth-value" numerus="yes">
-        <source>%n folders</source>
-        <translation>
-            <numerusform>%n folder</numerusform>
-            <numerusform>%n folders</numerusform>
-        </translation>
-    </message>
-    <message id="lautta-filters-depth">
-        <source>Search depth on servers</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-filters-recent">
         <source>Recent searches</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-mode-glob">
-        <source>pattern</source>
-        <oldsource>glob</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-mode-substring">
-        <source>contains</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-any-type">
-        <source>any type</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-search-placeholder">
@@ -317,16 +215,8 @@
         <oldsource>Search stopped</oldsource>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-search-idle">
-        <source>Search</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-search-none-hint">
         <source>Try another name or loosen the filters</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-idle-hint">
-        <source>Type part of a name, or a pattern such as *.pdf</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-search-progress" numerus="yes">
@@ -335,10 +225,6 @@
             <numerusform>Searching… %n result</numerusform>
             <numerusform>Searching… %n results</numerusform>
         </translation>
-    </message>
-    <message id="lautta-search-stop">
-        <source>Stop</source>
-        <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-days" numerus="yes">
         <source>%n days</source>
@@ -2621,6 +2507,88 @@
             <numerusform>Only files deleted from this device&apos;s folders are kept here for %n day. Deletes on volumes and servers are permanent.</numerusform>
             <numerusform>Only files deleted from this device&apos;s folders are kept here for %n days. Deletes on volumes and servers are permanent.</numerusform>
         </translation>
+    </message>
+    <message id="lautta-search-group-device">
+        <source>This device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-group-searching-folders" numerus="yes">
+        <source>Searching · %n folders</source>
+        <translation>
+            <numerusform>Searching · %n folder</numerusform>
+            <numerusform>Searching · %n folders</numerusform>
+        </translation>
+    </message>
+    <message id="lautta-search-group-searching">
+        <source>Searching</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-group-stopped">
+        <source>Stopped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-group-unreachable">
+        <source>Not reachable</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-group-denied">
+        <source>Not allowed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-group-attention">
+        <source>Needs attention</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-group-found" numerus="yes">
+        <source>%n results</source>
+        <translation>
+            <numerusform>%n result</numerusform>
+            <numerusform>%n results</numerusform>
+        </translation>
+    </message>
+    <message id="lautta-search-group-none">
+        <source>Nothing found</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-scope-everywhere">
+        <source>Everywhere</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-home-search">
+        <source>Search</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-type-any">
+        <source>Any type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-pill-archive">
+        <source>Archives</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-pill-text">
+        <source>Text</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-clear-recent">
+        <source>Clear recent searches</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-clearing-recent">
+        <source>Clearing recent searches</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-placeholder-in">
+        <source>Search in %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-pill-type">
+        <source>Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-pill-hidden">
+        <source>Hidden</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>
