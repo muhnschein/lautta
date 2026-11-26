@@ -61,8 +61,17 @@ struct GroupState {
     error_kind: String,
 }
 
+struct Finished {
+    scope: SearchScope,
+    root: Option<Uri>,
+    request: SearchRequest,
+    groups: Vec<SearchGroup>,
+    states: Vec<GroupState>,
+    hits: Vec<(usize, usize, SearchHit)>,
+}
+
 enum Event {
-    Rows(usize, Vec<Row>),
+    Rows(usize, Vec<Row>, Vec<(usize, usize, SearchHit)>),
     Progress(usize, u64),
     GroupDone(usize, Result<(u64, u64, u64), (String, String)>),
     Remembered,
@@ -134,6 +143,9 @@ pub struct SearchModel {
     groups: Vec<GroupState>,
     generation: u64,
     cancel_flag: Option<Arc<AtomicBool>>,
+    running_search: Option<(SearchScope, Option<Uri>, SearchRequest, Vec<SearchGroup>)>,
+    collected: Vec<(usize, usize, SearchHit)>,
+    finished: Option<Finished>,
 }
 
 impl Drop for SearchModel {
@@ -399,11 +411,23 @@ impl SearchModel {
         if !request.is_restricted() || (scope == SearchScope::Folder && root.is_none()) {
             return false;
         }
+        if let Some(prior) = self.finished.take() {
+            let narrows = prior.scope == scope && prior.root == root && request.narrows(&prior.request);
+            if narrows {
+                self.show_narrowed(&core, &prior, &request);
+            }
+            self.finished = Some(prior);
+            if narrows {
+                return true;
+            }
+        }
         let groups = core.search_groups(&scope, root.as_ref());
         if groups.is_empty() {
             return false;
         }
         self.clear();
+        self.collected.clear();
+        self.running_search = Some((scope.clone(), root.clone(), request.clone(), groups.clone()));
         self.depthLimit = match (&scope, &root) {
             (SearchScope::Folder, Some(r)) => core.search_depth(r).map_or(-1, |d| d as i32),
             _ => -1,
@@ -458,7 +482,8 @@ impl SearchModel {
                             .filter_map(|h| maker.row(&core, group, root, h))
                             .collect();
                         rows.sort_by_key(|a| a.name.to_lowercase());
-                        post(Event::Rows(group, rows));
+                        let raw = hits.into_iter().map(|h| (group, root, h)).collect();
+                        post(Event::Rows(group, rows, raw));
                     }
                     ScopeEvent::Progress { group, folders } => post(Event::Progress(group, folders)),
                     ScopeEvent::Remembered => post(Event::Remembered),
@@ -482,7 +507,10 @@ impl SearchModel {
         }
         match event {
             Event::Remembered => self.refreshRecent(),
-            Event::Rows(group, rows) => self.add_rows(group, rows),
+            Event::Rows(group, rows, raw) => {
+                self.collected.extend(raw);
+                self.add_rows(group, rows);
+            }
             Event::Progress(group, folders) => {
                 if let Some(g) = self.groups.get_mut(group) {
                     g.folders = g.folders.max(folders);
@@ -514,12 +542,71 @@ impl SearchModel {
                 self.publish_groups();
             }
             Event::Finished => {
+                if let Some((scope, root, request, groups)) = self.running_search.take() {
+                    self.finished = Some(Finished {
+                        scope,
+                        root,
+                        request,
+                        groups,
+                        states: self.groups.clone(),
+                        hits: std::mem::take(&mut self.collected),
+                    });
+                }
                 self.running = false;
                 self.cancel_flag = None;
                 self.runningChanged();
                 self.refreshRecent();
             }
         }
+    }
+
+    fn show_narrowed(&mut self, core: &Core, prior: &Finished, request: &SearchRequest) {
+        let Ok(kept) = request.narrow(prior.hits.iter().collect::<Vec<_>>(), |(_, _, h)| h) else {
+            return;
+        };
+        self.clear();
+        let key = prior.scope.recents_key(prior.root.as_ref());
+        if !request.text.trim().is_empty() && !key.is_empty() {
+            let _ = core.recent_searches.add(&key, request.text.trim());
+        }
+        self.refreshRecent();
+        let maker = RowMaker {
+            groups: prior.groups.clone(),
+            text: request.text.clone(),
+            mode: request.mode,
+            settings: core.settings(),
+        };
+        self.group_sizes = vec![0; prior.groups.len()];
+        self.groups = prior
+            .states
+            .iter()
+            .map(|g| GroupState {
+                hits: 0,
+                rows: 0,
+                ..g.clone()
+            })
+            .collect();
+        let mut by_group: Vec<Vec<Row>> = (0..prior.groups.len()).map(|_| Vec::new()).collect();
+        for (group, root, hit) in kept {
+            if let Some(row) = maker.row(core, *group, *root, hit) {
+                by_group[*group].push(row);
+            }
+        }
+        for (group, mut rows) in by_group.into_iter().enumerate() {
+            rows.sort_by_key(|a| a.name.to_lowercase());
+            if let Some(g) = self.groups.get_mut(group) {
+                g.hits = rows.len() as u64;
+            }
+            self.add_rows(group, rows);
+        }
+        if let [only] = self.groups.as_slice() {
+            if only.state == "failed" {
+                self.errorKind = QString::from(only.error_kind.as_str());
+            }
+        }
+        self.folderCount = self.groups.iter().map(|g| g.folders).sum::<u64>() as i32;
+        self.errorCount = self.groups.iter().map(|g| g.errors).sum::<u64>() as i32;
+        self.publish_groups();
     }
 
     fn add_rows(&mut self, group: usize, rows: Vec<Row>) {
