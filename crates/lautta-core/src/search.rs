@@ -337,6 +337,19 @@ fn hits_in(
         .collect()
 }
 
+pub fn filter_hits<T>(
+    items: Vec<T>,
+    hit: impl Fn(&T) -> &SearchHit,
+    query: &SearchQuery,
+    classify: &(dyn Fn(&Entry) -> String + Send + Sync),
+) -> Result<Vec<T>> {
+    let matcher = Matcher::new(query)?;
+    Ok(items
+        .into_iter()
+        .filter(|item| matcher.matches(&hit(item).entry, classify))
+        .collect())
+}
+
 pub fn classify_by_extension(entry: &Entry) -> String {
     if entry.is_dir() {
         return "folder".to_owned();

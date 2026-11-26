@@ -177,6 +177,34 @@ Item {
         model.scope = "folder"
         check(JSON.parse(model.recentSearchesJson).indexOf("thesis_draft") < 0, "folder recents stay apart")
 
+        run("thesis", "substring", [], "any", "any", false)
+        var full = rows.count
+        check(full === 5, "a finished search to narrow: " + names())
+        support.write("Documents/srch_t1/thesis_late.odt", "l", 0)
+        model.types = JSON.stringify(["document"])
+        check(model.start(), "a narrower request starts")
+        check(!model.running, "adding a type filter needs no walk")
+        check(names() === "thesis_draft.odt", "the type filter narrows the finished hits only: " + names())
+        model.types = "[]"
+        model.query = "thesis_d"
+        check(model.start() && !model.running, "a longer text needs no walk either")
+        check(names() === "thesis_draft.odt", "longer text narrows: " + names())
+        model.query = "thesis"
+        check(model.start() && !model.running, "back to the finished request needs no walk")
+        check(rows.count === full, "back to the full finished result: " + names())
+        check(JSON.parse(model.groupsJson)[0].state === "done", "narrowed groups keep their state")
+        model.query = "late"
+        check(model.start() && model.running, "a different text walks again")
+        waitIdle()
+        check(names() === "thesis_late.odt", "a new walk sees new files: " + names())
+        model.query = "thesis"
+        check(model.start(), "start to stop")
+        model.cancel()
+        model.query = "thesis_l"
+        check(model.start() && model.running, "a stopped search is never narrowed")
+        waitIdle()
+        check(names() === "thesis_late.odt", "the new walk finds it: " + names())
+
         model.rootUri = "lautta://user-documents/nonexistent_dir"
         run("x", "substring", [], "any", "any", false)
         check(model.errorKind.length > 0, "a missing root reports an error: " + model.errorKind)
