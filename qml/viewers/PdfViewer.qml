@@ -267,105 +267,121 @@ Page {
         }
     }
 
-    PinchArea {
+    SilicaFlickable {
+        id: pulleyHost
+
+        objectName: "pdfPulleyHost"
         anchors {
             top: page.searchMode ? searchField.bottom : parent.top
             bottom: page.searchMode ? hitBar.top : parent.bottom
             left: parent.left
             right: parent.right
         }
-        enabled: doc.loaded
+        contentWidth: width
+        contentHeight: height
 
-        property real startZoom: 1
-
-        onPinchStarted: startZoom = page.zoom
-        onPinchUpdated: page.zoomTo(startZoom * pinch.scale, pinch.center.x, pinch.center.y)
-        onPinchFinished: view.returnToBounds()
-
-        SilicaListView {
-            id: view
-
-            anchors.fill: parent
-            model: doc.loaded ? doc.pageCount : 0
-            clip: true
-            contentWidth: width * page.zoom
-            flickableDirection: page.zoom > 1 ? Flickable.HorizontalAndVerticalFlick : Flickable.VerticalFlick
-            spacing: Theme.paddingSmall
-
-            PullDownMenu {
-                MenuItem {
-                    visible: doc.problem === "encrypted"
-                    //% "Unlock"
-                    text: qsTrId("lautta-viewers-pdf-unlock")
-                    onClicked: page.askPassword()
-                }
-                MenuItem {
-                    //% "Open with"
-                    text: qsTrId("lautta-viewers-open-with")
-                    onClicked: external.openWith()
-                }
-                MenuItem {
-                    //% "Share"
-                    text: qsTrId("lautta-viewers-share")
-                    onClicked: external.share()
-                }
-                MenuItem {
-                    visible: doc.loaded && !page.searchMode
-                    //% "Search"
-                    text: qsTrId("lautta-viewers-pdf-search")
-                    onClicked: page.openSearch()
-                }
-                MenuItem {
-                    visible: doc.loaded
-                    //% "Contents and pages"
-                    text: qsTrId("lautta-viewers-pdf-contents-and-pages")
-                    onClicked: page.showContents()
-                }
+        PullDownMenu {
+            MenuItem {
+                visible: doc.problem === "encrypted"
+                //% "Unlock"
+                text: qsTrId("lautta-viewers-pdf-unlock")
+                onClicked: page.askPassword()
             }
-
-            header: HeaderBand {
-                width: view.width
-                x: view.contentX
-
-                PageHeader {
-                    title: page.fileName
-                    description: doc.loaded ? PdfText.summary(doc.pageCount) : " "
-                }
+            MenuItem {
+                //% "Open with"
+                text: qsTrId("lautta-viewers-open-with")
+                onClicked: external.openWith()
             }
-
-            delegate: PdfPage {
-                id: pdfPage
-                pageIndex: index
-                uri: page.uri
-                width: view.contentWidth
-                height: doc.heightFor(index, view.contentWidth)
-                fitWidth: view.width
-                zoom: page.renderZoom
-                hits: page.searchMode && doc.hitsRevision >= 0 ? JSON.parse(doc.hitsJson(index)) : []
-                onDoubleTapped: {
-                    var at = mapToItem(view, tapX, tapY)
-                    page.zoomTo(page.zoom > 1 ? 1 : 2.5, at.x, at.y)
-                }
-                onLinkClicked: page.followLink(link)
-                Component.onCompleted: doc.requestLinks(index)
-
-                Connections {
-                    target: doc
-                    onLinksReady: if (linkPage === pdfPage.pageIndex) pdfPage.links = JSON.parse(pageLinks)
-                }
+            MenuItem {
+                //% "Share"
+                text: qsTrId("lautta-viewers-share")
+                onClicked: external.share()
             }
-
-            ViewPlaceholder {
-                enabled: doc.problem !== "" || doc.errorKind !== ""
-                text: doc.problem !== ""
-                      ? PdfText.problem(doc.problem)
-                      : ErrorText.message(doc.errorKind, { "item": page.fileName, "location": App.locationName(page.uri), "open": true })
-                //% "Pull down to open it in another app."
-                hintText: doc.problem !== "" ? qsTrId("lautta-viewers-pdf-pull-hint") : ""
+            MenuItem {
+                visible: doc.loaded && !page.searchMode
+                //% "Search"
+                text: qsTrId("lautta-viewers-pdf-search")
+                onClicked: page.openSearch()
             }
+            MenuItem {
+                visible: doc.loaded
+                //% "Contents and pages"
+                text: qsTrId("lautta-viewers-pdf-contents-and-pages")
+                onClicked: page.showContents()
+            }
+        }
 
-            VerticalScrollDecorator { }
-            HorizontalScrollDecorator { }
+        HeaderBand {
+            id: header
+
+            objectName: "pdfHeader"
+            z: 1
+
+            PageHeader {
+                title: page.fileName
+            }
+        }
+
+        PinchArea {
+            anchors {
+                top: header.bottom
+                bottom: parent.bottom
+                left: parent.left
+                right: parent.right
+            }
+            enabled: doc.loaded
+
+            property real startZoom: 1
+
+            onPinchStarted: startZoom = page.zoom
+            onPinchUpdated: page.zoomTo(startZoom * pinch.scale, pinch.center.x, pinch.center.y)
+            onPinchFinished: view.returnToBounds()
+
+            SilicaListView {
+                id: view
+
+                objectName: "pdfPages"
+                anchors.fill: parent
+                model: doc.loaded ? doc.pageCount : 0
+                clip: true
+                contentWidth: width * page.zoom
+                flickableDirection: page.zoom > 1 ? Flickable.HorizontalAndVerticalFlick : Flickable.VerticalFlick
+                spacing: Theme.paddingSmall
+
+                delegate: PdfPage {
+                    id: pdfPage
+                    pageIndex: index
+                    uri: page.uri
+                    width: view.contentWidth
+                    height: doc.heightFor(index, view.contentWidth)
+                    fitWidth: view.width
+                    zoom: page.renderZoom
+                    hits: page.searchMode && doc.hitsRevision >= 0 ? JSON.parse(doc.hitsJson(index)) : []
+                    onDoubleTapped: {
+                        var at = mapToItem(view, tapX, tapY)
+                        page.zoomTo(page.zoom > 1 ? 1 : 2.5, at.x, at.y)
+                    }
+                    onLinkClicked: page.followLink(link)
+                    Component.onCompleted: doc.requestLinks(index)
+
+                    Connections {
+                        target: doc
+                        onLinksReady: if (linkPage === pdfPage.pageIndex) pdfPage.links = JSON.parse(pageLinks)
+                    }
+                }
+
+                VerticalScrollDecorator { }
+                HorizontalScrollDecorator { }
+            }
+        }
+
+        ViewPlaceholder {
+            enabled: doc.problem !== "" || doc.errorKind !== ""
+            text: doc.problem !== ""
+                  ? PdfText.problem(doc.problem)
+                  : ErrorText.message(doc.errorKind, { "item": page.fileName, "location": App.locationName(page.uri), "open": true })
+            //% "Pull down to open it in another app."
+            hintText: doc.problem !== "" ? qsTrId("lautta-viewers-pdf-pull-hint") : ""
         }
     }
 

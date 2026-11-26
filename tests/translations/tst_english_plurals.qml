@@ -26,7 +26,6 @@ QtObject {
         plural("lautta-dir-menu-paste", "Paste 1 item", "Paste %n items")
         plural("lautta-dir-clip-cut", "1 item cut", "%n items cut")
         plural("lautta-settings-days", "1 day", "%n days")
-        plural("lautta-viewers-pdf-pages", "1 page", "%n pages")
         plural("lautta-xfr-cover-count", "1 task", "%n tasks")
         plural("lautta-xfr-note-failed-body", "1 item failed. Tap to retry.", "%n items failed. Tap to retry.")
         plural("lautta-share-skipped", "1 file can't be read, skipped", "%n files can't be read, skipped")
