@@ -35,10 +35,13 @@ Item {
 
     function testKinds() {
         var categories = ["folder", "image", "video", "audio", "archive", "package", "database",
-                          "text", "code", "markdown", "pdf", "document", "spreadsheet", "presentation", "file", ""]
+                          "text", "code", "markdown", "pdf", "document", "spreadsheet", "presentation",
+                          "mail", "calendar", "contact", "notebook", "key", "executable", "font", "disk", "cad",
+                          "file", ""]
         same(categories.map(function (c) { return FileIcons.kind(c, false) }),
              ["folder", "image", "video", "audio", "archive", "package", "database",
-              "text", "code", "markdown", "pdf", "document", "spreadsheet", "presentation", "file",
+              "text", "code", "markdown", "pdf", "document", "spreadsheet", "presentation",
+              "mail", "calendar", "contact", "notebook", "key", "executable", "font", "disk", "cad", "file",
               "file"], "the glyph of each category, unknown ones the plain page")
         same(FileIcons.kind("image", true), "folder", "a folder is a folder, whatever its name says")
     }

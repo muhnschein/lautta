@@ -76,6 +76,15 @@ impl Favourite {
             FileCategory::Document => "file-document",
             FileCategory::Spreadsheet => "file-spreadsheet",
             FileCategory::Presentation => "file-presentation",
+            FileCategory::Mail => "file-mail",
+            FileCategory::Calendar => "file-calendar",
+            FileCategory::Contact => "file-contact",
+            FileCategory::Notebook => "file-notebook",
+            FileCategory::Key => "file-key",
+            FileCategory::Executable => "file-executable",
+            FileCategory::Font => "file-font",
+            FileCategory::DiskImage => "file-disk",
+            FileCategory::Cad => "file-cad",
             FileCategory::Folder | FileCategory::Other => "file-file",
         }
     }
@@ -482,7 +491,8 @@ mod tests {
         let f = store();
         let shown: Vec<_> = [
             "a.jpg", "a.mp4", "a.mp3", "a.zip", "a.rpm", "a.sqlite", "a.pdf", "a.txt", "a.rs", "a.md",
-            "a.odt", "a.ods", "a.odp", "a",
+            "a.odt", "a.ods", "a.odp", "a.eml", "a.ics", "a.vcf", "a.one", "a.pem", "a.exe", "a.ttf",
+            "a.iso", "a.stl", "a",
         ]
         .iter()
         .map(|n| {
@@ -506,6 +516,15 @@ mod tests {
                 "file-document",
                 "file-spreadsheet",
                 "file-presentation",
+                "file-mail",
+                "file-calendar",
+                "file-contact",
+                "file-notebook",
+                "file-key",
+                "file-executable",
+                "file-font",
+                "file-disk",
+                "file-cad",
                 "file-file",
             ],
             "the glyph the folder view shows for the file"

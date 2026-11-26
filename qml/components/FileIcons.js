@@ -19,6 +19,15 @@ function kind(category, isDir) {
     case "document":
     case "spreadsheet":
     case "presentation":
+    case "mail":
+    case "calendar":
+    case "contact":
+    case "notebook":
+    case "key":
+    case "executable":
+    case "font":
+    case "disk":
+    case "cad":
         return category
     }
     return "file"

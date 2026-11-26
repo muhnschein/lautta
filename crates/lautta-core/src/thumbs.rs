@@ -2,7 +2,7 @@
 
 use crate::entry::{Entry, EntryFlags};
 use crate::error::{Error, ErrorKind, Result};
-use crate::mime::{category_of, FileCategory};
+use crate::mime::{category_of, mime_of, shows_in_app, FileCategory};
 use crate::preview::exif;
 use crate::provider::{read_all, ReadHandle};
 use crate::settings::Settings;
@@ -60,7 +60,10 @@ impl ThumbSettings {
 }
 
 pub fn thumbnail_source(entry: &Entry, local: bool, shown: bool, set: &ThumbSettings) -> ThumbSource {
-    if !shown || entry.flags.contains(EntryFlags::NOT_ACCESSIBLE) {
+    if !shown
+        || entry.flags.contains(EntryFlags::NOT_ACCESSIBLE)
+        || !shows_in_app(&mime_of(entry).unwrap_or_default())
+    {
         return ThumbSource::Icon;
     }
     match (category_of(entry), local) {
@@ -819,6 +822,24 @@ mod tests {
             thumbnail_source(&file("a.jpg", None), true, false, &settings()),
             ThumbSource::Icon,
             "Show thumbnails off"
+        );
+    }
+
+    #[test]
+    fn pictures_videos_and_songs_lautta_cannot_show_keep_their_glyph() {
+        let on = settings();
+        for name in ["a.cr2", "b.psd", "c.heic", "d.wmv", "e.ape"] {
+            for local in [true, false] {
+                assert_eq!(
+                    thumbnail_source(&file(name, Some(5)), local, true, &on),
+                    ThumbSource::Icon,
+                    "{name} local {local}"
+                );
+            }
+        }
+        assert_eq!(
+            thumbnail_source(&file("f.pgm", Some(5)), false, true, &on),
+            ThumbSource::App
         );
     }
 
