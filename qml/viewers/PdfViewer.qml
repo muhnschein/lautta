@@ -243,162 +243,184 @@ Page {
         onTriggered: page.renderZoom = page.zoom
     }
 
-    SearchField {
-        id: searchField
+    SilicaFlickable {
+        id: pulleyHost
 
-        anchors { top: parent.top; left: parent.left; right: parent.right }
-        visible: page.searchMode
-        //% "Search the text"
-        placeholderText: qsTrId("lautta-viewers-pdf-search-placeholder")
-        inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
-        EnterKey.iconSource: "image://theme/icon-m-enter-close"
-        EnterKey.onClicked: focus = false
-        onTextChanged: {
-            if (text.trim() === "") {
-                typing.stop()
-                doc.stopSearch()
-            } else {
-                typing.restart()
-            }
-        }
-        rightItem: IconButton {
-            icon.source: "image://theme/icon-m-close"
-            onClicked: page.closeSearch()
-        }
-    }
-
-    PinchArea {
+        objectName: "pdfPulleyHost"
         anchors {
-            top: page.searchMode ? searchField.bottom : parent.top
-            bottom: page.searchMode ? hitBar.top : parent.bottom
+            top: parent.top
+            bottom: page.searchMode ? searchBar.top : parent.bottom
             left: parent.left
             right: parent.right
         }
-        enabled: doc.loaded
+        contentWidth: width
+        contentHeight: height
 
-        property real startZoom: 1
-
-        onPinchStarted: startZoom = page.zoom
-        onPinchUpdated: page.zoomTo(startZoom * pinch.scale, pinch.center.x, pinch.center.y)
-        onPinchFinished: view.returnToBounds()
-
-        SilicaListView {
-            id: view
-
-            anchors.fill: parent
-            model: doc.loaded ? doc.pageCount : 0
-            clip: true
-            contentWidth: width * page.zoom
-            flickableDirection: page.zoom > 1 ? Flickable.HorizontalAndVerticalFlick : Flickable.VerticalFlick
-            spacing: Theme.paddingSmall
-
-            PullDownMenu {
-                MenuItem {
-                    visible: doc.problem === "encrypted"
-                    //% "Unlock"
-                    text: qsTrId("lautta-viewers-pdf-unlock")
-                    onClicked: page.askPassword()
-                }
-                MenuItem {
-                    //% "Open with"
-                    text: qsTrId("lautta-viewers-open-with")
-                    onClicked: external.openWith()
-                }
-                MenuItem {
-                    //% "Share"
-                    text: qsTrId("lautta-viewers-share")
-                    onClicked: external.share()
-                }
-                MenuItem {
-                    visible: doc.loaded && !page.searchMode
-                    //% "Search"
-                    text: qsTrId("lautta-viewers-pdf-search")
-                    onClicked: page.openSearch()
-                }
-                MenuItem {
-                    visible: doc.loaded
-                    //% "Contents and pages"
-                    text: qsTrId("lautta-viewers-pdf-contents-and-pages")
-                    onClicked: page.showContents()
-                }
+        PullDownMenu {
+            MenuItem {
+                visible: doc.problem === "encrypted"
+                //% "Unlock"
+                text: qsTrId("lautta-viewers-pdf-unlock")
+                onClicked: page.askPassword()
             }
-
-            header: PageHeader {
-                width: view.width
-                x: view.contentX
-                title: page.fileName
-                description: doc.loaded ? PdfText.summary(doc.pageCount) : " "
+            MenuItem {
+                //% "Open with"
+                text: qsTrId("lautta-viewers-open-with")
+                onClicked: external.openWith()
             }
+            MenuItem {
+                //% "Share"
+                text: qsTrId("lautta-viewers-share")
+                onClicked: external.share()
+            }
+            MenuItem {
+                visible: doc.loaded && !page.searchMode
+                //% "Search"
+                text: qsTrId("lautta-viewers-pdf-search")
+                onClicked: page.openSearch()
+            }
+            MenuItem {
+                visible: doc.loaded
+                //% "Contents and pages"
+                text: qsTrId("lautta-viewers-pdf-contents-and-pages")
+                onClicked: page.showContents()
+            }
+        }
 
-            delegate: PdfPage {
-                id: pdfPage
-                pageIndex: index
-                uri: page.uri
-                width: view.contentWidth
-                height: doc.heightFor(index, view.contentWidth)
-                fitWidth: view.width
-                zoom: page.renderZoom
-                hits: page.searchMode && doc.hitsRevision >= 0 ? JSON.parse(doc.hitsJson(index)) : []
-                onDoubleTapped: {
-                    var at = mapToItem(view, tapX, tapY)
-                    page.zoomTo(page.zoom > 1 ? 1 : 2.5, at.x, at.y)
+        PageHeader {
+            id: header
+
+            objectName: "pdfHeader"
+            z: 1
+            title: page.fileName
+        }
+
+        PinchArea {
+            anchors {
+                top: header.bottom
+                bottom: parent.bottom
+                left: parent.left
+                right: parent.right
+            }
+            enabled: doc.loaded
+
+            property real startZoom: 1
+
+            onPinchStarted: startZoom = page.zoom
+            onPinchUpdated: page.zoomTo(startZoom * pinch.scale, pinch.center.x, pinch.center.y)
+            onPinchFinished: view.returnToBounds()
+
+            SilicaListView {
+                id: view
+
+                objectName: "pdfPages"
+                anchors.fill: parent
+                model: doc.loaded ? doc.pageCount : 0
+                clip: true
+                contentWidth: width * page.zoom
+                flickableDirection: page.zoom > 1 ? Flickable.HorizontalAndVerticalFlick : Flickable.VerticalFlick
+                spacing: Theme.paddingSmall
+
+                delegate: PdfPage {
+                    id: pdfPage
+                    pageIndex: index
+                    uri: page.uri
+                    width: view.contentWidth
+                    height: doc.heightFor(index, view.contentWidth)
+                    fitWidth: view.width
+                    zoom: page.renderZoom
+                    hits: page.searchMode && doc.hitsRevision >= 0 ? JSON.parse(doc.hitsJson(index)) : []
+                    onDoubleTapped: {
+                        var at = mapToItem(view, tapX, tapY)
+                        page.zoomTo(page.zoom > 1 ? 1 : 2.5, at.x, at.y)
+                    }
+                    onLinkClicked: page.followLink(link)
+                    Component.onCompleted: doc.requestLinks(index)
+
+                    Connections {
+                        target: doc
+                        onLinksReady: if (linkPage === pdfPage.pageIndex) pdfPage.links = JSON.parse(pageLinks)
+                    }
                 }
-                onLinkClicked: page.followLink(link)
-                Component.onCompleted: doc.requestLinks(index)
 
-                Connections {
-                    target: doc
-                    onLinksReady: if (linkPage === pdfPage.pageIndex) pdfPage.links = JSON.parse(pageLinks)
-                }
+                VerticalScrollDecorator { }
+                HorizontalScrollDecorator { }
             }
+        }
 
-            ViewPlaceholder {
-                enabled: doc.problem !== "" || doc.errorKind !== ""
-                text: doc.problem !== ""
-                      ? PdfText.problem(doc.problem)
-                      : ErrorText.message(doc.errorKind, { "item": page.fileName, "location": App.locationName(page.uri), "open": true })
-                //% "Pull down to open it in another app."
-                hintText: doc.problem !== "" ? qsTrId("lautta-viewers-pdf-pull-hint") : ""
-            }
-
-            VerticalScrollDecorator { }
-            HorizontalScrollDecorator { }
+        ViewPlaceholder {
+            enabled: doc.problem !== "" || doc.errorKind !== ""
+            text: doc.problem !== ""
+                  ? PdfText.problem(doc.problem)
+                  : ErrorText.message(doc.errorKind, { "item": page.fileName, "location": App.locationName(page.uri), "open": true })
+            //% "Pull down to open it in another app."
+            hintText: doc.problem !== "" ? qsTrId("lautta-viewers-pdf-pull-hint") : ""
         }
     }
 
-    Item {
-        id: hitBar
+    Column {
+        id: searchBar
 
+        objectName: "pdfSearchBar"
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-        height: Theme.itemSizeMedium
         visible: page.searchMode
 
-        IconButton {
-            anchors { left: parent.left; leftMargin: Theme.horizontalPageMargin; verticalCenter: parent.verticalCenter }
-            enabled: doc.hitCount > 0
-            icon.source: "image://theme/icon-m-up"
-            onClicked: page.previousHit()
+        SearchField {
+            id: searchField
+
+            width: parent.width
+            //% "Search the text"
+            placeholderText: qsTrId("lautta-viewers-pdf-search-placeholder")
+            inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
+            EnterKey.iconSource: "image://theme/icon-m-enter-close"
+            EnterKey.onClicked: focus = false
+            onTextChanged: {
+                if (text.trim() === "") {
+                    typing.stop()
+                    doc.stopSearch()
+                } else {
+                    typing.restart()
+                }
+            }
+            rightItem: IconButton {
+                icon.source: "image://theme/icon-m-close"
+                onClicked: page.closeSearch()
+            }
         }
 
-        BusyIndicator {
-            anchors { right: hitLabel.left; rightMargin: Theme.paddingMedium; verticalCenter: parent.verticalCenter }
-            size: BusyIndicatorSize.ExtraSmall
-            running: doc.searching
-        }
+        Item {
+            id: hitBar
 
-        Label {
-            id: hitLabel
-            anchors.centerIn: parent
-            font.pixelSize: Theme.fontSizeSmall
-            color: Theme.highlightColor
-            text: page.hitText()
-        }
+            width: parent.width
+            height: Theme.itemSizeMedium
 
-        IconButton {
-            anchors { right: parent.right; rightMargin: Theme.horizontalPageMargin; verticalCenter: parent.verticalCenter }
-            enabled: doc.hitCount > 0
-            icon.source: "image://theme/icon-m-down"
-            onClicked: page.nextHit()
+            IconButton {
+                anchors { left: parent.left; leftMargin: Theme.horizontalPageMargin; verticalCenter: parent.verticalCenter }
+                enabled: doc.hitCount > 0
+                icon.source: "image://theme/icon-m-up"
+                onClicked: page.previousHit()
+            }
+
+            BusyIndicator {
+                anchors { right: hitLabel.left; rightMargin: Theme.paddingMedium; verticalCenter: parent.verticalCenter }
+                size: BusyIndicatorSize.ExtraSmall
+                running: doc.searching
+            }
+
+            Label {
+                id: hitLabel
+                anchors.centerIn: parent
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.highlightColor
+                text: page.hitText()
+            }
+
+            IconButton {
+                anchors { right: parent.right; rightMargin: Theme.horizontalPageMargin; verticalCenter: parent.verticalCenter }
+                enabled: doc.hitCount > 0
+                icon.source: "image://theme/icon-m-down"
+                onClicked: page.nextHit()
+            }
         }
     }
 
@@ -406,7 +428,7 @@ Page {
         id: back
 
         anchors {
-            bottom: page.searchMode ? hitBar.top : parent.bottom
+            bottom: page.searchMode ? searchBar.top : parent.bottom
             bottomMargin: Theme.paddingLarge * 2
             horizontalCenter: parent.horizontalCenter
         }
@@ -447,7 +469,7 @@ Page {
 
     Rectangle {
         anchors {
-            bottom: back.visible ? back.top : (page.searchMode ? hitBar.top : parent.bottom)
+            bottom: back.visible ? back.top : (page.searchMode ? searchBar.top : parent.bottom)
             bottomMargin: Theme.paddingLarge * 2
             horizontalCenter: parent.horizontalCenter
         }
