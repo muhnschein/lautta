@@ -50,6 +50,7 @@ pub struct Settings {
 
     pub recents_enabled: bool,
     pub index_on_charger: bool,
+    pub index_on_mobile: bool,
 
     pub share_folders: Vec<String>,
 }
@@ -81,6 +82,7 @@ impl Default for Settings {
             large_op_bytes: GB,
             recents_enabled: true,
             index_on_charger: false,
+            index_on_mobile: false,
             share_folders: Vec::new(),
         }
     }

@@ -403,6 +403,131 @@ mod scope {
         assert_eq!(names, vec![(GroupKind::Volume, "SD card")]);
     }
 
+    fn cloud(h: &Home, id: &str, name: &str) -> MemoryProvider {
+        let m = MemoryProvider::new(Capabilities::with(&[lautta_core::entry::cap::SEARCH]));
+        let loc = Location::remote(
+            id,
+            LocationKind::Server {
+                provider: "webdav".into(),
+            },
+            name,
+            Some(format!("webdav://{id}")),
+        );
+        h.core.locations.register(loc, Arc::new(m.clone()));
+        m
+    }
+
+    #[tokio::test]
+    async fn a_server_that_can_search_is_asked_and_not_walked() {
+        let h = home().await;
+        let nc = cloud(&h, "nv-cloud", "Cloud");
+        nc.add_file("Docs/Budget 2027.odt", b"x", 0);
+        nc.add_file("Docs/deep/a/b/c/d/budget-old.txt", b"x", 0);
+        nc.add_file("Docs/.hidden/budget-secret.txt", b"x", 0);
+        nc.add_file("Docs/.budget-dotfile", b"x", 0);
+        nc.add_file("Pics/budget.jpg", b"x", 0);
+        nc.add_file("other.txt", b"x", 0);
+        let (groups, seen) = run(&h, SearchScope::Location("nv-cloud".into()), None, "BUDGET").await;
+        assert_eq!(groups.len(), 1);
+        let mut found: Vec<&str> = seen.hits[&0].iter().map(|(_, u)| u.as_str()).collect();
+        found.sort_unstable();
+        assert_eq!(
+            found,
+            vec![
+                "lautta://nv-cloud/Docs/Budget%202027.odt",
+                "lautta://nv-cloud/Docs/deep/a/b/c/d/budget-old.txt",
+                "lautta://nv-cloud/Pics/budget.jpg"
+            ],
+            "hidden files and folders stay out"
+        );
+        assert_eq!(seen.done[&0].as_ref().unwrap().hits, 3);
+        let calls = nc.calls();
+        assert!(calls.iter().any(|c| c == "search "), "{calls:?}");
+        assert!(
+            !calls.iter().any(|c| c.starts_with("list")),
+            "no folder is listed: {calls:?}"
+        );
+
+        let folder = uri("lautta://nv-cloud/Docs");
+        let (_, seen) = run(&h, SearchScope::Folder, Some(&folder), "budget").await;
+        assert_eq!(seen.hits[&0].len(), 2, "only below the folder searched");
+        assert!(nc.calls().iter().any(|c| c == "search Docs"));
+
+        let (_, seen) = run(&h, SearchScope::Location("nv-cloud".into()), None, "*budget*.txt").await;
+        let found: Vec<&str> = seen.hits[&0].iter().map(|(_, u)| u.as_str()).collect();
+        assert_eq!(
+            found,
+            vec!["lautta://nv-cloud/Docs/deep/a/b/c/d/budget-old.txt"],
+            "the pattern still decides"
+        );
+    }
+
+    #[tokio::test]
+    async fn filters_apply_to_what_the_server_found_and_trouble_is_reported() {
+        let h = home().await;
+        let nc = cloud(&h, "nv-cloud", "Cloud");
+        nc.add_file("Docs/budget.odt", b"x", 0);
+        nc.add_file("Docs/budget.jpg", b"x", 0);
+        let groups = h
+            .core
+            .search_groups(&SearchScope::Location("nv-cloud".into()), None);
+        let req = SearchRequest {
+            text: "budget".into(),
+            types: ["image".to_owned()].into_iter().collect(),
+            ..Default::default()
+        };
+        let (tx, mut rx) = mpsc::channel(4);
+        let core = h.core.clone();
+        let g2 = groups.clone();
+        let task = tokio::spawn(async move {
+            core.search_scope(&g2, &req, Arc::new(AtomicBool::new(false)), tx)
+                .await
+        });
+        let mut found = Vec::new();
+        while let Some(event) = rx.recv().await {
+            if let ScopeEvent::Hits { hits, .. } = event {
+                found.extend(hits.iter().map(|x| x.uri.to_string()));
+            }
+        }
+        task.await.unwrap();
+        assert_eq!(found, vec!["lautta://nv-cloud/Docs/budget.jpg"]);
+
+        nc.fail_next("search", "", Error::kind(ErrorKind::ConnectionLost));
+        let (_, seen) = run(&h, SearchScope::Location("nv-cloud".into()), None, "budget").await;
+        assert_eq!(seen.done[&0].as_ref().unwrap_err(), &ErrorKind::ConnectionLost);
+
+        nc.fail_next("search", "", Error::kind(ErrorKind::Unsupported));
+        nc.clear_calls();
+        let (_, seen) = run(&h, SearchScope::Location("nv-cloud".into()), None, "budget").await;
+        assert_eq!(
+            seen.hits[&0].len(),
+            2,
+            "a server that refuses to search is walked"
+        );
+        assert!(nc.calls().iter().any(|c| c.starts_with("list")));
+
+        nc.clear_calls();
+        let groups = h
+            .core
+            .search_groups(&SearchScope::Location("nv-cloud".into()), None);
+        let only_type = SearchRequest {
+            types: ["image".to_owned()].into_iter().collect(),
+            ..Default::default()
+        };
+        let (tx, mut rx) = mpsc::channel(4);
+        let core = h.core.clone();
+        let task = tokio::spawn(async move {
+            core.search_scope(&groups, &only_type, Arc::new(AtomicBool::new(false)), tx)
+                .await
+        });
+        while rx.recv().await.is_some() {}
+        task.await.unwrap();
+        assert!(
+            !nc.calls().iter().any(|c| c.starts_with("search")),
+            "without a text there is nothing to ask for"
+        );
+    }
+
     #[tokio::test]
     async fn everywhere_adds_servers_and_one_failing_server_spoils_nothing_else() {
         let h = home().await;

@@ -169,6 +169,7 @@ impl Core {
         };
         let core = Arc::new(core);
         if let Some(client) = client {
+            spawn_network_sync(&core, &client);
             spawn_bridge_sync(&core, client);
             crate::powersave::spawn(&core, zbus::Connection::system());
             crate::powersave::spawn_charger(&core, zbus::Connection::system());
@@ -192,7 +193,7 @@ impl Core {
         let settings = settings.sanitised();
         self.recents.set_enabled(settings.recents_enabled);
         if let Some(index) = &self.index {
-            index.set_on_charger_setting(settings.index_on_charger);
+            index.set_settings(settings.index_on_charger, settings.index_on_mobile);
         }
         let previous = std::mem::replace(&mut *lock(&self.settings), settings.clone());
         if previous.thumbnail_cache_mb != settings.thumbnail_cache_mb {
@@ -406,6 +407,22 @@ fn watch_volumes(locations: &LocationRegistry) -> Option<VolumeWatcher> {
             None
         }
     }
+}
+
+fn spawn_network_sync(core: &Arc<Core>, client: &BridgeClient) {
+    let weak = Arc::downgrade(core);
+    let mut network = client.watch_network();
+    tokio::spawn(async move {
+        loop {
+            let Some(core) = weak.upgrade() else { return };
+            let now = *network.borrow_and_update();
+            core.index_set_conditions(|c| c.network = now);
+            drop(core);
+            if network.changed().await.is_err() {
+                return;
+            }
+        }
+    });
 }
 
 fn spawn_bridge_sync(core: &Arc<Core>, client: BridgeClient) {

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
+use crate::bridge::Network;
+
 pub const CHARGE_THRESHOLD: u8 = 50;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -9,6 +11,8 @@ pub struct Conditions {
     pub charging: bool,
     pub battery: Option<u8>,
     pub index_on_charger: bool,
+    pub network: Network,
+    pub index_on_mobile: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,7 +38,12 @@ impl Conditions {
     }
 
     pub fn servers_allowed(&self) -> bool {
-        self.app_active
+        match self.network {
+            Network::Wifi | Network::Ethernet => self.app_active || self.on_charger(),
+            Network::Mobile => self.index_on_mobile && (self.app_active || self.on_charger()),
+            Network::Offline => false,
+            Network::Unknown | Network::Other => self.app_active,
+        }
     }
 }
 
@@ -68,6 +77,7 @@ mod tests {
             charging,
             battery,
             index_on_charger: setting,
+            ..Conditions::default()
         }
     }
 
@@ -105,9 +115,58 @@ mod tests {
     }
 
     #[test]
-    fn servers_wait_for_the_app_to_be_open() {
-        assert!(c(true, false, false, None, false).servers_allowed());
-        assert!(!c(false, false, true, Some(90), true).servers_allowed());
+    fn without_a_known_network_servers_wait_for_the_app_to_be_open() {
+        for network in [Network::Unknown, Network::Other] {
+            let on = |c: Conditions| Conditions { network, ..c };
+            assert!(on(c(true, false, false, None, false)).servers_allowed());
+            assert!(
+                !on(c(false, false, true, Some(90), true)).servers_allowed(),
+                "{network:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn on_wifi_servers_are_indexed_in_front_or_on_the_charger() {
+        for network in [Network::Wifi, Network::Ethernet] {
+            let on = |c: Conditions| Conditions { network, ..c };
+            assert!(on(c(true, false, false, None, false)).servers_allowed());
+            assert!(
+                on(c(false, false, true, Some(90), true)).servers_allowed(),
+                "{network:?}"
+            );
+            assert!(!on(c(false, false, true, Some(50), true)).servers_allowed());
+            assert!(!on(c(false, false, true, Some(90), false)).servers_allowed());
+            assert!(!on(c(false, false, false, Some(90), true)).servers_allowed());
+        }
+    }
+
+    #[test]
+    fn on_mobile_data_servers_are_indexed_only_with_the_setting() {
+        let mobile = |c: Conditions, index_on_mobile| Conditions {
+            network: Network::Mobile,
+            index_on_mobile,
+            ..c
+        };
+        assert!(
+            !mobile(c(true, true, true, Some(90), true), false).servers_allowed(),
+            "off by default"
+        );
+        assert!(mobile(c(true, false, false, None, false), true).servers_allowed());
+        assert!(mobile(c(false, false, true, Some(90), true), true).servers_allowed());
+        assert!(!mobile(c(false, false, false, None, false), true).servers_allowed());
+        assert!(!Conditions::default().index_on_mobile);
+    }
+
+    #[test]
+    fn without_a_network_no_server_is_indexed() {
+        let offline = Conditions {
+            network: Network::Offline,
+            index_on_mobile: true,
+            ..c(true, true, true, Some(90), true)
+        };
+        assert!(!offline.servers_allowed());
+        assert_eq!(offline.mode(), Mode::Normal, "the device is indexed all the same");
     }
 
     #[test]

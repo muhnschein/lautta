@@ -78,8 +78,10 @@ impl NameIndex {
         self.changed.send_modify(|n| *n = n.wrapping_add(1));
     }
 
-    pub fn set_on_charger_setting(&self, on: bool) {
-        lock(&self.conditions).index_on_charger = on;
+    pub fn set_settings(&self, on_charger: bool, on_mobile: bool) {
+        let mut conditions = lock(&self.conditions);
+        conditions.index_on_charger = on_charger;
+        conditions.index_on_mobile = on_mobile;
     }
 
     pub fn conditions(&self) -> Conditions {
