@@ -64,9 +64,6 @@ QtObject {
              .map(function (s) { return SearchGroups.scopeIcon(s, all) }),
              ["image://theme/icon-m-folder", "image://theme/icon-m-device", "image://theme/icon-m-sd-card", "server",
               "image://theme/icon-m-website", "image://theme/icon-m-folder"], "an icon per scope")
-        same(["folder", "device", "everywhere", "location:nv-nas"].map(function (s) { return SearchGroups.idleText(s, "NAS") }),
-             ["lautta-search-idle-folder", "lautta-search-idle-device", "lautta-search-idle-everywhere",
-              "lautta-search-idle-location"], "an empty page invites a search of its scope")
         same([SearchGroups.hasChoice(all, "location:nv-nas"), SearchGroups.hasChoice(all, "location:gone"),
               SearchGroups.hasChoice([], "device")], [true, false, false], "a scope is among the choices or not")
         same(SearchGroups.scopeChoices(false, "", [locations[0]]).map(function (c) { return c.value }),

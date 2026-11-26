@@ -71,6 +71,10 @@ Page {
                                                                   scopeLocations)
 
     allowedOrientations: Orientation.All
+    onStatusChanged: {
+        if (status === PageStatus.Active && !searched)
+            searchField.forceActiveFocus()
+    }
 
     function start() {
         searchModel.types = JSON.stringify(page.typeFilter === "" ? [] : [page.typeFilter])
@@ -497,21 +501,16 @@ Page {
                 readonly property bool outcome: page.searched && list.count === 0 && !searchModel.running
 
                 objectName: "searchPlaceholder"
-                enabled: list.count === 0 && !searchModel.running && !recentView.visible
-                text: outcome && searchModel.errorKind.length === 0
+                enabled: outcome && !recentView.visible
+                text: searchModel.errorKind.length === 0
                       //% "No matches"
                       ? qsTrId("lautta-search-none")
-                      : (searchModel.errorKind.length > 0
-                         //% "Search failed"
-                         ? qsTrId("lautta-search-failed")
-                         : SearchGroups.idleText(page.scope, SearchGroups.labelOf(page.scopeChoices, page.scope)))
-                hintText: outcome
-                          ? (searchModel.errorKind.length > 0
-                             ? ErrorText.message(searchModel.errorKind, { "location": App.locationName(page.rootUri), "open": true })
-                             //% "Try another name or loosen the filters"
-                             : qsTrId("lautta-search-none-hint"))
-                          //% "Part of a name is enough. *.pdf finds every PDF."
-                          : qsTrId("lautta-search-idle-hint")
+                      //% "Search failed"
+                      : qsTrId("lautta-search-failed")
+                hintText: searchModel.errorKind.length > 0
+                          ? ErrorText.message(searchModel.errorKind, { "location": App.locationName(page.rootUri), "open": true })
+                          //% "Try another name or loosen the filters"
+                          : qsTrId("lautta-search-none-hint")
             }
 
             VerticalScrollDecorator { }

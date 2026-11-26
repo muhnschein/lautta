@@ -63,20 +63,6 @@ function status(group) {
     }
 }
 
-function idleText(scope, label) {
-    if (scope === "folder")
-        //% "Find files in %1"
-        return qsTrId("lautta-search-idle-folder").arg(label)
-    if (scope === "device")
-        //% "Find files on this device"
-        return qsTrId("lautta-search-idle-device")
-    if (scope === "everywhere")
-        //% "Find files on this device and your servers"
-        return qsTrId("lautta-search-idle-everywhere")
-    //% "Find files on %1"
-    return qsTrId("lautta-search-idle-location").arg(label)
-}
-
 function scopeChoices(fromFolder, folderName, locations) {
     var out = []
     if (fromFolder)

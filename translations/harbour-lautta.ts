@@ -219,11 +219,6 @@
         <source>Try another name or loosen the filters</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-search-idle-hint">
-        <source>Part of a name is enough. *.pdf finds every PDF.</source>
-        <oldsource>Type part of a name, or a pattern such as *.pdf</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-search-progress" numerus="yes">
         <source>Searching… %n results</source>
         <translation>
@@ -2553,22 +2548,6 @@
     </message>
     <message id="lautta-search-group-none">
         <source>Nothing found</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-idle-folder">
-        <source>Find files in %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-idle-device">
-        <source>Find files on this device</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-idle-everywhere">
-        <source>Find files on this device and your servers</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-idle-location">
-        <source>Find files on %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-search-scope-everywhere">

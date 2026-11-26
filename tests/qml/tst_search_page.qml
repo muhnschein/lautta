@@ -166,6 +166,8 @@ ApplicationWindow {
                 if (!win.heading || !win.field || !win.list || !win.pills)
                     return win.fail("heading, field, list and pills are found")
                 win.checkStructure()
+                win.expect(!win.named("searchPlaceholder").enabled, "an empty search page shows no notice")
+                win.expect(win.field.focus, "the field has the focus as the page opens")
                 win.expect(win.page.scope === "folder", "a folder's search starts in the folder: " + win.page.scope)
                 win.field.forceActiveFocus()
                 win.fieldY = win.field.mapToItem(win.page, 0, 0).y
@@ -176,8 +178,7 @@ ApplicationWindow {
                 if (win.rowCount() !== 15)
                     break
                 win.checkFieldKept("thesis", "first search")
-                win.expect(win.named("searchPlaceholder").text !== "lautta-search-none",
-                           "a fading placeholder never says no matches over results")
+                win.expect(!win.named("searchPlaceholder").enabled, "no notice over results")
                 win.checkLayout("portrait")
                 win.field.text = "thesis_1"
                 win.next()
