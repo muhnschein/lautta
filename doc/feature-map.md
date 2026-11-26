@@ -74,7 +74,8 @@ IDs are stable handles for chat, issues, PRs, tests: `SCR-*` screen, `F-*` featu
 | SCR-22 | Task details | `pages/TransferDetailsPage.qml` | S | Activity row |
 | SCR-23 | Activity bar | `transfers/ActivityBar.qml` | S | Home, folder page while task runs |
 | SCR-24 | View options | `pages/ViewOptionsPage.qml` | S | folder pulley, Settings |
-| SCR-25 | Search | `pages/SearchPage.qml` | S | folder pulley Search, Home pulley Search |
+| SCR-25 | Search | `pages/SearchPage.qml` | S | folder pulley Search |
+| SCR-26 | Search filters | `pages/SearchFiltersPage.qml` | S | Search summary row |
 | SCR-27 | Image viewer | `viewers/ImageViewer.qml` (+ `gallery/`) | S | tap image |
 | SCR-28 | Image details | `viewers/ImageDetailsPage.qml` | S | image viewer (i) |
 | SCR-29 | Image More | `viewers/ImageMorePage.qml` | S | image viewer (…) |
@@ -130,7 +131,7 @@ Format: **F-ID Name** (mode) — what. *Entry:* where user starts it. *Proof:* w
 - **F-HOM-07 Home layout** (S) — hide sections (Recents, Volumes, Servers) and rows, reorder rows by drag, Restore defaults. *Entry:* Settings › Home page. *Code:* `HomeSettingsPage.qml`, `home_layout.rs`.
 - **F-HOM-09 Rescan volumes** (S) — Home refreshes rows when shown and when app returns to front (sandbox can miss mounts). *Proof:* new card shows without restart.
 - **F-HOM-10 Activity from Home** (S) — pulley "Activity (n)". *Proof:* SCR-21.
-- **F-HOM-11 Phone free space** (S) — "N free" at left end of "On this device" header: file system user folders are on; read when Home shows. *Code:* `HomePage.qml`, `app_home.rs` (`device_space`).
+- **F-HOM-11 Phone free space** (S) — "N free" right-aligned under "On this device" header, small: file system user folders are on; read when Home shows. *Code:* `HomePage.qml`, `app_home.rs` (`device_space`).
 
 ### 3.2 Servers and bridge (B)
 
@@ -229,8 +230,8 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 
 ### 3.9 Search
 
-- **F-SRC-01 Search** — folder pulley (this folder and below) or Home pulley (whole device, or everywhere with servers); type part of name, wildcards make a pattern (`*.pdf`); live results "Searching… N results", stop glyph; result opens item; list or grid as View options; wide scope: section per location (This device, each memory card, each server) with its state (searching N folders, N results, nothing found, not reachable, not allowed, needs attention); recent searches per scope before typing.
-- **F-SRC-02 Search pills** — pill strip under field: scope (this folder, This device, each memory card or USB drive, each server, Everywhere; chosen location's icon in pill), Type (Any, Folders, Images, Videos, Audio, Documents, Archives, Text), Modified, Hidden; scope, Type, Modified open a context menu under strip (tap, then tap; or hold, slide, release). Matches in bold highlight colour, list and grid. Pulley (only with recent searches): Clear recent searches.
+- **F-SRC-01 Search in folder** — from folder pulley; type part of name or pattern (`*.pdf`); live results "Searching… N results", Stop; result opens item.
+- **F-SRC-02 Search filters** — Name match Contains/Pattern, Type (Any, Folders, Images, Videos, Audio, Documents, Compressed files, Text files), Size, Modified, Include hidden files, Search depth on servers, Recent searches.
 - **F-SRC-03 Server search depth** — Settings › Search ("N folders deep on servers"; device searches all).
 
 ### 3.10 Scan
@@ -257,7 +258,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 ### 3.12 Share in, cover, notifications, app
 
 - **F-SHR-01 Share target** — Lautta in share sheet; dialog "Save here" over a folder view: "Save N files" (one file: its name), path band with crumbs (F-DIR-06), folders open in place, files dimmed, list or grid as View options say, pulley New folder. Opens folder saved to last, first time Downloads. House → Locations: last three folders saved to, then device folders, volumes, servers. Save here off at Locations and where folder takes no files; unreadable files skipped, told in one line. *Code:* `ShareTargetPage.qml`, `directory/DirectoryView.qml` (`picking`), `directory/PathBand.qml`, `operations/Share.js`, `OperationsHandlers.qml`.
-- **F-APP-01 Cover** — shows what a tap opens: page on top, else nearest page below that tells a cover. Home: no name; free space of phone and mounted volumes (four at most) as icon with "N GB free", two to a row, phone alone on one centred line; below, newest recents as tiles (fewer than three: places). Folder, Trash, Recents: F-DIR-11. Viewer: file fills cover, name on dark fade; no picture: type glyph. Built only while cover shows; no timers. Transfer cover while tasks run. *Code:* `CoverPage.qml`, `CoverHome.qml`, `CoverFile.qml`.
+- **F-APP-01 Cover** — shows what a tap opens: page on top, else nearest page below that tells a cover. Home: no name, no files, no free space: our glyphs in 13 lanes tilted -18°, every fourth lane in highlight colour with Lautta glyph in it; still, no animation. Folder, Trash, Recents: F-DIR-11. Viewer: file fills cover, name on dark fade; no picture: type glyph. Built only while cover shows; no timers. Transfer cover while tasks run. *Code:* `CoverPage.qml`, `CoverLanes.qml` (lanes prerendered: `lanes-faint.svg`, `lanes-lit.svg` from `tools/cover_lanes.py`, tinted by ambience), `CoverFile.qml`.
 - **F-APP-02 Start error** — "Lautta can't open its data".
 - **F-APP-03 Settings** — Browsing (Home page, View options, Search, Recents), Files (Deleting, Transfers, Storage), About Lautta.
 - **F-APP-04 Storage** — Keep stored listings, Clear cache, Clear app data ("Removes queue, history, favourites and everything in Trash"; refuses while tasks run).

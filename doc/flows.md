@@ -298,18 +298,16 @@ Features: F-XFR-01 Activity page, F-XFR-02 Task row menu, F-XFR-03 Task details,
 
 ### FL-19 Find a file (both modes)
 
-Search this folder and below, the device, or every location.
+Search this folder and below.
 
-Features: F-SRC-01 Search, F-SRC-02 Search pills, F-SRC-03 Server search depth
+Features: F-SRC-01 Search in folder, F-SRC-02 Search filters, F-SRC-03 Server search depth
 
 | # | Screen | Step |
 |---|---|---|
 | 1 | SCR-06 Folder pulley | Pull: Search |
 | 2 | SCR-25 Search | Search page |
 | 3 | SCR-25 Search | Results |
-| 4 | SCR-25 Search | Pills: scope, Type, Modified |
-| 5 | SCR-01 Home | Pull: Search |
-| 6 | SCR-25 Search | Results by location |
+| 4 | SCR-26 Search filters | Filters |
 
 ### FL-20 Restore from Trash (standalone)
 
@@ -548,7 +546,7 @@ Features: F-APP-01 Cover, F-XFR-10 Transfer cover, F-XFR-09 Notifications
 
 | # | Screen | Step |
 |---|---|---|
-| 1 | SCR-58 Cover (page / tasks) | Cover on Home page: free space, newest recents as tiles |
+| 1 | SCR-58 Cover (page / tasks) | Cover on Home page: lanes of Lautta glyphs |
 | 2 | SCR-58 Cover (page / tasks) | Cover in a folder: name, first items as tiles |
 | 3 | SCR-58 Cover (page / tasks) | Task running: count, percent, rate, cover fills from the left; actions Pause all, Activity |
 | 4 | SCR-21 Activity | Activity pulley: Pause all |
