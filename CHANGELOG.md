@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The PDF viewer has *Pages* in its pulley: all pages as small pictures, the page you are on marked. Tap one to go there, or type a page number under them. *Contents and pages* is now *Contents* and shows only when the PDF has a table of contents ([#140](https://github.com/muhnschein/lautta/issues/140)).
 - Search answers as you type: Lautta keeps a list of file names on this device and memory cards, and on servers you choose in *Settings › Search*. It builds the list at the lowest priority while Lautta is open, checks only folders that changed, and never reads what files contain. A search shows what the list knows at once, then corrects it for files added or removed since. With *Update while charging* on, the list also updates in the background while the phone charges above half battery. Matching ignores accents, so "cafe" finds "Café". Servers without a list are searched 16 folders deep; the *Search depth* setting is gone.
 - In the PDF viewer, *Search* opens its field at the bottom of the screen, above the arrows that step through the hits, as in Documents. The pulley stays at the top edge, no longer under the search field ([#112](https://github.com/muhnschein/lautta/issues/112)).
 - In the PDF viewer the header with the file name stays at the top while you read, as in folders, so a pull on it opens the pulley on any page. It no longer shows the page count ([#147](https://github.com/muhnschein/lautta/issues/147)).

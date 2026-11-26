@@ -31,6 +31,7 @@ Page {
         var item = view.itemAt(x, y) || view.itemAt(x, y + view.spacing)
         return item ? item.pageIndex : 0
     }
+    readonly property bool hasOutline: doc.loaded && doc.outline !== "" && JSON.parse(doc.outline).length > 0
     property bool searchMode
     property alias searchText: searchField.text
     property alias document: doc
@@ -67,11 +68,23 @@ Page {
     function showContents() {
         var contents = pageStack.push(contentsPage, {
             "fileName": fileName,
-            "outline": doc.outline !== "" ? JSON.parse(doc.outline) : [],
-            "pageCount": doc.pageCount,
+            "outline": JSON.parse(doc.outline),
             "currentPage": currentPage - 1
         })
         contents.chosen.connect(function(index) {
+            pageStack.pop(page)
+            showPage(index, -1)
+        })
+    }
+
+    function showPages() {
+        var pages = pageStack.push(pagesPage, {
+            "uri": uri,
+            "fileName": fileName,
+            "pageCount": doc.pageCount,
+            "currentPage": currentPage - 1
+        })
+        pages.chosen.connect(function(index) {
             pageStack.pop(page)
             showPage(index, -1)
         })
@@ -229,6 +242,11 @@ Page {
         PdfContentsPage { }
     }
 
+    Component {
+        id: pagesPage
+        PdfPagesPage { }
+    }
+
     ExternalActions {
         id: external
         uri: page.uri
@@ -280,10 +298,16 @@ Page {
                 onClicked: page.openSearch()
             }
             MenuItem {
-                visible: doc.loaded
-                //% "Contents and pages"
-                text: qsTrId("lautta-viewers-pdf-contents-and-pages")
+                visible: page.hasOutline
+                //% "Contents"
+                text: qsTrId("lautta-viewers-pdf-contents")
                 onClicked: page.showContents()
+            }
+            MenuItem {
+                visible: doc.loaded
+                //% "Pages"
+                text: qsTrId("lautta-viewers-pdf-pages-menu")
+                onClicked: page.showPages()
             }
         }
 
