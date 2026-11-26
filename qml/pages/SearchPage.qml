@@ -215,22 +215,6 @@ Page {
         contentWidth: width
         contentHeight: height + page.menuRoom
 
-        PullDownMenu {
-            visible: page.recentSearches.length > 0
-
-            MenuItem {
-                objectName: "clearRecentSearches"
-                visible: page.recentSearches.length > 0
-                //% "Clear recent searches"
-                text: qsTrId("lautta-search-clear-recent")
-                onClicked: {
-                    //% "Clearing recent searches"
-                    remorsePopup.execute(qsTrId("lautta-search-clearing-recent"), function () {
-                        searchModel.clearRecent()
-                    }, App.setting("remorse_seconds") * 1000)
-                }
-            }
-        }
 
         HeaderBand {
             anchors.fill: heading
@@ -390,6 +374,23 @@ Page {
             visible: !page.searched && page.recentSearches.length > 0
             contentHeight: recentColumn.height
             clip: true
+
+            PullDownMenu {
+                visible: page.recentSearches.length > 0
+
+                MenuItem {
+                    objectName: "clearRecentSearches"
+                    visible: page.recentSearches.length > 0
+                    //% "Clear recent searches"
+                    text: qsTrId("lautta-search-clear-recent")
+                    onClicked: {
+                        //% "Clearing recent searches"
+                        remorsePopup.execute(qsTrId("lautta-search-clearing-recent"), function () {
+                            searchModel.clearRecent()
+                        }, App.setting("remorse_seconds") * 1000)
+                    }
+                }
+            }
 
             Column {
                 id: recentColumn

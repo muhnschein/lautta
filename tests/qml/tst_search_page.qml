@@ -195,7 +195,8 @@ ApplicationWindow {
                     break
                 win.expect(win.marksShown(), "every result marks the match in bold highlight")
                 var pulley = win.findAll(win.page, function (x) { return x._isPullDownMenu === true }, [])[0]
-                win.expect(pulley.visible, "once a search is remembered the pulley shows")
+                win.expect(win.within(pulley, win.named("searchRecents")),
+                           "the pulley sits on the recent searches, away from the field")
                 win.touch("typePill").clicked(null)
                 win.next()
                 break
@@ -276,11 +277,26 @@ ApplicationWindow {
                            "closing a menu by its pill leaves the page at its top: " + host.contentY)
                 win.expect(Math.abs(win.named("searchPillHost").height - win.pills.height) < 1,
                            "a closed menu leaves no room under the pills")
+                win.page.datePreset = "any"
+                win.field.text = ""
+                win.next()
+                break
+            case 14:
+                if (!win.named("searchRecents").visible)
+                    break
+                var shown = win.findAll(win.page, function (x) { return x._isPullDownMenu === true }, [])[0]
+                win.expect(shown.visible, "with the field empty, remembered searches bring the pulley")
+                win.field.text = "thesis"
+                win.next()
+                break
+            case 15:
+                if (win.rowCount() !== 15)
+                    break
                 win.field.forceActiveFocus()
                 win.deviceOrientation = Orientation.Landscape
                 win.next()
                 break
-            case 14:
+            case 16:
                 if (!win.page.isLandscape || win.page.orientationTransitionRunning)
                     break
                 win.expect(win.page.width > win.page.height, "landscape page is wide: " + win.page.width + "x" + win.page.height)
