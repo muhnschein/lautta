@@ -504,14 +504,13 @@ Page {
                       : (searchModel.errorKind.length > 0
                          //% "Search failed"
                          ? qsTrId("lautta-search-failed")
-                         //% "Search"
-                         : qsTrId("lautta-search-idle"))
+                         : SearchGroups.idleText(page.scope, SearchGroups.labelOf(page.scopeChoices, page.scope)))
                 hintText: outcome
                           ? (searchModel.errorKind.length > 0
                              ? ErrorText.message(searchModel.errorKind, { "location": App.locationName(page.rootUri), "open": true })
                              //% "Try another name or loosen the filters"
                              : qsTrId("lautta-search-none-hint"))
-                          //% "Type part of a name, or a pattern such as *.pdf"
+                          //% "Part of a name is enough. *.pdf finds every PDF."
                           : qsTrId("lautta-search-idle-hint")
             }
 
