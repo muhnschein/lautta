@@ -30,6 +30,7 @@ Item {
             readonly property int key: trashId
             readonly property string thumb: thumbnailSource
             readonly property string mime: mimeType
+            readonly property string group: dateGroup
         }
     }
 
@@ -103,6 +104,8 @@ Item {
                 test.note = test.rowNamed("trash-roles.md")
                 if (!test.photo || !test.paper || !test.note)
                     break
+                if (test.photo.group !== "today")
+                    return test.fail("an item deleted now is in today's section: " + test.photo.group)
                 if (test.photo.mime !== "image/jpeg")
                     return test.fail("the image's type: " + test.photo.mime)
                 if (test.photo.thumb.indexOf("file://") !== 0 || test.photo.thumb.indexOf("trash-roles") >= 0)

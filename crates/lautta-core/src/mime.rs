@@ -20,6 +20,15 @@ pub enum FileCategory {
     Presentation,
     Database,
     Package,
+    Mail,
+    Calendar,
+    Contact,
+    Notebook,
+    Key,
+    Executable,
+    Font,
+    DiskImage,
+    Cad,
     Other,
 }
 
@@ -40,6 +49,15 @@ impl FileCategory {
             FileCategory::Presentation => "presentation",
             FileCategory::Database => "database",
             FileCategory::Package => "package",
+            FileCategory::Mail => "mail",
+            FileCategory::Calendar => "calendar",
+            FileCategory::Contact => "contact",
+            FileCategory::Notebook => "notebook",
+            FileCategory::Key => "key",
+            FileCategory::Executable => "executable",
+            FileCategory::Font => "font",
+            FileCategory::DiskImage => "disk",
+            FileCategory::Cad => "cad",
             FileCategory::Other => "file",
         }
     }
@@ -84,9 +102,42 @@ pub fn from_extension(ext: &str) -> Option<(&'static str, FileCategory)> {
         "svg" | "svgz" => ("image/svg+xml", Image),
         "ico" => ("image/vnd.microsoft.icon", Image),
         "tif" | "tiff" => ("image/tiff", Image),
-        "heic" | "heif" => ("image/heic", Other),
-        "avif" => ("image/avif", Other),
-        "jxl" => ("image/jxl", Other),
+        "heic" | "heif" => ("image/heic", Image),
+        "avif" => ("image/avif", Image),
+        "jxl" => ("image/jxl", Image),
+        "pbm" => ("image/x-portable-bitmap", Image),
+        "pgm" => ("image/x-portable-graymap", Image),
+        "ppm" => ("image/x-portable-pixmap", Image),
+        "pnm" => ("image/x-portable-anymap", Image),
+        "cur" => ("image/x-win-bitmap", Image),
+        "tga" => ("image/x-tga", Image),
+        "psd" => ("image/vnd.adobe.photoshop", Image),
+        "exr" => ("image/x-exr", Image),
+        "hdr" => ("image/vnd.radiance", Image),
+        "jp2" | "j2k" | "jpf" | "jpx" => ("image/jp2", Image),
+        "jpm" => ("image/jpm", Image),
+        "dds" => ("image/vnd-ms.dds", Image),
+        "sgi" => ("image/x-sgi", Image),
+        "pcx" => ("image/vnd.zbrush.pcx", Image),
+        "qoi" => ("image/qoi", Image),
+        "bpg" => ("image/bpg", Image),
+        "djvu" | "djv" => ("image/vnd.djvu", Image),
+        "emf" => ("image/emf", Image),
+        "wmf" => ("image/wmf", Image),
+        "icns" => ("image/x-icns", Image),
+        "dng" => ("image/x-adobe-dng", Image),
+        "nef" | "nrw" => ("image/x-nikon-nef", Image),
+        "cr2" => ("image/x-canon-cr2", Image),
+        "cr3" => ("image/x-canon-cr3", Image),
+        "crw" => ("image/x-canon-crw", Image),
+        "arw" | "srf" | "sr2" => ("image/x-sony-arw", Image),
+        "orf" => ("image/x-olympus-orf", Image),
+        "rw2" => ("image/x-panasonic-rw2", Image),
+        "pef" => ("image/x-pentax-pef", Image),
+        "erf" => ("image/x-epson-erf", Image),
+        "kdc" => ("image/x-kodak-kdc", Image),
+        "raf" => ("image/x-fuji-raf", Image),
+        "srw" => ("image/x-samsung-srw", Image),
         "mp4" | "m4v" => ("video/mp4", Video),
         "mkv" => ("video/x-matroska", Video),
         "webm" => ("video/webm", Video),
@@ -98,6 +149,15 @@ pub fn from_extension(ext: &str) -> Option<(&'static str, FileCategory)> {
         "mpg" | "mpeg" => ("video/mpeg", Video),
         "mts" | "m2ts" => (MPEG_TS, Video),
         "ogv" => ("video/ogg", Video),
+        "ivf" => ("video/x-ivf", Video),
+        "vob" | "m2v" => ("video/mpeg", Video),
+        "qt" => ("video/quicktime", Video),
+        "divx" => ("video/x-msvideo", Video),
+        "mxf" => ("application/mxf", Video),
+        "rm" | "rmvb" => ("application/vnd.rn-realmedia", Video),
+        "asf" => ("video/x-ms-asf", Video),
+        "wtv" => ("video/x-wtv", Video),
+        "nuv" => ("video/x-nuv", Video),
         "mp3" => ("audio/mpeg", Audio),
         "flac" => ("audio/flac", Audio),
         "ogg" | "oga" => ("audio/ogg", Audio),
@@ -108,6 +168,28 @@ pub fn from_extension(ext: &str) -> Option<(&'static str, FileCategory)> {
         "wma" => ("audio/x-ms-wma", Audio),
         "mid" | "midi" => ("audio/midi", Audio),
         "amr" => ("audio/amr", Audio),
+        "mka" => ("audio/x-matroska", Audio),
+        "aif" | "aiff" | "aifc" => ("audio/x-aiff", Audio),
+        "ac3" => ("audio/ac3", Audio),
+        "caf" => ("audio/x-caf", Audio),
+        "au" | "snd" => ("audio/basic", Audio),
+        "spx" => ("audio/x-speex", Audio),
+        "w64" => ("audio/x-w64", Audio),
+        "voc" => ("audio/x-voc", Audio),
+        "wv" => ("audio/x-wavpack", Audio),
+        "ape" => ("audio/x-ape", Audio),
+        "mpc" => ("audio/x-musepack", Audio),
+        "tta" => ("audio/x-tta", Audio),
+        "eac3" => ("audio/eac3", Audio),
+        "dts" => ("audio/vnd.dts", Audio),
+        "ra" => ("audio/vnd.rn-realaudio", Audio),
+        "dsf" => ("audio/x-dsf", Audio),
+        "dff" => ("audio/x-dff", Audio),
+        "tak" => ("audio/x-tak", Audio),
+        "shn" => ("audio/x-shorten", Audio),
+        "s3m" => ("audio/x-s3m", Audio),
+        "xm" => ("audio/x-xm", Audio),
+        "it" => ("audio/x-it", Audio),
         "txt" | "log" | "ini" | "conf" | "cfg" | "nfo" => ("text/plain", Text),
         "csv" => ("text/csv", Text),
         "tsv" => ("text/tab-separated-values", Text),
@@ -142,6 +224,25 @@ pub fn from_extension(ext: &str) -> Option<(&'static str, FileCategory)> {
         "7z" => ("application/x-7z-compressed", Archive),
         "rar" => ("application/vnd.rar", Archive),
         "jar" => ("application/java-archive", Archive),
+        "cbz" => ("application/vnd.comicbook+zip", Archive),
+        "cb7" => ("application/x-cb7", Archive),
+        "cbt" => ("application/x-cbt", Archive),
+        "cbr" => ("application/vnd.comicbook-rar", Archive),
+        "zipx" => ("application/x-zipx", Archive),
+        "z" => ("application/x-compress", Archive),
+        "lz4" => ("application/x-lz4", Archive),
+        "cab" => ("application/vnd.ms-cab-compressed", Archive),
+        "cpio" => ("application/x-cpio", Archive),
+        "lzh" | "lha" => ("application/x-lzh-compressed", Archive),
+        "xar" => ("application/x-xar", Archive),
+        "lzo" => ("application/x-lzop", Archive),
+        "lz" => ("application/x-lzip", Archive),
+        "lzma" => ("application/x-lzma", Archive),
+        "tlz" => ("application/x-lzma-compressed-tar", Archive),
+        "ar" => ("application/x-archive", Archive),
+        "arj" => ("application/x-arj", Archive),
+        "br" => ("application/x-brotli", Archive),
+        "warc" => ("application/warc", Archive),
         "doc" => ("application/msword", Document),
         "docx" => (
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -163,6 +264,135 @@ pub fn from_extension(ext: &str) -> Option<(&'static str, FileCategory)> {
         ),
         "odp" => ("application/vnd.oasis.opendocument.presentation", Presentation),
         "sqlite" | "sqlite3" | "db" => ("application/vnd.sqlite3", Database),
+        "docm" => ("application/vnd.ms-word.document.macroEnabled.12", Document),
+        "dotx" => (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+            Document,
+        ),
+        "dotm" => ("application/vnd.ms-word.template.macroEnabled.12", Document),
+        "fodt" => ("application/vnd.oasis.opendocument.text-flat-xml", Document),
+        "sxw" => ("application/vnd.sun.xml.writer", Document),
+        "sdw" => ("application/vnd.stardivision.writer", Document),
+        "pages" => ("application/vnd.apple.pages", Document),
+        "wps" => ("application/vnd.ms-works", Document),
+        "wpd" | "wp" => ("application/vnd.wordperfect", Document),
+        "wri" => ("application/x-mswrite", Document),
+        "hwp" => ("application/x-hwp", Document),
+        "xps" => ("application/vnd.ms-xpsdocument", Document),
+        "mobi" => ("application/x-mobipocket-ebook", Document),
+        "azw3" => ("application/vnd.amazon.mobi8-ebook", Document),
+        "fb2" => ("application/x-fictionbook+xml", Document),
+        "lit" => ("application/x-ms-reader", Document),
+        "lrf" => ("application/x-sony-bbeb", Document),
+        "chm" => ("application/vnd.ms-htmlhelp", Document),
+        "ibooks" => ("application/x-ibooks+zip", Document),
+        "indd" => ("application/x-adobe-indesign", Document),
+        "idml" => ("application/vnd.adobe.indesign-idml-package", Document),
+        "mht" | "mhtml" => ("application/x-mimearchive", Document),
+        "xlsm" => ("application/vnd.ms-excel.sheet.macroEnabled.12", Spreadsheet),
+        "xlsb" => (
+            "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+            Spreadsheet,
+        ),
+        "xltx" => (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
+            Spreadsheet,
+        ),
+        "xlt" => ("application/vnd.ms-excel", Spreadsheet),
+        "xltm" => ("application/vnd.ms-excel.template.macroEnabled.12", Spreadsheet),
+        "numbers" => ("application/vnd.apple.numbers", Spreadsheet),
+        "fods" => (
+            "application/vnd.oasis.opendocument.spreadsheet-flat-xml",
+            Spreadsheet,
+        ),
+        "sxc" => ("application/vnd.sun.xml.calc", Spreadsheet),
+        "wk1" | "wk3" | "wk4" | "wks" | "123" => ("application/vnd.lotus-1-2-3", Spreadsheet),
+        "wq1" | "wq2" | "wb1" | "wb2" | "wb3" | "qpw" => ("application/x-quattropro", Spreadsheet),
+        "pptm" => (
+            "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+            Presentation,
+        ),
+        "ppsx" => (
+            "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+            Presentation,
+        ),
+        "ppsm" => (
+            "application/vnd.ms-powerpoint.slideshow.macroEnabled.12",
+            Presentation,
+        ),
+        "pps" => ("application/vnd.ms-powerpoint", Presentation),
+        "potx" => (
+            "application/vnd.openxmlformats-officedocument.presentationml.template",
+            Presentation,
+        ),
+        "potm" => (
+            "application/vnd.ms-powerpoint.template.macroEnabled.12",
+            Presentation,
+        ),
+        "thmx" => ("application/vnd.ms-officetheme", Presentation),
+        "fodp" => (
+            "application/vnd.oasis.opendocument.presentation-flat-xml",
+            Presentation,
+        ),
+        "sxi" => ("application/vnd.sun.xml.impress", Presentation),
+        "sdd" => ("application/vnd.stardivision.impress", Presentation),
+        "mdb" | "accdb" => ("application/x-msaccess", Database),
+        "dbf" => ("application/x-dbf", Database),
+        "odb" => ("application/vnd.oasis.opendocument.database", Database),
+        "sas7bdat" => ("application/x-sas-data", Database),
+        "srt" => ("application/x-subrip", Text),
+        "vtt" => ("text/vtt", Text),
+        "ass" | "ssa" => ("text/x-ssa", Text),
+        "lrc" => ("text/x-lrc", Text),
+        "eml" | "emlx" => ("message/rfc822", Mail),
+        "mbox" => ("application/mbox", Mail),
+        "msg" => ("application/vnd.ms-outlook", Mail),
+        "pst" => ("application/vnd.ms-outlook-pst", Mail),
+        "ics" | "ical" => ("text/calendar", Calendar),
+        "vcs" => ("text/x-vcalendar", Calendar),
+        "vcf" | "vcard" => ("text/vcard", Contact),
+        "one" | "onepkg" | "onetoc2" => ("application/onenote", Notebook),
+        "pem" | "crt" => ("application/x-pem-file", Key),
+        "asc" => ("application/pgp-keys", Key),
+        "cer" | "der" => ("application/pkix-cert", Key),
+        "gpg" | "pgp" => ("application/pgp-encrypted", Key),
+        "p12" | "pfx" => ("application/x-pkcs12", Key),
+        "p7b" | "p7c" => ("application/x-pkcs7-certificates", Key),
+        "p7m" => ("application/pkcs7-mime", Key),
+        "p7s" => ("application/pkcs7-signature", Key),
+        "jks" => ("application/x-java-keystore", Key),
+        "kdbx" => ("application/x-keepass2", Key),
+        "exe" | "dll" => ("application/x-msdownload", Executable),
+        "msi" => ("application/x-msi", Executable),
+        "bat" | "cmd" => ("application/x-bat", Executable),
+        "class" => ("application/java-vm", Executable),
+        "appimage" => ("application/vnd.appimage", Executable),
+        "ttf" => ("font/ttf", Font),
+        "otf" => ("font/otf", Font),
+        "woff" => ("font/woff", Font),
+        "woff2" => ("font/woff2", Font),
+        "ttc" => ("font/collection", Font),
+        "pfb" => ("application/x-font-type1", Font),
+        "afm" => ("application/x-font-afm", Font),
+        "iso" => ("application/x-iso9660-image", DiskImage),
+        "img" => ("application/x-raw-disk-image", DiskImage),
+        "dmg" => ("application/x-apple-diskimage", DiskImage),
+        "vhd" | "vhdx" => ("application/x-vhd", DiskImage),
+        "vmdk" => ("application/x-vmdk", DiskImage),
+        "qcow2" => ("application/x-qemu-disk", DiskImage),
+        "dwg" => ("image/vnd.dwg", Cad),
+        "dxf" => ("image/vnd.dxf", Cad),
+        "dgn" => ("application/x-dgn", Cad),
+        "stl" => ("model/stl", Cad),
+        "3mf" => ("model/3mf", Cad),
+        "step" | "stp" => ("model/step", Cad),
+        "iges" | "igs" => ("model/iges", Cad),
+        "gltf" => ("model/gltf+json", Cad),
+        "glb" => ("model/gltf-binary", Cad),
+        "skp" => ("application/vnd.sketchup.skp", Cad),
+        "sldprt" | "sldasm" | "slddrw" => ("application/x-solidworks", Cad),
+        "fcstd" => ("application/x-freecad", Cad),
+        "blend" => ("application/x-blender", Cad),
         "rpm" => ("application/x-rpm", Package),
         "apk" => ("application/vnd.android.package-archive", Package),
         _ => return None,
@@ -170,16 +400,18 @@ pub fn from_extension(ext: &str) -> Option<(&'static str, FileCategory)> {
 }
 
 const MIME_PREFIXES: &[(&str, FileCategory)] = &[
+    ("text/calendar", FileCategory::Calendar),
+    ("text/x-vcalendar", FileCategory::Calendar),
+    ("text/vcard", FileCategory::Contact),
+    ("text/x-vcard", FileCategory::Contact),
     ("text/markdown", FileCategory::Markdown),
     ("text/x-", FileCategory::Code),
     ("text/html", FileCategory::Code),
     ("text/css", FileCategory::Code),
     ("text/javascript", FileCategory::Code),
     ("text/", FileCategory::Text),
-    ("image/heic", FileCategory::Other),
-    ("image/heif", FileCategory::Other),
-    ("image/avif", FileCategory::Other),
-    ("image/jxl", FileCategory::Other),
+    ("image/vnd.dwg", FileCategory::Cad),
+    ("image/vnd.dxf", FileCategory::Cad),
     ("image/", FileCategory::Image),
     ("video/", FileCategory::Video),
     ("audio/", FileCategory::Audio),
@@ -224,6 +456,26 @@ const MIME_PREFIXES: &[(&str, FileCategory)] = &[
         "application/vnd.oasis.opendocument.presentation",
         FileCategory::Presentation,
     ),
+    ("message/rfc822", FileCategory::Mail),
+    ("application/mbox", FileCategory::Mail),
+    ("application/vnd.ms-outlook", FileCategory::Mail),
+    ("application/onenote", FileCategory::Notebook),
+    ("application/x-pem-file", FileCategory::Key),
+    ("application/pgp-keys", FileCategory::Key),
+    ("application/pkix-cert", FileCategory::Key),
+    ("application/x-x509-ca-cert", FileCategory::Key),
+    ("application/x-pkcs12", FileCategory::Key),
+    ("application/x-pkcs7", FileCategory::Key),
+    ("application/pkcs7", FileCategory::Key),
+    ("application/x-executable", FileCategory::Executable),
+    ("application/x-msdownload", FileCategory::Executable),
+    ("application/x-dosexec", FileCategory::Executable),
+    ("font/", FileCategory::Font),
+    ("application/font-", FileCategory::Font),
+    ("application/x-font-", FileCategory::Font),
+    ("application/x-iso9660-image", FileCategory::DiskImage),
+    ("application/x-apple-diskimage", FileCategory::DiskImage),
+    ("model/", FileCategory::Cad),
     ("inode/directory", FileCategory::Folder),
 ];
 
@@ -392,6 +644,9 @@ pub fn viewer_for_name(name: &[u8], category: FileCategory, mime: &str) -> Viewe
 
 pub fn viewer_for(category: FileCategory, mime: &str) -> Viewer {
     match category {
+        FileCategory::Image | FileCategory::Video | FileCategory::Audio if !shows_in_app(mime) => {
+            Viewer::External
+        }
         FileCategory::Image => Viewer::Image,
         FileCategory::Text | FileCategory::Code => Viewer::Text,
         FileCategory::Markdown => Viewer::Markdown,
@@ -401,17 +656,119 @@ pub fn viewer_for(category: FileCategory, mime: &str) -> Viewer {
         FileCategory::Archive => archive_viewer(mime),
         FileCategory::Package if mime == "application/vnd.android.package-archive" => Viewer::Archive,
         FileCategory::Other => other_viewer(mime),
+        FileCategory::Mail | FileCategory::Key | FileCategory::Executable if TEXT_MIMES.contains(&mime) => {
+            Viewer::Text
+        }
         FileCategory::Folder
         | FileCategory::Database
         | FileCategory::Package
         | FileCategory::Document
         | FileCategory::Spreadsheet
-        | FileCategory::Presentation => Viewer::External,
+        | FileCategory::Presentation
+        | FileCategory::Mail
+        | FileCategory::Calendar
+        | FileCategory::Contact
+        | FileCategory::Notebook
+        | FileCategory::Key
+        | FileCategory::Executable
+        | FileCategory::Font
+        | FileCategory::DiskImage
+        | FileCategory::Cad => Viewer::External,
     }
 }
 
+const TEXT_MIMES: [&str; 5] = [
+    "message/rfc822",
+    "application/mbox",
+    "application/x-pem-file",
+    "application/pgp-keys",
+    "application/x-bat",
+];
+
+const NOT_IN_APP: [&str; 74] = [
+    "image/heic",
+    "image/heif",
+    "image/heic-sequence",
+    "image/heif-sequence",
+    "image/avif",
+    "image/jxl",
+    "image/x-tga",
+    "image/vnd.adobe.photoshop",
+    "image/x-exr",
+    "image/vnd.radiance",
+    "image/jp2",
+    "image/jpm",
+    "image/vnd-ms.dds",
+    "image/x-sgi",
+    "image/vnd.zbrush.pcx",
+    "image/qoi",
+    "image/bpg",
+    "image/vnd.djvu",
+    "image/emf",
+    "image/wmf",
+    "image/x-icns",
+    "image/x-adobe-dng",
+    "image/x-nikon-nef",
+    "image/x-canon-cr2",
+    "image/x-canon-cr3",
+    "image/x-canon-crw",
+    "image/x-sony-arw",
+    "image/x-olympus-orf",
+    "image/x-panasonic-rw2",
+    "image/x-pentax-pef",
+    "image/x-epson-erf",
+    "image/x-kodak-kdc",
+    "image/x-fuji-raf",
+    "image/x-samsung-srw",
+    "video/x-ms-wmv",
+    "video/x-ms-asf",
+    "application/mxf",
+    "application/vnd.rn-realmedia",
+    "video/x-wtv",
+    "video/x-nuv",
+    "audio/x-ms-wma",
+    "audio/midi",
+    "audio/amr",
+    "audio/x-wavpack",
+    "audio/x-ape",
+    "audio/x-musepack",
+    "audio/x-tta",
+    "audio/eac3",
+    "audio/vnd.dts",
+    "audio/vnd.rn-realaudio",
+    "audio/x-dsf",
+    "audio/x-dff",
+    "audio/x-tak",
+    "audio/x-shorten",
+    "audio/x-s3m",
+    "audio/x-xm",
+    "audio/x-it",
+    "application/vnd.rar",
+    "application/vnd.comicbook-rar",
+    "application/x-zipx",
+    "application/x-compress",
+    "application/x-lz4",
+    "application/vnd.ms-cab-compressed",
+    "application/x-cpio",
+    "application/x-lzh-compressed",
+    "application/x-xar",
+    "application/x-lzop",
+    "application/x-lzip",
+    "application/x-lzma",
+    "application/x-lzma-compressed-tar",
+    "application/x-archive",
+    "application/x-arj",
+    "application/x-brotli",
+    "application/warc",
+];
+
+pub fn shows_in_app(mime: &str) -> bool {
+    let base = mime.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
+    !NOT_IN_APP.contains(&base.as_str())
+}
+
 fn archive_viewer(mime: &str) -> Viewer {
-    if mime == "application/vnd.rar" {
+    if !shows_in_app(mime) {
         Viewer::External
     } else {
         Viewer::Archive
@@ -540,7 +897,7 @@ mod tests {
     }
 
     #[test]
-    fn images_without_qt_decoder_open_with_other_apps() {
+    fn images_without_qt_decoder_show_the_image_glyph_and_open_with_other_apps() {
         for (name, mime) in [
             ("a.heic", "image/heic"),
             ("a.HEIF", "image/heic"),
@@ -548,12 +905,12 @@ mod tests {
             ("a.jxl", "image/jxl"),
         ] {
             let mut e = file(name);
-            assert_eq!(category_of(&e), FileCategory::Other, "{name}");
+            assert_eq!(category_of(&e), FileCategory::Image, "{name}");
             assert_eq!(mime_of(&e).as_deref(), Some(mime), "{name}");
             e.content_type = Some(mime.into());
-            assert_eq!(category_of(&e), FileCategory::Other, "{name} from server");
+            assert_eq!(category_of(&e), FileCategory::Image, "{name} from server");
             assert_eq!(
-                viewer_for_name(name.as_bytes(), FileCategory::Other, mime),
+                viewer_for_name(name.as_bytes(), FileCategory::Image, mime),
                 Viewer::External
             );
         }
@@ -563,12 +920,70 @@ mod tests {
             "image/avif",
             "image/jxl",
             "image/heic-sequence",
+            "IMAGE/HEIC; profile=x",
         ] {
-            let mut e = file("noext");
-            e.content_type = Some(mime.into());
-            assert_eq!(category_of(&e), FileCategory::Other, "{mime}");
+            assert_eq!(viewer_of(b"noext", mime, None), Viewer::External, "{mime}");
+            assert!(!shows_in_app(mime), "{mime}");
         }
         assert_eq!(category_from_mime("image/png"), FileCategory::Image);
+    }
+
+    #[test]
+    fn media_and_archives_get_their_kind_and_open_in_lautta_only_when_the_phone_decodes_them() {
+        use FileCategory::*;
+        let cases: &[(&[&str], FileCategory, Viewer)] = &[
+            (&["pbm", "pgm", "ppm", "pnm", "cur"], Image, Viewer::Image),
+            (
+                &[
+                    "tga", "psd", "exr", "hdr", "jp2", "j2k", "jpf", "jpx", "jpm", "dds", "sgi", "pcx",
+                    "qoi", "bpg", "djvu", "djv", "emf", "wmf", "icns", "dng", "nef", "nrw", "cr2", "cr3",
+                    "crw", "arw", "srf", "sr2", "orf", "rw2", "pef", "erf", "kdc", "raf", "srw",
+                ],
+                Image,
+                Viewer::External,
+            ),
+            (&["ivf", "vob", "m2v", "qt", "divx"], Video, Viewer::Video),
+            (
+                &["mxf", "rm", "rmvb", "asf", "wtv", "nuv", "wmv"],
+                Video,
+                Viewer::External,
+            ),
+            (
+                &[
+                    "mka", "aif", "aiff", "aifc", "ac3", "caf", "au", "snd", "spx", "w64", "voc",
+                ],
+                Audio,
+                Viewer::Audio,
+            ),
+            (
+                &[
+                    "wv", "ape", "mpc", "tta", "eac3", "dts", "ra", "dsf", "dff", "tak", "shn", "s3m", "xm",
+                    "it", "wma", "mid", "midi", "amr",
+                ],
+                Audio,
+                Viewer::External,
+            ),
+            (&["cbz", "cb7", "cbt"], Archive, Viewer::Archive),
+            (
+                &[
+                    "cbr", "zipx", "z", "lz4", "cab", "cpio", "lzh", "lha", "xar", "lzo", "lz", "lzma",
+                    "tlz", "ar", "arj", "br", "warc", "rar",
+                ],
+                Archive,
+                Viewer::External,
+            ),
+        ];
+        for (exts, category, viewer) in cases {
+            for ext in exts.iter() {
+                let name = format!("x.{}", ext.to_ascii_uppercase());
+                assert_eq!(category_of_name(name.as_bytes()), *category, "{ext}");
+                assert_eq!(viewer_of(name.as_bytes(), "", None), *viewer, "{ext}");
+            }
+        }
+        assert_eq!(category_of_name(b"go.mod"), FileCategory::Other);
+        assert_eq!(viewer_of(b"a.jpg", "", None), Viewer::Image);
+        assert_eq!(viewer_of(b"a.mp3", "", None), Viewer::Audio);
+        assert_eq!(viewer_of(b"a.zip", "", None), Viewer::Archive);
     }
 
     #[test]
@@ -710,6 +1125,126 @@ mod tests {
     }
 
     #[test]
+    fn office_ebook_database_and_subtitle_variants_get_their_category() {
+        use FileCategory::*;
+        let want: [(&[&str], FileCategory); 5] = [
+            (
+                &[
+                    "docm", "dotx", "dotm", "fodt", "sxw", "sdw", "pages", "wps", "wpd", "wp", "wri", "hwp",
+                    "xps", "mobi", "azw3", "fb2", "lit", "lrf", "chm", "ibooks", "indd", "idml", "mht",
+                    "mhtml",
+                ],
+                Document,
+            ),
+            (
+                &[
+                    "xlsm", "xlsb", "xltx", "xlt", "xltm", "numbers", "fods", "sxc", "wk1", "wk3", "wk4",
+                    "wks", "123", "wq1", "wq2", "wb1", "wb2", "wb3", "qpw",
+                ],
+                Spreadsheet,
+            ),
+            (
+                &[
+                    "pptm", "ppsx", "ppsm", "pps", "potx", "potm", "thmx", "fodp", "sxi", "sdd",
+                ],
+                Presentation,
+            ),
+            (&["mdb", "accdb", "dbf", "odb", "sas7bdat"], Database),
+            (&["srt", "vtt", "ass", "ssa", "lrc"], Text),
+        ];
+        for (exts, category) in want {
+            for ext in exts {
+                let name = format!("Some file.{}", ext.to_ascii_uppercase());
+                assert_eq!(category_of_name(name.as_bytes()), category, "{ext}");
+            }
+        }
+        assert_eq!(viewer_of(b"film.srt", "", None), Viewer::Text);
+        assert_eq!(viewer_of(b"sheet.xlsm", "", None), Viewer::External);
+    }
+
+    #[test]
+    fn mail_calendar_contacts_keys_programs_fonts_disks_and_models_get_their_category() {
+        use FileCategory::*;
+        let want: [(&[&str], FileCategory); 9] = [
+            (&["eml", "emlx", "mbox", "msg", "pst"], Mail),
+            (&["ics", "ical", "vcs"], Calendar),
+            (&["vcf", "vcard"], Contact),
+            (&["one", "onepkg", "onetoc2"], Notebook),
+            (
+                &[
+                    "pem", "crt", "asc", "cer", "der", "gpg", "pgp", "p12", "pfx", "p7b", "p7c", "p7m",
+                    "p7s", "jks", "kdbx",
+                ],
+                Key,
+            ),
+            (
+                &["exe", "dll", "msi", "bat", "cmd", "class", "appimage"],
+                Executable,
+            ),
+            (&["ttf", "otf", "woff", "woff2", "ttc", "pfb", "afm"], Font),
+            (&["iso", "img", "dmg", "vhd", "vhdx", "vmdk", "qcow2"], DiskImage),
+            (
+                &[
+                    "dwg", "dxf", "dgn", "stl", "3mf", "step", "stp", "iges", "igs", "gltf", "glb", "skp",
+                    "sldprt", "sldasm", "slddrw", "fcstd", "blend",
+                ],
+                Cad,
+            ),
+        ];
+        for (exts, category) in want {
+            for ext in exts {
+                let name = format!("x.{}", ext.to_ascii_uppercase());
+                assert_eq!(category_of_name(name.as_bytes()), category, "{ext}");
+            }
+        }
+    }
+
+    #[test]
+    fn text_based_mail_keys_and_scripts_open_as_text_the_rest_elsewhere() {
+        for name in ["a.eml", "a.mbox", "a.pem", "a.crt", "a.asc", "a.bat"] {
+            assert_eq!(viewer_of(name.as_bytes(), "", None), Viewer::Text, "{name}");
+        }
+        for name in [
+            "a.msg", "a.ics", "a.vcf", "a.one", "a.p12", "a.der", "a.exe", "a.ttf", "a.iso", "a.stl",
+        ] {
+            assert_eq!(viewer_of(name.as_bytes(), "", None), Viewer::External, "{name}");
+        }
+    }
+
+    #[test]
+    fn server_types_of_the_new_kinds() {
+        use FileCategory::*;
+        for (mime, category) in [
+            ("message/rfc822", Mail),
+            ("text/calendar; charset=utf-8", Calendar),
+            ("text/x-vcard", Contact),
+            ("application/onenote", Notebook),
+            ("application/x-x509-ca-cert", Key),
+            ("application/x-dosexec", Executable),
+            ("font/woff2", Font),
+            ("application/x-font-ttf", Font),
+            ("application/x-iso9660-image", DiskImage),
+            ("model/stl", Cad),
+            ("image/vnd.dwg", Cad),
+            ("image/png", Image),
+            ("text/plain", Text),
+        ] {
+            assert_eq!(category_from_mime(mime), category, "{mime}");
+        }
+        assert_eq!(
+            category_from_mime(sniff(b"\x7fELF\x02\x01\x01").unwrap()),
+            Executable
+        );
+    }
+
+    #[test]
+    fn names_shared_with_other_formats_stay_unknown() {
+        for name in ["id_ed25519.pub", "server.key", "graph.dot", "subs.sub"] {
+            assert_eq!(category_of_name(name.as_bytes()), FileCategory::Other, "{name}");
+        }
+    }
+
+    #[test]
     fn icon_names_are_distinct_per_category() {
         let all = [
             FileCategory::Folder,
@@ -726,6 +1261,15 @@ mod tests {
             FileCategory::Presentation,
             FileCategory::Database,
             FileCategory::Package,
+            FileCategory::Mail,
+            FileCategory::Calendar,
+            FileCategory::Contact,
+            FileCategory::Notebook,
+            FileCategory::Key,
+            FileCategory::Executable,
+            FileCategory::Font,
+            FileCategory::DiskImage,
+            FileCategory::Cad,
             FileCategory::Other,
         ];
         let names: std::collections::HashSet<_> = all.iter().map(|c| c.icon_name()).collect();

@@ -102,8 +102,8 @@ ApplicationWindow {
                     return win.fail("titled Trash: " + (header.length ? header[0].title : "no header"))
                 var note = findAll(win.page, function(x) {
                     return x.wrapMode !== undefined && x.visible && either(x.text,
-                        "Only files deleted from this device's folders appear here. Deletes on volumes and servers are permanent.",
-                        "lautta-trash-note")
+                        "Only files deleted from this device's folders are kept here for 30 days. Deletes on volumes and servers are permanent.",
+                        "lautta-trash-note-kept")
                 }, [])
                 if (note.length !== 1)
                     return win.fail("the note says volumes and servers")

@@ -211,6 +211,7 @@ async fn the_folders_images_come_in_the_folders_order() {
         ("a2.png", jpeg(2, 2)),
         (".hidden.jpg", jpeg(2, 2)),
         ("notes.txt", b"x".to_vec()),
+        ("raw.cr2", b"x".to_vec()),
     ] {
         std::fs::write(h.root.join("Pictures").join(n), d).unwrap();
     }
@@ -220,7 +221,7 @@ async fn the_folders_images_come_in_the_folders_order() {
     assert_eq!(
         names,
         ["a2.png", "a10.png", "b.jpg"],
-        "natural order, no folders or hidden"
+        "natural order, no folders, hidden or pictures only other apps show"
     );
     assert_eq!(list[0].uri, uri("lautta://user-pictures/a2.png"));
     assert!(list[0].size.is_some());

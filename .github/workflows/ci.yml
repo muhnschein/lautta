@@ -101,8 +101,11 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
-      - name: Install dependencies
-        run: ./tools/ci/install-host-deps.sh cross
+      - name: Cross-build tools (i386 C library for the SDK compiler, Rust)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends libc6-i386
+          rustup toolchain install
       - name: Pull the SDK
         run: docker pull "$SDK_IMAGE"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
