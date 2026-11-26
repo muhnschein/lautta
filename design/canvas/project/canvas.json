@@ -795,9 +795,9 @@
       "y": 6580
     },
     "FileGlyphOptions.dc.html": {
-      "h": 1220,
+      "h": 1560,
       "is_interactive": true,
-      "title": "File type glyphs (#44) \u00b7 options A B C",
+      "title": "File type glyphs (#44) \u00b7 options A B C D",
       "w": 860,
       "x": 0,
       "y": 62200
@@ -826,12 +826,20 @@
       "x": 2820,
       "y": 62200
     },
+    "FileGlyphsD.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Directory \u00b7 file glyphs D, folded corner, content of a",
+      "w": 860,
+      "x": 3760,
+      "y": 62200
+    },
     "FileGlyphsC.dc.html": {
       "h": 860,
       "is_interactive": true,
       "title": "Directory \u00b7 file glyphs C, extension label",
       "w": 860,
-      "x": 3760,
+      "x": 4700,
       "y": 62200
     },
     "FileGlyphsCompare.dc.html": {
@@ -839,7 +847,7 @@
       "is_interactive": true,
       "title": "Directory \u00b7 file glyphs today, A, B, C",
       "w": 1660,
-      "x": 8700,
+      "x": 10440,
       "y": 62200
     }
   },
@@ -1069,6 +1077,7 @@
     "FileGlyphsToday.dc.html",
     "FileGlyphsA.dc.html",
     "FileGlyphsB.dc.html",
+    "FileGlyphsD.dc.html",
     "FileGlyphsC.dc.html",
     "FileGlyphsCompare.dc.html"
   ],
