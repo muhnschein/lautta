@@ -849,6 +849,22 @@
       "w": 1660,
       "x": 10440,
       "y": 62200
+    },
+    "NewKindOptions.dc.html": {
+      "h": 1300,
+      "is_interactive": true,
+      "title": "New file kinds (#44) \u00b7 options P S H",
+      "w": 860,
+      "x": 0,
+      "y": 64000
+    },
+    "NewKindsCompare.dc.html": {
+      "h": 1000,
+      "is_interactive": true,
+      "title": "New file kinds (#44) \u00b7 today, P, S, H",
+      "w": 1660,
+      "x": 1740,
+      "y": 64000
     }
   },
   "createdOnFiles": {
@@ -971,6 +987,14 @@
       "w": 240,
       "x": 0,
       "y": 61900
+    },
+    "r20": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "New file kinds (#44): mail, calendar, contacts, keys, programs, fonts, disk images, CAD, OneNote",
+      "w": 240,
+      "x": 0,
+      "y": 63700
     }
   },
   "order": [
@@ -1079,7 +1103,9 @@
     "FileGlyphsB.dc.html",
     "FileGlyphsD.dc.html",
     "FileGlyphsC.dc.html",
-    "FileGlyphsCompare.dc.html"
+    "FileGlyphsCompare.dc.html",
+    "NewKindOptions.dc.html",
+    "NewKindsCompare.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"
