@@ -2,6 +2,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import "../components"
+import "../components/viewers/PdfText.js" as PdfText
 
 Page {
     id: page
@@ -28,7 +29,8 @@ Page {
         readonly property real sheetWidth: Math.floor(cellWidth - 2 * Theme.paddingLarge)
 
         objectName: "pdfPagesGrid"
-        anchors.fill: parent
+        anchors { top: parent.top; left: parent.left; right: parent.right; bottom: goTo.top }
+        clip: true
         cellWidth: Math.floor(width / columns)
         cellHeight: Math.ceil(sheetWidth * 1.5) + numberMetrics.height + 2 * Theme.paddingMedium
         model: page.pageCount
@@ -118,5 +120,24 @@ Page {
         Component.onCompleted: positionViewAtIndex(page.currentPage, GridView.Center)
 
         VerticalScrollDecorator { }
+    }
+
+    TextField {
+        id: goTo
+
+        readonly property int target: PdfText.typedPage(text, page.pageCount)
+
+        anchors.bottom: parent.bottom
+        width: parent.width
+        inputMethodHints: Qt.ImhDigitsOnly
+        //% "Go to page"
+        placeholderText: qsTrId("lautta-viewers-pdf-go-to-page")
+        //% "Go to page, 1 to %1"
+        label: qsTrId("lautta-viewers-pdf-go-to-page-range").arg(page.pageCount)
+        errorHighlight: text !== "" && target < 0
+
+        EnterKey.enabled: target >= 0
+        EnterKey.iconSource: "image://theme/icon-m-enter-accept"
+        EnterKey.onClicked: page.chosen(target)
     }
 }

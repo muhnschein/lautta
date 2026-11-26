@@ -66,11 +66,60 @@ ApplicationWindow {
         return top >= 0 && top + item.height <= grid.height
     }
 
-    function checkMenu(viewer) {
-        var entry = findAll(viewer, function (x) { return x.text === qsTrId("lautta-viewers-pdf-pages-menu") }, [])
+    function menuItems(viewer) {
         var menus = findAll(viewer, function (x) { return x._isPullDownMenu === true }, [])
-        expect(entry.length === 1 && menus.length === 1 && isInside(menus[0], entry[0]),
-               "the pulley has Pages: " + entry.length + " " + menus.length)
+        if (!expect(menus.length === 1, "one pulley: " + menus.length))
+            return {}
+        var menu = menus[0]
+        var flick = menu.flickable
+        flick.contentY = flick.originY
+        var x = flick.width / 2
+        var from = flick.height * 0.2
+        tools.mouse(flick, "press", x, from)
+        for (var i = 1; i <= 12; ++i)
+            tools.mouse(flick, "move", x, from + Theme.itemSizeLarge * i / 12)
+        waitFor(function () { return menu.active }, "the pulley to come out")
+        var names = ["lautta-viewers-pdf-search", "lautta-viewers-pdf-contents", "lautta-viewers-pdf-pages-menu",
+                     "lautta-viewers-pdf-contents-and-pages"].map(function (id) { return qsTrId(id) })
+        var items = findAll(menu, function (x) { return names.indexOf(x.text) >= 0 && x.visible }, [])
+        var shown = {}
+        for (var k = 0; k < items.length; ++k)
+            shown[items[k].text] = Array.prototype.indexOf.call(items[k].parent.children, items[k])
+        tools.mouse(flick, "move", x, from)
+        tools.mouse(flick, "release", x, from)
+        menu.close(true)
+        waitFor(function () { return !menu.active && !flick.moving }, "the pulley to close")
+        return shown
+    }
+
+    function checkMenu(viewer, outlined) {
+        var shown = menuItems(viewer)
+        var contents = shown[qsTrId("lautta-viewers-pdf-contents")]
+        var pages = shown[qsTrId("lautta-viewers-pdf-pages-menu")]
+        var search = shown[qsTrId("lautta-viewers-pdf-search")]
+        expect(pages !== undefined && search !== undefined && pages > search,
+               "the pulley has Pages, after Search: " + JSON.stringify(shown))
+        expect(shown[qsTrId("lautta-viewers-pdf-contents-and-pages")] === undefined,
+               "no Contents and pages entry: " + JSON.stringify(shown))
+        if (outlined)
+            expect(contents !== undefined && contents > search && contents < pages,
+                   "with an outline, Contents sits between Search and Pages: " + JSON.stringify(shown))
+        else
+            expect(contents === undefined, "without an outline, no Contents: " + JSON.stringify(shown))
+    }
+
+    function checkGoTo(viewer) {
+        viewer.showPages()
+        waitFor(function () { return pageStack.currentPage !== viewer && !pageStack.busy }, "Pages for Go to page")
+        var fields = findAll(pageStack.currentPage, function (x) { return x.target !== undefined && x.placeholderText !== undefined }, [])
+        if (!expect(fields.length === 1 && fields[0].visible, "Pages shows the Go to page field: " + fields.length))
+            return
+        fields[0].text = "45"
+        expect(fields[0].target === 44 && !fields[0].errorHighlight, "45 is page index 44: " + fields[0].target)
+        fields[0].text = "61"
+        expect(fields[0].target < 0 && fields[0].errorHighlight, "61 is past the end: " + fields[0].target)
+        pageStack.pop(viewer, PageStackAction.Immediate)
+        waitFor(function () { return pageStack.currentPage === viewer && !pageStack.busy }, "back from Pages")
     }
 
     function checkPages(viewer, label) {
@@ -112,24 +161,34 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/sixty-pages.pdf"), "lautta://user-documents/pages-sixty.pdf"))
+        if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/sixty-pages.pdf"), "lautta://user-documents/pages-sixty.pdf")
+                || !tools.installFixture(Qt.resolvedUrl("host/fixtures/linked.pdf"), "lautta://user-documents/pages-linked.pdf"))
             console.error("FAILED: fixture not installed")
         pageStack.push(emptyPage, {}, PageStackAction.Immediate)
         var viewer = pageStack.push(viewerComponent, {}, PageStackAction.Immediate)
         waitFor(function () { return viewer.document.loaded && !pageStack.busy }, "the PDF")
-        checkMenu(viewer)
+        checkMenu(viewer, false)
+        checkGoTo(viewer)
         checkPages(viewer, "portrait")
         window.deviceOrientation = Orientation.Landscape
         waitFor(function () { return viewer.isLandscape && !viewer.orientationTransitionRunning }, "landscape")
         checkPages(viewer, "landscape")
         window.deviceOrientation = Orientation.Portrait
         waitFor(function () { return !viewer.isLandscape && !viewer.orientationTransitionRunning }, "portrait again")
+        var linked = pageStack.push(linkedComponent, {}, PageStackAction.Immediate)
+        waitFor(function () { return linked.document.loaded && !pageStack.busy }, "the linked PDF")
+        checkMenu(linked, true)
         reachedEnd = true
     }
 
     Component {
         id: emptyPage
         Page { }
+    }
+
+    Component {
+        id: linkedComponent
+        PdfViewer { uri: "lautta://user-documents/pages-linked.pdf" }
     }
 
     Component {

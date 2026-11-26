@@ -1603,20 +1603,12 @@
         <source>Contents</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-viewers-pdf-no-contents">
-        <source>No table of contents</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-viewers-pdf-go-to-page">
         <source>Go to page</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-pdf-go-to-page-range">
         <source>Go to page, 1 to %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-pdf-contents-and-pages">
-        <source>Contents and pages</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-pdf-back-to-page">
