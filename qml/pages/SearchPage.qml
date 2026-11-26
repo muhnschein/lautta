@@ -215,11 +215,6 @@ Page {
         contentWidth: width
         contentHeight: height + page.menuRoom
 
-
-        HeaderBand {
-            anchors.fill: heading
-        }
-
         Item {
             id: heading
 

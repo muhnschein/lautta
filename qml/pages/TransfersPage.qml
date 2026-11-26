@@ -97,12 +97,10 @@ Page {
             z: 1
             width: parent.width
 
-            HeaderBand {
-                PageHeader {
-                    //% "Activity"
-                    title: qsTrId("lautta-xfr-title")
-                    description: page.headerDescription()
-                }
+            PageHeader {
+                //% "Activity"
+                title: qsTrId("lautta-xfr-title")
+                description: page.headerDescription()
             }
             BackgroundItem {
                 id: banner

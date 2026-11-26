@@ -2,7 +2,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
-import "../components"
 
 Page {
     id: page
@@ -53,11 +52,9 @@ Page {
 
             width: parent.width
 
-            HeaderBand {
-                PageHeader {
-                    //% "About"
-                    title: qsTrId("lautta-about-title")
-                }
+            PageHeader {
+                //% "About"
+                title: qsTrId("lautta-about-title")
             }
 
             Item {

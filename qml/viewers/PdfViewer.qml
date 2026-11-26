@@ -323,14 +323,11 @@ Page {
                 }
             }
 
-            header: HeaderBand {
+            header: PageHeader {
                 width: view.width
                 x: view.contentX
-
-                PageHeader {
-                    title: page.fileName
-                    description: doc.loaded ? PdfText.summary(doc.pageCount) : " "
-                }
+                title: page.fileName
+                description: doc.loaded ? PdfText.summary(doc.pageCount) : " "
             }
 
             delegate: PdfPage {

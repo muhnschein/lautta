@@ -2,7 +2,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
-import "../components"
 import "../components/search"
 
 Page {
@@ -20,10 +19,8 @@ Page {
 
             width: parent.width
 
-            HeaderBand {
-                PageHeader {
-                    title: qsTrId("lautta-settings-search")
-                }
+            PageHeader {
+                title: qsTrId("lautta-settings-search")
             }
 
             SettingSlider {

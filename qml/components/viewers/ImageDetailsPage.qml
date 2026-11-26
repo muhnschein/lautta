@@ -2,7 +2,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
-import ".."
 import "ViewerText.js" as ViewerText
 
 Page {
@@ -53,12 +52,10 @@ Page {
             id: column
             width: parent.width
 
-            HeaderBand {
-                PageHeader {
-                    //% "Details"
-                    title: qsTrId("lautta-viewers-details")
-                    description: App.nameOf(page.uri)
-                }
+            PageHeader {
+                //% "Details"
+                title: qsTrId("lautta-viewers-details")
+                description: App.nameOf(page.uri)
             }
 
             DetailItem {
