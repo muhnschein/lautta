@@ -198,10 +198,6 @@
         <source>This year</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-filters-recent">
-        <source>Recent searches</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-search-placeholder">
         <source>Search</source>
         <translation type="unfinished"></translation>
@@ -350,17 +346,6 @@
     <message id="lautta-settings-search">
         <source>Search</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-search-depth">
-        <source>Search depth on servers</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-folders" numerus="yes">
-        <source>%n folders</source>
-        <translation>
-            <numerusform>%n folder</numerusform>
-            <numerusform>%n folders</numerusform>
-        </translation>
     </message>
     <message id="lautta-settings-recents">
         <source>Recents</source>
@@ -1596,20 +1581,12 @@
         <source>Contents</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-viewers-pdf-no-contents">
-        <source>No table of contents</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-viewers-pdf-go-to-page">
         <source>Go to page</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-pdf-go-to-page-range">
         <source>Go to page, 1 to %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-viewers-pdf-contents-and-pages">
-        <source>Contents and pages</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-viewers-pdf-back-to-page">
@@ -1824,10 +1801,6 @@
     </message>
     <message id="lautta-dir-renamed-file">
         <source>File renamed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-search-depth-hint">
-        <source>Searches on this device go through every folder</source>
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-settings-files">
@@ -2581,6 +2554,46 @@
     </message>
     <message id="lautta-search-pill-hidden">
         <source>Hidden</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-index-explain">
+        <source>Lautta keeps a list of file names, so search answers as you type and finds files on servers that are offline. It never reads what files contain.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-index-charger">
+        <source>Update while charging</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-index-charger-hint">
+        <source>With the charger in and the battery above half, Lautta also updates the index while it runs in the background.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-index-state-ready">
+        <source>Up to date</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-index-state-updating">
+        <source>Updating</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-index-state-unreachable">
+        <source>Not reachable</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-index-state-off">
+        <source>Not indexed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-index-state-waiting">
+        <source>Waiting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-pages-title">
+        <source>Pages</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-viewers-pdf-pages-menu">
+        <source>Pages</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

@@ -18,7 +18,7 @@ Page {
     id: page
 
     property string rootUri
-    property string scope: rootUri.length > 0 ? "folder" : (searchModel.hasServers() ? "everywhere" : "device")
+    property string scope: rootUri.length > 0 ? "folder" : (searchModel.hasOtherPlaces() ? "everywhere" : "device")
     property bool searched
     property string typeFilter: ""
     property string datePreset: "any"
@@ -72,9 +72,25 @@ Page {
 
     allowedOrientations: Orientation.All
     onStatusChanged: {
+        App.setSearchOpen(status === PageStatus.Active)
         if (status === PageStatus.Active && !searched)
             searchField.forceActiveFocus()
+        else if (status === PageStatus.Deactivating)
+            page.remember()
     }
+
+    function remember() {
+        if (searched && searchModel.query.trim().length > 0)
+            searchModel.rememberSearch()
+    }
+
+    function submit() {
+        typing.stop()
+        page.start()
+        page.remember()
+        searchField.focus = false
+    }
+    Component.onDestruction: App.setSearchOpen(false)
 
     function start() {
         searchModel.types = JSON.stringify(page.typeFilter === "" ? [] : [page.typeFilter])
@@ -142,12 +158,11 @@ Page {
 
     function useRecent(text) {
         searchField.text = text
-        typing.stop()
-        page.start()
-        searchField.focus = false
+        page.submit()
     }
 
     function openHit(row, tileSize) {
+        page.remember()
         Open.open(pageStack, App, typeof Operations !== "undefined" ? Operations : null,
                   row.uri, row.isDir, "", row.folderUri, tileSize)
     }
@@ -215,6 +230,23 @@ Page {
         contentWidth: width
         contentHeight: height + page.menuRoom
 
+        PullDownMenu {
+            visible: page.recentSearches.length > 0
+
+            MenuItem {
+                objectName: "clearRecentSearches"
+                visible: page.recentSearches.length > 0
+                //% "Clear recent searches"
+                text: qsTrId("lautta-search-clear-recent")
+                onClicked: {
+                    //% "Clearing recent searches"
+                    remorsePopup.execute(qsTrId("lautta-search-clearing-recent"), function () {
+                        searchModel.clearRecent()
+                    }, App.setting("remorse_seconds") * 1000)
+                }
+            }
+        }
+
         Item {
             id: heading
 
@@ -246,11 +278,7 @@ Page {
                                  : qsTrId("lautta-search-placeholder")
                 inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
                 EnterKey.iconSource: "image://theme/icon-m-enter-accept"
-                EnterKey.onClicked: {
-                    typing.stop()
-                    page.start()
-                    focus = false
-                }
+                EnterKey.onClicked: page.submit()
                 onTextChanged: page.edited(text)
                 Component.onCompleted: forceActiveFocus()
             }
@@ -370,32 +398,11 @@ Page {
             contentHeight: recentColumn.height
             clip: true
 
-            PullDownMenu {
-                visible: page.recentSearches.length > 0
-
-                MenuItem {
-                    objectName: "clearRecentSearches"
-                    visible: page.recentSearches.length > 0
-                    //% "Clear recent searches"
-                    text: qsTrId("lautta-search-clear-recent")
-                    onClicked: {
-                        //% "Clearing recent searches"
-                        remorsePopup.execute(qsTrId("lautta-search-clearing-recent"), function () {
-                            searchModel.clearRecent()
-                        }, App.setting("remorse_seconds") * 1000)
-                    }
-                }
-            }
-
             Column {
                 id: recentColumn
 
                 width: parent.width
-
-                SectionHeader {
-                    //% "Recent searches"
-                    text: qsTrId("lautta-filters-recent")
-                }
+                topPadding: Theme.paddingSmall
 
                 Repeater {
                     model: page.recentSearches

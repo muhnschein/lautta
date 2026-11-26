@@ -809,6 +809,40 @@ async fn a_page_is_rendered_without_opening_first_and_sees_no_stale_copy() {
     );
 }
 
+#[tokio::test]
+async fn page_thumbnails_are_small_and_follow_a_changed_file() {
+    use lautta_core::app_pdf::PdfFailure;
+    use lautta_core::pdf_pages::MAX_PAGE_THUMB_WIDTH;
+    use lautta_pdf::sample::{build, page};
+    let h = home().await;
+    h.nas.add_file("docs/thumbs-overview.pdf", &sample_pdf(), 1);
+    let u = uri("lautta://nv-nas/docs/thumbs-overview.pdf");
+    let tall = h.core.pdf_page_thumb(&u, 0, 300).await.unwrap();
+    assert_eq!(
+        (tall.width, tall.height),
+        (225, 450),
+        "no taller than one and a half times the asked width"
+    );
+    let wide = h.core.pdf_page_thumb(&u, 1, 5000).await.unwrap();
+    assert_eq!(wide.width, MAX_PAGE_THUMB_WIDTH, "capped");
+    let at = ((440 * 225 + 10) * 4) as usize;
+    assert_eq!(tall.rgba[at..at + 4], [255, 0, 0, 255]);
+    assert_eq!(
+        h.core.pdf_page_thumb(&u, 2, 100).await.unwrap_err(),
+        PdfFailure::Pdf(lautta_pdf::PdfError::NoSuchPage)
+    );
+    h.nas
+        .add_file("docs/thumbs-overview.pdf", &build(&[page(100, 200, "")]), 2);
+    h.core.open_pdf(&u, None).await.unwrap();
+    let changed = h.core.pdf_page_thumb(&u, 0, 300).await.unwrap();
+    assert_eq!((changed.width, changed.height), (225, 450));
+    assert_eq!(
+        changed.rgba[at..at + 4],
+        [255, 255, 255, 255],
+        "the changed file, not the kept thumbnail"
+    );
+}
+
 async fn pdf_failure(h: &Home, u: &str) -> String {
     use lautta_core::app_pdf::PdfFailure;
     match h.core.open_pdf(&uri(u), None).await.unwrap_err() {

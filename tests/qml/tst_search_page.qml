@@ -195,8 +195,8 @@ ApplicationWindow {
                     break
                 win.expect(win.marksShown(), "every result marks the match in bold highlight")
                 var pulley = win.findAll(win.page, function (x) { return x._isPullDownMenu === true }, [])[0]
-                win.expect(win.within(pulley, win.named("searchRecents")),
-                           "the pulley sits on the recent searches, away from the field")
+                win.expect(pulley.flickable === win.named("searchPulleyHost"),
+                           "the pulley pulls the whole page, from the top")
                 win.touch("typePill").clicked(null)
                 win.next()
                 break
@@ -261,6 +261,10 @@ ApplicationWindow {
                     break
                 win.expect(win.page.scope === "device" && win.page.wide, "the device scope is wide")
                 win.expect(win.named("searchGroupName").text.length > 0, "the device section is named")
+                win.expect(win.page.recentSearches.length === 0, "searching as you type remembers nothing")
+                win.page.submit()
+                win.expect(win.page.recentSearches.length === 1 && win.page.recentSearches[0] === "thesis",
+                           "Enter remembers the search: " + JSON.stringify(win.page.recentSearches))
                 win.touch("typePill").clicked(null)
                 win.next()
                 break

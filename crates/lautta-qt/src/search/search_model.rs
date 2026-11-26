@@ -74,7 +74,7 @@ enum Event {
     Rows(usize, Vec<Row>, Vec<(usize, usize, SearchHit)>),
     Progress(usize, u64),
     GroupDone(usize, Result<(u64, u64, u64), (String, String)>),
-    Remembered,
+    Gone(usize, Vec<String>),
     Finished,
 }
 
@@ -134,8 +134,9 @@ pub struct SearchModel {
     clear: qt_method!(fn(&mut self)),
     refreshRecent: qt_method!(fn(&mut self)),
     clearRecent: qt_method!(fn(&mut self)),
+    rememberSearch: qt_method!(fn(&mut self)),
     canSearch: qt_method!(fn(&self) -> bool),
-    hasServers: qt_method!(fn(&self) -> bool),
+    hasOtherPlaces: qt_method!(fn(&self) -> bool),
     scopeLocationsJson: qt_method!(fn(&self) -> QString),
 
     rows: Vec<Row>,
@@ -318,12 +319,12 @@ impl SearchModel {
         self.request().is_restricted()
     }
 
-    fn hasServers(&self) -> bool {
+    fn hasOtherPlaces(&self) -> bool {
         core().is_some_and(|c| {
             c.locations
                 .locations()
                 .iter()
-                .any(|l| matches!(l.kind, LocationKind::Server { .. }))
+                .any(|l| matches!(l.kind, LocationKind::Server { .. } | LocationKind::Volume))
         })
     }
 
@@ -350,6 +351,15 @@ impl SearchModel {
         };
         self.recentSearchesJson = QString::from(to_json(&list).as_str());
         self.recentChanged();
+    }
+
+    fn rememberSearch(&mut self) {
+        let key = self.recents_key();
+        let text = self.query.to_string();
+        if let (Some(core), false) = (core(), key.is_empty()) {
+            let _ = core.recent_searches.remember(&key, &text);
+        }
+        self.refreshRecent();
     }
 
     fn clearRecent(&mut self) {
@@ -465,14 +475,11 @@ impl SearchModel {
             mode: request.mode,
             settings: core.settings(),
         };
-        let key = scope.recents_key(root.as_ref());
         handle().spawn(async move {
             let (tx, mut rx) = tokio::sync::mpsc::channel(8);
             let search_core = core.clone();
             let search = tokio::spawn(async move {
-                search_core
-                    .search_scope(&groups, &request, &key, cancel, tx)
-                    .await;
+                search_core.search_scope(&groups, &request, cancel, tx).await;
             });
             while let Some(event) = rx.recv().await {
                 match event {
@@ -486,7 +493,9 @@ impl SearchModel {
                         post(Event::Rows(group, rows, raw));
                     }
                     ScopeEvent::Progress { group, folders } => post(Event::Progress(group, folders)),
-                    ScopeEvent::Remembered => post(Event::Remembered),
+                    ScopeEvent::Gone { group, uris } => {
+                        post(Event::Gone(group, uris.iter().map(ToString::to_string).collect()))
+                    }
                     ScopeEvent::Done { group, result } => post(Event::GroupDone(
                         group,
                         result
@@ -502,11 +511,11 @@ impl SearchModel {
     }
 
     fn apply(&mut self, generation: u64, event: Event) {
-        if generation != self.generation && !matches!(event, Event::Remembered) {
+        if generation != self.generation {
             return;
         }
         match event {
-            Event::Remembered => self.refreshRecent(),
+            Event::Gone(group, uris) => self.remove_rows(group, &uris),
             Event::Rows(group, rows, raw) => {
                 self.collected.extend(raw);
                 self.add_rows(group, rows);
@@ -555,7 +564,6 @@ impl SearchModel {
                 self.running = false;
                 self.cancel_flag = None;
                 self.runningChanged();
-                self.refreshRecent();
             }
         }
     }
@@ -565,11 +573,6 @@ impl SearchModel {
             return;
         };
         self.clear();
-        let key = prior.scope.recents_key(prior.root.as_ref());
-        if !request.text.trim().is_empty() && !key.is_empty() {
-            let _ = core.recent_searches.add(&key, request.text.trim());
-        }
-        self.refreshRecent();
         let maker = RowMaker {
             groups: prior.groups.clone(),
             text: request.text.clone(),
@@ -606,6 +609,29 @@ impl SearchModel {
         }
         self.folderCount = self.groups.iter().map(|g| g.folders).sum::<u64>() as i32;
         self.errorCount = self.groups.iter().map(|g| g.errors).sum::<u64>() as i32;
+        self.publish_groups();
+    }
+
+    fn remove_rows(&mut self, group: usize, uris: &[String]) {
+        let gone: std::collections::HashSet<&str> = uris.iter().map(String::as_str).collect();
+        self.collected
+            .retain(|(g, _, hit)| *g != group || !gone.contains(hit.uri.to_string().as_str()));
+        let mut i = self.rows.len();
+        while i > 0 {
+            i -= 1;
+            if self.rows[i].group == group && gone.contains(self.rows[i].uri.as_str()) {
+                self.begin_remove_rows(i as i32, i as i32);
+                self.rows.remove(i);
+                self.end_remove_rows();
+                if let Some(n) = self.group_sizes.get_mut(group) {
+                    *n = n.saturating_sub(1);
+                }
+            }
+        }
+        if let Some(g) = self.groups.get_mut(group) {
+            g.rows = self.group_sizes.get(group).copied().unwrap_or(0);
+        }
+        self.hitCount = self.rows.len() as i32;
         self.publish_groups();
     }
 

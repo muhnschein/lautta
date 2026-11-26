@@ -913,6 +913,14 @@
       "w": 1660,
       "x": 8700,
       "y": 60300
+    },
+    "PdfPages.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "PDF pages",
+      "w": 400,
+      "x": 5280,
+      "y": 8200
     }
   },
   "createdOnFiles": {
@@ -1104,6 +1112,7 @@
     "MarkdownMore.dc.html",
     "TextProse.dc.html",
     "PdfViewer.dc.html",
+    "PdfPages.dc.html",
     "VideoPlayer.dc.html",
     "AudioPlayer.dc.html",
     "ArchiveView.dc.html",
