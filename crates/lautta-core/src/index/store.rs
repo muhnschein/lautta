@@ -146,6 +146,33 @@ fn sql(e: rusqlite::Error) -> Error {
     }
 }
 
+fn mark_one(
+    conn: &Connection,
+    root: i64,
+    root_path: &VPath,
+    folder: &VPath,
+    pass: i64,
+    version: Option<&[u8]>,
+) -> Result<()> {
+    if folder == root_path {
+        conn.execute(
+            "UPDATE root SET checked_pass = ?2, dir_version = ?3 WHERE id = ?1",
+            params![root, pass, version],
+        )
+        .map_err(sql)?;
+        return Ok(());
+    }
+    let (Some(parent), Some(name)) = (folder.parent(), folder.name()) else {
+        return Ok(());
+    };
+    conn.execute(
+        "UPDATE node SET checked_pass = ?4, dir_version = ?5 WHERE root = ?1 AND parent = ?2 AND name = ?3",
+        params![root, parent.as_bytes(), name, pass, version],
+    )
+    .map_err(sql)?;
+    Ok(())
+}
+
 fn configure(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
@@ -393,24 +420,25 @@ impl IndexStore {
         pass: i64,
         version: Option<&[u8]>,
     ) -> Result<()> {
-        let conn = self.lock();
-        if folder == root_path {
-            conn.execute(
-                "UPDATE root SET checked_pass = ?2, dir_version = ?3 WHERE id = ?1",
-                params![root, pass, version],
-            )
-            .map_err(sql)?;
+        mark_one(&self.lock(), root, root_path, folder, pass, version)
+    }
+
+    pub fn mark_checked_many(
+        &self,
+        root: i64,
+        root_path: &VPath,
+        pass: i64,
+        folders: &[(VPath, Option<Vec<u8>>)],
+    ) -> Result<()> {
+        if folders.is_empty() {
             return Ok(());
         }
-        let (Some(parent), Some(name)) = (folder.parent(), folder.name()) else {
-            return Ok(());
-        };
-        conn.execute(
-            "UPDATE node SET checked_pass = ?4, dir_version = ?5 WHERE root = ?1 AND parent = ?2 AND name = ?3",
-            params![root, parent.as_bytes(), name, pass, version],
-        )
-        .map_err(sql)?;
-        Ok(())
+        let mut conn = self.lock();
+        let tx = conn.transaction().map_err(sql)?;
+        for (folder, version) in folders {
+            mark_one(&tx, root, root_path, folder, pass, version.as_deref())?;
+        }
+        tx.commit().map_err(sql)
     }
 
     pub fn children(&self, root: i64, folder: &VPath) -> Result<Vec<Entry>> {

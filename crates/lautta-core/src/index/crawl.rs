@@ -53,12 +53,19 @@ impl Crawl<'_> {
         self.store.set_state(root.id, RootState::Crawling, None)?;
         let (top, checked) = self.store.root_folder(root.id)?;
         if checked < pass {
-            if let Err(e) = self.check(root, &top, pass).await {
-                self.store
-                    .set_state(root.id, RootState::Failed, Some(&e.to_string()))?;
-                return Err(e);
+            match self.check(root, &top).await {
+                Ok(version) => {
+                    self.store
+                        .mark_checked(root.id, &root.path, &top.path, pass, version.as_deref())?;
+                }
+                Err(e) => {
+                    self.store
+                        .set_state(root.id, RootState::Failed, Some(&e.to_string()))?;
+                    return Err(e);
+                }
             }
         }
+        let mut marks: Vec<(VPath, Option<Vec<u8>>)> = Vec::with_capacity(BATCH);
         loop {
             let batch = self.store.pending_folders(root.id, pass, BATCH)?;
             if batch.is_empty() {
@@ -66,23 +73,27 @@ impl Crawl<'_> {
             }
             for folder in batch {
                 if self.stop.load(Ordering::Relaxed) {
+                    self.store.mark_checked_many(root.id, &root.path, pass, &marks)?;
                     return Ok(CrawlOutcome::Stopped);
                 }
-                if let Err(e) = self.check(root, &folder, pass).await {
-                    if e.kind == ErrorKind::NoSpace {
+                match self.check(root, &folder).await {
+                    Ok(version) => marks.push((folder.path, version)),
+                    Err(e) if e.kind == ErrorKind::NoSpace => {
+                        let _ = self.store.mark_checked_many(root.id, &root.path, pass, &marks);
                         return Err(e);
                     }
-                    self.store
-                        .mark_checked(root.id, &root.path, &folder.path, pass, None)?;
+                    Err(_) => marks.push((folder.path, None)),
                 }
             }
+            self.store.mark_checked_many(root.id, &root.path, pass, &marks)?;
+            marks.clear();
         }
         self.store.finish_pass(root.id, (self.now_ms)())?;
         self.emit(CrawlEvent::Ready { root: root.id });
         Ok(CrawlOutcome::Done)
     }
 
-    async fn check(&self, root: &RootInfo, folder: &Folder, pass: i64) -> Result<()> {
+    async fn check(&self, root: &RootInfo, folder: &Folder) -> Result<Option<Vec<u8>>> {
         let stat = self.provider.stat(&folder.path, false, Lane::Bulk).await?;
         let version = version_of(&stat, (self.now_ms)());
         let unchanged = version.is_some() && version == folder.version;
@@ -90,14 +101,12 @@ impl Crawl<'_> {
             let entries = list_all(self.provider, &folder.path, Lane::Bulk).await?;
             self.store.replace_folder(root.id, &folder.path, &entries)?;
         }
-        self.store
-            .mark_checked(root.id, &root.path, &folder.path, pass, version.as_deref())?;
         self.emit(CrawlEvent::Folder {
             root: root.id,
             path: folder.path.clone(),
             listed: !unchanged,
         });
-        Ok(())
+        Ok(version)
     }
 }
 
