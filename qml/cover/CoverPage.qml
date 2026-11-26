@@ -71,7 +71,6 @@ CoverBackground {
                 id: tiles
 
                 objectName: "coverGrid"
-                visible: !parent.rows
                 anchors {
                     top: header.bottom
                     topMargin: Theme.paddingLarge
@@ -85,8 +84,9 @@ CoverBackground {
                 id: lines
 
                 objectName: "coverList"
-                visible: parent.rows
-                anchors.fill: tiles
+                y: header.y + header.height + Theme.paddingLarge
+                width: parent.width
+                height: parent.height - y
                 model: parent.rows ? parent.items : null
             }
             Label {

@@ -376,7 +376,7 @@ ApplicationWindow {
             return
         expect(cover.kind === "list" && texts(frame, "coverHeader") === "Cover121",
                "a folder in list view has a list cover under its name: " + cover.kind + " " + texts(frame, "coverHeader"))
-        expect(named(frame, "coverTile").length === 0 && named(frame, "coverGrid").length === 0, "no tiles beside the lines")
+        expect(named(frame, "coverTile").length === 0 && named(frame, "coverGrid")[0].count === 0, "no tiles beside the lines")
         var lines = named(frame, "coverLine")
         expect(lineText(frame).indexOf("Empty,Other,a.md,b.md") === 0, "lines follow the folder's order, folders first: " + lineText(frame))
         var icons = lines.map(function (l) { return named(l, "coverLineIcon")[0] })
@@ -398,10 +398,15 @@ ApplicationWindow {
                "lines start where tiles would")
         var list = named(frame, "coverList")[0]
         expect(list.clip && Math.round(list.mapToItem(frame, 0, list.height).y) === Math.round(frame.height), "and stay inside the cover")
+        var ramp = findAll(list, function (x) { return x.sourceItem !== undefined && x.slope !== undefined }, [])
+        expect(ramp.length === 1 && ramp[0].direction === OpacityRamp.TopToBottom && ramp[0].offset === 0.75 && ramp[0].slope === 4
+               && ramp[0].sourceItem.count === list.count,
+               "the lines fade out at the bottom as tiles do: " + ramp.length)
 
         App.setSetting("view_mode", JSON.stringify("grid"))
         if (waitFor(function () { return cover.kind === "grid" }, "the grid cover"))
-            expect(named(frame, "coverLine").length === 0 && named(frame, "coverTile").length >= 9, "switched to grid, the cover shows tiles")
+            expect(named(frame, "coverLine").length === 0 && named(frame, "coverList")[0].count === 0 && named(frame, "coverTile").length >= 9,
+                   "switched to grid, the cover shows tiles and builds no lines")
         App.setSetting("view_mode", JSON.stringify("list"))
         if (waitFor(function () { return cover.kind === "list" }, "the list cover"))
             expect(named(frame, "coverLine").length >= 6 && named(frame, "coverTile").length === 0, "and back to lines")
