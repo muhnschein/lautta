@@ -7,9 +7,6 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - .cargo/mutants.toml
-      - Makefile
-      - rust-toolchain.toml
-      - tools/ci/install-host-deps.sh
       - .github/workflows/mutation.yml
 permissions:
   contents: read
