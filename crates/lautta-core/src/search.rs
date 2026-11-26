@@ -3,6 +3,7 @@
 use crate::db::Db;
 use crate::entry::{Entry, Kind};
 use crate::error::{Error, ErrorKind, Result};
+use crate::filter::fold_text;
 use crate::provider::{list_all, Lane, Provider, ProviderResolver};
 use crate::uri::Uri;
 use crate::vpath::VPath;
@@ -178,20 +179,20 @@ impl<'q> Matcher<'q> {
     fn new(query: &'q SearchQuery) -> Result<Matcher<'q>> {
         let glob = match query.mode {
             MatchMode::Glob if !query.text.is_empty() => Some(
-                glob::Pattern::new(&query.text.to_lowercase())
+                glob::Pattern::new(&fold_text(&query.text))
                     .map_err(|_| Error::new(ErrorKind::InvalidArgument, "invalid search pattern"))?,
             ),
             _ => None,
         };
         Ok(Matcher {
             query,
-            needle: query.text.to_lowercase(),
+            needle: fold_text(&query.text),
             glob,
         })
     }
 
     fn name_matches(&self, entry: &Entry) -> bool {
-        let name = entry.display_name().to_lowercase();
+        let name = fold_text(&entry.display_name());
         match &self.glob {
             Some(pat) => pat.matches(&name),
             None => name.contains(&self.needle),

@@ -107,10 +107,17 @@ impl SearchRequest {
 }
 
 fn lower_chars(s: &str) -> Vec<char> {
-    s.chars().map(|c| c.to_lowercase().next().unwrap_or(c)).collect()
+    s.chars()
+        .map(|c| {
+            crate::filter::fold_text(&c.to_string())
+                .chars()
+                .next()
+                .unwrap_or(c)
+        })
+        .collect()
 }
 
-fn literal_needle(text: &str, mode: MatchMode) -> String {
+pub fn literal_needle(text: &str, mode: MatchMode) -> String {
     match mode {
         MatchMode::Substring => text.to_owned(),
         MatchMode::Glob => text
@@ -241,6 +248,10 @@ pub enum ScopeEvent {
     Done {
         group: usize,
         result: Result<SearchSummary>,
+    },
+    Gone {
+        group: usize,
+        uris: Vec<Uri>,
     },
     Remembered,
 }
@@ -494,6 +505,73 @@ impl Core {
         futures::future::join_all(runs).await;
     }
 
+    fn indexed_hits(
+        &self,
+        root: &SearchRoot,
+        indexed: &crate::index::store::RootInfo,
+        query: &search::SearchQuery,
+    ) -> Result<Vec<SearchHit>> {
+        let needle = literal_needle(query.text.trim(), query.mode);
+        let found: Vec<SearchHit> = self
+            .index_query(indexed, &needle, query.include_hidden)
+            .into_iter()
+            .filter(|h| h.folder_uri.path.starts_with(&root.uri.path) && h.uri != root.uri)
+            .collect();
+        search::filter_hits(found, |h| h, query, &classify_by_extension)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn search_index(
+        &self,
+        group: usize,
+        root_index: usize,
+        root: &SearchRoot,
+        indexed: &crate::index::store::RootInfo,
+        query: &search::SearchQuery,
+        cancel: &Arc<AtomicBool>,
+        out: &mpsc::Sender<ScopeEvent>,
+    ) -> Result<u64> {
+        let first = self.indexed_hits(root, indexed, query)?;
+        let mut shown: std::collections::HashSet<Uri> = first.iter().map(|h| h.uri.clone()).collect();
+        if !first.is_empty() {
+            let _ = out
+                .send(ScopeEvent::Hits {
+                    group,
+                    root: root_index,
+                    hits: first,
+                })
+                .await;
+        }
+        let local = self
+            .locations
+            .get(&indexed.location)
+            .is_some_and(|l| l.is_local());
+        if !local || cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            return Ok(shown.len() as u64);
+        }
+        if self.index_refresh_root(indexed, cancel).await.is_err() {
+            return Ok(shown.len() as u64);
+        }
+        let fresh = self.indexed_hits(root, indexed, query)?;
+        let now: std::collections::HashSet<Uri> = fresh.iter().map(|h| h.uri.clone()).collect();
+        let gone: Vec<Uri> = shown.iter().filter(|u| !now.contains(*u)).cloned().collect();
+        let added: Vec<SearchHit> = fresh.into_iter().filter(|h| !shown.contains(&h.uri)).collect();
+        if !gone.is_empty() {
+            let _ = out.send(ScopeEvent::Gone { group, uris: gone }).await;
+        }
+        if !added.is_empty() {
+            let _ = out
+                .send(ScopeEvent::Hits {
+                    group,
+                    root: root_index,
+                    hits: added,
+                })
+                .await;
+        }
+        shown = now;
+        Ok(shown.len() as u64)
+    }
+
     async fn search_group(
         &self,
         group: usize,
@@ -508,6 +586,22 @@ impl Core {
         for (root_index, root) in spec.roots.iter().enumerate() {
             if cancel.load(std::sync::atomic::Ordering::Relaxed) {
                 break;
+            }
+            if let Some(indexed) = self.index_ready_root(&root.uri.location) {
+                match self
+                    .search_index(group, root_index, root, &indexed, query, &cancel, &out)
+                    .await
+                {
+                    Ok(hits) => {
+                        searched += 1;
+                        total.hits += hits;
+                    }
+                    Err(e) => {
+                        total.errors += 1;
+                        failure.get_or_insert(e);
+                    }
+                }
+                continue;
             }
             let before = total.folders;
             let progress_out = out.clone();

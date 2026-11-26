@@ -72,9 +72,11 @@ Page {
 
     allowedOrientations: Orientation.All
     onStatusChanged: {
+        App.setSearchOpen(status === PageStatus.Active)
         if (status === PageStatus.Active && !searched)
             searchField.forceActiveFocus()
     }
+    Component.onDestruction: App.setSearchOpen(false)
 
     function start() {
         searchModel.types = JSON.stringify(page.typeFilter === "" ? [] : [page.typeFilter])

@@ -75,6 +75,7 @@ enum Event {
     Progress(usize, u64),
     GroupDone(usize, Result<(u64, u64, u64), (String, String)>),
     Remembered,
+    Gone(usize, Vec<String>),
     Finished,
 }
 
@@ -487,6 +488,9 @@ impl SearchModel {
                     }
                     ScopeEvent::Progress { group, folders } => post(Event::Progress(group, folders)),
                     ScopeEvent::Remembered => post(Event::Remembered),
+                    ScopeEvent::Gone { group, uris } => {
+                        post(Event::Gone(group, uris.iter().map(ToString::to_string).collect()))
+                    }
                     ScopeEvent::Done { group, result } => post(Event::GroupDone(
                         group,
                         result
@@ -507,6 +511,7 @@ impl SearchModel {
         }
         match event {
             Event::Remembered => self.refreshRecent(),
+            Event::Gone(group, uris) => self.remove_rows(group, &uris),
             Event::Rows(group, rows, raw) => {
                 self.collected.extend(raw);
                 self.add_rows(group, rows);
@@ -606,6 +611,29 @@ impl SearchModel {
         }
         self.folderCount = self.groups.iter().map(|g| g.folders).sum::<u64>() as i32;
         self.errorCount = self.groups.iter().map(|g| g.errors).sum::<u64>() as i32;
+        self.publish_groups();
+    }
+
+    fn remove_rows(&mut self, group: usize, uris: &[String]) {
+        let gone: std::collections::HashSet<&str> = uris.iter().map(String::as_str).collect();
+        self.collected
+            .retain(|(g, _, hit)| *g != group || !gone.contains(hit.uri.to_string().as_str()));
+        let mut i = self.rows.len();
+        while i > 0 {
+            i -= 1;
+            if self.rows[i].group == group && gone.contains(self.rows[i].uri.as_str()) {
+                self.begin_remove_rows(i as i32, i as i32);
+                self.rows.remove(i);
+                self.end_remove_rows();
+                if let Some(n) = self.group_sizes.get_mut(group) {
+                    *n = n.saturating_sub(1);
+                }
+            }
+        }
+        if let Some(g) = self.groups.get_mut(group) {
+            g.rows = self.group_sizes.get(group).copied().unwrap_or(0);
+        }
+        self.hitCount = self.rows.len() as i32;
         self.publish_groups();
     }
 

@@ -153,6 +153,9 @@ const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE browse_layout RENAME TO home_layout;
     "#,
+    r#"
+    ALTER TABLE location_prefs ADD COLUMN index_names INTEGER NOT NULL DEFAULT 0;
+    "#,
 ];
 
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;

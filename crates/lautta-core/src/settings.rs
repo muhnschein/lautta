@@ -50,6 +50,7 @@ pub struct Settings {
 
     pub recents_enabled: bool,
     pub search_remote_depth: u32,
+    pub index_on_charger: bool,
 
     pub share_folders: Vec<String>,
 }
@@ -81,6 +82,7 @@ impl Default for Settings {
             large_op_bytes: GB,
             recents_enabled: true,
             search_remote_depth: 8,
+            index_on_charger: false,
             share_folders: Vec::new(),
         }
     }
@@ -192,6 +194,7 @@ pub struct LocationPrefs {
     pub no_listing_cache: bool,
     pub no_thumb_cache: bool,
     pub bulk_lanes: Option<u32>,
+    pub index_names: bool,
 }
 
 impl LocationPrefs {
@@ -203,6 +206,7 @@ impl LocationPrefs {
             no_listing_cache: false,
             no_thumb_cache: false,
             bulk_lanes: None,
+            index_names: false,
         }
     }
 
@@ -226,7 +230,7 @@ pub struct LocationPrefsStore {
     db: Db,
 }
 
-type RawPrefs = (String, Option<String>, Option<String>, i64, i64, Option<i64>);
+type RawPrefs = (String, Option<String>, Option<String>, i64, i64, Option<i64>, i64);
 
 fn build(raw: RawPrefs) -> LocationPrefs {
     LocationPrefs {
@@ -236,15 +240,24 @@ fn build(raw: RawPrefs) -> LocationPrefs {
         no_listing_cache: raw.3 != 0,
         no_thumb_cache: raw.4 != 0,
         bulk_lanes: raw.5.and_then(|n| u32::try_from(n).ok()),
+        index_names: raw.6 != 0,
     }
 }
 
 fn raw_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<RawPrefs> {
-    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
+    Ok((
+        r.get(0)?,
+        r.get(1)?,
+        r.get(2)?,
+        r.get(3)?,
+        r.get(4)?,
+        r.get(5)?,
+        r.get(6)?,
+    ))
 }
 
 const PREF_COLUMNS: &str =
-    "location_id, display_name, start_folder, no_listing_cache, no_thumb_cache, bulk_lanes";
+    "location_id, display_name, start_folder, no_listing_cache, no_thumb_cache, bulk_lanes, index_names";
 
 impl LocationPrefsStore {
     pub fn new(db: Db) -> LocationPrefsStore {
@@ -275,13 +288,14 @@ impl LocationPrefsStore {
         }
         conn.execute(
             "INSERT INTO location_prefs(location_id, display_name, start_folder,
-                                        no_listing_cache, no_thumb_cache, bulk_lanes)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                                        no_listing_cache, no_thumb_cache, bulk_lanes, index_names)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
              ON CONFLICT(location_id) DO UPDATE SET display_name = excluded.display_name,
                  start_folder = excluded.start_folder,
                  no_listing_cache = excluded.no_listing_cache,
                  no_thumb_cache = excluded.no_thumb_cache,
-                 bulk_lanes = excluded.bulk_lanes",
+                 bulk_lanes = excluded.bulk_lanes,
+                 index_names = excluded.index_names",
             rusqlite::params![
                 p.location_id,
                 p.display_name,
@@ -289,6 +303,7 @@ impl LocationPrefsStore {
                 i64::from(p.no_listing_cache),
                 i64::from(p.no_thumb_cache),
                 p.bulk_lanes.map(i64::from),
+                i64::from(p.index_names),
             ],
         )?;
         Ok(())

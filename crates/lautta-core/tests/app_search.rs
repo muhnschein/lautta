@@ -273,6 +273,7 @@ mod scope {
         done: BTreeMap<usize, Result<SearchSummary, ErrorKind>>,
         after_done: bool,
         remembered: usize,
+        gone: BTreeMap<usize, Vec<String>>,
         remembered_before_any_done: bool,
     }
 
@@ -308,6 +309,12 @@ mod scope {
                 ScopeEvent::Progress { group, folders } => {
                     seen.after_done |= seen.done.contains_key(&group);
                     seen.progress.entry(group).or_default().push(folders);
+                }
+                ScopeEvent::Gone { group, uris } => {
+                    seen.gone
+                        .entry(group)
+                        .or_default()
+                        .extend(uris.iter().map(ToString::to_string));
                 }
                 ScopeEvent::Remembered => {
                     seen.remembered += 1;

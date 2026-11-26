@@ -133,6 +133,17 @@ impl MemoryProvider {
         });
     }
 
+    pub fn set_mtime(&self, path: &str, mtime_ms: i64) {
+        let p = Self::vp(path);
+        let mut st = self.lock();
+        match st.nodes.get_mut(&p) {
+            Some(Node::Dir { mtime, .. }) | Some(Node::File { mtime, .. }) => {
+                *mtime = crate::entry::ms_to_system_time(mtime_ms);
+            }
+            _ => {}
+        }
+    }
+
     pub fn add_symlink(&self, path: &str, target: &str) {
         let p = Self::vp(path);
         let mut st = self.lock();
