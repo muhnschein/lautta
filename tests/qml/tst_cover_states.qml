@@ -192,10 +192,16 @@ ApplicationWindow {
         expect(texts(frame, "coverHeader") === "", "nor a header: " + texts(frame, "coverHeader"))
     }
 
+    function listOf(items) {
+        var out = []
+        for (var i = 0; i < items.length; ++i)
+            out.push(items[i])
+        return out
+    }
+
     function pose(lanes) {
-        return [lanes.opacity, lanes.x, lanes.y].concat(named(lanes, "coverLane").map(function (l) {
-            var at = l.mapToItem(lanes, 0, 0)
-            return Math.round(at.x) + ":" + Math.round(at.y) + ":" + l.opacity
+        return [lanes.opacity, lanes.x, lanes.y].concat(listOf(lanes.children).map(function (l) {
+            return [l.x, l.y, l.opacity, l.scale, l.rotation].join(":")
         })).join(" ")
     }
 
@@ -209,36 +215,21 @@ ApplicationWindow {
         expect(named(frame, "coverTile").length === 0 && named(frame, "fileGlyph").length === 0
                && named(frame, "textPreview").length === 0 && named(frame, "coverGrid").length === 0,
                "no recents, files or previews on it, though Home has recents")
-        var field = named(frame, "laneField")[0]
-        var mid = field.mapToItem(frame, field.width / 2, field.height / 2)
-        expect(field.rotation === -18 && Math.abs(mid.x - frame.width / 2) < 1 && Math.abs(mid.y - frame.height / 2) < 1,
-               "lanes tilted, centred on the cover: " + field.rotation + " " + mid.x + "," + mid.y)
-        var rows = named(field, "coverLane").sort(function (a, b) { return a.lane - b.lane })
-        if (!expect(rows.length === 13, "thirteen lanes: " + rows.length))
+        var faint = named(lanes[0], "lanesFaint")
+        var lit = named(lanes[0], "lanesLit")
+        if (!expect(faint.length === 1 && lit.length === 1, "two drawn layers: " + faint.length + " " + lit.length))
             return
-        var size = Math.round(26 * frame.width / 234)
-        var lit = []
-        var apps = []
-        var odd = 0
-        for (var i = 0; i < rows.length; ++i) {
-            var glyphs = named(rows[i], "laneGlyph")
-            expect(glyphs.length === 11, "eleven glyphs in lane " + i + ": " + glyphs.length)
-            var high = glyphs.filter(function (g) { return String(g.color) === String(Theme.highlightColor) }).length
-            if (high === glyphs.length)
-                lit.push(i)
-            else
-                expect(high === 0, "a lane is lit whole or not at all: lane " + i)
-            apps.push(glyphs.filter(function (g) { return g.icon === "lautta" })
-                      .map(function (g) { return Math.round(g.x / lanes[0].step) }).sort(function (a, b) { return a - b }).join(" "))
-            odd += glyphs.filter(function (g) { return g.icon.length === 0 || g.icon.indexOf(":") >= 0 || g.iconSize !== size }).length
-        }
-        expect(lit.join(",") === "1,5,9", "every fourth lane lit: " + lit.join(","))
-        expect(apps.join(",") === ",0 4 8,,,,1 5 9,,,,2 6 10,,,", "the Lautta glyph rides only in lit lanes, a step further each: " + apps.join(","))
-        expect(odd === 0, "all glyphs are our own, one size: " + odd)
-        expect(rows[1].opacity === 1 && rows[0].opacity < 1 && rows[3].opacity < 1 && rows[3].opacity !== rows[0].opacity,
-               "lit lanes full, others faint: " + rows.map(function (r) { return r.opacity }).join(","))
-        var columns = rows.map(function (r) { return Math.round((r.x - rows[0].x) / lanes[0].step * 2) }).join(",")
-        expect(columns === "0,1,0,1,0,1,0,1,0,1,0,1,0", "every second lane half a glyph further: " + columns)
+        expect(String(faint[0].source).match(/cover\/lanes-faint\.svg$/) !== null && String(lit[0].source).match(/cover\/lanes-lit\.svg$/) !== null,
+               "the prerendered lanes: " + faint[0].source + " " + lit[0].source)
+        expect(String(faint[0].color) === String(Theme.primaryColor) && String(lit[0].color) === String(Theme.highlightColor),
+               "faint lanes in primary, lit lanes in the ambience's highlight: " + faint[0].color + " " + lit[0].color)
+        expect([faint[0], lit[0]].every(function (i) {
+                   return i.width === frame.width && i.height === frame.height && i.x === 0 && i.y === 0
+                       && i.sourceSize.width === Math.round(frame.width) && i.sourceSize.height === Math.round(frame.height)
+                       && i.fillMode === Image.PreserveAspectCrop && i.status === Image.Ready && i.cache
+               }), "both fill the cover, drawn at its size, ready, cached: " + lit[0].sourceSize + " " + lit[0].status)
+        var layers = listOf(lanes[0].children)
+        expect(lit[0].z >= faint[0].z && layers.indexOf(lit[0]) > layers.indexOf(faint[0]), "lit lanes over faint ones")
         cover.live = false
         expect(named(frame, "coverLanes").length === 0, "hidden cover drops the lanes")
         cover.live = true
