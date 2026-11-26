@@ -325,17 +325,18 @@ fn syntaxes() -> &'static SyntaxSet {
     SYNTAXES.get_or_init(SyntaxSet::load_defaults_newlines)
 }
 
+const INI: &str = "Java Properties";
+
 const BY_EXTENSION: &[(&str, &str)] = &[
     ("h", "C"),
     ("mjs", "JavaScript"),
     ("qml", "JavaScript"),
     ("ts", "JavaScript"),
-    ("ini", "Java Properties"),
-    ("desktop", "Java Properties"),
-    ("service", "Java Properties"),
-    ("conf", "Java Properties"),
-    ("cfg", "Java Properties"),
-    ("toml", "Java Properties"),
+    ("ini", INI),
+    ("desktop", INI),
+    ("conf", INI),
+    ("cfg", INI),
+    ("toml", INI),
 ];
 
 const NOT_BY_EXTENSION: &[&str] = &["build", "inc", "s"];
@@ -346,8 +347,13 @@ pub fn syntax_for(name: &[u8], first_line: &str) -> Option<&'static SyntaxRefere
     let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase());
     let by_name = set.find_syntax_by_extension(&name).or_else(|| {
         let ext = ext.as_deref()?;
-        match BY_EXTENSION.iter().find(|(e, _)| *e == ext) {
-            Some((_, syntax)) => set.find_syntax_by_name(syntax),
+        let mapped = BY_EXTENSION
+            .iter()
+            .find(|(e, _)| *e == ext)
+            .map(|(_, syntax)| *syntax);
+        let mapped = mapped.or_else(|| crate::mime::is_systemd_unit_extension(ext).then_some(INI));
+        match mapped {
+            Some(syntax) => set.find_syntax_by_name(syntax),
             None if NOT_BY_EXTENSION.contains(&ext) => None,
             None => set.find_syntax_by_extension(ext),
         }
