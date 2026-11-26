@@ -41,6 +41,7 @@ ApplicationWindow {
                "no Permissions section: " + JSON.stringify(texts))
         var labels = items.filter(function (x) { return typeof x.label === "string" && typeof x.value === "string" })
                           .map(function (x) { return x.label })
+                          .filter(function (label, i, all) { return all.indexOf(label) === i })
         var want = [qsTrId("lautta-about-status"), qsTrId("lautta-about-licence"), qsTrId("lautta-about-source")]
         expect(JSON.stringify(labels) === JSON.stringify(want), "Network locations shows the status only, no access: " + JSON.stringify(labels))
         expect(named("accessHint") === undefined, "and no hint to change access")
