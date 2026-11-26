@@ -53,6 +53,8 @@ jobs:
         run: make check
       - name: Docs-only rule
         run: ./tools/ci/changes-test.sh
+      - name: Apt mirror picker
+        run: ./tools/ci/apt-install-selftest.sh
 
   mutation:
     name: Tests bite (mutation check, changed lines)
@@ -103,8 +105,7 @@ jobs:
           persist-credentials: false
       - name: Cross-build tools (i386 C library for the SDK compiler, Rust)
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends libc6-i386
+          ./tools/ci/apt-install.sh --no-install-recommends libc6-i386
           rustup toolchain install
       - name: Pull the SDK
         run: docker pull "$SDK_IMAGE"

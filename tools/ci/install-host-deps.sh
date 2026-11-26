@@ -1,9 +1,22 @@
 #!/bin/sh
 # SPDX-License-Identifier: LGPL-2.1-or-later
 set -eu
-sudo apt-get update -q
-sudo apt-get install -y -q --no-install-recommends \
-    qtbase5-dev qttools5-dev-tools qtdeclarative5-dev qtmultimedia5-dev qml-module-qtquick2 qml-module-qtqml-models2 qml-module-qtmultimedia libqt5svg5 libsqlite3-dev liblzma-dev libbz2-dev pkg-config
+here=$(cd "$(dirname "$0")" && pwd)
+packages="qtbase5-dev qttools5-dev-tools qtdeclarative5-dev qtmultimedia5-dev qml-module-qtquick2 qml-module-qtqml-models2 qml-module-qtmultimedia libqt5svg5 libsqlite3-dev liblzma-dev libbz2-dev pkg-config"
+for tool in "$@"; do
+    case $tool in
+        nextest | mutants) ;;
+        coverage) packages="$packages python3-coverage" ;;
+        cross) packages="$packages libc6-i386" ;;
+        *) echo "unknown tool $tool" >&2; exit 2 ;;
+    esac
+done
+if [ "${GITHUB_ACTIONS:-}" = true ]; then
+    DEBIAN_FRONTEND=noninteractive "$here/apt-install.sh" --no-install-recommends $packages
+else
+    sudo apt-get update -q
+    sudo apt-get install -y -q --no-install-recommends $packages
+fi
 rustup show active-toolchain || rustup toolchain install
 cargo_tool() {
     crate=$1 version=$2
@@ -16,9 +29,7 @@ cargo_tool() {
 for tool in "$@"; do
     case $tool in
         nextest) cargo_tool cargo-nextest 0.9.148 ;;
-        coverage) cargo_tool cargo-llvm-cov 0.6.16; sudo apt-get install -y -q --no-install-recommends python3-coverage ;;
+        coverage) cargo_tool cargo-llvm-cov 0.6.16 ;;
         mutants) cargo_tool cargo-mutants 25.0.1 ;;
-        cross) sudo apt-get install -y -q --no-install-recommends libc6-i386 ;;
-        *) echo "unknown tool $tool" >&2; exit 2 ;;
     esac
 done
