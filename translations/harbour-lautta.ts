@@ -548,13 +548,6 @@
         <oldsource>Recently deleted</oldsource>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-trash-kept" numerus="yes">
-        <source>Kept for %n days</source>
-        <translation>
-            <numerusform>Kept for %n day</numerusform>
-            <numerusform>Kept for %n days</numerusform>
-        </translation>
-    </message>
     <message id="lautta-trash-restore">
         <source>Restore</source>
         <translation type="unfinished"></translation>
@@ -1870,10 +1863,6 @@
         <source>Swipe down to go to previous view</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-trash-note">
-        <source>Only files deleted from this device&apos;s folders appear here. Deletes on volumes and servers are permanent.</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-dir-date-time">
         <source>%1, %2</source>
         <translation type="unfinished"></translation>
@@ -2317,10 +2306,6 @@
             <numerusform>You chose for all %n</numerusform>
         </translation>
     </message>
-    <message id="lautta-cover-free">
-        <source>%1 free</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-attention-back">
         <source>Go back</source>
         <translation type="unfinished"></translation>
@@ -2521,6 +2506,13 @@
         <source>Server</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-trash-note-kept" numerus="yes">
+        <source>Only files deleted from this device&apos;s folders are kept here for %n days. Deletes on volumes and servers are permanent.</source>
+        <translation>
+            <numerusform>Only files deleted from this device&apos;s folders are kept here for %n day. Deletes on volumes and servers are permanent.</numerusform>
+            <numerusform>Only files deleted from this device&apos;s folders are kept here for %n days. Deletes on volumes and servers are permanent.</numerusform>
+        </translation>
+    </message>
     <message id="lautta-search-group-device">
         <source>This device</source>
         <translation type="unfinished"></translation>
@@ -2563,46 +2555,6 @@
         <source>Nothing found</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-search-scope-everywhere">
-        <source>Everywhere</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-home-search">
-        <source>Search</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-placeholder-in">
-        <source>Search in %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-pill-archive">
-        <source>Archives</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-pill-text">
-        <source>Text</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-pill-hidden">
-        <source>Hidden</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-type-any">
-        <source>Any type</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-clear-recent">
-        <source>Clear recent searches</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-clearing-recent">
-        <source>Clearing recent searches</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-search-pill-type">
-        <source>Type</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-search-idle-folder">
         <source>Find files in %1</source>
         <translation type="unfinished"></translation>
@@ -2617,6 +2569,46 @@
     </message>
     <message id="lautta-search-idle-location">
         <source>Find files on %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-scope-everywhere">
+        <source>Everywhere</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-home-search">
+        <source>Search</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-type-any">
+        <source>Any type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-pill-archive">
+        <source>Archives</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-pill-text">
+        <source>Text</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-clear-recent">
+        <source>Clear recent searches</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-clearing-recent">
+        <source>Clearing recent searches</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-placeholder-in">
+        <source>Search in %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-pill-type">
+        <source>Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-search-pill-hidden">
+        <source>Hidden</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
