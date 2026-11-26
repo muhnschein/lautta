@@ -51,11 +51,23 @@ QtObject {
         same([SearchGroups.failed(group("failed")), SearchGroups.failed(group("done")), SearchGroups.failed(null)],
              [true, false, false], "only a failed group is failed")
 
-        same(["folder", "device", "everywhere"].map(function (s) { return SearchGroups.scopeIcon(s) }),
-             ["image://theme/icon-m-folder", "image://theme/icon-m-device", "image://theme/icon-m-website"],
-             "an icon per scope")
-        same(["folder", "device", "everywhere"].map(function (s) { return SearchGroups.scopeName(s, "Uni") }),
-             ["Uni", "lautta-search-group-device", "lautta-search-scope-everywhere"], "a name per scope")
+        var locations = [{ "value": "location:vol-sd", "label": "SD card", "kind": "volume",
+                           "icon": "image://theme/icon-m-sd-card" },
+                         { "value": "location:nv-nas", "label": "NAS", "kind": "server", "icon": "server" }]
+        var all = SearchGroups.scopeChoices(true, "Uni", locations)
+        same(all.map(function (c) { return c.value }),
+             ["folder", "device", "location:vol-sd", "location:nv-nas", "everywhere"],
+             "folder, device, each volume and server, then everywhere")
+        same(all.map(function (c) { return c.label }),
+             ["Uni", "lautta-search-group-device", "SD card", "NAS", "lautta-search-scope-everywhere"], "their names")
+        same(["folder", "device", "location:vol-sd", "location:nv-nas", "everywhere", "location:gone"]
+             .map(function (s) { return SearchGroups.scopeIcon(s, all) }),
+             ["image://theme/icon-m-folder", "image://theme/icon-m-device", "image://theme/icon-m-sd-card", "server",
+              "image://theme/icon-m-website", "image://theme/icon-m-folder"], "an icon per scope")
+        same([SearchGroups.hasChoice(all, "location:nv-nas"), SearchGroups.hasChoice(all, "location:gone"),
+              SearchGroups.hasChoice([], "device")], [true, false, false], "a scope is among the choices or not")
+        same(SearchGroups.scopeChoices(false, "", [locations[0]]).map(function (c) { return c.value }),
+             ["device", "location:vol-sd"], "no folder from Home, no everywhere without a server")
 
         var choices = [{ "value": "", "label": "Any type" }, { "value": "image", "label": "Images" }]
         same(SearchGroups.labelOf(choices, "image"), "Images", "a choice's label")

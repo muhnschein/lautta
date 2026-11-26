@@ -142,6 +142,14 @@ Item {
         check(model.hitCount === before, "no hits after cancel: " + before + " -> " + model.hitCount)
         check(rows.count === before, "no rows after cancel")
 
+        model.query = "cut_short"
+        check(model.start(), "start for an early stop")
+        model.cancel()
+        for (var w = 0; w < 300 && JSON.parse(model.recentSearchesJson).indexOf("cut_short") < 0; ++w)
+            support.spin(10)
+        check(JSON.parse(model.recentSearchesJson)[0] === "cut_short",
+              "a search stopped early still shows up in recent searches: " + model.recentSearchesJson)
+
         model.clear()
         check(rows.count === 0 && model.hitCount === 0, "clear empties the list")
         model.clearRecent()

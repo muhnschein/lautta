@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import "../FileIcons.js" as FileIcons
 
 Item {
     id: root
@@ -37,14 +38,17 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         spacing: root.icon !== "" ? Theme.paddingSmall : 0
 
-        Image {
+        HighlightImage {
+            objectName: "pillIcon"
             visible: root.icon !== ""
             anchors.verticalCenter: parent.verticalCenter
             width: visible ? Theme.iconSizeSmallPlus : 0
             height: Theme.iconSizeSmallPlus
             sourceSize.width: Theme.iconSizeSmallPlus
             sourceSize.height: Theme.iconSizeSmallPlus
-            source: root.icon !== "" ? root.icon + "?" + root.ink : ""
+            source: root.icon !== "" ? FileIcons.source(root.icon, Theme.pixelRatio) : ""
+            color: root.ink
+            highlightColor: root.ink
         }
 
         Label {

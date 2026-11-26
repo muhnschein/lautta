@@ -3,7 +3,9 @@
 use crate::json::{from_json, to_json};
 use crate::runtime::{core, handle};
 use lautta_core::app::Core;
-use lautta_core::app_search::{highlight_span, ScopeEvent, SearchGroup, SearchRequest, SearchScope};
+use lautta_core::app_search::{
+    highlight_span, ScopeEvent, SearchGroup, SearchRequest, SearchScope, LOCATION_SCOPE_PREFIX,
+};
 use lautta_core::locations::LocationKind;
 use lautta_core::mime::category_of_name;
 use lautta_core::search::{MatchMode, SearchHit};
@@ -37,6 +39,14 @@ struct Row {
     type_icon: &'static str,
 }
 
+#[derive(Serialize)]
+struct ScopeChoice {
+    value: String,
+    label: String,
+    kind: &'static str,
+    icon: &'static str,
+}
+
 #[derive(Serialize, Clone)]
 struct GroupState {
     key: String,
@@ -55,6 +65,7 @@ enum Event {
     Rows(usize, Vec<Row>),
     Progress(usize, u64),
     GroupDone(usize, Result<(u64, u64, u64), (String, String)>),
+    Remembered,
     Finished,
 }
 
@@ -116,6 +127,7 @@ pub struct SearchModel {
     clearRecent: qt_method!(fn(&mut self)),
     canSearch: qt_method!(fn(&self) -> bool),
     hasServers: qt_method!(fn(&self) -> bool),
+    scopeLocationsJson: qt_method!(fn(&self) -> QString),
 
     rows: Vec<Row>,
     group_sizes: Vec<usize>,
@@ -303,6 +315,21 @@ impl SearchModel {
         })
     }
 
+    fn scopeLocationsJson(&self) -> QString {
+        let list: Vec<ScopeChoice> = core()
+            .map(|c| c.scope_locations())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|l| ScopeChoice {
+                value: format!("{LOCATION_SCOPE_PREFIX}{}", l.id),
+                label: l.name,
+                kind: l.kind.name(),
+                icon: l.icon,
+            })
+            .collect();
+        QString::from(to_json(&list).as_str())
+    }
+
     fn refreshRecent(&mut self) {
         let key = self.recents_key();
         let list = match core() {
@@ -372,12 +399,12 @@ impl SearchModel {
         if !request.is_restricted() || (scope == SearchScope::Folder && root.is_none()) {
             return false;
         }
-        let groups = core.search_groups(scope, root.as_ref());
+        let groups = core.search_groups(&scope, root.as_ref());
         if groups.is_empty() {
             return false;
         }
         self.clear();
-        self.depthLimit = match (scope, &root) {
+        self.depthLimit = match (&scope, &root) {
             (SearchScope::Folder, Some(r)) => core.search_depth(r).map_or(-1, |d| d as i32),
             _ => -1,
         };
@@ -434,6 +461,7 @@ impl SearchModel {
                         post(Event::Rows(group, rows));
                     }
                     ScopeEvent::Progress { group, folders } => post(Event::Progress(group, folders)),
+                    ScopeEvent::Remembered => post(Event::Remembered),
                     ScopeEvent::Done { group, result } => post(Event::GroupDone(
                         group,
                         result
@@ -449,10 +477,11 @@ impl SearchModel {
     }
 
     fn apply(&mut self, generation: u64, event: Event) {
-        if generation != self.generation {
+        if generation != self.generation && !matches!(event, Event::Remembered) {
             return;
         }
         match event {
+            Event::Remembered => self.refreshRecent(),
             Event::Rows(group, rows) => self.add_rows(group, rows),
             Event::Progress(group, folders) => {
                 if let Some(g) = self.groups.get_mut(group) {

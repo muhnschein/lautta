@@ -95,6 +95,7 @@ ApplicationWindow {
         expect(!list.pullDownMenu, "the pulley belongs to the page, not to the result list")
         expect(named("searchSettingsItem") === null, "the pulley has no search settings entry")
         expect(named("clearRecentSearches") !== null, "the pulley can clear recent searches")
+        expect(pulleys.length === 1 && !pulleys[0].visible, "without recent searches the pulley is hidden")
         expect(!within(field, list), "the search field is not inside the list")
         expect(list.headerItem === null, "the list has no header")
         expect(within(field, heading) && within(pills, heading), "field and pills are in the heading")
@@ -192,6 +193,8 @@ ApplicationWindow {
                 if (win.rowCount() !== 15)
                     break
                 win.expect(win.marksShown(), "every result marks the match in bold highlight")
+                var pulley = win.findAll(win.page, function (x) { return x._isPullDownMenu === true }, [])[0]
+                win.expect(pulley.visible, "once a search is remembered the pulley shows")
                 win.touch("typePill").clicked(null)
                 win.next()
                 break

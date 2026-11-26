@@ -28,7 +28,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 const PLACE_SEPARATOR: &str = " › ";
-const SERVER_ICON: &str = "server";
+pub(crate) const SERVER_ICON: &str = "server";
 const FOLDER_ICON: &str = "file-folder";
 
 const MOUNT_LOOKS: u32 = 10;
@@ -791,7 +791,7 @@ struct LocalRows {
     layout: Layout,
 }
 
-fn drive_icon(kind: DriveKind) -> &'static str {
+pub(crate) fn drive_icon(kind: DriveKind) -> &'static str {
     match kind {
         DriveKind::Card => "image://theme/icon-m-sd-card",
         DriveKind::Usb => "image://theme/icon-m-usb",

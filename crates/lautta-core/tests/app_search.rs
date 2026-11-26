@@ -272,6 +272,8 @@ mod scope {
         progress: BTreeMap<usize, Vec<u64>>,
         done: BTreeMap<usize, Result<SearchSummary, ErrorKind>>,
         after_done: bool,
+        remembered: usize,
+        remembered_before_any_done: bool,
     }
 
     async fn run(
@@ -280,7 +282,7 @@ mod scope {
         folder: Option<&Uri>,
         text: &str,
     ) -> (Vec<lautta_core::app_search::SearchGroup>, Seen) {
-        let groups = h.core.search_groups(scope, folder);
+        let groups = h.core.search_groups(&scope, folder);
         let req = SearchRequest {
             text: text.into(),
             mode: MatchMode::for_text(text),
@@ -306,6 +308,10 @@ mod scope {
                 ScopeEvent::Progress { group, folders } => {
                     seen.after_done |= seen.done.contains_key(&group);
                     seen.progress.entry(group).or_default().push(folders);
+                }
+                ScopeEvent::Remembered => {
+                    seen.remembered += 1;
+                    seen.remembered_before_any_done = seen.done.is_empty();
                 }
                 ScopeEvent::Done { group, result } => {
                     assert!(
@@ -360,6 +366,8 @@ mod scope {
         assert!(done.folders >= 4, "every folder of every root walked: {done:?}");
         assert!(!seen.after_done, "nothing comes after a group's Done");
         assert_eq!(h.core.recent_searches.list("@device").unwrap(), vec!["budget"]);
+        assert_eq!(seen.remembered, 1, "the stored search is announced once");
+        assert!(seen.remembered_before_any_done, "and before any location is done");
     }
 
     #[tokio::test]
@@ -413,6 +421,61 @@ mod scope {
         assert!(groups[0].roots.iter().any(|r| r.name == "Broken"), "{groups:?}");
         let done = seen.done[&0].as_ref().expect("one readable root is enough");
         assert_eq!((done.hits, done.errors), (1, 1));
+    }
+
+    #[tokio::test]
+    async fn a_location_scope_searches_that_server_alone() {
+        let h = home().await;
+        write(&h.root.join("Documents/budget.ods"), b"x");
+        nas(&h, "nv-nas", "NAS").add_file("shared/budget.txt", b"x", 0);
+        nas(&h, "nv-office", "Office").add_file("budget.txt", b"x", 0);
+        let (groups, seen) = run(&h, SearchScope::Location("nv-nas".into()), None, "budget").await;
+        let kinds: Vec<(GroupKind, &str)> = groups.iter().map(|g| (g.kind, g.name.as_str())).collect();
+        assert_eq!(kinds, vec![(GroupKind::Server, "NAS")]);
+        assert_eq!(
+            seen.hits[&0],
+            vec![(0, "lautta://nv-nas/shared/budget.txt".to_owned())]
+        );
+        assert_eq!(h.core.recent_searches.list("nv-nas").unwrap(), vec!["budget"]);
+        let ids: Vec<(String, GroupKind, &str)> = h
+            .core
+            .scope_locations()
+            .into_iter()
+            .map(|l| (l.id, l.kind, l.icon))
+            .collect();
+        assert_eq!(
+            ids,
+            vec![
+                ("nv-nas".to_owned(), GroupKind::Server, "server"),
+                ("nv-office".to_owned(), GroupKind::Server, "server")
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_search_without_text_remembers_nothing() {
+        let h = home().await;
+        write(&h.root.join("Documents/a.pdf"), b"x");
+        let groups = h.core.search_groups(&SearchScope::Device, None);
+        let req = SearchRequest {
+            types: ["document".to_owned()].into_iter().collect(),
+            ..Default::default()
+        };
+        let (tx, mut rx) = mpsc::channel(4);
+        let core = h.core.clone();
+        let task = tokio::spawn(async move {
+            core.search_scope(&groups, &req, "@device", Arc::new(AtomicBool::new(false)), tx)
+                .await
+        });
+        let mut remembered = 0;
+        while let Some(event) = rx.recv().await {
+            if matches!(event, ScopeEvent::Remembered) {
+                remembered += 1;
+            }
+        }
+        task.await.unwrap();
+        assert_eq!(remembered, 0);
+        assert!(h.core.recent_searches.list("@device").unwrap().is_empty());
     }
 
     #[tokio::test]

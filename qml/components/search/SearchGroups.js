@@ -63,27 +63,38 @@ function status(group) {
     }
 }
 
-function scopeIcon(scope) {
-    switch (scope) {
-    case "device":
-        return "image://theme/icon-m-device"
-    case "everywhere":
-        return "image://theme/icon-m-website"
-    default:
-        return "image://theme/icon-m-folder"
+function scopeChoices(fromFolder, folderName, locations) {
+    var out = []
+    if (fromFolder)
+        out.push({ "value": "folder", "label": folderName, "icon": "image://theme/icon-m-folder" })
+    out.push({ "value": "device", "label": qsTrId("lautta-search-group-device"),
+               "icon": "image://theme/icon-m-device" })
+    var servers = false
+    for (var i = 0; i < locations.length; ++i) {
+        out.push({ "value": locations[i].value, "label": locations[i].label, "icon": locations[i].icon })
+        servers = servers || locations[i].kind === "server"
     }
+    if (servers)
+        //% "Everywhere"
+        out.push({ "value": "everywhere", "label": qsTrId("lautta-search-scope-everywhere"),
+                   "icon": "image://theme/icon-m-website" })
+    return out
 }
 
-function scopeName(scope, folderName) {
-    switch (scope) {
-    case "device":
-        return qsTrId("lautta-search-group-device")
-    case "everywhere":
-        //% "Everywhere"
-        return qsTrId("lautta-search-scope-everywhere")
-    default:
-        return folderName
+function hasChoice(choices, value) {
+    for (var i = 0; i < choices.length; ++i) {
+        if (choices[i].value === value)
+            return true
     }
+    return false
+}
+
+function scopeIcon(scope, choices) {
+    for (var i = 0; i < choices.length; ++i) {
+        if (choices[i].value === scope)
+            return choices[i].icon
+    }
+    return "image://theme/icon-m-folder"
 }
 
 function labelOf(choices, value) {

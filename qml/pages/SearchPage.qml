@@ -65,15 +65,9 @@ Page {
     readonly property real tileWidth: Math.min(Screen.width, Screen.height) / gridMetrics.portraitColumns
     readonly property int columns: GridRows.columns(width, tileWidth, gridMetrics.portraitColumns)
     readonly property real cellWidth: width / columns
-    readonly property var scopeChoices: {
-        var out = []
-        if (rootUri.length > 0)
-            out.push("folder")
-        out.push("device")
-        if (scope === "everywhere" || searchModel.hasServers())
-            out.push("everywhere")
-        return out
-    }
+    property var scopeLocations: JSON.parse(searchModel.scopeLocationsJson() || "[]")
+    readonly property var scopeChoices: SearchGroups.scopeChoices(rootUri.length > 0, searchModel.rootName,
+                                                                  scopeLocations)
 
     allowedOrientations: Orientation.All
 
@@ -101,7 +95,21 @@ Page {
         page.start()
     }
 
+    onScopeChoicesChanged: {
+        if (!SearchGroups.hasChoice(scopeChoices, scope)) {
+            scope = "device"
+            if (searched)
+                refine()
+        }
+    }
+
+    function refreshLocations() {
+        page.scopeLocations = JSON.parse(searchModel.scopeLocationsJson() || "[]")
+    }
+
     function openMenuOf(menu) {
+        if (menu === scopeMenu)
+            page.refreshLocations()
         if (page.openMenu && page.openMenu !== menu)
             page.openMenu.close()
         if (!menu.active)
@@ -201,6 +209,8 @@ Page {
         contentHeight: height + page.menuRoom
 
         PullDownMenu {
+            visible: page.recentSearches.length > 0
+
             MenuItem {
                 objectName: "clearRecentSearches"
                 visible: page.recentSearches.length > 0
@@ -286,8 +296,8 @@ Page {
 
                         PillButton {
                             objectName: "scopePill"
-                            icon: SearchGroups.scopeIcon(page.scope)
-                            text: SearchGroups.scopeName(page.scope, searchModel.rootName)
+                            icon: SearchGroups.scopeIcon(page.scope, page.scopeChoices)
+                            text: SearchGroups.labelOf(page.scopeChoices, page.scope)
                             checked: true
                             open: scopeMenu.active
                             onClicked: page.toggleMenu(scopeMenu)
@@ -338,9 +348,7 @@ Page {
 
             objectName: "scopeMenu"
             current: page.scope
-            choices: page.scopeChoices.map(function (s) {
-                return { "value": s, "label": SearchGroups.scopeName(s, searchModel.rootName) }
-            })
+            choices: page.scopeChoices
             onChosen: page.choose("scope", value)
         }
 
