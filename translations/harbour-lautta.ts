@@ -2594,10 +2594,6 @@
         <source>Any type</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-search-settings">
-        <source>Search settings</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-search-clear-recent">
         <source>Clear recent searches</source>
         <translation type="unfinished"></translation>

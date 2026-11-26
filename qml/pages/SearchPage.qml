@@ -201,12 +201,6 @@ Page {
 
         PullDownMenu {
             MenuItem {
-                objectName: "searchSettingsItem"
-                //% "Search settings"
-                text: qsTrId("lautta-search-settings")
-                onClicked: pageStack.push(Qt.resolvedUrl("SearchSettingsPage.qml"))
-            }
-            MenuItem {
                 objectName: "clearRecentSearches"
                 visible: page.recentSearches.length > 0
                 //% "Clear recent searches"

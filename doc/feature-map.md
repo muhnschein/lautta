@@ -230,7 +230,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 ### 3.9 Search
 
 - **F-SRC-01 Search** — folder pulley (this folder and below) or Home pulley (whole device, or everywhere with servers); type part of name, wildcards make a pattern (`*.pdf`); live results "Searching… N results", stop glyph; result opens item; list or grid as View options; wide scope: section per location (This device, each memory card, each server) with its state (searching N folders, N results, nothing found, not reachable, not allowed, needs attention); recent searches per scope before typing.
-- **F-SRC-02 Search pills** — pill strip under field: scope (this folder, This device, Everywhere), Type (Any, Folders, Images, Videos, Audio, Documents, Archives, Text), Modified, Hidden; scope, Type, Modified open a context menu under strip (tap, then tap; or hold, slide, release). Matches in bold highlight colour, list and grid. Pulley: Search settings, Clear recent searches.
+- **F-SRC-02 Search pills** — pill strip under field: scope (this folder, This device, Everywhere), Type (Any, Folders, Images, Videos, Audio, Documents, Archives, Text), Modified, Hidden; scope, Type, Modified open a context menu under strip (tap, then tap; or hold, slide, release). Matches in bold highlight colour, list and grid. Pulley: Clear recent searches.
 - **F-SRC-03 Server search depth** — Settings › Search ("N folders deep on servers"; device searches all).
 
 ### 3.10 Scan

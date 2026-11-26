@@ -93,7 +93,7 @@ ApplicationWindow {
         })
         expect(pulleys.length === 1, "the page has one pulley menu: " + pulleys.length)
         expect(!list.pullDownMenu, "the pulley belongs to the page, not to the result list")
-        expect(named("searchSettingsItem") !== null, "the pulley opens the search settings")
+        expect(named("searchSettingsItem") === null, "the pulley has no search settings entry")
         expect(named("clearRecentSearches") !== null, "the pulley can clear recent searches")
         expect(!within(field, list), "the search field is not inside the list")
         expect(list.headerItem === null, "the list has no header")
