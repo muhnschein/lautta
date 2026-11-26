@@ -101,6 +101,15 @@ Page {
                 //% "With the charger in and the battery above half, Lautta also updates the index while it runs in the background."
                 description: qsTrId("lautta-index-charger-hint")
             }
+
+            SettingSwitch {
+                objectName: "indexOnMobile"
+                settingKey: "index_on_mobile"
+                //% "Use mobile data"
+                text: qsTrId("lautta-index-mobile")
+                //% "Lautta updates the lists of servers on Wi-Fi only. With this on, it uses mobile data too."
+                description: qsTrId("lautta-index-mobile-hint")
+            }
         }
 
         VerticalScrollDecorator { }

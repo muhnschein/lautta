@@ -2,7 +2,7 @@
 
 use super::client::Inner;
 use super::link::{rpc, Link};
-use super::types::{BridgeStatus, Consent, Drive, NearbyServer, RemoteLocation};
+use super::types::{BridgeStatus, Consent, Drive, NearbyServer, Network, RemoteLocation};
 use futures::{FutureExt, StreamExt};
 use lautta_bridge_proto::{feature, BridgeError, Signal, SignalStream};
 use std::future::Future;
@@ -148,6 +148,7 @@ async fn handshake(inner: &Arc<Inner>, link: &Arc<Link>) -> Result<(), Attempt> 
     }
     apply_consent(inner, link, Consent::from_wire(&consent));
     spawn_drives(inner, link);
+    spawn_network(inner, link);
     Ok(())
 }
 
@@ -188,6 +189,7 @@ fn teardown(inner: &Arc<Inner>, link: &Arc<Link>) {
         changed
     });
     publish(&inner.drives, Vec::new());
+    set_network(inner, Network::Unknown);
 }
 
 fn handle_signal(inner: &Arc<Inner>, link: &Arc<Link>, signal: Signal) {
@@ -206,6 +208,7 @@ fn handle_signal(inner: &Arc<Inner>, link: &Arc<Link>, signal: Signal) {
             show_nearby(inner, show);
         }
         Signal::DrivesChanged => spawn_drives(inner, link),
+        Signal::NetworkChanged(kind) => set_network(inner, Network::from_wire(&kind)),
         _ => {}
     }
 }
@@ -296,6 +299,33 @@ async fn refresh_locations(inner: &Arc<Inner>, link: &Arc<Link>) {
             *current = Arc::new(list);
         }
         changed
+    });
+}
+
+fn set_network(inner: &Inner, network: Network) {
+    inner.network.send_if_modified(|current| {
+        let changed = *current != network;
+        *current = network;
+        changed
+    });
+}
+
+fn spawn_network(inner: &Arc<Inner>, link: &Arc<Link>) {
+    if !inner.info().features.iter().any(|f| f == feature::NETWORK) {
+        return;
+    }
+    let inner = inner.clone();
+    let link = link.clone();
+    tokio::spawn(async move {
+        match rpc(link.proxy().get_network().await) {
+            Ok(kind) => {
+                let current = inner.info().link.as_ref().is_some_and(|l| Arc::ptr_eq(l, &link));
+                if current {
+                    set_network(&inner, Network::from_wire(&kind));
+                }
+            }
+            Err(e) => log::warn!("bridge network kind not known: {e}"),
+        }
     });
 }
 

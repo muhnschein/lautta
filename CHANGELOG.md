@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Keeping the name list of a server fresh takes far fewer requests with the next netvfs: Lautta asks about many folders at once, and on Nextcloud and ownCloud a branch that did not change is skipped whole. Server lists now update on Wi-Fi only, also in the background with *Update while charging*; *Settings › Search › Use mobile data* allows mobile data too; until then a server not yet listed says *Waiting for Wi-Fi*. A Nextcloud or ownCloud server without a list is asked to search itself, which answers at once instead of going folder by folder. With an older netvfs, servers are indexed as before, while Lautta is open.
 - systemd unit files (such as `.service`, `.socket`, `.mount`, `.timer`, `.target`), Podman Quadlet files (`.container`, `.volume`, `.network`, `.kube`, `.image`), networkd `.link` and `.netdev` files and `.nspawn` files open in the text viewer with their keys and comments coloured, and show the config icon. Before, they opened with another app.
 - When a folder, *Recents* or *Trash* is shown as a list, Lautta's cover shows a list too: each item's icon or thumbnail beside its name. In grid view the cover keeps its tiles.
 - The PDF viewer has *Pages* in its pulley: all pages as small pictures, the page you are on marked. Tap one to go there, or type a page number under them. *Contents and pages* is now *Contents* and shows only when the PDF has a table of contents ([#140](https://github.com/muhnschein/lautta/issues/140)).

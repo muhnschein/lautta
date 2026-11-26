@@ -41,6 +41,7 @@ struct State {
     checksums: HashMap<VPath, Vec<u8>>,
     holds: HashMap<(String, VPath), (oneshot::Sender<()>, oneshot::Receiver<()>)>,
     root_at: Vec<u8>,
+    deep_etags: bool,
 }
 
 pub struct Hold {
@@ -90,6 +91,12 @@ impl MemoryProvider {
 
     pub fn rooted_at(self, dir: &str) -> MemoryProvider {
         self.lock().root_at = dir.trim_end_matches('/').as_bytes().to_vec();
+        self
+    }
+
+    pub fn with_deep_etags(mut self) -> MemoryProvider {
+        self.lock().deep_etags = true;
+        self.caps.raw.insert(cap::DEEP_ETAGS.to_owned());
         self
     }
 
@@ -215,6 +222,10 @@ impl MemoryProvider {
         .await;
     }
 
+    pub fn clear_calls(&self) {
+        self.lock().calls.clear();
+    }
+
     pub fn calls(&self) -> Vec<String> {
         self.lock().calls.clone()
     }
@@ -238,6 +249,26 @@ impl MemoryProvider {
         }
     }
 
+    fn deep_etag(st: &State, dir: &VPath) -> Vec<u8> {
+        let mut hash = sha2::Sha256::new();
+        for (path, node) in st.nodes.iter().filter(|(p, _)| *p != dir && p.starts_with(dir)) {
+            hash.update(path.as_bytes());
+            let (kind, size, mtime) = match node {
+                Node::File { data, mtime, .. } => (1u8, data.len(), Some(*mtime)),
+                Node::Dir { mtime, .. } => (2, 0, Some(*mtime)),
+                Node::Link { target } => (3, target.len(), None),
+            };
+            hash.update([0, kind]);
+            hash.update(size.to_le_bytes());
+            hash.update(mtime.map_or(0, crate::entry::system_time_to_ms).to_le_bytes());
+        }
+        hash.finalize()
+            .iter()
+            .take(8)
+            .flat_map(|b| format!("{b:02x}").into_bytes())
+            .collect()
+    }
+
     fn entry_for(path: &VPath, node: &Node, st: &State, follow: bool) -> Entry {
         let name = path.name().unwrap_or(b"");
         match node {
@@ -252,6 +283,9 @@ impl MemoryProvider {
                 let mut e = Entry::new(name, Kind::Dir);
                 e.modified = Some(*mtime);
                 e.mode = Some(*mode);
+                if st.deep_etags {
+                    e.etag = Some(Self::deep_etag(st, path));
+                }
                 e
             }
             Node::Link { target } => {
@@ -378,6 +412,28 @@ impl ReadHandle for MemoryReader {
 impl Provider for MemoryProvider {
     fn capabilities(&self) -> Capabilities {
         self.caps.clone()
+    }
+
+    async fn search_names(&self, root: &VPath, text: &str, limit: u32) -> Result<Vec<(VPath, Entry)>> {
+        self.enter("search", root)?;
+        if !self.caps.raw.contains(cap::SEARCH) {
+            return Err(Error::new(ErrorKind::Unsupported, "this location cannot search"));
+        }
+        let needle = text.to_lowercase();
+        let st = self.lock();
+        let root = canonical(&st, root, true);
+        Self::get_dir(&st, &root)?;
+        Ok(st
+            .nodes
+            .iter()
+            .filter(|(p, _)| **p != root && p.starts_with(&root))
+            .filter(|(p, _)| {
+                p.name()
+                    .is_some_and(|n| String::from_utf8_lossy(n).to_lowercase().contains(&needle))
+            })
+            .take(limit as usize)
+            .map(|(p, n)| (p.clone(), Self::entry_for(p, n, &st, false)))
+            .collect())
     }
 
     async fn list(&self, dir: &VPath, _lane: Lane, out: mpsc::Sender<Vec<Entry>>) -> Result<()> {

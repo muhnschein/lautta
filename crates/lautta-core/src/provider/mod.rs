@@ -6,7 +6,7 @@ pub mod memory;
 pub mod netvfs;
 
 use crate::entry::{Capabilities, Entry};
-use crate::error::Result;
+use crate::error::{Error, ErrorKind, Result};
 use crate::vpath::VPath;
 use async_trait::async_trait;
 use std::os::fd::OwnedFd;
@@ -113,9 +113,90 @@ pub async fn read_all(handle: &dyn ReadHandle, limit: u64) -> Result<Vec<u8>> {
     }
 }
 
+pub const RACY_MS: i64 = 2000;
+pub const SEARCH_LIMIT: u32 = 2000;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KnownFolder {
+    pub path: VPath,
+    pub etag: Option<Vec<u8>>,
+    pub modified_ms: Option<i64>,
+}
+
+#[derive(Debug)]
+pub enum FolderCheck {
+    Failed(Error),
+    Unchanged(Entry),
+    Listed(Entry, Vec<Entry>),
+}
+
+pub fn folder_changed(known: &KnownFolder, now: &Entry, now_ms: i64) -> bool {
+    if let Some(etag) = now.etag.as_ref().filter(|e| !e.is_empty()) {
+        return known.etag.as_ref() != Some(etag);
+    }
+    match now.modified_ms() {
+        Some(mtime) if mtime >= 0 && mtime <= now_ms - RACY_MS => known.modified_ms != Some(mtime),
+        _ => true,
+    }
+}
+
+async fn check_folder(
+    provider: &(impl Provider + ?Sized),
+    known: &KnownFolder,
+    now_ms: i64,
+    lane: Lane,
+) -> FolderCheck {
+    let entry = match provider.stat(&known.path, false, lane).await {
+        Ok(entry) => entry,
+        Err(e) => return FolderCheck::Failed(e),
+    };
+    if !folder_changed(known, &entry, now_ms) {
+        return FolderCheck::Unchanged(entry);
+    }
+    let (tx, mut rx) = mpsc::channel(16);
+    let collect = async {
+        let mut all = Vec::new();
+        while let Some(batch) = rx.recv().await {
+            all.extend(batch);
+        }
+        all
+    };
+    let (listed, children) = tokio::join!(provider.list(&known.path, lane, tx), collect);
+    match listed {
+        Ok(()) => FolderCheck::Listed(entry, children),
+        Err(e) => FolderCheck::Failed(e),
+    }
+}
+
+pub async fn check_one_by_one(
+    provider: &(impl Provider + ?Sized),
+    folders: &[KnownFolder],
+    now_ms: i64,
+    lane: Lane,
+) -> Vec<FolderCheck> {
+    let mut out = Vec::with_capacity(folders.len());
+    for known in folders {
+        out.push(check_folder(provider, known, now_ms, lane).await);
+    }
+    out
+}
+
 #[async_trait]
 pub trait Provider: Send + Sync {
     fn capabilities(&self) -> Capabilities;
+
+    async fn check_folders(
+        &self,
+        folders: &[KnownFolder],
+        now_ms: i64,
+        lane: Lane,
+    ) -> Result<Vec<FolderCheck>> {
+        Ok(check_one_by_one(self, folders, now_ms, lane).await)
+    }
+
+    async fn search_names(&self, _root: &VPath, _text: &str, _limit: u32) -> Result<Vec<(VPath, Entry)>> {
+        Err(Error::new(ErrorKind::Unsupported, "this location cannot search"))
+    }
 
     async fn known_capabilities(&self) -> Capabilities {
         self.capabilities()

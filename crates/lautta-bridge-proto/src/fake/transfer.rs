@@ -6,7 +6,7 @@ use super::iface::Iface;
 use super::state::{JobFailure, Session, Shared};
 use super::tree::Tree;
 use crate::access::{self, After};
-use crate::wire::{WireEntry, WireWalkItem};
+use crate::wire::{check_changed, WireCheckItem, WireCheckResult, WireEntry, WireWalkItem, MAX_LIST_BATCH};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
@@ -390,6 +390,116 @@ pub(super) async fn run_walk(
         Ok(items) => walk_batches(&env, job, &cancel, items).await,
         Err(f) => Err(f),
     };
+    env.finish(job, result).await;
+}
+
+pub(super) async fn run_search(
+    env: Env,
+    job: u32,
+    cancel: Arc<AtomicBool>,
+    (loc, root, folders_only): (String, Vec<u8>, bool),
+    (text, limit): (String, usize),
+) {
+    let needle = text.to_lowercase();
+    let listing = env
+        .shared
+        .with(|s| s.tree_mut(&loc).walk(&root, -1, false))
+        .map_err(Fail::from)
+        .map(|mut items| {
+            items.retain(|(_, e)| !folders_only || access::is_folder(e.kind, e.target_kind));
+            items.retain(|(_, e)| String::from_utf8_lossy(&e.name).to_lowercase().contains(&needle));
+            items.truncate(limit);
+            let below = if root.is_empty() { 0 } else { root.len() + 1 };
+            for (path, _) in &mut items {
+                *path = path.get(below..).unwrap_or_default().to_vec();
+            }
+            items
+        });
+    let result = match listing {
+        Ok(items) => walk_batches(&env, job, &cancel, items).await,
+        Err(f) => Err(f),
+    };
+    env.finish(job, result).await;
+}
+
+fn check_folder(
+    tree: &Tree,
+    (index, item): (u32, &WireCheckItem),
+    folders_only: bool,
+) -> (Vec<WireCheckResult>, bool) {
+    let result = |error: &str, entry: WireEntry, listed, children| WireCheckResult {
+        index,
+        error: error.to_owned(),
+        entry,
+        listed,
+        children,
+    };
+    let entry = match tree.stat(&item.path, false) {
+        Ok(entry) => entry,
+        Err(e) => {
+            return (
+                vec![result(e.name, WireEntry::default(), false, Vec::new())],
+                false,
+            )
+        }
+    };
+    if !check_changed(&item.etag, item.mtime_ms, &entry, tree.now_ms) {
+        return (vec![result("", entry, false, Vec::new())], false);
+    }
+    let mut children = match tree.list(&item.path) {
+        Ok(children) => children,
+        Err(e) => {
+            return (
+                vec![result(e.name, WireEntry::default(), false, Vec::new())],
+                false,
+            )
+        }
+    };
+    children.retain(|e| !folders_only || access::is_folder(e.kind, e.target_kind));
+    if children.is_empty() {
+        return (vec![result("", entry, true, Vec::new())], true);
+    }
+    let parts = children
+        .chunks(MAX_LIST_BATCH as usize)
+        .map(|c| result("", entry.clone(), true, c.to_vec()))
+        .collect();
+    (parts, true)
+}
+
+pub(super) async fn run_check(
+    env: Env,
+    job: u32,
+    cancel: Arc<AtomicBool>,
+    loc: String,
+    (items, folders_only): (Vec<WireCheckItem>, Vec<bool>),
+) {
+    let (mut folders, mut listed) = (0_i64, 0_i64);
+    let mut outcome = Ok(());
+    let mut index = 0_u32;
+    for (chunk, only) in items.chunks(WALK_BATCH).zip(folders_only.chunks(WALK_BATCH)) {
+        if cancel.load(Ordering::SeqCst) {
+            outcome = Err(canceled());
+            break;
+        }
+        env.pause().await;
+        let mut batch = Vec::new();
+        for (item, only) in chunk.iter().zip(only) {
+            let (results, was_listed) = env
+                .shared
+                .with(|s| check_folder(s.tree_mut(&loc), (index, item), *only));
+            index += 1;
+            folders += 1;
+            listed += i64::from(was_listed);
+            batch.extend(results);
+        }
+        let _ = Iface::check_batch(&env.ctx, job, batch).await;
+    }
+    let result = outcome.map(|()| {
+        let mut extra = Extra::new();
+        extra.insert("folders".to_owned(), Value::from(folders));
+        extra.insert("listed".to_owned(), Value::from(listed));
+        extra
+    });
     env.finish(job, result).await;
 }
 

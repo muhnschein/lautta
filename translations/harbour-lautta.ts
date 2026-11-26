@@ -2581,5 +2581,17 @@
         <source>Pages</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-index-mobile">
+        <source>Use mobile data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-index-mobile-hint">
+        <source>Lautta updates the lists of servers on Wi-Fi only. With this on, it uses mobile data too.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-index-state-wifi">
+        <source>Waiting for Wi-Fi</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

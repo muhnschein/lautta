@@ -386,3 +386,100 @@ async fn servers_are_crawled_only_while_the_app_is_in_the_foreground() {
     let root = index.store.root("nv-nas", &VPath::root()).unwrap();
     assert_eq!(h.core.index_query(&root, "holiday", false, &|_| true).len(), 1);
 }
+
+#[tokio::test]
+async fn on_the_charger_servers_are_indexed_on_wifi_and_on_mobile_data_only_when_allowed() {
+    use lautta_core::bridge::Network;
+    let h = home().await;
+    let nas = Arc::new(MemoryProvider::new(Capabilities::with(&[])));
+    nas.add_file("/Films/holiday.mkv", b"x", 1_000);
+    let location = Location::remote(
+        "nv-nas",
+        LocationKind::Server {
+            provider: "sftp".into(),
+        },
+        "NAS",
+        None,
+    );
+    h.core.locations.register(location, nas.clone());
+    h.core
+        .location_prefs
+        .set(&LocationPrefs {
+            index_names: true,
+            ..LocationPrefs::new("nv-nas")
+        })
+        .unwrap();
+    let index = h.core.index.as_ref().unwrap();
+    let mut changes = index.subscribe();
+    h.core.index_set_conditions(|c| {
+        c.index_on_charger = true;
+        c.charging = true;
+        c.battery = Some(80);
+        c.network = Network::Mobile;
+    });
+    assert!(!index.servers_running(), "mobile data is off limits by default");
+    let waits = |core: &Core| -> Vec<(bool, bool)> {
+        core.index_status()
+            .into_iter()
+            .map(|s| (s.local, s.waits_for_wifi))
+            .collect()
+    };
+    assert!(
+        waits(&h.core).iter().all(|(local, waiting)| local != waiting),
+        "the server waits for Wi-Fi, the device does not: {:?}",
+        waits(&h.core)
+    );
+    changes.borrow_and_update();
+    h.core.index_set_conditions(|c| c.index_on_mobile = true);
+    assert!(changes.has_changed().unwrap(), "the settings page hears of it");
+    assert!(
+        waits(&h.core).iter().all(|(_, waiting)| !waiting),
+        "nothing waits once mobile data is allowed"
+    );
+    h.core.index_set_conditions(|c| c.index_on_mobile = false);
+    h.core.index_set_conditions(|c| c.network = Network::Offline);
+    assert!(!index.servers_running(), "no network, no server");
+    h.core.index_set_conditions(|c| c.app_active = true);
+    assert!(!index.servers_running(), "also with Lautta in front");
+    h.core.index_set_conditions(|c| {
+        c.app_active = false;
+        c.network = Network::Wifi;
+    });
+    assert!(
+        index.servers_running(),
+        "Wi-Fi and the charger are enough in the background"
+    );
+    let ready = async {
+        loop {
+            let nas_ready = h
+                .core
+                .index_status()
+                .into_iter()
+                .any(|s| s.location == "nv-nas" && s.state == RootState::Ready);
+            if nas_ready {
+                break;
+            }
+            changes.changed().await.unwrap();
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(20), ready)
+        .await
+        .expect("the server index is built in the background");
+    let root = index.store.root("nv-nas", &VPath::root()).unwrap();
+    assert_eq!(h.core.index_query(&root, "holiday", false, &|_| true).len(), 1);
+
+    let hold = nas.hold_next("stat", "/");
+    h.core.index_restart();
+    h.core.index_set_conditions(|c| c.network = Network::Mobile);
+    assert!(
+        !index.servers_running(),
+        "switching to mobile data stops the crawl"
+    );
+    drop(hold);
+    let mut settings = h.core.settings();
+    settings.index_on_charger = true;
+    settings.index_on_mobile = true;
+    h.core.apply_settings(settings);
+    h.core.index_kick();
+    assert!(index.servers_running(), "the setting allows mobile data");
+}
