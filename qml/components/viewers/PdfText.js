@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 .pragma library
 
-function summary(pages) {
-    //% "%n pages"
-    return qsTrId("lautta-viewers-pdf-pages", pages)
-}
-
 function problem(name) {
     switch (name) {
     case "encrypted":

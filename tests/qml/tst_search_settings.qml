@@ -14,7 +14,7 @@ ApplicationWindow {
         { "entry": "transfersEntry", "page": "transfersSettingsPage",
           "keys": ["local_concurrency", "remote_lanes", "preserve_mtimes", "preserve_permissions",
                    "verify_checksums", "auto_resume", "history_retention_days"] },
-        { "entry": "searchEntry", "page": "searchSettingsPage", "keys": ["search_remote_depth"] },
+        { "entry": "searchEntry", "page": "searchSettingsPage", "keys": ["index_on_charger"] },
         { "entry": "recentsEntry", "page": "recentsSettingsPage", "keys": ["recents_enabled"] },
         { "entry": "storageEntry", "page": "storageSettingsPage", "keys": ["listing_cache_days"] }
     ]
