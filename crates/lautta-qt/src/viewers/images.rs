@@ -272,6 +272,7 @@ cpp! {{
         engine->addImageProvider(QStringLiteral("lautta-file"), new LauttaImageProvider(1));
         engine->addImageProvider(QStringLiteral("lautta-pdf"), new LauttaImageProvider(2));
         engine->addImageProvider(QStringLiteral("lautta-cover"), new LauttaImageProvider(3));
+        engine->addImageProvider(QStringLiteral("lautta-pdf-thumb"), new LauttaImageProvider(4));
         engine->addImageProvider(QStringLiteral("lautta-icon"), new LauttaIconProvider());
     }
 }}
@@ -285,6 +286,7 @@ pub unsafe fn register_image_providers(engine: *mut c_void) {
 const KIND_THUMB: i32 = 0;
 const KIND_PDF: i32 = 2;
 const KIND_COVER: i32 = 3;
+const KIND_PDF_THUMB: i32 = 4;
 
 pub(crate) type Canceller = Box<dyn FnOnce() + Send>;
 
@@ -379,6 +381,8 @@ fn request(kind: i32, id_data: *const u8, id_len: usize, w: i32, h: i32, req: u6
         thumb_request(core, &id, kind, (w, h), req, reply);
     } else if kind == KIND_PDF {
         super::pdf::page_request(core, &id, w, req, reply);
+    } else if kind == KIND_PDF_THUMB {
+        super::pdf::thumb_request(core, &id, w, req, reply);
     } else {
         file_request(core, &id, (w, h), req, reply);
     }
@@ -732,6 +736,34 @@ mod tests {
         let (e, ..) = probe("lautta-pdf", "lautta://nv-qt-images/p/gone.pdf?page=0", (50, 0));
         assert!(e.starts_with("NotFound"), "{e}");
         let (e, ..) = probe("lautta-pdf", "lautta://nv-qt-images/p/two.pdf", (50, 0));
+        assert_eq!(e, "bad page id");
+        let (e, w, h) = probe(
+            "lautta-pdf-thumb",
+            "lautta://nv-qt-images/p/two.pdf?page=0",
+            (120, 0),
+        );
+        assert_eq!(
+            (e.as_str(), w, h),
+            ("", 90, 180),
+            "page thumbnail fits a tile 1.5 times as tall as wide"
+        );
+        let (e, w, h) = probe(
+            "lautta-pdf-thumb",
+            "lautta://nv-qt-images/p/two.pdf?page=1",
+            (0, 0),
+        );
+        assert_eq!(
+            (e.as_str(), w, h),
+            ("", 400, 200),
+            "the thumbnail cap without a request"
+        );
+        let (e, ..) = probe(
+            "lautta-pdf-thumb",
+            "lautta://nv-qt-images/p/two.pdf?page=2",
+            (50, 0),
+        );
+        assert_eq!(e, "no such page");
+        let (e, ..) = probe("lautta-pdf-thumb", "lautta://nv-qt-images/p/two.pdf", (50, 0));
         assert_eq!(e, "bad page id");
 
         let (e, w, h) = probe(

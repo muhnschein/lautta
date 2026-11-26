@@ -913,6 +913,22 @@
       "w": 1660,
       "x": 8700,
       "y": 60300
+    },
+    "CoversList.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Cover in list view \u00b7 options A, B",
+      "w": 1660,
+      "x": 0,
+      "y": 65600
+    },
+    "PdfPages.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "PDF pages",
+      "w": 400,
+      "x": 5280,
+      "y": 8200
     }
   },
   "createdOnFiles": {
@@ -1051,6 +1067,14 @@
       "w": 240,
       "x": 0,
       "y": 60000
+    },
+    "r21": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Cover follows list view: folder, Recents, Trash (options A, B)",
+      "w": 240,
+      "x": 0,
+      "y": 65300
     }
   },
   "order": [
@@ -1104,6 +1128,7 @@
     "MarkdownMore.dc.html",
     "TextProse.dc.html",
     "PdfViewer.dc.html",
+    "PdfPages.dc.html",
     "VideoPlayer.dc.html",
     "AudioPlayer.dc.html",
     "ArchiveView.dc.html",
@@ -1167,7 +1192,8 @@
     "HomeFoldersA.dc.html",
     "HomeFoldersB.dc.html",
     "HomeFoldersC.dc.html",
-    "HomeFoldersCompare.dc.html"
+    "HomeFoldersCompare.dc.html",
+    "CoversList.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"

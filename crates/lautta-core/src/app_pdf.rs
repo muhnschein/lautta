@@ -4,6 +4,7 @@ use crate::app::Core;
 use crate::error::{Error, ErrorKind, Result};
 use crate::org::recents::RecentKind;
 use crate::panics::catch;
+use crate::pdf_pages::{thumb_width, PageThumbs};
 use crate::provider::Lane;
 use crate::uri::Uri;
 use lautta_pdf::{PdfDocument, RenderedPage, MAX_PDF_BYTES};
@@ -54,7 +55,7 @@ pub struct OpenedPdf {
     pub outline: Vec<OutlineItem>,
 }
 
-type Kept = Vec<(Uri, Arc<PdfDocument>)>;
+type Kept = Vec<(Uri, Arc<PdfDocument>, Arc<str>)>;
 
 static DOCUMENTS: OnceLock<Mutex<Kept>> = OnceLock::new();
 
@@ -66,22 +67,35 @@ fn documents() -> MutexGuard<'static, Kept> {
     }
 }
 
-fn keep(uri: &Uri, doc: &Arc<PdfDocument>) {
+fn keep(uri: &Uri, doc: &Arc<PdfDocument>, version: &str) {
     let mut kept = documents();
-    kept.retain(|(u, _)| u != uri);
-    kept.insert(0, (uri.clone(), Arc::clone(doc)));
+    kept.retain(|(u, ..)| u != uri);
+    kept.insert(0, (uri.clone(), Arc::clone(doc), Arc::from(version)));
     kept.truncate(KEPT_DOCUMENTS);
 }
 
-fn kept(uri: &Uri) -> Option<Arc<PdfDocument>> {
+fn kept_version(uri: &Uri) -> Option<(Arc<PdfDocument>, Arc<str>)> {
     documents()
         .iter()
-        .find(|(u, _)| u == uri)
-        .map(|(_, d)| Arc::clone(d))
+        .find(|(u, ..)| u == uri)
+        .map(|(_, d, v)| (Arc::clone(d), Arc::clone(v)))
 }
 
 fn forget(doc: &Arc<PdfDocument>) {
-    documents().retain(|(_, d)| !Arc::ptr_eq(d, doc));
+    documents().retain(|(_, d, _)| !Arc::ptr_eq(d, doc));
+}
+
+fn page_thumbs() -> &'static PageThumbs {
+    static THUMBS: OnceLock<PageThumbs> = OnceLock::new();
+    THUMBS.get_or_init(PageThumbs::default)
+}
+
+fn version_of(uri: &Uri, entry: &crate::entry::Entry) -> String {
+    let modified = entry
+        .modified
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_nanos());
+    format!("{uri}|{:?}|{modified:?}", entry.size)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -263,7 +277,7 @@ impl Core {
             caught(parse, || ())
         })
         .await??;
-        keep(uri, &doc);
+        keep(uri, &doc, &version_of(uri, &entry));
         self.note_viewed(uri, RecentKind::Previewed);
         let last_page = self
             .recents
@@ -296,6 +310,22 @@ impl Core {
         width: u32,
     ) -> std::result::Result<RenderedPage, PdfFailure> {
         self.on_document(uri, move |doc| doc.render(page, width)).await
+    }
+
+    pub async fn pdf_page_thumb(
+        &self,
+        uri: &Uri,
+        page: usize,
+        width: u32,
+    ) -> std::result::Result<Arc<RenderedPage>, PdfFailure> {
+        let (doc, version) = self.pdf_document_version(uri).await?;
+        let size = *doc.page_sizes().get(page).ok_or(PdfError::NoSuchPage)?;
+        let width = thumb_width(size, width);
+        page_thumbs()
+            .make(version, page, width, move || {
+                run_on(doc, move |d| d.render(page, width))
+            })
+            .await
     }
 
     pub async fn search_pdf(
@@ -332,23 +362,34 @@ impl Core {
     }
 
     async fn pdf_document(&self, uri: &Uri) -> std::result::Result<Arc<PdfDocument>, PdfFailure> {
-        if let Some(doc) = kept(uri) {
-            return Ok(doc);
+        Ok(self.pdf_document_version(uri).await?.0)
+    }
+
+    async fn pdf_document_version(
+        &self,
+        uri: &Uri,
+    ) -> std::result::Result<(Arc<PdfDocument>, Arc<str>), PdfFailure> {
+        if let Some(found) = kept_version(uri) {
+            return Ok(found);
         }
         self.open_pdf(uri, None).await?;
-        kept(uri).ok_or(PdfFailure::File(Error::kind(ErrorKind::Internal)))
+        kept_version(uri).ok_or(PdfFailure::File(Error::kind(ErrorKind::Internal)))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        caught, forget, keep, kept, parse_page_id, pdf_error_name, run_on, search_pages, HitArea, PageHits,
-        PageRect, PdfDocument, PdfError, PdfFailure, PdfSearchResults, TextHit,
+        caught, forget, keep, kept_version, parse_page_id, pdf_error_name, run_on, search_pages, HitArea,
+        PageHits, PageRect, PdfDocument, PdfError, PdfFailure, PdfSearchResults, TextHit,
     };
     use crate::uri::Uri;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
+
+    fn kept(uri: &Uri) -> Option<Arc<PdfDocument>> {
+        kept_version(uri).map(|(d, _)| d)
+    }
 
     static KEPT_LIST: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
@@ -562,16 +603,17 @@ mod tests {
             Uri::parse("lautta://kept-test/b.pdf").unwrap(),
             Uri::parse("lautta://kept-test/c.pdf").unwrap(),
         );
-        keep(&a, &doc(1));
-        keep(&b, &doc(2));
-        keep(&a, &doc(3));
+        keep(&a, &doc(1), "a1");
+        keep(&b, &doc(2), "b2");
+        keep(&a, &doc(3), "a3");
         assert_eq!(
             kept(&a).unwrap().page_sizes()[0].width,
             3.0,
             "replaced, not added"
         );
         assert_eq!(kept(&b).unwrap().page_sizes()[0].width, 2.0);
-        keep(&c, &doc(4));
+        assert_eq!(&*kept_version(&a).unwrap().1, "a3", "the version comes with it");
+        keep(&c, &doc(4), "c4");
         assert!(kept(&b).is_none(), "the oldest goes");
         assert!(kept(&a).is_some() && kept(&c).is_some());
     }
@@ -602,13 +644,13 @@ mod tests {
         let a = Uri::parse("lautta://forget-test/a.pdf").unwrap();
         let b = Uri::parse("lautta://forget-test/b.pdf").unwrap();
         let old = parse(1);
-        keep(&a, &old);
-        keep(&b, &parse(2));
+        keep(&a, &old, "v");
+        keep(&b, &parse(2), "v");
         forget(&old);
         assert!(kept(&a).is_none());
         assert!(kept(&b).is_some(), "other documents stay");
         let newer = parse(3);
-        keep(&a, &newer);
+        keep(&a, &newer, "v");
         forget(&old);
         assert!(
             kept(&a).is_some_and(|d| Arc::ptr_eq(&d, &newer)),
@@ -621,7 +663,7 @@ mod tests {
         let _turn = KEPT_LIST.lock().await;
         let u = Uri::parse("lautta://forget-test/c.pdf").unwrap();
         let doc = parse(5);
-        keep(&u, &doc);
+        keep(&u, &doc, "v");
         let res = run_on(Arc::clone(&doc), |_| -> Result<(), PdfError> {
             panic!("hayro tripped")
         })
@@ -632,7 +674,7 @@ mod tests {
             "what the viewer shows as unreadable"
         );
         assert!(kept(&u).is_none(), "parsed again on the next request");
-        keep(&u, &doc);
+        keep(&u, &doc, "v");
         assert_eq!(run_on(Arc::clone(&doc), |d| Ok(d.page_count())).await, Ok(1));
         assert!(kept(&u).is_some(), "kept while nothing panics");
     }

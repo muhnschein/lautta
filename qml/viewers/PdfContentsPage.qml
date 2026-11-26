@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-import "../components"
 import "../components/viewers/PdfText.js" as PdfText
 
 Page {
@@ -9,7 +8,6 @@ Page {
 
     property string fileName
     property var outline: []
-    property int pageCount
     property int currentPage
 
     signal chosen(int index)
@@ -21,16 +19,13 @@ Page {
     SilicaListView {
         id: list
 
-        anchors { top: parent.top; left: parent.left; right: parent.right; bottom: goTo.top }
-        clip: true
+        anchors.fill: parent
         model: page.outline
 
-        header: HeaderBand {
-            PageHeader {
-                //% "Contents"
-                title: qsTrId("lautta-viewers-pdf-contents")
-                description: page.fileName
-            }
+        header: PageHeader {
+            //% "Contents"
+            title: qsTrId("lautta-viewers-pdf-contents")
+            description: page.fileName
         }
 
         delegate: BackgroundItem {
@@ -70,36 +65,11 @@ Page {
             onClicked: page.chosen(modelData.page)
         }
 
-        ViewPlaceholder {
-            enabled: page.outline.length === 0
-            //% "No table of contents"
-            text: qsTrId("lautta-viewers-pdf-no-contents")
-        }
-
         Component.onCompleted: {
             if (page.currentItem >= 0)
                 positionViewAtIndex(page.currentItem, ListView.Center)
         }
 
         VerticalScrollDecorator { }
-    }
-
-    TextField {
-        id: goTo
-
-        readonly property int target: PdfText.typedPage(text, page.pageCount)
-
-        anchors.bottom: parent.bottom
-        width: parent.width
-        inputMethodHints: Qt.ImhDigitsOnly
-        //% "Go to page"
-        placeholderText: qsTrId("lautta-viewers-pdf-go-to-page")
-        //% "Go to page, 1 to %1"
-        label: qsTrId("lautta-viewers-pdf-go-to-page-range").arg(page.pageCount)
-        errorHighlight: text !== "" && target < 0
-
-        EnterKey.enabled: target >= 0
-        EnterKey.iconSource: "image://theme/icon-m-enter-accept"
-        EnterKey.onClicked: page.chosen(target)
     }
 }

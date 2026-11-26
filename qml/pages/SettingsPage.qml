@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-import "../components"
 import "../components/search"
 import "../components/FileIcons.js" as FileIcons
 
@@ -24,11 +23,9 @@ Page {
 
             width: parent.width
 
-            HeaderBand {
-                PageHeader {
-                    //% "Settings"
-                    title: qsTrId("lautta-settings-title")
-                }
+            PageHeader {
+                //% "Settings"
+                title: qsTrId("lautta-settings-title")
             }
 
             SectionHeader {

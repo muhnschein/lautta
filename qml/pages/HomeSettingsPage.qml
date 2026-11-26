@@ -2,7 +2,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
-import "../components"
 import "../components/home"
 import "../components/home/HomeText.js" as HomeText
 
@@ -44,10 +43,8 @@ Page {
             }
         }
 
-        header: HeaderBand {
-            PageHeader {
-                title: qsTrId("lautta-settings-home-page")
-            }
+        header: PageHeader {
+            title: qsTrId("lautta-settings-home-page")
         }
 
         section.property: "section"

@@ -5,6 +5,7 @@ pub mod app_archives;
 pub mod app_checksum;
 pub mod app_directory;
 pub mod app_home;
+pub mod app_index;
 pub mod app_operations;
 pub mod app_pdf;
 pub mod app_scan;
@@ -46,6 +47,7 @@ pub mod workcopy;
 pub mod checksum;
 pub mod compress;
 pub mod password;
+pub mod pdf_pages;
 pub mod preview;
 pub mod scan;
 pub mod thumbs;
@@ -54,6 +56,7 @@ pub mod thumbs_text;
 pub(crate) mod zipaes;
 pub(crate) mod zipcrypto;
 
+pub mod index;
 pub mod org;
 pub mod search;
 

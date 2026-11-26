@@ -2,7 +2,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
-import "../components"
 import "../components/scan"
 import "../components/ErrorText.js" as ErrorText
 
@@ -125,12 +124,10 @@ FullscreenContentPage {
         anchors.fill: parent
         visible: placeholder.enabled
 
-        HeaderBand {
-            PageHeader {
-                //% "Scan"
-                title: qsTrId("lautta-scan-title")
-                rightMargin: Theme.horizontalPageMargin + Theme.itemSizeSmall
-            }
+        PageHeader {
+            //% "Scan"
+            title: qsTrId("lautta-scan-title")
+            rightMargin: Theme.horizontalPageMargin + Theme.itemSizeSmall
         }
 
         ViewPlaceholder {

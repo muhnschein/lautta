@@ -49,7 +49,7 @@ pub struct Settings {
     pub large_op_bytes: u64,
 
     pub recents_enabled: bool,
-    pub search_remote_depth: u32,
+    pub index_on_charger: bool,
 
     pub share_folders: Vec<String>,
 }
@@ -80,7 +80,7 @@ impl Default for Settings {
             large_op_items: 1_000,
             large_op_bytes: GB,
             recents_enabled: true,
-            search_remote_depth: 8,
+            index_on_charger: false,
             share_folders: Vec::new(),
         }
     }
@@ -110,7 +110,6 @@ impl Settings {
         self.remote_lanes = clamp(self.remote_lanes, REMOTE_LANES_RANGE);
         self.large_op_items = self.large_op_items.max(1);
         self.large_op_bytes = self.large_op_bytes.max(MB);
-        self.search_remote_depth = self.search_remote_depth.clamp(1, 64);
         let mut kept: Vec<String> = Vec::new();
         for folder in self.share_folders.drain(..) {
             if kept.len() < SHARE_FOLDERS_MAX && !kept.contains(&folder) {
@@ -192,6 +191,7 @@ pub struct LocationPrefs {
     pub no_listing_cache: bool,
     pub no_thumb_cache: bool,
     pub bulk_lanes: Option<u32>,
+    pub index_names: bool,
 }
 
 impl LocationPrefs {
@@ -203,6 +203,7 @@ impl LocationPrefs {
             no_listing_cache: false,
             no_thumb_cache: false,
             bulk_lanes: None,
+            index_names: false,
         }
     }
 
@@ -226,7 +227,7 @@ pub struct LocationPrefsStore {
     db: Db,
 }
 
-type RawPrefs = (String, Option<String>, Option<String>, i64, i64, Option<i64>);
+type RawPrefs = (String, Option<String>, Option<String>, i64, i64, Option<i64>, i64);
 
 fn build(raw: RawPrefs) -> LocationPrefs {
     LocationPrefs {
@@ -236,15 +237,24 @@ fn build(raw: RawPrefs) -> LocationPrefs {
         no_listing_cache: raw.3 != 0,
         no_thumb_cache: raw.4 != 0,
         bulk_lanes: raw.5.and_then(|n| u32::try_from(n).ok()),
+        index_names: raw.6 != 0,
     }
 }
 
 fn raw_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<RawPrefs> {
-    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
+    Ok((
+        r.get(0)?,
+        r.get(1)?,
+        r.get(2)?,
+        r.get(3)?,
+        r.get(4)?,
+        r.get(5)?,
+        r.get(6)?,
+    ))
 }
 
 const PREF_COLUMNS: &str =
-    "location_id, display_name, start_folder, no_listing_cache, no_thumb_cache, bulk_lanes";
+    "location_id, display_name, start_folder, no_listing_cache, no_thumb_cache, bulk_lanes, index_names";
 
 impl LocationPrefsStore {
     pub fn new(db: Db) -> LocationPrefsStore {
@@ -275,13 +285,14 @@ impl LocationPrefsStore {
         }
         conn.execute(
             "INSERT INTO location_prefs(location_id, display_name, start_folder,
-                                        no_listing_cache, no_thumb_cache, bulk_lanes)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                                        no_listing_cache, no_thumb_cache, bulk_lanes, index_names)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
              ON CONFLICT(location_id) DO UPDATE SET display_name = excluded.display_name,
                  start_folder = excluded.start_folder,
                  no_listing_cache = excluded.no_listing_cache,
                  no_thumb_cache = excluded.no_thumb_cache,
-                 bulk_lanes = excluded.bulk_lanes",
+                 bulk_lanes = excluded.bulk_lanes,
+                 index_names = excluded.index_names",
             rusqlite::params![
                 p.location_id,
                 p.display_name,
@@ -289,6 +300,7 @@ impl LocationPrefsStore {
                 i64::from(p.no_listing_cache),
                 i64::from(p.no_thumb_cache),
                 p.bulk_lanes.map(i64::from),
+                i64::from(p.index_names),
             ],
         )?;
         Ok(())
@@ -340,7 +352,6 @@ mod tests {
         assert_eq!(s.history_retention_days, 30);
         assert_eq!((s.large_op_items, s.large_op_bytes), (1_000, 1_000_000_000));
         assert!(s.recents_enabled);
-        assert_eq!(s.search_remote_depth, 8);
         assert_eq!(s.clone().sanitised(), s, "defaults are already valid");
     }
 
@@ -356,7 +367,6 @@ mod tests {
             history_retention_days: 100_000,
             large_op_items: 0,
             large_op_bytes: 0,
-            search_remote_depth: 0,
             sort_key: "bogus".into(),
             view_mode: "".into(),
             ..Settings::default()
@@ -370,7 +380,6 @@ mod tests {
         assert_eq!(s.thumbnail_max_remote_mb, 1);
         assert_eq!(s.history_retention_days, 365);
         assert_eq!((s.large_op_items, s.large_op_bytes), (1, MB));
-        assert_eq!(s.search_remote_depth, 1);
         assert_eq!((s.sort_key.as_str(), s.view_mode.as_str()), ("name", "list"));
         s.remorse_seconds = 99;
         s.remote_lanes = 99;
@@ -428,6 +437,14 @@ mod tests {
         assert!(!s.to_map().contains_key("date_format"));
         assert!(!s.to_json().contains("date_format"));
         assert!(!s.set("date_format", json!("locale")));
+    }
+
+    #[test]
+    fn a_stored_search_depth_is_ignored() {
+        let mut s = Settings::from_json(r#"{"search_remote_depth":3,"remorse_seconds":7}"#);
+        assert_eq!(s.remorse_seconds, 7);
+        assert!(!s.to_json().contains("search_remote_depth"));
+        assert!(!s.set("search_remote_depth", json!(4)));
     }
 
     #[test]

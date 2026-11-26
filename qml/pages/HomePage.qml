@@ -131,11 +131,9 @@ Page {
         anchors.fill: parent
         model: page.listModel
 
-        header: HeaderBand {
-            PageHeader {
-                //% "Home"
-                title: qsTrId("lautta-home-title")
-            }
+        header: PageHeader {
+            //% "Home"
+            title: qsTrId("lautta-home-title")
         }
 
         section.property: "section"
@@ -145,11 +143,6 @@ Page {
             height: deviceSpace.visible ? Math.max(sectionHeader.height, deviceSpace.y + deviceSpace.height + Theme.paddingSmall)
                                         : sectionHeader.height
 
-            HeaderBand {
-                objectName: "recentsHeaderBand"
-                visible: section === "recents"
-                anchors.fill: parent
-            }
             SectionHeader {
                 id: sectionHeader
 
@@ -240,12 +233,6 @@ Page {
             onClicked: if (plain) page.openRow(model)
             onPressAndHold: prefetch.stop()
             onCanceled: prefetch.stop()
-
-            HeaderBand {
-                objectName: "stripHeaderBand"
-                visible: row.strip
-                height: row.contentHeight
-            }
 
             Loader {
                 id: stripLoader

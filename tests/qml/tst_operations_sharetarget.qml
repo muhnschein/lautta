@@ -256,7 +256,7 @@ ApplicationWindow {
             return x.visible && x.radius !== undefined && x.color !== undefined && x.color.a > 0 && x.width > 0
                     && x.mapToItem(band, 0, 0).y <= middle && x.mapToItem(band, 0, x.height).y >= middle
         }, [])
-        same(tints.map(function (x) { return x.objectName }), ["folderHeaderBand"], "one tint behind the path: the header band")
+        same(tints.map(function (x) { return x.objectName }), ["pathBandTint"], "one tint behind the path: the path band's own")
         same(pulley(page), ["lautta-dir-menu-new-folder"], "the pulley makes a folder, nothing else")
         named(page, "folderMenuNewFolder").clicked()
         waitFor(function () { return pageStack.currentPage !== page && !pageStack.busy }, "the page that names a folder")

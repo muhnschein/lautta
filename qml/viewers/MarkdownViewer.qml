@@ -2,7 +2,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
-import "../components"
 import "../components/viewers"
 import "../components/ErrorText.js" as ErrorText
 import "../components/viewers/ReadingStyle.js" as ReadingStyle
@@ -61,12 +60,9 @@ Page {
             }
         }
 
-        header: HeaderBand {
+        header: PageHeader {
             width: view.width
-
-            PageHeader {
-                title: page.fileName
-            }
+            title: page.fileName
         }
 
         delegate: Item {

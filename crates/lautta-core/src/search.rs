@@ -3,6 +3,7 @@
 use crate::db::Db;
 use crate::entry::{Entry, Kind};
 use crate::error::{Error, ErrorKind, Result};
+use crate::filter::fold_text;
 use crate::provider::{list_all, Lane, Provider, ProviderResolver};
 use crate::uri::Uri;
 use crate::vpath::VPath;
@@ -16,7 +17,7 @@ use tokio::sync::mpsc;
 
 const WALK_CONCURRENCY: usize = 2;
 pub const RECENT_SEARCHES_PER_LOCATION: usize = 10;
-pub const REMOTE_DEPTH_DEFAULT: u32 = 8;
+pub const SERVER_SEARCH_DEPTH: u32 = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MatchMode {
@@ -168,30 +169,30 @@ fn enqueue_children(
     }
 }
 
-struct Matcher<'q> {
+pub struct Matcher<'q> {
     query: &'q SearchQuery,
     needle: String,
     glob: Option<glob::Pattern>,
 }
 
 impl<'q> Matcher<'q> {
-    fn new(query: &'q SearchQuery) -> Result<Matcher<'q>> {
+    pub fn new(query: &'q SearchQuery) -> Result<Matcher<'q>> {
         let glob = match query.mode {
             MatchMode::Glob if !query.text.is_empty() => Some(
-                glob::Pattern::new(&query.text.to_lowercase())
+                glob::Pattern::new(&fold_text(&query.text))
                     .map_err(|_| Error::new(ErrorKind::InvalidArgument, "invalid search pattern"))?,
             ),
             _ => None,
         };
         Ok(Matcher {
             query,
-            needle: query.text.to_lowercase(),
+            needle: fold_text(&query.text),
             glob,
         })
     }
 
     fn name_matches(&self, entry: &Entry) -> bool {
-        let name = entry.display_name().to_lowercase();
+        let name = fold_text(&entry.display_name());
         match &self.glob {
             Some(pat) => pat.matches(&name),
             None => name.contains(&self.needle),
@@ -219,7 +220,7 @@ impl<'q> Matcher<'q> {
         q.modified_after.is_none_or(|a| t >= a) && q.modified_before.is_none_or(|b| t <= b)
     }
 
-    fn matches(&self, entry: &Entry, classify: &(dyn Fn(&Entry) -> String + Send + Sync)) -> bool {
+    pub fn matches(&self, entry: &Entry, classify: &(dyn Fn(&Entry) -> String + Send + Sync)) -> bool {
         (self.query.include_hidden || !entry.is_hidden())
             && self.name_matches(entry)
             && self.attributes_match(entry)
@@ -400,6 +401,27 @@ impl RecentSearches {
             (location, RECENT_SEARCHES_PER_LOCATION as i64),
         )?;
         Ok(())
+    }
+
+    pub fn remember(&self, location: &str, query: &str) -> Result<()> {
+        self.remember_at(location, query, crate::org::now_ms())
+    }
+
+    pub fn remember_at(&self, location: &str, query: &str, at_ms: i64) -> Result<()> {
+        let query = query.trim();
+        if query.is_empty() {
+            return Ok(());
+        }
+        if let Some(latest) = self.list(location)?.into_iter().next() {
+            let grew = latest.len() < query.len() && query.to_lowercase().starts_with(&latest.to_lowercase());
+            if grew {
+                self.db.lock().execute(
+                    "DELETE FROM recent_searches WHERE location_id = ?1 AND query = ?2",
+                    (location, &latest),
+                )?;
+            }
+        }
+        self.add_at(location, query, at_ms)
     }
 
     pub fn list(&self, location: &str) -> Result<Vec<String>> {
@@ -848,5 +870,41 @@ mod tests {
         assert_eq!(rs.clear("nas").unwrap(), 10);
         assert!(rs.list("nas").unwrap().is_empty());
         assert_eq!(rs.list("sd").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_remembered_search_replaces_the_latest_one_it_grew_from() {
+        let rs = RecentSearches::new(Db::open_in_memory().unwrap());
+        rs.remember_at("nas", "tes", 1).unwrap();
+        rs.remember_at("nas", "test", 2).unwrap();
+        assert_eq!(rs.list("nas").unwrap(), ["test"]);
+        rs.remember_at("nas", "Report", 3).unwrap();
+        rs.remember_at("nas", "report 2026", 4).unwrap();
+        assert_eq!(
+            rs.list("nas").unwrap(),
+            ["report 2026", "test"],
+            "case does not matter"
+        );
+        rs.remember_at("nas", "test again", 5).unwrap();
+        assert_eq!(
+            rs.list("nas").unwrap(),
+            ["test again", "report 2026", "test"],
+            "only the latest search is replaced"
+        );
+        rs.remember_at("nas", "test", 6).unwrap();
+        assert_eq!(
+            rs.list("nas").unwrap(),
+            ["test", "test again", "report 2026"],
+            "a shorter search replaces nothing"
+        );
+        rs.remember_at("nas", " test ", 7).unwrap();
+        rs.remember_at("nas", "  ", 8).unwrap();
+        assert_eq!(
+            rs.list("nas").unwrap().len(),
+            3,
+            "the same search again moves up, blanks are skipped"
+        );
+        rs.remember_at("sd", "testing", 9).unwrap();
+        assert_eq!(rs.list("nas").unwrap()[0], "test", "other places keep theirs");
     }
 }
