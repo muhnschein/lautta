@@ -16,7 +16,6 @@ Item {
     readonly property var glyphs: ["file-database", "file-video", "file-document", "types/text", "types/markdown", "link",
         "types/json", "file-folder", "server", "home", "file-package", "lock", "types/shell", "dir-copy", "file-image",
         "file-audio", "file-archive", "types/rust"]
-    property real glide
 
     function lit(lane) {
         return lane % 4 === 1
@@ -51,10 +50,9 @@ Item {
                 id: lane
 
                 readonly property int lane: index
-                readonly property int way: index % 2 === 0 ? 1 : -1
 
                 objectName: "coverLane"
-                x: (index % 2) * 24 * root.unit - 20 * root.unit - way * (1 - root.glide) * root.step
+                x: (index % 2) * 24 * root.unit - 20 * root.unit
                 y: index * root.pitch + 8 * root.unit
                 width: root.columns * root.step
                 height: root.glyphSize
@@ -73,16 +71,5 @@ Item {
                 }
             }
         }
-    }
-
-    NumberAnimation {
-        objectName: "laneGlide"
-        target: root
-        property: "glide"
-        running: true
-        from: 0
-        to: 1
-        duration: 800
-        easing.type: Easing.OutCubic
     }
 }

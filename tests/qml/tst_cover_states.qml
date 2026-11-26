@@ -192,17 +192,11 @@ ApplicationWindow {
         expect(texts(frame, "coverHeader") === "", "nor a header: " + texts(frame, "coverHeader"))
     }
 
-    function glideOf(lanes) {
-        var parts = lanes.data
-        for (var i = 0; i < parts.length; ++i) {
-            if (parts[i].objectName === "laneGlide")
-                return parts[i]
-        }
-        return null
-    }
-
-    function laneXs() {
-        return named(frame, "coverLane").sort(function (a, b) { return a.lane - b.lane }).map(function (l) { return l.x })
+    function pose(lanes) {
+        return [lanes.opacity, lanes.x, lanes.y].concat(named(lanes, "coverLane").map(function (l) {
+            var at = l.mapToItem(lanes, 0, 0)
+            return Math.round(at.x) + ":" + Math.round(at.y) + ":" + l.opacity
+        })).join(" ")
     }
 
     function checkHome() {
@@ -243,23 +237,17 @@ ApplicationWindow {
         expect(odd === 0, "all glyphs are our own, one size: " + odd)
         expect(rows[1].opacity === 1 && rows[0].opacity < 1 && rows[3].opacity < 1 && rows[3].opacity !== rows[0].opacity,
                "lit lanes full, others faint: " + rows.map(function (r) { return r.opacity }).join(","))
-        var glide = glideOf(lanes[0])
-        if (!expect(glide !== null && glide.loops === 1, "one glide, played once"))
-            return
-        if (!waitFor(function () { return !glide.running && lanes[0].glide === 1 }, "the glide to end"))
-            return
-        var rest = laneXs()
-        lanes[0].glide = 0
-        var before = laneXs()
-        lanes[0].glide = 1
-        var moved = rest.map(function (x, i) { return Math.round((x - before[i]) / lanes[0].step) }).join(",")
-        expect(moved === "1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1", "lanes glide one glyph, neighbours opposite ways: " + moved)
+        var columns = rows.map(function (r) { return Math.round((r.x - rows[0].x) / lanes[0].step * 2) }).join(",")
+        expect(columns === "0,1,0,1,0,1,0,1,0,1,0,1,0", "every second lane half a glyph further: " + columns)
         cover.live = false
         expect(named(frame, "coverLanes").length === 0, "hidden cover drops the lanes")
         cover.live = true
-        var again = named(frame, "coverLanes")
-        expect(again.length === 1 && again[0].glide < 1 && glideOf(again[0]).running, "shown again, it glides again")
-        waitFor(function () { return !glideOf(again[0]).running }, "the second glide to end")
+        var shownAgain = named(frame, "coverLanes")
+        if (!expect(shownAgain.length === 1, "shown again, the lanes are back"))
+            return
+        var still = pose(shownAgain[0])
+        tools.pump(1000)
+        expect(pose(shownAgain[0]) === still, "nothing moves on the cover in its first second: " + still + " then " + pose(shownAgain[0]))
     }
 
     function checkFolder() {

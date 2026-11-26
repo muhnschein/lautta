@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- On Home, Lautta's cover shows tilted lanes of its own icons that glide briefly when the cover appears, no longer free space and recent files. Folders, files and running tasks keep their covers.
+- On Home, Lautta's cover shows tilted lanes of its own icons, no longer free space and recent files. Folders, files and running tasks keep their covers.
 - The phone's free space on Home now sits right-aligned under *On this device*.
 - In grid view, the first row of a folder sits a little lower, with some space between it and the header.
 - In *Recents* and *Activity* the page title stays at the top while you scroll, as in folders. While you scroll, a date shows by the scroll handle on the right: *Today*, *Yesterday*, the weekday for the last week, then month and year. Drag the handle to jump through the list ([#194](https://github.com/muhnschein/lautta/issues/194)).
