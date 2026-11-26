@@ -242,7 +242,6 @@ pub enum ScopeEvent {
         group: usize,
         result: Result<SearchSummary>,
     },
-    Remembered,
 }
 
 pub const PROGRESS_EVERY_FOLDERS: u64 = 25;
@@ -315,13 +314,13 @@ pub fn scope_groups(
         kind,
         roots: vec![root_of(l)],
     };
-    groups.extend(
-        locations
-            .iter()
-            .filter(|l| l.kind == LocationKind::Volume)
-            .map(|l| single(GroupKind::Volume, l)),
-    );
     if *scope == SearchScope::Everywhere {
+        groups.extend(
+            locations
+                .iter()
+                .filter(|l| l.kind == LocationKind::Volume)
+                .map(|l| single(GroupKind::Volume, l)),
+        );
         groups.extend(
             locations
                 .iter()
@@ -473,20 +472,10 @@ impl Core {
         &self,
         groups: &[SearchGroup],
         request: &SearchRequest,
-        recents_key: &str,
         cancel: Arc<AtomicBool>,
         out: mpsc::Sender<ScopeEvent>,
     ) {
         let query = request.to_query(Local::now());
-        if !query.text.is_empty() && !recents_key.is_empty() {
-            let (searches, key, text) = (
-                self.recent_searches.clone(),
-                recents_key.to_owned(),
-                query.text.clone(),
-            );
-            let _ = tokio::task::spawn_blocking(move || searches.add(&key, &text)).await;
-            let _ = out.send(ScopeEvent::Remembered).await;
-        }
         let runs = groups
             .iter()
             .enumerate()
@@ -675,25 +664,19 @@ mod tests {
     }
 
     #[test]
-    fn device_scope_groups_user_and_android_folders_and_lists_volumes_apart() {
+    fn device_scope_is_the_phone_storage_alone() {
         assert_eq!(
             summary(&scope_groups(&SearchScope::Device, None, &fleet())),
-            vec![
-                (
-                    "@device".to_owned(),
-                    GroupKind::Device,
-                    vec![
-                        "lautta://user-documents/=Documents".to_owned(),
-                        "lautta://user-pictures/=Pictures".to_owned(),
-                        "lautta://android-dcim/=DCIM".to_owned()
-                    ]
-                ),
-                (
-                    "vol-sd".to_owned(),
-                    GroupKind::Volume,
-                    vec!["lautta://vol-sd/=SD card".to_owned()]
-                ),
-            ]
+            vec![(
+                "@device".to_owned(),
+                GroupKind::Device,
+                vec![
+                    "lautta://user-documents/=Documents".to_owned(),
+                    "lautta://user-pictures/=Pictures".to_owned(),
+                    "lautta://android-dcim/=DCIM".to_owned()
+                ]
+            )],
+            "memory cards and servers stay out of This device"
         );
     }
 
