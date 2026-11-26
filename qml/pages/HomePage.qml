@@ -191,6 +191,12 @@ Page {
                       : qsTrId("lautta-home-transfers")
                 onClicked: pageStack.push(Qt.resolvedUrl("TransfersPage.qml"))
             }
+            MenuItem {
+                objectName: "homeSearch"
+                //% "Search"
+                text: qsTrId("lautta-home-search")
+                onClicked: pageStack.push(Qt.resolvedUrl("SearchPage.qml"))
+            }
         }
 
         delegate: ListItem {

@@ -25,6 +25,16 @@ pub enum MatchMode {
     Glob,
 }
 
+impl MatchMode {
+    pub fn for_text(text: &str) -> MatchMode {
+        if text.contains(['*', '?', '[']) {
+            MatchMode::Glob
+        } else {
+            MatchMode::Substring
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct SearchQuery {
     pub text: String,
@@ -225,11 +235,14 @@ pub struct SearchSummary {
     pub canceled: bool,
 }
 
+pub type FolderProgress = Arc<dyn Fn(u64) + Send + Sync>;
+
 #[derive(Clone)]
 pub struct SearchOptions {
     pub depth_limit: Option<u32>,
     pub cancel: Arc<AtomicBool>,
     pub walker: Option<Arc<dyn TreeWalker>>,
+    pub progress: Option<FolderProgress>,
 }
 
 impl SearchOptions {
@@ -238,7 +251,13 @@ impl SearchOptions {
             depth_limit,
             cancel,
             walker: None,
+            progress: None,
         }
+    }
+
+    pub fn with_progress(mut self, progress: FolderProgress) -> SearchOptions {
+        self.progress = Some(progress);
+        self
     }
 
     pub fn with_walker(mut self, walker: Arc<dyn TreeWalker>) -> SearchOptions {
@@ -268,9 +287,15 @@ pub async fn search(
         None => &list_walker,
     };
     let (matcher_ref, out_ref, cancel_ref) = (&matcher, &out, &options.cancel);
+    let progress = options.progress.clone();
     let consume = async move {
         let mut hits = 0u64;
+        let mut folders = 0u64;
         while let Some(listing) = rx.recv().await {
+            folders += 1;
+            if let Some(report) = &progress {
+                report(folders);
+            }
             let batch = hits_in(matcher_ref, classify, &listing);
             if batch.is_empty() {
                 continue;
@@ -387,6 +412,46 @@ impl RecentSearches {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn progress_counts_every_folder_walked() {
+        let (m, res) = fixture();
+        m.add_file("a/x.txt", b"", 0);
+        m.add_file("a/b/y.txt", b"", 0);
+        m.add_file("c/z.txt", b"", 0);
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let record = seen.clone();
+        let options = SearchOptions::new(None, Arc::new(AtomicBool::new(false)))
+            .with_progress(Arc::new(move |n| record.lock().unwrap().push(n)));
+        let (tx, mut rx) = mpsc::channel(64);
+        let query = SearchQuery {
+            text: "x".into(),
+            ..Default::default()
+        };
+        let summary = search(
+            &res,
+            Uri::parse("lautta://l/").unwrap(),
+            &query,
+            options,
+            &classify_by_extension,
+            tx,
+        )
+        .await
+        .unwrap();
+        while rx.recv().await.is_some() {}
+        assert_eq!(summary.folders, 4);
+        assert_eq!(*seen.lock().unwrap(), vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn wildcards_make_a_pattern_and_plain_text_a_substring() {
+        for text in ["*.pdf", "IMG_20??", "[ab]c", "a*"] {
+            assert_eq!(MatchMode::for_text(text), MatchMode::Glob, "{text}");
+        }
+        for text in ["thesis", "", "budget 2026", "a.b-c_(1)"] {
+            assert_eq!(MatchMode::for_text(text), MatchMode::Substring, "{text}");
+        }
+    }
     use crate::provider::memory::MemoryProvider;
     use crate::provider::StaticResolver;
     use std::time::Duration;
