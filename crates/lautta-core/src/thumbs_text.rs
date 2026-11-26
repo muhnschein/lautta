@@ -56,6 +56,7 @@ pub fn type_icon(name: &[u8]) -> &'static str {
         "diff" | "patch" => "types/patch",
         "java" => "types/java",
         "ini" | "conf" | "cfg" | "properties" => "types/config",
+        e if crate::mime::is_systemd_unit_extension(e) => "types/config",
         "rs" => "types/rust",
         _ => "types/text",
     }
@@ -158,6 +159,8 @@ mod tests {
             ("notes.txt", "types/text"),
             ("main.py", "types/text"),
             ("README", "types/text"),
+            ("sshd.service", "types/config"),
+            ("web.Container", "types/config"),
         ];
         for (name, icon) in cases {
             assert_eq!(type_icon(name.as_bytes()), icon, "{name}");

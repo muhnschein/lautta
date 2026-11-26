@@ -48,6 +48,9 @@ fn grammars_by_name_extension_and_first_line() {
     );
     assert_eq!(syntax_name("Main.qml", ""), Some("JavaScript"));
     assert_eq!(syntax_name("harbour-lautta.desktop", ""), Some("Java Properties"));
+    assert_eq!(syntax_name("sshd.service", ""), Some("Java Properties"));
+    assert_eq!(syntax_name("web.Container", ""), Some("Java Properties"));
+    assert_eq!(syntax_name("lan.network", ""), Some("Java Properties"));
     assert_eq!(syntax_name("configure", "#!/bin/sh"), bash);
     assert_eq!(syntax_name("run", "#!/usr/bin/env bash"), bash);
     assert_eq!(syntax_name("tool", "#!/usr/bin/python3"), Some("Python"));
@@ -780,4 +783,16 @@ async fn a_job_may_run_for_its_budget_and_grace() {
     let after = Instant::now();
     let room = limits.budget + GRACE;
     assert!(job.deadline >= before + room && job.deadline <= after + room);
+}
+
+#[test]
+fn unit_files_colour_keys_and_comments() {
+    let doc = coloured(
+        "web.container",
+        "[Container]\n# pinned\nImage=docker.io/library/nginx:1\nPublishPort=8080:80",
+    );
+    assert_eq!(doc.syntax(), Some("Java Properties"));
+    assert_eq!(pieces(&doc, 1), vec![("# pinned", Class::Comment)]);
+    assert_eq!(class_of(&doc, 2, "Image"), Some(Class::Keyword));
+    assert_eq!(class_of(&doc, 3, "PublishPort"), Some(Class::Keyword));
 }
