@@ -34,8 +34,8 @@ def parse(name):
     text = re.sub(r"<!--.*?-->", "", (ICONS / f"{name}.svg").read_text(), flags=re.S)
     head, body = re.search(r"<svg([^>]*)>(.*)</svg>", text, re.S).groups()
     box = [float(v) for v in re.search(r'viewBox="([^"]*)"', head).group(1).split()]
-    keep = {k: v for k, v in re.findall(r'\b(fill|stroke|stroke-linecap|stroke-linejoin)="([^"]*)"', head)}
-    return box, keep, re.sub(r"\s*\n\s*", "", body.strip())
+    keep = dict(re.findall(r'\b(fill|stroke|stroke-linecap|stroke-linejoin)="([^"]*)"', head))
+    return box, keep, "".join(line.strip() for line in body.splitlines())
 
 
 def glyph(name, x, y):
