@@ -2,11 +2,12 @@
 
 use crate::app::Core;
 use crate::error::{Error, ErrorKind, Result};
+use crate::locations::{Location, LocationKind};
 use crate::search::{
     self, classify_by_extension, MatchMode, SearchHit, SearchOptions, SearchQuery, SearchSummary,
 };
 use crate::settings::LocationPrefs;
-use crate::uri::Uri;
+use crate::uri::{LocationId, Uri};
 use crate::vpath::display_name;
 use chrono::{DateTime, Datelike, Duration, Local, TimeZone};
 use std::collections::BTreeSet;
@@ -111,6 +112,206 @@ pub fn highlight_span(name: &str, text: &str, mode: MatchMode) -> Option<(usize,
         .map(|start| (start, needle.len()))
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SearchScope {
+    Folder,
+    Device,
+    Everywhere,
+    Location(LocationId),
+}
+
+pub const LOCATION_SCOPE_PREFIX: &str = "location:";
+
+impl SearchScope {
+    pub fn parse(name: &str) -> Option<SearchScope> {
+        match name {
+            "folder" => Some(SearchScope::Folder),
+            "device" => Some(SearchScope::Device),
+            "everywhere" => Some(SearchScope::Everywhere),
+            _ => name
+                .strip_prefix(LOCATION_SCOPE_PREFIX)
+                .filter(|id| !id.is_empty())
+                .map(|id| SearchScope::Location(id.to_owned())),
+        }
+    }
+
+    pub fn recents_key(&self, folder: Option<&Uri>) -> String {
+        match (self, folder) {
+            (SearchScope::Folder, Some(f)) => f.location.clone(),
+            (SearchScope::Folder, None) => String::new(),
+            (SearchScope::Device, _) => "@device".to_owned(),
+            (SearchScope::Everywhere, _) => "@everywhere".to_owned(),
+            (SearchScope::Location(id), _) => id.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScopeLocation {
+    pub id: LocationId,
+    pub name: String,
+    pub kind: GroupKind,
+    pub icon: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GroupKind {
+    Folder,
+    Device,
+    Volume,
+    Server,
+}
+
+impl GroupKind {
+    pub fn name(self) -> &'static str {
+        match self {
+            GroupKind::Folder => "folder",
+            GroupKind::Device => "device",
+            GroupKind::Volume => "volume",
+            GroupKind::Server => "server",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchRoot {
+    pub uri: Uri,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchGroup {
+    pub key: String,
+    pub name: String,
+    pub kind: GroupKind,
+    pub roots: Vec<SearchRoot>,
+}
+
+impl SearchGroup {
+    pub fn place(&self, root: &SearchRoot, folder: &Uri) -> String {
+        match self.kind {
+            GroupKind::Folder | GroupKind::Device => section_label(&root.uri, &root.name, folder),
+            GroupKind::Volume | GroupKind::Server => {
+                let rel = folder
+                    .path
+                    .strip_prefix(&root.uri.path)
+                    .map(|rel| rel.components().map(display_name).collect::<Vec<_>>())
+                    .unwrap_or_default();
+                if rel.is_empty() {
+                    self.name.clone()
+                } else {
+                    rel.join(" \u{203a} ")
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ScopeEvent {
+    Hits {
+        group: usize,
+        root: usize,
+        hits: Vec<SearchHit>,
+    },
+    Progress {
+        group: usize,
+        folders: u64,
+    },
+    Done {
+        group: usize,
+        result: Result<SearchSummary>,
+    },
+    Remembered,
+}
+
+pub const PROGRESS_EVERY_FOLDERS: u64 = 25;
+
+fn root_of(location: &Location) -> SearchRoot {
+    SearchRoot {
+        uri: Uri::root(location.id.clone()),
+        name: location.name.clone(),
+    }
+}
+
+fn location_group_kind(location: &Location) -> Option<GroupKind> {
+    match location.kind {
+        LocationKind::Volume => Some(GroupKind::Volume),
+        LocationKind::Server { .. } => Some(GroupKind::Server),
+        _ => None,
+    }
+}
+
+pub fn scope_groups(
+    scope: &SearchScope,
+    folder: Option<(&Uri, &str)>,
+    locations: &[Location],
+) -> Vec<SearchGroup> {
+    if let SearchScope::Location(id) = scope {
+        return locations
+            .iter()
+            .filter(|l| &l.id == id)
+            .filter_map(|l| {
+                location_group_kind(l).map(|kind| SearchGroup {
+                    key: l.id.clone(),
+                    name: l.name.clone(),
+                    kind,
+                    roots: vec![root_of(l)],
+                })
+            })
+            .collect();
+    }
+    if *scope == SearchScope::Folder {
+        return folder
+            .map(|(uri, name)| SearchGroup {
+                key: uri.to_string(),
+                name: name.to_owned(),
+                kind: GroupKind::Folder,
+                roots: vec![SearchRoot {
+                    uri: uri.clone(),
+                    name: name.to_owned(),
+                }],
+            })
+            .into_iter()
+            .collect();
+    }
+    let mut groups = Vec::new();
+    let device: Vec<SearchRoot> = locations
+        .iter()
+        .filter(|l| matches!(l.kind, LocationKind::UserFolder | LocationKind::Android))
+        .map(root_of)
+        .collect();
+    if !device.is_empty() {
+        groups.push(SearchGroup {
+            key: "@device".to_owned(),
+            name: String::new(),
+            kind: GroupKind::Device,
+            roots: device,
+        });
+    }
+    let single = |kind: GroupKind, l: &Location| SearchGroup {
+        key: l.id.clone(),
+        name: l.name.clone(),
+        kind,
+        roots: vec![root_of(l)],
+    };
+    groups.extend(
+        locations
+            .iter()
+            .filter(|l| l.kind == LocationKind::Volume)
+            .map(|l| single(GroupKind::Volume, l)),
+    );
+    if *scope == SearchScope::Everywhere {
+        groups.extend(
+            locations
+                .iter()
+                .filter(|l| matches!(l.kind, LocationKind::Server { .. }))
+                .map(|l| single(GroupKind::Server, l)),
+        );
+    }
+    groups
+}
+
 pub fn section_label(root: &Uri, root_name: &str, folder: &Uri) -> String {
     let mut parts = vec![root_name.to_owned()];
     if let Some(rel) = folder.path.strip_prefix(&root.path) {
@@ -208,6 +409,145 @@ impl Core {
         .await
     }
 
+    pub fn scope_locations(&self) -> Vec<ScopeLocation> {
+        self.locations
+            .locations()
+            .into_iter()
+            .filter_map(|l| {
+                let kind = location_group_kind(&l)?;
+                let icon = match kind {
+                    GroupKind::Volume => crate::app_home::drive_icon(
+                        self.locations
+                            .volume_kind(&l.id)
+                            .unwrap_or(crate::bridge::DriveKind::Usb),
+                    ),
+                    _ => crate::app_home::SERVER_ICON,
+                };
+                Some(ScopeLocation {
+                    id: l.id,
+                    name: l.name,
+                    kind,
+                    icon,
+                })
+            })
+            .collect()
+    }
+
+    pub fn search_groups(&self, scope: &SearchScope, folder: Option<&Uri>) -> Vec<SearchGroup> {
+        let named = folder.map(|uri| (uri, self.folder_name(uri)));
+        scope_groups(
+            scope,
+            named.as_ref().map(|(uri, name)| (*uri, name.as_str())),
+            &self.locations.locations(),
+        )
+    }
+
+    fn folder_name(&self, uri: &Uri) -> String {
+        match uri.name() {
+            Some(n) => String::from_utf8_lossy(n).into_owned(),
+            None => self.locations.name(&uri.location).unwrap_or_default(),
+        }
+    }
+
+    pub async fn search_scope(
+        &self,
+        groups: &[SearchGroup],
+        request: &SearchRequest,
+        recents_key: &str,
+        cancel: Arc<AtomicBool>,
+        out: mpsc::Sender<ScopeEvent>,
+    ) {
+        let query = request.to_query(Local::now());
+        if !query.text.is_empty() && !recents_key.is_empty() {
+            let (searches, key, text) = (
+                self.recent_searches.clone(),
+                recents_key.to_owned(),
+                query.text.clone(),
+            );
+            let _ = tokio::task::spawn_blocking(move || searches.add(&key, &text)).await;
+            let _ = out.send(ScopeEvent::Remembered).await;
+        }
+        let runs = groups
+            .iter()
+            .enumerate()
+            .map(|(index, group)| self.search_group(index, group, &query, cancel.clone(), out.clone()));
+        futures::future::join_all(runs).await;
+    }
+
+    async fn search_group(
+        &self,
+        group: usize,
+        spec: &SearchGroup,
+        query: &search::SearchQuery,
+        cancel: Arc<AtomicBool>,
+        out: mpsc::Sender<ScopeEvent>,
+    ) {
+        let mut total = SearchSummary::default();
+        let mut failure = None;
+        let mut searched = 0usize;
+        for (root_index, root) in spec.roots.iter().enumerate() {
+            if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
+            let before = total.folders;
+            let progress_out = out.clone();
+            let progress: search::FolderProgress = Arc::new(move |folders: u64| {
+                if folders.is_multiple_of(PROGRESS_EVERY_FOLDERS) {
+                    let _ = progress_out.try_send(ScopeEvent::Progress {
+                        group,
+                        folders: before + folders,
+                    });
+                }
+            });
+            let options =
+                SearchOptions::new(self.search_depth(&root.uri), cancel.clone()).with_progress(progress);
+            let (tx, mut rx) = mpsc::channel::<Vec<SearchHit>>(4);
+            let forward_out = out.clone();
+            let forward = async move {
+                while let Some(hits) = rx.recv().await {
+                    if forward_out
+                        .send(ScopeEvent::Hits {
+                            group,
+                            root: root_index,
+                            hits,
+                        })
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            };
+            let walk = search::search(
+                &self.locations,
+                root.uri.clone(),
+                query,
+                options,
+                &classify_by_extension,
+                tx,
+            );
+            let (result, ()) = tokio::join!(walk, forward);
+            match result {
+                Ok(summary) => {
+                    searched += 1;
+                    total.folders += summary.folders;
+                    total.hits += summary.hits;
+                    total.errors += summary.errors;
+                    total.canceled |= summary.canceled;
+                }
+                Err(e) => {
+                    total.errors += 1;
+                    failure.get_or_insert(e);
+                }
+            }
+        }
+        let result = match failure {
+            Some(e) if searched == 0 => Err(e),
+            _ => Ok(total),
+        };
+        let _ = out.send(ScopeEvent::Done { group, result }).await;
+    }
+
     pub fn recent_searches_of(&self, root: &Uri) -> Vec<String> {
         self.recent_searches.list(&root.location).unwrap_or_default()
     }
@@ -278,6 +618,186 @@ impl Core {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::vpath::VPath;
+
+    fn loc(id: &str, kind: LocationKind, name: &str) -> Location {
+        Location::remote(id, kind, name, None)
+    }
+
+    fn server() -> LocationKind {
+        LocationKind::Server {
+            provider: "sftp".into(),
+        }
+    }
+
+    fn fleet() -> Vec<Location> {
+        vec![
+            loc("user-documents", LocationKind::UserFolder, "Documents"),
+            loc("user-pictures", LocationKind::UserFolder, "Pictures"),
+            loc("android-dcim", LocationKind::Android, "DCIM"),
+            loc("vol-sd", LocationKind::Volume, "SD card"),
+            loc("nv-nas", server(), "NAS"),
+            loc("arc-1", LocationKind::Archive, "photos.zip"),
+        ]
+    }
+
+    fn summary(groups: &[SearchGroup]) -> Vec<(String, GroupKind, Vec<String>)> {
+        groups
+            .iter()
+            .map(|g| {
+                (
+                    g.key.clone(),
+                    g.kind,
+                    g.roots.iter().map(|r| format!("{}={}", r.uri, r.name)).collect(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn device_scope_groups_user_and_android_folders_and_lists_volumes_apart() {
+        assert_eq!(
+            summary(&scope_groups(&SearchScope::Device, None, &fleet())),
+            vec![
+                (
+                    "@device".to_owned(),
+                    GroupKind::Device,
+                    vec![
+                        "lautta://user-documents/=Documents".to_owned(),
+                        "lautta://user-pictures/=Pictures".to_owned(),
+                        "lautta://android-dcim/=DCIM".to_owned()
+                    ]
+                ),
+                (
+                    "vol-sd".to_owned(),
+                    GroupKind::Volume,
+                    vec!["lautta://vol-sd/=SD card".to_owned()]
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn everywhere_adds_servers_after_the_device_and_never_archives() {
+        let groups = scope_groups(&SearchScope::Everywhere, None, &fleet());
+        let kinds: Vec<(&str, GroupKind)> = groups.iter().map(|g| (g.key.as_str(), g.kind)).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                ("@device", GroupKind::Device),
+                ("vol-sd", GroupKind::Volume),
+                ("nv-nas", GroupKind::Server)
+            ]
+        );
+        assert_eq!(groups[2].name, "NAS");
+    }
+
+    #[test]
+    fn without_device_folders_there_is_no_device_group() {
+        let only_server = vec![loc("nv-nas", server(), "NAS")];
+        let groups = scope_groups(&SearchScope::Everywhere, None, &only_server);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].kind, GroupKind::Server);
+        assert!(scope_groups(&SearchScope::Device, None, &only_server).is_empty());
+    }
+
+    #[test]
+    fn folder_scope_is_the_folder_alone() {
+        let folder = Uri::parse("lautta://nv-nas/srv/Uni").unwrap();
+        assert_eq!(
+            summary(&scope_groups(
+                &SearchScope::Folder,
+                Some((&folder, "Uni")),
+                &fleet()
+            )),
+            vec![(
+                "lautta://nv-nas/srv/Uni".to_owned(),
+                GroupKind::Folder,
+                vec!["lautta://nv-nas/srv/Uni=Uni".to_owned()]
+            )]
+        );
+        assert!(scope_groups(&SearchScope::Folder, None, &fleet()).is_empty());
+    }
+
+    #[test]
+    fn a_location_scope_is_that_server_or_volume_alone() {
+        let nas = scope_groups(&SearchScope::Location("nv-nas".into()), None, &fleet());
+        assert_eq!(
+            summary(&nas),
+            vec![(
+                "nv-nas".to_owned(),
+                GroupKind::Server,
+                vec!["lautta://nv-nas/=NAS".to_owned()]
+            )]
+        );
+        assert_eq!(nas[0].name, "NAS");
+        let sd = scope_groups(&SearchScope::Location("vol-sd".into()), None, &fleet());
+        assert_eq!(
+            summary(&sd),
+            vec![(
+                "vol-sd".to_owned(),
+                GroupKind::Volume,
+                vec!["lautta://vol-sd/=SD card".to_owned()]
+            )]
+        );
+        for id in ["user-documents", "arc-1", "nv-gone"] {
+            assert!(
+                scope_groups(&SearchScope::Location(id.into()), None, &fleet()).is_empty(),
+                "{id} is no location scope"
+            );
+        }
+    }
+
+    #[test]
+    fn places_name_the_root_on_the_device_and_only_the_path_on_servers() {
+        let groups = scope_groups(&SearchScope::Everywhere, None, &fleet());
+        let docs = Uri::parse("lautta://user-documents/Finance/2026").unwrap();
+        assert_eq!(
+            groups[0].place(&groups[0].roots[0], &docs),
+            "Documents \u{203a} Finance \u{203a} 2026"
+        );
+        let nas = &groups[2];
+        let deep = Uri::new("nv-nas", VPath::parse(b"/home/shared/Plans").unwrap());
+        assert_eq!(
+            nas.place(&nas.roots[0], &deep),
+            "home \u{203a} shared \u{203a} Plans"
+        );
+        assert_eq!(nas.place(&nas.roots[0], &Uri::root("nv-nas")), "NAS");
+        let sd = &groups[1];
+        assert_eq!(sd.place(&sd.roots[0], &Uri::root("vol-sd")), "SD card");
+    }
+
+    #[test]
+    fn recents_are_kept_per_folder_location_and_per_wide_scope() {
+        let folder = Uri::parse("lautta://user-documents/Uni").unwrap();
+        assert_eq!(SearchScope::Folder.recents_key(Some(&folder)), "user-documents");
+        assert_eq!(SearchScope::Folder.recents_key(None), "");
+        assert_eq!(SearchScope::Device.recents_key(Some(&folder)), "@device");
+        assert_eq!(SearchScope::Everywhere.recents_key(None), "@everywhere");
+        assert_eq!(SearchScope::parse("device"), Some(SearchScope::Device));
+        assert_eq!(SearchScope::parse("folder"), Some(SearchScope::Folder));
+        assert_eq!(SearchScope::parse("everywhere"), Some(SearchScope::Everywhere));
+        assert_eq!(SearchScope::parse("Device"), None);
+        assert_eq!(
+            SearchScope::parse("location:nv-nas"),
+            Some(SearchScope::Location("nv-nas".into()))
+        );
+        assert_eq!(SearchScope::parse("location:"), None);
+        assert_eq!(
+            SearchScope::Location("nv-nas".into()).recents_key(Some(&folder)),
+            "nv-nas"
+        );
+        let names: Vec<&str> = [
+            GroupKind::Folder,
+            GroupKind::Device,
+            GroupKind::Volume,
+            GroupKind::Server,
+        ]
+        .iter()
+        .map(|k| k.name())
+        .collect();
+        assert_eq!(names, vec!["folder", "device", "volume", "server"]);
+    }
 
     fn at(y: i32, m: u32, d: u32, h: u32) -> DateTime<Local> {
         Local.with_ymd_and_hms(y, m, d, h, 30, 0).earliest().unwrap()

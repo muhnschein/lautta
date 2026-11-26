@@ -121,9 +121,9 @@ ApplicationWindow {
 
     function checkSearch() {
         var page = push(search, { "rootUri": "lautta://user-documents/" })
-        var filters = findAll(page, function (x) { return x.objectName === "searchFilters" }, [])
-        if (expect(filters.length === 1, "Search: one filter line: " + filters.length))
-            checkBand(page, "Search", filters[0])
+        var pills = findAll(page, function (x) { return x.objectName === "searchPills" }, [])
+        if (expect(pills.length === 1, "Search: one pill strip: " + pills.length))
+            checkBand(page, "Search", pills[0])
         pop()
     }
 
