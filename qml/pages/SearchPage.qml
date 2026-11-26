@@ -488,8 +488,11 @@ Page {
             }
 
             ViewPlaceholder {
+                readonly property bool outcome: page.searched && list.count === 0 && !searchModel.running
+
+                objectName: "searchPlaceholder"
                 enabled: list.count === 0 && !searchModel.running && !recentView.visible
-                text: page.searched && searchModel.errorKind.length === 0
+                text: outcome && searchModel.errorKind.length === 0
                       //% "No matches"
                       ? qsTrId("lautta-search-none")
                       : (searchModel.errorKind.length > 0
@@ -497,7 +500,7 @@ Page {
                          ? qsTrId("lautta-search-failed")
                          //% "Search"
                          : qsTrId("lautta-search-idle"))
-                hintText: page.searched
+                hintText: outcome
                           ? (searchModel.errorKind.length > 0
                              ? ErrorText.message(searchModel.errorKind, { "location": App.locationName(page.rootUri), "open": true })
                              //% "Try another name or loosen the filters"

@@ -175,6 +175,8 @@ ApplicationWindow {
                 if (win.rowCount() !== 15)
                     break
                 win.checkFieldKept("thesis", "first search")
+                win.expect(win.named("searchPlaceholder").text !== "lautta-search-none",
+                           "a fading placeholder never says no matches over results")
                 win.checkLayout("portrait")
                 win.field.text = "thesis_1"
                 win.next()
