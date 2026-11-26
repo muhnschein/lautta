@@ -2,6 +2,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "CoverRows.js" as CoverRows
 
 Item {
     id: grid
@@ -11,17 +12,6 @@ Item {
     readonly property real gap: Theme.paddingSmall
     readonly property real tile: Math.floor((width - (columns - 1) * gap) / columns)
     readonly property alias count: view.count
-
-    function field(row, name, fallback) {
-        return row[name] === undefined || row[name] === null ? fallback : row[name]
-    }
-
-    function told(row) {
-        if (row.thumbnailSource !== undefined || !row.uri)
-            return row
-        var json = App.tileOf(row.uri)
-        return json.length > 0 ? JSON.parse(json) : row
-    }
 
     clip: true
 
@@ -39,23 +29,23 @@ Item {
 
             readonly property bool ownText: row.textPreview !== undefined
             readonly property alias textAsked: lines.uri
-            readonly property var row: grid.told(typeof modelData !== "undefined" ? modelData : model)
+            readonly property var row: CoverRows.told(typeof modelData !== "undefined" ? modelData : model, App)
 
             size: grid.tile
-            isDir: grid.field(row, "isDir", false)
-            category: grid.field(row, "category", isDir ? "folder" : App.categoryOf(grid.field(row, "name", "")))
-            thumbnailSource: grid.field(row, "thumbnailSource", "")
-            mimeType: grid.field(row, "mimeType", "")
+            isDir: CoverRows.field(row, "isDir", false)
+            category: CoverRows.field(row, "category", isDir ? "folder" : App.categoryOf(CoverRows.field(row, "name", "")))
+            thumbnailSource: CoverRows.field(row, "thumbnailSource", "")
+            mimeType: CoverRows.field(row, "mimeType", "")
             previewText: ownText ? row.textPreview : lines.text
-            previewMono: grid.field(row, "textPreviewMono", grid.field(row, "textMono", false))
-            typeIcon: grid.field(row, "typeIcon", "")
-            Component.onCompleted: if (grid.field(row, "textThumb", false) && view.model.requestPreview)
+            previewMono: CoverRows.field(row, "textPreviewMono", CoverRows.field(row, "textMono", false))
+            typeIcon: CoverRows.field(row, "typeIcon", "")
+            Component.onCompleted: if (CoverRows.field(row, "textThumb", false) && view.model.requestPreview)
                                        view.model.requestPreview(row.uri)
 
             TextThumb {
                 id: lines
 
-                uri: !cell.ownText && grid.field(cell.row, "textThumb", false) ? cell.row.uri : ""
+                uri: !cell.ownText && CoverRows.field(cell.row, "textThumb", false) ? cell.row.uri : ""
             }
         }
     }
