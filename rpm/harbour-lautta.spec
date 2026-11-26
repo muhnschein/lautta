@@ -2,7 +2,7 @@
 
 Name:       harbour-lautta
 Summary:    A file manager for Sailfish OS
-Version:    1.0.0
+Version:    1.1.0
 Release:    1
 License:    LGPLv2+ and ASL 2.0 and BSD and OFL
 URL:        https://github.com/muhnschein/lautta

@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
+
+Servers need netvfs 2.0.0: install it before this update. Lautta 1.0.0 cannot use servers with netvfs 2.0.0, and this release cannot with netvfs 1.0.0. Without netvfs, Lautta works on the phone, memory cards and USB drives as before.
 
 - Keeping the name list of a server fresh takes far fewer requests with the next netvfs: Lautta asks about many folders at once, and on Nextcloud and ownCloud a branch that did not change is skipped whole. Server lists now update on Wi-Fi only, also in the background with *Update while charging*; *Settings › Search › Use mobile data* allows mobile data too; until then a server not yet listed says *Waiting for Wi-Fi*. A Nextcloud or ownCloud server without a list is asked to search itself, which answers at once instead of going folder by folder. With an older netvfs, servers are indexed as before, while Lautta is open.
 - systemd unit files (such as `.service`, `.socket`, `.mount`, `.timer`, `.target`), Podman Quadlet files (`.container`, `.volume`, `.network`, `.kube`, `.image`), networkd `.link` and `.netdev` files and `.nspawn` files open in the text viewer with their keys and comments coloured, and show the config icon. Before, they opened with another app.
