@@ -83,7 +83,7 @@ async fn standalone_shows_no_trace_of_the_bridge() {
     assert_eq!(of(&rows, "android")[0].name, "DCIM");
     assert_eq!(
         (device[0].icon.as_str(), of(&rows, "android")[0].icon.as_str()),
-        ("file-folder", "file-folder")
+        ("file-folder-documents", "file-folder-camera")
     );
 }
 
