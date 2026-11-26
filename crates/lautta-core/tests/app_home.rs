@@ -83,7 +83,7 @@ async fn standalone_shows_no_trace_of_the_bridge() {
     assert_eq!(of(&rows, "android")[0].name, "DCIM");
     assert_eq!(
         (device[0].icon.as_str(), of(&rows, "android")[0].icon.as_str()),
-        ("file-folder", "file-folder")
+        ("file-folder-documents", "file-folder-camera")
     );
 }
 
@@ -538,7 +538,7 @@ async fn file_favourites_name_their_folder_and_icon() {
     assert_eq!(
         shown,
         [
-            ("Thesis", "Documents › Uni", "file-document", true),
+            ("Thesis", "Documents › Uni", "file-pdf", true),
             ("Photo", "Documents", "file-image", true),
         ],
         "the folder a file is in, and the file's icon"

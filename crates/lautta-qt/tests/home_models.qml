@@ -654,9 +654,9 @@ Item {
              function() {
                  var f = row("favourite", "Notes")
                  var stored = JSON.parse(favs.get(favs.idOf(a)))
-                 return f !== null && f.rfile && f.rplace === "Documents" && f.ricon === "file-document"
+                 return f !== null && f.rfile && f.rplace === "Documents" && f.ricon === "file-text"
                         && stored.isDir === false && stored.place === "Documents" && stored.icon === ""
-                        && stored.defaultIcon === "file-document"
+                        && stored.defaultIcon === "file-text"
                         && !row("favourite", "Papers").rfile && row("favourite", "Papers").ricon === "image://theme/icon-m-favorite"
              })
         step("relabelling it keeps it a file",
