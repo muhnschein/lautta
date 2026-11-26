@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import "../search/Marks.js" as Marks
 
 Item {
     id: caption
 
     property Item metrics
     property string name
+    property string mark
     property var captions: []
     property int minLines
     property bool emphasised
@@ -27,8 +29,15 @@ Item {
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignTop
         wrapMode: Text.NoWrap
-        textFormat: Text.PlainText
-        text: caption.nameLines.join("\n")
+        readonly property string marked: caption.mark.length > 0
+                                         ? caption.nameLines.map(function (line) {
+                                             return Marks.marked(line, caption.mark, String(Theme.highlightColor))
+                                                    || Marks.escaped(line)
+                                         }).join("<br>")
+                                         : ""
+
+        textFormat: marked.length > 0 ? Text.StyledText : Text.PlainText
+        text: marked.length > 0 ? marked : caption.nameLines.join("\n")
         font.pixelSize: Theme.fontSizeExtraSmall
         color: caption.emphasised ? Theme.highlightColor
                                   : Qt.tint(Theme.primaryColor, Theme.rgba(Theme.highlightColor, caption.glow))

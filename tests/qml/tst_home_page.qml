@@ -103,7 +103,7 @@ ApplicationWindow {
 
     function checkPulley(list) {
         var pulley = texts(findAll(list, isMenuItem, []))
-        if (pulley !== "settings,add-server,transfers")
+        if (pulley !== "settings,add-server,transfers,search")
             fail("the pulley has " + pulley)
     }
 
