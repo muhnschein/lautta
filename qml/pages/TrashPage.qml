@@ -17,6 +17,7 @@ Page {
     readonly property int remorseMs: (App.setting("remorse_seconds") || 5) * 1000
     readonly property int soonDays: 7
     readonly property color soonColor: Theme.presenceColor(Theme.PresenceAway)
+    readonly property real sectionTextTop: Theme.paddingMedium + (Theme.itemSizeSmall - Theme.paddingMedium - sectionFont.height) / 2
     readonly property string coverKind: "grid"
     //% "Trash"
     readonly property string coverTitle: qsTrId("lautta-trash-title")
@@ -109,6 +110,15 @@ Page {
         id: gridMetrics
     }
 
+    FontMetrics {
+        id: sectionFont
+
+        font {
+            family: Theme.fontFamily
+            pixelSize: Theme.fontSizeSmall
+        }
+    }
+
     Notice {
         id: notice
     }
@@ -150,8 +160,6 @@ Page {
             PageHeader {
                 //% "Trash"
                 title: qsTrId("lautta-trash-title")
-                //% "Kept for %n days"
-                description: qsTrId("lautta-trash-kept", page.retentionDays)
             }
         }
 
@@ -165,25 +173,24 @@ Page {
                 bottom: parent.bottom
             }
             clip: true
-            quickScroll: false
 
             header: Item {
                 objectName: "trashNote"
                 width: list.width
-                height: note.height + Theme.paddingLarge
+                height: note.y + note.height
 
                 Label {
                     id: note
 
                     x: Theme.horizontalPageMargin
-                    y: Theme.paddingMedium
+                    y: page.sectionTextTop
                     width: parent.width - 2 * Theme.horizontalPageMargin
                     opacity: page.listModel.count > 0 ? 1 : 0
                     wrapMode: Text.Wrap
                     color: Theme.secondaryColor
                     font.pixelSize: Theme.fontSizeSmall
-                    //% "Only files deleted from this device's folders appear here. Deletes on volumes and servers are permanent."
-                    text: qsTrId("lautta-trash-note")
+                    //% "Only files deleted from this device's folders are kept here for %n days. Deletes on volumes and servers are permanent."
+                    text: qsTrId("lautta-trash-note-kept", page.retentionDays)
                 }
             }
 
@@ -200,16 +207,8 @@ Page {
                 //% "Files you delete from this device's folders wait here before they are removed for good."
                 hintText: qsTrId("lautta-trash-placeholder-hint")
             }
-        }
 
-        ScrollDateBar {
-            flickable: list
-            rowDate: function (index) {
-                var at = page.gridMode ? (index < gridRows.count ? gridRows.get(index).first : -1) : index
-                if (at < 0 || at >= dates.items.count)
-                    return null
-                return { "inProgress": false, "at": dates.items.get(at).model.trashedAt * 1000 }
-            }
+            VerticalScrollDecorator { }
         }
     }
 
@@ -259,10 +258,12 @@ Page {
                     highlighted: item.highlighted
                 }
                 OpIcon {
+                    objectName: "trashGlyph"
                     anchors.centerIn: parent
                     visible: model.thumbnailSource.length === 0
                     isDir: model.isDir
                     category: App.categoryOf(model.name)
+                    color: page.soon(model.daysLeft) ? page.soonColor : Theme.primaryColor
                     highlighted: item.highlighted
                 }
             }
@@ -392,9 +393,11 @@ Page {
                         height: width
 
                         Rectangle {
+                            objectName: "trashTileBackground"
                             anchors.fill: parent
                             visible: !tileIcon.thumbnailReady
-                            color: Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity / 3)
+                            color: Theme.rgba(page.soon(model.daysLeft) ? page.soonColor : Theme.highlightBackgroundColor,
+                                              Theme.highlightBackgroundOpacity / 3)
                         }
                         FileIcon {
                             id: tileIcon
@@ -406,6 +409,7 @@ Page {
                             isDir: model.isDir
                             thumbnailSource: model.thumbnailSource
                             mimeType: model.mimeType
+                            glyphColor: page.soon(model.daysLeft) ? page.soonColor : Theme.primaryColor
                             highlighted: cell.lit
                         }
                     }

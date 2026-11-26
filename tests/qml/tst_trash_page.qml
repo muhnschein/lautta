@@ -137,8 +137,8 @@ ApplicationWindow {
             return fail("the title is not part of the list")
         if (menus.length !== 1 || menus[0].flickable !== host || v.pullDownMenu)
             return fail("the one pulley is the host's, not the list's")
-        if (v.boundsBehavior !== Flickable.StopAtBounds || v.quickScroll)
-            return fail("the list stops at its top and has no quick scroll")
+        if (v.boundsBehavior !== Flickable.StopAtBounds)
+            return fail("the list stops at its top")
         if (Math.abs(v.mapToItem(win.page, 0, 0).y - header.height) > 0.5 || !v.clip)
             return fail("the list starts under the title and is cut there")
         v.contentY = v.originY + v.height
@@ -149,38 +149,63 @@ ApplicationWindow {
         return true
     }
 
-    function daysLabels() {
-        layout()
-        return findAll(win.page, function(x) { return x.objectName === "trashDaysLeft" })
-    }
-
-    function checkSoon(what) {
-        var labels = daysLabels()
-        if (labels.length !== seed.length)
-            return fail(what + ": " + labels.length + " days-left lines for " + seed.length + " items")
-        labels.sort(function(a, b) {
+    function byPlace(items) {
+        return items.sort(function(a, b) {
             var pa = a.mapToItem(win.page, 0, 0), pb = b.mapToItem(win.page, 0, 0)
             return Math.abs(pa.y - pb.y) > 0.5 ? pa.y - pb.y : pa.x - pb.x
         })
-        var warn = Theme.presenceColor(Theme.PresenceAway)
-        for (var i = 0; i < labels.length; ++i) {
+    }
+
+    function checkColoured(what, items, colourOf, warn) {
+        if (items.length !== seed.length)
+            return fail(what + ": " + items.length + " for " + seed.length + " items")
+        byPlace(items)
+        for (var i = 0; i < items.length; ++i) {
             var soon = seed[i].daysLeft <= 7
-            if (Qt.colorEqual(labels[i].color, warn) !== soon)
+            if (Qt.colorEqual(colourOf(items[i]), warn) !== soon)
                 return fail(what + ": " + seed[i].name + " with " + seed[i].daysLeft + " days left"
                             + (soon ? " is not" : " is") + " in the warning colour")
         }
         return true
     }
 
-    function checkDateBar() {
-        var bar = one("scrollDateBar")
-        var v = view()
-        if (!bar || bar.flickable !== v)
-            return fail("the date bar follows the list")
-        var row = bar.rowDate(page.gridMode ? Math.ceil(4 / page.columns) : 4)
-        var want = 900000
-        if (!row || row.at !== want || row.inProgress)
-            return fail("the bar dates a row by its delete time: " + JSON.stringify(row))
+    function checkSoon(what) {
+        layout()
+        var warn = Theme.presenceColor(Theme.PresenceAway)
+        var named = function(name) { return findAll(win.page, function(x) { return x.objectName === name }) }
+        var colour = function(x) { return x.color }
+        if (checkColoured(what + ", days left", named("trashDaysLeft"), colour, warn) !== true)
+            return false
+        if (!page.gridMode)
+            return checkColoured(what + ", glyph", named("trashGlyph"), colour, warn)
+        var glyphs = []
+        var tiles = named("trashGridTile")
+        for (var t = 0; t < tiles.length; ++t)
+            glyphs = glyphs.concat(findAll(tiles[t], function(x) { return x.glyphColor !== undefined }))
+        return checkColoured(what + ", glyph", glyphs, function(x) { return x.glyphColor }, warn)
+                && checkColoured(what + ", tile", named("trashTileBackground"), colour,
+                                 Theme.rgba(warn, Theme.highlightBackgroundOpacity / 3))
+    }
+
+    function checkNote() {
+        var v = layout()
+        var headers = findAll(win.page, function(x) { return x.title !== undefined && x.description !== undefined && x._titleItem !== undefined })
+        if (headers.length !== 1 || headers[0].description !== "")
+            return fail("the title has no subtitle: " + (headers.length ? headers[0].description : "no header"))
+        var notes = findAll(one("trashNote"), function(x) { return x.wrapMode !== undefined })
+        if (notes.length !== 1 || (notes[0].text !== "lautta-trash-note-kept" && notes[0].text.indexOf("kept here for 30 days") < 0))
+            return fail("the note says how long Trash keeps files: " + (notes.length ? notes[0].text : "no note"))
+        var note = notes[0]
+        var above = note.mapToItem(v, 0, 0).y
+        var sections = findAll(win.page, function(x) { return x.objectName === "dateSection" && x.visible })
+        sections.sort(function(a, b) { return a.mapToItem(v, 0, 0).y - b.mapToItem(v, 0, 0).y })
+        var first = sections[0]
+        var textTop = first.mapToItem(v, 0, 0).y + first.topPadding + (first.height - first.topPadding - first.contentHeight) / 2
+        var below = textTop - (above + note.height)
+        if (above <= Theme.paddingMedium || Math.abs(above - below) > 1)
+            return fail("the note sits as far under the title as Today's header sits under the note: " + above + " vs " + below)
+        if (one("scrollDateBar"))
+            return fail("Trash has no scroll date pill")
         return true
     }
 
@@ -222,7 +247,7 @@ ApplicationWindow {
                 if (!win.matches(win.sections()))
                     break
                 if (win.checkAtTop("items arriving after the page opened") !== true || win.checkHeaderPinned() !== true
-                        || win.checkSoon("list") !== true || win.checkDateBar() !== true)
+                        || win.checkSoon("list") !== true || win.checkNote() !== true)
                     return
                 App.setSetting("view_mode", JSON.stringify("grid"))
                 win.next()
@@ -231,7 +256,7 @@ ApplicationWindow {
                 if (!win.page.gridMode || !win.matches(win.sections()))
                     break
                 if (win.checkGrid() !== true || win.checkAtTop("grid") !== true || win.checkHeaderPinned() !== true
-                        || win.checkSoon("grid") !== true || win.checkDateBar() !== true)
+                        || win.checkSoon("grid") !== true || win.checkNote() !== true)
                     return
                 App.setSetting("view_mode", JSON.stringify("list"))
                 win.reachedEnd = true

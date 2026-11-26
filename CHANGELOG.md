@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- *Trash* opens at the top of the list, with its title in view. Before, it opened scrolled down past the title. Its title now stays at the top while you scroll, items are grouped by when you deleted them, a date shows by the scroll handle as in *Recents*, and *Trash* follows the grid or list choice in *View options*. Items with 7 days or less left before they are removed for good show their days left in a warning colour.
+- *Trash* opens at the top of the list, with its title in view. Before, it opened scrolled down past the title. Its title now stays at the top while you scroll, items are grouped by when you deleted them, as in *Recents*, and *Trash* follows the grid or list choice in *View options*. The note at the top says how many days items are kept. Items with 7 days or less left before they are removed for good show their icon and days left in a warning colour.
 - In grid view, the first row of a folder sits a little lower, with some space between it and the header.
 - In *Recents* and *Activity* the page title stays at the top while you scroll, as in folders. While you scroll, a date shows by the scroll handle on the right: *Today*, *Yesterday*, the weekday for the last week, then month and year. Drag the handle to jump through the list ([#194](https://github.com/muhnschein/lautta/issues/194)).
 - Sharing a file from a server offers the same apps as sharing a file on this device, such as Bluetooth. Before, the share sheet listed only apps that take any file, such as *Save to Lautta* ([#153](https://github.com/muhnschein/lautta/issues/153)).
