@@ -31,5 +31,6 @@ for tool in "$@"; do
         nextest) cargo_tool cargo-nextest 0.9.148 ;;
         coverage) cargo_tool cargo-llvm-cov 0.6.16 ;;
         mutants) cargo_tool cargo-mutants 25.0.1 ;;
+        *) ;;
     esac
 done
