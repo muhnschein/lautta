@@ -66,6 +66,26 @@ impl SearchRequest {
             || date_lower_bound(&self.date_preset, Local::now()).is_some()
     }
 
+    pub fn narrows(&self, prior: &SearchRequest) -> bool {
+        let unset = |preset: &str| preset.is_empty() || preset == "any";
+        let (text, prior_text) = (self.text.trim(), prior.text.trim());
+        let text_narrows = match (self.mode, prior.mode) {
+            (MatchMode::Substring, MatchMode::Substring) => {
+                text.to_lowercase().contains(&prior_text.to_lowercase())
+            }
+            _ => self.mode == prior.mode && text == prior_text,
+        };
+        text_narrows
+            && self.include_hidden == prior.include_hidden
+            && (prior.types.is_empty() || (!self.types.is_empty() && self.types.is_subset(&prior.types)))
+            && (unset(&prior.size_preset) || self.size_preset == prior.size_preset)
+            && (unset(&prior.date_preset) || self.date_preset == prior.date_preset)
+    }
+
+    pub fn narrow<T>(&self, items: Vec<T>, hit: impl Fn(&T) -> &SearchHit) -> Result<Vec<T>> {
+        search::filter_hits(items, hit, &self.to_query(Local::now()), &classify_by_extension)
+    }
+
     pub fn to_query(&self, now: DateTime<Local>) -> SearchQuery {
         let (min_size, max_size) = size_bounds(&self.size_preset);
         SearchQuery {
@@ -717,6 +737,110 @@ mod tests {
             )]
         );
         assert!(scope_groups(&SearchScope::Folder, None, &fleet()).is_empty());
+    }
+
+    fn req(text: &str, types: &[&str], date: &str, hidden: bool) -> SearchRequest {
+        SearchRequest {
+            text: text.into(),
+            mode: MatchMode::for_text(text),
+            types: types.iter().map(|t| (*t).to_owned()).collect(),
+            size_preset: "any".into(),
+            date_preset: date.into(),
+            include_hidden: hidden,
+        }
+    }
+
+    #[test]
+    fn a_request_narrows_one_it_only_adds_to() {
+        let base = req("test", &[], "any", false);
+        let narrower = [
+            req("test", &[], "any", false),
+            req("tests", &[], "any", false),
+            req("My TEST", &[], "any", false),
+            req("test", &["document"], "any", false),
+            req("test", &[], "today", false),
+            req("test", &["document"], "week", false),
+        ];
+        for r in &narrower {
+            assert!(r.narrows(&base), "{r:?}");
+        }
+        let wider_or_other = [
+            req("tes", &[], "any", false),
+            req("best", &[], "any", false),
+            req("test", &[], "any", true),
+            req("test*", &[], "any", false),
+        ];
+        for r in &wider_or_other {
+            assert!(!r.narrows(&base), "{r:?}");
+        }
+        assert!(!req("budget", &[], "any", false).narrows(&req("", &["document"], "any", false)));
+        assert!(req("budget", &["document"], "any", false).narrows(&req("", &["document"], "any", false)));
+        let typed = req("test", &["document", "image"], "today", true);
+        assert!(req("test", &["document"], "today", true).narrows(&typed));
+        assert!(!req("test", &[], "today", true).narrows(&typed));
+        assert!(!req("test", &["video"], "today", true).narrows(&typed));
+        assert!(!req("test", &["document"], "any", true).narrows(&typed));
+        assert!(!req("test", &["document"], "week", true).narrows(&typed));
+        assert!(!req("test", &["document"], "today", false).narrows(&typed));
+        let glob = req("*.pdf", &[], "any", false);
+        assert!(req("*.pdf", &["document"], "any", false).narrows(&glob));
+        assert!(!req("a*.pdf", &[], "any", false).narrows(&glob));
+        let sized = SearchRequest {
+            size_preset: "gt1m".into(),
+            ..base.clone()
+        };
+        assert!(sized.narrows(&base));
+        assert!(!base.narrows(&sized));
+        assert!(!SearchRequest {
+            size_preset: "gt10m".into(),
+            ..base.clone()
+        }
+        .narrows(&sized));
+    }
+
+    #[test]
+    fn narrowing_filters_earlier_hits_with_the_search_matcher() {
+        use crate::entry::{Entry, Kind};
+        let hit = |name: &str, kind: Kind| SearchHit {
+            uri: Uri::parse(&format!("lautta://l/{name}")).unwrap(),
+            entry: Entry::new(name.as_bytes(), kind),
+            folder_uri: Uri::parse("lautta://l/").unwrap(),
+        };
+        let hits = vec![
+            (0, hit("test-plan.odt", Kind::File)),
+            (1, hit("test.jpg", Kind::File)),
+            (0, hit("tests", Kind::Dir)),
+            (1, hit("Latest notes.pdf", Kind::File)),
+        ];
+        let names = |kept: Vec<(i32, SearchHit)>| -> Vec<String> {
+            kept.into_iter()
+                .map(|(g, h)| format!("{g}:{}", h.entry.display_name()))
+                .collect()
+        };
+        assert_eq!(
+            names(
+                req("test", &["document"], "any", false)
+                    .narrow(hits.clone(), |(_, h)| h)
+                    .unwrap()
+            ),
+            vec!["0:test-plan.odt", "1:Latest notes.pdf"]
+        );
+        assert_eq!(
+            names(
+                req("tests", &[], "any", false)
+                    .narrow(hits.clone(), |(_, h)| h)
+                    .unwrap()
+            ),
+            vec!["0:tests"]
+        );
+        assert_eq!(
+            names(
+                req("test", &["folder"], "any", false)
+                    .narrow(hits, |(_, h)| h)
+                    .unwrap()
+            ),
+            vec!["0:tests"]
+        );
     }
 
     #[test]
