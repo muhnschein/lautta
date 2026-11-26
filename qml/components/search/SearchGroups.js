@@ -69,12 +69,9 @@ function scopeChoices(fromFolder, folderName, locations) {
         out.push({ "value": "folder", "label": folderName, "icon": "image://theme/icon-m-folder" })
     out.push({ "value": "device", "label": qsTrId("lautta-search-group-device"),
                "icon": "image://theme/icon-m-device" })
-    var servers = false
-    for (var i = 0; i < locations.length; ++i) {
+    for (var i = 0; i < locations.length; ++i)
         out.push({ "value": locations[i].value, "label": locations[i].label, "icon": locations[i].icon })
-        servers = servers || locations[i].kind === "server"
-    }
-    if (servers)
+    if (locations.length > 0)
         //% "Everywhere"
         out.push({ "value": "everywhere", "label": qsTrId("lautta-search-scope-everywhere"),
                    "icon": "image://theme/icon-m-website" })

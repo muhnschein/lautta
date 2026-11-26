@@ -32,6 +32,12 @@ ApplicationWindow {
                            //% "USB drive"
                            qsTrId("lautta-home-volume-usb"))
         App.loadSettings(settingsStore.value)
+        App.setAppActive(Qt.application.state === Qt.ApplicationActive)
+    }
+
+    Connections {
+        target: Qt.application
+        onStateChanged: App.setAppActive(Qt.application.state === Qt.ApplicationActive)
     }
 
     HomeHandlers { }

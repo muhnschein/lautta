@@ -6,7 +6,7 @@ use lautta_core::locations::LocationRegistry;
 use lautta_core::ops::OperationKind;
 use lautta_core::paths::AppPaths;
 use lautta_core::search::MatchMode;
-use lautta_core::settings::{LocationPrefs, Settings};
+use lautta_core::settings::LocationPrefs;
 use lautta_core::{ErrorKind, Uri};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
@@ -120,14 +120,13 @@ async fn search_streams_hits_and_remembers_the_query() {
 }
 
 #[tokio::test]
-async fn search_depth_is_unlimited_locally_and_a_setting_remotely() {
+async fn search_depth_is_unlimited_locally_and_fixed_on_servers() {
     let h = home().await;
-    h.core.apply_settings(Settings {
-        search_remote_depth: 3,
-        ..Settings::default()
-    });
     assert_eq!(h.core.search_depth(&uri("lautta://user-documents/")), None);
-    assert_eq!(h.core.search_depth(&uri("lautta://nv-nas/srv")), Some(3));
+    assert_eq!(
+        h.core.search_depth(&uri("lautta://nv-nas/srv")),
+        Some(lautta_core::search::SERVER_SEARCH_DEPTH)
+    );
 }
 
 #[tokio::test]
@@ -252,6 +251,13 @@ mod scope {
     use lautta_core::Error;
     use std::collections::BTreeMap;
 
+    fn card(h: &Home) -> MemoryProvider {
+        let m = MemoryProvider::new(Capabilities::with(&[]));
+        let loc = Location::remote("vol-sd", LocationKind::Volume, "SD card", None);
+        h.core.locations.register(loc, Arc::new(m.clone()));
+        m
+    }
+
     fn nas(h: &Home, id: &str, name: &str) -> MemoryProvider {
         let m = MemoryProvider::new(Capabilities::with(&[]));
         let loc = Location::remote(
@@ -272,8 +278,7 @@ mod scope {
         progress: BTreeMap<usize, Vec<u64>>,
         done: BTreeMap<usize, Result<SearchSummary, ErrorKind>>,
         after_done: bool,
-        remembered: usize,
-        remembered_before_any_done: bool,
+        gone: BTreeMap<usize, Vec<String>>,
     }
 
     async fn run(
@@ -290,9 +295,9 @@ mod scope {
         };
         let (tx, mut rx) = mpsc::channel(4);
         let core = h.core.clone();
-        let (g2, key) = (groups.clone(), scope.recents_key(folder));
+        let g2 = groups.clone();
         let task = tokio::spawn(async move {
-            core.search_scope(&g2, &req, &key, Arc::new(AtomicBool::new(false)), tx)
+            core.search_scope(&g2, &req, Arc::new(AtomicBool::new(false)), tx)
                 .await
         });
         let mut seen = Seen::default();
@@ -309,9 +314,11 @@ mod scope {
                     seen.after_done |= seen.done.contains_key(&group);
                     seen.progress.entry(group).or_default().push(folders);
                 }
-                ScopeEvent::Remembered => {
-                    seen.remembered += 1;
-                    seen.remembered_before_any_done = seen.done.is_empty();
+                ScopeEvent::Gone { group, uris } => {
+                    seen.gone
+                        .entry(group)
+                        .or_default()
+                        .extend(uris.iter().map(ToString::to_string));
                 }
                 ScopeEvent::Done { group, result } => {
                     assert!(
@@ -335,9 +342,14 @@ mod scope {
         write(&h.root.join("Downloads/Household budget.pdf"), b"x");
         write(&h.root.join("Pictures/holiday.jpg"), b"x");
         nas(&h, "nv-nas", "NAS").add_file("budget.txt", b"x", 0);
+        card(&h).add_file("budget card.txt", b"x", 0);
         let (groups, seen) = run(&h, SearchScope::Device, None, "budget").await;
         let kinds: Vec<GroupKind> = groups.iter().map(|g| g.kind).collect();
-        assert_eq!(kinds, vec![GroupKind::Device], "servers stay out of This device");
+        assert_eq!(
+            kinds,
+            vec![GroupKind::Device],
+            "servers and memory cards stay out of This device"
+        );
         let roots: Vec<String> = groups[0].roots.iter().map(|r| r.uri.to_string()).collect();
         assert!(
             roots.contains(&"lautta://user-documents/".to_owned()),
@@ -365,9 +377,30 @@ mod scope {
         assert_eq!(done.hits, 2);
         assert!(done.folders >= 4, "every folder of every root walked: {done:?}");
         assert!(!seen.after_done, "nothing comes after a group's Done");
-        assert_eq!(h.core.recent_searches.list("@device").unwrap(), vec!["budget"]);
-        assert_eq!(seen.remembered, 1, "the stored search is announced once");
-        assert!(seen.remembered_before_any_done, "and before any location is done");
+        assert!(
+            h.core.recent_searches.list("@device").unwrap().is_empty(),
+            "a search alone is not remembered"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_memory_card_is_searched_everywhere_and_on_its_own() {
+        let h = home().await;
+        write(&h.root.join("Documents/budget.ods"), b"x");
+        card(&h).add_file("Work/budget card.txt", b"x", 0);
+        let (groups, seen) = run(&h, SearchScope::Everywhere, None, "budget").await;
+        let names: Vec<(GroupKind, &str)> = groups.iter().map(|g| (g.kind, g.name.as_str())).collect();
+        assert_eq!(
+            names,
+            vec![(GroupKind::Device, ""), (GroupKind::Volume, "SD card")]
+        );
+        assert_eq!(
+            seen.hits[&1],
+            vec![(0, "lautta://vol-sd/Work/budget%20card.txt".to_owned())]
+        );
+        let (groups, _) = run(&h, SearchScope::Location("vol-sd".into()), None, "budget").await;
+        let names: Vec<(GroupKind, &str)> = groups.iter().map(|g| (g.kind, g.name.as_str())).collect();
+        assert_eq!(names, vec![(GroupKind::Volume, "SD card")]);
     }
 
     #[tokio::test]
@@ -400,11 +433,6 @@ mod scope {
         assert_eq!(seen.done[&2].as_ref().unwrap_err(), &ErrorKind::ConnectionLost);
         assert_eq!(seen.done[&0].as_ref().unwrap().hits, 1);
         assert!(!seen.hits.contains_key(&2));
-        assert_eq!(
-            h.core.recent_searches.list("@everywhere").unwrap(),
-            vec!["budget"]
-        );
-        assert!(h.core.recent_searches.list("@device").unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -436,7 +464,6 @@ mod scope {
             seen.hits[&0],
             vec![(0, "lautta://nv-nas/shared/budget.txt".to_owned())]
         );
-        assert_eq!(h.core.recent_searches.list("nv-nas").unwrap(), vec!["budget"]);
         let ids: Vec<(String, GroupKind, &str)> = h
             .core
             .scope_locations()
@@ -453,46 +480,16 @@ mod scope {
     }
 
     #[tokio::test]
-    async fn a_search_without_text_remembers_nothing() {
+    async fn server_search_stops_sixteen_folders_down() {
         let h = home().await;
-        write(&h.root.join("Documents/a.pdf"), b"x");
-        let groups = h.core.search_groups(&SearchScope::Device, None);
-        let req = SearchRequest {
-            types: ["document".to_owned()].into_iter().collect(),
-            ..Default::default()
-        };
-        let (tx, mut rx) = mpsc::channel(4);
-        let core = h.core.clone();
-        let task = tokio::spawn(async move {
-            core.search_scope(&groups, &req, "@device", Arc::new(AtomicBool::new(false)), tx)
-                .await
-        });
-        let mut remembered = 0;
-        while let Some(event) = rx.recv().await {
-            if matches!(event, ScopeEvent::Remembered) {
-                remembered += 1;
-            }
-        }
-        task.await.unwrap();
-        assert_eq!(remembered, 0);
-        assert!(h.core.recent_searches.list("@device").unwrap().is_empty());
-    }
-
-    #[tokio::test]
-    async fn server_search_keeps_the_depth_setting() {
-        let h = home().await;
-        h.core.apply_settings(Settings {
-            search_remote_depth: 1,
-            ..h.core.settings()
-        });
         let m = nas(&h, "nv-nas", "NAS");
-        m.add_file("a/budget-1.txt", b"x", 0);
-        m.add_file("a/b/budget-2.txt", b"x", 0);
+        let deep: String = (1..=16).map(|i| format!("d{i}/")).collect();
+        m.add_file(&format!("{deep}budget-16.txt"), b"x", 0);
+        m.add_file(&format!("{deep}d17/budget-17.txt"), b"x", 0);
         let (_, seen) = run(&h, SearchScope::Everywhere, None, "budget").await;
-        assert_eq!(
-            seen.hits[&1],
-            vec![(0, "lautta://nv-nas/a/budget-1.txt".to_owned())]
-        );
+        let found: Vec<&str> = seen.hits[&1].iter().map(|(_, u)| u.as_str()).collect();
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].ends_with("/d16/budget-16.txt"), "{found:?}");
     }
 
     #[tokio::test]
@@ -513,10 +510,6 @@ mod scope {
                 (0, "lautta://user-documents/Uni/Thesis".to_owned()),
                 (0, "lautta://user-documents/Uni/Thesis/thesis.pdf".to_owned())
             ]
-        );
-        assert_eq!(
-            h.core.recent_searches.list("user-documents").unwrap(),
-            vec!["thesis"]
         );
     }
 
