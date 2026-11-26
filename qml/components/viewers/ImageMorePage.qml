@@ -2,7 +2,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
-import ".."
 import "../directory"
 import "../directory/ContextActions.js" as Actions
 
@@ -41,10 +40,8 @@ Page {
             { "id": "rename", "text": qsTrId("lautta-viewers-more-rename"), "icon": Actions.icon("rename") }
         ] : []).concat(Actions.more({ "isDir": false, "writable": page.writable, "favourite": App.isFavourite(page.uri) }))
 
-        header: HeaderBand {
-            PageHeader {
-                title: App.nameOf(page.uri)
-            }
+        header: PageHeader {
+            title: App.nameOf(page.uri)
         }
 
         delegate: MoreActionRow {

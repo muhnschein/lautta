@@ -31,6 +31,7 @@ Page {
         var item = view.itemAt(x, y) || view.itemAt(x, y + view.spacing)
         return item ? item.pageIndex : 0
     }
+    readonly property bool hasOutline: doc.loaded && doc.outline !== "" && JSON.parse(doc.outline).length > 0
     property bool searchMode
     property alias searchText: searchField.text
     property alias document: doc
@@ -67,11 +68,23 @@ Page {
     function showContents() {
         var contents = pageStack.push(contentsPage, {
             "fileName": fileName,
-            "outline": doc.outline !== "" ? JSON.parse(doc.outline) : [],
-            "pageCount": doc.pageCount,
+            "outline": JSON.parse(doc.outline),
             "currentPage": currentPage - 1
         })
         contents.chosen.connect(function(index) {
+            pageStack.pop(page)
+            showPage(index, -1)
+        })
+    }
+
+    function showPages() {
+        var pages = pageStack.push(pagesPage, {
+            "uri": uri,
+            "fileName": fileName,
+            "pageCount": doc.pageCount,
+            "currentPage": currentPage - 1
+        })
+        pages.chosen.connect(function(index) {
             pageStack.pop(page)
             showPage(index, -1)
         })
@@ -229,6 +242,11 @@ Page {
         PdfContentsPage { }
     }
 
+    Component {
+        id: pagesPage
+        PdfPagesPage { }
+    }
+
     ExternalActions {
         id: external
         uri: page.uri
@@ -243,37 +261,13 @@ Page {
         onTriggered: page.renderZoom = page.zoom
     }
 
-    SearchField {
-        id: searchField
-
-        anchors { top: parent.top; left: parent.left; right: parent.right }
-        visible: page.searchMode
-        //% "Search the text"
-        placeholderText: qsTrId("lautta-viewers-pdf-search-placeholder")
-        inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
-        EnterKey.iconSource: "image://theme/icon-m-enter-close"
-        EnterKey.onClicked: focus = false
-        onTextChanged: {
-            if (text.trim() === "") {
-                typing.stop()
-                doc.stopSearch()
-            } else {
-                typing.restart()
-            }
-        }
-        rightItem: IconButton {
-            icon.source: "image://theme/icon-m-close"
-            onClicked: page.closeSearch()
-        }
-    }
-
     SilicaFlickable {
         id: pulleyHost
 
         objectName: "pdfPulleyHost"
         anchors {
-            top: page.searchMode ? searchField.bottom : parent.top
-            bottom: page.searchMode ? hitBar.top : parent.bottom
+            top: parent.top
+            bottom: page.searchMode ? searchBar.top : parent.bottom
             left: parent.left
             right: parent.right
         }
@@ -304,22 +298,25 @@ Page {
                 onClicked: page.openSearch()
             }
             MenuItem {
-                visible: doc.loaded
-                //% "Contents and pages"
-                text: qsTrId("lautta-viewers-pdf-contents-and-pages")
+                visible: page.hasOutline
+                //% "Contents"
+                text: qsTrId("lautta-viewers-pdf-contents")
                 onClicked: page.showContents()
+            }
+            MenuItem {
+                visible: doc.loaded
+                //% "Pages"
+                text: qsTrId("lautta-viewers-pdf-pages-menu")
+                onClicked: page.showPages()
             }
         }
 
-        HeaderBand {
+        PageHeader {
             id: header
 
             objectName: "pdfHeader"
             z: 1
-
-            PageHeader {
-                title: page.fileName
-            }
+            title: page.fileName
         }
 
         PinchArea {
@@ -385,39 +382,69 @@ Page {
         }
     }
 
-    Item {
-        id: hitBar
+    Column {
+        id: searchBar
 
+        objectName: "pdfSearchBar"
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-        height: Theme.itemSizeMedium
         visible: page.searchMode
 
-        IconButton {
-            anchors { left: parent.left; leftMargin: Theme.horizontalPageMargin; verticalCenter: parent.verticalCenter }
-            enabled: doc.hitCount > 0
-            icon.source: "image://theme/icon-m-up"
-            onClicked: page.previousHit()
+        SearchField {
+            id: searchField
+
+            width: parent.width
+            //% "Search the text"
+            placeholderText: qsTrId("lautta-viewers-pdf-search-placeholder")
+            inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
+            EnterKey.iconSource: "image://theme/icon-m-enter-close"
+            EnterKey.onClicked: focus = false
+            onTextChanged: {
+                if (text.trim() === "") {
+                    typing.stop()
+                    doc.stopSearch()
+                } else {
+                    typing.restart()
+                }
+            }
+            rightItem: IconButton {
+                icon.source: "image://theme/icon-m-close"
+                onClicked: page.closeSearch()
+            }
         }
 
-        BusyIndicator {
-            anchors { right: hitLabel.left; rightMargin: Theme.paddingMedium; verticalCenter: parent.verticalCenter }
-            size: BusyIndicatorSize.ExtraSmall
-            running: doc.searching
-        }
+        Item {
+            id: hitBar
 
-        Label {
-            id: hitLabel
-            anchors.centerIn: parent
-            font.pixelSize: Theme.fontSizeSmall
-            color: Theme.highlightColor
-            text: page.hitText()
-        }
+            width: parent.width
+            height: Theme.itemSizeMedium
 
-        IconButton {
-            anchors { right: parent.right; rightMargin: Theme.horizontalPageMargin; verticalCenter: parent.verticalCenter }
-            enabled: doc.hitCount > 0
-            icon.source: "image://theme/icon-m-down"
-            onClicked: page.nextHit()
+            IconButton {
+                anchors { left: parent.left; leftMargin: Theme.horizontalPageMargin; verticalCenter: parent.verticalCenter }
+                enabled: doc.hitCount > 0
+                icon.source: "image://theme/icon-m-up"
+                onClicked: page.previousHit()
+            }
+
+            BusyIndicator {
+                anchors { right: hitLabel.left; rightMargin: Theme.paddingMedium; verticalCenter: parent.verticalCenter }
+                size: BusyIndicatorSize.ExtraSmall
+                running: doc.searching
+            }
+
+            Label {
+                id: hitLabel
+                anchors.centerIn: parent
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.highlightColor
+                text: page.hitText()
+            }
+
+            IconButton {
+                anchors { right: parent.right; rightMargin: Theme.horizontalPageMargin; verticalCenter: parent.verticalCenter }
+                enabled: doc.hitCount > 0
+                icon.source: "image://theme/icon-m-down"
+                onClicked: page.nextHit()
+            }
         }
     }
 
@@ -425,7 +452,7 @@ Page {
         id: back
 
         anchors {
-            bottom: page.searchMode ? hitBar.top : parent.bottom
+            bottom: page.searchMode ? searchBar.top : parent.bottom
             bottomMargin: Theme.paddingLarge * 2
             horizontalCenter: parent.horizontalCenter
         }
@@ -466,7 +493,7 @@ Page {
 
     Rectangle {
         anchors {
-            bottom: back.visible ? back.top : (page.searchMode ? hitBar.top : parent.bottom)
+            bottom: back.visible ? back.top : (page.searchMode ? searchBar.top : parent.bottom)
             bottomMargin: Theme.paddingLarge * 2
             horizontalCenter: parent.horizontalCenter
         }

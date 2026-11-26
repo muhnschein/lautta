@@ -9,6 +9,7 @@ use lautta_core::app_pdf::{
     parse_page_id, pdf_error_name, Link, LinkTarget, OpenedPdf, OutlineItem, PageHits, PageSize, PdfError,
     PdfFailure, PdfSearchResults,
 };
+use lautta_core::pdf_pages::MAX_PAGE_THUMB_WIDTH;
 use qmetaobject::prelude::*;
 use qmetaobject::{qml_register_type, queued_callback, QPointer};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -346,6 +347,30 @@ pub(crate) fn page_request(core: Arc<Core>, id: &str, width: i32, req: u64, repl
         .unwrap_or(DEFAULT_PAGE_WIDTH);
     let task = handle().spawn(async move {
         let res = core.pdf_page(&uri, page, width).await;
+        finished(req);
+        match res {
+            Ok(p) => {
+                let _ =
+                    tokio::task::spawn_blocking(move || reply.done_rgba(&p.rgba, p.width, p.height)).await;
+            }
+            Err(f) => reply.fail(&failure_text(&f)),
+        }
+    });
+    let abort = task.abort_handle();
+    on_cancel(req, Box::new(move || abort.abort()));
+}
+
+pub(crate) fn thumb_request(core: Arc<Core>, id: &str, width: i32, req: u64, reply: Reply) {
+    let Some((uri, page)) = parse_page_id(id) else {
+        reply.fail("bad page id");
+        return;
+    };
+    let width = u32::try_from(width)
+        .ok()
+        .filter(|w| *w > 0)
+        .unwrap_or(MAX_PAGE_THUMB_WIDTH);
+    let task = handle().spawn(async move {
+        let res = core.pdf_page_thumb(&uri, page, width).await;
         finished(req);
         match res {
             Ok(p) => {

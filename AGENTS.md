@@ -77,7 +77,7 @@ Every added or changed test, before push:
 - "Design first" / "no PR yet" → artboard on design canvas (`design/canvas/project/*.dc.html`, kit `design/STYLE.md`), wait for approval, then code.
 - Every string `qsTrId()` with `//%` engineering English; error text as `doc/PROJECT.md` "Words on screen". Changed strings → `make translations` (`make check` fails on drift). A count in a text → one `%n` plural string, never "(s)"; `make translations` adds its English singular (read the printed pairs).
 - Host QML tests have no Silica; target page tests have no finger, no phone: looks and gestures unproven until device test. Say so.
-- Phone = battery: no always-running animations, timers, polling. Idle in background = 0 % CPU, no timers; only a running transfer keeps device awake.
+- Phone = battery: no always-running animations, timers, polling. Idle in background = 0 % CPU, no timers; only a running transfer keeps device awake. One exception (owner, 2026-11-26): search index may update in background while charging, battery above 50 %, setting "Update while charging" on; lowest priority, off UI thread.
 
 ## Comments and docs
 

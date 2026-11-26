@@ -2,7 +2,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
-import "../components"
 import "../components/ErrorText.js" as ErrorText
 
 Page {
@@ -56,10 +55,8 @@ Page {
         anchors.fill: parent
         model: verify
 
-        header: HeaderBand {
-            PageHeader {
-                title: App.nameOf(page.uri)
-            }
+        header: PageHeader {
+            title: App.nameOf(page.uri)
         }
 
         delegate: ListItem {

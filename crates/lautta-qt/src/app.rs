@@ -31,6 +31,8 @@ pub struct App {
     setting: qt_method!(fn(&self, key: QString) -> QVariant),
     setSetting: qt_method!(fn(&mut self, key: QString, value_json: QString) -> bool),
     setVolumeNames: qt_method!(fn(&self, card: QString, usb: QString)),
+    setAppActive: qt_method!(fn(&self, active: bool)),
+    setSearchOpen: qt_method!(fn(&self, open: bool)),
 
     childUri: qt_method!(fn(&self, parent: QString, name: QString) -> QString),
     parentUri: qt_method!(fn(&self, uri: QString) -> QString),
@@ -123,6 +125,18 @@ impl App {
         });
     }
 
+    fn setAppActive(&self, active: bool) {
+        if let Some(core) = core() {
+            core.index_set_conditions(|c| c.app_active = active);
+        }
+    }
+
+    fn setSearchOpen(&self, open: bool) {
+        if let Some(core) = core() {
+            core.index_set_conditions(|c| c.search_open = open);
+        }
+    }
+
     fn setVolumeNames(&self, card: QString, usb: QString) {
         if let Some(core) = core() {
             core.locations.set_volume_words(VolumeWords {
@@ -160,6 +174,7 @@ impl App {
             return false;
         }
         core.apply_settings(settings);
+        core.index_kick();
         self.publish_settings();
         true
     }

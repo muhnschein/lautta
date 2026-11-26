@@ -16,7 +16,7 @@ Page {
 
     property var listModel: recents
     readonly property bool recentsOn: JSON.parse(App.settingsJson).recents_enabled !== false
-    readonly property string coverKind: "grid"
+    readonly property string coverKind: gridMode ? "grid" : "list"
     //% "Recents"
     readonly property string coverTitle: qsTrId("lautta-recents-title")
     readonly property var coverModel: listModel
@@ -116,16 +116,13 @@ Page {
             }
         }
 
-        HeaderBand {
+        PageHeader {
             id: top
 
             objectName: "recentsHeader"
             z: 1
-
-            PageHeader {
-                //% "Recents"
-                title: qsTrId("lautta-recents-title")
-            }
+            //% "Recents"
+            title: qsTrId("lautta-recents-title")
         }
 
         SilicaListView {

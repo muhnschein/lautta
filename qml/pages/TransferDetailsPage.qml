@@ -31,16 +31,14 @@ Page {
         header: Column {
             width: list.width
 
-            HeaderBand {
-                PageHeader {
-                    title: page.s ? TransferText.title({
-                        kind: page.s.kind, direction: page.s.direction, state: page.s.state,
-                        title: page.s.title, itemsTotal: page.s.itemsTotal, destName: page.s.destName
-                    }) : ""
-                    description: page.s && page.s.sourceName
-                        //% "From %1"
-                        ? qsTrId("lautta-xfr-from").arg(page.s.sourceAddress) : ""
-                }
+            PageHeader {
+                title: page.s ? TransferText.title({
+                    kind: page.s.kind, direction: page.s.direction, state: page.s.state,
+                    title: page.s.title, itemsTotal: page.s.itemsTotal, destName: page.s.destName
+                }) : ""
+                description: page.s && page.s.sourceName
+                    //% "From %1"
+                    ? qsTrId("lautta-xfr-from").arg(page.s.sourceAddress) : ""
             }
             ProgressBar {
                 width: parent.width

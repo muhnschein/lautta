@@ -53,6 +53,8 @@ pub struct Core {
     pub home_layout: HomeLayout,
     pub working_copies: WorkingCopies,
     pub bridge: Option<BridgeClient>,
+    pub index: Option<crate::app_index::NameIndex>,
+    pub(crate) runtime: tokio::runtime::Handle,
     settings: Mutex<Settings>,
     settings_changed: watch::Sender<u64>,
     _volume_watch: Option<VolumeWatcher>,
@@ -134,7 +136,16 @@ impl Core {
             Some(cfg) => Some(BridgeClient::start(cfg)?),
             None => None,
         };
+        let index_path = paths.index_database();
+        let index = tokio::task::spawn_blocking(move || crate::index::store::IndexStore::open(&index_path))
+            .await
+            .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))?
+            .map_err(|e| log::warn!("search index not opened: {e}"))
+            .ok()
+            .map(crate::app_index::NameIndex::new);
         let core = Core {
+            index,
+            runtime: tokio::runtime::Handle::current(),
             dircache: DirCache::new(db.clone(), DIRCACHE_ENTRIES)?,
             favourites: Favourites::new(db.clone()),
             recents: Recents::new(db.clone()),
@@ -160,6 +171,7 @@ impl Core {
         if let Some(client) = client {
             spawn_bridge_sync(&core, client);
             crate::powersave::spawn(&core, zbus::Connection::system());
+            crate::powersave::spawn_charger(&core, zbus::Connection::system());
         }
         Ok(core)
     }
@@ -179,6 +191,9 @@ impl Core {
     pub fn apply_settings(&self, settings: Settings) {
         let settings = settings.sanitised();
         self.recents.set_enabled(settings.recents_enabled);
+        if let Some(index) = &self.index {
+            index.set_on_charger_setting(settings.index_on_charger);
+        }
         let previous = std::mem::replace(&mut *lock(&self.settings), settings.clone());
         if previous.thumbnail_cache_mb != settings.thumbnail_cache_mb {
             self.follow_thumbnail_budget(&settings);
