@@ -99,7 +99,7 @@ Item {
         if (!place)
             return
         same([place.uri, place.kind, place.icon, place.writable, place.selectable],
-             [downloads, "folder", "file-folder", true, true], "a folder on the device")
+             [downloads, "folder", "file-folder-downloads", true, true], "a folder on the device, with its emblem")
     }
 
     PickerRootsModel { id: roots }

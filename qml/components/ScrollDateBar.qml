@@ -64,19 +64,41 @@ Item {
         description = shown.description
     }
 
+    readonly property bool hiding: hide.running
+    readonly property real thumbRoom: dragging ? Theme.itemSizeMedium : 0
+
     objectName: "scrollDateBar"
     anchors.fill: flickable
-    opacity: active ? 1 : 0
+    opacity: 0
     visible: opacity > 0
     onActiveChanged: {
         shownIndex = -1
         refresh()
+        if (active) {
+            hide.stop()
+            show.start()
+        } else {
+            show.stop()
+            hide.start()
+        }
     }
 
-    Behavior on opacity {
-        SequentialAnimation {
-            PauseAnimation { duration: bar.active ? 0 : 1800 }
-            FadeAnimation { duration: bar.active ? 100 : 400 }
+    FadeAnimation {
+        id: show
+
+        target: bar
+        to: 1
+        duration: 100
+    }
+
+    SequentialAnimation {
+        id: hide
+
+        PauseAnimation { duration: 1800 }
+        FadeAnimation {
+            target: bar
+            to: 0
+            duration: 400
         }
     }
 
@@ -85,33 +107,55 @@ Item {
         onContentYChanged: bar.refresh()
     }
 
-    Rectangle {
+    Item {
         id: handle
+
+        readonly property real corner: Theme.paddingMedium
+        readonly property color fill: Qt.tint(Theme.overlayBackgroundColor,
+                                              Theme.rgba(Theme.highlightBackgroundColor, 0.75))
+        property real room: bar.thumbRoom
 
         objectName: "scrollDateHandle"
         x: parent.width - width - Theme.paddingMedium
         y: bar.progress * (parent.height - height)
-        width: Math.max(dateText.implicitWidth, dateDescription.implicitWidth) + 2 * Theme.paddingLarge
+        width: lines.width + 2 * Theme.paddingLarge + room
         height: lines.height + 2 * Theme.paddingSmall
-        radius: Theme.paddingMedium
-        color: Theme.overlayBackgroundColor
+
+        Behavior on room { NumberAnimation { duration: 100 } }
 
         Rectangle {
             anchors.fill: parent
-            radius: parent.radius
-            color: Theme.rgba(Theme.highlightBackgroundColor, 0.75)
+            radius: handle.corner
+            color: handle.fill
+        }
+        Rectangle {
+            objectName: "scrollDateSquareTopLeft"
+            width: handle.corner
+            height: handle.corner
+            color: handle.fill
+        }
+        Rectangle {
+            objectName: "scrollDateSquareBottomRight"
+            x: parent.width - width
+            y: parent.height - height
+            width: handle.corner
+            height: handle.corner
+            color: handle.fill
         }
 
         Column {
             id: lines
 
             x: Theme.paddingLarge
+            width: Math.max(dateText.implicitWidth, dateDescription.implicitWidth)
             anchors.verticalCenter: parent.verticalCenter
 
             Label {
                 id: dateText
 
                 objectName: "scrollDateText"
+                width: parent.width
+                horizontalAlignment: Text.AlignLeft
                 text: bar.text
                 color: Theme.primaryColor
                 font.pixelSize: Theme.fontSizeMedium
@@ -120,6 +164,8 @@ Item {
                 id: dateDescription
 
                 objectName: "scrollDateDescription"
+                width: parent.width
+                horizontalAlignment: Text.AlignLeft
                 visible: text.length > 0
                 text: bar.description
                 color: Theme.primaryColor

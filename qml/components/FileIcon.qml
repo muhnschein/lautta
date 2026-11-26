@@ -17,6 +17,7 @@ Item {
     property real size: Theme.iconSizeMedium
     property real glyphSize: Theme.iconSizeMedium
     property bool highlighted
+    property color glyphColor: Theme.primaryColor
     readonly property bool thumbnailReady: thumbnailLoader.item ? thumbnailLoader.item.ready : false
     readonly property bool thumbnailFailed: thumbnailLoader.item ? thumbnailLoader.item.failed : false
     property string previewText
@@ -114,7 +115,7 @@ Item {
         anchors.centerIn: parent
         icon: icon.iconFor(icon.category, icon.isDir)
         iconSize: icon.glyphSize
-        color: icon.videoShown ? Theme.lightPrimaryColor : Theme.primaryColor
+        color: icon.videoShown ? Theme.lightPrimaryColor : icon.glyphColor
         highlightColor: icon.videoShown ? Theme.highlightFromColor(Theme.highlightColor, Theme.LightOnDark)
                                         : Theme.highlightColor
         highlighted: icon.highlighted

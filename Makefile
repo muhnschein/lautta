@@ -9,13 +9,17 @@ export SDK_IMAGE TARGET
 LUPDATE ?= lupdate
 LUPDATE_ARGS = -silent -locations none -no-obsolete -target-language en
 
-.PHONY: translations translations-check comments-check check fmt-check clippy test coverage mutants mutants-diff mutants-paths clippy-report rpm check-rpm clean
+.PHONY: translations translations-check comments-check cover-lanes-check check fmt-check clippy test coverage mutants mutants-diff mutants-paths clippy-report rpm check-rpm clean
 
-check: fmt-check comments-check translations-check clippy test
+check: fmt-check comments-check cover-lanes-check translations-check clippy test
 
 comments-check:
 	python3 tools/no_comments_test.py
 	python3 tools/no_comments.py
+
+cover-lanes-check:
+	python3 tools/cover_lanes_test.py
+	python3 tools/cover_lanes.py --check
 
 fmt-check:
 	$(CARGO) fmt --all -- --check
@@ -36,6 +40,7 @@ coverage:
 	mkdir -p coverage
 	QT_QPA_PLATFORM=offscreen $(CARGO) llvm-cov --workspace $(HOST_FEATURES) --lcov --output-path coverage/lcov.info
 	python3 -m coverage run --data-file=coverage/python.data --include='tools/*' tools/no_comments_test.py
+	python3 -m coverage run --append --data-file=coverage/python.data --include='tools/*' tools/cover_lanes_test.py
 	python3 -m coverage xml --data-file=coverage/python.data -o coverage/python.xml
 
 clippy-report:
