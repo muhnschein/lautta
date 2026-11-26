@@ -43,11 +43,7 @@ CoverBackground {
     Component {
         id: home
 
-        CoverHome {
-            rows: cover.told("listModel", null)
-            deviceFree: cover.told("deviceFree", -1)
-            deviceTotal: cover.told("deviceTotal", -1)
-        }
+        CoverLanes {}
     }
 
     Component {

@@ -17,7 +17,7 @@ Item {
     }
 
     function told(row) {
-        if (row.thumbnailSource !== undefined || row.placeIcon !== undefined || !row.uri)
+        if (row.thumbnailSource !== undefined || !row.uri)
             return row
         var json = App.tileOf(row.uri)
         return json.length > 0 ? JSON.parse(json) : row
@@ -46,7 +46,6 @@ Item {
             category: grid.field(row, "category", isDir ? "folder" : App.categoryOf(grid.field(row, "name", "")))
             thumbnailSource: grid.field(row, "thumbnailSource", "")
             mimeType: grid.field(row, "mimeType", "")
-            placeIcon: grid.field(row, "placeIcon", "")
             previewText: ownText ? row.textPreview : lines.text
             previewMono: grid.field(row, "textPreviewMono", grid.field(row, "textMono", false))
             typeIcon: grid.field(row, "typeIcon", "")
