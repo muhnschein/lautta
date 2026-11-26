@@ -18,7 +18,7 @@ Page {
     readonly property int soonDays: 7
     readonly property color soonColor: Theme.presenceColor(Theme.PresenceAway)
     readonly property real sectionTextTop: Theme.paddingMedium + (Theme.itemSizeSmall - Theme.paddingMedium - sectionFont.height) / 2
-    readonly property string coverKind: "grid"
+    readonly property string coverKind: gridMode ? "grid" : "list"
     //% "Trash"
     readonly property string coverTitle: qsTrId("lautta-trash-title")
     readonly property var coverModel: listModel

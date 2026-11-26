@@ -10,7 +10,7 @@ Page {
 
     property string uri
     property bool shown
-    readonly property string coverKind: "grid"
+    readonly property string coverKind: view.gridMode ? "grid" : "list"
     readonly property string coverTitle: App.nameOf(uri)
     readonly property var coverModel: view.model
     readonly property var trail: view.trail

@@ -100,6 +100,13 @@ ApplicationWindow {
         ListElement { itemId: 2; uri: "lautta://user-documents/Cover121/photo.jpg"; name: "photo.jpg"; kind: "previewed"; place: "Documents"; at: 0; dateGroup: "today" }
     }
 
+    ListModel {
+        id: trashRows
+
+        ListElement { trashId: "1"; name: "notes.md"; isDir: false; thumbnailSource: ""; mimeType: "text/markdown"; daysLeft: 20; dateGroup: "today"; folderName: "Documents"; folderUri: "lautta://user-documents/" }
+        ListElement { trashId: "2"; name: "Old"; isDir: true; thumbnailSource: ""; mimeType: ""; daysLeft: 20; dateGroup: "today"; folderName: "Documents"; folderUri: "lautta://user-documents/" }
+    }
+
     function expect(ok, what) {
         if (!ok)
             console.error("FAILED: " + what)
@@ -364,6 +371,96 @@ ApplicationWindow {
                "back on Home its cover is back")
     }
 
+    function lineText(root) {
+        return named(root, "coverLine").map(function (l) { return l.name }).join(",")
+    }
+
+    function checkListView() {
+        App.setSetting("view_mode", JSON.stringify("list"))
+        var page = push(folderPage, { "uri": base })
+        var total = files.length + 2
+        if (!waitFor(function () { return page.coverModel.count === total && named(frame, "coverLine").length >= 6 }, "the folder's lines"))
+            return
+        expect(cover.kind === "list" && texts(frame, "coverHeader") === "Cover121",
+               "a folder in list view has a list cover under its name: " + cover.kind + " " + texts(frame, "coverHeader"))
+        expect(named(frame, "coverTile").length === 0 && named(frame, "coverGrid")[0].count === 0, "no tiles beside the lines")
+        var lines = named(frame, "coverLine")
+        expect(lineText(frame).indexOf("Empty,Other,a.md,b.md") === 0, "lines follow the folder's order, folders first: " + lineText(frame))
+        var icons = lines.map(function (l) { return named(l, "coverLineIcon")[0] })
+        expect(icons[0].isDir && icons[0].category === "folder" && !icons[2].isDir && icons[2].category === "markdown",
+               "each line has its item's glyph: " + icons[0].category + " " + icons[2].category)
+        expect(icons.every(function (i) { return i.width === Theme.iconSizeSmall && i.glyphSize === Theme.iconSizeSmall
+                                                 && i.previewText === "" && Math.round(i.mapToItem(frame, 0, 0).x) === Math.round(Theme.paddingLarge) }),
+               "small glyphs, no text previews, on the header's margin: " + icons[0].width + " " + at(icons[0]))
+        var label = findAll(lines[2], function (x) { return x.text === "a.md" && x.truncationMode !== undefined }, [])[0]
+        expect(label.font.pixelSize === Theme.fontSizeExtraSmall && label.truncationMode === TruncationMode.None
+               && Math.round(label.mapToItem(frame, label.width, 0).x) === Math.round(frame.width)
+               && Math.round(label.mapToItem(frame, 0, 0).x) === Math.round(Theme.paddingLarge + Theme.iconSizeSmall + Theme.paddingMedium),
+               "a name beside its glyph runs to the cover's edge, not cut short: " + at(label) + " " + label.width)
+        var edge = named(frame, "coverEdgeFade")
+        if (expect(edge.length === 1, "one fade along the right edge")) {
+            var fadeStart = edge[0].offset * frame.width
+            expect(edge[0].direction === OpacityRamp.LeftToRight && edge[0].sourceItem.count === named(frame, "coverList")[0].count
+                   && Math.abs(fadeStart - (frame.width - 2 * Theme.paddingLarge)) < 0.5
+                   && Math.abs(fadeStart + frame.width / edge[0].slope - frame.width) < 0.5,
+                   "anything within two large paddings of the right edge fades, gone at the edge, short names too: "
+                   + fadeStart + " " + edge[0].slope)
+        }
+        expect(lines[1].height === Theme.iconSizeSmall + Theme.paddingMedium
+               && Math.round(lines[1].mapToItem(frame, 0, 0).y - lines[0].mapToItem(frame, 0, 0).y) === Math.round(lines[0].height),
+               "lines stack without gaps: " + lines[0].height)
+        var header = named(frame, "coverHeader")[0]
+        expect(Math.round(lines[0].mapToItem(frame, 0, 0).y) === Math.round(header.mapToItem(frame, 0, header.height).y + Theme.paddingLarge),
+               "lines start where tiles would")
+        var list = named(frame, "coverList")[0]
+        expect(list.clip && Math.round(list.mapToItem(frame, 0, list.height).y) === Math.round(frame.height), "and stay inside the cover")
+        var ramp = findAll(list, function (x) { return x.sourceItem !== undefined && x.direction === OpacityRamp.TopToBottom }, [])
+        expect(ramp.length === 1 && ramp[0].offset === 0.75 && ramp[0].slope === 4
+               && named(ramp[0].sourceItem, "coverEdgeFade").length === 1,
+               "the lines, edge fade included, fade out at the bottom as tiles do: " + ramp.length)
+
+        App.setSetting("view_mode", JSON.stringify("grid"))
+        if (waitFor(function () { return cover.kind === "grid" }, "the grid cover"))
+            expect(named(frame, "coverLine").length === 0 && named(frame, "coverList")[0].count === 0 && named(frame, "coverTile").length >= 9,
+                   "switched to grid, the cover shows tiles and builds no lines")
+        App.setSetting("view_mode", JSON.stringify("list"))
+        if (waitFor(function () { return cover.kind === "list" }, "the list cover"))
+            expect(named(frame, "coverLine").length >= 6 && named(frame, "coverTile").length === 0, "and back to lines")
+        page.coverModel.setViewPrefs(JSON.stringify({ "viewMode": "grid" }))
+        if (waitFor(function () { return cover.kind === "grid" }, "the folder's own grid"))
+            expect(named(frame, "coverTile").length >= 9, "a folder set to grid keeps tiles though the app shows lists")
+        page.coverModel.setViewPrefs(JSON.stringify({ "viewMode": "list" }))
+        waitFor(function () { return cover.kind === "list" }, "the folder back in list view")
+
+        var empty = push(folderPage, { "uri": base + "Empty/" })
+        if (waitFor(function () { return empty.coverModel.loading === false && texts(frame, "coverHeader") === "Empty" }, "the empty folder"))
+            expect(cover.kind === "list" && named(frame, "coverLine").length === 0 && texts(frame, "coverEmpty") === "lautta-dir-empty",
+                   "an empty folder in list view says so: " + texts(frame, "coverEmpty"))
+        popTo(1)
+
+        push(recentsPage, { "listModel": recentRows })
+        expect(cover.kind === "list" && texts(frame, "coverHeader") === "lautta-recents-title" && lineText(frame) === "a.md,photo.jpg",
+               "Recents in list view: a line per file: " + cover.kind + " " + lineText(frame))
+        var recent = named(frame, "coverLineIcon")
+        expect(recent.length === 2 && recent[0].category === "markdown" && recent[1].thumbnailSource.indexOf("photo.jpg") > 0,
+               "by type, with the photo's picture")
+        expect(named(frame, "coverEmpty").length === 0, "no empty text beside them")
+        popTo(1)
+        push(trashPage, {})
+        expect(cover.kind === "list" && texts(frame, "coverHeader") === "lautta-trash-title" && named(frame, "coverLine").length === 0
+               && texts(frame, "coverEmpty") === "lautta-dir-empty",
+               "an empty Trash in list view says No files: " + cover.kind + " " + texts(frame, "coverEmpty"))
+        popTo(1)
+        push(trashPage, { "listModel": trashRows })
+        var trashed = named(frame, "coverLineIcon")
+        expect(lineText(frame) === "notes.md,Old" && trashed.length === 2 && trashed[0].category === "markdown"
+               && trashed[1].isDir && trashed[1].category === "folder",
+               "Trash rows tell no type: it comes from the name, folders get the folder glyph: " + lineText(frame) + " "
+               + trashed.map(function (i) { return i.category }).join(","))
+        popTo(1)
+        App.setSetting("view_mode", JSON.stringify("grid"))
+    }
+
     function checkDialogClosing() {
         var below = pageStack.currentPage
         var dialog = pageStack.push(plainDialog)
@@ -448,6 +545,7 @@ ApplicationWindow {
                 win.scenarioRunning = false
                 return
             }
+            App.setSetting("view_mode", JSON.stringify("grid"))
             win.checkAsleep()
             cover.live = true
             win.checkHome()
@@ -455,6 +553,7 @@ ApplicationWindow {
             win.checkFolder()
             win.checkFile()
             win.checkLists()
+            win.checkListView()
             win.checkDialogClosing()
             win.checkTaskCover()
             win.reachedEnd = true
