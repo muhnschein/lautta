@@ -77,7 +77,10 @@ impl IndexInfo {
     fn refresh(&mut self) {
         let Some(core) = core() else { return };
         self.statusJson = QString::from(to_json(&lines(&core)).as_str());
-        self.running = core.index.as_ref().is_some_and(|i| i.running().is_some());
+        self.running = core
+            .index
+            .as_ref()
+            .is_some_and(|i| i.running().is_some() || i.servers_running());
         self.changed();
         if !self.following {
             self.following = true;

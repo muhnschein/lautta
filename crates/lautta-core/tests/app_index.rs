@@ -257,3 +257,97 @@ async fn the_worker_builds_the_device_index_while_the_app_is_open_and_pauses_beh
         "on the charger it works in the background"
     );
 }
+
+#[tokio::test]
+async fn servers_are_crawled_only_while_the_app_is_in_the_foreground() {
+    let h = home().await;
+    let nas = Arc::new(MemoryProvider::new(Capabilities::with(&[])));
+    nas.add_file("/Films/holiday.mkv", b"x", 1_000);
+    nas.add_file("/Music/song.flac", b"x", 1_000);
+    let location = Location::remote(
+        "nv-nas",
+        LocationKind::Server {
+            provider: "sftp".into(),
+        },
+        "NAS",
+        None,
+    );
+    h.core.locations.register(location, nas.clone());
+    h.core
+        .location_prefs
+        .set(&LocationPrefs {
+            index_names: true,
+            ..LocationPrefs::new("nv-nas")
+        })
+        .unwrap();
+    let index = h.core.index.as_ref().unwrap();
+    let mut changes = index.subscribe();
+    let nas_state = |h: &Home| {
+        h.core
+            .index_status()
+            .into_iter()
+            .find(|s| s.location == "nv-nas")
+            .map(|s| s.state)
+    };
+
+    h.core.index_set_conditions(|c| {
+        c.index_on_charger = true;
+        c.charging = true;
+        c.battery = Some(80);
+    });
+    assert_eq!(index.running(), Some(Mode::Idle));
+    assert!(!index.servers_running(), "no server crawl in the background");
+    tokio::time::timeout(Duration::from_secs(20), async {
+        while index.running().is_some() {
+            changes.changed().await.unwrap();
+        }
+    })
+    .await
+    .expect("device index built on the charger");
+    assert_eq!(nas_state(&h), Some(RootState::Pending));
+
+    let hold = nas.hold_next("stat", "/");
+    h.core.index_set_conditions(|c| c.app_active = true);
+    assert!(
+        index.servers_running(),
+        "the app in front crawls servers, search closed or not"
+    );
+    hold.reached.await.unwrap();
+    h.core.index_set_conditions(|c| c.app_active = false);
+    assert!(
+        !index.servers_running(),
+        "leaving the foreground stops the server crawl"
+    );
+    assert_eq!(
+        index.running(),
+        Some(Mode::Idle),
+        "the charger keeps the device crawl going"
+    );
+    let _ = hold.release.send(());
+    let listed = |c: &String| c.starts_with("list ");
+    tokio::time::timeout(Duration::from_secs(20), async {
+        while !nas.calls().iter().any(listed) {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the held folder finishes");
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let calls = nas.calls();
+    assert!(
+        !calls.iter().any(|c| c.contains("Films") || c.contains("Music")),
+        "the stopped crawl leaves the subfolders for later: {calls:?}"
+    );
+    assert_ne!(nas_state(&h), Some(RootState::Ready));
+
+    h.core.index_set_conditions(|c| c.app_active = true);
+    tokio::time::timeout(Duration::from_secs(20), async {
+        while nas_state(&h) != Some(RootState::Ready) {
+            changes.changed().await.unwrap();
+        }
+    })
+    .await
+    .expect("the server index finishes in the foreground");
+    let root = index.store.root("nv-nas", &VPath::root()).unwrap();
+    assert_eq!(h.core.index_query(&root, "holiday", false).len(), 1);
+}

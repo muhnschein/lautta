@@ -42,6 +42,7 @@ pub struct NameIndex {
     pub store: IndexStore,
     conditions: Mutex<Conditions>,
     worker: Mutex<Option<Worker>>,
+    servers: Mutex<Option<Arc<AtomicBool>>>,
     refreshed: Mutex<HashSet<i64>>,
     changed: watch::Sender<u64>,
 }
@@ -63,6 +64,7 @@ impl NameIndex {
             store,
             conditions: Mutex::default(),
             worker: Mutex::default(),
+            servers: Mutex::default(),
             refreshed: Mutex::default(),
             changed: watch::channel(0).0,
         }
@@ -90,6 +92,10 @@ impl NameIndex {
 
     pub fn running(&self) -> Option<Mode> {
         lock(&self.worker).as_ref().map(|w| w.mode)
+    }
+
+    pub fn servers_running(&self) -> bool {
+        lock(&self.servers).is_some()
     }
 }
 
@@ -221,11 +227,15 @@ impl Core {
         if let Some(w) = lock(&index.worker).take() {
             w.stop.store(true, Ordering::Relaxed);
         }
+        if let Some(stop) = lock(&index.servers).take() {
+            stop.store(true, Ordering::Relaxed);
+        }
         self.index_kick();
     }
 
     pub fn index_kick(self: &Arc<Self>) {
         let Some(index) = &self.index else { return };
+        self.index_kick_servers(index);
         let mode = index.mode();
         let mut worker = lock(&index.worker);
         if let Some(w) = worker.as_ref() {
@@ -256,7 +266,7 @@ impl Core {
                             .on_thread_start(lower_this_thread)
                             .build();
                         if let Ok(rt) = rt {
-                            rt.block_on(run_worker(core, stop, true));
+                            rt.block_on(run_worker(core, stop));
                         }
                     });
                 if let Err(e) = spawned {
@@ -264,9 +274,26 @@ impl Core {
                 }
             }
             _ => {
-                self.runtime.spawn(run_worker(core, stop, false));
+                self.runtime.spawn(run_worker(core, stop));
             }
         }
+    }
+
+    fn index_kick_servers(self: &Arc<Self>, index: &NameIndex) {
+        let mut servers = lock(&index.servers);
+        if !index.conditions().servers_allowed() {
+            if let Some(stop) = servers.take() {
+                stop.store(true, Ordering::Relaxed);
+            }
+            return;
+        }
+        if servers.is_some() {
+            return;
+        }
+        let stop = Arc::new(AtomicBool::new(false));
+        *servers = Some(stop.clone());
+        drop(servers);
+        self.runtime.spawn(run_servers(Arc::downgrade(self), stop));
     }
 
     fn index_due(&self, root: &RootInfo, local: bool) -> bool {
@@ -290,17 +317,16 @@ impl Core {
     }
 }
 
-async fn run_worker(core: Weak<Core>, stop: Arc<AtomicBool>, idle: bool) {
+async fn refresh_due(core: &Weak<Core>, stop: &Arc<AtomicBool>, local: bool) {
     let Some(c) = core.upgrade() else { return };
     c.index_forget_unwanted();
     let targets = c.index_targets();
-    let servers_allowed = c.index.as_ref().is_some_and(|i| i.conditions().servers_allowed());
     drop(c);
     for target in targets {
         if stop.load(Ordering::Relaxed) {
             break;
         }
-        if !target.local && (idle || !servers_allowed) {
+        if target.local != local {
             continue;
         }
         let Some(c) = core.upgrade() else { return };
@@ -311,10 +337,28 @@ async fn run_worker(core: Weak<Core>, stop: Arc<AtomicBool>, idle: bool) {
         if !c.index_due(&root, target.local) {
             continue;
         }
-        if let Err(e) = c.index_refresh_root(&root, &stop).await {
+        if let Err(e) = c.index_refresh_root(&root, stop).await {
             log::info!("index of {} not refreshed: {e}", target.location);
         }
     }
+}
+
+async fn run_servers(core: Weak<Core>, stop: Arc<AtomicBool>) {
+    refresh_due(&core, &stop, false).await;
+    if let Some(c) = core.upgrade() {
+        if let Some(index) = &c.index {
+            let mut servers = lock(&index.servers);
+            if servers.as_ref().is_some_and(|s| Arc::ptr_eq(s, &stop)) {
+                *servers = None;
+            }
+            drop(servers);
+            index.notify();
+        }
+    }
+}
+
+async fn run_worker(core: Weak<Core>, stop: Arc<AtomicBool>) {
+    refresh_due(&core, &stop, true).await;
     if let Some(c) = core.upgrade() {
         if let Some(index) = &c.index {
             let mut worker = lock(&index.worker);
