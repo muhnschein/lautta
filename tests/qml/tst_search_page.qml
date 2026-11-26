@@ -195,8 +195,8 @@ ApplicationWindow {
                     break
                 win.expect(win.marksShown(), "every result marks the match in bold highlight")
                 var pulley = win.findAll(win.page, function (x) { return x._isPullDownMenu === true }, [])[0]
-                win.expect(win.within(pulley, win.named("searchRecents")),
-                           "the pulley sits on the recent searches, away from the field")
+                win.expect(pulley.flickable === win.named("searchPulleyHost"),
+                           "the pulley pulls the whole page, from the top")
                 win.touch("typePill").clicked(null)
                 win.next()
                 break
