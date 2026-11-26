@@ -913,6 +913,14 @@
       "w": 1660,
       "x": 8700,
       "y": 60300
+    },
+    "CoversList.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Cover in list view \u00b7 options A, B",
+      "w": 1660,
+      "x": 0,
+      "y": 65600
     }
   },
   "createdOnFiles": {
@@ -1051,6 +1059,14 @@
       "w": 240,
       "x": 0,
       "y": 60000
+    },
+    "r21": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "Cover follows list view: folder, Recents, Trash (options A, B)",
+      "w": 240,
+      "x": 0,
+      "y": 65300
     }
   },
   "order": [
@@ -1167,7 +1183,8 @@
     "HomeFoldersA.dc.html",
     "HomeFoldersB.dc.html",
     "HomeFoldersC.dc.html",
-    "HomeFoldersCompare.dc.html"
+    "HomeFoldersCompare.dc.html",
+    "CoversList.dc.html"
   ],
   "pages": [],
   "title": "Lautta UI"
