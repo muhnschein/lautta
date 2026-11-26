@@ -10,60 +10,76 @@ Item {
 
     property alias model: view.model
     readonly property real iconSize: Theme.iconSizeSmall
+    readonly property real edge: 2 * Theme.paddingLarge
     readonly property alias count: view.count
 
     clip: true
 
-    ListView {
-        id: view
+    Item {
+        id: faded
 
-        anchors.fill: parent
-        interactive: false
+        width: parent.width
+        height: parent.height
 
-        delegate: Item {
-            id: line
+        ListView {
+            id: view
 
-            readonly property var row: CoverRows.told(typeof modelData !== "undefined" ? modelData : model, App)
-            readonly property bool isDir: CoverRows.field(row, "isDir", false)
-            readonly property alias name: label.text
+            width: parent.width
+            height: parent.height
+            interactive: false
 
-            objectName: "coverLine"
-            width: view.width
-            height: lines.iconSize + Theme.paddingMedium
+            delegate: Item {
+                id: line
 
-            FileIcon {
-                id: icon
+                readonly property var row: CoverRows.told(typeof modelData !== "undefined" ? modelData : model, App)
+                readonly property bool isDir: CoverRows.field(row, "isDir", false)
+                readonly property alias name: label.text
 
-                objectName: "coverLineIcon"
-                x: Theme.paddingLarge
-                anchors.verticalCenter: parent.verticalCenter
-                size: lines.iconSize
-                glyphSize: lines.iconSize
-                isDir: line.isDir
-                category: CoverRows.field(line.row, "category", line.isDir ? "folder" : App.categoryOf(label.text))
-                thumbnailSource: CoverRows.field(line.row, "thumbnailSource", "")
-                mimeType: CoverRows.field(line.row, "mimeType", "")
-            }
+                objectName: "coverLine"
+                width: view.width
+                height: lines.iconSize + Theme.paddingMedium
 
-            Label {
-                id: label
+                FileIcon {
+                    id: icon
 
-                anchors {
-                    left: icon.right
-                    leftMargin: Theme.paddingMedium
-                    right: parent.right
-                    verticalCenter: parent.verticalCenter
+                    objectName: "coverLineIcon"
+                    x: Theme.paddingLarge
+                    anchors.verticalCenter: parent.verticalCenter
+                    size: lines.iconSize
+                    glyphSize: lines.iconSize
+                    isDir: line.isDir
+                    category: CoverRows.field(line.row, "category", line.isDir ? "folder" : App.categoryOf(label.text))
+                    thumbnailSource: CoverRows.field(line.row, "thumbnailSource", "")
+                    mimeType: CoverRows.field(line.row, "mimeType", "")
                 }
-                text: CoverRows.field(line.row, "name", "")
-                textFormat: Text.PlainText
-                truncationMode: TruncationMode.Fade
-                font.pixelSize: Theme.fontSizeExtraSmall
+
+                Label {
+                    id: label
+
+                    anchors {
+                        left: icon.right
+                        leftMargin: Theme.paddingMedium
+                        right: parent.right
+                        verticalCenter: parent.verticalCenter
+                    }
+                    text: CoverRows.field(line.row, "name", "")
+                    textFormat: Text.PlainText
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                }
             }
+        }
+
+        OpacityRampEffect {
+            objectName: "coverEdgeFade"
+            sourceItem: view
+            direction: OpacityRamp.LeftToRight
+            offset: 1 - lines.edge / faded.width
+            slope: faded.width / lines.edge
         }
     }
 
     OpacityRampEffect {
-        sourceItem: view
+        sourceItem: faded
         direction: OpacityRamp.TopToBottom
         offset: 0.75
         slope: 4

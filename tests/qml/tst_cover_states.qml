@@ -100,6 +100,13 @@ ApplicationWindow {
         ListElement { itemId: 2; uri: "lautta://user-documents/Cover121/photo.jpg"; name: "photo.jpg"; kind: "previewed"; place: "Documents"; at: 0; dateGroup: "today" }
     }
 
+    ListModel {
+        id: trashRows
+
+        ListElement { trashId: "1"; name: "notes.md"; isDir: false; thumbnailSource: ""; mimeType: "text/markdown"; daysLeft: 20; dateGroup: "today"; folderName: "Documents"; folderUri: "lautta://user-documents/" }
+        ListElement { trashId: "2"; name: "Old"; isDir: true; thumbnailSource: ""; mimeType: ""; daysLeft: 20; dateGroup: "today"; folderName: "Documents"; folderUri: "lautta://user-documents/" }
+    }
+
     function expect(ok, what) {
         if (!ok)
             console.error("FAILED: " + what)
@@ -386,10 +393,19 @@ ApplicationWindow {
                                                  && i.previewText === "" && Math.round(i.mapToItem(frame, 0, 0).x) === Math.round(Theme.paddingLarge) }),
                "small glyphs, no text previews, on the header's margin: " + icons[0].width + " " + at(icons[0]))
         var label = findAll(lines[2], function (x) { return x.text === "a.md" && x.truncationMode !== undefined }, [])[0]
-        expect(label.font.pixelSize === Theme.fontSizeExtraSmall && label.truncationMode === TruncationMode.Fade
+        expect(label.font.pixelSize === Theme.fontSizeExtraSmall && label.truncationMode === TruncationMode.None
                && Math.round(label.mapToItem(frame, label.width, 0).x) === Math.round(frame.width)
                && Math.round(label.mapToItem(frame, 0, 0).x) === Math.round(Theme.paddingLarge + Theme.iconSizeSmall + Theme.paddingMedium),
-               "a name beside its glyph fades out at the cover's edge: " + at(label) + " " + label.width)
+               "a name beside its glyph runs to the cover's edge, not cut short: " + at(label) + " " + label.width)
+        var edge = named(frame, "coverEdgeFade")
+        if (expect(edge.length === 1, "one fade along the right edge")) {
+            var fadeStart = edge[0].offset * frame.width
+            expect(edge[0].direction === OpacityRamp.LeftToRight && edge[0].sourceItem.count === named(frame, "coverList")[0].count
+                   && Math.abs(fadeStart - (frame.width - 2 * Theme.paddingLarge)) < 0.5
+                   && Math.abs(fadeStart + frame.width / edge[0].slope - frame.width) < 0.5,
+                   "anything within two large paddings of the right edge fades, gone at the edge, short names too: "
+                   + fadeStart + " " + edge[0].slope)
+        }
         expect(lines[1].height === Theme.iconSizeSmall + Theme.paddingMedium
                && Math.round(lines[1].mapToItem(frame, 0, 0).y - lines[0].mapToItem(frame, 0, 0).y) === Math.round(lines[0].height),
                "lines stack without gaps: " + lines[0].height)
@@ -398,10 +414,10 @@ ApplicationWindow {
                "lines start where tiles would")
         var list = named(frame, "coverList")[0]
         expect(list.clip && Math.round(list.mapToItem(frame, 0, list.height).y) === Math.round(frame.height), "and stay inside the cover")
-        var ramp = findAll(list, function (x) { return x.sourceItem !== undefined && x.slope !== undefined }, [])
-        expect(ramp.length === 1 && ramp[0].direction === OpacityRamp.TopToBottom && ramp[0].offset === 0.75 && ramp[0].slope === 4
-               && ramp[0].sourceItem.count === list.count,
-               "the lines fade out at the bottom as tiles do: " + ramp.length)
+        var ramp = findAll(list, function (x) { return x.sourceItem !== undefined && x.direction === OpacityRamp.TopToBottom }, [])
+        expect(ramp.length === 1 && ramp[0].offset === 0.75 && ramp[0].slope === 4
+               && named(ramp[0].sourceItem, "coverEdgeFade").length === 1,
+               "the lines, edge fade included, fade out at the bottom as tiles do: " + ramp.length)
 
         App.setSetting("view_mode", JSON.stringify("grid"))
         if (waitFor(function () { return cover.kind === "grid" }, "the grid cover"))
@@ -434,6 +450,13 @@ ApplicationWindow {
         expect(cover.kind === "list" && texts(frame, "coverHeader") === "lautta-trash-title" && named(frame, "coverLine").length === 0
                && texts(frame, "coverEmpty") === "lautta-dir-empty",
                "an empty Trash in list view says No files: " + cover.kind + " " + texts(frame, "coverEmpty"))
+        popTo(1)
+        push(trashPage, { "listModel": trashRows })
+        var trashed = named(frame, "coverLineIcon")
+        expect(lineText(frame) === "notes.md,Old" && trashed.length === 2 && trashed[0].category === "markdown"
+               && trashed[1].isDir && trashed[1].category === "folder",
+               "Trash rows tell no type: it comes from the name, folders get the folder glyph: " + lineText(frame) + " "
+               + trashed.map(function (i) { return i.category }).join(","))
         popTo(1)
         App.setSetting("view_mode", JSON.stringify("grid"))
     }
