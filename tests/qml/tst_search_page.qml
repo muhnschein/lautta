@@ -214,13 +214,15 @@ ApplicationWindow {
                     break
                 win.checkFieldKept("thesis", "type menu")
                 win.expect(win.pill("typePill").checked, "a chosen type lights the Type pill")
+                win.touch("typePill").clicked(null)
                 win.touch("datePill").pressAndHold(null)
                 win.next()
                 break
             case 6:
                 if (!win.named("dateMenu") || !win.named("dateMenu")._expanded)
                     break
-                win.expect(win.named("typeMenu") === null, "one menu at a time")
+                var typeMenu = win.named("typeMenu")
+                win.expect(!typeMenu || !typeMenu.active, "one menu at a time")
                 win.checkLayout("menu open")
                 if (!win.pick("dateMenu", "today"))
                     return win.fail("the date menu offers Today")
