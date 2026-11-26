@@ -65,7 +65,8 @@ Page {
     readonly property real tileWidth: Math.min(Screen.width, Screen.height) / gridMetrics.portraitColumns
     readonly property int columns: GridRows.columns(width, tileWidth, gridMetrics.portraitColumns)
     readonly property real cellWidth: width / columns
-    property var scopeLocations: JSON.parse(searchModel.scopeLocationsJson() || "[]")
+    property string locationsJson: searchModel.scopeLocationsJson()
+    readonly property var scopeLocations: JSON.parse(locationsJson || "[]")
     readonly property var scopeChoices: SearchGroups.scopeChoices(rootUri.length > 0, searchModel.rootName,
                                                                   scopeLocations)
 
@@ -104,7 +105,9 @@ Page {
     }
 
     function refreshLocations() {
-        page.scopeLocations = JSON.parse(searchModel.scopeLocationsJson() || "[]")
+        var json = searchModel.scopeLocationsJson()
+        if (json !== page.locationsJson)
+            page.locationsJson = json
     }
 
     function openMenuOf(menu) {
