@@ -406,11 +406,7 @@ Page {
                 id: recentColumn
 
                 width: parent.width
-
-                SectionHeader {
-                    //% "Recent searches"
-                    text: qsTrId("lautta-filters-recent")
-                }
+                topPadding: Theme.paddingSmall
 
                 Repeater {
                     model: page.recentSearches

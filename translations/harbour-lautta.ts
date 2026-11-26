@@ -198,10 +198,6 @@
         <source>This year</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-filters-recent">
-        <source>Recent searches</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-search-placeholder">
         <source>Search</source>
         <translation type="unfinished"></translation>
