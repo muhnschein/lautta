@@ -1537,13 +1537,6 @@
         <source>Can&apos;t show page %1</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-viewers-pdf-pages" numerus="yes">
-        <source>%n pages</source>
-        <translation>
-            <numerusform>%n page</numerusform>
-            <numerusform>%n pages</numerusform>
-        </translation>
-    </message>
     <message id="lautta-viewers-pdf-encrypted">
         <source>This PDF is protected with a password.</source>
         <translation type="unfinished"></translation>

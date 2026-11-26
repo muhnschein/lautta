@@ -89,7 +89,7 @@ async fn search_with(
     let (tx, mut rx) = mpsc::channel(8);
     let core = h.core.clone();
     let task = tokio::spawn(async move {
-        core.search_scope(&groups, &req, "", Arc::new(AtomicBool::new(false)), tx)
+        core.search_scope(&groups, &req, Arc::new(AtomicBool::new(false)), tx)
             .await
     });
     let mut seen = Seen::default();

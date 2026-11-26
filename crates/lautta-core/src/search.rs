@@ -403,6 +403,27 @@ impl RecentSearches {
         Ok(())
     }
 
+    pub fn remember(&self, location: &str, query: &str) -> Result<()> {
+        self.remember_at(location, query, crate::org::now_ms())
+    }
+
+    pub fn remember_at(&self, location: &str, query: &str, at_ms: i64) -> Result<()> {
+        let query = query.trim();
+        if query.is_empty() {
+            return Ok(());
+        }
+        if let Some(latest) = self.list(location)?.into_iter().next() {
+            let grew = latest.len() < query.len() && query.to_lowercase().starts_with(&latest.to_lowercase());
+            if grew {
+                self.db.lock().execute(
+                    "DELETE FROM recent_searches WHERE location_id = ?1 AND query = ?2",
+                    (location, &latest),
+                )?;
+            }
+        }
+        self.add_at(location, query, at_ms)
+    }
+
     pub fn list(&self, location: &str) -> Result<Vec<String>> {
         let conn = self.db.lock();
         let mut stmt = conn.prepare(
@@ -849,5 +870,41 @@ mod tests {
         assert_eq!(rs.clear("nas").unwrap(), 10);
         assert!(rs.list("nas").unwrap().is_empty());
         assert_eq!(rs.list("sd").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_remembered_search_replaces_the_latest_one_it_grew_from() {
+        let rs = RecentSearches::new(Db::open_in_memory().unwrap());
+        rs.remember_at("nas", "tes", 1).unwrap();
+        rs.remember_at("nas", "test", 2).unwrap();
+        assert_eq!(rs.list("nas").unwrap(), ["test"]);
+        rs.remember_at("nas", "Report", 3).unwrap();
+        rs.remember_at("nas", "report 2026", 4).unwrap();
+        assert_eq!(
+            rs.list("nas").unwrap(),
+            ["report 2026", "test"],
+            "case does not matter"
+        );
+        rs.remember_at("nas", "test again", 5).unwrap();
+        assert_eq!(
+            rs.list("nas").unwrap(),
+            ["test again", "report 2026", "test"],
+            "only the latest search is replaced"
+        );
+        rs.remember_at("nas", "test", 6).unwrap();
+        assert_eq!(
+            rs.list("nas").unwrap(),
+            ["test", "test again", "report 2026"],
+            "a shorter search replaces nothing"
+        );
+        rs.remember_at("nas", " test ", 7).unwrap();
+        rs.remember_at("nas", "  ", 8).unwrap();
+        assert_eq!(
+            rs.list("nas").unwrap().len(),
+            3,
+            "the same search again moves up, blanks are skipped"
+        );
+        rs.remember_at("sd", "testing", 9).unwrap();
+        assert_eq!(rs.list("nas").unwrap()[0], "test", "other places keep theirs");
     }
 }
