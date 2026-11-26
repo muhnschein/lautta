@@ -131,7 +131,7 @@ Format: **F-ID Name** (mode) — what. *Entry:* where user starts it. *Proof:* w
 - **F-HOM-07 Home layout** (S) — hide sections (Recents, Volumes, Servers) and rows, reorder rows by drag, Restore defaults. *Entry:* Settings › Home page. *Code:* `HomeSettingsPage.qml`, `home_layout.rs`.
 - **F-HOM-09 Rescan volumes** (S) — Home refreshes rows when shown and when app returns to front (sandbox can miss mounts). *Proof:* new card shows without restart.
 - **F-HOM-10 Activity from Home** (S) — pulley "Activity (n)". *Proof:* SCR-21.
-- **F-HOM-11 Phone free space** (S) — "N free" at left end of "On this device" header: file system user folders are on; read when Home shows. *Code:* `HomePage.qml`, `app_home.rs` (`device_space`).
+- **F-HOM-11 Phone free space** (S) — "N free" right-aligned under "On this device" header, small: file system user folders are on; read when Home shows. *Code:* `HomePage.qml`, `app_home.rs` (`device_space`).
 
 ### 3.2 Servers and bridge (B)
 
@@ -258,7 +258,7 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 ### 3.12 Share in, cover, notifications, app
 
 - **F-SHR-01 Share target** — Lautta in share sheet; dialog "Save here" over a folder view: "Save N files" (one file: its name), path band with crumbs (F-DIR-06), folders open in place, files dimmed, list or grid as View options say, pulley New folder. Opens folder saved to last, first time Downloads. House → Locations: last three folders saved to, then device folders, volumes, servers. Save here off at Locations and where folder takes no files; unreadable files skipped, told in one line. *Code:* `ShareTargetPage.qml`, `directory/DirectoryView.qml` (`picking`), `directory/PathBand.qml`, `operations/Share.js`, `OperationsHandlers.qml`.
-- **F-APP-01 Cover** — shows what a tap opens: page on top, else nearest page below that tells a cover. Home: no name; free space of phone and mounted volumes (four at most) as icon with "N GB free", two to a row, phone alone on one centred line; below, newest recents as tiles (fewer than three: places). Folder, Trash, Recents: F-DIR-11. Viewer: file fills cover, name on dark fade; no picture: type glyph. Built only while cover shows; no timers. Transfer cover while tasks run. *Code:* `CoverPage.qml`, `CoverHome.qml`, `CoverFile.qml`.
+- **F-APP-01 Cover** — shows what a tap opens: page on top, else nearest page below that tells a cover. Home: no name, no files, no free space: our glyphs in 13 lanes tilted -18°, every fourth lane in highlight colour with Lautta glyph in it; still, no animation. Folder, Trash, Recents: F-DIR-11. Viewer: file fills cover, name on dark fade; no picture: type glyph. Built only while cover shows; no timers. Transfer cover while tasks run. *Code:* `CoverPage.qml`, `CoverLanes.qml` (lanes prerendered: `lanes-faint.svg`, `lanes-lit.svg` from `tools/cover_lanes.py`, tinted by ambience), `CoverFile.qml`.
 - **F-APP-02 Start error** — "Lautta can't open its data".
 - **F-APP-03 Settings** — Browsing (Home page, View options, Search, Recents), Files (Deleting, Transfers, Storage), About Lautta.
 - **F-APP-04 Storage** — Keep stored listings, Clear cache, Clear app data ("Removes queue, history, favourites and everything in Trash"; refuses while tasks run).

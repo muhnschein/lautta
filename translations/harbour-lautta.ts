@@ -2415,10 +2415,6 @@
             <numerusform>You chose for all %n</numerusform>
         </translation>
     </message>
-    <message id="lautta-cover-free">
-        <source>%1 free</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-attention-back">
         <source>Go back</source>
         <translation type="unfinished"></translation>
