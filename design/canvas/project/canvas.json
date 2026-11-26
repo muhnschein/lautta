@@ -794,6 +794,78 @@
       "x": 5740,
       "y": 6580
     },
+    "FileGlyphOptions.dc.html": {
+      "h": 1560,
+      "is_interactive": true,
+      "title": "File type glyphs (#44) \u00b7 options A B C D",
+      "w": 860,
+      "x": 0,
+      "y": 62200
+    },
+    "FileGlyphsToday.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Directory \u00b7 file glyphs today",
+      "w": 860,
+      "x": 940,
+      "y": 62200
+    },
+    "FileGlyphsA.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Directory \u00b7 file glyphs A, content",
+      "w": 860,
+      "x": 1880,
+      "y": 62200
+    },
+    "FileGlyphsB.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Directory \u00b7 file glyphs B, folded corner",
+      "w": 860,
+      "x": 2820,
+      "y": 62200
+    },
+    "FileGlyphsD.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Directory \u00b7 file glyphs D, folded corner, content of a",
+      "w": 860,
+      "x": 3760,
+      "y": 62200
+    },
+    "FileGlyphsC.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Directory \u00b7 file glyphs C, extension label",
+      "w": 860,
+      "x": 4700,
+      "y": 62200
+    },
+    "FileGlyphsCompare.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Directory \u00b7 file glyphs today, A, B, C",
+      "w": 1660,
+      "x": 10440,
+      "y": 62200
+    },
+    "NewKindOptions.dc.html": {
+      "h": 1300,
+      "is_interactive": true,
+      "title": "New file kinds (#44) \u00b7 options P S H",
+      "w": 860,
+      "x": 0,
+      "y": 64000
+    },
+    "NewKindsCompare.dc.html": {
+      "h": 1000,
+      "is_interactive": true,
+      "title": "New file kinds (#44) \u00b7 today, P, S, H",
+      "w": 1660,
+      "x": 1740,
+      "y": 64000
+    },
     "FolderGlyphOptions.dc.html": {
       "h": 1220,
       "is_interactive": true,
@@ -956,6 +1028,22 @@
       "x": 0,
       "y": 17960
     },
+    "r19": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "File type glyphs (#44): list and grid (options A, B, C)",
+      "w": 240,
+      "x": 0,
+      "y": 61900
+    },
+    "r20": {
+      "kind": "title1",
+      "maxW": 5200,
+      "text": "New file kinds (#44): mail, calendar, contacts, keys, programs, fonts, disk images, CAD, OneNote",
+      "w": 240,
+      "x": 0,
+      "y": 63700
+    },
     "r18": {
       "kind": "title1",
       "maxW": 5200,
@@ -1065,6 +1153,15 @@
     "AccessPicker.dc.html",
     "AccessNarrowed.dc.html",
     "AccessAbout.dc.html",
+    "FileGlyphOptions.dc.html",
+    "FileGlyphsToday.dc.html",
+    "FileGlyphsA.dc.html",
+    "FileGlyphsB.dc.html",
+    "FileGlyphsD.dc.html",
+    "FileGlyphsC.dc.html",
+    "FileGlyphsCompare.dc.html",
+    "NewKindOptions.dc.html",
+    "NewKindsCompare.dc.html",
     "FolderGlyphOptions.dc.html",
     "HomeFoldersToday.dc.html",
     "HomeFoldersA.dc.html",
