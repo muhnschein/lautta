@@ -15,9 +15,7 @@ ApplicationWindow {
     property var heading
     property var field
     property var list
-    property var filters
-    property var dialog
-    property var searchModel
+    property var pills
     property real fieldY
 
     SearchTestSupport { id: support }
@@ -90,42 +88,49 @@ ApplicationWindow {
     }
 
     function checkStructure() {
-        expect(findAll(page, function (x) { return x._isPullDownMenu === true }, []).length === 0,
-               "the page has no pulley menu")
-        expect(findAll(page, function (x) { return x.pullDownMenu !== undefined && x.pullDownMenu !== null }, []).length === 0,
-               "no flickable of the page has a pulley menu")
+        var pulleys = findAll(page, function (x) { return x._isPullDownMenu === true }, []).filter(function (x, i, all) {
+            return all.indexOf(x) === i
+        })
+        expect(pulleys.length === 1, "the page has one pulley menu: " + pulleys.length)
+        expect(!list.pullDownMenu, "the pulley belongs to the page, not to the result list")
+        expect(named("searchSettingsItem") === null, "the pulley has no search settings entry")
+        expect(named("clearRecentSearches") !== null, "the pulley can clear recent searches")
+        expect(pulleys.length === 1 && !pulleys[0].visible, "without recent searches the pulley is hidden")
         expect(!within(field, list), "the search field is not inside the list")
         expect(list.headerItem === null, "the list has no header")
-        expect(within(field, heading) && within(filters, heading), "field and filter summary are in the heading")
+        expect(within(field, heading) && within(pills, heading), "field and pills are in the heading")
         expect(page.allowedOrientations === Orientation.All, "the page turns to landscape")
     }
 
-    function filtersShown() {
-        if (pageStack.busy || pageStack.currentPage === page)
+    function pill(name) {
+        return findAll(pills, function (x) { return x.objectName === name }, [])[0]
+    }
+
+    function touch(name) {
+        return findAll(pill(name), function (x) { return x.preventStealing !== undefined }, [])[0]
+    }
+
+    function choice(menuName, value) {
+        var menu = named(menuName)
+        if (!menu)
+            return null
+        return findAll(menu, function (x) { return x.objectName === "pillChoice" && x.value === value }, [])[0]
+    }
+
+    function pick(menuName, value) {
+        var menu = named(menuName)
+        var item = choice(menuName, value)
+        if (!menu || !item || !menu._expanded)
             return false
-        dialog = pageStack.currentPage
-        if (dialog.typeIds === undefined || dialog.searchModel === undefined) {
-            fail("the filter summary opens the filters")
-            return false
-        }
-        searchModel = dialog.searchModel
+        menu._activatedMenuItem(item)
         return true
     }
 
-    function backOnPage() {
-        return !pageStack.busy && pageStack.currentPage === page
-    }
-
-    function nameField() {
-        return findAll(dialog, function (x) {
-            return x.echoMode !== undefined && x.label !== undefined && x.placeholderText !== undefined
-        }, [])[0]
-    }
-
-    function typeBox() {
-        return findAll(dialog, function (x) {
-            return x.currentIndex !== undefined && (x.label === "lautta-filters-type" || x.label === "Type")
-        }, [])[0]
+    function marksShown() {
+        var names = findAll(list.contentItem, function (x) { return x.objectName === "searchResultName" }, [])
+        return names.length > 0 && names.every(function (n) {
+            return n.textFormat === Text.StyledText && n.text.indexOf("<b><font") >= 0
+        })
     }
 
     Component.onCompleted: {
@@ -157,10 +162,13 @@ ApplicationWindow {
                 win.heading = win.named("searchHeading")
                 win.field = win.named("searchField")
                 win.list = win.named("searchList")
-                win.filters = win.named("searchFilters")
-                if (!win.heading || !win.field || !win.list || !win.filters)
-                    return win.fail("heading, field, list and filter summary are found")
+                win.pills = win.named("searchPills")
+                if (!win.heading || !win.field || !win.list || !win.pills)
+                    return win.fail("heading, field, list and pills are found")
                 win.checkStructure()
+                win.expect(!win.named("searchPlaceholder").enabled, "an empty search page shows no notice")
+                win.expect(win.field.focus, "the field has the focus as the page opens")
+                win.expect(win.page.scope === "folder", "a folder's search starts in the folder: " + win.page.scope)
                 win.field.forceActiveFocus()
                 win.fieldY = win.field.mapToItem(win.page, 0, 0).y
                 win.field.text = "thesis"
@@ -170,6 +178,7 @@ ApplicationWindow {
                 if (win.rowCount() !== 15)
                     break
                 win.checkFieldKept("thesis", "first search")
+                win.expect(!win.named("searchPlaceholder").enabled, "no notice over results")
                 win.checkLayout("portrait")
                 win.field.text = "thesis_1"
                 win.next()
@@ -178,51 +187,116 @@ ApplicationWindow {
                 if (win.rowCount() !== 3)
                     break
                 win.checkFieldKept("thesis_1", "second search")
-                win.filters.clicked(null)
-                win.next()
-                break
-            case 3:
-                if (!win.filtersShown())
-                    break
-                var name = win.nameField()
-                win.expect(name.text === "thesis_1", "the filters start from the typed name: " + name.text)
-                name.text = "final"
-                win.dialog.accept()
-                win.next()
-                break
-            case 4:
-                if (!win.backOnPage() || win.rowCount() !== 1)
-                    break
-                win.expect(win.field.text === "final", "the field shows the name the filters searched for: " + win.field.text)
-                win.field.forceActiveFocus()
                 win.field.text = "thesis"
                 win.next()
                 break
-            case 5:
+            case 3:
                 if (win.rowCount() !== 15)
                     break
-                win.expect(win.searchModel.query === "thesis", "the query follows the field: " + win.searchModel.query)
-                win.checkFieldKept("thesis", "after the filters")
-                win.filters.clicked(null)
+                win.expect(win.marksShown(), "every result marks the match in bold highlight")
+                var pulley = win.findAll(win.page, function (x) { return x._isPullDownMenu === true }, [])[0]
+                win.expect(win.within(pulley, win.named("searchRecents")),
+                           "the pulley sits on the recent searches, away from the field")
+                win.touch("typePill").clicked(null)
+                win.next()
+                break
+            case 4:
+                if (!win.named("typeMenu") || !win.named("typeMenu")._expanded)
+                    break
+                win.expect(win.named("searchPillHost").height > win.pills.height, "the type menu opens under the pills")
+                win.expect(win.pill("typePill").open, "the Type pill shows its menu is open")
+                if (!win.pick("typeMenu", "text"))
+                    return win.fail("the type menu offers Text")
+                win.next()
+                break
+            case 5:
+                if (win.rowCount() !== 3)
+                    break
+                win.checkFieldKept("thesis", "type menu")
+                win.expect(win.pill("typePill").checked, "a chosen type lights the Type pill")
+                win.touch("datePill").pressAndHold(null)
                 win.next()
                 break
             case 6:
-                if (!win.filtersShown())
+                if (!win.named("dateMenu") || !win.named("dateMenu")._expanded)
                     break
-                win.nameField().text = ""
-                win.typeBox().currentIndex = 1
-                win.dialog.accept()
+                win.expect(win.named("typeMenu") === null, "one menu at a time")
+                win.checkLayout("menu open")
+                if (!win.pick("dateMenu", "today"))
+                    return win.fail("the date menu offers Today")
                 win.next()
                 break
             case 7:
-                if (win.waited < 8 || !win.backOnPage() || win.rowCount() !== 2)
+                if (win.waited < 8 || win.rowCount() !== 3 || win.named("dateMenu") !== null)
                     break
-                win.expect(win.field.text === "", "the field shows the empty name: " + win.field.text)
+                win.expect(win.pill("datePill").checked, "a chosen date lights its pill")
+                win.touch("typePill").clicked(null)
+                win.next()
+                break
+            case 8:
+                if (!win.pick("typeMenu", ""))
+                    break
+                win.next()
+                break
+            case 9:
+                if (win.rowCount() !== 15)
+                    break
+                win.expect(!win.pill("typePill").checked, "any type dims the Type pill")
+                win.touch("scopePill").clicked(null)
+                win.next()
+                break
+            case 10:
+                if (!win.named("scopeMenu") || !win.named("scopeMenu")._expanded)
+                    break
+                if (!win.choice("scopeMenu", "folder"))
+                    return win.fail("the scope menu names the folder too")
+                if (!win.pick("scopeMenu", "device"))
+                    return win.fail("the scope menu offers This device")
+                win.next()
+                break
+            case 11:
+                if (win.rowCount() < 15 || win.named("searchGroupName") === null)
+                    break
+                win.expect(win.page.scope === "device" && win.page.wide, "the device scope is wide")
+                win.expect(win.named("searchGroupName").text.length > 0, "the device section is named")
+                win.touch("typePill").clicked(null)
+                win.next()
+                break
+            case 12:
+                var open = win.named("typeMenu")
+                if (!open || !open._expanded)
+                    break
+                win.touch("typePill").clicked(null)
+                win.next()
+                break
+            case 13:
+                if (win.named("typeMenu") !== null)
+                    break
+                var host = win.named("searchPulleyHost")
+                win.expect(Math.abs(host.contentY - host.originY) < 1,
+                           "closing a menu by its pill leaves the page at its top: " + host.contentY)
+                win.expect(Math.abs(win.named("searchPillHost").height - win.pills.height) < 1,
+                           "a closed menu leaves no room under the pills")
+                win.page.datePreset = "any"
+                win.field.text = ""
+                win.next()
+                break
+            case 14:
+                if (!win.named("searchRecents").visible)
+                    break
+                var shown = win.findAll(win.page, function (x) { return x._isPullDownMenu === true }, [])[0]
+                win.expect(shown.visible, "with the field empty, remembered searches bring the pulley")
+                win.field.text = "thesis"
+                win.next()
+                break
+            case 15:
+                if (win.rowCount() !== 15)
+                    break
                 win.field.forceActiveFocus()
                 win.deviceOrientation = Orientation.Landscape
                 win.next()
                 break
-            case 8:
+            case 16:
                 if (!win.page.isLandscape || win.page.orientationTransitionRunning)
                     break
                 win.expect(win.page.width > win.page.height, "landscape page is wide: " + win.page.width + "x" + win.page.height)

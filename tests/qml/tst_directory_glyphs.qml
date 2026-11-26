@@ -14,7 +14,7 @@ ApplicationWindow {
     property string archiveRoot
     property string thumb
     readonly property var kindOf: ({
-        "folder": "folder", "markdown": "document", "archive": "archive", "video": "video",
+        "folder": "folder", "markdown": "markdown", "archive": "archive", "video": "video",
         "package": "package", "database": "database"
     })
 

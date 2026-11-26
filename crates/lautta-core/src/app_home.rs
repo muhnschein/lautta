@@ -28,10 +28,25 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 const PLACE_SEPARATOR: &str = " › ";
-const SERVER_ICON: &str = "server";
+pub(crate) const SERVER_ICON: &str = "server";
 const FOLDER_ICON: &str = "file-folder";
 
 const MOUNT_LOOKS: u32 = 10;
+
+pub fn standard_folder_icon(location_id: &str) -> &'static str {
+    match location_id {
+        "user-documents" | "android-documents" => "file-folder-documents",
+        "user-downloads" | "android-download" => "file-folder-downloads",
+        "user-pictures" | "android-pictures" => "file-folder-pictures",
+        "user-music" | "android-music" => "file-folder-music",
+        "user-videos" | "android-movies" => "file-folder-videos",
+        "user-public" => "file-folder-public",
+        "user-playlists" => "file-folder-playlists",
+        "android-dcim" => "file-folder-camera",
+        "android-podcasts" => "file-folder-podcasts",
+        _ => FOLDER_ICON,
+    }
+}
 const MOUNT_LOOK_EVERY: Duration = Duration::from_millis(200);
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -269,7 +284,7 @@ impl Core {
                 drive_icon(self.locations.volume_kind(&location.id).unwrap_or(DriveKind::Usb))
             }
             LocationKind::Server { .. } => SERVER_ICON,
-            _ => FOLDER_ICON,
+            _ => standard_folder_icon(&location.id),
         }
     }
 
@@ -508,7 +523,7 @@ impl Core {
                 let mut row = Row::new(section, "folder");
                 row.uri = Uri::root(l.id.clone()).to_string();
                 row.name = display_of(&l, prefs);
-                row.icon = FOLDER_ICON.to_owned();
+                row.icon = self.location_icon(&l).to_owned();
                 row.item_id = l.id;
                 row
             })
@@ -791,7 +806,7 @@ struct LocalRows {
     layout: Layout,
 }
 
-fn drive_icon(kind: DriveKind) -> &'static str {
+pub(crate) fn drive_icon(kind: DriveKind) -> &'static str {
     match kind {
         DriveKind::Card => "image://theme/icon-m-sd-card",
         DriveKind::Usb => "image://theme/icon-m-usb",
@@ -877,6 +892,43 @@ async fn purge_step(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn standard_folders_get_their_emblem_in_every_glyph_set() {
+        let want = [
+            ("user-documents", "file-folder-documents"),
+            ("user-downloads", "file-folder-downloads"),
+            ("user-pictures", "file-folder-pictures"),
+            ("user-music", "file-folder-music"),
+            ("user-videos", "file-folder-videos"),
+            ("user-public", "file-folder-public"),
+            ("user-playlists", "file-folder-playlists"),
+            ("android-documents", "file-folder-documents"),
+            ("android-download", "file-folder-downloads"),
+            ("android-pictures", "file-folder-pictures"),
+            ("android-dcim", "file-folder-camera"),
+            ("android-music", "file-folder-music"),
+            ("android-podcasts", "file-folder-podcasts"),
+            ("android-movies", "file-folder-videos"),
+        ];
+        let ids: Vec<&str> = crate::locations::USER_FOLDERS
+            .iter()
+            .chain(crate::locations::ANDROID_FOLDERS.iter())
+            .map(|(_, id)| *id)
+            .collect();
+        assert_eq!(ids, want.map(|(id, _)| id));
+        let icons = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../qml/icons");
+        for (id, icon) in want {
+            assert_eq!(standard_folder_icon(id), icon, "{id}");
+            for set in [28, 32, 80] {
+                assert!(
+                    icons.join(format!("{icon}-{set}.svg")).is_file(),
+                    "{icon}-{set}.svg"
+                );
+            }
+        }
+        assert_eq!(standard_folder_icon("user-templates"), FOLDER_ICON);
+    }
 
     #[test]
     fn file_systems_have_names() {
