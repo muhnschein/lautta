@@ -179,8 +179,8 @@ ApplicationWindow {
         expect(find(settings, "homePageEntry") !== null && find(settings, "aboutEntry") !== null,
                "Home page and About stay on Settings")
         var homeIcon = String(find(settings, "homePageEntry").iconSource)
-        expect(homeIcon.indexOf("image://lautta-icon/") === 0 && homeIcon.indexOf("/home.svg?") > 0,
-               "its row shows the house of the folder header: " + homeIcon)
+        expect(homeIcon.indexOf("image://lautta-icon/") === 0 && homeIcon.indexOf("/lautta.svg?") > 0,
+               "its row shows Lautta's glyph, as the folder header does: " + homeIcon)
         checkNamesOnly(settings)
         subPages.forEach(function (spec) { checkSubPage(settings, spec) })
         checkLargeOps(settings)

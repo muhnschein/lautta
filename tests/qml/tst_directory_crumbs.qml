@@ -210,7 +210,7 @@ ApplicationWindow {
         expect(home.width > dots.width + 1 && widths[0] > 0, "crumbs have a width, the house more than the dots: " + home.width + " " + dots.width + " " + widths)
         same(crumbs.reserve, dots.width + sep + Theme.paddingMedium, "kept free of the name: the dots and their separator")
         var house = named(host, "crumbHouse")
-        expect(String(house.source).indexOf("/qml/icons/home.svg?stroke=") > 0, "the house is Lautta's own drawing: " + house.source)
+        expect(String(house.source).indexOf("/qml/icons/lautta.svg?stroke=") > 0, "the way home is Lautta's glyph: " + house.source)
         var houseAt = fitting(0) + home.width - dots.width
 
         same(title.text, "Here", "the line ends with the folder's name")

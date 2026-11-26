@@ -94,6 +94,19 @@ fn plural_singular(ts: &str, id: &str) -> String {
     )
 }
 
+fn source_of(ts: &str, id: &str) -> String {
+    let (_, message) = ts.split_once(&format!("<message id=\"{id}\">")).unwrap();
+    let source = message.split_once("<source>").unwrap().1;
+    source.split_once("</source>").unwrap().0.to_owned()
+}
+
+#[test]
+fn the_start_page_and_its_settings_are_called_browse() {
+    let ts = catalogue();
+    assert_eq!(source_of(&ts, "lautta-home-title"), "Browse");
+    assert_eq!(source_of(&ts, "lautta-settings-home-page"), "Browse page");
+}
+
 #[test]
 fn the_built_catalogue_has_english_plural_forms() {
     let home = tempfile::tempdir().unwrap();
