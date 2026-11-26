@@ -107,11 +107,15 @@ Item {
         }
         check(found, "draft found")
 
+        check(JSON.parse(model.recentSearchesJson).length === 0,
+              "a search alone is not remembered: " + model.recentSearchesJson)
+        model.rememberSearch()
         var recent = JSON.parse(model.recentSearchesJson)
         check(recent.length === 1 && recent[0] === "thesis", "recent searches: " + model.recentSearchesJson)
 
         run("*thesis*.md", "glob", [], "any", "any", false)
         check(names() === "Thesis_notes.md", "glob hits: " + names())
+        model.rememberSearch()
         check(JSON.parse(model.recentSearchesJson)[0] === "*thesis*.md", "newest recent first")
 
         run("thesis", "substring", ["document", "archive"], "any", "any", false)
@@ -142,13 +146,12 @@ Item {
         check(model.hitCount === before, "no hits after cancel: " + before + " -> " + model.hitCount)
         check(rows.count === before, "no rows after cancel")
 
-        model.query = "cut_short"
-        check(model.start(), "start for an early stop")
-        model.cancel()
-        for (var w = 0; w < 300 && JSON.parse(model.recentSearchesJson).indexOf("cut_short") < 0; ++w)
-            support.spin(10)
-        check(JSON.parse(model.recentSearchesJson)[0] === "cut_short",
-              "a search stopped early still shows up in recent searches: " + model.recentSearchesJson)
+        model.query = "thes"
+        model.rememberSearch()
+        model.query = "thesis_dr"
+        model.rememberSearch()
+        check(JSON.stringify(JSON.parse(model.recentSearchesJson)) === JSON.stringify(["thesis_dr", "*thesis*.md", "thesis"]),
+              "a longer search replaces the one it grew from: " + model.recentSearchesJson)
 
         model.clear()
         check(rows.count === 0 && model.hitCount === 0, "clear empties the list")
@@ -171,9 +174,11 @@ Item {
               "device rows are sectioned by group: " + d.rowSection)
         check(d.rowPlace === "Documents › srch_t1 › Uni", "place names the device folder: " + d.rowPlace)
         check(d.rowMime.length > 0 && d.rowTypeIcon.length > 0, "rows carry their look: " + d.rowMime + " " + d.rowTypeIcon)
+        check(JSON.parse(model.recentSearchesJson).length === 0, "nothing remembered before asked")
+        model.rememberSearch()
         check(JSON.stringify(JSON.parse(model.recentSearchesJson)) === JSON.stringify(["thesis_draft"]),
               "device recents: " + model.recentSearchesJson)
-        check(!model.hasServers(), "no servers without the bridge")
+        check(!model.hasOtherPlaces(), "no servers or cards here")
         model.scope = "folder"
         check(JSON.parse(model.recentSearchesJson).indexOf("thesis_draft") < 0, "folder recents stay apart")
 

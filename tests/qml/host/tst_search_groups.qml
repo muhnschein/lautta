@@ -67,7 +67,9 @@ QtObject {
         same([SearchGroups.hasChoice(all, "location:nv-nas"), SearchGroups.hasChoice(all, "location:gone"),
               SearchGroups.hasChoice([], "device")], [true, false, false], "a scope is among the choices or not")
         same(SearchGroups.scopeChoices(false, "", [locations[0]]).map(function (c) { return c.value }),
-             ["device", "location:vol-sd"], "no folder from Home, no everywhere without a server")
+             ["device", "location:vol-sd", "everywhere"], "no folder from Home; a card alone makes everywhere")
+        same(SearchGroups.scopeChoices(false, "", []).map(function (c) { return c.value }),
+             ["device"], "the phone alone: no everywhere")
 
         var choices = [{ "value": "", "label": "Any type" }, { "value": "image", "label": "Images" }]
         same(SearchGroups.labelOf(choices, "image"), "Images", "a choice's label")

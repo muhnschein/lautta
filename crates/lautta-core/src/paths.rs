@@ -50,6 +50,10 @@ impl AppPaths {
         self.cache_dir().join("thumbs")
     }
 
+    pub fn index_database(&self) -> PathBuf {
+        self.cache_dir().join("names.db")
+    }
+
     pub fn dircache_dir(&self) -> PathBuf {
         self.cache_dir().join("dircache")
     }
