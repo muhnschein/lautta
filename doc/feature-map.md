@@ -250,8 +250,8 @@ Context menu order (list long-press): Share (files) · Copy · Cut · Rename · 
 - **F-RCT-01 Recents** — files opened, edited, transferred, under date groups; thumbnails as folders have them; list or grid as View options' View, in grid each date group starts its own row of tiles (name, place). Title stays on top while list scrolls; while list moves, scroll handle with top row's date as F-XFR-01. Tap opens (transferred → its folder); menu Remove from recents; pulley Clear recents.
 - **F-RCT-02 Recents off** — Settings › Recents "Remember recent files"; Home tiles hide.
 - **F-RCT-03 Recents on Home** — section Recents above Favourites: three newest files as tiles (thumbnail, a text file's first lines, or type glyph; name), fourth tile "All recents" opens SCR-38. Tap opens (transferred → its folder); long press: Remove from recents. No section while Recents are off or hold fewer than three files; switch "Newest recents" in Settings › Home page. *Code:* `RecentStrip.qml`, `app_home.rs` (`recent_tiles`).
-- **F-TRH-01 Trash** — items from user folders, newest delete first, under date groups of delete time; note "Only files deleted from this device's folders are kept here for N days …"; "N days left", "From folder"; 7 or fewer days left: days left, glyph and grid tile tint in warning colour (`Theme.presenceColor(Theme.PresenceAway)`). List or grid as View options' View, in grid each date group starts its own row of tiles (name, days left). Title stays on top while list scrolls; opens at list top; no scroll date pill (short list).
-- **F-TRH-02 Restore / Delete now / Show original folder** — row menu (grid: long press on tile).
+- **F-TRH-01 Trash** — items from user folders, "Kept for N days", "N days left", "From folder".
+- **F-TRH-02 Restore / Delete now / Show original folder** — row menu.
 - **F-TRH-03 Empty trash** — pulley, remorse.
 - **F-TRH-04 Trash settings** — Move deleted items to Trash, Keep items in Trash (days), Time to undo (remorse seconds).
 
