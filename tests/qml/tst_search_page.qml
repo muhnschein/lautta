@@ -254,11 +254,29 @@ ApplicationWindow {
                     break
                 win.expect(win.page.scope === "device" && win.page.wide, "the device scope is wide")
                 win.expect(win.named("searchGroupName").text.length > 0, "the device section is named")
+                win.touch("typePill").clicked(null)
+                win.next()
+                break
+            case 12:
+                var open = win.named("typeMenu")
+                if (!open || !open._expanded)
+                    break
+                win.touch("typePill").clicked(null)
+                win.next()
+                break
+            case 13:
+                if (win.named("typeMenu") !== null)
+                    break
+                var host = win.named("searchPulleyHost")
+                win.expect(Math.abs(host.contentY - host.originY) < 1,
+                           "closing a menu by its pill leaves the page at its top: " + host.contentY)
+                win.expect(Math.abs(win.named("searchPillHost").height - win.pills.height) < 1,
+                           "a closed menu leaves no room under the pills")
                 win.field.forceActiveFocus()
                 win.deviceOrientation = Orientation.Landscape
                 win.next()
                 break
-            case 12:
+            case 14:
                 if (!win.page.isLandscape || win.page.orientationTransitionRunning)
                     break
                 win.expect(win.page.width > win.page.height, "landscape page is wide: " + win.page.width + "x" + win.page.height)

@@ -23,6 +23,7 @@ Page {
     property string typeFilter: ""
     property string datePreset: "any"
     property bool includeHidden
+    readonly property real menuRoom: scopeMenu.height + typeMenu.height + dateMenu.height
     readonly property Item openMenu: scopeMenu.active ? scopeMenu
                                      : typeMenu.active ? typeMenu
                                      : dateMenu.active ? dateMenu : null
@@ -197,7 +198,7 @@ Page {
         objectName: "searchPulleyHost"
         anchors.fill: parent
         contentWidth: width
-        contentHeight: height
+        contentHeight: height + page.menuRoom
 
         PullDownMenu {
             MenuItem {
@@ -264,7 +265,7 @@ Page {
                 objectName: "searchPillHost"
                 anchors.top: searchField.bottom
                 width: parent.width
-                height: pillStrip.height + (page.openMenu ? page.openMenu.height : 0)
+                height: pillStrip.height + page.menuRoom
 
                 Flickable {
                     id: pillStrip
