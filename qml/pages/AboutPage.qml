@@ -2,6 +2,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
+import "../components/FileIcons.js" as FileIcons
 
 Page {
     id: page
@@ -28,19 +29,6 @@ Page {
         }
     }
 
-    function accessText() {
-        switch (bridgeStatus) {
-        case "consentUnknown":
-            //% "Not asked yet"
-            return qsTrId("lautta-about-access-unknown")
-        case "connecting":
-            return ""
-        default:
-            //% "Set per server"
-            return qsTrId("lautta-about-access-per-server")
-        }
-    }
-
     allowedOrientations: Orientation.All
 
     SilicaFlickable {
@@ -61,7 +49,7 @@ Page {
                 width: parent.width
                 height: logo.height + Theme.paddingLarge * 2
 
-                Image {
+                HighlightImage {
                     id: logo
 
                     objectName: "aboutIcon"
@@ -70,7 +58,8 @@ Page {
                     height: width
                     sourceSize.width: width
                     sourceSize.height: height
-                    source: Qt.resolvedUrl("../icons/lautta-256.png")
+                    source: FileIcons.source("lautta", Theme.pixelRatio)
+                    color: Theme.highlightColor
                 }
             }
 
@@ -110,25 +99,6 @@ Page {
                 //% "Status"
                 label: qsTrId("lautta-about-status")
                 value: page.statusText()
-            }
-            DetailItem {
-                visible: page.hasBridge && value.length > 0
-                //% "Access"
-                label: qsTrId("lautta-about-access")
-                value: page.accessText()
-            }
-            Label {
-                objectName: "accessHint"
-                visible: page.hasBridge
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                bottomPadding: Theme.paddingMedium
-                horizontalAlignment: Text.AlignRight
-                wrapMode: Text.Wrap
-                color: Theme.secondaryColor
-                font.pixelSize: Theme.fontSizeSmall
-                //% "Change it in Settings › Accounts › Apps using network locations."
-                text: qsTrId("lautta-about-access-hint")
             }
 
             SectionHeader {

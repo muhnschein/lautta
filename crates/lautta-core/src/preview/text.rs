@@ -121,7 +121,6 @@ const CONFIG: &[&str] = &[
     "yaml",
     "yml",
     "desktop",
-    "service",
     "rules",
     "properties",
     "env",
@@ -156,7 +155,7 @@ pub fn text_kind(name: &[u8]) -> TextKind {
     match ext {
         e if crate::mime::is_markdown_extension(e) => TextKind::Markdown,
         "log" => TextKind::Log,
-        e if CONFIG.contains(&e) => TextKind::Config,
+        e if CONFIG.contains(&e) || crate::mime::is_systemd_unit_extension(e) => TextKind::Config,
         e if DATA.contains(&e) => TextKind::Data,
         _ => TextKind::Plain,
     }
@@ -267,6 +266,8 @@ mod tests {
         assert_eq!(text_kind(b"notes.mdwn"), TextKind::Markdown);
         assert_eq!(text_kind(b"a.log"), TextKind::Log);
         assert_eq!(text_kind(b"a.yaml"), TextKind::Config);
+        assert_eq!(text_kind(b"getty@.service"), TextKind::Config);
+        assert_eq!(text_kind(b"web.CONTAINER"), TextKind::Config);
         assert_eq!(text_kind(b"a.json"), TextKind::Data);
         assert_eq!(text_kind(b"noext"), TextKind::Plain);
         assert_eq!(text_kind(b"\xff.rs"), TextKind::Code("Rust"));

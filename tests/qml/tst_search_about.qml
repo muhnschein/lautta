@@ -30,15 +30,21 @@ ApplicationWindow {
             return items.filter(function (x) { return x.objectName === name })[0]
         }
         var icon = named("aboutIcon")
-        expect(icon && String(icon.source).indexOf("icons/lautta-256.png") >= 0 && icon.status === Image.Ready,
-               "the app's own icon: " + (icon ? icon.source + " " + icon.status : "none"))
+        expect(icon && String(icon.source).indexOf("image://lautta-icon/") === 0
+               && String(icon.source).indexOf("/icons/lautta.svg?") > 0 && icon.status === Image.Ready,
+               "Lautta's glyph: " + (icon ? icon.source + " " + icon.status : "none"))
+        expect(icon && Qt.colorEqual(icon.color, Theme.highlightColor), "in the ambience colour: " + (icon ? icon.color : "none"))
         var texts = items.filter(function (x) { return typeof x.text === "string" && x.visible })
                          .map(function (x) { return x.text })
         expect(texts.indexOf(qsTrId("lautta-about-tagline")) >= 0, "the claim: " + JSON.stringify(texts))
         expect(texts.indexOf(qsTrId("lautta-about-permissions")) < 0 && texts.indexOf("Permissions") < 0,
                "no Permissions section: " + JSON.stringify(texts))
-        var hint = named("accessHint")
-        expect(hint && hint.text === qsTrId("lautta-about-access-hint"), "the access hint: " + (hint ? hint.text : "none"))
+        var labels = items.filter(function (x) { return typeof x.label === "string" && typeof x.value === "string" })
+                          .map(function (x) { return x.label })
+                          .filter(function (label, i, all) { return all.indexOf(label) === i })
+        var want = [qsTrId("lautta-about-status"), qsTrId("lautta-about-licence"), qsTrId("lautta-about-source")]
+        expect(JSON.stringify(labels) === JSON.stringify(want), "Network locations shows the status only, no access: " + JSON.stringify(labels))
+        expect(named("accessHint") === undefined, "and no hint to change access")
         expect(named("sourceCode") !== undefined, "Source code is a row to tap")
     }
 

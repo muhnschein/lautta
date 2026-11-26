@@ -91,6 +91,32 @@ pub fn is_markdown_extension(ext: &str) -> bool {
     MARKDOWN_EXTENSIONS.contains(&ext)
 }
 
+const SYSTEMD_UNIT_EXTENSIONS: [&str; 19] = [
+    "service",
+    "socket",
+    "device",
+    "mount",
+    "automount",
+    "swap",
+    "target",
+    "path",
+    "timer",
+    "slice",
+    "scope",
+    "container",
+    "volume",
+    "network",
+    "kube",
+    "image",
+    "link",
+    "netdev",
+    "nspawn",
+];
+
+pub fn is_systemd_unit_extension(ext: &str) -> bool {
+    SYSTEMD_UNIT_EXTENSIONS.contains(&ext)
+}
+
 pub fn from_extension(ext: &str) -> Option<(&'static str, FileCategory)> {
     use FileCategory::*;
     Some(match ext {
@@ -214,6 +240,7 @@ pub fn from_extension(ext: &str) -> Option<(&'static str, FileCategory)> {
         "go" => ("text/x-go", Code),
         "sql" => ("application/sql", Code),
         "diff" | "patch" => ("text/x-diff", Code),
+        e if is_systemd_unit_extension(e) => ("text/x-systemd-unit", Code),
         "pro" | "pri" | "spec" | "desktop" | "cmake" | "lua" | "rb" | "pl" | "php" => ("text/x-source", Code),
         "zip" => ("application/zip", Archive),
         "tar" => ("application/x-tar", Archive),
@@ -1084,6 +1111,40 @@ mod tests {
         assert_eq!(viewer_of(b"noext", "image/png", None), Viewer::Image);
         assert_eq!(viewer_of(b"noext", "image/heic", None), Viewer::External);
         assert_eq!(viewer_of(b"noext", "", None), Viewer::External);
+    }
+
+    #[test]
+    fn systemd_units_and_quadlets_open_in_the_text_viewer() {
+        for ext in [
+            "service",
+            "socket",
+            "device",
+            "mount",
+            "automount",
+            "swap",
+            "target",
+            "path",
+            "timer",
+            "slice",
+            "scope",
+            "container",
+            "volume",
+            "network",
+            "kube",
+            "image",
+            "link",
+            "netdev",
+            "nspawn",
+        ] {
+            for name in [format!("web.{ext}"), format!("WEB.{}", ext.to_uppercase())] {
+                let entry = file(&name);
+                assert_eq!(mime_of(&entry).as_deref(), Some("text/x-systemd-unit"), "{name}");
+                assert_eq!(category_of(&entry), FileCategory::Code, "{name}");
+                assert_eq!(viewer_of(name.as_bytes(), "", None), Viewer::Text, "{name}");
+            }
+        }
+        assert_eq!(viewer_of(b"noext", "text/x-systemd-unit", None), Viewer::Text);
+        assert!(!is_systemd_unit_extension("txt"));
     }
 
     #[test]

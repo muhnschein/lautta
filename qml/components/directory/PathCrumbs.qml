@@ -14,7 +14,7 @@ Item {
     property Item menuHost
     property int menuMost
     property real homeInset
-    //% "Home"
+    //% "Browse"
     property string homeText: qsTrId("lautta-home-title")
     property var widths: []
     property Item _menu
@@ -107,7 +107,7 @@ Item {
                 height: width
                 sourceSize.width: width
                 sourceSize.height: height
-                source: FileIcons.source("home", Theme.pixelRatio)
+                source: FileIcons.source("lautta", Theme.pixelRatio)
                 highlighted: houseButton.highlighted
             }
         }

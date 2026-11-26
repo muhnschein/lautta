@@ -132,7 +132,7 @@ Page {
         model: page.listModel
 
         header: PageHeader {
-            //% "Home"
+            //% "Browse"
             title: qsTrId("lautta-home-title")
         }
 
