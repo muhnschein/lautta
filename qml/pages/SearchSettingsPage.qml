@@ -35,11 +35,8 @@ Page {
                 }
             }
 
-            SectionHeader {
-                //% "Search index"
-                text: qsTrId("lautta-index-title")
-            }
             Label {
+                objectName: "indexIntro"
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 wrapMode: Text.Wrap
@@ -47,6 +44,11 @@ Page {
                 font.pixelSize: Theme.fontSizeSmall
                 //% "Lautta keeps a list of file names, so search answers as you type and finds files on servers that are offline. It never reads what files contain."
                 text: qsTrId("lautta-index-explain")
+            }
+
+            Item {
+                width: 1
+                height: Theme.paddingLarge
             }
 
             Repeater {
@@ -101,30 +103,6 @@ Page {
                 text: qsTrId("lautta-index-charger")
                 //% "With the charger in and the battery above half, Lautta also updates the index while it runs in the background."
                 description: qsTrId("lautta-index-charger-hint")
-            }
-
-            SectionHeader {
-                //% "Without an index"
-                text: qsTrId("lautta-index-without")
-            }
-
-            SettingSlider {
-                //% "Search depth on servers"
-                label: qsTrId("lautta-settings-search-depth")
-                settingKey: "search_remote_depth"
-                minimumValue: 1
-                maximumValue: 16
-                //% "%n folders"
-                valueFormat: function (n) { return qsTrId("lautta-settings-folders", n) }
-            }
-            Label {
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                wrapMode: Text.Wrap
-                color: Theme.secondaryHighlightColor
-                font.pixelSize: Theme.fontSizeSmall
-                //% "Servers without an index are searched this deep"
-                text: qsTrId("lautta-settings-search-depth-hint")
             }
         }
 

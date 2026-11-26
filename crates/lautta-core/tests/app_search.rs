@@ -6,7 +6,7 @@ use lautta_core::locations::LocationRegistry;
 use lautta_core::ops::OperationKind;
 use lautta_core::paths::AppPaths;
 use lautta_core::search::MatchMode;
-use lautta_core::settings::{LocationPrefs, Settings};
+use lautta_core::settings::LocationPrefs;
 use lautta_core::{ErrorKind, Uri};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
@@ -120,14 +120,13 @@ async fn search_streams_hits_and_remembers_the_query() {
 }
 
 #[tokio::test]
-async fn search_depth_is_unlimited_locally_and_a_setting_remotely() {
+async fn search_depth_is_unlimited_locally_and_fixed_on_servers() {
     let h = home().await;
-    h.core.apply_settings(Settings {
-        search_remote_depth: 3,
-        ..Settings::default()
-    });
     assert_eq!(h.core.search_depth(&uri("lautta://user-documents/")), None);
-    assert_eq!(h.core.search_depth(&uri("lautta://nv-nas/srv")), Some(3));
+    assert_eq!(
+        h.core.search_depth(&uri("lautta://nv-nas/srv")),
+        Some(lautta_core::search::SERVER_SEARCH_DEPTH)
+    );
 }
 
 #[tokio::test]
@@ -486,20 +485,16 @@ mod scope {
     }
 
     #[tokio::test]
-    async fn server_search_keeps_the_depth_setting() {
+    async fn server_search_stops_sixteen_folders_down() {
         let h = home().await;
-        h.core.apply_settings(Settings {
-            search_remote_depth: 1,
-            ..h.core.settings()
-        });
         let m = nas(&h, "nv-nas", "NAS");
-        m.add_file("a/budget-1.txt", b"x", 0);
-        m.add_file("a/b/budget-2.txt", b"x", 0);
+        let deep: String = (1..=16).map(|i| format!("d{i}/")).collect();
+        m.add_file(&format!("{deep}budget-16.txt"), b"x", 0);
+        m.add_file(&format!("{deep}d17/budget-17.txt"), b"x", 0);
         let (_, seen) = run(&h, SearchScope::Everywhere, None, "budget").await;
-        assert_eq!(
-            seen.hits[&1],
-            vec![(0, "lautta://nv-nas/a/budget-1.txt".to_owned())]
-        );
+        let found: Vec<&str> = seen.hits[&1].iter().map(|(_, u)| u.as_str()).collect();
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].ends_with("/d16/budget-16.txt"), "{found:?}");
     }
 
     #[tokio::test]

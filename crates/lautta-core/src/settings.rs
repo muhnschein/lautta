@@ -49,7 +49,6 @@ pub struct Settings {
     pub large_op_bytes: u64,
 
     pub recents_enabled: bool,
-    pub search_remote_depth: u32,
     pub index_on_charger: bool,
 
     pub share_folders: Vec<String>,
@@ -81,7 +80,6 @@ impl Default for Settings {
             large_op_items: 1_000,
             large_op_bytes: GB,
             recents_enabled: true,
-            search_remote_depth: 8,
             index_on_charger: false,
             share_folders: Vec::new(),
         }
@@ -112,7 +110,6 @@ impl Settings {
         self.remote_lanes = clamp(self.remote_lanes, REMOTE_LANES_RANGE);
         self.large_op_items = self.large_op_items.max(1);
         self.large_op_bytes = self.large_op_bytes.max(MB);
-        self.search_remote_depth = self.search_remote_depth.clamp(1, 64);
         let mut kept: Vec<String> = Vec::new();
         for folder in self.share_folders.drain(..) {
             if kept.len() < SHARE_FOLDERS_MAX && !kept.contains(&folder) {
@@ -355,7 +352,6 @@ mod tests {
         assert_eq!(s.history_retention_days, 30);
         assert_eq!((s.large_op_items, s.large_op_bytes), (1_000, 1_000_000_000));
         assert!(s.recents_enabled);
-        assert_eq!(s.search_remote_depth, 8);
         assert_eq!(s.clone().sanitised(), s, "defaults are already valid");
     }
 
@@ -371,7 +367,6 @@ mod tests {
             history_retention_days: 100_000,
             large_op_items: 0,
             large_op_bytes: 0,
-            search_remote_depth: 0,
             sort_key: "bogus".into(),
             view_mode: "".into(),
             ..Settings::default()
@@ -385,7 +380,6 @@ mod tests {
         assert_eq!(s.thumbnail_max_remote_mb, 1);
         assert_eq!(s.history_retention_days, 365);
         assert_eq!((s.large_op_items, s.large_op_bytes), (1, MB));
-        assert_eq!(s.search_remote_depth, 1);
         assert_eq!((s.sort_key.as_str(), s.view_mode.as_str()), ("name", "list"));
         s.remorse_seconds = 99;
         s.remote_lanes = 99;
@@ -443,6 +437,14 @@ mod tests {
         assert!(!s.to_map().contains_key("date_format"));
         assert!(!s.to_json().contains("date_format"));
         assert!(!s.set("date_format", json!("locale")));
+    }
+
+    #[test]
+    fn a_stored_search_depth_is_ignored() {
+        let mut s = Settings::from_json(r#"{"search_remote_depth":3,"remorse_seconds":7}"#);
+        assert_eq!(s.remorse_seconds, 7);
+        assert!(!s.to_json().contains("search_remote_depth"));
+        assert!(!s.set("search_remote_depth", json!(4)));
     }
 
     #[test]

@@ -35,19 +35,19 @@ function name(row) {
 function status(row) {
     switch (row.state) {
     case "ready":
-        //% "%n names · up to date"
-        return qsTrId("lautta-index-ready", row.names)
+        //% "Up to date"
+        return qsTrId("lautta-index-state-ready")
     case "crawling":
-        //% "Updating · %n names so far"
-        return qsTrId("lautta-index-crawling", row.names)
+        //% "Updating"
+        return qsTrId("lautta-index-state-updating")
     case "failed":
-        //% "Not reachable · %n names from the last update"
-        return qsTrId("lautta-index-failed", row.names)
+        //% "Not reachable"
+        return qsTrId("lautta-index-state-unreachable")
     case "off":
-        //% "Not indexed: each search walks the server"
-        return qsTrId("lautta-index-off")
+        //% "Not indexed"
+        return qsTrId("lautta-index-state-off")
     default:
-        //% "Waiting to start"
-        return qsTrId("lautta-index-pending")
+        //% "Waiting"
+        return qsTrId("lautta-index-state-waiting")
     }
 }

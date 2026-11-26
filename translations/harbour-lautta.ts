@@ -351,17 +351,6 @@
         <source>Search</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-settings-search-depth">
-        <source>Search depth on servers</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-settings-folders" numerus="yes">
-        <source>%n folders</source>
-        <translation>
-            <numerusform>%n folder</numerusform>
-            <numerusform>%n folders</numerusform>
-        </translation>
-    </message>
     <message id="lautta-settings-recents">
         <source>Recents</source>
         <translation type="unfinished"></translation>
@@ -1833,11 +1822,6 @@
         <source>File renamed</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-settings-search-depth-hint">
-        <source>Servers without an index are searched this deep</source>
-        <oldsource>Searches on this device go through every folder</oldsource>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-settings-files">
         <source>Files</source>
         <translation type="unfinished"></translation>
@@ -2591,39 +2575,6 @@
         <source>Hidden</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-index-ready" numerus="yes">
-        <source>%n names · up to date</source>
-        <translation>
-            <numerusform>%n name · up to date</numerusform>
-            <numerusform>%n names · up to date</numerusform>
-        </translation>
-    </message>
-    <message id="lautta-index-crawling" numerus="yes">
-        <source>Updating · %n names so far</source>
-        <translation>
-            <numerusform>Updating · %n name so far</numerusform>
-            <numerusform>Updating · %n names so far</numerusform>
-        </translation>
-    </message>
-    <message id="lautta-index-failed" numerus="yes">
-        <source>Not reachable · %n names from the last update</source>
-        <translation>
-            <numerusform>Not reachable · %n name from the last update</numerusform>
-            <numerusform>Not reachable · %n names from the last update</numerusform>
-        </translation>
-    </message>
-    <message id="lautta-index-off">
-        <source>Not indexed: each search walks the server</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-index-pending">
-        <source>Waiting to start</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-index-title">
-        <source>Search index</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message id="lautta-index-explain">
         <source>Lautta keeps a list of file names, so search answers as you type and finds files on servers that are offline. It never reads what files contain.</source>
         <translation type="unfinished"></translation>
@@ -2636,8 +2587,24 @@
         <source>With the charger in and the battery above half, Lautta also updates the index while it runs in the background.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-index-without">
-        <source>Without an index</source>
+    <message id="lautta-index-state-ready">
+        <source>Up to date</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-index-state-updating">
+        <source>Updating</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-index-state-unreachable">
+        <source>Not reachable</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-index-state-off">
+        <source>Not indexed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-index-state-waiting">
+        <source>Waiting</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

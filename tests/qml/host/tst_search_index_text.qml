@@ -30,8 +30,9 @@ QtObject {
         same(IndexText.name(rows[0]), "lautta-search-group-device", "the device row has its own name")
         same(["ready", "crawling", "failed", "off", "pending"].map(function (s) {
             return IndexText.status({ "state": s, "names": 3 })
-        }), ["lautta-index-ready", "lautta-index-crawling", "lautta-index-failed", "lautta-index-off", "lautta-index-pending"],
-             "a status line per state")
+        }), ["lautta-index-state-ready", "lautta-index-state-updating", "lautta-index-state-unreachable",
+              "lautta-index-state-off", "lautta-index-state-waiting"],
+             "a status word per state, no counts")
         reachedEnd = true
     }
 }
