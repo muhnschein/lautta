@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-import "../components"
 import "../components/viewers/PdfText.js" as PdfText
 
 Page {
@@ -36,14 +35,10 @@ Page {
         model: page.pageCount
         cacheBuffer: cellHeight
 
-        header: HeaderBand {
-            width: grid.width
-
-            PageHeader {
-                //% "Pages"
-                title: qsTrId("lautta-viewers-pdf-pages-title")
-                description: page.fileName
-            }
+        header: PageHeader {
+            //% "Pages"
+            title: qsTrId("lautta-viewers-pdf-pages-title")
+            description: page.fileName
         }
 
         delegate: BackgroundItem {

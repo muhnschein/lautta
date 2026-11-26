@@ -311,15 +311,12 @@ Page {
             }
         }
 
-        HeaderBand {
+        PageHeader {
             id: header
 
             objectName: "pdfHeader"
             z: 1
-
-            PageHeader {
-                title: page.fileName
-            }
+            title: page.fileName
         }
 
         PinchArea {

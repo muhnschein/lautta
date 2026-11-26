@@ -151,16 +151,13 @@ Page {
             }
         }
 
-        HeaderBand {
+        PageHeader {
             id: top
 
             objectName: "trashHeader"
             z: 1
-
-            PageHeader {
-                //% "Trash"
-                title: qsTrId("lautta-trash-title")
-            }
+            //% "Trash"
+            title: qsTrId("lautta-trash-title")
         }
 
         SilicaListView {

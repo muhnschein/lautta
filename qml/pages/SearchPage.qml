@@ -247,10 +247,6 @@ Page {
             }
         }
 
-        HeaderBand {
-            anchors.fill: heading
-        }
-
         Item {
             id: heading
 

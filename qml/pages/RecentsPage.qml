@@ -116,16 +116,13 @@ Page {
             }
         }
 
-        HeaderBand {
+        PageHeader {
             id: top
 
             objectName: "recentsHeader"
             z: 1
-
-            PageHeader {
-                //% "Recents"
-                title: qsTrId("lautta-recents-title")
-            }
+            //% "Recents"
+            title: qsTrId("lautta-recents-title")
         }
 
         SilicaListView {
