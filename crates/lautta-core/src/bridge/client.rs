@@ -3,7 +3,7 @@
 use super::link::{rpc, Link};
 use super::nearby::Settle;
 use super::types::{
-    bridge_id, BridgeConfig, BridgeStatus, Consent, Drive, Level, NearbyServer, RemoteLocation,
+    bridge_id, BridgeConfig, BridgeStatus, Consent, Drive, Level, NearbyServer, Network, RemoteLocation,
 };
 use crate::error::{Error, ErrorKind, Result};
 use crate::paths::AppPaths;
@@ -32,6 +32,7 @@ pub(super) struct Inner {
     pub locations: watch::Sender<Arc<Vec<RemoteLocation>>>,
     pub nearby: watch::Sender<Arc<Vec<NearbyServer>>>,
     pub drives: watch::Sender<Arc<Vec<Drive>>>,
+    pub network: watch::Sender<Network>,
     pub foreground: watch::Sender<bool>,
     pub wake: Notify,
     pub discover: AtomicBool,
@@ -72,6 +73,7 @@ impl BridgeClient {
             locations: watch::channel(Arc::new(Vec::new())).0,
             nearby: watch::channel(Arc::new(Vec::new())).0,
             drives: watch::channel(Arc::new(Vec::new())).0,
+            network: watch::channel(Network::Unknown).0,
             wake: Notify::new(),
             discover: AtomicBool::new(false),
             refreshes: AtomicU64::new(0),
@@ -175,6 +177,14 @@ impl BridgeClient {
 
     pub fn watch_drives(&self) -> watch::Receiver<Arc<Vec<Drive>>> {
         self.inner.drives.subscribe()
+    }
+
+    pub fn network(&self) -> Network {
+        *self.inner.network.borrow()
+    }
+
+    pub fn watch_network(&self) -> watch::Receiver<Network> {
+        self.inner.network.subscribe()
     }
 
     pub fn offers(&self, feature: &str) -> bool {

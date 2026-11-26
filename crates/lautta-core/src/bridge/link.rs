@@ -5,7 +5,10 @@ use super::registry::Registry;
 use crate::entry::Entry;
 use crate::error::{Error, ErrorKind, Result};
 use crate::provider::{Lane, ProgressSink};
-use lautta_bridge_proto::{value_i64, Bridge1Proxy, BridgeError, Connection, ProxyResult, Signal, WireEntry};
+use lautta_bridge_proto::{
+    value_i64, Bridge1Proxy, BridgeError, Connection, OptsBuilder, ProxyResult, Signal, WireCheckItem,
+    WireCheckResult, WireEntry, WireWalkItem,
+};
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
@@ -29,6 +32,8 @@ pub(crate) enum ListEvent {
 
 pub(crate) enum JobEvent {
     Progress { done: i64, total: i64 },
+    Checked(Vec<WireCheckResult>),
+    Found(Vec<WireWalkItem>),
     Finished(Result<JobOutcome>),
 }
 
@@ -88,7 +93,8 @@ impl Link {
                 };
                 self.jobs.push(job, JobEvent::Finished(result));
             }
-            Signal::WalkBatch { .. } => {}
+            Signal::WalkBatch { job, entries } => self.jobs.push(job, JobEvent::Found(entries)),
+            Signal::CheckBatch { job, results } => self.jobs.push(job, JobEvent::Checked(results)),
             other => return Some(other),
         }
         None
@@ -159,10 +165,61 @@ impl Link {
                 JobEvent::Progress { done, total } => {
                     progress(u64::try_from(done).unwrap_or(0), u64::try_from(total).ok());
                 }
+                JobEvent::Checked(_) | JobEvent::Found(_) => {}
                 JobEvent::Finished(result) => {
                     guard.finish();
                     return result;
                 }
+            }
+        }
+        guard.finish();
+        Err(lost())
+    }
+
+    pub(crate) async fn check(
+        self: &Arc<Self>,
+        loc: &str,
+        items: &[WireCheckItem],
+        lane: Lane,
+    ) -> Result<Vec<WireCheckResult>> {
+        let job = rpc(self.proxy().check(loc, items, lane.wire()).await)?;
+        let mut rx = self.jobs.subscribe(job);
+        let mut guard = RequestGuard::new(self, Kind::Job, job);
+        let mut results = Vec::new();
+        while let Some(event) = rx.recv().await {
+            match event {
+                JobEvent::Checked(batch) => results.extend(batch),
+                JobEvent::Finished(result) => {
+                    guard.finish();
+                    return result.map(|_| results);
+                }
+                JobEvent::Progress { .. } | JobEvent::Found(_) => {}
+            }
+        }
+        guard.finish();
+        Err(lost())
+    }
+
+    pub(crate) async fn search(
+        self: &Arc<Self>,
+        loc: &str,
+        root: &[u8],
+        text: &str,
+        limit: u32,
+    ) -> Result<Vec<WireWalkItem>> {
+        let opts = OptsBuilder::new().int("limit", i64::from(limit)).build();
+        let job = rpc(self.proxy().search(loc, root, text, &opts).await)?;
+        let mut rx = self.jobs.subscribe(job);
+        let mut guard = RequestGuard::new(self, Kind::Job, job);
+        let mut found = Vec::new();
+        while let Some(event) = rx.recv().await {
+            match event {
+                JobEvent::Found(batch) => found.extend(batch),
+                JobEvent::Finished(result) => {
+                    guard.finish();
+                    return result.map(|_| found);
+                }
+                JobEvent::Progress { .. } | JobEvent::Checked(_) => {}
             }
         }
         guard.finish();
@@ -307,18 +364,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn other_signals_are_handed_back_and_walks_are_dropped() {
+    async fn other_signals_are_handed_back_and_batches_go_to_their_job() {
         let link = link().await;
         assert!(matches!(
             link.route(Signal::LocationsChanged),
             Some(Signal::LocationsChanged)
         ));
+        assert!(matches!(
+            link.route(Signal::NetworkChanged("wifi".into())),
+            Some(Signal::NetworkChanged(_))
+        ));
+        let mut rx = link.jobs.subscribe(1);
         assert!(link
             .route(Signal::WalkBatch {
                 job: 1,
                 entries: Vec::new()
             })
             .is_none());
+        assert!(link
+            .route(Signal::CheckBatch {
+                job: 1,
+                results: Vec::new()
+            })
+            .is_none());
+        assert!(matches!(rx.recv().await, Some(JobEvent::Found(_))));
+        assert!(matches!(rx.recv().await, Some(JobEvent::Checked(_))));
     }
 
     #[tokio::test]

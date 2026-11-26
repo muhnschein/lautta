@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 use crate::errors::BridgeError;
-use crate::wire::{WireEntry, WireNearby, WireWalkItem, INTERFACE};
+use crate::wire::{WireCheckResult, WireEntry, WireNearby, WireWalkItem, INTERFACE};
 use std::collections::HashMap;
 use zbus::message::Type as MessageType;
 use zbus::zvariant::OwnedValue;
@@ -37,6 +37,11 @@ pub enum Signal {
         extra: HashMap<String, OwnedValue>,
     },
     DrivesChanged,
+    CheckBatch {
+        job: u32,
+        results: Vec<WireCheckResult>,
+    },
+    NetworkChanged(String),
 }
 
 fn body<T>(msg: &Message) -> Result<T, BridgeError>
@@ -94,6 +99,11 @@ fn decode_member(member: &str, msg: &Message) -> Result<Option<Signal>, BridgeEr
             }
         }
         "DrivesChanged" => Signal::DrivesChanged,
+        "CheckBatch" => {
+            let (job, results) = body::<(u32, Vec<WireCheckResult>)>(msg)?;
+            Signal::CheckBatch { job, results }
+        }
+        "NetworkChanged" => Signal::NetworkChanged(body::<(String,)>(msg)?.0),
         _ => return Ok(None),
     }))
 }

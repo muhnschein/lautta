@@ -241,7 +241,10 @@ async fn features_and_the_storage_handoff_need_no_consent() {
     let conn = fake.connect().await.unwrap();
     hello(&conn).await;
     let p = conn.proxy();
-    assert_eq!(p.get_features().await.unwrap(), ["storage-settings"]);
+    assert_eq!(
+        p.get_features().await.unwrap(),
+        ["storage-settings", "network", "check", "search"]
+    );
     p.open_storage_settings().await.unwrap();
     assert_eq!(fake.handoffs(), ["storage"]);
 

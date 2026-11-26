@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 use super::{
-    no_progress, AttributeChanges, CopyOptions, Disposition, Lane, ProgressSink, Provider, ReadHandle,
-    ReadOptions, RenameMode, SpaceInfo, WriteOptions,
+    check_one_by_one, no_progress, AttributeChanges, CopyOptions, Disposition, FolderCheck, KnownFolder,
+    Lane, ProgressSink, Provider, ReadHandle, ReadOptions, RenameMode, SpaceInfo, WriteOptions,
 };
-use crate::bridge::convert::{capabilities_from_wire, entry_from_wire};
+use crate::bridge::convert::{capabilities_from_wire, entry_from_wire, finished_error};
+use crate::bridge::feature;
 use crate::bridge::link::{rpc, JobOutcome, Link};
 use crate::bridge::{bridge_id, location_id, BridgeClient, Level};
 use crate::entry::{cap, system_time_to_ms, Capabilities, Entry};
@@ -13,7 +14,10 @@ use crate::uri::LocationId;
 use crate::vpath::VPath;
 use async_trait::async_trait;
 use lautta_bridge_proto::zvariant::Fd;
-use lautta_bridge_proto::{Opts, OptsBuilder, MAX_READ_BYTES};
+use lautta_bridge_proto::{
+    Opts, OptsBuilder, WireCheckItem, WireCheckResult, WireWalkItem, MAX_CHECK_ITEMS, MAX_READ_BYTES,
+};
+use std::collections::HashMap;
 use std::os::fd::OwnedFd;
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc;
@@ -119,6 +123,48 @@ fn to_i64(v: u64) -> i64 {
     i64::try_from(v).unwrap_or(i64::MAX)
 }
 
+pub(crate) fn folder_checks(count: usize, results: Vec<WireCheckResult>) -> Vec<FolderCheck> {
+    let mut out: Vec<Option<FolderCheck>> = (0..count).map(|_| None).collect();
+    for r in results {
+        let Some(slot) = usize::try_from(r.index).ok().and_then(|i| out.get_mut(i)) else {
+            continue;
+        };
+        if let Some(e) = finished_error(&r.error, "", &HashMap::new()) {
+            *slot = Some(FolderCheck::Failed(e));
+            continue;
+        }
+        let children = r.children.iter().map(entry_from_wire);
+        match slot {
+            Some(FolderCheck::Listed(_, all)) if r.listed => all.extend(children),
+            _ if r.listed => *slot = Some(FolderCheck::Listed(entry_from_wire(&r.entry), children.collect())),
+            _ => *slot = Some(FolderCheck::Unchanged(entry_from_wire(&r.entry))),
+        }
+    }
+    out.into_iter()
+        .map(|slot| {
+            slot.unwrap_or_else(|| {
+                FolderCheck::Failed(Error::new(
+                    ErrorKind::ProtocolError,
+                    "the bridge left a folder out",
+                ))
+            })
+        })
+        .collect()
+}
+
+pub(crate) fn found_below(root: &VPath, items: &[WireWalkItem]) -> Vec<(VPath, Entry)> {
+    items
+        .iter()
+        .filter_map(|item| {
+            let mut path = root.clone();
+            for part in item.path.split(|b| *b == b'/') {
+                path = path.join(part).ok()?;
+            }
+            (path.name() == Some(item.entry.name.as_slice())).then(|| (path, entry_from_wire(&item.entry)))
+        })
+        .collect()
+}
+
 fn with_access(mut caps: Capabilities, level: Option<Level>) -> Capabilities {
     let flags: &[&str] = match level {
         None | Some(Level::Full) => &[],
@@ -149,6 +195,43 @@ impl Provider for NetvfsProvider {
             }
         }
         self.capabilities()
+    }
+
+    async fn check_folders(
+        &self,
+        folders: &[KnownFolder],
+        now_ms: i64,
+        lane: Lane,
+    ) -> Result<Vec<FolderCheck>> {
+        if !self.client.offers(feature::CHECK) {
+            return Ok(check_one_by_one(self, folders, now_ms, lane).await);
+        }
+        let link = self.link()?;
+        let mut out = Vec::with_capacity(folders.len());
+        for chunk in folders.chunks(MAX_CHECK_ITEMS) {
+            let items: Vec<WireCheckItem> = chunk
+                .iter()
+                .map(|f| WireCheckItem {
+                    path: f.path.as_bytes().to_vec(),
+                    etag: f.etag.clone().unwrap_or_default(),
+                    mtime_ms: f.modified_ms.unwrap_or(-1),
+                })
+                .collect();
+            let results = link.check(&self.loc, &items, lane).await?;
+            out.extend(folder_checks(chunk.len(), results));
+        }
+        Ok(out)
+    }
+
+    async fn search_names(&self, root: &VPath, text: &str, limit: u32) -> Result<Vec<(VPath, Entry)>> {
+        if !self.client.offers(feature::SEARCH) || !self.capabilities().raw.contains(cap::SEARCH) {
+            return Err(Error::new(ErrorKind::Unsupported, "this server cannot search"));
+        }
+        let found = self
+            .link()?
+            .search(&self.loc, root.as_bytes(), text, limit)
+            .await?;
+        Ok(found_below(root, &found))
     }
 
     async fn list(&self, dir: &VPath, lane: Lane, out: mpsc::Sender<Vec<Entry>>) -> Result<()> {

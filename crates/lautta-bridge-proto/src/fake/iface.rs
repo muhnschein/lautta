@@ -8,8 +8,8 @@ use super::tree::Tree;
 use super::{tree::TreeError, DEFAULT_CAPS};
 use crate::access::{self, After, Level, Op, Verdict};
 use crate::wire::{
-    feature, location_state, WireCapabilities, WireDrive, WireEntry, WireLocation, WireNearby, WireWalkItem,
-    INTERFACE, OBJECT_PATH,
+    feature, location_state, WireCapabilities, WireCheckItem, WireCheckResult, WireDrive, WireEntry,
+    WireLocation, WireNearby, WireWalkItem, INTERFACE, OBJECT_PATH,
 };
 use sha2::Digest;
 use std::collections::HashMap;
@@ -701,6 +701,69 @@ impl Iface {
         }))
     }
 
+    async fn check(
+        &self,
+        loc: String,
+        items: Vec<WireCheckItem>,
+        lane: String,
+        #[zbus(signal_context)] ctxt: SignalContext<'_>,
+    ) -> Result<u32, Fail> {
+        let loc = args::location(&loc)?;
+        let items = args::check_items(items)?;
+        let lane = args::lane(&lane, "bulk")?;
+        self.begin("Check", lane, &loc, true).await?;
+        let mut folders_only = Vec::with_capacity(items.len());
+        for item in &items {
+            folders_only.push(self.admit(&loc, &item.path, Op::Browse)? == Verdict::FoldersOnly);
+        }
+        self.reach(&loc)?;
+        Ok(self.start_job(&ctxt, move |env, job, cancel| {
+            transfer::run_check(env, job, cancel, loc, (items, folders_only))
+        }))
+    }
+
+    async fn search(
+        &self,
+        loc: String,
+        root: Vec<u8>,
+        text: String,
+        opts: Dict,
+        #[zbus(signal_context)] ctxt: SignalContext<'_>,
+    ) -> Result<u32, Fail> {
+        let loc = args::location(&loc)?;
+        let root = args::path(&root)?;
+        args::search_text(&text)?;
+        let limit = args::search_limit(&opts)?;
+        self.begin("Search", "bulk", &loc, true).await?;
+        let folders_only = self.admit(&loc, &root, Op::Browse)? == Verdict::FoldersOnly;
+        self.reach(&loc)?;
+        let offered = self.shared.with(|s| {
+            s.caps
+                .get(&loc)
+                .is_none_or(|c| c.flags.iter().any(|f| f == "Search"))
+        });
+        if !offered {
+            return Err(Fail::net("Unsupported", "Search is not supported"));
+        }
+        Ok(self.start_job(&ctxt, move |env, job, cancel| {
+            transfer::run_search(env, job, cancel, (loc, root, folders_only), (text, limit))
+        }))
+    }
+
+    async fn get_network(&self) -> Result<String, Fail> {
+        self.begin("GetNetwork", "interactive", "", false).await?;
+        Ok(self.shared.with(|s| s.network.clone()))
+    }
+
+    #[zbus(signal)]
+    pub async fn network_changed(ctxt: &SignalContext<'_>, network: String) -> zbus::Result<()>;
+    #[zbus(signal)]
+    pub async fn check_batch(
+        ctxt: &SignalContext<'_>,
+        job: u32,
+        results: Vec<WireCheckResult>,
+    ) -> zbus::Result<()>;
+
     async fn cancel(&self, id: u32) -> Result<(), Fail> {
         self.begin("Cancel", "interactive", &id.to_string(), false)
             .await?;
@@ -855,6 +918,15 @@ impl Shared {
         for session in self.sessions_snapshot() {
             if let Some(ctx) = context(&session) {
                 let _ = Iface::locations_changed(&ctx).await;
+            }
+        }
+    }
+
+    pub async fn broadcast_network(&self) {
+        let network = self.with(|s| s.network.clone());
+        for session in self.sessions_snapshot() {
+            if let Some(ctx) = context(&session) {
+                let _ = Iface::network_changed(&ctx, network.clone()).await;
             }
         }
     }

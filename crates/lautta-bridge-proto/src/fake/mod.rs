@@ -32,6 +32,7 @@ pub const DEFAULT_CAPS: &[&str] = &[
     "ServerCopy",
     "SpaceInfo",
     "Checksums",
+    "Search",
 ];
 
 #[derive(Clone)]
@@ -253,6 +254,25 @@ impl FakeBridge {
     pub async fn set_nearby(&self, nearby: Vec<WireNearby>) {
         self.shared.with(|s| s.nearby = nearby);
         self.shared.broadcast_nearby().await;
+    }
+
+    pub async fn set_network(&self, kind: &str) {
+        self.shared.with(|s| s.network = kind.to_owned());
+        self.shared.broadcast_network().await;
+    }
+
+    pub fn set_now_ms(&self, loc: &str, now_ms: i64) {
+        self.shared.with(|s| s.tree_mut(loc).now_ms = now_ms);
+    }
+
+    pub fn set_deep_etags(&self, loc: &str, on: bool) {
+        self.shared.with(|s| s.tree_mut(loc).deep_etags = on);
+    }
+
+    pub fn set_mtime(&self, loc: &str, path: &[u8], mtime_ms: i64) {
+        self.shared.with(|s| {
+            let _ = s.tree_mut(loc).set_attributes(path, None, Some(mtime_ms));
+        });
     }
 
     pub fn put_file(&self, loc: &str, path: &[u8], data: &[u8]) {

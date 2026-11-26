@@ -2,7 +2,10 @@
 
 use super::fail::Fail;
 use super::tree::normalize;
-use crate::wire::{value_bool, value_i64, value_str, MAX_LIST_BATCH, MAX_READ_BYTES};
+use crate::wire::{
+    value_bool, value_i64, value_str, WireCheckItem, MAX_CHECK_ETAG, MAX_CHECK_ITEMS, MAX_LIST_BATCH,
+    MAX_READ_BYTES, MAX_SEARCH_RESULTS,
+};
 use std::collections::HashMap;
 use zbus::zvariant::OwnedValue;
 
@@ -37,6 +40,48 @@ pub fn location(id: &str) -> Result<String, Fail> {
 
 pub fn path(raw: &[u8]) -> Result<Vec<u8>, Fail> {
     Ok(normalize(raw)?)
+}
+
+pub fn check_items(items: Vec<WireCheckItem>) -> Result<Vec<WireCheckItem>, Fail> {
+    if items.is_empty() || items.len() > MAX_CHECK_ITEMS {
+        return Err(Fail::args("Check takes 1 to 1024 folders"));
+    }
+    items
+        .into_iter()
+        .map(|item| {
+            if item.etag.len() > MAX_CHECK_ETAG {
+                return Err(Fail::args("Etag too long"));
+            }
+            if item.mtime_ms != -1 && !(-MAX_TIME_MS..=MAX_TIME_MS).contains(&item.mtime_ms) {
+                return Err(Fail::args("Modification time out of range"));
+            }
+            Ok(WireCheckItem {
+                path: path(&item.path)?,
+                ..item
+            })
+        })
+        .collect()
+}
+
+pub fn search_text(text: &str) -> Result<(), Fail> {
+    if text.is_empty() {
+        return Err(Fail::args("Search needs a text"));
+    }
+    if text.encode_utf16().count() > 256 {
+        return Err(Fail::args("Argument 2 is too long"));
+    }
+    Ok(())
+}
+
+pub fn search_limit(opts: &Dict) -> Result<usize, Fail> {
+    let mut limit = MAX_SEARCH_RESULTS;
+    for (key, value) in opts {
+        match key.as_str() {
+            "limit" => limit = int_option(key, value, 1, MAX_SEARCH_RESULTS)?,
+            _ => return Err(unknown(key)),
+        }
+    }
+    usize::try_from(limit).map_err(|e| Fail::args(&e.to_string()))
 }
 
 pub fn lane(given: &str, default: &'static str) -> Result<&'static str, Fail> {

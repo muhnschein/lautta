@@ -98,6 +98,40 @@ pub mod location_state {
 pub mod feature {
     pub const STORAGE_SETTINGS: &str = "storage-settings";
     pub const DRIVES: &str = "drives";
+    pub const NETWORK: &str = "network";
+    pub const CHECK: &str = "check";
+    pub const SEARCH: &str = "search";
+}
+
+pub const MAX_CHECK_ITEMS: usize = 1024;
+pub const MAX_CHECK_ETAG: usize = 1024;
+pub const CHECK_RACY_MS: i64 = 2000;
+pub const MAX_SEARCH_RESULTS: i64 = 2000;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct WireCheckItem {
+    pub path: Vec<u8>,
+    pub etag: Vec<u8>,
+    pub mtime_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct WireCheckResult {
+    pub index: u32,
+    pub error: String,
+    pub entry: WireEntry,
+    pub listed: bool,
+    pub children: Vec<WireEntry>,
+}
+
+pub fn check_changed(etag: &[u8], mtime_ms: i64, now: &WireEntry, now_ms: i64) -> bool {
+    if !now.etag.is_empty() {
+        return now.etag != etag;
+    }
+    if now.mtime_ms < 0 || now.mtime_ms > now_ms.saturating_sub(CHECK_RACY_MS) {
+        return true;
+    }
+    now.mtime_ms != mtime_ms
 }
 
 #[derive(Debug, Serialize, Deserialize, Type)]
