@@ -112,25 +112,22 @@ fn hidden_below(root: &VPath, folder: &VPath) -> bool {
         .is_some_and(|rel| rel.components().any(|c| c.first() == Some(&b'.')))
 }
 
-pub fn index_hits(
+pub fn index_hit(
     location: &str,
     root_path: &VPath,
-    found: Vec<IndexedEntry>,
+    found: IndexedEntry,
     include_hidden: bool,
-) -> Vec<SearchHit> {
-    found
-        .into_iter()
-        .filter(|f| include_hidden || !hidden_below(root_path, &f.folder))
-        .filter_map(|f| {
-            let folder_uri = Uri::new(location.to_owned(), f.folder.clone());
-            let uri = folder_uri.join(&f.entry.name).ok()?;
-            Some(SearchHit {
-                uri,
-                entry: f.entry,
-                folder_uri,
-            })
-        })
-        .collect()
+) -> Option<SearchHit> {
+    if !include_hidden && hidden_below(root_path, &found.folder) {
+        return None;
+    }
+    let folder_uri = Uri::new(location.to_owned(), found.folder);
+    let uri = folder_uri.join(&found.entry.name).ok()?;
+    Some(SearchHit {
+        uri,
+        entry: found.entry,
+        folder_uri,
+    })
 }
 
 impl Core {
@@ -183,15 +180,26 @@ impl Core {
         root.checked_ms.is_some().then_some(root)
     }
 
-    pub fn index_query(&self, root: &RootInfo, text: &str, include_hidden: bool) -> Vec<SearchHit> {
+    pub fn index_query(
+        &self,
+        root: &RootInfo,
+        text: &str,
+        include_hidden: bool,
+        keep: &dyn Fn(&SearchHit) -> bool,
+    ) -> Vec<SearchHit> {
         let Some(index) = &self.index else {
             return Vec::new();
         };
-        let found = index
-            .store
-            .query(&[root.id], text, QUERY_LIMIT)
-            .unwrap_or_default();
-        index_hits(&root.location, &root.path, found, include_hidden)
+        let mut hits = Vec::new();
+        let _ = index.store.query_each(&[root.id], text, |found| {
+            if let Some(hit) = index_hit(&root.location, &root.path, found, include_hidden) {
+                if keep(&hit) {
+                    hits.push(hit);
+                }
+            }
+            hits.len() < QUERY_LIMIT
+        });
+        hits
     }
 
     pub async fn index_refresh_root(&self, root: &RootInfo, stop: &AtomicBool) -> Result<CrawlOutcome> {

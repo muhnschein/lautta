@@ -408,7 +408,7 @@ impl Core {
         if self.locations.to_local_path(root).is_some() {
             None
         } else {
-            Some(self.settings().search_remote_depth)
+            Some(search::SERVER_SEARCH_DEPTH)
         }
     }
 
@@ -512,12 +512,12 @@ impl Core {
         query: &search::SearchQuery,
     ) -> Result<Vec<SearchHit>> {
         let needle = literal_needle(query.text.trim(), query.mode);
-        let found: Vec<SearchHit> = self
-            .index_query(indexed, &needle, query.include_hidden)
-            .into_iter()
-            .filter(|h| h.folder_uri.path.starts_with(&root.uri.path) && h.uri != root.uri)
-            .collect();
-        search::filter_hits(found, |h| h, query, &classify_by_extension)
+        let matcher = search::Matcher::new(query)?;
+        Ok(self.index_query(indexed, &needle, query.include_hidden, &|h| {
+            h.folder_uri.path.starts_with(&root.uri.path)
+                && h.uri != root.uri
+                && matcher.matches(&h.entry, &classify_by_extension)
+        }))
     }
 
     #[allow(clippy::too_many_arguments)]

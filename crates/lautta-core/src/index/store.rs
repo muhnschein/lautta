@@ -525,8 +525,22 @@ impl IndexStore {
     }
 
     pub fn query(&self, roots: &[i64], text: &str, limit: usize) -> Result<Vec<IndexedEntry>> {
+        let mut out = Vec::new();
+        self.query_each(roots, text, |found| {
+            out.push(found);
+            out.len() < limit
+        })?;
+        Ok(out)
+    }
+
+    pub fn query_each(
+        &self,
+        roots: &[i64],
+        text: &str,
+        mut each: impl FnMut(IndexedEntry) -> bool,
+    ) -> Result<()> {
         if roots.is_empty() {
-            return Ok(Vec::new());
+            return Ok(());
         }
         let fold = fold_text(text.trim());
         let ids = roots.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
@@ -536,19 +550,19 @@ impl IndexStore {
             (
                 format!(
                     "{base} JOIN node_fts f ON f.rowid = n.id
-                     WHERE f.fold GLOB ?1 AND n.root IN ({ids}) LIMIT ?2"
+                     WHERE f.fold GLOB ?1 AND n.root IN ({ids})"
                 ),
                 needle_glob(&fold),
             )
         } else {
             (
-                format!("{base} WHERE instr(n.fold, ?1) > 0 AND n.root IN ({ids}) LIMIT ?2"),
+                format!("{base} WHERE instr(n.fold, ?1) > 0 AND n.root IN ({ids})"),
                 fold,
             )
         };
         let mut stmt = conn.prepare(&sql_text).map_err(sql)?;
         let rows = stmt
-            .query_map(params![arg, limit as i64], |r| {
+            .query_map(params![arg], |r| {
                 let parent: Vec<u8> = r.get(1)?;
                 let name: Vec<u8> = r.get(2)?;
                 let mut e = Entry::new(&name, kind_of(r.get(3)?));
@@ -558,15 +572,16 @@ impl IndexStore {
                 Ok((r.get::<_, i64>(0)?, parent, e))
             })
             .map_err(sql)?;
-        let mut out = Vec::new();
         for row in rows {
             let (root, parent, entry) = row.map_err(sql)?;
             let Ok(folder) = VPath::parse(&parent) else {
                 continue;
             };
-            out.push(IndexedEntry { root, folder, entry });
+            if !each(IndexedEntry { root, folder, entry }) {
+                break;
+            }
         }
-        Ok(out)
+        Ok(())
     }
 
     pub fn integrity_ok(&self) -> bool {

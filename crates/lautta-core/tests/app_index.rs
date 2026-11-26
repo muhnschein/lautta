@@ -70,13 +70,22 @@ async fn search(
     text: &str,
     hidden: bool,
 ) -> Seen {
-    let groups = h.core.search_groups(&scope, folder);
     let req = SearchRequest {
         text: text.into(),
         mode: MatchMode::for_text(text),
         include_hidden: hidden,
         ..Default::default()
     };
+    search_with(h, scope, folder, req).await
+}
+
+async fn search_with(
+    h: &Home,
+    scope: SearchScope,
+    folder: Option<&lautta_core::Uri>,
+    req: SearchRequest,
+) -> Seen {
+    let groups = h.core.search_groups(&scope, folder);
     let (tx, mut rx) = mpsc::channel(8);
     let core = h.core.clone();
     let task = tokio::spawn(async move {
@@ -179,6 +188,32 @@ async fn a_search_answers_from_the_index_then_corrects_what_changed() {
 }
 
 #[tokio::test]
+async fn filters_pick_from_every_indexed_name_before_the_answer_is_capped() {
+    let h = home().await;
+    let many = h.root.join("Documents/aaa");
+    std::fs::create_dir_all(&many).unwrap();
+    for i in 0..2100 {
+        std::fs::write(many.join(format!("photo-{i}.jpg")), b"").unwrap();
+    }
+    for i in 0..3 {
+        write(&h.root.join(format!("Documents/zzz/deeper/report-{i}.pdf")));
+    }
+    index_everything(&h).await;
+    let req = SearchRequest {
+        types: ["document".to_owned()].into_iter().collect(),
+        ..Default::default()
+    };
+    let seen = search_with(&h, SearchScope::Device, None, req).await;
+    let found: Vec<&String> = seen.batches.iter().flat_map(|(_, b)| b).collect();
+    assert_eq!(
+        found.iter().filter(|u| u.contains("/report-")).count(),
+        3,
+        "every document is found: {} names",
+        found.len()
+    );
+}
+
+#[tokio::test]
 async fn index_answers_respect_hidden_folders_the_folder_scope_and_accents() {
     let h = home().await;
     write(&h.root.join("Documents/.private/secret-notes.txt"));
@@ -243,7 +278,7 @@ async fn the_worker_builds_the_device_index_while_the_app_is_open_and_pauses_beh
         .await
         .expect("device index built");
     let docs = index.store.root("user-documents", &VPath::root()).unwrap();
-    assert_eq!(h.core.index_query(&docs, "deep-note", false).len(), 1);
+    assert_eq!(h.core.index_query(&docs, "deep-note", false, &|_| true).len(), 1);
     h.core.index_set_conditions(|c| c.app_active = false);
     assert_eq!(index.running(), None, "no worker in the background");
     h.core.index_set_conditions(|c| {
@@ -349,5 +384,5 @@ async fn servers_are_crawled_only_while_the_app_is_in_the_foreground() {
     .await
     .expect("the server index finishes in the foreground");
     let root = index.store.root("nv-nas", &VPath::root()).unwrap();
-    assert_eq!(h.core.index_query(&root, "holiday", false).len(), 1);
+    assert_eq!(h.core.index_query(&root, "holiday", false, &|_| true).len(), 1);
 }

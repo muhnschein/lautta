@@ -17,7 +17,7 @@ use tokio::sync::mpsc;
 
 const WALK_CONCURRENCY: usize = 2;
 pub const RECENT_SEARCHES_PER_LOCATION: usize = 10;
-pub const REMOTE_DEPTH_DEFAULT: u32 = 8;
+pub const SERVER_SEARCH_DEPTH: u32 = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MatchMode {
@@ -169,14 +169,14 @@ fn enqueue_children(
     }
 }
 
-struct Matcher<'q> {
+pub struct Matcher<'q> {
     query: &'q SearchQuery,
     needle: String,
     glob: Option<glob::Pattern>,
 }
 
 impl<'q> Matcher<'q> {
-    fn new(query: &'q SearchQuery) -> Result<Matcher<'q>> {
+    pub fn new(query: &'q SearchQuery) -> Result<Matcher<'q>> {
         let glob = match query.mode {
             MatchMode::Glob if !query.text.is_empty() => Some(
                 glob::Pattern::new(&fold_text(&query.text))
@@ -220,7 +220,7 @@ impl<'q> Matcher<'q> {
         q.modified_after.is_none_or(|a| t >= a) && q.modified_before.is_none_or(|b| t <= b)
     }
 
-    fn matches(&self, entry: &Entry, classify: &(dyn Fn(&Entry) -> String + Send + Sync)) -> bool {
+    pub fn matches(&self, entry: &Entry, classify: &(dyn Fn(&Entry) -> String + Send + Sync)) -> bool {
         (self.query.include_hidden || !entry.is_hidden())
             && self.name_matches(entry)
             && self.attributes_match(entry)
