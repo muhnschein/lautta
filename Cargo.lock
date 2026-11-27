@@ -1047,7 +1047,7 @@ dependencies = [
 
 [[package]]
 name = "harbour-lautta"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "lautta-qt",
 ]
@@ -1408,7 +1408,7 @@ dependencies = [
 
 [[package]]
 name = "lautta-bridge-proto"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "async-trait",
  "futures",
@@ -1424,7 +1424,7 @@ dependencies = [
 
 [[package]]
 name = "lautta-core"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "aes",
  "async-trait",
@@ -1477,14 +1477,14 @@ dependencies = [
 
 [[package]]
 name = "lautta-pdf"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "hayro",
 ]
 
 [[package]]
 name = "lautta-qt"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "cpp",
  "cpp_build",
