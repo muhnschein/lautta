@@ -147,10 +147,11 @@ ApplicationWindow {
         var view = named(viewer, "pdfPages")
         if (!header || !view)
             return
+        var pan = named(viewer, "pdfPan")
         var headerAt = header.mapToItem(viewer, 0, 0)
         viewer.zoomTo(2.5, view.width / 2, view.height / 2)
-        view.contentX = view.contentWidth - view.width
-        expect(view.contentX > 0 && Math.abs(header.mapToItem(viewer, 0, 0).x - headerAt.x) < 0.5
+        pan.contentX = pan.contentWidth - pan.width
+        expect(pan.contentX > 0 && Math.abs(header.mapToItem(viewer, 0, 0).x - headerAt.x) < 0.5
                && Math.abs(header.mapToItem(viewer, 0, 0).y - headerAt.y) < 0.5 && header.width === viewer.width,
                label + ": zoomed and panned, the header stays put: " + header.mapToItem(viewer, 0, 0).x + " "
                + header.width)

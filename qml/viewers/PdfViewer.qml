@@ -22,11 +22,11 @@ Page {
     readonly property string problem: doc.problem
     readonly property bool loading: doc.loading
     readonly property int currentPage: {
-        var item = view.itemAt(view.contentX + view.width / 2, view.contentY + view.height / 2)
+        var item = view.itemAt(view.width / 2, view.contentY + view.height / 2)
         return item ? item.pageIndex + 1 : 1
     }
     readonly property int topPage: {
-        var x = view.contentX + view.width / 2
+        var x = view.width / 2
         var y = Math.max(0, view.contentY)
         var item = view.itemAt(x, y) || view.itemAt(x, y + view.spacing)
         return item ? item.pageIndex : 0
@@ -40,10 +40,10 @@ Page {
     function zoomTo(to, x, y) {
         var z = Math.max(1, Math.min(maxZoom, to))
         var ratio = z / zoom
-        var cx = (view.contentX + x) * ratio - x
+        var cx = (pan.contentX + x) * ratio - x
         var cy = (view.contentY - view.originY + y) * ratio - y + view.originY
         zoom = z
-        view.contentX = Math.max(0, Math.min(cx, view.contentWidth - view.width))
+        pan.contentX = Math.max(0, Math.min(cx, pan.contentWidth - pan.width))
         view.contentY = cy
         settle.restart()
     }
@@ -52,7 +52,7 @@ Page {
         view.positionViewAtIndex(index, ListView.Beginning)
         if (top > 0) {
             var bottom = view.originY + view.contentHeight - view.height
-            view.contentY = Math.min(bottom, view.contentY + top * doc.heightFor(index, view.contentWidth))
+            view.contentY = Math.min(bottom, view.contentY + top * doc.heightFor(index, pan.contentWidth))
         }
     }
 
@@ -134,10 +134,10 @@ Page {
             return
         var index = doc.currentHitPage
         view.positionViewAtIndex(index, ListView.Beginning)
-        view.contentY += area.y * doc.heightFor(index, view.contentWidth) - view.height / 3
+        view.contentY += area.y * doc.heightFor(index, pan.contentWidth) - view.height / 3
         if (zoom > 1)
-            view.contentX = Math.max(0, Math.min(area.x * view.contentWidth - view.width / 3,
-                                                 view.contentWidth - view.width))
+            pan.contentX = Math.max(0, Math.min(area.x * pan.contentWidth - pan.width / 3,
+                                                pan.contentWidth - pan.width))
         view.returnToBounds()
     }
 
@@ -334,40 +334,54 @@ Page {
             onPinchUpdated: page.zoomTo(startZoom * pinch.scale, pinch.center.x, pinch.center.y)
             onPinchFinished: view.returnToBounds()
 
-            SilicaListView {
-                id: view
+            SilicaFlickable {
+                id: pan
 
-                objectName: "pdfPages"
+                objectName: "pdfPan"
                 anchors.fill: parent
-                model: doc.loaded ? doc.pageCount : 0
-                clip: true
                 contentWidth: width * page.zoom
-                flickableDirection: page.zoom > 1 ? Flickable.HorizontalAndVerticalFlick : Flickable.VerticalFlick
-                spacing: Theme.paddingSmall
+                contentHeight: height
+                flickableDirection: Flickable.HorizontalFlick
+                interactive: page.zoom > 1
 
-                delegate: PdfPage {
-                    id: pdfPage
-                    pageIndex: index
-                    uri: page.uri
-                    width: view.contentWidth
-                    height: doc.heightFor(index, view.contentWidth)
-                    fitWidth: view.width
-                    zoom: page.renderZoom
-                    hits: page.searchMode && doc.hitsRevision >= 0 ? JSON.parse(doc.hitsJson(index)) : []
-                    onDoubleTapped: {
-                        var at = mapToItem(view, tapX, tapY)
-                        page.zoomTo(page.zoom > 1 ? 1 : 2.5, at.x, at.y)
-                    }
-                    onLinkClicked: page.followLink(link)
-                    Component.onCompleted: doc.requestLinks(index)
+                SilicaListView {
+                    id: view
 
-                    Connections {
-                        target: doc
-                        onLinksReady: if (linkPage === pdfPage.pageIndex) pdfPage.links = JSON.parse(pageLinks)
+                    objectName: "pdfPages"
+                    x: pan.contentX
+                    width: pan.width
+                    height: pan.height
+                    model: doc.loaded ? doc.pageCount : 0
+                    clip: true
+                    flickableDirection: Flickable.VerticalFlick
+                    spacing: Theme.paddingSmall
+
+                    delegate: PdfPage {
+                        id: pdfPage
+                        pageIndex: index
+                        uri: page.uri
+                        x: -pan.contentX
+                        width: pan.contentWidth
+                        height: doc.heightFor(index, pan.contentWidth)
+                        fitWidth: view.width
+                        zoom: page.renderZoom
+                        hits: page.searchMode && doc.hitsRevision >= 0 ? JSON.parse(doc.hitsJson(index)) : []
+                        onDoubleTapped: {
+                            var at = mapToItem(view, tapX, tapY)
+                            page.zoomTo(page.zoom > 1 ? 1 : 2.5, at.x, at.y)
+                        }
+                        onLinkClicked: page.followLink(link)
+                        Component.onCompleted: doc.requestLinks(index)
+
+                        Connections {
+                            target: doc
+                            onLinksReady: if (linkPage === pdfPage.pageIndex) pdfPage.links = JSON.parse(pageLinks)
+                        }
                     }
+
+                    VerticalScrollDecorator { }
                 }
 
-                VerticalScrollDecorator { }
                 HorizontalScrollDecorator { }
             }
         }
