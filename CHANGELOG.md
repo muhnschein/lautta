@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- In the PDF viewer, after zooming in, dragging a page moves it with your finger again. Before, the view jumped to the left edge of the page as soon as you dragged ([#293](https://github.com/muhnschein/lautta/issues/293)).
 - systemd unit files (such as `.service`, `.socket`, `.mount`, `.timer`, `.target`), Podman Quadlet files (`.container`, `.volume`, `.network`, `.kube`, `.image`), networkd `.link` and `.netdev` files and `.nspawn` files open in the text viewer with their keys and comments coloured, and show the config icon. Before, they opened with another app.
 - When a folder, *Recents* or *Trash* is shown as a list, Lautta's cover shows a list too: each item's icon or thumbnail beside its name. In grid view the cover keeps its tiles.
 - The PDF viewer has *Pages* in its pulley: all pages as small pictures, the page you are on marked. Tap one to go there, or type a page number under them. *Contents and pages* is now *Contents* and shows only when the PDF has a table of contents ([#140](https://github.com/muhnschein/lautta/issues/140)).
