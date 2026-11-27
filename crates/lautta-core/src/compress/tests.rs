@@ -5,6 +5,7 @@ use super::*;
 use crate::provider::archive::ArchiveFormat;
 use crate::provider::memory::MemoryProvider;
 use crate::provider::{list_all, read_all, StaticResolver};
+use crate::room::Room;
 use std::sync::Mutex;
 
 fn vp(s: &str) -> VPath {
@@ -101,9 +102,15 @@ async fn run(f: &Fixture, sources: &[Uri], kind: ArchiveKind) -> (Vec<u8>, Compr
 async fn reopen(name: &str, bytes: &[u8], cache: &Path) -> ArchiveProvider {
     let mem = MemoryProvider::default();
     mem.add_file(name, bytes, 0);
-    ArchiveProvider::open(Arc::new(mem), vp(name), cache.to_path_buf(), None)
-        .await
-        .unwrap()
+    ArchiveProvider::open(
+        Arc::new(mem),
+        vp(name),
+        cache.to_path_buf(),
+        Room::default(),
+        None,
+    )
+    .await
+    .unwrap()
 }
 
 fn tar_members(bytes: &[u8]) -> Vec<(String, tar::EntryType, Vec<u8>, Option<String>)> {
