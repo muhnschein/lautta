@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Lautta speaks your language: it follows the phone's *Language* setting in all 39 languages Sailfish OS offers. Its launcher description and *Save to Lautta* in the share menu are translated too ([#36](https://github.com/muhnschein/lautta/issues/36)).
 - A PDF whose fill pattern repeats at a huge step, such as `tiling-pattern-large-steps.pdf` from the pdf.js tests, no longer closes Lautta: the page shows as it should.
 - Extracting or opening a large file inside an archive no longer fills the phone's storage. Lautta checks the free space first and stops with *Not enough space* when the file would leave less than 256 MB free; it checks again while it writes. Before, an archive entry larger than the free space (such as a zip bomb) filled the phone completely.
 - Keeping the name list of a server fresh takes far fewer requests with the next netvfs: Lautta asks about many folders at once, and on Nextcloud and ownCloud a branch that did not change is skipped whole. Server lists now update on Wi-Fi only, also in the background with *Update while charging*; *Settings › Search › Use mobile data* allows mobile data too; until then a server not yet listed says *Waiting for Wi-Fi*. A Nextcloud or ownCloud server without a list is asked to search itself, which answers at once instead of going folder by folder. With an older netvfs, servers are indexed as before, while Lautta is open.

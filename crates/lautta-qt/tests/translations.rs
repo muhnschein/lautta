@@ -412,3 +412,393 @@ fn every_message_has_its_english() {
         "<message id=\"a\"><source>A</source></message><message id=\"b\"><source></source></message>";
     assert_eq!(without_english(broken), ["b"]);
 }
+
+const LANGUAGES: [&str; 39] = [
+    "bg", "bn", "cs", "da", "de", "el", "es", "et", "fi", "fr", "gu", "hi", "hu", "it", "kn", "lt", "lv",
+    "ml", "mr", "nb", "nl", "pa", "pl", "pt", "pt_BR", "ro", "ru", "sk", "sl", "sv", "ta", "te", "tr", "tt",
+    "uk", "vi", "zh_CN", "zh_HK", "zh_TW",
+];
+
+struct Message {
+    id: String,
+    source: String,
+    finished: bool,
+    forms: Vec<String>,
+}
+
+fn unescape(text: &str) -> String {
+    let mut decoded = String::new();
+    let mut rest = text;
+    while let Some(at) = rest.find("&#") {
+        decoded.push_str(&rest[..at]);
+        let (code, after) = rest[at + 2..].split_once(';').unwrap();
+        let value = match code.strip_prefix('x') {
+            Some(hex) => u32::from_str_radix(hex, 16).unwrap(),
+            None => code.parse().unwrap(),
+        };
+        decoded.push(char::from_u32(value).unwrap());
+        rest = after;
+    }
+    decoded.push_str(rest);
+    decoded
+        .replace("&apos;", "'")
+        .replace("&quot;", "\"")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
+}
+
+fn escape(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
+fn between<'a>(text: &'a str, open: &str, close: &str) -> Option<&'a str> {
+    let rest = text.split_once(open)?.1;
+    Some(rest.split_once(close)?.0)
+}
+
+fn language_of(ts: &str) -> String {
+    between(ts, "<TS version=\"2.1\" language=\"", "\"")
+        .unwrap_or_default()
+        .to_owned()
+}
+
+fn messages(ts: &str) -> Vec<Message> {
+    ts.split("<message id=\"")
+        .skip(1)
+        .map(|block| {
+            let block = block.split_once("</message>").map_or(block, |(b, _)| b);
+            let id = block.split('"').next().unwrap_or_default().to_owned();
+            let translation = block.split_once("<translation").map_or("", |(_, t)| t);
+            let finished = !translation.starts_with(" type=\"unfinished\"");
+            let body = translation
+                .split_once('>')
+                .map_or("", |(_, t)| t)
+                .split_once("</translation>")
+                .map_or("", |(t, _)| t);
+            let forms = if body.contains("<numerusform>") {
+                body.split("<numerusform>")
+                    .skip(1)
+                    .map(|f| unescape(f.split_once("</numerusform>").map_or(f, |(f, _)| f)))
+                    .collect()
+            } else {
+                vec![unescape(body)]
+            };
+            let source = unescape(between(block, "<source>", "</source>").unwrap_or_default());
+            Message {
+                id,
+                source,
+                finished,
+                forms,
+            }
+        })
+        .collect()
+}
+
+fn language_catalogue(language: &str) -> String {
+    std::fs::read_to_string(root().join(format!("translations/harbour-lautta-{language}.ts")))
+        .unwrap_or_default()
+}
+
+#[test]
+fn every_sailfish_language_has_a_catalogue() {
+    let missing: Vec<&str> = LANGUAGES
+        .iter()
+        .copied()
+        .filter(|language| {
+            !root()
+                .join(format!("translations/harbour-lautta-{language}.ts"))
+                .exists()
+        })
+        .collect();
+    assert_eq!(missing, Vec::<&str>::new());
+    let mut found: Vec<String> = std::fs::read_dir(root().join("translations"))
+        .unwrap()
+        .filter_map(|entry| entry.unwrap().file_name().into_string().ok())
+        .filter_map(|name| {
+            name.strip_prefix("harbour-lautta-")
+                .and_then(|n| n.strip_suffix(".ts"))
+                .map(str::to_owned)
+        })
+        .collect();
+    found.sort();
+    assert_eq!(found, LANGUAGES, "a catalogue the list above does not know");
+}
+
+fn gaps(language: &str, ts: &str, source: &str) -> Vec<String> {
+    let mut problems = Vec::new();
+    if language_of(ts) != language {
+        problems.push(format!("{language}: language is \"{}\"", language_of(ts)));
+    }
+    let mut want: Vec<String> = messages(source).into_iter().map(|m| m.id).collect();
+    let mut have: Vec<String> = messages(ts).iter().map(|m| m.id.clone()).collect();
+    want.sort();
+    have.sort();
+    if want != have {
+        problems.push(format!("{language}: not the source's ids: run make translations"));
+    }
+    for message in messages(ts) {
+        if !message.finished || message.forms.iter().any(String::is_empty) {
+            problems.push(format!("{language}: {} untranslated", message.id));
+        }
+    }
+    problems
+}
+
+#[test]
+fn every_catalogue_has_every_message_translated() {
+    let source = catalogue();
+    assert!(messages(&source).len() > 500, "the source catalogue is cut short");
+    let problems: Vec<String> = LANGUAGES
+        .iter()
+        .flat_map(|language| gaps(language, &language_catalogue(language), &source))
+        .collect();
+    assert_eq!(problems, Vec::<String>::new());
+
+    let german = language_catalogue("de");
+    let first = messages(&german).remove(0).id;
+    let unfinished = german.replacen("<translation>", "<translation type=\"unfinished\">", 1);
+    assert_eq!(
+        gaps("de", &unfinished, &source),
+        [format!("de: {first} untranslated")]
+    );
+    let emptied = german.replacen("<numerusform>", "<numerusform></numerusform><x>", 1);
+    assert_eq!(gaps("de", &emptied, &source).len(), 1, "an empty plural form");
+    let short = german.replacen("<message id=\"", "<gone id=\"", 1);
+    assert_eq!(
+        gaps("de", &short, &source),
+        ["de: not the source's ids: run make translations"]
+    );
+    let misnamed = german.replacen("language=\"de\"", "language=\"en\"", 1);
+    assert_eq!(gaps("de", &misnamed, &source), ["de: language is \"en\""]);
+}
+
+fn placeholders(text: &str) -> Vec<String> {
+    let mut found: Vec<String> = text
+        .match_indices('%')
+        .filter_map(|(at, _)| text[at + 1..].chars().next())
+        .filter(|c| c.is_ascii_digit() || *c == 'n')
+        .map(|c| format!("%{c}"))
+        .collect();
+    found.sort();
+    found
+}
+
+fn lost_placeholders(language: &str, ts: &str, source: &str) -> Vec<String> {
+    let english: std::collections::HashMap<String, Message> =
+        messages(source).into_iter().map(|m| (m.id.clone(), m)).collect();
+    let mut problems = Vec::new();
+    for message in messages(ts) {
+        let Some(en) = english.get(&message.id) else {
+            continue;
+        };
+        let count_optional = en.forms.len() > 1 && en.forms.iter().any(|f| !f.contains("%n"));
+        let want: Vec<String> = placeholders(&en.source)
+            .into_iter()
+            .filter(|p| !count_optional || p != "%n")
+            .collect();
+        for form in &message.forms {
+            let got: Vec<String> = placeholders(form)
+                .into_iter()
+                .filter(|p| !count_optional || p != "%n")
+                .collect();
+            if got != want {
+                problems.push(format!(
+                    "{language}: {}: \"{form}\" has {got:?}, not {want:?}",
+                    message.id
+                ));
+            }
+        }
+    }
+    problems
+}
+
+#[test]
+fn every_translation_keeps_the_placeholders_of_its_english() {
+    let source = catalogue();
+    let problems: Vec<String> = LANGUAGES
+        .iter()
+        .flat_map(|language| lost_placeholders(language, &language_catalogue(language), &source))
+        .collect();
+    assert_eq!(problems, Vec::<String>::new());
+
+    let german = language_catalogue("de");
+    let sizes = messages(&german)
+        .into_iter()
+        .find(|m| m.id == "lautta-err-no-space-sizes")
+        .unwrap();
+    assert_eq!(placeholders(&sizes.forms[0]), ["%1", "%2", "%3"]);
+    let without_three = german.replacen(
+        &format!(">{}<", escape(&sizes.forms[0])),
+        &format!(">{}<", escape(&sizes.forms[0].replace("%3", ""))),
+        1,
+    );
+    assert_ne!(without_three, german);
+    assert_eq!(lost_placeholders("de", &without_three, &source).len(), 1);
+    let items = messages(&german)
+        .into_iter()
+        .find(|m| m.id == "lautta-dir-grid-items")
+        .unwrap();
+    let no_count = german.replacen(
+        &format!("<numerusform>{}</numerusform>", escape(&items.forms[0])),
+        &format!(
+            "<numerusform>{}</numerusform>",
+            escape(&items.forms[0].replace("%n", "1"))
+        ),
+        1,
+    );
+    assert_ne!(no_count, german);
+    assert_eq!(lost_placeholders("de", &no_count, &source).len(), 1);
+}
+
+fn release_all(dir: &Path) {
+    release(&catalogue(), dir, "harbour-lautta");
+    for language in LANGUAGES {
+        release(
+            &language_catalogue(language),
+            dir,
+            &format!("harbour-lautta-{language}"),
+        );
+    }
+}
+
+fn js(text: &str) -> String {
+    let mut out = String::from("\"");
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            c if c.is_ascii() => out.push(c),
+            c => out.push_str(&format!("\\u{:04x}", c as u32)),
+        }
+    }
+    out + "\""
+}
+
+fn reads_in(locale: &str, want: &[(String, i32, String)]) -> i32 {
+    let home = tempfile::tempdir().unwrap();
+    std::env::set_var("HOME", home.path());
+    std::env::set_var("QT_QPA_PLATFORM", "offscreen");
+    std::env::set_var("LC_ALL", format!("{locale}.UTF-8"));
+    std::env::set_var("LANGUAGE", locale);
+    let dir = tempfile::tempdir().unwrap();
+    release_all(dir.path());
+    let checks: String = want
+        .iter()
+        .map(|(id, n, text)| format!("        same({}, {n}, {}),\n", js(id), js(text)))
+        .collect();
+    let qml = format!(
+        "import QtQuick 2.6\nQtObject {{\n    function same(id, n, want) {{\n        var got = n < 0 ? qsTrId(id) : qsTrId(id, n)\n        if (got !== want)\n            console.error(\"FAILED: \" + id + \" \" + n + \": \" + got + \", not \" + want)\n    }}\n    Component.onCompleted: [\n{checks}    ]\n}}\n"
+    );
+    let file = dir.path().join("reader.qml");
+    std::fs::write(&file, qml).unwrap();
+    check(dir.path(), &file)
+}
+
+fn plain_messages_of(language: &str) -> Vec<(String, i32, String)> {
+    messages(&language_catalogue(language))
+        .into_iter()
+        .filter(|m| m.forms.len() == 1 && !m.forms[0].contains("%n"))
+        .map(|m| (m.id, -1, m.forms[0].clone()))
+        .collect()
+}
+
+fn readers_get(locale: &str, language: &str) {
+    let want = plain_messages_of(language);
+    assert!(want.len() > 400, "{language}: too few plain messages");
+    assert_eq!(reads_in(locale, &want), 0, "{locale} does not read {language}");
+    let english: Vec<(String, i32, String)> = messages(&catalogue())
+        .into_iter()
+        .filter(|m| {
+            want.iter()
+                .any(|(id, _, text)| *id == m.id && *text != m.forms[0])
+        })
+        .take(1)
+        .map(|m| (m.id, -1, m.forms[0].clone()))
+        .collect();
+    assert_eq!(english.len(), 1);
+    assert_ne!(
+        reads_in(locale, &english),
+        0,
+        "{locale} check cannot tell English apart"
+    );
+}
+
+#[test]
+fn a_finnish_reader_gets_finnish() {
+    readers_get("fi_FI", "fi");
+}
+
+#[test]
+fn an_austrian_reader_gets_german() {
+    readers_get("de_AT", "de");
+}
+
+#[test]
+fn a_brazilian_reader_gets_brazilian_portuguese() {
+    readers_get("pt_BR", "pt_BR");
+}
+
+#[test]
+fn a_reader_in_portugal_gets_portuguese() {
+    readers_get("pt_PT", "pt");
+}
+
+#[test]
+fn a_reader_in_taiwan_gets_taiwans_chinese() {
+    readers_get("zh_TW", "zh_TW");
+}
+
+#[test]
+fn a_reader_in_hong_kong_gets_hong_kongs_chinese() {
+    readers_get("zh_HK", "zh_HK");
+}
+
+#[test]
+fn a_language_without_a_catalogue_gets_english() {
+    let want: Vec<(String, i32, String)> = vec![
+        ("lautta-home-title".to_owned(), -1, "Browse".to_owned()),
+        ("lautta-dir-grid-items".to_owned(), 1, "1 item".to_owned()),
+        ("lautta-dir-grid-items".to_owned(), 3, "3 items".to_owned()),
+    ];
+    assert_eq!(reads_in("ja_JP", &want), 0);
+    let wrong = vec![("lautta-dir-grid-items".to_owned(), 1, "1 items".to_owned())];
+    assert_ne!(reads_in("ja_JP", &wrong), 0);
+}
+
+#[test]
+fn polish_counts_follow_polish_rules() {
+    let polish = messages(&language_catalogue("pl"))
+        .into_iter()
+        .find(|m| m.id == "lautta-dir-grid-items")
+        .unwrap();
+    assert_eq!(polish.forms.len(), 3);
+    let form_of = [(1, 0), (2, 1), (4, 1), (5, 2), (12, 2), (22, 1), (25, 2), (0, 2)];
+    let want: Vec<(String, i32, String)> = form_of
+        .iter()
+        .map(|(n, form)| {
+            (
+                polish.id.clone(),
+                *n,
+                polish.forms[*form].replace("%n", &n.to_string()),
+            )
+        })
+        .collect();
+    assert_eq!(reads_in("pl_PL", &want), 0);
+    let swapped: Vec<(String, i32, String)> = want
+        .iter()
+        .map(|(id, n, text)| {
+            let other = if *n == 22 {
+                polish.forms[2].replace("%n", "22")
+            } else {
+                text.clone()
+            };
+            (id.clone(), *n, other)
+        })
+        .collect();
+    assert_ne!(reads_in("pl_PL", &swapped), 0);
+}
