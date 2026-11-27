@@ -47,4 +47,5 @@ strip = "symbols"
 debug = false
 
 [patch.crates-io]
+cpp_common = { path = "third_party/cpp_common" }
 qttypes = { path = "third_party/qttypes" }

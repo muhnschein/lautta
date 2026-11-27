@@ -55,6 +55,7 @@ pub struct Transfers {
     answer: qt_method!(fn(&self, id: i64, item: i32, choice: QString, apply_to_all: bool) -> bool),
     questionsJson: qt_method!(fn(&self, id: i64) -> QString),
     clearHistory: qt_method!(fn(&self) -> i32),
+    removeFromHistory: qt_method!(fn(&self, id: i64) -> bool),
     dismissRestored: qt_method!(fn(&mut self)),
     noteClosing: qt_method!(fn(&mut self)),
     requestShow: qt_method!(fn(&self)),
@@ -360,6 +361,12 @@ impl Transfers {
     fn questionsJson(&self, id: i64) -> QString {
         let list = core().and_then(|c| c.question_list(id).ok()).unwrap_or_default();
         QString::from(to_json(&list).as_str())
+    }
+
+    fn removeFromHistory(&self, id: i64) -> bool {
+        let removed = core().is_some_and(|c| c.forget_finished(id));
+        events::reload();
+        removed
     }
 
     fn clearHistory(&self) -> i32 {

@@ -539,8 +539,6 @@ dependencies = [
 [[package]]
 name = "cpp_common"
 version = "0.5.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7280a73ef92e18d27d2ec3005b57fe0043b51d1b506be86b0bf66f588f9857b"
 dependencies = [
  "proc-macro2",
  "syn 2.0.119",

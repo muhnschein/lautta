@@ -11,12 +11,22 @@ each file keeps its own SPDX header):
 | `VerticalPageBackHint.qml` | jolla-gallery `f46dfc1` `src/pages/VerticalPageBackHint.qml` |
 | `GalleryImage.qml` | [sailfish-components-gallery](https://github.com/sailfishos/sailfish-components-gallery) `2247c60` `src/ImageViewer.qml` |
 | `GalleryOverlay.qml` | sailfish-components-gallery `2247c60` `src/GalleryOverlay.qml` |
+| `VideoPoster.qml` | sailfish-components-gallery `2247c60` `src/VideoPoster.qml` |
 
 They are copied, not imported: `Sailfish.Gallery`, `com.jolla.gallery` and
 `Sailfish.Silica.private` are not Harbour imports. What lautta changed:
 
-- Images only: the video player, poster and seek controls, the image
-  editor and Ambience are gone.
+- Photos and videos of the folder, in its order (audio keeps its own
+  player). The image editor, Ambience and the video's 10 s skips are gone.
+- A video shows its poster (system thumbnailer frame, asked with the
+  file's type as the Gallery does; none on a server)
+  and a play button; nothing plays until tapped. Its player is lautta's
+  `../MediaPlayback.qml` (device file, or server stream or download through
+  the bridge) in the slot, instead of the Gallery's one player per view: made
+  at the first tap on play, gone once the video is no longer current. The
+  overlay carries the position slider with elapsed and total time; details
+  are for images only. As there, a playing video without its controls holds
+  the swipes, and starting it puts the controls away.
 - Zooming is lautta's `../ZoomableFlickable.qml` (LGPL-2.1-or-later, the
   behaviour of Silica's private ZoomableFlickable written anew, rules in
   `../ZoomMath.js`), with a double tap besides the pinch. Its drag detector

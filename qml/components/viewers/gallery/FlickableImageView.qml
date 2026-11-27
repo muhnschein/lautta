@@ -5,12 +5,14 @@
 // SPDX-License-Identifier: BSD-3-Clause
 //
 // jolla-gallery's src/pages/FlickableImageView.qml, adapted for lautta
-// (PRV-4, see LAUTTA.md): images only (the video player goes), items are
-// lautta URIs (the model's `uri` role, or the items of an array) shown
-// through image://lautta-file/, and the overlay's actions are the page's.
-// A zoomed image takes the drags, so swipes wait until it is zoomed out
-// again, and while a delete waits for its remorse (`held`). Neighbours load
-// once the current image has, so it gets the cores first.
+// (PRV-4, see LAUTTA.md): items are lautta URIs with a video flag (the
+// model's `uri` and `video` roles, or objects of an array); images show
+// through image://lautta-file/, videos in VideoPoster, which plays only the
+// current one; the overlay's actions are the page's. A zoomed image takes
+// the drags, so swipes wait until it is zoomed out again, and while a delete
+// waits for its remorse (`held`); a playing video without its controls
+// takes them as in the Gallery. Neighbours load once the current item has,
+// so it gets the cores first.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Lautta 1.0
@@ -32,20 +34,23 @@ PagedView {
         return ViewerImage.source(uri)
     }
 
-    readonly property bool currentSettled: currentItem !== null && currentItem.item !== null
-                                           && (currentItem.item.photo.status === Image.Ready
-                                               || currentItem.item.photo.status === Image.Error)
+    readonly property bool playing: currentItem !== null && currentItem.playing
+    readonly property bool currentSettled: currentItem !== null && currentItem.item !== null && currentItem.item.settled
 
-    interactive: count > 1 && !zoomed && !held
+    interactive: count > 1 && !zoomed && !held && !(playing && !overlay.active)
 
     delegate: Loader {
         id: slot
 
-        readonly property string imageUri: model.uri !== undefined ? model.uri : model.modelData
-        readonly property url source: imageUri.length > 0 ? root.sourceOf(imageUri) : ""
+        readonly property string itemUri: model.uri !== undefined ? model.uri : model.modelData.uri
+        readonly property bool video: model.uri !== undefined ? model.video : model.modelData.video === true
+        readonly property string mimeType: model.uri !== undefined ? model.mimeType : model.modelData.mimeType || ""
+        readonly property url source: itemUri.length > 0 ? root.sourceOf(itemUri) : ""
         readonly property bool isCurrentItem: PagedView.isCurrentItem
         readonly property bool error: item && item.error
         readonly property bool zoomed: item !== null && item.zoomed
+        readonly property bool playing: item !== null && item.playing === true
+        readonly property QtObject player: video && item !== null ? item.player : null
         readonly property bool wanted: isCurrentItem || root.currentSettled
         property bool loadAllowed
 
@@ -54,7 +59,7 @@ PagedView {
 
         width: root.width
         height: root.height
-        sourceComponent: imageComponent
+        sourceComponent: video ? videoComponent : imageComponent
         asynchronous: !isCurrentItem
 
         Component {
@@ -71,11 +76,26 @@ PagedView {
                 }
 
                 source: slot.loadAllowed ? slot.source : ""
-                placeholder: slot.imageUri.length > 0 ? ViewerImage.placeholder(App, slot.imageUri) : ""
-                tile: slot.imageUri === root.tileUri ? ViewerImage.tile(App, slot.imageUri, root.tileSize) : ""
+                placeholder: slot.itemUri.length > 0 ? ViewerImage.placeholder(App, slot.itemUri) : ""
+                tile: slot.itemUri === root.tileUri ? ViewerImage.tile(App, slot.itemUri, root.tileSize) : ""
                 tileSize: root.tileSize
                 active: slot.isCurrentItem
                 viewMoving: root.moving
+            }
+        }
+
+        Component {
+            id: videoComponent
+
+            VideoPoster {
+                onClicked: overlay.active = !overlay.active
+                onPlayingChanged: if (playing && overlay.active) overlay.active = false
+
+                uri: slot.itemUri
+                mimeType: slot.mimeType
+                loadAllowed: slot.loadAllowed
+                active: slot.isCurrentItem
+                overlayMode: overlay.active
             }
         }
     }
@@ -86,6 +106,8 @@ PagedView {
         source: root.currentItem ? root.currentItem.source : ""
         error: root.currentItem !== null && root.currentItem.error
         held: root.held
+        video: root.currentItem !== null && root.currentItem.video
+        player: root.currentItem !== null ? root.currentItem.player : null
 
         anchors.fill: parent
         z: root.count + 100

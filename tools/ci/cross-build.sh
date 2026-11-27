@@ -21,7 +21,17 @@ export SQLITE3_LIB_DIR="$sdk/linklib"
 export SQLITE3_STATIC=0
 export LIBSQLITE3_SYS_USE_PKG_CONFIG=1
 export LZMA_API_STATIC=0
-export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=-Wl,--as-needed -C link-arg=-Wl,-z,relro,-z,now"
+rust_maps=""
+c_maps=""
+map() {
+    rust_maps="$rust_maps --remap-path-prefix=$1=$2"
+    c_maps="$c_maps -ffile-prefix-map=$1=$2"
+}
+map "$sdk" /sdk
+map "${CARGO_HOME:-$HOME/.cargo}" /cargo
+export TARGET_CFLAGS="$c_maps"
+export TARGET_CXXFLAGS="$c_maps"
+export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=-Wl,--as-needed -C link-arg=-Wl,-z,relro,-z,now$rust_maps"
 export CARGO_TARGET_DIR="$out/target"
 export CARGO_INCREMENTAL=0
 
