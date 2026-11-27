@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-import QtMultimedia 5.6 as MM
-import Nemo.KeepAlive 1.2
 import Lautta 1.0
 import "../components/viewers"
 import "../components/viewers/ViewerText.js" as ViewerText
-import "../components/ErrorText.js" as ErrorText
 
 Page {
     id: page
@@ -14,19 +11,17 @@ Page {
     property string uri
     readonly property string coverKind: "file"
     readonly property string coverUri: uri
-    property bool video
-
     readonly property bool local: App.isLocal(uri)
     readonly property string fileName: App.nameOf(uri)
-    readonly property bool playing: local ? localPlayer.playbackState === MM.MediaPlayer.PlayingState : remote.playing
-    readonly property real position: local ? localPlayer.position : remote.position
-    readonly property real duration: local ? localPlayer.duration : remote.duration
-    readonly property string errorKind: local ? remote.playerErrorKind(localPlayer.error) : remote.errorKind
-    property bool chrome: true
-    readonly property bool sideBySide: !video && isLandscape
+    readonly property bool playing: playback.playing
+    readonly property real position: playback.position
+    readonly property real duration: playback.duration
+    readonly property string errorKind: playback.errorKind
+    readonly property string statusText: playback.statusText
+    readonly property bool sideBySide: isLandscape
     readonly property real paneX: sideBySide ? width / 2 : 0
     readonly property real paneWidth: sideBySide ? width / 2 : width
-    readonly property string coverUrl: !video && info.cover !== "" ? "image://lautta-cover/" + uri : ""
+    readonly property string coverUrl: info.cover !== "" ? "image://lautta-cover/" + uri : ""
     readonly property string trackTitle: {
         if (info.title !== "")
             return info.title
@@ -35,71 +30,28 @@ Page {
     }
 
     function toggle() {
-        if (local) {
-            if (playing)
-                localPlayer.pause()
-            else
-                localPlayer.play()
-        } else if (playing) {
-            remote.pause()
-        } else {
-            remote.play()
-        }
+        playback.toggle()
     }
 
     function seek(ms) {
-        var target = Math.max(0, Math.min(duration > 0 ? duration : ms, ms))
-        if (local)
-            localPlayer.seek(target)
-        else
-            remote.seek(target)
-    }
-
-    function keepPipelineIfStuck() {
-        var media = local ? localPlayer : remote.mediaObject
-        tools.keepWhileLoading(media, output)
-        if (local)
-            tools.keepWhileLoading(media, localPlayer)
+        playback.seek(ms)
     }
 
     allowedOrientations: Orientation.All
 
-    MM.MediaPlayer {
-        id: localPlayer
-        source: page.local ? App.localUrl(page.uri) : ""
-        autoPlay: true
-    }
-
-    MediaSource {
-        id: remote
-        uri: page.local ? "" : page.uri
-        Component.onCompleted: play()
+    MediaPlayback {
+        id: playback
+        uri: page.uri
     }
 
     ViewerTools { id: tools }
 
     AudioInfo {
         id: info
-        uri: page.video ? "" : page.uri
+        uri: page.uri
     }
 
     Component.onCompleted: if (local) tools.noteViewed(uri)
-    Component.onDestruction: {
-        if (local)
-            localPlayer.stop()
-        else
-            remote.stop()
-        keepPipelineIfStuck()
-    }
-
-    DisplayBlanking {
-        preventBlanking: page.video && page.playing
-    }
-
-    Rectangle {
-        anchors.fill: parent
-        color: page.video ? "black" : "transparent"
-    }
 
     Image {
         id: glow
@@ -119,41 +71,12 @@ Page {
         }
     }
 
-    MM.VideoOutput {
-        id: output
-        anchors.fill: parent
-        visible: page.video
-        source: page.local ? localPlayer : remote
-        fillMode: MM.VideoOutput.PreserveAspectFit
-    }
-
-    MouseArea {
-        anchors.fill: parent
-        enabled: page.video
-        onClicked: page.chrome = !page.chrome
-    }
-
-    readonly property string statusText: {
-        if (errorKind !== "")
-            return ErrorText.message(errorKind, { "item": fileName, "location": App.locationName(uri), "open": true })
-        if (remote.downloading)
-            //% "Downloading from %1"
-            return qsTrId("lautta-viewers-media-downloading").arg(App.locationName(uri))
-        if (!local)
-            //% "Streaming from %1"
-            return qsTrId("lautta-viewers-media-streaming").arg(App.locationName(uri))
-        return ""
-    }
-
     PageHeader {
         id: header
         x: page.paneX
         width: page.paneWidth
-        opacity: page.chrome || !page.video ? 1 : 0
-        visible: opacity > 0
         title: page.fileName
         description: page.statusText
-        Behavior on opacity { FadeAnimation { } }
     }
 
     Item {
@@ -168,7 +91,6 @@ Page {
 
         objectName: "cover"
         readonly property real block: height + Theme.paddingLarge * 2 + trackInfo.height
-        visible: !page.video
         width: page.sideBySide
                ? Math.min(page.width / 2 - 2 * Theme.horizontalPageMargin, page.height - 2 * Theme.paddingLarge)
                : Math.max(0, Math.min(page.width - 2 * Theme.horizontalPageMargin, Theme.itemSizeHuge * 2.4,
@@ -207,7 +129,6 @@ Page {
         width: page.paneWidth - 2 * Theme.horizontalPageMargin
         y: page.sideBySide ? stage.y + Math.max(0, (stage.height - height) / 2)
                            : cover.y + cover.height + Theme.paddingLarge * 2
-        visible: !page.video
         opacity: info.loading ? 0 : 1
         spacing: Theme.paddingSmall
         Behavior on opacity { FadeAnimation { } }
@@ -264,17 +185,17 @@ Page {
     BusyIndicator {
         anchors.centerIn: parent
         size: BusyIndicatorSize.Large
-        running: remote.loading || (remote.downloading && remote.downloadProgress < 0)
+        running: playback.loading || (playback.downloading && playback.downloadProgress < 0)
     }
 
     ProgressBar {
         x: page.paneX
         width: page.paneWidth
-        y: page.video ? (page.height - height) / 2 : page.height - height - Theme.paddingLarge * 2
-        visible: remote.downloading && remote.downloadProgress >= 0
+        y: page.height - height - Theme.paddingLarge * 2
+        visible: playback.downloading && playback.downloadProgress >= 0
         minimumValue: 0
         maximumValue: 1
-        value: Math.max(0, remote.downloadProgress)
+        value: Math.max(0, playback.downloadProgress)
         //% "Getting the file before playing"
         label: qsTrId("lautta-viewers-media-getting")
     }
@@ -285,9 +206,7 @@ Page {
         x: page.paneX
         width: page.paneWidth
         anchors.bottom: parent.bottom
-        opacity: page.chrome || !page.video ? 1 : 0
-        visible: opacity > 0 && !remote.downloading
-        Behavior on opacity { FadeAnimation { } }
+        visible: !playback.downloading
 
         Slider {
             id: slider

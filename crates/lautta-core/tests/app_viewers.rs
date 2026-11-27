@@ -203,27 +203,42 @@ async fn exif_report_reads_the_head_of_the_file() {
 }
 
 #[tokio::test]
-async fn the_folders_images_come_in_the_folders_order() {
+async fn the_folders_photos_and_videos_come_in_the_folders_order() {
     let h = home().await;
     for (n, d) in [
         ("b.jpg", jpeg(2, 2)),
         ("a10.png", jpeg(2, 2)),
         ("a2.png", jpeg(2, 2)),
+        ("a3.mp4", b"x".to_vec()),
         (".hidden.jpg", jpeg(2, 2)),
+        (".hidden.mp4", b"x".to_vec()),
         ("notes.txt", b"x".to_vec()),
+        ("song.mp3", b"x".to_vec()),
         ("raw.cr2", b"x".to_vec()),
+        ("old.wmv", b"x".to_vec()),
     ] {
         std::fs::write(h.root.join("Pictures").join(n), d).unwrap();
     }
     std::fs::create_dir(h.root.join("Pictures/sub.jpg")).unwrap();
-    let list = h.core.list_images(&uri("lautta://user-pictures/")).await.unwrap();
-    let names: Vec<_> = list.iter().map(|i| i.name.as_str()).collect();
+    std::fs::create_dir(h.root.join("Pictures/sub.mp4")).unwrap();
+    let list = h
+        .core
+        .list_gallery(&uri("lautta://user-pictures/"))
+        .await
+        .unwrap();
+    let names: Vec<_> = list.iter().map(|i| (i.name.as_str(), i.video)).collect();
     assert_eq!(
         names,
-        ["a2.png", "a10.png", "b.jpg"],
-        "natural order, no folders, hidden or pictures only other apps show"
+        [
+            ("a2.png", false),
+            ("a3.mp4", true),
+            ("a10.png", false),
+            ("b.jpg", false)
+        ],
+        "natural order, no folders, hidden, audio or files only other apps show"
     );
     assert_eq!(list[0].uri, uri("lautta://user-pictures/a2.png"));
+    assert_eq!(list[1].uri, uri("lautta://user-pictures/a3.mp4"));
     assert!(list[0].size.is_some());
 }
 

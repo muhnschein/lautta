@@ -7,7 +7,7 @@ var viewerPages = {
     "markdown": "../viewers/MarkdownViewer.qml",
     "prose": "../viewers/MarkdownViewer.qml",
     "audio": "../viewers/MediaPlayer.qml",
-    "video": "../viewers/MediaPlayer.qml",
+    "video": "../viewers/ImageViewer.qml",
     "pdf": "../viewers/PdfViewer.qml"
 }
 
@@ -24,12 +24,11 @@ function open(pageStack, app, operations, uri, isDir, mimeType, folderUri, tileS
     var page = viewerPages[viewer]
     if (page) {
         var props = { "uri": uri }
-        if (viewer === "image") {
+        if (viewer === "image" || viewer === "video") {
             props.folderUri = folderUri || app.parentUri(uri)
             props.tileSize = tileSize || 0
-        }
-        if (viewer === "audio" || viewer === "video")
             props.video = viewer === "video"
+        }
         pageStack.push(Qt.resolvedUrl(page), props)
         return viewer
     }

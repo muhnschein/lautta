@@ -18,7 +18,7 @@ Item {
 
     ViewerTools { id: tools }
     ExifModel { id: exif }
-    ImageListModel { id: images }
+    GalleryListModel { id: images }
 
     Repeater {
         id: imageRows
@@ -26,6 +26,7 @@ Item {
         delegate: Item {
             property string rowUri: uri
             property string rowName: name
+            property bool rowVideo: video
         }
     }
 
@@ -53,12 +54,18 @@ Item {
         images.folderUri = "lautta://user-pictures/"
         settle(images)
         check(images.count === 1 && imageRows.count === 1, "one image in the folder " + images.count)
-        check(imageRows.itemAt(0).rowUri === "lautta://user-pictures/photo.jpg" && imageRows.itemAt(0).rowName === "photo.jpg", "image row")
+        check(imageRows.itemAt(0).rowUri === "lautta://user-pictures/photo.jpg" && imageRows.itemAt(0).rowName === "photo.jpg"
+              && !imageRows.itemAt(0).rowVideo, "image row")
         check(images.indexOf("lautta://user-pictures/photo.jpg") === 0 && images.indexOf("lautta://user-pictures/other.jpg") === -1, "indexOf")
         check(tools.installFixture(Qt.resolvedUrl("fixtures/photo.jpg"), "lautta://user-pictures/a.jpg"), "second image")
         images.reload()
         settle(images)
         check(images.count === 2 && imageRows.itemAt(0).rowName === "a.jpg", "reload sees the new image, in name order")
+        check(tools.installFixture(Qt.resolvedUrl("fixtures/data.bin"), "lautta://user-pictures/b.mp4"), "video")
+        images.reload()
+        settle(images)
+        check(images.count === 3 && imageRows.itemAt(1).rowName === "b.mp4" && imageRows.itemAt(1).rowVideo
+              && !imageRows.itemAt(2).rowVideo, "a video sits among the photos, marked as one")
         images.folderUri = "lautta://user-pictures/nope/"
         settle(images)
         check(images.errorKind === "NotFound", "image list error " + images.errorKind)
