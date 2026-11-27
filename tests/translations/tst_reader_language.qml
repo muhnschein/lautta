@@ -2,6 +2,8 @@
 import QtQuick 2.6
 
 QtObject {
+    property bool reachedEnd
+
     function notEnglish(got, english) {
         if (got === english || got === "")
             console.error("FAILED: \"" + got + "\" is not in the reader's language")
@@ -12,5 +14,6 @@ QtObject {
         notEnglish(qsTrId("lautta-dir-grid-items", 2), "2 items")
         if (qsTrId("lautta-app-name") !== "Lautta")
             console.error("FAILED: the app's name is translated")
+        reachedEnd = true
     }
 }

@@ -679,12 +679,30 @@ fn js(text: &str) -> String {
     out + "\""
 }
 
-fn reads_in(locale: &str, want: &[(String, i32, String)]) -> i32 {
+fn in_own_process(test: &str, locale: &str, body: impl FnOnce()) {
+    if std::env::var("LAUTTA_LOCALE_TEST").as_deref() == Ok(test) {
+        body();
+        return;
+    }
     let home = tempfile::tempdir().unwrap();
-    std::env::set_var("HOME", home.path());
-    std::env::set_var("QT_QPA_PLATFORM", "offscreen");
-    std::env::set_var("LC_ALL", format!("{locale}.UTF-8"));
-    std::env::set_var("LANGUAGE", locale);
+    let out = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", test, "--nocapture", "--test-threads", "1"])
+        .env("LAUTTA_LOCALE_TEST", test)
+        .env("HOME", home.path())
+        .env("QT_QPA_PLATFORM", "offscreen")
+        .env("LC_ALL", format!("{locale}.UTF-8"))
+        .env("LANGUAGE", locale)
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success() && stdout.contains("1 passed"),
+        "{test} in {locale}:\n{stdout}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+fn reads_in(want: &[(String, i32, String)]) -> i32 {
     let dir = tempfile::tempdir().unwrap();
     release_all(dir.path());
     let checks: String = want
@@ -710,7 +728,7 @@ fn plain_messages_of(language: &str) -> Vec<(String, i32, String)> {
 fn readers_get(locale: &str, language: &str) {
     let want = plain_messages_of(language);
     assert!(want.len() > 400, "{language}: too few plain messages");
-    assert_eq!(reads_in(locale, &want), 0, "{locale} does not read {language}");
+    assert_eq!(reads_in(&want), 0, "{locale} does not read {language}");
     let english: Vec<(String, i32, String)> = messages(&catalogue())
         .into_iter()
         .filter(|m| {
@@ -721,84 +739,96 @@ fn readers_get(locale: &str, language: &str) {
         .map(|m| (m.id, -1, m.forms[0].clone()))
         .collect();
     assert_eq!(english.len(), 1);
-    assert_ne!(
-        reads_in(locale, &english),
-        0,
-        "{locale} check cannot tell English apart"
-    );
+    assert_ne!(reads_in(&english), 0, "{locale} check cannot tell English apart");
 }
 
 #[test]
 fn a_finnish_reader_gets_finnish() {
-    readers_get("fi_FI", "fi");
+    in_own_process("a_finnish_reader_gets_finnish", "fi_FI", || {
+        readers_get("fi_FI", "fi")
+    });
 }
 
 #[test]
 fn an_austrian_reader_gets_german() {
-    readers_get("de_AT", "de");
+    in_own_process("an_austrian_reader_gets_german", "de_AT", || {
+        readers_get("de_AT", "de")
+    });
 }
 
 #[test]
 fn a_brazilian_reader_gets_brazilian_portuguese() {
-    readers_get("pt_BR", "pt_BR");
+    in_own_process("a_brazilian_reader_gets_brazilian_portuguese", "pt_BR", || {
+        readers_get("pt_BR", "pt_BR")
+    });
 }
 
 #[test]
 fn a_reader_in_portugal_gets_portuguese() {
-    readers_get("pt_PT", "pt");
+    in_own_process("a_reader_in_portugal_gets_portuguese", "pt_PT", || {
+        readers_get("pt_PT", "pt")
+    });
 }
 
 #[test]
 fn a_reader_in_taiwan_gets_taiwans_chinese() {
-    readers_get("zh_TW", "zh_TW");
+    in_own_process("a_reader_in_taiwan_gets_taiwans_chinese", "zh_TW", || {
+        readers_get("zh_TW", "zh_TW")
+    });
 }
 
 #[test]
 fn a_reader_in_hong_kong_gets_hong_kongs_chinese() {
-    readers_get("zh_HK", "zh_HK");
+    in_own_process("a_reader_in_hong_kong_gets_hong_kongs_chinese", "zh_HK", || {
+        readers_get("zh_HK", "zh_HK")
+    });
 }
 
 #[test]
 fn a_language_without_a_catalogue_gets_english() {
-    let want: Vec<(String, i32, String)> = vec![
-        ("lautta-home-title".to_owned(), -1, "Browse".to_owned()),
-        ("lautta-dir-grid-items".to_owned(), 1, "1 item".to_owned()),
-        ("lautta-dir-grid-items".to_owned(), 3, "3 items".to_owned()),
-    ];
-    assert_eq!(reads_in("ja_JP", &want), 0);
-    let wrong = vec![("lautta-dir-grid-items".to_owned(), 1, "1 items".to_owned())];
-    assert_ne!(reads_in("ja_JP", &wrong), 0);
+    in_own_process("a_language_without_a_catalogue_gets_english", "ja_JP", || {
+        let want: Vec<(String, i32, String)> = vec![
+            ("lautta-home-title".to_owned(), -1, "Browse".to_owned()),
+            ("lautta-dir-grid-items".to_owned(), 1, "1 item".to_owned()),
+            ("lautta-dir-grid-items".to_owned(), 3, "3 items".to_owned()),
+        ];
+        assert_eq!(reads_in(&want), 0);
+        let wrong = vec![("lautta-dir-grid-items".to_owned(), 1, "1 items".to_owned())];
+        assert_ne!(reads_in(&wrong), 0);
+    });
 }
 
 #[test]
 fn polish_counts_follow_polish_rules() {
-    let polish = messages(&language_catalogue("pl"))
-        .into_iter()
-        .find(|m| m.id == "lautta-dir-grid-items")
-        .unwrap();
-    assert_eq!(polish.forms.len(), 3);
-    let form_of = [(1, 0), (2, 1), (4, 1), (5, 2), (12, 2), (22, 1), (25, 2), (0, 2)];
-    let want: Vec<(String, i32, String)> = form_of
-        .iter()
-        .map(|(n, form)| {
-            (
-                polish.id.clone(),
-                *n,
-                polish.forms[*form].replace("%n", &n.to_string()),
-            )
-        })
-        .collect();
-    assert_eq!(reads_in("pl_PL", &want), 0);
-    let swapped: Vec<(String, i32, String)> = want
-        .iter()
-        .map(|(id, n, text)| {
-            let other = if *n == 22 {
-                polish.forms[2].replace("%n", "22")
-            } else {
-                text.clone()
-            };
-            (id.clone(), *n, other)
-        })
-        .collect();
-    assert_ne!(reads_in("pl_PL", &swapped), 0);
+    in_own_process("polish_counts_follow_polish_rules", "pl_PL", || {
+        let polish = messages(&language_catalogue("pl"))
+            .into_iter()
+            .find(|m| m.id == "lautta-dir-grid-items")
+            .unwrap();
+        assert_eq!(polish.forms.len(), 3);
+        let form_of = [(1, 0), (2, 1), (4, 1), (5, 2), (12, 2), (22, 1), (25, 2), (0, 2)];
+        let want: Vec<(String, i32, String)> = form_of
+            .iter()
+            .map(|(n, form)| {
+                (
+                    polish.id.clone(),
+                    *n,
+                    polish.forms[*form].replace("%n", &n.to_string()),
+                )
+            })
+            .collect();
+        assert_eq!(reads_in(&want), 0);
+        let swapped: Vec<(String, i32, String)> = want
+            .iter()
+            .map(|(id, n, text)| {
+                let other = if *n == 22 {
+                    polish.forms[2].replace("%n", "22")
+                } else {
+                    text.clone()
+                };
+                (id.clone(), *n, other)
+            })
+            .collect();
+        assert_ne!(reads_in(&swapped), 0);
+    });
 }
