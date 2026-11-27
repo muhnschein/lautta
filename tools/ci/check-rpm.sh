@@ -152,6 +152,13 @@ if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal \
         "$PWD/tests/translations/tst_english_plurals.qml"; then
     fail "English plural forms on the target"
 fi
+shipped_languages=$(rpm -qlp "$rpm" | grep -c '/translations/harbour-lautta-.*\.qm$' || true)
+[ "$shipped_languages" -eq 39 ] || fail "RPM ships $shipped_languages language catalogues, not 39"
+if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal LANG=fi_FI.UTF-8 LC_ALL=fi_FI.UTF-8 LANGUAGE=fi_FI \
+        /usr/bin/harbour-lautta --qml-check -T /usr/share/harbour-lautta/translations \
+        "$PWD/tests/translations/tst_reader_language.qml"; then
+    fail "Finnish reader gets English on the target"
+fi
 if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal:enable_fonts \
         /usr/bin/harbour-lautta --qml-check -F /usr/share/harbour-lautta/fonts \
         "$PWD/tests/fonts/tst_bundled_font.qml"; then

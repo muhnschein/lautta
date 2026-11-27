@@ -32,7 +32,7 @@ Item {
     readonly property bool playing: player !== null && player.playing
     readonly property bool loaded: player !== null && (player.playing || player.position > 0)
     readonly property bool busy: player !== null && (player.loading || (player.downloading && player.downloadProgress < 0))
-    readonly property bool error: player !== null && player.errorKind !== ""
+    readonly property bool error: player !== null && player.failed
     readonly property bool settled: poster.status !== Thumbnail.Loading
     readonly property bool zoomed: false
 
