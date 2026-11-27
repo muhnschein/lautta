@@ -112,7 +112,7 @@ Every added or changed test, before push:
 
 ## Releases
 
-- Only on user's go. None cut yet, no tags. Latest `main` commit green first, Sonar included: check main, not just PR.
+- Only on user's go. Tag `vX.Y.Z` on main's merge commit; GitHub release carries that commit's CI RPM (`harbour-lautta-aarch64`). Version in `rpm/harbour-lautta.spec`, `Cargo.toml`, `sonar-project.properties`. Latest `main` commit green first, Sonar included: check main, not just PR.
 - Strict semver: nothing breaking → minor.
 - Harbour upload stays with user.
 - Before release: CI started by hand on release commit (`gh workflow run ci.yml --ref main`), job "RPM rebuilds byte for byte" green.

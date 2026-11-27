@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
+
+Servers need netvfs 2.0.0: install it before this update. Lautta 1.0.0 cannot use servers with netvfs 2.0.0, and this release cannot with netvfs 1.0.0. Without netvfs, Lautta works on the phone, memory cards and USB drives as before.
 
 - In the PDF viewer, after zooming in, dragging a page moves it with your finger again. Before, the view jumped to the left edge of the page as soon as you dragged ([#293](https://github.com/muhnschein/lautta/issues/293)).
 - In the PDF viewer's *Pages*, a landscape page sits at the bottom of its tile, right above its number, so documents that mix landscape and portrait pages line up ([#275](https://github.com/muhnschein/lautta/issues/275)). Before, a landscape page sat at the top of its tile with its number far below.
