@@ -82,12 +82,12 @@ ApplicationWindow {
             return
 
         var top = view.contentY
-        drag(view, view.width / 2, view.height * 0.7, view.width / 2, view.height * 0.3)
+        drag(view, view.width / 2, view.height * 0.7, view.width / 2 + 4, view.height * 0.3)
         settle(viewer)
         expect(view.contentY > top + view.height * 0.2,
                label + ": an upward drag turns the pages: " + view.contentY + " vs " + top)
         expect(Math.abs(sheetLeft(viewer, sheet) - zoomedLeft) < 0.5,
-               label + ": an upward drag keeps the page where the zoom put it: " + sheetLeft(viewer, sheet) + " vs " + zoomedLeft)
+               label + ": an upward drag a few pixels aslant, as a finger makes, keeps the page where the zoom put it: " + sheetLeft(viewer, sheet) + " vs " + zoomedLeft)
 
         var before = sheetLeft(viewer, sheet)
         var reach = view.width / 3
