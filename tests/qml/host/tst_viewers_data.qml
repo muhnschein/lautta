@@ -27,6 +27,7 @@ Item {
             property string rowUri: uri
             property string rowName: name
             property bool rowVideo: video
+            property string rowMime: mimeType
         }
     }
 
@@ -66,6 +67,8 @@ Item {
         settle(images)
         check(images.count === 3 && imageRows.itemAt(1).rowName === "b.mp4" && imageRows.itemAt(1).rowVideo
               && !imageRows.itemAt(2).rowVideo, "a video sits among the photos, marked as one")
+        check(imageRows.itemAt(1).rowMime === "video/mp4" && imageRows.itemAt(0).rowMime === "image/jpeg",
+              "rows carry their type: " + imageRows.itemAt(1).rowMime + " " + imageRows.itemAt(0).rowMime)
         images.folderUri = "lautta://user-pictures/nope/"
         settle(images)
         check(images.errorKind === "NotFound", "image list error " + images.errorKind)

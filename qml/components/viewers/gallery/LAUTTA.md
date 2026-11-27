@@ -18,7 +18,8 @@ They are copied, not imported: `Sailfish.Gallery`, `com.jolla.gallery` and
 
 - Photos and videos of the folder, in its order (audio keeps its own
   player). The image editor, Ambience and the video's 10 s skips are gone.
-- A video shows its poster (system thumbnailer frame; none on a server)
+- A video shows its poster (system thumbnailer frame, asked with the
+  file's type as the Gallery does; none on a server)
   and a play button; nothing plays until tapped. Its player is lautta's
   `../MediaPlayback.qml` (device file, or server stream or download through
   the bridge) in the slot, instead of the Gallery's one player per view: made

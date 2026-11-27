@@ -86,6 +86,7 @@ pub struct GalleryItem {
     pub name: String,
     pub size: Option<u64>,
     pub video: bool,
+    pub mime: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1045,6 +1046,7 @@ impl Core {
                     name: e.display_name(),
                     size: e.size,
                     video: category_of(e) == FileCategory::Video,
+                    mime: mime_of(e).unwrap_or_default(),
                 })
             })
             .collect()

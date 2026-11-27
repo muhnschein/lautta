@@ -20,6 +20,7 @@ const ROLE_URI: i32 = 0x100;
 const ROLE_NAME: i32 = 0x101;
 const ROLE_SIZE: i32 = 0x102;
 const ROLE_VIDEO: i32 = 0x103;
+const ROLE_MIME: i32 = 0x104;
 
 #[derive(QObject, Default)]
 pub struct GalleryListModel {
@@ -117,6 +118,7 @@ impl QAbstractListModel for GalleryListModel {
             ROLE_NAME => qstr(&item.name).into(),
             ROLE_SIZE => item.size.map_or(-1.0, |s| s as f64).into(),
             ROLE_VIDEO => item.video.into(),
+            ROLE_MIME => qstr(&item.mime).into(),
             _ => QVariant::default(),
         }
     }
@@ -127,6 +129,7 @@ impl QAbstractListModel for GalleryListModel {
         m.insert(ROLE_NAME, "name".into());
         m.insert(ROLE_SIZE, "size".into());
         m.insert(ROLE_VIDEO, "video".into());
+        m.insert(ROLE_MIME, "mimeType".into());
         m
     }
 }

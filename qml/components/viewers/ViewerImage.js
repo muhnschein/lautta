@@ -19,7 +19,3 @@ function systemThumbnail(app, uri) {
 function tile(app, uri, size) {
     return size > 0 ? systemThumbnail(app, uri) : ""
 }
-
-function poster(app, uri) {
-    return systemThumbnail(app, uri)
-}

@@ -239,6 +239,10 @@ async fn the_folders_photos_and_videos_come_in_the_folders_order() {
     );
     assert_eq!(list[0].uri, uri("lautta://user-pictures/a2.png"));
     assert_eq!(list[1].uri, uri("lautta://user-pictures/a3.mp4"));
+    assert_eq!(
+        (list[0].mime.as_str(), list[1].mime.as_str()),
+        ("image/png", "video/mp4")
+    );
     assert!(list[0].size.is_some());
 }
 

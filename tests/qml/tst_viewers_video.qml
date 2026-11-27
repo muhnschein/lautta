@@ -117,6 +117,9 @@ QtQuick.Window {
         expect(view.currentItem.video && named(shown(), "zoomableImage") === null, "the video's slot holds no image")
         expect(view.currentItem.player === null, "nothing plays before play is tapped")
         expect(named(shown(), "playButton") !== null, "the poster shows its play button")
+        var poster = named(shown(), "videoPoster")
+        expect(poster !== null && poster.mimeType === "video/mp4" && String(poster.source).indexOf("file://") === 0,
+               "the poster asks the thumbnailer for the device file as a video: " + (poster ? poster.mimeType + " " + poster.source : "none"))
         expect(view.interactive && page.backNavigation, "swipes and back navigation, as for a photo")
         expect(named(view.overlay, "videoControls") !== null && named(view.overlay, "positionSlider") !== null,
                "the overlay shows the position slider")
@@ -205,6 +208,8 @@ QtQuick.Window {
                 window.expect(!window.page.inFolder, "a hidden video opens on its own: " + window.describe())
                 window.expect(window.view.currentItem.video && window.named(window.shown(), "playButton") !== null,
                               "opened alone, it is still a video")
+                var alone = window.named(window.shown(), "videoPoster")
+                window.expect(alone !== null && alone.mimeType === "video/mp4", "its poster keeps the type it was opened with")
                 var close = window.named(window.view.overlay, "dismissButton")
                 if (!window.expect(close !== null && window.view.overlay.enabled, "the overlay has its close button"))
                     return
@@ -264,6 +269,6 @@ QtQuick.Window {
 
     Component {
         id: hiddenComponent
-        ImageViewer { uri: window.folder + ".d.mp4"; folderUri: window.folder; video: true }
+        ImageViewer { uri: window.folder + ".d.mp4"; folderUri: window.folder; video: true; mimeType: "video/mp4" }
     }
 }

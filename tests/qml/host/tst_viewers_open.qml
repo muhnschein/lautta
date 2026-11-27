@@ -28,18 +28,18 @@ QtObject {
         }
     }
 
-    function open(uri, folderUri, tileSize) {
+    function open(uri, folderUri, tileSize, mime) {
         pushed = []
-        var viewer = Open.open(stack, app, null, uri, false, "", folderUri, tileSize)
+        var viewer = Open.open(stack, app, null, uri, false, mime, folderUri, tileSize)
         return { "viewer": viewer, "pushed": pushed }
     }
 
     Component.onCompleted: {
-        same(open("lautta://user-videos/a.mp4", "", 120), { "viewer": "video", "pushed": [{ "page": "viewers/ImageViewer.qml",
-             "props": { "uri": "lautta://user-videos/a.mp4", "folderUri": "lautta://user-videos/", "tileSize": 120, "video": true } }] },
+        same(open("lautta://user-videos/a.mp4", "", 120, "video/mp4"), { "viewer": "video", "pushed": [{ "page": "viewers/ImageViewer.qml",
+             "props": { "uri": "lautta://user-videos/a.mp4", "folderUri": "lautta://user-videos/", "tileSize": 120, "video": true, "mimeType": "video/mp4" } }] },
              "a video opens in the photos' viewer, on its folder, marked as a video")
         same(open("lautta://user-pictures/b.jpg", "lautta://search/", 0), { "viewer": "image", "pushed": [{ "page": "viewers/ImageViewer.qml",
-             "props": { "uri": "lautta://user-pictures/b.jpg", "folderUri": "lautta://search/", "tileSize": 0, "video": false } }] },
+             "props": { "uri": "lautta://user-pictures/b.jpg", "folderUri": "lautta://search/", "tileSize": 0, "video": false, "mimeType": "" } }] },
              "a photo opens there as a photo, in the folder given")
         same(open("lautta://user-music/c.mp3", "", 0), { "viewer": "audio", "pushed": [{ "page": "viewers/MediaPlayer.qml",
              "props": { "uri": "lautta://user-music/c.mp3" } }] },

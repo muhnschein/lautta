@@ -15,6 +15,7 @@ FullscreenContentPage {
     property string folderUri: App.parentUri(uri)
     property int tileSize
     property bool video
+    property string mimeType
 
     property bool listed
     readonly property bool inFolder: images.count > 0 && (listed || images.indexOf(uri) >= 0)
@@ -136,7 +137,7 @@ FullscreenContentPage {
         id: imageView
         FlickableImageView {
             objectName: "flickableView"
-            model: [{ "uri": page.uri, "video": page.video }]
+            model: [{ "uri": page.uri, "video": page.video, "mimeType": page.mimeType }]
             held: remorse.active
             tileUri: page.uri
             tileSize: page.tileSize

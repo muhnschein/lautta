@@ -5,7 +5,8 @@
 //
 // sailfish-components-gallery's src/VideoPoster.qml, adapted for lautta
 // (PRV-4, see LAUTTA.md): the poster is the system thumbnailer's frame of a
-// device video (none for server videos), and the slot owns its player:
+// device video, asked with its type as the Gallery does (none for server
+// videos), and the slot owns its player:
 // lautta's MediaPlayback with a VideoOutput, made at the first tap on play
 // and gone once the slot is no longer current, so nothing plays or streams
 // off screen. Server videos show the bridge's download and streaming states.
@@ -13,14 +14,15 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import QtMultimedia 5.6 as MM
 import Nemo.KeepAlive 1.2
+import Nemo.Thumbnailer 1.0
 import Lautta 1.0
 import ".."
-import "../ViewerImage.js" as ViewerImage
 
 Item {
     id: root
 
     property string uri
+    property string mimeType
     property bool loadAllowed
     property bool active
     property bool overlayMode
@@ -31,7 +33,7 @@ Item {
     readonly property bool loaded: player !== null && (player.playing || player.position > 0)
     readonly property bool busy: player !== null && (player.loading || (player.downloading && player.downloadProgress < 0))
     readonly property bool error: player !== null && player.errorKind !== ""
-    readonly property bool settled: poster.status !== Image.Loading
+    readonly property bool settled: poster.status !== Thumbnail.Loading
     readonly property bool zoomed: false
 
     signal clicked
@@ -56,17 +58,17 @@ Item {
         onClicked: root.clicked()
     }
 
-    Image {
+    Thumbnail {
         id: poster
 
         objectName: "videoPoster"
         anchors.fill: parent
-        source: root.loadAllowed ? ViewerImage.poster(App, root.uri) : ""
+        source: root.loadAllowed && App.isLocal(root.uri) ? App.localUrl(root.uri) : ""
+        mimeType: root.mimeType
         sourceSize.width: Screen.height
         sourceSize.height: Screen.height
-        fillMode: Image.PreserveAspectFit
-        asynchronous: true
-        cache: false
+        priority: Thumbnail.HighPriority
+        fillMode: Thumbnail.PreserveAspectFit
         opacity: !root.loaded ? 1.0 : 0.0
         Behavior on opacity { FadeAnimator {} }
         visible: !root.loaded

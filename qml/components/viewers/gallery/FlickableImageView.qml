@@ -44,6 +44,7 @@ PagedView {
 
         readonly property string itemUri: model.uri !== undefined ? model.uri : model.modelData.uri
         readonly property bool video: model.uri !== undefined ? model.video : model.modelData.video === true
+        readonly property string mimeType: model.uri !== undefined ? model.mimeType : model.modelData.mimeType || ""
         readonly property url source: itemUri.length > 0 ? root.sourceOf(itemUri) : ""
         readonly property bool isCurrentItem: PagedView.isCurrentItem
         readonly property bool error: item && item.error
@@ -91,6 +92,7 @@ PagedView {
                 onPlayingChanged: if (playing && overlay.active) overlay.active = false
 
                 uri: slot.itemUri
+                mimeType: slot.mimeType
                 loadAllowed: slot.loadAllowed
                 active: slot.isCurrentItem
                 overlayMode: overlay.active

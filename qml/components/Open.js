@@ -28,6 +28,7 @@ function open(pageStack, app, operations, uri, isDir, mimeType, folderUri, tileS
             props.folderUri = folderUri || app.parentUri(uri)
             props.tileSize = tileSize || 0
             props.video = viewer === "video"
+            props.mimeType = mimeType || ""
         }
         pageStack.push(Qt.resolvedUrl(page), props)
         return viewer
