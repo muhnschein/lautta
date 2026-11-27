@@ -21,7 +21,7 @@ What Lautta is: `PROJECT.md`. UI: design canvas in `../design` (one `.dc.html` a
 - Blocking file system calls in `tokio::task::spawn_blocking`. Database only through `crate::db::Db` (`Mutex<rusqlite::Connection>`), only from blocking contexts.
 - SPDX `// SPDX-License-Identifier: LGPL-2.1-or-later` as line 1 of every source file (`#` in shell, Python, Makefile, YAML, TOML; line 2 after a shebang). Third-party code keeps own licence and headers: `third_party/` (crates), `qml/components/viewers/gallery/` (Jolla Gallery viewer, BSD-3-Clause); `LAUTTA.md` beside it says origin and changes.
 - No code comments: AGENTS.md "Comments and docs".
-- Strings: `qsTrId("lautta-…")` with `//%` engineering English. Count in text = one plural string with `%n`, called `qsTrId(id, n)`: never "(s)", never separate id for "1 item". `make translations` refreshes `translations/harbour-lautta.ts`, adds English singular of new plurals: read printed pairs, write singular by hand where it cannot tell. `make check` fails on gap.
+- Strings: `qsTrId("lautta-…")` with `//%` engineering English. Count in text = one plural string with `%n`, called `qsTrId(id, n)`: never "(s)", never separate id for "1 item". `make translations` refreshes all `translations/*.ts`, adds English singular of new plurals: read printed pairs, write singular by hand where it cannot tell. Then fill every language catalogue: `doc/TRANSLATING.md`. `make check` fails on gap.
 
 ## Layout
 
