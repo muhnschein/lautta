@@ -7,7 +7,8 @@ TARGET ?= SailfishOS-5.2.0.15-aarch64
 export SDK_IMAGE TARGET
 
 LUPDATE ?= lupdate
-LUPDATE_ARGS = -silent -locations none -no-obsolete -target-language en
+LRELEASE ?= lrelease
+LUPDATE_ARGS = -silent -locations none -no-obsolete
 
 .PHONY: translations translations-check comments-check cover-lanes-check check fmt-check clippy test coverage mutants mutants-diff mutants-paths clippy-report rpm check-rpm clean
 
@@ -72,15 +73,12 @@ check-rpm:
 	./tools/ci/check-rpm.sh
 
 translations:
-	$(LUPDATE) $(LUPDATE_ARGS) qml -ts translations/harbour-lautta.ts
+	$(LUPDATE) $(LUPDATE_ARGS) qml -ts translations/*.ts
 	python3 tools/english-plurals.py fill < translations/harbour-lautta.ts > $${TMPDIR:-/tmp}/lautta-ts-filled.ts
 	mv $${TMPDIR:-/tmp}/lautta-ts-filled.ts translations/harbour-lautta.ts
 
 translations-check:
-	cp translations/harbour-lautta.ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
-	$(LUPDATE) $(LUPDATE_ARGS) qml -ts $${TMPDIR:-/tmp}/lautta-ts-check.ts
-	python3 tools/english-plurals.py fill < $${TMPDIR:-/tmp}/lautta-ts-check.ts > $${TMPDIR:-/tmp}/lautta-ts-checked.ts
-	diff -u translations/harbour-lautta.ts $${TMPDIR:-/tmp}/lautta-ts-checked.ts
+	LUPDATE="$(LUPDATE) $(LUPDATE_ARGS)" LRELEASE="$(LRELEASE)" ./tools/translations-check.sh
 
 clean:
 	$(CARGO) clean
