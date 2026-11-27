@@ -2593,6 +2593,11 @@
         <source>Waiting for Wi-Fi</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-err-no-sound">
+        <source>Cannot play the audio track</source>
+        <oldsource>This phone can&apos;t play the sound.</oldsource>
+        <translation type="unfinished"></translation>
+    </message>
     <message id="lautta-xfr-remorse-remove">
         <source>Removing</source>
         <translation type="unfinished"></translation>

@@ -2495,6 +2495,10 @@
         <source>This file isn&apos;t valid UTF-8. Some characters are replaced.</source>
         <translation>此文件不是有效的 UTF-8。部分字符已被替换。</translation>
     </message>
+    <message id="lautta-err-no-sound">
+        <source>Cannot play the audio track</source>
+        <translation>无法播放音轨</translation>
+    </message>
     <message id="lautta-xfr-remorse-remove">
         <source>Removing</source>
         <translation>正在移除</translation>

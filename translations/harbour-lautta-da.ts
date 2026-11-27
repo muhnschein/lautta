@@ -2549,6 +2549,10 @@
         <source>This file isn&apos;t valid UTF-8. Some characters are replaced.</source>
         <translation>Denne fil er ikke gyldig UTF-8. Nogle tegn er erstattet.</translation>
     </message>
+    <message id="lautta-err-no-sound">
+        <source>Cannot play the audio track</source>
+        <translation>Kan ikke afspille lydsporet</translation>
+    </message>
     <message id="lautta-xfr-remorse-remove">
         <source>Removing</source>
         <translation>Fjerner</translation>

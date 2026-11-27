@@ -2549,6 +2549,10 @@
         <source>This file isn&apos;t valid UTF-8. Some characters are replaced.</source>
         <translation>Tämä tiedosto ei ole kelvollista UTF-8:aa. Osa merkeistä on korvattu.</translation>
     </message>
+    <message id="lautta-err-no-sound">
+        <source>Cannot play the audio track</source>
+        <translation>Ääniraitaa ei voi toistaa</translation>
+    </message>
     <message id="lautta-xfr-remorse-remove">
         <source>Removing</source>
         <translation>Poistetaan</translation>

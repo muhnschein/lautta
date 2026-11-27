@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A video whose sound is in a format the phone can't decode, such as DTS, E-AC-3 or TrueHD in an MKV, still plays its picture, and the header now says *Cannot play the audio track*. Before, it said *Can't play film.mkv.*, and a video on a server was downloaded whole for nothing ([#285](https://github.com/muhnschein/lautta/issues/285)).
 - Reproducible builds: a commit always builds to the same RPM, byte for byte. `tools/verify-rpm.sh` checks one for you (`doc/VERIFYING.md`).
 - Lautta speaks your language: it follows the phone's *Language* setting in all 39 languages Sailfish OS offers. Its launcher description and *Save to Lautta* in the share menu are translated too ([#36](https://github.com/muhnschein/lautta/issues/36)).
 - *Activity* is tidier. Tasks that need an answer come first, then running, waiting and paused ones; each says its state first, with a small icon for waiting, paused, conflicts and failures. Finished tasks take one line with their time on the right and only say how they ended when something went wrong, such as *2 of 5 failed*. Long titles wrap to a second line, so where a task goes stays readable. Holding a finished task offers *Show in folder* and *Remove from Activity*; before, it dimmed the list, showed nothing and left the task highlighted ([#273](https://github.com/muhnschein/lautta/issues/273)).

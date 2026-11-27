@@ -2657,6 +2657,10 @@
         <source>This file isn&apos;t valid UTF-8. Some characters are replaced.</source>
         <translation>Ta datoteka ni veljaven UTF-8. Nekateri znaki so zamenjani.</translation>
     </message>
+    <message id="lautta-err-no-sound">
+        <source>Cannot play the audio track</source>
+        <translation>Zvočnega posnetka ni mogoče predvajati</translation>
+    </message>
     <message id="lautta-xfr-remorse-remove">
         <source>Removing</source>
         <translation>Odstranjevanje</translation>

@@ -2603,6 +2603,10 @@
         <source>This file isn&apos;t valid UTF-8. Some characters are replaced.</source>
         <translation>Ten plik nie jest prawidłowym tekstem UTF-8. Niektóre znaki zostały zastąpione.</translation>
     </message>
+    <message id="lautta-err-no-sound">
+        <source>Cannot play the audio track</source>
+        <translation>Nie można odtworzyć ścieżki dźwiękowej</translation>
+    </message>
     <message id="lautta-xfr-remorse-remove">
         <source>Removing</source>
         <translation>Usuwanie</translation>
