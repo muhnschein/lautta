@@ -84,6 +84,18 @@ function message(kind, context) {
                      qsTrId("lautta-err-not-playable"),
                      //% "Can't play this file."
                      qsTrId("lautta-err-not-playable-unnamed"))
+    case "PlaysInPart":
+        if (c.missing)
+            return item
+                   //% "Part of %1 doesn't play: this phone has no %2."
+                   ? qsTrId("lautta-err-plays-in-part").arg(item).arg(c.missing)
+                   //% "Part of this file doesn't play: this phone has no %1."
+                   : qsTrId("lautta-err-plays-in-part-unnamed").arg(c.missing)
+        return _pick(item,
+                     //% "Part of %1 doesn't play on this phone."
+                     qsTrId("lautta-err-plays-in-part-generic"),
+                     //% "Part of this file doesn't play on this phone."
+                     qsTrId("lautta-err-plays-in-part-generic-unnamed"))
     case "BridgeUnavailable":
         //% "Network locations are unavailable right now."
         return qsTrId("lautta-err-bridge-gone")

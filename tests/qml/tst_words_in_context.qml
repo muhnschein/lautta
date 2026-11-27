@@ -39,6 +39,17 @@ ApplicationWindow {
              qsTrId("lautta-err-wrong-password-unnamed"), "wrong password unnamed")
     }
 
+    function checkPlaysInPart() {
+        same(ErrorText.message("PlaysInPart", { "item": "a.mkv", "missing": "DTS decoder" }),
+             qsTrId("lautta-err-plays-in-part").arg("a.mkv").arg("DTS decoder"), "names the file and what is missing")
+        same(ErrorText.message("PlaysInPart", { "missing": "DTS decoder" }),
+             qsTrId("lautta-err-plays-in-part-unnamed").arg("DTS decoder"), "unnamed names what is missing")
+        same(ErrorText.message("PlaysInPart", { "item": "a.mkv", "missing": "" }),
+             qsTrId("lautta-err-plays-in-part-generic").arg("a.mkv"), "nothing named missing")
+        same(ErrorText.message("PlaysInPart", {}),
+             qsTrId("lautta-err-plays-in-part-generic-unnamed"), "nothing named at all")
+    }
+
     function checkItemStates() {
         var cases = [
             ["copy", "", "lautta-xfr-item-copying"],
@@ -110,6 +121,7 @@ ApplicationWindow {
             Component.onCompleted: {
                 test.checkPermission()
                 test.checkPasswords()
+                test.checkPlaysInPart()
                 test.checkItemStates()
                 test.checkCanceledItems()
                 test.checkPending()
