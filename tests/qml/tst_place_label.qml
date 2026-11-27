@@ -57,6 +57,28 @@ ApplicationWindow {
             remote: true
         }
         PlaceLabel {
+            id: splitLine
+            width: 200
+            before: "Copying a-very-long-file-name-that-does-not-fit.mp4 to "
+            text: "NAS"
+            remote: true
+            maximumLineCount: 2
+        }
+        PlaceLabel {
+            id: fitsLine
+            width: parent.width
+            before: "Copied 4 items to "
+            text: "NAS"
+            remote: true
+            maximumLineCount: 2
+        }
+        PlaceLabel {
+            id: wrapLine
+            width: 200
+            text: "Download a-very long file name that does not fit on one line and goes on and on and on.mp4"
+            maximumLineCount: 2
+        }
+        PlaceLabel {
             id: emptyLine
             width: parent.width
             text: ""
@@ -126,6 +148,20 @@ ApplicationWindow {
         expect(g.lead.width < longLine.width && longLine.iconShown && g.name.x + g.name.width <= longLine.width + 0.5,
                "too long a line keeps the icon and the name inside: " + g.lead.width + ", " + g.name.x + "+" + g.name.width)
         expect(!emptyLine.iconShown, "no icon without a name")
+
+        var sp = partsOf(splitLine)
+        expect(splitLine.split && sp.lead.y === 0 && sp.lead.width === splitLine.width
+               && sp.name.y >= sp.lead.height && sp.icon.x === 0 && sp.name.x >= sp.icon.width
+               && sp.name.width >= sp.name.implicitWidth,
+               "a sentence too long for one line puts the whole place on the second: " + sp.name.y + ", " + sp.name.x)
+        expect(Math.abs(splitLine.height - (sp.lead.height + sp.name.height)) < 1 && Math.abs(sp.icon.y + sp.icon.height / 2 - sp.name.y - sp.name.height / 2) < 1,
+               "two lines tall, icon beside the name: " + splitLine.height)
+        var f = partsOf(fitsLine)
+        expect(!fitsLine.split && f.name.y === f.lead.y && fitsLine.height === f.name.implicitHeight,
+               "a sentence that fits stays on one line")
+        var w = partsOf(wrapLine)
+        expect(wrapLine.wraps && w.name.truncated && Math.abs(wrapLine.height - 2 * localLine.height) < 2,
+               "a long name without a sentence wraps to two lines, then ends: " + wrapLine.height + " of " + localLine.height)
 
         expect(remoteSearch.remote && !localSearch.remote, "the search page marks folder headers on a server only")
     }

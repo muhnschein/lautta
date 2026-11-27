@@ -220,9 +220,18 @@ fn read_into(ctx: *mut c_void, off: i64, buf: *mut u8, want: i64) -> i64 {
     }
 }
 
-pub fn error_kind(code: i32) -> &'static str {
+const FORMAT_ERROR: i32 = 2;
+const LOADING_MEDIA: i32 = 2;
+
+fn plays_without_sound(code: i32, status: i32) -> bool {
+    code == FORMAT_ERROR && (3..=7).contains(&status)
+}
+
+pub fn error_kind(code: i32, status: i32) -> &'static str {
     match code {
         0 => "",
+        _ if plays_without_sound(code, status) => "NoSound",
+        FORMAT_ERROR if status == LOADING_MEDIA => "",
         1 | 2 | 5 => "NotPlayable",
         3 => "ConnectionLost",
         4 => "PermissionDenied",
@@ -238,8 +247,8 @@ pub fn state_name(code: i32) -> &'static str {
     }
 }
 
-fn fallback_applies(code: i32) -> bool {
-    matches!(code, 1 | 2)
+fn fallback_applies(code: i32, status: i32) -> bool {
+    matches!(code, 1 | 2) && error_kind(code, status) == "NotPlayable"
 }
 
 #[derive(Default)]
@@ -272,7 +281,7 @@ pub struct MediaSource {
     pause: qt_method!(fn(&mut self)),
     stop: qt_method!(fn(&mut self)),
     seek: qt_method!(fn(&mut self, ms: f64)),
-    playerErrorKind: qt_method!(fn(&self, code: i32) -> QString),
+    playerErrorKind: qt_method!(fn(&self, code: i32, status: i32) -> QString),
 
     media: usize,
     want_play: bool,
@@ -307,7 +316,8 @@ impl MediaSource {
             case 0: return m->player->position();
             case 1: return m->player->duration();
             case 2: return m->player->state();
-            default: return m->player->error();
+            case 3: return m->player->error();
+            default: return m->player->mediaStatus();
             }
         })
     }
@@ -345,6 +355,7 @@ impl MediaSource {
         let duration = self.player_info(1) as f64;
         let state = state_name(i32::try_from(self.player_info(2)).unwrap_or(0));
         let code = i32::try_from(self.player_info(3)).unwrap_or(0);
+        let status = i32::try_from(self.player_info(4)).unwrap_or(0);
         let mut changed = position != self.position || duration != self.duration;
         changed |= state != self.state.to_string();
         self.position = position;
@@ -352,7 +363,7 @@ impl MediaSource {
         self.state = qstr(state);
         self.playing = state == "playing";
         if code != 0 && self.opened {
-            changed |= self.player_failed(code);
+            changed |= self.player_failed(code, status);
         }
         if self.downloading {
             changed |= self.update_progress();
@@ -375,13 +386,13 @@ impl MediaSource {
         changed
     }
 
-    fn player_failed(&mut self, code: i32) -> bool {
-        if self.mode.to_string() == "stream" && !self.fell_back && fallback_applies(code) {
+    fn player_failed(&mut self, code: i32, status: i32) -> bool {
+        if self.mode.to_string() == "stream" && !self.fell_back && fallback_applies(code, status) {
             self.fell_back = true;
             self.start_download();
             return true;
         }
-        let kind = qstr(error_kind(code));
+        let kind = qstr(error_kind(code, status));
         if kind == self.errorKind {
             return false;
         }
@@ -390,8 +401,8 @@ impl MediaSource {
         true
     }
 
-    fn playerErrorKind(&self, code: i32) -> QString {
-        qstr(error_kind(code))
+    fn playerErrorKind(&self, code: i32, status: i32) -> QString {
+        qstr(error_kind(code, status))
     }
 
     fn setUri(&mut self, value: QString) {
@@ -575,13 +586,30 @@ mod tests {
 
     #[test]
     fn errors_map_to_app_kinds() {
-        assert_eq!(error_kind(0), "");
-        assert_eq!(error_kind(1), "NotPlayable");
-        assert_eq!(error_kind(2), "NotPlayable");
-        assert_eq!(error_kind(3), "ConnectionLost");
-        assert_eq!(error_kind(4), "PermissionDenied");
-        assert_eq!(error_kind(5), "NotPlayable");
-        assert_eq!(error_kind(9), "Internal");
+        assert_eq!(error_kind(0, 6), "");
+        assert_eq!(error_kind(1, 8), "NotPlayable");
+        assert_eq!(error_kind(2, 8), "NotPlayable");
+        assert_eq!(error_kind(3, 8), "ConnectionLost");
+        assert_eq!(error_kind(4, 8), "PermissionDenied");
+        assert_eq!(error_kind(5, 8), "NotPlayable");
+        assert_eq!(error_kind(9, 8), "Internal");
+    }
+
+    #[test]
+    fn a_missing_decoder_while_the_rest_plays_is_not_a_failure() {
+        for status in [3, 4, 5, 6, 7] {
+            assert_eq!(error_kind(2, status), "NoSound", "status {status}");
+        }
+        for status in [0, 1, 8] {
+            assert_eq!(error_kind(2, status), "NotPlayable", "status {status}");
+        }
+        assert_eq!(error_kind(2, 2), "", "undecided while loading");
+        assert_eq!(error_kind(1, 6), "NotPlayable", "only format errors play in part");
+        assert_eq!(
+            error_kind(3, 2),
+            "ConnectionLost",
+            "only format errors wait for loading"
+        );
     }
 
     #[test]
@@ -594,8 +622,14 @@ mod tests {
 
     #[test]
     fn only_device_failures_fall_back_to_a_download() {
-        assert!(fallback_applies(1) && fallback_applies(2));
-        assert!(!fallback_applies(3) && !fallback_applies(4) && !fallback_applies(5));
+        assert!(fallback_applies(1, 8) && fallback_applies(2, 8));
+        assert!(!fallback_applies(3, 8) && !fallback_applies(4, 8) && !fallback_applies(5, 8));
+    }
+
+    #[test]
+    fn a_stream_without_sound_or_still_loading_is_not_downloaded() {
+        assert!(!fallback_applies(2, 6), "a download lacks the same decoder");
+        assert!(!fallback_applies(2, 2), "wait for loading to decide");
     }
 
     #[test]

@@ -12,7 +12,11 @@ Item {
     property color color: Theme.secondaryColor
     property real fontSize: Theme.fontSizeExtraSmall
     property int horizontalAlignment: Text.AlignLeft
+    property int maximumLineCount: 1
     readonly property bool iconShown: remote && text.length > 0
+    readonly property bool split: maximumLineCount > 1 && before.length > 0
+                                  && lead.implicitWidth + markWidth + nameMetrics.advanceWidth > width
+    readonly property bool wraps: maximumLineCount > 1 && before.length === 0 && nameMetrics.advanceWidth > width
 
     readonly property real markWidth: iconShown ? icon.width + Theme.paddingSmall : 0
     readonly property real leadWidth: before.length > 0
@@ -25,16 +29,23 @@ Item {
                                   : horizontalAlignment === Text.AlignHCenter ? (width - used) / 2 : 0
 
     implicitWidth: lead.implicitWidth + markWidth + name.implicitWidth
-    implicitHeight: name.implicitHeight
+    implicitHeight: split ? lead.implicitHeight + name.implicitHeight : name.implicitHeight
     height: implicitHeight
+
+    TextMetrics {
+        id: nameMetrics
+
+        font: name.font
+        text: line.text
+    }
 
     Label {
         id: lead
 
         visible: line.before.length > 0
-        x: line.start
-        width: line.leadWidth
-        anchors.verticalCenter: parent.verticalCenter
+        x: line.split ? 0 : line.start
+        y: line.split ? 0 : (line.height - height) / 2
+        width: line.split ? line.width : line.leadWidth
         text: line.before
         textFormat: Text.PlainText
         color: line.color
@@ -47,8 +58,8 @@ Item {
 
         objectName: "remoteIcon"
         visible: line.iconShown
-        x: line.start + line.leadWidth
-        anchors.verticalCenter: parent.verticalCenter
+        x: line.split ? 0 : line.start + line.leadWidth
+        y: name.y + (name.height - height) / 2
         source: FileIcons.source("server", Theme.pixelRatio)
         width: Math.round(line.fontSize * 1.25)
         height: width
@@ -60,13 +71,15 @@ Item {
     Label {
         id: name
 
-        x: line.start + line.leadWidth + line.markWidth
-        width: line.nameWidth
-        anchors.verticalCenter: parent.verticalCenter
+        x: line.split ? line.markWidth : line.start + line.leadWidth + line.markWidth
+        y: line.split ? lead.height : (line.height - height) / 2
+        width: line.split ? line.width - line.markWidth : line.wraps ? line.width : line.nameWidth
         text: line.text
         textFormat: Text.PlainText
         color: line.color
         font.pixelSize: line.fontSize
-        truncationMode: TruncationMode.Fade
+        wrapMode: line.wraps ? Text.Wrap : Text.NoWrap
+        maximumLineCount: line.wraps ? line.maximumLineCount : 1
+        truncationMode: line.wraps ? TruncationMode.Elide : TruncationMode.Fade
     }
 }

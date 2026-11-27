@@ -117,6 +117,26 @@ async fn the_list_groups_questions_and_history() {
 }
 
 #[tokio::test]
+async fn only_a_finished_task_can_be_removed_from_the_list() {
+    let h = home().await;
+    let id = conflicting_copy(&h).await;
+    let book = ProgressBook::default();
+
+    assert!(!h.core.forget_finished(id));
+    assert_eq!(h.core.transfer_rows(&book).len(), 1);
+
+    h.core.answer_question(id, 0, "Replace", false).unwrap();
+    h.core
+        .engine
+        .wait_for(id, |s| s.state.is_finished())
+        .await
+        .unwrap();
+    assert!(h.core.forget_finished(id));
+    assert!(h.core.transfer_rows(&book).is_empty());
+    assert!(!h.core.forget_finished(id));
+}
+
+#[tokio::test]
 async fn a_task_names_the_folder_it_copies_to() {
     let h = home().await;
     write(&h.root.join("Documents/a.txt"), b"a");

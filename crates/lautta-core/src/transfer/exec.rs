@@ -10,10 +10,11 @@ use crate::provider::{
     list_all, AttributeChanges, CopyOptions, Disposition, Lane, ProgressSink, Provider, ReadOptions,
     RenameMode, WriteOptions,
 };
+use crate::room::Room;
 use crate::uri::Uri;
 use crate::vpath::VPath;
 use std::fs::File;
-use std::os::fd::OwnedFd;
+use std::os::fd::{AsFd, OwnedFd};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -28,6 +29,7 @@ pub struct ItemEnv {
     pub op: OperationKind,
     pub options: TransferOptions,
     pub scratch_dir: PathBuf,
+    pub room: Room,
     pub trasher: Option<Arc<dyn Trasher>>,
     pub progress: ProgressSink,
     pub commit: Arc<dyn Fn(bool) -> bool + Send + Sync>,
@@ -333,6 +335,11 @@ async fn stream_to(
         tempfile::tempfile_in(dir)
     })
     .await?;
+    let (room, probe) = (env.room.clone(), scratch.try_clone().map_err(Error::from)?);
+    let need = total.unwrap_or(0).saturating_sub(offset);
+    tokio::task::spawn_blocking(move || room.ensure(probe.as_fd(), need))
+        .await
+        .map_err(|e| Error::new(ErrorKind::Internal, e.to_string()))??;
     let (down, up) = phase_sinks(env.progress.clone(), offset, total);
     let fd = OwnedFd::from(scratch.try_clone().map_err(Error::from)?);
     env.src
@@ -693,6 +700,7 @@ mod tests {
             op,
             options: TransferOptions::default(),
             scratch_dir: std::env::temp_dir(),
+            room: Room::default(),
             trasher: None,
             progress: no_progress(),
             commit: Arc::new(|_| true),
@@ -822,6 +830,7 @@ mod tests {
             op: OperationKind::Copy,
             options: TransferOptions::default(),
             scratch_dir: d.path().join("scratch"),
+            room: Room::default(),
             trasher: None,
             progress: Arc::new(move |done, _| s2.store(done, Ordering::SeqCst)),
             commit: Arc::new(|_| true),
@@ -830,6 +839,71 @@ mod tests {
         assert_eq!(out.unwrap(), Outcome::Done);
         assert_eq!(seen.load(Ordering::SeqCst), 9 << 20);
         assert!(!d.path().join("scratch").exists(), "no streaming through scratch");
+    }
+
+    fn disk_of(capacity: u64) -> Room {
+        Room::new(
+            0,
+            Arc::new(move |fd| {
+                let used = rustix::fs::fstat(fd)?.st_size.unsigned_abs();
+                Ok(crate::sys::VfsInfo {
+                    free: capacity.saturating_sub(used),
+                    total: capacity,
+                    used,
+                    read_only: false,
+                    name_max: 255,
+                })
+            }),
+        )
+    }
+
+    async fn extract_bomb(capacity: u64) -> (Result<Outcome>, MemoryProvider, tempfile::TempDir) {
+        use std::io::Write as _;
+        let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        w.start_file("bomb.bin", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        w.write_all(&vec![0u8; 8 << 20]).unwrap();
+        let zip = w.finish().unwrap().into_inner();
+        let holder = MemoryProvider::default();
+        holder.add_file("a.zip", &zip, 0);
+        let d = tempfile::tempdir().unwrap();
+        let archive = crate::provider::archive::ArchiveProvider::open(
+            Arc::new(holder),
+            vp("a.zip"),
+            d.path().join("archives"),
+            disk_of(u64::MAX),
+            None,
+        )
+        .await
+        .unwrap();
+        let dst = plain();
+        dst.add_dir("out");
+        let e = ItemEnv {
+            src: Arc::new(archive),
+            scratch_dir: d.path().join("scratch"),
+            room: disk_of(capacity),
+            op: OperationKind::Extract,
+            ..env(&MemoryProvider::default(), &dst, false, OperationKind::Extract)
+        };
+        let out = run_item(&e, &job(item("bomb.bin", "out/bomb.bin", Kind::File, 8 << 20))).await;
+        (out, dst, d)
+    }
+
+    #[tokio::test]
+    async fn archive_entry_bigger_than_free_space_fails_before_the_scratch_copy() {
+        let (out, dst, _d) = extract_bomb((8 << 20) - 1).await;
+        assert_eq!(out.err().map(|e| e.kind), Some(ErrorKind::NoSpace));
+        assert_eq!(
+            dst.calls()
+                .iter()
+                .filter(|c| c.starts_with("upload_from"))
+                .count(),
+            0
+        );
+        assert!(!dst.exists("out/bomb.bin"));
+        let (out, dst, _d) = extract_bomb(8 << 20).await;
+        assert_eq!(out.unwrap(), Outcome::Done, "a disk with room extracts it");
+        assert_eq!(dst.read_file("out/bomb.bin").unwrap().len(), 8 << 20);
     }
 
     #[tokio::test]
