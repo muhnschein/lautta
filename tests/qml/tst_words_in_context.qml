@@ -98,6 +98,71 @@ ApplicationWindow {
         same(TransferText.barDetail("failed", failed, 0, 0), qsTrId("lautta-xfr-failed"), "any other failure")
     }
 
+    function checkActivityRows() {
+        var row = function (more) {
+            var r = { "group": "active", "dateGroup": "inProgress", "kind": "copy", "state": "running",
+                      "title": "a.txt", "direction": "local", "waitReason": "", "bytesDone": 1048576,
+                      "bytesTotal": 4194304, "rate": 1024, "eta": 240, "itemsDone": 0, "itemsTotal": 1,
+                      "itemsFailed": 0, "destName": "Documents", "finishedMs": -1, "questions": 0 }
+            for (var key in more)
+                r[key] = more[key]
+            return r
+        }
+        var progress = qsTrId("lautta-xfr-progress").arg(TransferText.size(1048576)).arg(TransferText.size(4194304))
+        same(TransferText.rowLine(row({}), false),
+             progress + " · " + qsTrId("lautta-xfr-eta-left").arg(TransferText.duration(240)),
+             "a running task says how far and how long, not how fast")
+        same(TransferText.rowLine(row({ "rate": 0 }), false), progress, "no time left without a rate")
+        same(TransferText.rowLine(row({ "state": "queued", "bytesDone": 0 }), false), qsTrId("lautta-xfr-queued"),
+             "a queued task says so")
+        same(TransferText.rowLine(row({ "group": "waiting", "state": "waiting", "waitReason": "question", "questions": 2 }), false),
+             qsTrId("lautta-xfr-needs-answer", 2), "a task with questions asks for an answer")
+        same(TransferText.rowLine(row({ "group": "waiting", "state": "waiting", "waitReason": "network" }), false),
+             qsTrId("lautta-xfr-wait-network"), "a waiting task says what it waits for")
+        var ended = { "group": "history", "dateGroup": "today", "finishedMs": new Date(2026, 10, 27, 18, 2).getTime() }
+        same(TransferText.rowLine(row(ended), false), "", "a task that went well says nothing more")
+        ended.state = "canceled"
+        same(TransferText.rowLine(row(ended), false), qsTrId("lautta-xfr-canceled"), "a cancelled task says so")
+        ended.state = "failed"
+        ended.itemsDone = 3
+        ended.itemsFailed = 2
+        ended.itemsTotal = 5
+        same(TransferText.rowLine(row(ended), false), qsTrId("lautta-xfr-failed-of", 2).arg(5), "partly failed: how many of all")
+        same(TransferText.stateGlyph(row(ended)), "image://theme/icon-s-warning", "a failure has the warning glyph")
+        same(TransferText.rowWarns(row(ended)), true, "a failure is in the warning colour")
+        ended.itemsDone = 0
+        same(TransferText.rowLine(row(ended), false), qsTrId("lautta-xfr-failed"), "nothing done: failed")
+        same(TransferText.rowTime(row(ended)), Format.formatDate(new Date(ended.finishedMs), Formatter.TimeValue),
+             "a task from today shows its time")
+        ended.dateGroup = "yesterday"
+        same(TransferText.rowTime(row(ended)), Format.formatDate(new Date(ended.finishedMs), Formatter.TimeValue),
+             "a task from yesterday shows its time, under its section")
+        ended.dateGroup = "last7Days"
+        same(TransferText.rowTime(row(ended)), Format.formatDate(new Date(ended.finishedMs), Formatter.DateMediumWithoutYear),
+             "an older task shows its day")
+        ended.dateGroup = "older"
+        same(TransferText.rowTime(row(ended)), Format.formatDate(new Date(ended.finishedMs), Formatter.DateMedium),
+             "a much older task shows its year")
+        same(TransferText.rowTime(row({})), "", "a running task has no time")
+        same(TransferText.stateGlyph(row({})), "", "a running task has no glyph")
+        same(TransferText.rowWarns(row({})), false, "a running task is not a warning")
+        same(TransferText.stateGlyph(row({ "group": "waiting", "state": "waiting", "waitReason": "network" })),
+             "image://theme/icon-s-time", "a waiting task has the clock")
+        same(TransferText.stateGlyph(row({ "group": "paused", "state": "paused" })), "image://theme/icon-m-pause",
+             "a paused task has the pause glyph")
+        same(TransferText.stateGlyph(row({ "group": "waiting", "state": "waiting", "waitReason": "question", "questions": 1 })),
+             "image://theme/icon-s-warning", "a task with questions has the warning glyph")
+        var parts = function (more) {
+            var p = TransferText.titleParts(row(more))
+            return p.before + p.rest
+        }
+        same(parts({}), qsTrId("lautta-xfr-title-copying-one").arg("a.txt").arg("Documents"), "a running task is doing it")
+        same(parts({ "state": "queued" }), qsTrId("lautta-xfr-title-copy-one").arg("a.txt").arg("Documents"),
+             "a queued task is still to do")
+        same(parts({ "group": "history", "state": "completed" }),
+             qsTrId("lautta-xfr-title-copied-one").arg("a.txt").arg("Documents"), "a finished task is done")
+    }
+
     function checkPicker(picker) {
         same(picker.rootStatus("attention", "auth-failed", "NAS"), qsTrId("lautta-attention-auth-title"),
              "sign-in failure is words, not its code")
@@ -120,6 +185,7 @@ ApplicationWindow {
                 test.checkCanceledItems()
                 test.checkPending()
                 test.checkLevels()
+                test.checkActivityRows()
                 test.checkPicker(picker)
                 test.reachedEnd = true
             }

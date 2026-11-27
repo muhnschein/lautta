@@ -138,7 +138,7 @@ function titleParts(r) {
         for (var key in r)
             marked[key] = r[key]
         marked.destName = dest
-        return title(marked)
+        return forms(marked)[r.state === "completed" ? ENDED : r.state === "running" ? ONGOING : IMPERATIVE]
     }, r.destName)
 }
 
@@ -217,6 +217,53 @@ function status(r, restored) {
     default:
         return historyLine(r)
     }
+}
+
+function rowLine(r, restored) {
+    if (r.questions > 0)
+        return needsAnswer(r.questions)
+    if (r.group === "history")
+        return outcome(r)
+    if (r.group === "active" && r.state === "running") {
+        var text = qsTrId("lautta-xfr-progress").arg(size(r.bytesDone)).arg(size(r.bytesTotal))
+        return r.rate > 0 && r.eta >= 0 ? text + " · " + qsTrId("lautta-xfr-eta-left").arg(duration(r.eta)) : text
+    }
+    return status(r, restored)
+}
+
+function outcome(r) {
+    if (r.state === "canceled")
+        return qsTrId("lautta-xfr-canceled")
+    if (r.state === "failed" && r.itemsFailed > 0 && r.itemsDone > 0)
+        //% "%n of %1 failed"
+        return qsTrId("lautta-xfr-failed-of", r.itemsFailed).arg(r.itemsTotal)
+    if (r.state === "failed")
+        return qsTrId("lautta-xfr-failed")
+    return ""
+}
+
+function rowWarns(r) {
+    return r.questions > 0 || (r.group === "history" && r.state === "failed")
+}
+
+function stateGlyph(r) {
+    if (rowWarns(r))
+        return "image://theme/icon-s-warning"
+    if (r.group === "waiting")
+        return "image://theme/icon-s-time"
+    if (r.group === "paused")
+        return "image://theme/icon-m-pause"
+    return ""
+}
+
+function rowTime(r) {
+    if (r.finishedMs < 0)
+        return ""
+    var at = new Date(r.finishedMs)
+    if (r.dateGroup === "today" || r.dateGroup === "yesterday")
+        return Silica.Format.formatDate(at, Silica.Formatter.TimeValue)
+    return Silica.Format.formatDate(at, r.dateGroup === "older" ? Silica.Formatter.DateMedium
+                                                                 : Silica.Formatter.DateMediumWithoutYear)
 }
 
 function historyLine(r) {

@@ -2607,5 +2607,25 @@
         <source>Cannot play the audio track</source>
         <translation>Pista audio nu poate fi redată</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>Se elimină</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>Afișează în dosar</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>Elimină din Activitate</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%n din %1 a eșuat</numerusform>
+            <numerusform>%n din %1 au eșuat</numerusform>
+            <numerusform>%n din %1 au eșuat</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

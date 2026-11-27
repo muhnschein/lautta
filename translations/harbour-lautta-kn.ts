@@ -2553,5 +2553,24 @@
         <source>Cannot play the audio track</source>
         <translation>ಆಡಿಯೊ ಟ್ರ್ಯಾಕ್ ಅನ್ನು ಪ್ಲೇ ಮಾಡಲು ಸಾಧ್ಯವಿಲ್ಲ</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>ತೆಗೆದುಹಾಕಲಾಗುತ್ತಿದೆ</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>ಫೋಲ್ಡರ್‌ನಲ್ಲಿ ತೋರಿಸಿ</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>ಚಟುವಟಿಕೆಯಿಂದ ತೆಗೆದುಹಾಕಿ</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%1 ರಲ್ಲಿ %n ವಿಫಲವಾಗಿದೆ</numerusform>
+            <numerusform>%1 ರಲ್ಲಿ %n ವಿಫಲವಾಗಿವೆ</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

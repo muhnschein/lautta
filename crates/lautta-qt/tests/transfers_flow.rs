@@ -60,6 +60,8 @@ Item {
         delegate: Item {
             property string g: group
             property string dg: dateGroup
+            property string du: destUri
+            property int tid: transferId
             property string k: kind
             property string d: direction
             property string t: title
@@ -170,12 +172,19 @@ Item {
                      answerOpen()
                  return finishedCount === 2 && idle() && Transfers.barMode === "done" && rows.count === 2
              })
-        step("history cleared",
+        step("first copy removed from the list",
              function() {
                  check(finishedId === queuedId && finishedOk, "second copy finished ok")
                  check(Transfers.barTransferId === queuedId, "the end shows again after a swipe, got " + Transfers.barTransferId)
                  check(rows.itemAt(0).dg === "today" && rows.itemAt(1).dg === "today", "both ended today")
-                 check(Transfers.clearHistory() === 2, "history cleared")
+                 check(rows.itemAt(0).du === "lautta://user-downloads/", "a row knows the folder it went to, got " + rows.itemAt(0).du)
+                 check(Transfers.removeFromHistory(firstId), "a finished task can be removed")
+             },
+             function() { return rows.count === 1 && rows.itemAt(0).tid === queuedId })
+        step("history cleared",
+             function() {
+                 check(!Transfers.removeFromHistory(firstId), "a removed task is gone")
+                 check(Transfers.clearHistory() === 1, "history cleared")
              },
              function() { return rows.count === 0 && Transfers.barMode === "hidden" })
     }

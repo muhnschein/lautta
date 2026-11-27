@@ -2553,5 +2553,24 @@
         <source>Cannot play the audio track</source>
         <translation>Звуковата пътечка не може да се възпроизведе</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>Премахва се</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>Показване в папката</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>Премахване от Активност</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%n от %1 не успя</numerusform>
+            <numerusform>%n от %1 не успяха</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

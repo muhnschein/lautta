@@ -2607,5 +2607,25 @@
         <source>Cannot play the audio track</source>
         <translation>Zvukovou stopu nelze přehrát</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>Odebírání</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>Zobrazit ve složce</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>Odebrat z Aktivity</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%n z %1 selhala</numerusform>
+            <numerusform>%n z %1 selhaly</numerusform>
+            <numerusform>%n z %1 selhalo</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

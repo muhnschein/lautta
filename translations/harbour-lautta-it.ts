@@ -2553,5 +2553,24 @@
         <source>Cannot play the audio track</source>
         <translation>Impossibile riprodurre la traccia audio</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>Rimozione</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>Mostra nella cartella</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>Rimuovi da Attività</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%n di %1 non riuscito</numerusform>
+            <numerusform>%n di %1 non riusciti</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

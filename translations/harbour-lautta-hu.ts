@@ -2499,5 +2499,23 @@
         <source>Cannot play the audio track</source>
         <translation>A hangsáv nem játszható le</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>Eltávolítás folyamatban</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>Megjelenítés a mappában</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>Eltávolítás a Tevékenységből</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%1 közül %n sikertelen</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

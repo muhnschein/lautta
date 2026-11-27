@@ -2553,5 +2553,24 @@
         <source>Cannot play the audio track</source>
         <translation>Ääniraitaa ei voi toistaa</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>Poistetaan</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>Näytä kansiossa</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>Poista tehtävistä</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%n/%1 epäonnistui</numerusform>
+            <numerusform>%n/%1 epäonnistui</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

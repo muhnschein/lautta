@@ -2607,5 +2607,25 @@
         <source>Cannot play the audio track</source>
         <translation>Nepavyksta paleisti garso takelio</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>Šalinama</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>Rodyti aplanke</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>Pašalinti iš Veiklos</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>Nepavyko %n iš %1</numerusform>
+            <numerusform>Nepavyko %n iš %1</numerusform>
+            <numerusform>Nepavyko %n iš %1</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

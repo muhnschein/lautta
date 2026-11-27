@@ -2661,5 +2661,26 @@
         <source>Cannot play the audio track</source>
         <translation>Zvočnega posnetka ni mogoče predvajati</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>Odstranjevanje</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>Pokaži v mapi</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>Odstrani iz Dejavnosti</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%n od %1 ni uspel</numerusform>
+            <numerusform>%n od %1 nista uspela</numerusform>
+            <numerusform>%n od %1 niso uspeli</numerusform>
+            <numerusform>%n od %1 ni uspelo</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

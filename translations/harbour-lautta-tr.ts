@@ -2499,5 +2499,23 @@
         <source>Cannot play the audio track</source>
         <translation>Ses parçası oynatılamıyor</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>Kaldırılıyor</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>Klasörde göster</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>Etkinlik&apos;ten kaldır</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%n/%1 başarısız</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>
