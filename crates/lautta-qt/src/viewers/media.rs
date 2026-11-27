@@ -223,14 +223,14 @@ fn read_into(ctx: *mut c_void, off: i64, buf: *mut u8, want: i64) -> i64 {
 const FORMAT_ERROR: i32 = 2;
 const LOADING_MEDIA: i32 = 2;
 
-fn plays_in_part(code: i32, status: i32) -> bool {
+fn plays_without_sound(code: i32, status: i32) -> bool {
     code == FORMAT_ERROR && (3..=7).contains(&status)
 }
 
 pub fn error_kind(code: i32, status: i32) -> &'static str {
     match code {
         0 => "",
-        _ if plays_in_part(code, status) => "PlaysInPart",
+        _ if plays_without_sound(code, status) => "NoSound",
         FORMAT_ERROR if status == LOADING_MEDIA => "",
         1 | 2 | 5 => "NotPlayable",
         3 => "ConnectionLost",
@@ -392,18 +392,12 @@ impl MediaSource {
             self.start_download();
             return true;
         }
-        let name = error_kind(code, status);
-        let message = if name.is_empty() {
-            QString::default()
-        } else {
-            self.player_error_text()
-        };
-        let kind = qstr(name);
-        if kind == self.errorKind && message == self.errorMessage {
+        let kind = qstr(error_kind(code, status));
+        if kind == self.errorKind {
             return false;
         }
         self.errorKind = kind;
-        self.errorMessage = message;
+        self.errorMessage = self.player_error_text();
         true
     }
 
@@ -604,7 +598,7 @@ mod tests {
     #[test]
     fn a_missing_decoder_while_the_rest_plays_is_not_a_failure() {
         for status in [3, 4, 5, 6, 7] {
-            assert_eq!(error_kind(2, status), "PlaysInPart", "status {status}");
+            assert_eq!(error_kind(2, status), "NoSound", "status {status}");
         }
         for status in [0, 1, 8] {
             assert_eq!(error_kind(2, status), "NotPlayable", "status {status}");
@@ -633,7 +627,7 @@ mod tests {
     }
 
     #[test]
-    fn a_stream_playing_in_part_or_still_loading_is_not_downloaded() {
+    fn a_stream_without_sound_or_still_loading_is_not_downloaded() {
         assert!(!fallback_applies(2, 6), "a download lacks the same decoder");
         assert!(!fallback_applies(2, 2), "wait for loading to decide");
     }

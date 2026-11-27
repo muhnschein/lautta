@@ -2593,20 +2593,8 @@
         <source>Waiting for Wi-Fi</source>
         <translation type="unfinished"></translation>
     </message>
-    <message id="lautta-err-plays-in-part">
-        <source>Part of %1 doesn&apos;t play: this phone has no %2.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-err-plays-in-part-unnamed">
-        <source>Part of this file doesn&apos;t play: this phone has no %1.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-err-plays-in-part-generic">
-        <source>Part of %1 doesn&apos;t play on this phone.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message id="lautta-err-plays-in-part-generic-unnamed">
-        <source>Part of this file doesn&apos;t play on this phone.</source>
+    <message id="lautta-err-no-sound">
+        <source>This phone can&apos;t play the sound in this file.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

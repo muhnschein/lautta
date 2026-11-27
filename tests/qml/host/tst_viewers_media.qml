@@ -32,7 +32,7 @@ Item {
         check(!idle.playing, "controls on an idle source are harmless")
         check(idle.playerErrorKind(0, 6) === "", "no error, no kind")
         check(idle.playerErrorKind(2, 8) === "NotPlayable", "unplayable file: " + idle.playerErrorKind(2, 8))
-        check(idle.playerErrorKind(2, 6) === "PlaysInPart",
+        check(idle.playerErrorKind(2, 6) === "NoSound",
               "missing decoder while the rest plays: " + idle.playerErrorKind(2, 6))
         check(idle.playerErrorKind(4, 8) === "PermissionDenied", "access denied: " + idle.playerErrorKind(4, 8))
 

@@ -22,7 +22,6 @@ Page {
     readonly property real position: local ? localPlayer.position : remote.position
     readonly property real duration: local ? localPlayer.duration : remote.duration
     readonly property string errorKind: local ? remote.playerErrorKind(localPlayer.error, localPlayer.status) : remote.errorKind
-    readonly property string errorDetail: local ? localPlayer.errorString : remote.errorMessage
     property bool chrome: true
     readonly property bool sideBySide: !video && isLandscape
     readonly property real paneX: sideBySide ? width / 2 : 0
@@ -136,8 +135,7 @@ Page {
 
     readonly property string statusText: {
         if (errorKind !== "")
-            return ErrorText.message(errorKind, { "item": fileName, "location": App.locationName(uri), "open": true,
-                                                  "missing": errorDetail })
+            return ErrorText.message(errorKind, { "item": fileName, "location": App.locationName(uri), "open": true })
         if (remote.downloading)
             //% "Downloading from %1"
             return qsTrId("lautta-viewers-media-downloading").arg(App.locationName(uri))
