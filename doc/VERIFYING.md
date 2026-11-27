@@ -37,12 +37,14 @@ clone under `~/.cache/lautta-verify`, never in your tree: ~4 GB, checks for
 - Build paths: binary records none. `tools/ci/cross-build.sh` maps lifted
   SDK and cargo home to `/sdk`, `/cargo` (rustc `--remap-path-prefix`, gcc
   `-ffile-prefix-map`); cargo names the workspace's own sources relative to
-  the checkout.
+  the checkout. Output folder leaves no trace either: `third_party/cpp_common`
+  names rust-cpp's callback table after the crate's build folder, not its
+  full path.
 - Build environment: SDK image pinned by digest (`Makefile` `SDK_IMAGE`:
   cross compiler, sysroot, Qt, rpm); Rust pinned (`rust-toolchain.toml`).
   Packaged in the image at a fixed path.
-- Inputs pinned: `Cargo.lock` (crates by checksum), `third_party/qttypes` in
-  the tree.
+- Inputs pinned: `Cargo.lock` (crates by checksum), `third_party/qttypes` and
+  `third_party/cpp_common` in the tree.
 
 CI checks it on every push: job "RPM rebuilds byte for byte" runs
 `tools/verify-rpm.sh` on the RPM job's package, on another runner, from a
