@@ -7,7 +7,7 @@ What Lautta is: `PROJECT.md`. UI: design canvas in `../design` (one `.dc.html` a
 - Rust **1.95** everywhere (`rust-toolchain.toml`). 5.2 SDK target ships rustc 1.75, so RPM's binary is cross-built with host cargo against SDK's gcc, Qt, sysroot (`tools/ci/lift-sdk.sh`, `tools/ci/cross-build.sh`); `mb2` only packages it.
 - `Cargo.lock` from current stable cargo honouring `.cargo/config.toml`'s `incompatible-rust-versions = "fallback"`: `cargo +stable update -p <crate>` / `cargo +stable generate-lockfile`. No crate newer than workspace `rust-version` allows.
 - New dependencies: pure Rust preferred; native links only to Harbour's allowed libraries (`PROJECT.md` "Platform").
-- RPM reproducible: same commit, same RPM, byte for byte. No build path, time or host reaches it; every input pinned (SDK image by digest, `rust-toolchain.toml`, `Cargo.lock`). CI job "RPM rebuilds byte for byte" runs `tools/verify-rpm.sh` (`VERIFYING.md`).
+- RPM reproducible: same commit, same RPM, byte for byte. No build path, time or host reaches it; every input pinned (SDK image by digest, `rust-toolchain.toml`, `Cargo.lock`). CI job "RPM rebuilds byte for byte" runs `tools/verify-rpm.sh` only in hand-started CI runs, required before a release (`VERIFYING.md`).
 
 ## Rules
 

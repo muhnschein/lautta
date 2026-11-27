@@ -115,6 +115,7 @@ Every added or changed test, before push:
 - Only on user's go. None cut yet, no tags. Latest `main` commit green first, Sonar included: check main, not just PR.
 - Strict semver: nothing breaking → minor.
 - Harbour upload stays with user.
+- Before release: CI started by hand on release commit (`gh workflow run ci.yml --ref main`), job "RPM rebuilds byte for byte" green.
 - Before release: corpus run with release candidate RPM on one E4504 and `op6`, state `clean` (harness `apps/lautta.md` "Corpus runs": `corpus_fetch; corpus_push; corpus_stress`). Pass: no `CRASH` or `HANG` in `results.tsv`, empty `escapes.txt`. Results to user before release go.
 
 ## Subagents
