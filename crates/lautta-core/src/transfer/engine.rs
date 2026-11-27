@@ -13,6 +13,7 @@ use crate::entry::Kind;
 use crate::error::{Error, ErrorKind, Result};
 use crate::ops::{Conflict, ConflictChoice, OperationKind, Plan, PlanItem};
 use crate::provider::{ProgressSink, ProviderResolver};
+use crate::room::Room;
 use crate::uri::Uri;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
@@ -26,6 +27,7 @@ pub struct EngineConfig {
     pub backoff_base: Duration,
     pub max_retries: u32,
     pub scratch_dir: PathBuf,
+    pub room: Room,
     pub retention_days: u32,
     pub progress_event_interval_ms: i64,
 }
@@ -36,6 +38,7 @@ impl Default for EngineConfig {
             backoff_base: Duration::from_secs(1),
             max_retries: 3,
             scratch_dir: std::env::temp_dir(),
+            room: Room::default(),
             retention_days: DEFAULT_RETENTION_DAYS,
             progress_event_interval_ms: 250,
         }
@@ -1293,6 +1296,7 @@ impl Inner {
             op,
             options,
             scratch_dir: self.cfg.scratch_dir.clone(),
+            room: self.cfg.room.clone(),
             trasher: self.deps.trasher.clone(),
             progress,
             commit,

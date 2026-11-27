@@ -81,10 +81,12 @@ pub enum CoverFrom {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ImageItem {
+pub struct GalleryItem {
     pub uri: Uri,
     pub name: String,
     pub size: Option<u64>,
+    pub video: bool,
+    pub mime: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1021,28 +1023,30 @@ impl Core {
         audio::folder_cover(&entries).is_some()
     }
 
-    pub async fn list_images(&self, folder: &Uri) -> Result<Vec<ImageItem>> {
+    pub async fn list_gallery(&self, folder: &Uri) -> Result<Vec<GalleryItem>> {
         let provider = self.provider(&folder.location)?;
         let all = list_all(provider.as_ref(), &folder.path, Lane::Interactive).await?;
         let prefs = self.view_prefs();
         let hidden = prefs.show_hidden;
-        let images: Vec<Entry> = all
+        let shown: Vec<Entry> = all
             .into_iter()
             .filter(|e| {
-                category_of(e) == FileCategory::Image
+                matches!(category_of(e), FileCategory::Image | FileCategory::Video)
                     && shows_in_app(&mime_of(e).unwrap_or_default())
                     && (hidden || !e.is_hidden())
             })
             .collect();
-        let order = sort_permutation(&images, &prefs.sort_options());
+        let order = sort_permutation(&shown, &prefs.sort_options());
         order
             .into_iter()
             .map(|i| {
-                let e = &images[i as usize];
-                Ok(ImageItem {
+                let e = &shown[i as usize];
+                Ok(GalleryItem {
                     uri: folder.join(&e.name)?,
                     name: e.display_name(),
                     size: e.size,
+                    video: category_of(e) == FileCategory::Video,
+                    mime: mime_of(e).unwrap_or_default(),
                 })
             })
             .collect()

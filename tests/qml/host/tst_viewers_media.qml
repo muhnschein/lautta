@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 import QtQuick 2.6
 import Lautta 1.0
+import "../../../qml/components/ErrorText.js" as ErrorText
 
 Item {
     id: root
@@ -30,9 +31,15 @@ Item {
         idle.pause()
         idle.stop()
         check(!idle.playing, "controls on an idle source are harmless")
-        check(idle.playerErrorKind(0) === "", "no error, no kind")
-        check(idle.playerErrorKind(2) === "NotPlayable", "unplayable file: " + idle.playerErrorKind(2))
-        check(idle.playerErrorKind(4) === "PermissionDenied", "access denied: " + idle.playerErrorKind(4))
+        check(idle.playerErrorKind(0, 6) === "", "no error, no kind")
+        check(idle.playerErrorKind(2, 8) === "NotPlayable", "unplayable file: " + idle.playerErrorKind(2, 8))
+        check(idle.playerErrorKind(2, 6) === "NoSound",
+              "missing decoder while the rest plays: " + idle.playerErrorKind(2, 6))
+        check(idle.playerErrorKind(4, 8) === "PermissionDenied", "access denied: " + idle.playerErrorKind(4, 8))
+        check(!ErrorText.stopsPlayback("") && !ErrorText.stopsPlayback("NoSound"),
+              "a video without its sound keeps playing its picture")
+        check(ErrorText.stopsPlayback("NotPlayable") && ErrorText.stopsPlayback("ConnectionLost"),
+              "other errors stop the video")
 
         streaming.uri = "lautta://user-documents/a.mp3"
         check(streaming.mediaObject !== null && streaming.mediaObject !== undefined, "mediaObject is the player")

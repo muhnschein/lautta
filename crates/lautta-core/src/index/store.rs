@@ -441,6 +441,25 @@ impl IndexStore {
         tx.commit().map_err(sql)
     }
 
+    pub fn mark_subtree_checked(&self, root: i64, folder: &VPath, pass: i64) -> Result<usize> {
+        let conn = self.lock();
+        if folder.is_root() {
+            return conn
+                .execute(
+                    "UPDATE node SET checked_pass = ?2 WHERE root = ?1 AND kind = 1 AND checked_pass < ?2",
+                    params![root, pass],
+                )
+                .map_err(sql);
+        }
+        let (low, high) = subtree_bounds(folder);
+        conn.execute(
+            "UPDATE node SET checked_pass = ?2 WHERE root = ?1 AND kind = 1 AND checked_pass < ?2
+             AND (parent = ?3 OR (parent >= ?4 AND parent < ?5))",
+            params![root, pass, folder.as_bytes(), low, high],
+        )
+        .map_err(sql)
+    }
+
     pub fn children(&self, root: i64, folder: &VPath) -> Result<Vec<Entry>> {
         let conn = self.lock();
         let mut stmt = conn

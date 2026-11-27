@@ -5,6 +5,7 @@ use crate::error::Result;
 use crate::locations::{Location, LocationKind, LocationRegistry};
 use crate::password::Password;
 use crate::provider::archive::{archive_location_id, ArchiveProvider};
+use crate::room::Room;
 use crate::transfer::{Engine, TransferId};
 use crate::uri::Uri;
 use std::collections::HashMap;
@@ -115,7 +116,8 @@ impl Core {
         let source = self.provider(&uri.location)?;
         let cache = self.paths.cache_dir().join("archives");
         tokio::fs::create_dir_all(&cache).await?;
-        let provider = ArchiveProvider::open(source, uri.path.clone(), cache, password).await?;
+        let provider =
+            ArchiveProvider::open(source, uri.path.clone(), cache, Room::default(), password).await?;
         let name = uri
             .path
             .name()

@@ -49,7 +49,7 @@ fn lines(core: &lautta_core::app::Core) -> Vec<Line> {
             location: s.location,
             name: s.name,
             local: s.local,
-            state: s.state.name(),
+            state: if s.waits_for_wifi { "wifi" } else { s.state.name() },
             names: s.names,
             checked_ms: s.checked_ms.unwrap_or(-1),
             wanted: true,

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 use crate::wire::{
-    Bytes, Opts, WireCapabilities, WireDrive, WireEntry, WireLocation, WireNearby, WireWalkItem,
+    Bytes, Opts, WireCapabilities, WireCheckItem, WireCheckResult, WireDrive, WireEntry, WireLocation,
+    WireNearby, WireWalkItem,
 };
 use zbus::zvariant::{Fd, OwnedValue};
 
@@ -89,4 +90,12 @@ pub trait Bridge1 {
     fn drives_changed(&self) -> zbus::Result<()>;
     fn mount(&self, drive: &str) -> zbus::Result<Vec<u8>>;
     fn unmount(&self, drive: &str) -> zbus::Result<()>;
+
+    fn check(&self, loc: &str, items: &[WireCheckItem], lane: &str) -> zbus::Result<u32>;
+    #[zbus(signal)]
+    fn check_batch(&self, job: u32, results: Vec<WireCheckResult>) -> zbus::Result<()>;
+    fn get_network(&self) -> zbus::Result<String>;
+    #[zbus(signal)]
+    fn network_changed(&self, network: String) -> zbus::Result<()>;
+    fn search(&self, loc: &str, root: &[u8], text: &str, opts: &Opts) -> zbus::Result<u32>;
 }

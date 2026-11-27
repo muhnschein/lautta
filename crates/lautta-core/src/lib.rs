@@ -18,6 +18,7 @@ pub mod error;
 pub mod fonts;
 pub mod paths;
 pub mod provider;
+pub mod room;
 pub mod sys;
 pub mod uri;
 pub mod vpath;

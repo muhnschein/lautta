@@ -147,6 +147,8 @@ pub mod cap {
     pub const RESTRICTED_NAMES: &str = "RestrictedNames";
     pub const NO_CHANGE: &str = "NoChange";
     pub const NO_READ: &str = "NoRead";
+    pub const DEEP_ETAGS: &str = "DeepETags";
+    pub const SEARCH: &str = "Search";
 }
 
 impl Capabilities {

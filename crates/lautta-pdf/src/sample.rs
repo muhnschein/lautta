@@ -32,7 +32,7 @@ pub fn text(x: u32, y: u32, s: &str) -> String {
 }
 
 const FONT: &str =
-    "<< /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >> >>";
+    "/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >>";
 
 pub fn build(pages: &[Spec]) -> Vec<u8> {
     Doc::new(pages.to_vec()).build()
@@ -51,16 +51,19 @@ pub struct Doc {
     pages: Vec<Spec>,
     catalog: String,
     page_entries: Vec<String>,
+    page_resources: Vec<String>,
     objects: Vec<String>,
 }
 
 impl Doc {
     pub fn new(pages: Vec<Spec>) -> Doc {
         let page_entries = vec![String::new(); pages.len()];
+        let page_resources = page_entries.clone();
         Doc {
             pages,
             catalog: String::new(),
             page_entries,
+            page_resources,
             objects: Vec::new(),
         }
     }
@@ -74,6 +77,12 @@ impl Doc {
     pub fn page_entry(&mut self, index: usize, entry: &str) -> &mut Doc {
         self.page_entries[index].push(' ');
         self.page_entries[index].push_str(entry);
+        self
+    }
+
+    pub fn page_resource(&mut self, index: usize, entry: &str) -> &mut Doc {
+        self.page_resources[index].push(' ');
+        self.page_resources[index].push_str(entry);
         self
     }
 
@@ -119,10 +128,11 @@ impl Doc {
         ];
         for (i, p) in self.pages.iter().enumerate() {
             objects.push(format!(
-                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {} {}] /Rotate {} /Resources {FONT} /Contents {} 0 R{} >>",
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {} {}] /Rotate {} /Resources << {FONT}{} >> /Contents {} 0 R{} >>",
                 p.w,
                 p.h,
                 p.rotate,
+                self.page_resources[i],
                 4 + 2 * i,
                 self.page_entries[i]
             ));

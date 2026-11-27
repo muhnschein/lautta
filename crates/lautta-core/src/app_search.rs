@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 use crate::app::Core;
+use crate::entry::cap;
 use crate::error::{Error, ErrorKind, Result};
+use crate::index::store::IndexedEntry;
 use crate::locations::{Location, LocationKind};
 use crate::search::{
     self, classify_by_extension, MatchMode, SearchHit, SearchOptions, SearchQuery, SearchSummary,
@@ -509,6 +511,48 @@ impl Core {
         }))
     }
 
+    async fn server_hits(
+        &self,
+        root: &SearchRoot,
+        query: &search::SearchQuery,
+    ) -> Option<Result<Vec<SearchHit>>> {
+        if self.locations.to_local_path(&root.uri).is_some() {
+            return None;
+        }
+        let needle = literal_needle(query.text.trim(), query.mode);
+        if needle.is_empty() {
+            return None;
+        }
+        let provider = self.provider(&root.uri.location).ok()?;
+        if !provider.known_capabilities().await.raw.contains(cap::SEARCH) {
+            return None;
+        }
+        let found = match provider
+            .search_names(&root.uri.path, &needle, crate::provider::SEARCH_LIMIT)
+            .await
+        {
+            Ok(found) => found,
+            Err(e) if e.kind == ErrorKind::Unsupported => return None,
+            Err(e) => return Some(Err(e)),
+        };
+        let matcher = match search::Matcher::new(query) {
+            Ok(matcher) => matcher,
+            Err(e) => return Some(Err(e)),
+        };
+        Some(Ok(found
+            .into_iter()
+            .filter_map(|(path, entry)| {
+                let found = IndexedEntry {
+                    root: 0,
+                    folder: path.parent()?,
+                    entry,
+                };
+                crate::app_index::index_hit(&root.uri.location, &root.uri.path, found, query.include_hidden)
+            })
+            .filter(|h| matcher.matches(&h.entry, &classify_by_extension))
+            .collect()))
+    }
+
     #[allow(clippy::too_many_arguments)]
     async fn search_index(
         &self,
@@ -591,6 +635,28 @@ impl Core {
                     }
                 }
                 continue;
+            }
+            match self.server_hits(root, query).await {
+                Some(Ok(hits)) => {
+                    searched += 1;
+                    total.hits += hits.len() as u64;
+                    if !hits.is_empty() {
+                        let _ = out
+                            .send(ScopeEvent::Hits {
+                                group,
+                                root: root_index,
+                                hits,
+                            })
+                            .await;
+                    }
+                    continue;
+                }
+                Some(Err(e)) => {
+                    total.errors += 1;
+                    failure.get_or_insert(e);
+                    continue;
+                }
+                None => {}
             }
             let before = total.folders;
             let progress_out = out.clone();

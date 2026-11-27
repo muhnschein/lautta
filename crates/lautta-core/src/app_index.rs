@@ -31,6 +31,7 @@ pub struct IndexStatus {
     pub state: RootState,
     pub names: i64,
     pub checked_ms: Option<i64>,
+    pub waits_for_wifi: bool,
 }
 
 struct Worker {
@@ -78,8 +79,10 @@ impl NameIndex {
         self.changed.send_modify(|n| *n = n.wrapping_add(1));
     }
 
-    pub fn set_on_charger_setting(&self, on: bool) {
-        lock(&self.conditions).index_on_charger = on;
+    pub fn set_settings(&self, on_charger: bool, on_mobile: bool) {
+        let mut conditions = lock(&self.conditions);
+        conditions.index_on_charger = on_charger;
+        conditions.index_on_mobile = on_mobile;
     }
 
     pub fn conditions(&self) -> Conditions {
@@ -153,14 +156,17 @@ impl Core {
             return Vec::new();
         };
         let roots = index.store.roots().unwrap_or_default();
+        let no_wifi = index.conditions().waits_for_wifi();
         self.index_targets()
             .into_iter()
             .map(|t| {
                 let root = roots
                     .iter()
                     .find(|r| r.location == t.location && r.path.is_root());
+                let state = root.map_or(RootState::Pending, |r| r.state);
                 IndexStatus {
-                    state: root.map_or(RootState::Pending, |r| r.state),
+                    waits_for_wifi: no_wifi && !t.local && state == RootState::Pending,
+                    state,
                     names: root.map_or(0, |r| r.names),
                     checked_ms: root.and_then(|r| r.checked_ms),
                     location: t.location,
@@ -226,7 +232,11 @@ impl Core {
 
     pub fn index_set_conditions(self: &Arc<Self>, change: impl FnOnce(&mut Conditions)) {
         let Some(index) = &self.index else { return };
+        let waited = index.conditions().waits_for_wifi();
         change(&mut lock(&index.conditions));
+        if index.conditions().waits_for_wifi() != waited {
+            index.notify();
+        }
         self.index_kick();
     }
 

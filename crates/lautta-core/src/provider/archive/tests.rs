@@ -100,7 +100,14 @@ fn sevenz_bytes(files: &[(&str, &[u8])]) -> Vec<u8> {
 async fn open_named(name: &str, data: &[u8], cache: &Path) -> Result<ArchiveProvider> {
     let mem = MemoryProvider::default();
     mem.add_file(name, data, 0);
-    ArchiveProvider::open(Arc::new(mem), vp(name), cache.to_path_buf(), None).await
+    ArchiveProvider::open(
+        Arc::new(mem),
+        vp(name),
+        cache.to_path_buf(),
+        Room::default(),
+        None,
+    )
+    .await
 }
 
 async fn read_entry(p: &ArchiveProvider, path: &str) -> Vec<u8> {
@@ -714,4 +721,180 @@ fn file_range_reads_its_span_in_small_steps() {
         out.extend_from_slice(&buf[..n]);
     }
     assert_eq!(out, b"456789abc");
+}
+
+fn room_with(free: impl Fn(std::os::fd::BorrowedFd<'_>) -> u64 + Send + Sync + 'static) -> Room {
+    Room::new(
+        0,
+        Arc::new(move |fd| {
+            Ok(crate::sys::VfsInfo {
+                free: free(fd),
+                total: 1 << 40,
+                used: 0,
+                read_only: false,
+                name_max: 255,
+            })
+        }),
+    )
+}
+
+fn linked(fd: std::os::fd::BorrowedFd<'_>) -> bool {
+    rustix::fs::fstat(fd).map(|s| s.st_nlink > 0).unwrap_or(false)
+}
+
+fn left_in(dir: &Path) -> usize {
+    std::fs::read_dir(dir).map_or(0, Iterator::count)
+}
+
+async fn open_in_room(name: &str, data: &[u8], cache: &Path, room: Room) -> Result<ArchiveProvider> {
+    let mem = MemoryProvider::default();
+    mem.add_file(name, data, 0);
+    ArchiveProvider::open(Arc::new(mem), vp(name), cache.to_path_buf(), room, None).await
+}
+
+#[tokio::test]
+async fn large_entry_too_big_for_free_space_is_not_extracted() {
+    let tmp = tempfile::tempdir().unwrap();
+    let cache = tmp.path().join("cache");
+    let size = MEMORY_LIMIT + 4096;
+    let big = vec![0u8; usize::try_from(size).unwrap()];
+    let data = zip_bytes(&[("big.bin", &big)], zip::CompressionMethod::Deflated);
+    let p = open_in_room("a.zip", &data, &cache, room_with(move |_| size - 1))
+        .await
+        .unwrap();
+    let err = p.open_read(&vp("big.bin"), Lane::Bulk).await.err();
+    assert_eq!(err.map(|e| e.kind), Some(ErrorKind::NoSpace));
+    assert_eq!(left_in(&cache), 0);
+    let p = open_in_room("a.zip", &data, &cache, room_with(move |_| size))
+        .await
+        .unwrap();
+    assert_eq!(
+        read_entry(&p, "big.bin").await.len() as u64,
+        size,
+        "exact fit extracts"
+    );
+}
+
+#[tokio::test]
+async fn download_into_refuses_an_entry_bigger_than_free_space() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = zip_bytes(&[("p.bin", &[7u8; 5000])], zip::CompressionMethod::Deflated);
+    let p = open_in_room("a.zip", &data, tmp.path(), room_with(|_| 3999))
+        .await
+        .unwrap();
+    let out = tempfile::tempfile().unwrap();
+    let fd = OwnedFd::from(out.try_clone().unwrap());
+    let err = p
+        .download_into(&vp("p.bin"), fd, ReadOptions { offset: 1000 }, no_progress())
+        .await
+        .err();
+    assert_eq!(err.map(|e| e.kind), Some(ErrorKind::NoSpace));
+    assert_eq!(out.metadata().unwrap().len(), 0, "nothing written");
+    let p = open_in_room("a.zip", &data, tmp.path(), room_with(|_| 4000))
+        .await
+        .unwrap();
+    let fd = OwnedFd::from(out.try_clone().unwrap());
+    p.download_into(&vp("p.bin"), fd, ReadOptions { offset: 1000 }, no_progress())
+        .await
+        .unwrap();
+    assert_eq!(out.metadata().unwrap().len(), 4000);
+}
+
+#[tokio::test]
+async fn download_into_stops_when_free_space_runs_out_while_writing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let size = 3 * crate::room::RECHECK_EVERY;
+    let payload = vec![1u8; usize::try_from(size).unwrap()];
+    let data = zip_bytes(&[("p.bin", &payload)], zip::CompressionMethod::Deflated);
+    let probes = Arc::new(AtomicU64::new(0));
+    let seen = Arc::clone(&probes);
+    let room = room_with(move |_| match seen.fetch_add(1, Ordering::SeqCst) {
+        0 => u64::MAX,
+        _ => 0,
+    });
+    let p = open_in_room("a.zip", &data, tmp.path(), room).await.unwrap();
+    let out = tempfile::tempfile().unwrap();
+    let fd = OwnedFd::from(out.try_clone().unwrap());
+    let err = p
+        .download_into(&vp("p.bin"), fd, ReadOptions::default(), no_progress())
+        .await
+        .err();
+    assert_eq!(err.map(|e| e.kind), Some(ErrorKind::NoSpace));
+    assert_eq!(
+        probes.load(Ordering::SeqCst),
+        2,
+        "checked before and once while writing"
+    );
+    assert!(out.metadata().unwrap().len() < size, "stopped early");
+}
+
+fn file_size(fd: std::os::fd::BorrowedFd<'_>) -> u64 {
+    rustix::fs::fstat(fd).map_or(0, |s| s.st_size.unsigned_abs())
+}
+
+#[tokio::test]
+async fn large_entry_stops_when_free_space_runs_out_at_the_end() {
+    let tmp = tempfile::tempdir().unwrap();
+    let cache = tmp.path().join("cache");
+    let size = MEMORY_LIMIT + 4096;
+    let big = vec![3u8; usize::try_from(size).unwrap()];
+    let data = zip_bytes(&[("big.bin", &big)], zip::CompressionMethod::Deflated);
+    let room = room_with(|fd| {
+        if file_size(fd) >= MEMORY_LIMIT {
+            0
+        } else {
+            u64::MAX
+        }
+    });
+    let p = open_in_room("a.zip", &data, &cache, room).await.unwrap();
+    let err = p.open_read(&vp("big.bin"), Lane::Bulk).await.err();
+    assert_eq!(err.map(|e| e.kind), Some(ErrorKind::NoSpace));
+}
+
+#[tokio::test]
+async fn compressed_tar_cache_download_stops_when_free_space_runs_out() {
+    let tmp = tempfile::tempdir().unwrap();
+    let cache = tmp.path().join("cache");
+    let data = compressed(Compression::Gzip, &tar_bytes(&[("n.bin", &noise(3 << 20, 5))]));
+    assert!(data.len() > 2 << 20, "several download chunks");
+    let probes = Arc::new(AtomicU64::new(0));
+    let seen = Arc::clone(&probes);
+    let room = room_with(move |_| match seen.fetch_add(1, Ordering::SeqCst) {
+        0 => u64::MAX,
+        _ => 0,
+    });
+    let err = open_in_room("a.tar.gz", &data, &cache, room).await.err();
+    assert_eq!(err.map(|e| e.kind), Some(ErrorKind::NoSpace));
+    assert_eq!(left_in(&cache), 0, "no partial cache file left");
+}
+
+#[tokio::test]
+async fn compressed_tar_is_not_cached_without_room() {
+    let tmp = tempfile::tempdir().unwrap();
+    let cache = tmp.path().join("cache");
+    let data = compressed(Compression::Gzip, &tar_bytes(&[("n.bin", &noise(3 << 20, 5))]));
+    assert!(data.len() > 2 << 20, "several download chunks");
+    let need = data.len() as u64;
+    let err = open_in_room("a.tar.gz", &data, &cache, room_with(move |_| need - 1))
+        .await
+        .err();
+    assert_eq!(err.map(|e| e.kind), Some(ErrorKind::NoSpace));
+    assert_eq!(left_in(&cache), 0, "no partial cache file left");
+    assert!(open_in_room("a.tar.gz", &data, &cache, room_with(move |_| need))
+        .await
+        .is_ok());
+}
+
+#[tokio::test]
+async fn compressed_tar_spill_stops_without_room() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = compressed(Compression::Gzip, &tar_bytes(&SAMPLE));
+    let room = room_with(|fd| if linked(fd) { u64::MAX } else { 0 });
+    let p = open_in_room("a.tar.gz", &data, tmp.path(), room).await.unwrap();
+    let err = p.open_read(&vp("top.txt"), Lane::Bulk).await.err();
+    assert_eq!(err.map(|e| e.kind), Some(ErrorKind::NoSpace));
+    let p = open_in_room("a.tar.gz", &data, tmp.path(), room_with(|_| u64::MAX))
+        .await
+        .unwrap();
+    assert_eq!(read_entry(&p, "top.txt").await, b"top level");
 }

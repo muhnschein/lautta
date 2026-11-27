@@ -26,12 +26,13 @@ Page {
 
         readonly property int columns: page.isLandscape ? 5 : 3
         readonly property real sheetWidth: Math.floor(cellWidth - 2 * Theme.paddingLarge)
+        readonly property real sheetHeight: Math.ceil(sheetWidth * 1.5)
 
         objectName: "pdfPagesGrid"
         anchors { top: parent.top; left: parent.left; right: parent.right; bottom: goTo.top }
         clip: true
         cellWidth: Math.floor(width / columns)
-        cellHeight: Math.ceil(sheetWidth * 1.5) + numberMetrics.height + 2 * Theme.paddingMedium
+        cellHeight: sheetHeight + numberMetrics.height + 2 * Theme.paddingMedium
         model: page.pageCount
         cacheBuffer: cellHeight
 
@@ -50,6 +51,18 @@ Page {
             width: grid.cellWidth
             height: grid.cellHeight
 
+            Item {
+                id: sheet
+
+                anchors {
+                    horizontalCenter: parent.horizontalCenter
+                    top: parent.top
+                    topMargin: Theme.paddingMedium
+                }
+                width: grid.sheetWidth
+                height: grid.sheetHeight
+            }
+
             Rectangle {
                 anchors {
                     fill: thumb
@@ -66,12 +79,11 @@ Page {
 
                 objectName: "pdfPageThumb"
                 anchors {
-                    horizontalCenter: parent.horizontalCenter
-                    top: parent.top
-                    topMargin: Theme.paddingMedium
+                    horizontalCenter: sheet.horizontalCenter
+                    bottom: sheet.bottom
                 }
-                width: status === Image.Ready ? implicitWidth : grid.sheetWidth
-                height: status === Image.Ready ? implicitHeight : Math.ceil(grid.sheetWidth * 1.5)
+                width: status === Image.Ready ? implicitWidth : sheet.width
+                height: status === Image.Ready ? implicitHeight : sheet.height
                 asynchronous: true
                 cache: false
                 sourceSize.width: grid.sheetWidth
@@ -101,8 +113,7 @@ Page {
                 objectName: "pdfPageNumber"
                 anchors {
                     horizontalCenter: parent.horizontalCenter
-                    bottom: parent.bottom
-                    bottomMargin: Theme.paddingMedium
+                    top: sheet.bottom
                 }
                 font.pixelSize: Theme.fontSizeSmall
                 color: tile.current || tile.highlighted ? Theme.highlightColor : Theme.secondaryColor

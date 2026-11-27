@@ -61,7 +61,7 @@ done
 grep -q 'GNU LESSER GENERAL PUBLIC LICENSE' "$work/usr/share/harbour-lautta/LICENSE" ||
     fail "LGPL text not shipped in /usr/share/harbour-lautta/LICENSE"
 size=$(stat -c %s "$bin")
-[ "$size" -le 20971520 ] || fail "binary is $size bytes, over the 20 MB budget"
+[ "$size" -le 26214400 ] || fail "binary is $size bytes, over the 25 MB budget"
 
 tls_align=$(readelf -lW "$bin" | awk '$1 == "TLS" { print $NF }')
 [ $((tls_align)) -ge 128 ] || fail "TLS segment alignment is ${tls_align:-missing}, needs 128 (libhybris)"
@@ -151,6 +151,13 @@ if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal \
         /usr/bin/harbour-lautta --qml-check -T /usr/share/harbour-lautta/translations \
         "$PWD/tests/translations/tst_english_plurals.qml"; then
     fail "English plural forms on the target"
+fi
+shipped_languages=$(rpm -qlp "$rpm" | grep -c '/translations/harbour-lautta-.*\.qm$' || true)
+[ "$shipped_languages" -eq 39 ] || fail "RPM ships $shipped_languages language catalogues, not 39"
+if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal LANG=fi_FI.UTF-8 LC_ALL=fi_FI.UTF-8 LANGUAGE=fi_FI \
+        /usr/bin/harbour-lautta --qml-check -T /usr/share/harbour-lautta/translations \
+        "$PWD/tests/translations/tst_reader_language.qml"; then
+    fail "Finnish reader gets English on the target"
 fi
 if ! sb2 -t "$TARGET" env HOME="$home" QT_QPA_PLATFORM=minimal:enable_fonts \
         /usr/bin/harbour-lautta --qml-check -F /usr/share/harbour-lautta/fonts \

@@ -49,6 +49,34 @@ impl Consent {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Network {
+    #[default]
+    Unknown,
+    Offline,
+    Wifi,
+    Ethernet,
+    Mobile,
+    Other,
+}
+
+impl Network {
+    pub fn from_wire(s: &str) -> Network {
+        match s {
+            "wifi" => Network::Wifi,
+            "ethernet" => Network::Ethernet,
+            "mobile" => Network::Mobile,
+            "other" => Network::Other,
+            "none" => Network::Offline,
+            _ => Network::Unknown,
+        }
+    }
+
+    pub fn unmetered(self) -> bool {
+        matches!(self, Network::Wifi | Network::Ethernet)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Attention {
     #[default]
     None,

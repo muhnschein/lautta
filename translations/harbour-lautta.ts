@@ -2581,5 +2581,41 @@
         <source>Pages</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-index-mobile">
+        <source>Use mobile data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-index-mobile-hint">
+        <source>Lautta updates the lists of servers on Wi-Fi only. With this on, it uses mobile data too.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-index-state-wifi">
+        <source>Waiting for Wi-Fi</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-err-no-sound">
+        <source>Cannot play the audio track</source>
+        <oldsource>This phone can&apos;t play the sound.</oldsource>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%n of %1 failed</numerusform>
+            <numerusform>%n of %1 failed</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

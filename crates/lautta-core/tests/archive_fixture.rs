@@ -4,6 +4,7 @@ use lautta_core::entry::Kind;
 use lautta_core::provider::archive::{ArchiveFormat, ArchiveProvider};
 use lautta_core::provider::memory::MemoryProvider;
 use lautta_core::provider::{read_all, Lane, Provider};
+use lautta_core::room::Room;
 use lautta_core::VPath;
 use std::sync::Arc;
 
@@ -15,9 +16,15 @@ async fn sevenz_fixture_lists_and_reads() {
     let mem = MemoryProvider::default();
     mem.add_file("sample.7z", FIXTURE, 0);
     let path = VPath::parse(b"sample.7z").unwrap();
-    let p = ArchiveProvider::open(Arc::new(mem), path, tmp.path().to_path_buf(), None)
-        .await
-        .unwrap();
+    let p = ArchiveProvider::open(
+        Arc::new(mem),
+        path,
+        tmp.path().to_path_buf(),
+        Room::default(),
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(p.format(), ArchiveFormat::SevenZ);
     let entries = p.entries();
     let listed: Vec<(String, Kind)> = entries.iter().map(|e| (e.path.display(), e.kind)).collect();
@@ -49,9 +56,15 @@ async fn sevenz_codecs_read_every_entry_of_a_solid_block() {
         let mem = MemoryProvider::default();
         mem.add_file(name, bytes, 0);
         let path = VPath::parse(name.as_bytes()).unwrap();
-        let p = ArchiveProvider::open(Arc::new(mem), path, tmp.path().to_path_buf(), None)
-            .await
-            .unwrap();
+        let p = ArchiveProvider::open(
+            Arc::new(mem),
+            path,
+            tmp.path().to_path_buf(),
+            Room::default(),
+            None,
+        )
+        .await
+        .unwrap();
         for (entry, want) in [
             ("b.txt", &b"bravo bravo bravo\n"[..]),
             ("a.txt", b"alpha alpha alpha\n"),
