@@ -46,10 +46,11 @@ clone under `~/.cache/lautta-verify`, never in your tree: ~4 GB, checks for
 - Inputs pinned: `Cargo.lock` (crates by checksum), `third_party/qttypes` and
   `third_party/cpp_common` in the tree.
 
-CI checks it on every push: job "RPM rebuilds byte for byte" runs
+CI checks it for releases: job "RPM rebuilds byte for byte" runs
 `tools/verify-rpm.sh` on the RPM job's package, on another runner, from a
 fresh clone at another path, with another cargo home, time zone, umask and
-time.
+time. It runs on `v*` tags and on a CI run started by hand (Actions → CI →
+Run workflow), not on pull requests or pushes to `main`.
 
 ## What it doesn't cover
 
