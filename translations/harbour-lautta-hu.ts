@@ -2495,5 +2495,9 @@
         <source>This file isn&apos;t valid UTF-8. Some characters are replaced.</source>
         <translation>Ez a fájl nem érvényes UTF-8. Egyes karakterek le vannak cserélve.</translation>
     </message>
+    <message id="lautta-err-no-sound">
+        <source>Cannot play the audio track</source>
+        <translation>A hangsáv nem játszható le</translation>
+    </message>
 </context>
 </TS>

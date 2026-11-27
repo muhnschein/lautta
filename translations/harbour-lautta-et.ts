@@ -2549,5 +2549,9 @@
         <source>This file isn&apos;t valid UTF-8. Some characters are replaced.</source>
         <translation>See fail pole korrektne UTF-8. Mõned märgid on asendatud.</translation>
     </message>
+    <message id="lautta-err-no-sound">
+        <source>Cannot play the audio track</source>
+        <translation>Helirada ei saa esitada</translation>
+    </message>
 </context>
 </TS>

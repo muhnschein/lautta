@@ -2495,5 +2495,9 @@
         <source>This file isn&apos;t valid UTF-8. Some characters are replaced.</source>
         <translation>Tệp này không phải UTF-8 hợp lệ. Một số ký tự đã bị thay thế.</translation>
     </message>
+    <message id="lautta-err-no-sound">
+        <source>Cannot play the audio track</source>
+        <translation>Không thể phát rãnh âm thanh</translation>
+    </message>
 </context>
 </TS>
