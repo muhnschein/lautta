@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- In the PDF viewer's *Pages*, a landscape page sits at the bottom of its tile, right above its number, so documents that mix landscape and portrait pages line up ([#275](https://github.com/muhnschein/lautta/issues/275)). Before, a landscape page sat at the top of its tile with its number far below.
 - Videos open in the same viewer as photos. Swipe left or right to move through the folder's photos and videos in the order the folder shows them, and swipe up or down to go back. A video shows its first frame and a play button, and plays only when you tap it. Tapping the screen shows or hides the controls, including the position slider and the time. A video stops when you swipe away from it ([#277](https://github.com/muhnschein/lautta/issues/277)).
 - A video whose sound is in a format the phone can't decode, such as DTS, E-AC-3 or TrueHD in an MKV, still plays its picture, and the header now says *Cannot play the audio track*. Before, it said *Can't play film.mkv.*, and a video on a server was downloaded whole for nothing ([#285](https://github.com/muhnschein/lautta/issues/285)).
 - Reproducible builds: a commit always builds to the same RPM, byte for byte. `tools/verify-rpm.sh` checks one for you (`doc/VERIFYING.md`).
