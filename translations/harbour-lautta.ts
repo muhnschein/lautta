@@ -2594,7 +2594,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message id="lautta-err-no-sound">
-        <source>This phone can&apos;t play the sound in this file.</source>
+        <source>This phone can&apos;t play the sound.</source>
+        <oldsource>This phone can&apos;t play the sound in this file.</oldsource>
         <translation type="unfinished"></translation>
     </message>
 </context>
