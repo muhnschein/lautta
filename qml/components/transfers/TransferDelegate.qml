@@ -10,20 +10,25 @@ ListItem {
 
     property bool restored
     property var row: ({
-        transferId: 0, group: "active", kind: "copy", title: "", state: "running", waitReason: "",
-        bytesDone: 0, bytesTotal: 0, rate: 0, eta: -1, itemsDone: 0, itemsTotal: 0, itemsFailed: 0,
-        direction: "local", destName: "", finishedMs: -1, questions: 0, progress: 0
+        transferId: 0, group: "active", dateGroup: "inProgress", kind: "copy", title: "", state: "running",
+        waitReason: "", bytesDone: 0, bytesTotal: 0, rate: 0, eta: -1, itemsDone: 0, itemsTotal: 0,
+        itemsFailed: 0, direction: "local", destName: "", destUri: "", finishedMs: -1, questions: 0, progress: 0
     })
+    readonly property bool finished: row.group === "history"
     readonly property bool hasProgress: (row.group === "active" && row.state !== "scanning") || row.group === "paused"
     readonly property var r: ({
-        group: row.group, kind: row.kind, state: row.state, title: row.title, direction: row.direction,
-        waitReason: row.waitReason, bytesDone: row.bytesDone, bytesTotal: row.bytesTotal, rate: row.rate,
-        eta: row.eta, itemsDone: row.itemsDone, itemsTotal: row.itemsTotal, itemsFailed: row.itemsFailed,
-        destName: row.destName, finishedMs: row.finishedMs
+        group: row.group, dateGroup: row.dateGroup, kind: row.kind, state: row.state, title: row.title,
+        direction: row.direction, waitReason: row.waitReason, bytesDone: row.bytesDone, bytesTotal: row.bytesTotal,
+        rate: row.rate, eta: row.eta, itemsDone: row.itemsDone, itemsTotal: row.itemsTotal,
+        itemsFailed: row.itemsFailed, destName: row.destName, finishedMs: row.finishedMs, questions: row.questions
     })
     readonly property var titleParts: TransferText.titleParts(r)
     readonly property bool toServer: TransferText.toServer(row.direction)
-    readonly property bool hasActions: row.group !== "history" || row.state === "failed"
+    readonly property string line: TransferText.rowLine(r, restored)
+    readonly property bool warns: TransferText.rowWarns(r)
+    readonly property color warnColor: Theme.presenceColor(Theme.PresenceAway)
+
+    signal showFolder(string uri)
 
     function cancelLater() {
         var id = row.transferId
@@ -32,12 +37,15 @@ ListItem {
                       App.setting("remorse_seconds") * 1000)
     }
 
-    contentHeight: Math.max(Theme.itemSizeMedium, content.height + 2 * Theme.paddingSmall)
-    menu: hasActions ? actionsMenu : null
+    function removeLater() {
+        var id = row.transferId
+        //% "Removing"
+        remorseAction(qsTrId("lautta-xfr-remorse-remove"), function() { Transfers.removeFromHistory(id) },
+                      App.setting("remorse_seconds") * 1000)
+    }
 
-    Component {
-        id: actionsMenu
-
+    contentHeight: Math.max(finished ? Theme.itemSizeSmall : Theme.itemSizeMedium, content.height + 2 * Theme.paddingSmall)
+    menu: Component {
         ContextMenu {
             MenuItem {
                 //% "Pause"
@@ -54,19 +62,31 @@ ListItem {
             MenuItem {
                 //% "Move to the top of the queue"
                 text: qsTrId("lautta-xfr-menu-top")
-                visible: row.group !== "history"
+                visible: !item.finished
                 onClicked: Transfers.moveToTop(row.transferId)
             }
             MenuItem {
                 //% "Retry failed"
                 text: qsTrId("lautta-xfr-menu-retry")
-                visible: row.group === "history" && row.state === "failed"
+                visible: item.finished && row.state === "failed"
                 onClicked: Transfers.retryFailed(row.transferId)
+            }
+            MenuItem {
+                //% "Show in folder"
+                text: qsTrId("lautta-xfr-menu-show-folder")
+                visible: item.finished && row.destUri.length > 0
+                onClicked: item.showFolder(row.destUri)
+            }
+            MenuItem {
+                //% "Remove from Activity"
+                text: qsTrId("lautta-xfr-menu-remove")
+                visible: item.finished
+                onClicked: item.removeLater()
             }
             MenuItem {
                 //% "Cancel"
                 text: qsTrId("lautta-xfr-menu-cancel")
-                visible: row.group !== "history"
+                visible: !item.finished
                 onClicked: item.cancelLater()
             }
         }
@@ -83,69 +103,77 @@ ListItem {
         AppIcon {
             id: directionIcon
 
-            anchors.top: parent.top
-            anchors.topMargin: Theme.paddingSmall
+            anchors.verticalCenter: item.finished ? parent.verticalCenter : undefined
             icon: TransferText.directionIcon(row.direction)
+            color: item.finished ? Theme.secondaryColor : Theme.primaryColor
             highlighted: item.highlighted
         }
 
         Column {
-            width: parent.width - directionIcon.width - parent.spacing
+            id: body
+
+            width: parent.width - directionIcon.width - parent.spacing - (time.visible ? time.width + parent.spacing : 0)
+            anchors.verticalCenter: parent.verticalCenter
 
             PlaceLabel {
+                objectName: "transferTitle"
                 width: parent.width
                 before: item.titleParts.before
                 text: item.titleParts.rest
                 remote: item.titleParts.named && item.toServer
                 color: item.highlighted ? Theme.highlightColor : Theme.primaryColor
-                fontSize: Theme.fontSizeMedium
+                fontSize: Theme.fontSizeSmall
+                maximumLineCount: 2
             }
             ProgressBar {
                 width: parent.width + 2 * Theme.horizontalPageMargin
                 x: -Theme.horizontalPageMargin
                 visible: item.hasProgress
+                highlighted: row.group !== "paused"
+                opacity: row.group === "paused" ? Theme.opacityHigh : 1
                 height: visible ? implicitHeight : 0
                 minimumValue: 0
                 maximumValue: 1
                 value: row.progress
             }
-            Label {
-                width: parent.width
-                visible: row.questions === 0
-                text: TransferText.status(item.r, item.restored)
-                color: item.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
-                font.pixelSize: Theme.fontSizeSmall
-                truncationMode: TruncationMode.Fade
-            }
             Row {
-                visible: row.questions > 0
+                objectName: "transferLine"
+                visible: item.line.length > 0
+                width: parent.width
                 spacing: Theme.paddingSmall
 
                 AppIcon {
-                    icon: "image://theme/icon-s-warning"
-                    small: true
+                    id: glyph
+
+                    objectName: "transferGlyph"
+                    visible: icon.length > 0
+                    icon: TransferText.stateGlyph(item.r)
+                    iconSize: Theme.iconSizeExtraSmall
+                    color: item.warns ? item.warnColor : Theme.secondaryColor
+                    highlighted: item.highlighted && !item.warns
                     anchors.verticalCenter: parent.verticalCenter
                 }
                 Label {
-                    text: TransferText.needsAnswer(row.questions)
-                    color: Theme.highlightColor
+                    width: parent.width - (glyph.visible ? glyph.width + parent.spacing : 0)
+                    text: item.line
+                    color: item.warns ? item.warnColor
+                                      : item.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
                     font.pixelSize: Theme.fontSizeExtraSmall
+                    truncationMode: TruncationMode.Fade
                     anchors.verticalCenter: parent.verticalCenter
                 }
             }
-            Label {
-                visible: row.group === "history" && row.state === "failed" && row.itemsFailed > 0
-                text: qsTrId("lautta-xfr-menu-retry")
-                color: Theme.highlightColor
-                font.pixelSize: Theme.fontSizeSmall
-                height: visible ? implicitHeight : 0
+        }
 
-                MouseArea {
-                    anchors.fill: parent
-                    anchors.margins: -Theme.paddingMedium
-                    onClicked: Transfers.retryFailed(row.transferId)
-                }
-            }
+        Label {
+            id: time
+
+            objectName: "transferTime"
+            visible: text.length > 0
+            anchors.verticalCenter: parent.verticalCenter
+            text: TransferText.rowTime(item.r)
+            color: item.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
+            font.pixelSize: Theme.fontSizeExtraSmall
         }
     }
 }

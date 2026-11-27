@@ -282,16 +282,25 @@ pub fn date_group_of(s: &TransferSummary, now_ms: i64) -> DateGroup {
     }
 }
 
+fn needs_you_rank(state: TransferState) -> u8 {
+    match state {
+        TransferState::Waiting(WaitReason::Question) => 0,
+        TransferState::Waiting(_) => 2,
+        TransferState::Paused => 3,
+        _ => 1,
+    }
+}
+
 fn order_rows(rows: &mut [TransferRow]) {
     rows.sort_by_key(|r| {
         let s = &r.summary;
         let ended = s.state.is_finished();
-        let tie = if ended {
-            ended_ms(s).saturating_neg()
+        let (rank, tie) = if ended {
+            (0, ended_ms(s).saturating_neg())
         } else {
-            s.position
+            (needs_you_rank(s.state), s.position)
         };
-        (ended, tie, s.id)
+        (ended, rank, tie, s.id)
     });
 }
 
@@ -348,6 +357,10 @@ impl Core {
             dest_address: self.locations.display_address(&s.dest),
             summary: s,
         }
+    }
+
+    pub fn forget_finished(&self, id: TransferId) -> bool {
+        self.engine.forget(id).is_ok()
     }
 
     pub fn clear_history(&self) -> usize {
@@ -542,7 +555,7 @@ mod tests {
     }
 
     #[test]
-    fn rows_are_in_progress_in_queue_order_then_ended_newest_first() {
+    fn questions_lead_then_running_waiting_paused_in_queue_order_then_ended_newest_first() {
         use TransferState::*;
         let mk = |id, state, position, finished_ms| {
             let mut summary = summary(id, state, 0, 0);
@@ -564,18 +577,19 @@ mod tests {
         };
         let mut rows = vec![
             mk(1, Completed, 0, Some(5000)),
-            mk(2, Paused, 3, None),
+            mk(2, Paused, 1, None),
             mk(3, Failed, 0, Some(9000)),
             mk(4, Running, 2, None),
-            mk(5, Waiting(WaitReason::Bridge), 1, None),
+            mk(5, Waiting(WaitReason::Bridge), 3, None),
             mk(6, Queued, 4, None),
             mk(7, Canceled, 0, None),
             mk(8, Scanning, 0, None),
             mk(9, Completed, 0, Some(5000)),
+            mk(10, Waiting(WaitReason::Question), 5, None),
         ];
         order_rows(&mut rows);
         let ids: Vec<i64> = rows.iter().map(|r| r.summary.id).collect();
-        assert_eq!(ids, [8, 5, 4, 2, 6, 3, 7, 1, 9]);
+        assert_eq!(ids, [10, 8, 4, 6, 5, 2, 3, 7, 1, 9]);
     }
 
     #[test]

@@ -9,7 +9,7 @@
 <x-dc>
 <helmet>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600&amp;family=Source+Code+Pro:wght@400&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet">
 <style>
 body{margin:0}
 .amb{--pri:#ffffff;--sec:rgba(255,255,255,.62);--hl:#74d4ff;--hl2:#5fb3d9;--hlbg:rgba(116,212,255,.30);--hldim:rgba(116,212,255,.13);--ov:rgba(8,14,20,.55);--line:rgba(255,255,255,.28);--btn:rgba(255,255,255,.16);--warn:#ffb067;
@@ -25,13 +25,16 @@ body{margin:0}
 .ic.l{width:64px;height:64px;stroke-width:.41}
 .hl{color:var(--hl)}.sec{color:var(--sec)}.hl2{color:var(--hl2)}.warn{color:var(--warn)}
 .small{font-size:15px}.xs{font-size:13px}.tiny{font-size:12px}.large{font-size:26px;font-weight:300}.xl{font-size:34px;font-weight:300}
-.mono{font-family:'Source Code Pro',monospace}
+.mono{font-family:'JetBrains Mono',monospace}
+/* page-stack indicators */
 .ind-back,.ind-fwd{position:absolute;top:14px;display:flex;gap:4px}
 .ind-back{left:10px}.ind-fwd{right:10px}
 .ind-back i,.ind-fwd i{display:block;width:4px;height:4px;border-radius:2px;background:var(--hl);opacity:.9}
 .ind-back i+i,.ind-fwd i+i{opacity:.45}
+/* pulley/push-up indicators (closed) */
 .pull-ind{position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--hl) 50%,transparent);opacity:.7}
 .push-ind{position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--hl) 50%,transparent);opacity:.7}
+/* open pulley / push-up menu */
 .pulley{padding:18px 18px 6px;background:linear-gradient(180deg,var(--hlbg),var(--hldim) 70%,transparent);display:flex;flex-direction:column}
 .pushup{padding:6px 18px 18px;background:linear-gradient(0deg,var(--hlbg),var(--hldim) 70%,transparent);display:flex;flex-direction:column}
 .mi{height:56px;display:flex;align-items:center;justify-content:center;font-size:19px;color:var(--pri);width:100%;text-align:center}
@@ -39,15 +42,24 @@ body{margin:0}
 .mi .cnt{margin-left:8px;color:var(--sec);font-size:15px}
 .mi.on .cnt{color:var(--hl2)}
 .mi.dis{color:var(--sec);opacity:.5}
+/* page header */
 .hdr{min-height:80px;padding:14px 18px 6px 60px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;text-align:right}
 .hdr-t{font-size:28px;font-weight:300;color:var(--hl);line-height:1.15}
 .hdr-d{font-size:15px;color:var(--hl2);margin-top:2px}
+.crh{min-height:80px;padding:0 18px 0 10px;display:flex;align-items:center;justify-content:flex-end;white-space:nowrap;overflow:hidden}
+.crh .cr{flex:none;display:flex;align-items:center;align-self:stretch;padding:0 6px;color:var(--pri);font-size:19px}
+.crh .cr.down{background:var(--hlbg);color:var(--hl)}
+.crh .sp{flex:none;color:var(--sec);font-size:17px}
+.crh .hdr-t{margin-left:6px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* dialog header */
 .dlg{height:80px;padding:0 18px;display:flex;align-items:center;justify-content:space-between}
 .dlg-c{font-size:19px;color:var(--pri)}
 .dlg-a{font-size:28px;font-weight:300;color:var(--hl)}
 .dlg-a.dis{opacity:.4}
 .dlg-sub{padding:0 18px 8px;text-align:right;font-size:15px;color:var(--hl2)}
+/* section header */
 .sh{padding:14px 18px 6px;text-align:right;font-size:15px;color:var(--hl)}
+/* list item */
 .li{min-height:72px;padding:6px 18px;display:flex;align-items:center;gap:14px;width:100%}
 .li.s{min-height:56px}
 .li.pressed{background:var(--hlbg)}
@@ -60,40 +72,51 @@ body{margin:0}
 .li-s{font-size:15px;color:var(--sec);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .li-r{font-size:15px;color:var(--sec);flex:none;text-align:right}
 .li.pressed .li-t{color:var(--hl)}
+/* context menu (inline, under pressed item) */
 .cm{background:var(--hldim);display:flex;flex-direction:column;padding:4px 0}
+/* badges / dots */
 .dot{width:8px;height:8px;border-radius:4px;background:var(--hl);display:inline-block;flex:none}
 .dot.off{background:transparent;border:1px solid var(--sec)}
 .badge{font-size:13px;color:var(--warn);display:inline-flex;align-items:center;gap:4px}
 .tagdot{width:12px;height:12px;border-radius:6px;display:inline-block;flex:none}
 .lossy{font-size:12px;border:1px solid var(--sec);color:var(--sec);border-radius:3px;padding:0 4px;margin-left:6px;vertical-align:middle}
+/* progress */
 .prog{height:3px;background:var(--line);position:relative;overflow:hidden}
 .prog>i{position:absolute;left:0;top:0;bottom:0;background:var(--hl);display:block}
 .slim{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--hl),transparent);opacity:.85}
+/* busy indicator */
 .busy{width:64px;height:64px;border-radius:50%;border:3px solid var(--hldim);border-top-color:var(--hl);border-right-color:var(--hl)}
 .busy.s{width:24px;height:24px;border-width:2px}
+/* placeholder */
 .ph{position:absolute;left:18px;right:18px;text-align:center}
 .ph-t{font-size:34px;font-weight:300;color:var(--hl);opacity:.85;line-height:1.2}
 .ph-h{font-size:19px;color:var(--hl2);margin-top:12px;line-height:1.35}
+/* buttons */
 .btn{min-width:150px;height:52px;padding:0 26px;border-radius:0;background:var(--btn);color:var(--pri);font-size:19px;display:inline-flex;align-items:center;justify-content:center}
 .btn.down{background:var(--hlbg);color:var(--hl)}
 .btns{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;padding:12px 18px}
 .ibtn{width:56px;height:56px;display:inline-flex;align-items:center;justify-content:center;color:var(--pri)}
 .ibtn.on{color:var(--hl)}
+/* docked panel */
 .dock{position:absolute;left:0;right:0;bottom:0;min-height:80px;background:var(--ov);backdrop-filter:blur(6px);border-top:1px solid var(--hldim);display:flex;align-items:center;justify-content:space-around;padding:0 6px}
+/* text switch */
 .sw{display:flex;gap:14px;padding:10px 18px;align-items:flex-start;width:100%}
 .sw-d{width:18px;height:18px;border-radius:9px;border:1.5px solid var(--sec);margin-top:5px;flex:none}
 .sw.on .sw-d{border-color:var(--hl);background:var(--hl);box-shadow:0 0 10px 2px var(--hlbg)}
 .sw-t{font-size:19px}.sw-x{font-size:15px;color:var(--sec);margin-top:2px;line-height:1.3}
+/* combo box */
 .cb{display:flex;flex-direction:column;padding:10px 18px;width:100%}
 .cb-r{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
 .cb-l{font-size:19px}.cb-v{font-size:19px;color:var(--hl)}
 .cb-x{font-size:15px;color:var(--sec);margin-top:2px}
+/* slider */
 .sl{padding:8px 18px 12px}
 .sl-v{text-align:center;font-size:26px;font-weight:300;color:var(--hl)}
 .sl-t{height:2px;background:var(--line);margin:14px 6px;position:relative}
 .sl-t>i{position:absolute;left:0;top:0;bottom:0;background:var(--hl)}
 .sl-t>b{position:absolute;top:-9px;width:20px;height:20px;border-radius:10px;background:var(--hl);box-shadow:0 0 12px 3px var(--hlbg);margin-left:-10px}
 .sl-l{text-align:center;font-size:15px;color:var(--sec)}
+/* text field */
 .tf{padding:10px 18px}
 .tf input,.tf textarea{width:100%;background:transparent;border:0;border-bottom:1px solid var(--line);color:var(--pri);font:inherit;font-size:19px;padding:6px 0;outline:none}
 .tf.focus input{border-bottom-color:var(--hl)}
@@ -101,38 +124,49 @@ body{margin:0}
 .tf.focus label{color:var(--hl)}
 .tf.err input{border-bottom-color:var(--warn)}
 .tf.err label{color:var(--warn)}
+/* remorse */
 .remorse{min-height:72px;background:var(--hlbg);position:relative;padding:10px 18px;display:flex;flex-direction:column;justify-content:center;overflow:hidden}
 .remorse>i{position:absolute;left:0;top:0;bottom:0;background:var(--hldim);display:block}
 .remorse b{font-weight:400;font-size:19px;position:relative}
 .remorse span{font-size:15px;color:var(--sec);position:relative}
+/* banner (in-page notice, e.g. offline) */
 .banner{margin:6px 18px;padding:12px 14px;background:var(--hldim);display:flex;gap:12px;align-items:center;font-size:15px}
 .banner .act{color:var(--hl);font-size:15px;margin-left:auto;flex:none}
+/* interaction hint label */
 .hintlabel{position:absolute;left:0;right:0;bottom:0;padding:40px 30px 30px;text-align:center;font-size:19px;color:var(--hl);background:linear-gradient(0deg,var(--ov),transparent)}
+/* key/value detail (DetailItem) */
 .di{display:flex;gap:12px;padding:5px 18px;font-size:15px}
 .di-l{flex:1;text-align:right;color:var(--sec)}
 .di-v{flex:1;color:var(--pri);word-break:break-all}
+/* notification popup (system) */
 .note{background:rgba(20,30,40,.92);color:#fff;padding:12px 16px;display:flex;gap:12px;align-items:flex-start;border-radius:6px}
+.amb .li-t{font-size:15px}
+.amb .li-s,.amb .li-r,.amb .badge,.amb .li-b .small{font-size:13px}
+.amb .li-t.fade{white-space:normal;display:-webkit-box !important;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-height:1.25}
 </style>
 </helmet>
-<div class="amb {{amb}}" style="width: 400px; height: 1200px">
+<div class="amb {{amb}}" style="width: 400px; height: 980px">
 <div class="pull-ind"></div><div class="ind-back"><i></i></div>
-<div class="hdr"><div class="hdr-t">Activity</div><div class="hdr-d">3 running · 11.4 MB/s</div></div>
+<div class="hdr"><div class="hdr-t">Activity</div><div class="hdr-d">2 running · 11.4 MB/s</div></div>
 <div class="sh">In progress</div>
-<a class="li" href="TransferDetails.dc.html"><span class="li-ic" style=""><svg class="ic m" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Copy 37 items to NAS</span><div class="prog" style="margin: 6px 0 4px"><i style="width: 30%"></i></div><span class="li-s" style="display: block">1.2 GB of 4.0 GB · 11.4 MB/s · 4 min</span></span></a>
-<a class="li s" href="TransferDetails.dc.html"><span class="li-ic" style=""><svg class="ic m" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Upload figure-3.png to NAS</span><div class="prog" style="margin: 6px 0 4px"><i style="width: 46%"></i></div><span class="li-s" style="display: block">1.1 MB of 2.4 MB · 820 kB/s · 2 s</span></span></a>
-<a class="li" href="TransferDetails.dc.html"><span class="li-ic" style=""><svg class="ic m" viewBox="0 0 24 24"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Copy NAS › Office</span><span class="li-s" style="display: block">Scanning… 412 items</span></span></a>
-<a class="li" href="Conflict.dc.html"><span class="li-ic" style=""><svg class="ic m" viewBox="0 0 24 24"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Move 8 items to Office</span><span class="badge" style="display: flex; margin-top: 2px"><svg class="ic " viewBox="0 0 24 24" style="width: 15px; height: 15px"><path d="M12 3l10 18H2zM12 10v5M12 18h.01"/></svg>Needs an answer: 2 conflicts</span></span></a>
-<a class="li" href="TransferDetails.dc.html"><span class="li-ic" style=""><svg class="ic m" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Download holiday.mp4</span><span class="li-s" style="display: block">Waiting for network</span></span></a>
-<a class="li" href="TransferDetails.dc.html"><span class="li-ic" style=""><svg class="ic m" viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7zM10 3v4M13 3v4"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Copy 120 items to SD card</span><span class="li-s" style="display: block">Insert the card to continue</span></span></a>
-<a class="li" href="TransferDetails.dc.html"><span class="li-ic" style=""><svg class="ic m" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Backup to NAS · 62%</span><div class="prog" style="margin: 6px 0 4px"><i style="width: 62%"></i></div><span class="li-s" style="display: block">Paused at 62%</span></span></a>
+<a class="li" href="Conflict.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Move 8 items to Office</span><span class="badge" style="display: flex; margin-top: 2px"><svg class="ic" viewBox="0 0 24 24" style="width: 15px; height: 15px; margin-right: 4px; vertical-align: -2px"><path d="M12 3l10 18H2zM12 10v5M12 18h.01"/></svg>Needs an answer: 2 conflicts</span></span></a>
+<a class="li" href="TransferDetails.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg></span><span class="li-b"><span class="li-t fade" style="display: block">Copying 37 items to Holiday photos 2026 on NAS</span><div class="prog" style="margin: 6px 0 4px"><i style="width: 30%"></i></div><span class="li-s" style="display: block">1.2 GB of 4.0 GB · about 4 min left</span></span></a>
+<a class="li" href="TransferDetails.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg></span><span class="li-b"><span class="li-t fade" style="display: block">Uploading IMG_20261124_181502_HDR.jpg to NAS</span><div class="prog" style="margin: 6px 0 4px"><i style="width: 46%"></i></div><span class="li-s" style="display: block">1.1 MB of 2.4 MB · about 2 s left</span></span></a>
+<a class="li" href="TransferDetails.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Download holiday.mp4</span><span class="li-s" style="display: block"><svg class="ic" viewBox="0 0 24 24" style="width: 15px; height: 15px; margin-right: 4px; vertical-align: -2px"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Waiting for network</span></span></a>
+<a class="li" href="TransferDetails.dc.html"><span class="li-ic"><svg class="ic m" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Upload backup.tar to NAS</span><div class="prog" style="margin: 6px 0 4px; opacity: .45"><i style="width: 62%; background: var(--sec)"></i></div><span class="li-s" style="display: block"><svg class="ic" viewBox="0 0 24 24" style="width: 15px; height: 15px; margin-right: 4px; vertical-align: -2px"><path d="M8 5v14M16 5v14"/></svg>Paused at 62%</span></span></a>
 <div class="sh">Today</div>
-<a class="li" href="TransferDetails.dc.html"><span class="li-ic" style=""><svg class="ic m" viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Copied 14 items to Documents</span><span class="li-s" style="display: block">Completed · 09:41</span></span></a>
+<a class="li s" href="TransferDetails.dc.html"><span class="li-ic" style="color: var(--sec)"><svg class="ic m" viewBox="0 0 24 24"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Copied 14 items to Documents</span></span><span class="li-r">18:02</span></a>
+<a class="li s" href="TransferDetails.dc.html"><span class="li-ic" style="color: var(--sec)"><svg class="ic m" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Upload to NAS</span><span class="warn small" style="display: block"><svg class="ic" viewBox="0 0 24 24" style="width: 15px; height: 15px; margin-right: 4px; vertical-align: -2px"><path d="M12 3l10 18H2zM12 10v5M12 18h.01"/></svg>2 of 5 failed</span></span><span class="li-r">10:04</span></a>
+<a class="li s" href="TransferDetails.dc.html"><span class="li-ic" style="color: var(--sec)"><svg class="ic m" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Deleted 4 items</span></span><span class="li-r">09:52</span></a>
+<a class="li s" href="TransferDetails.dc.html"><span class="li-ic" style="color: var(--sec)"><svg class="ic m" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18"/><path d="M12 3v2M12 7v2M12 11v2"/><rect x="10.5" y="14" width="3" height="4"/></svg></span><span class="li-b"><span class="li-t fade" style="display: block">Extracted thesis-final-v3-corrected-sources.zip to Documents</span></span><span class="li-r">09:41</span></a>
 <div class="sh">Yesterday</div>
-<a class="li" href="TransferDetails.dc.html"><span class="li-ic" style=""><svg class="ic m" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Upload to NAS</span><span class="li-s" style="display: block">Completed with 2 failures · Yesterday</span><span class="hl small">Retry failed</span></span></a>
+<a class="li s" href="TransferDetails.dc.html"><span class="li-ic" style="color: var(--sec)"><svg class="ic m" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Downloaded thesis.pdf</span></span><span class="li-r">21:15</span></a>
+<a class="li s" href="TransferDetails.dc.html"><span class="li-ic" style="color: var(--sec)"><svg class="ic m" viewBox="0 0 24 24"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Copy scan.png to Pictures</span><span class="li-s" style="display: block">Cancelled</span></span><span class="li-r">12:30</span></a>
+<a class="li s" href="TransferDetails.dc.html"><span class="li-ic" style="color: var(--sec)"><svg class="ic m" viewBox="0 0 24 24"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg></span><span class="li-b"><span class="li-t" style="display: block">Moved 8 items to Office</span></span><span class="li-r">08:10</span></a>
 <div style="height: 30px"></div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":400,"height":1200}}'>
+<script type="text/x-dc" data-dc-script data-props='{"ambience":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":400,"height":980}}'>
 class Component extends DCLogic {
 renderVals() {
 return { amb: (this.props.ambience ?? 'dark') === 'light' ? 'light' : 'dark' };

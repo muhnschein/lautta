@@ -2593,5 +2593,24 @@
         <source>Waiting for Wi-Fi</source>
         <translation type="unfinished"></translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%n of %1 failed</numerusform>
+            <numerusform>%n of %1 failed</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>
