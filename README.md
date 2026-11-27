@@ -15,9 +15,15 @@
 ## Screenshots
 
 <p>
-  <img src="store/screenshots/1-home.png" width="32%" alt="Browse: recent files, favourites, phone folders and drives, one memory card locked">
-  <img src="store/screenshots/2-folder.png" width="32%" alt="A busy folder as a grid, four photos and videos selected">
-  <img src="store/screenshots/3-text.png" width="32%" alt="A shell script from a server, with syntax colours">
+  <img src="store/screenshots/1-browse.png" width="24%" alt="Browse: recent files, favourites and the phone's folders">
+  <img src="store/screenshots/2-folder.png" width="24%" alt="A folder of photos, videos and notes as a grid, four selected">
+  <img src="store/screenshots/3-text.png" width="24%" alt="A shell script from a server, with syntax colours">
+  <img src="store/screenshots/4-search.png" width="24%" alt="Search for cabin: results on the phone and on a server">
+</p>
+<p>
+  <img src="store/screenshots/5-documents.png" width="24%" alt="Documents with their own icons and previews">
+  <img src="store/screenshots/6-pdf-pages.png" width="24%" alt="All pages of a PDF as small pictures">
+  <img src="store/screenshots/7-trash.png" width="24%" alt="Trash grouped by when items were deleted, the oldest marked">
 </p>
 
 Where the files and the background in the screenshots come from:
