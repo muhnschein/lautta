@@ -160,9 +160,40 @@ ApplicationWindow {
                label + ": a tap went to page 60: top " + viewer.topPage + ", current " + viewer.currentPage)
     }
 
+    function checkMixed(viewer) {
+        viewer.showPages()
+        waitFor(function () { return pageStack.currentPage !== viewer && !pageStack.busy }, "Pages of the mixed PDF")
+        var grid = named(pageStack.currentPage, "pdfPagesGrid")[0]
+        var tall = tileOf(grid, 0)
+        var wide = tileOf(grid, 1)
+        if (!expect(tall && wide, "both tiles of the mixed PDF"))
+            return
+        var shown = [tall, wide].map(function (tile) {
+            var image = named(tile, "pdfPageThumb")[0]
+            waitFor(function () { return image.status === Image.Ready }, "thumbnail of page " + named(tile, "pdfPageNumber")[0].text)
+            var number = named(tile, "pdfPageNumber")[0]
+            var top = image.mapToItem(tile, 0, 0).y
+            return { top: top, bottom: top + image.height, width: image.width, height: image.height,
+                     number: number.mapToItem(tile, 0, 0).y }
+        })
+        var t = shown[0]
+        var w = shown[1]
+        expect(Math.abs(w.width - grid.sheetWidth) <= 1 && w.height < grid.sheetHeight / 2,
+               "the landscape page fills the tile's width: " + w.width + "x" + w.height + " in " + grid.sheetWidth + "x" + grid.sheetHeight)
+        expect(Math.abs(t.height - grid.sheetHeight) <= 1,
+               "the tall page fills the tile's height: " + t.height + " in " + grid.sheetHeight)
+        expect(Math.abs(w.bottom - t.bottom) <= 0.5 && w.top > t.top + grid.sheetHeight / 2,
+               "the landscape page sits on the same line as the tall one: " + JSON.stringify(shown))
+        expect(Math.abs(w.number - w.bottom) <= 0.5 && Math.abs(t.number - t.bottom) <= 0.5 && w.number === t.number,
+               "each number sits right under its page, on one line: " + JSON.stringify(shown))
+        pageStack.pop(viewer, PageStackAction.Immediate)
+        waitFor(function () { return pageStack.currentPage === viewer && !pageStack.busy }, "back from the mixed Pages")
+    }
+
     Component.onCompleted: {
         if (!tools.installFixture(Qt.resolvedUrl("host/fixtures/sixty-pages.pdf"), "lautta://user-documents/pages-sixty.pdf")
-                || !tools.installFixture(Qt.resolvedUrl("host/fixtures/linked.pdf"), "lautta://user-documents/pages-linked.pdf"))
+                || !tools.installFixture(Qt.resolvedUrl("host/fixtures/linked.pdf"), "lautta://user-documents/pages-linked.pdf")
+                || !tools.installFixture(Qt.resolvedUrl("host/fixtures/two-pages.pdf"), "lautta://user-documents/pages-mixed.pdf"))
             console.error("FAILED: fixture not installed")
         pageStack.push(emptyPage, {}, PageStackAction.Immediate)
         var viewer = pageStack.push(viewerComponent, {}, PageStackAction.Immediate)
@@ -178,6 +209,9 @@ ApplicationWindow {
         var linked = pageStack.push(linkedComponent, {}, PageStackAction.Immediate)
         waitFor(function () { return linked.document.loaded && !pageStack.busy }, "the linked PDF")
         checkMenu(linked, true)
+        var mixed = pageStack.push(mixedComponent, {}, PageStackAction.Immediate)
+        waitFor(function () { return mixed.document.loaded && !pageStack.busy }, "the mixed PDF")
+        checkMixed(mixed)
         reachedEnd = true
     }
 
@@ -189,6 +223,11 @@ ApplicationWindow {
     Component {
         id: linkedComponent
         PdfViewer { uri: "lautta://user-documents/pages-linked.pdf" }
+    }
+
+    Component {
+        id: mixedComponent
+        PdfViewer { uri: "lautta://user-documents/pages-mixed.pdf" }
     }
 
     Component {
