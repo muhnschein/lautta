@@ -27,6 +27,9 @@ Requires:   qt5-qtmultimedia
 Requires:   qt5-qtsvg-plugin-imageformat-svg
 
 %define debug_package %{nil}
+%define use_source_date_epoch_as_buildtime 1
+%define clamp_mtime_to_source_date_epoch 1
+%define _buildhost lautta-build
 %define __provides_exclude_from ^%{_datadir}/.*$
 
 %description

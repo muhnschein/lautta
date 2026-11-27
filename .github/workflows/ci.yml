@@ -55,6 +55,8 @@ jobs:
         run: ./tools/ci/changes-test.sh
       - name: Apt mirror picker
         run: ./tools/ci/apt-install-selftest.sh
+      - name: verify-rpm usage
+        run: ./tools/ci/verify-rpm-test.sh
 
   mutation:
     name: Tests bite (mutation check, changed lines)
@@ -134,3 +136,29 @@ jobs:
         with:
           tool: zizmor@1.30.1
       - run: zizmor --offline .github/workflows/
+
+  reproducible:
+    name: RPM rebuilds byte for byte
+    needs: rpm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - name: Cross-build tools (i386 C library for the SDK compiler)
+        run: ./tools/ci/apt-install.sh --no-install-recommends libc6-i386
+      - name: Fetch the RPM job's package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" -n harbour-lautta-aarch64 --dir "$RUNNER_TEMP/rpms"
+      - name: Rebuild and compare
+        env:
+          TZ: Pacific/Chatham
+        run: |
+          umask 0002
+          CARGO_HOME="$RUNNER_TEMP/cargo" LAUTTA_REPO="$GITHUB_WORKSPACE" \
+            ./tools/verify-rpm.sh --ref "$GITHUB_SHA" "$RUNNER_TEMP"/rpms/*.rpm
