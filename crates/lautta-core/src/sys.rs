@@ -2,12 +2,13 @@
 #![allow(unsafe_code)]
 
 use rustix::fs::{
-    copy_file_range, fadvise, ioctl_ficlone, renameat_with, statvfs as rx_statvfs, utimensat, Access, Advice,
-    AtFlags, RenameFlags, StatxFlags, Timespec, Timestamps, CWD, UTIME_OMIT,
+    copy_file_range, fadvise, fstatvfs as rx_fstatvfs, ioctl_ficlone, renameat_with, statvfs as rx_statvfs,
+    utimensat, Access, Advice, AtFlags, RenameFlags, StatxFlags, Timespec, Timestamps, CWD, UTIME_OMIT,
 };
 use rustix::io::Errno;
 use std::fs::File;
 use std::io;
+use std::os::fd::BorrowedFd;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
@@ -172,16 +173,23 @@ pub struct VfsInfo {
 }
 
 pub fn statvfs(path: &Path) -> io::Result<VfsInfo> {
-    let v = rx_statvfs(path)?;
+    Ok(vfs_info(&rx_statvfs(path)?))
+}
+
+pub fn fstatvfs(fd: BorrowedFd<'_>) -> io::Result<VfsInfo> {
+    Ok(vfs_info(&rx_fstatvfs(fd)?))
+}
+
+fn vfs_info(v: &rustix::fs::StatVfs) -> VfsInfo {
     let total = v.f_blocks.saturating_mul(v.f_frsize);
     let free_all = v.f_bfree.saturating_mul(v.f_frsize);
-    Ok(VfsInfo {
+    VfsInfo {
         free: v.f_bavail.saturating_mul(v.f_frsize),
         total,
         used: total.saturating_sub(free_all),
         read_only: v.f_flag.contains(rustix::fs::StatVfsMountFlags::RDONLY),
         name_max: v.f_namemax,
-    })
+    }
 }
 
 pub fn set_mtime(path: &Path, mtime: SystemTime) -> io::Result<()> {
@@ -442,6 +450,9 @@ mod tests {
         assert!(v.used <= v.total);
         assert!(!v.read_only);
         assert!(v.name_max >= 100);
+        let f = File::create(d.path().join("f")).unwrap();
+        let by_fd = fstatvfs(std::os::fd::AsFd::as_fd(&f)).unwrap();
+        assert_eq!((by_fd.total, by_fd.name_max), (v.total, v.name_max));
     }
 
     #[test]
