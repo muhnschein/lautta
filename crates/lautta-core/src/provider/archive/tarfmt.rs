@@ -4,8 +4,10 @@ use super::blocks::{from_io, BlockReader};
 use super::{Compression, Loc, RawEntry};
 use crate::entry::Kind;
 use crate::error::{Error, ErrorKind, Result};
+use crate::room::{Meter, Room};
 use std::fs::File;
 use std::io::{self, BufReader, Read};
+use std::os::fd::AsFd;
 use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -98,10 +100,11 @@ pub struct Spill {
     file: Arc<File>,
     base: u64,
     cap: u64,
+    meter: Meter,
 }
 
 impl Spill {
-    pub fn new(archive: File, comp: Compression, dir: &Path) -> Result<Spill> {
+    pub fn new(archive: File, comp: Compression, dir: &Path, room: &Room) -> Result<Spill> {
         Ok(Spill {
             comp,
             dir: dir.to_path_buf(),
@@ -110,6 +113,7 @@ impl Spill {
             file: Arc::new(spill_file(dir)?),
             base: 0,
             cap: SPILL_CAP,
+            meter: room.meter(),
         })
     }
 
@@ -138,6 +142,7 @@ impl Spill {
             if n == 0 {
                 break;
             }
+            self.meter.before_write(self.file.as_fd(), n as u64)?;
             self.file
                 .write_all_at(&buf[..n], self.pos - self.base)
                 .map_err(tar_err)?;
@@ -260,7 +265,13 @@ mod tests {
                 _ => panic!("compressed tar entry not located by stream offset"),
             })
             .collect();
-        let spill = Spill::new(File::open(&path).unwrap(), Compression::Gzip, dir.path()).unwrap();
+        let spill = Spill::new(
+            File::open(&path).unwrap(),
+            Compression::Gzip,
+            dir.path(),
+            &Room::default(),
+        )
+        .unwrap();
         (dir, path, locs, spill)
     }
 

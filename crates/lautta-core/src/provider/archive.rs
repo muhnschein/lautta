@@ -14,6 +14,7 @@ use crate::provider::{
     AttributeChanges, CopyOptions, Lane, ProgressSink, Provider, ReadHandle, ReadOptions, RenameMode,
     SpaceInfo, WriteOptions,
 };
+use crate::room::{Meter, Room};
 use crate::uri::Uri;
 use crate::vpath::VPath;
 use async_trait::async_trait;
@@ -22,7 +23,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::os::fd::OwnedFd;
+use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -304,6 +305,7 @@ struct Inner {
     blocks: Option<Arc<BlockSource>>,
     cache: Option<CacheFile>,
     cache_dir: PathBuf,
+    room: Room,
     spill: Mutex<Option<tarfmt::Spill>>,
 }
 
@@ -371,7 +373,12 @@ impl Inner {
                             ArchiveFormat::Tar(c) | ArchiveFormat::Single(c) => c,
                             _ => Compression::None,
                         };
-                        *spill = Some(tarfmt::Spill::new(self.cache_file()?, comp, &self.cache_dir)?);
+                        *spill = Some(tarfmt::Spill::new(
+                            self.cache_file()?,
+                            comp,
+                            &self.cache_dir,
+                            &self.room,
+                        )?);
                     }
                     let spill = spill.as_mut().expect("spill just set");
                     spill.fetch(*offset, node.size, || self.cache_file())?
@@ -455,6 +462,7 @@ impl ArchiveProvider {
         source: Arc<dyn Provider>,
         path: VPath,
         cache_dir: PathBuf,
+        room: Room,
         password: Option<Password>,
     ) -> Result<ArchiveProvider> {
         let handle: Arc<dyn ReadHandle> = Arc::from(source.open_read(&path, Lane::Interactive).await?);
@@ -472,12 +480,12 @@ impl ArchiveProvider {
                         .unwrap_or(0),
                 };
                 let src = BlockSource::new(handle, tokio::runtime::Handle::current(), size, Some(head));
-                index_ranged(format, src, cache_dir, password).await?
+                index_ranged(format, src, cache_dir, room, password).await?
             }
             _ => {
-                let cache = download_to_cache(source.as_ref(), &path, &cache_dir).await?;
+                let cache = download_to_cache(source.as_ref(), &path, &cache_dir, &room).await?;
                 let name = path.name().unwrap_or_default().to_vec();
-                index_cached(format, cache, cache_dir, password, name).await?
+                index_cached(format, cache, cache_dir, room, password, name).await?
             }
         };
         Ok(ArchiveProvider {
@@ -544,6 +552,7 @@ async fn index_ranged(
     format: ArchiveFormat,
     src: Arc<BlockSource>,
     cache_dir: PathBuf,
+    room: Room,
     password: Option<Password>,
 ) -> Result<Inner> {
     let reader_src = Arc::clone(&src);
@@ -566,6 +575,7 @@ async fn index_ranged(
         blocks: Some(src),
         cache: None,
         cache_dir,
+        room,
         spill: Mutex::new(None),
     })
 }
@@ -574,6 +584,7 @@ async fn index_cached(
     format: ArchiveFormat,
     cache: CacheFile,
     cache_dir: PathBuf,
+    room: Room,
     password: Option<Password>,
     name: Vec<u8>,
 ) -> Result<Inner> {
@@ -607,16 +618,27 @@ async fn index_cached(
         blocks: None,
         cache: Some(cache),
         cache_dir,
+        room,
         spill: Mutex::new(None),
     })
 }
 
-async fn download_to_cache(source: &dyn Provider, path: &VPath, dir: &Path) -> Result<CacheFile> {
+async fn download_to_cache(
+    source: &dyn Provider,
+    path: &VPath,
+    dir: &Path,
+    room: &Room,
+) -> Result<CacheFile> {
     tokio::fs::create_dir_all(dir).await?;
     let handle = source.open_read(path, Lane::Bulk).await?;
     let target = dir.join(unique_name("archive"));
     let guard = CacheFile(target.clone());
     let file = Arc::new(tokio::fs::File::create(&target).await?.into_std().await);
+    let need = handle.size().unwrap_or(0);
+    let (f, r) = (Arc::clone(&file), room.clone());
+    let mut meter = tokio::task::spawn_blocking(move || r.ensure(f.as_fd(), need).map(|()| r.meter()))
+        .await
+        .map_err(join_err)??;
     let mut offset = 0u64;
     loop {
         let chunk = handle.read_at(offset, 1 << 20).await?;
@@ -626,9 +648,13 @@ async fn download_to_cache(source: &dyn Provider, path: &VPath, dir: &Path) -> R
         offset += chunk.len() as u64;
         let f = Arc::clone(&file);
         let at = offset - chunk.len() as u64;
-        tokio::task::spawn_blocking(move || f.write_all_at(&chunk, at))
-            .await
-            .map_err(join_err)??;
+        meter = tokio::task::spawn_blocking(move || -> Result<Meter> {
+            meter.before_write(f.as_fd(), chunk.len() as u64)?;
+            f.write_all_at(&chunk, at)?;
+            Ok(meter)
+        })
+        .await
+        .map_err(join_err)??;
     }
 }
 
@@ -790,9 +816,9 @@ fn extract_to_temp(inner: &Inner, node: &Node) -> Result<File> {
         .create_new(true)
         .open(&path)?;
     std::fs::remove_file(&path)?;
-    let mut writer = io::BufWriter::new(&file);
+    let mut writer = io::BufWriter::new(inner.room.guard(&file, node.size)?);
     inner.copy_node(node, &mut writer)?;
-    writer.flush()?;
+    writer.flush().map_err(from_io)?;
     drop(writer);
     Ok(file)
 }
@@ -923,9 +949,10 @@ impl Provider for ArchiveProvider {
         let node = node.clone();
         self.run(move |inner| {
             let total = node.size.saturating_sub(opts.offset);
-            let mut sink = SinkWriter::new(File::from(dst), opts.offset, total, progress);
+            let out = inner.room.guard(File::from(dst), total)?;
+            let mut sink = SinkWriter::new(out, opts.offset, total, progress);
             inner.copy_node(&node, &mut sink)?;
-            sink.finish().map_err(Error::from)
+            sink.finish().map_err(from_io)
         })
         .await
     }
