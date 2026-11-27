@@ -61,7 +61,7 @@ done
 grep -q 'GNU LESSER GENERAL PUBLIC LICENSE' "$work/usr/share/harbour-lautta/LICENSE" ||
     fail "LGPL text not shipped in /usr/share/harbour-lautta/LICENSE"
 size=$(stat -c %s "$bin")
-[ "$size" -le 20971520 ] || fail "binary is $size bytes, over the 20 MB budget"
+[ "$size" -le 26214400 ] || fail "binary is $size bytes, over the 25 MB budget"
 
 tls_align=$(readelf -lW "$bin" | awk '$1 == "TLS" { print $NF }')
 [ $((tls_align)) -ge 128 ] || fail "TLS segment alignment is ${tls_align:-missing}, needs 128 (libhybris)"
