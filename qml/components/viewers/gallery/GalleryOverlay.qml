@@ -4,15 +4,17 @@
 // SPDX-License-Identifier: BSD-3-Clause
 //
 // sailfish-components-gallery's src/GalleryOverlay.qml, adapted for lautta
-// (PRV-4, see LAUTTA.md): images only (the video controls, the image editor
-// and Ambience go), the close button of Silica's DismissButton top right,
-// and lautta's actions as signals for the page: details (top left, for
-// every location), and in the toolbar Delete, Open with (where the
-// Gallery's Edit is), Share and More. A delete waiting for its remorse
-// (`held`) puts the controls away, as there.
+// (PRV-4, see LAUTTA.md): the image editor, Ambience and the video's 10 s
+// skips go, the close button of Silica's DismissButton top right, and
+// lautta's actions as signals for the page: details (top left, for every
+// location's images), and in the toolbar Delete, Open with (where the
+// Gallery's Edit is), Share and More. A video's position slider sits above
+// the toolbar with its elapsed and total time; the toolbar stays open. A
+// delete waiting for its remorse (`held`) puts the controls away, as there.
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import ".."
+import "../ViewerText.js" as ViewerText
 import "../../FileIcons.js" as FileIcons
 
 Item {
@@ -30,6 +32,8 @@ Item {
 
     property url source
     property bool error
+    property bool video
+    property QtObject player
     // Delete offered: false where netvfs grants less than full access.
     property bool changeable: true
 
@@ -56,7 +60,7 @@ Item {
 
         fadeOpacity: topFade.fadeOpacity
         width: parent.width
-        height: toolbar.height + 2 * toolbarParent.anchors.bottomMargin
+        height: toolbarParent.height + 2 * toolbarParent.anchors.bottomMargin
         anchors.bottom: parent.bottom
     }
 
@@ -67,6 +71,7 @@ Item {
         x: Theme.horizontalPageMargin
         y: Theme.paddingLarge
         icon.source: "image://theme/icon-m-about"
+        visible: !overlay.video
         onClicked: overlay.details()
     }
 
@@ -91,12 +96,65 @@ Item {
             bottom: parent.bottom
             bottomMargin: parent.height/20
         }
-        height: toolbar.height
+        height: (sliderRow.visible ? sliderRow.height : 0) + toolbar.height
+
+        Item {
+            id: sliderRow
+
+            objectName: "videoControls"
+            visible: overlay.video
+            width: parent.width
+            height: positionSlider.height + elapsed.height
+
+            Slider {
+                id: positionSlider
+
+                objectName: "positionSlider"
+                readonly property real duration: overlay.player ? overlay.player.duration : 0
+                width: parent.width
+                minimumValue: 0
+                maximumValue: Math.max(1, duration)
+                enabled: !overlay.error && duration > 0
+                opacity: overlay.error ? 0.0 : 1.0
+                handleVisible: duration > 0
+                onReleased: overlay.player.seek(value)
+
+                Binding {
+                    target: positionSlider
+                    property: "value"
+                    value: overlay.player ? overlay.player.position : 0
+                    when: !positionSlider.down
+                }
+            }
+
+            Label {
+                id: elapsed
+
+                objectName: "elapsedTime"
+                x: positionSlider.leftMargin
+                anchors.top: positionSlider.bottom
+                text: positionSlider.duration > 0 ? ViewerText.clock(positionSlider.value) : ""
+                font.pixelSize: Theme.fontSizeSmall
+                color: positionSlider.highlighted ? Theme.highlightColor : Theme.lightPrimaryColor
+            }
+
+            Label {
+                objectName: "totalTime"
+                x: parent.width - positionSlider.rightMargin - width
+                anchors.top: positionSlider.bottom
+                text: positionSlider.duration > 0 ? ViewerText.clock(positionSlider.duration) : ""
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.lightSecondaryColor
+            }
+        }
 
         Row {
             id: toolbar
 
-            anchors.horizontalCenter: parent.horizontalCenter
+            anchors {
+                horizontalCenter: parent.horizontalCenter
+                bottom: parent.bottom
+            }
             spacing: Theme.paddingLarge
 
             IconButton {

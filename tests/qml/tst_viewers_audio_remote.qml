@@ -28,6 +28,6 @@ ApplicationWindow {
 
     Component {
         id: pageComponent
-        MediaPlayer { uri: "lautta://nv-nas/audio/chapter.mp3"; video: false }
+        MediaPlayer { uri: "lautta://nv-nas/audio/chapter.mp3" }
     }
 }
