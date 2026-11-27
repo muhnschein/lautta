@@ -3,7 +3,9 @@
 use super::{parse_uri, qstr, run_then};
 use crate::runtime::{core, handle};
 use cpp::cpp;
-use lautta_core::app_viewers::{parse_image_uri, parse_thumb_id, viewer_decode_size, ImageItem, PreviewKind};
+use lautta_core::app_viewers::{
+    parse_image_uri, parse_thumb_id, viewer_decode_size, GalleryItem, PreviewKind,
+};
 use qmetaobject::prelude::*;
 use qmetaobject::qml_register_type;
 use std::collections::HashMap;
@@ -11,15 +13,17 @@ use std::os::raw::c_void;
 use std::sync::Mutex;
 
 pub fn register() {
-    qml_register_type::<ImageListModel>(&crate::qml_uri(), 1, 0, &crate::cstr("ImageListModel"));
+    qml_register_type::<GalleryListModel>(&crate::qml_uri(), 1, 0, &crate::cstr("GalleryListModel"));
 }
 
 const ROLE_URI: i32 = 0x100;
 const ROLE_NAME: i32 = 0x101;
 const ROLE_SIZE: i32 = 0x102;
+const ROLE_VIDEO: i32 = 0x103;
+const ROLE_MIME: i32 = 0x104;
 
 #[derive(QObject, Default)]
-pub struct ImageListModel {
+pub struct GalleryListModel {
     base: qt_base_class!(trait QAbstractListModel),
     folderUri: qt_property!(QString; WRITE setFolderUri NOTIFY folderUriChanged),
     folderUriChanged: qt_signal!(),
@@ -30,11 +34,11 @@ pub struct ImageListModel {
     stateChanged: qt_signal!(),
     indexOf: qt_method!(fn(&self, uri: QString) -> i32),
     reload: qt_method!(fn(&mut self)),
-    items: Vec<ImageItem>,
+    items: Vec<GalleryItem>,
     generation: u64,
 }
 
-impl Drop for ImageListModel {
+impl Drop for GalleryListModel {
     fn drop(&mut self) {
         if let Some(core) = core() {
             core.forget_shown_images();
@@ -42,7 +46,7 @@ impl Drop for ImageListModel {
     }
 }
 
-impl ImageListModel {
+impl GalleryListModel {
     fn setFolderUri(&mut self, value: QString) {
         if self.folderUri == value {
             return;
@@ -63,7 +67,7 @@ impl ImageListModel {
         self.stateChanged();
         run_then(
             self,
-            async move { core.list_images(&folder).await },
+            async move { core.list_gallery(&folder).await },
             move |me, res| {
                 if me.generation != gen {
                     return;
@@ -81,7 +85,7 @@ impl ImageListModel {
         );
     }
 
-    fn replace(&mut self, items: Vec<ImageItem>) {
+    fn replace(&mut self, items: Vec<GalleryItem>) {
         self.begin_reset_model();
         self.count = i32::try_from(items.len()).unwrap_or(i32::MAX);
         self.items = items;
@@ -100,7 +104,7 @@ impl ImageListModel {
     }
 }
 
-impl QAbstractListModel for ImageListModel {
+impl QAbstractListModel for GalleryListModel {
     fn row_count(&self) -> i32 {
         self.count
     }
@@ -113,6 +117,8 @@ impl QAbstractListModel for ImageListModel {
             ROLE_URI => qstr(&item.uri.to_string()).into(),
             ROLE_NAME => qstr(&item.name).into(),
             ROLE_SIZE => item.size.map_or(-1.0, |s| s as f64).into(),
+            ROLE_VIDEO => item.video.into(),
+            ROLE_MIME => qstr(&item.mime).into(),
             _ => QVariant::default(),
         }
     }
@@ -122,6 +128,8 @@ impl QAbstractListModel for ImageListModel {
         m.insert(ROLE_URI, "uri".into());
         m.insert(ROLE_NAME, "name".into());
         m.insert(ROLE_SIZE, "size".into());
+        m.insert(ROLE_VIDEO, "video".into());
+        m.insert(ROLE_MIME, "mimeType".into());
         m
     }
 }

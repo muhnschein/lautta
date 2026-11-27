@@ -178,3 +178,7 @@ function actions(kind) {
     default: return []
     }
 }
+
+function stopsPlayback(kind) {
+    return kind !== "" && kind !== "NoSound"
+}

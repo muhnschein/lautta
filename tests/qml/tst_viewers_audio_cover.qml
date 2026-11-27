@@ -81,10 +81,10 @@ ApplicationWindow {
 
     Component {
         id: tagged
-        MediaPlayer { uri: "lautta://user-documents/song.mp3"; video: false }
+        MediaPlayer { uri: "lautta://user-documents/song.mp3" }
     }
     Component {
         id: plain
-        MediaPlayer { uri: "lautta://user-downloads/bare-tune.mp3"; video: false }
+        MediaPlayer { uri: "lautta://user-downloads/bare-tune.mp3" }
     }
 }

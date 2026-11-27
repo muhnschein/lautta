@@ -14,11 +14,13 @@ FullscreenContentPage {
     readonly property string coverUri: currentUri
     property string folderUri: App.parentUri(uri)
     property int tileSize
+    property bool video
+    property string mimeType
 
     property bool listed
     readonly property bool inFolder: images.count > 0 && (listed || images.indexOf(uri) >= 0)
     readonly property var slideshow: viewLoader.item
-    readonly property string currentUri: slideshow && slideshow.currentItem ? slideshow.currentItem.imageUri : uri
+    readonly property string currentUri: slideshow && slideshow.currentItem ? slideshow.currentItem.itemUri : uri
     readonly property int total: inFolder ? images.count : 1
     property int keepIndex: -1
 
@@ -135,7 +137,7 @@ FullscreenContentPage {
         id: imageView
         FlickableImageView {
             objectName: "flickableView"
-            model: [page.uri]
+            model: [{ "uri": page.uri, "video": page.video, "mimeType": page.mimeType }]
             held: remorse.active
             tileUri: page.uri
             tileSize: page.tileSize
@@ -154,7 +156,7 @@ FullscreenContentPage {
         }
     }
 
-    ImageListModel {
+    GalleryListModel {
         id: images
         folderUri: page.folderUri
         onLoadingChanged: {
