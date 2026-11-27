@@ -85,7 +85,7 @@ function message(kind, context) {
                      //% "Can't play this file."
                      qsTrId("lautta-err-not-playable-unnamed"))
     case "NoSound":
-        //% "This phone can't play the sound."
+        //% "Cannot play the audio track"
         return qsTrId("lautta-err-no-sound")
     case "BridgeUnavailable":
         //% "Network locations are unavailable right now."
