@@ -23,6 +23,7 @@ ListItem {
     })
     readonly property var titleParts: TransferText.titleParts(r)
     readonly property bool toServer: TransferText.toServer(row.direction)
+    readonly property bool hasActions: row.group !== "history" || row.state === "failed"
 
     function cancelLater() {
         var id = row.transferId
@@ -32,7 +33,11 @@ ListItem {
     }
 
     contentHeight: Math.max(Theme.itemSizeMedium, content.height + 2 * Theme.paddingSmall)
-    menu: Component {
+    menu: hasActions ? actionsMenu : null
+
+    Component {
+        id: actionsMenu
+
         ContextMenu {
             MenuItem {
                 //% "Pause"
