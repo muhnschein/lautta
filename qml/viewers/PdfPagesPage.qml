@@ -77,15 +77,13 @@ Page {
             Image {
                 id: thumb
 
-                readonly property real fit: Math.min(sheet.width / implicitWidth, sheet.height / implicitHeight)
-
                 objectName: "pdfPageThumb"
                 anchors {
                     horizontalCenter: sheet.horizontalCenter
                     bottom: sheet.bottom
                 }
-                width: status === Image.Ready ? Math.round(implicitWidth * fit) : sheet.width
-                height: status === Image.Ready ? Math.round(implicitHeight * fit) : sheet.height
+                width: status === Image.Ready ? implicitWidth : sheet.width
+                height: status === Image.Ready ? implicitHeight : sheet.height
                 asynchronous: true
                 cache: false
                 sourceSize.width: grid.sheetWidth
