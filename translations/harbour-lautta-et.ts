@@ -2553,5 +2553,24 @@
         <source>Cannot play the audio track</source>
         <translation>Helirada ei saa esitada</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>Eemaldan</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>Näita kaustas</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>Eemalda tegevustest</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%n %1-st ebaõnnestus</numerusform>
+            <numerusform>%n %1-st ebaõnnestus</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

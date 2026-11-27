@@ -435,7 +435,7 @@
       "y": 14440
     },
     "Transfers.dc.html": {
-      "h": 1200,
+      "h": 980,
       "is_interactive": true,
       "title": "Activity",
       "w": 400,
@@ -929,6 +929,14 @@
       "w": 400,
       "x": 5280,
       "y": 8200
+    },
+    "TransfersHeld.dc.html": {
+      "h": 860,
+      "is_interactive": true,
+      "title": "Activity \u00b7 finished task held",
+      "w": 400,
+      "x": 6220,
+      "y": 6580
     }
   },
   "createdOnFiles": {
@@ -1116,6 +1124,7 @@
     "Compress.dc.html",
     "RecentlyDeleted.dc.html",
     "Transfers.dc.html",
+    "TransfersHeld.dc.html",
     "TransfersPulley.dc.html",
     "TransferDetails.dc.html",
     "TransfersRestored.dc.html",

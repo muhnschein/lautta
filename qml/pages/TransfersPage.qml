@@ -173,6 +173,7 @@ Page {
                 row: model
                 restored: Transfers.pendingAtStart > 0
                 onClicked: page.activate({ "transferId": transferId, "questions": questions })
+                onShowFolder: pageStack.push(Qt.resolvedUrl("DirectoryPage.qml"), { "uri": uri })
             }
 
             footer: Column {

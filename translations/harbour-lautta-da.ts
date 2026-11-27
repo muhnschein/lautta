@@ -2553,5 +2553,24 @@
         <source>Cannot play the audio track</source>
         <translation>Kan ikke afspille lydsporet</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>Fjerner</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>Vis i mappe</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>Fjern fra Aktivitet</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%n af %1 mislykkedes</numerusform>
+            <numerusform>%n af %1 mislykkedes</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

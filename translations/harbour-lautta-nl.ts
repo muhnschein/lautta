@@ -2553,5 +2553,24 @@
         <source>Cannot play the audio track</source>
         <translation>Kan het audiospoor niet afspelen</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>Wordt verwijderd</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>In map tonen</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>Uit Activiteit verwijderen</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%n van %1 mislukt</numerusform>
+            <numerusform>%n van %1 mislukt</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

@@ -2499,5 +2499,23 @@
         <source>Cannot play the audio track</source>
         <translation>无法播放音轨</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>正在移除</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>在文件夹中显示</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>从活动中移除</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%1 项中 %n 项失败</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

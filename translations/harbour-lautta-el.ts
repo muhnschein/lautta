@@ -2553,5 +2553,24 @@
         <source>Cannot play the audio track</source>
         <translation>Δεν είναι δυνατή η αναπαραγωγή του κομματιού ήχου</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>Αφαίρεση σε εξέλιξη</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>Εμφάνιση στον φάκελο</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>Αφαίρεση από τη Δραστηριότητα</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>Απέτυχε %n από %1</numerusform>
+            <numerusform>Απέτυχαν %n από %1</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

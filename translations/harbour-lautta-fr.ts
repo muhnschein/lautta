@@ -2553,5 +2553,24 @@
         <source>Cannot play the audio track</source>
         <translation>Impossible de lire la piste audio</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>Retrait</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>Afficher dans le dossier</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>Retirer d&apos;Activité</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%n sur %1 a échoué</numerusform>
+            <numerusform>%n sur %1 ont échoué</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

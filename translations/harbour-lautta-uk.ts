@@ -2607,5 +2607,25 @@
         <source>Cannot play the audio track</source>
         <translation>Не вдається відтворити звукову доріжку</translation>
     </message>
+    <message id="lautta-xfr-remorse-remove">
+        <source>Removing</source>
+        <translation>Вилучення</translation>
+    </message>
+    <message id="lautta-xfr-menu-show-folder">
+        <source>Show in folder</source>
+        <translation>Показати в теці</translation>
+    </message>
+    <message id="lautta-xfr-menu-remove">
+        <source>Remove from Activity</source>
+        <translation>Вилучити з Активності</translation>
+    </message>
+    <message id="lautta-xfr-failed-of" numerus="yes">
+        <source>%n of %1 failed</source>
+        <translation>
+            <numerusform>%n з %1 з помилкою</numerusform>
+            <numerusform>%n з %1 з помилкою</numerusform>
+            <numerusform>%n з %1 з помилкою</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

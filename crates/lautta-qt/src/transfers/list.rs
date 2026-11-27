@@ -10,7 +10,7 @@ use qmetaobject::QPointer;
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
-const ROLES: [&str; 23] = [
+const ROLES: [&str; 24] = [
     "transferId",
     "group",
     "dateGroup",
@@ -34,6 +34,7 @@ const ROLES: [&str; 23] = [
     "progress",
     "failed",
     "name",
+    "destUri",
 ];
 const FIRST_ROLE: i32 = 257;
 
@@ -56,6 +57,7 @@ pub(super) struct RowData {
     pub direction: &'static str,
     pub destination: String,
     pub dest_name: String,
+    pub dest_uri: String,
     pub created_ms: i64,
     pub finished_ms: i64,
     pub questions: i64,
@@ -95,6 +97,7 @@ impl RowData {
             "direction" => s(self.direction),
             "destination" => s(&self.destination),
             "destName" => s(&self.dest_name),
+            "destUri" => s(&self.dest_uri),
             "createdMs" => QVariant::from(self.created_ms),
             "finishedMs" => QVariant::from(self.finished_ms),
             "questions" => QVariant::from(self.questions),
@@ -124,6 +127,7 @@ pub(super) fn transfer_row(r: &TransferRow) -> RowData {
         direction: r.direction.name(),
         destination: r.dest_address.clone(),
         dest_name: r.dest_name.clone(),
+        dest_uri: s.dest.to_string(),
         created_ms: s.created_ms,
         finished_ms: s.finished_ms.unwrap_or(-1),
         questions: r.questions as i64,
@@ -287,6 +291,7 @@ mod tests {
         assert_eq!((data.group, data.date_group), ("history", "last7Days"));
         assert_eq!(data.value("dateGroup").to_qstring().to_string(), "last7Days");
         assert_eq!(data.value("group").to_qstring().to_string(), "history");
+        assert_eq!(data.value("destUri").to_qstring().to_string(), "lautta://a/");
     }
 
     #[test]
