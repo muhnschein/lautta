@@ -15,8 +15,8 @@ Item {
     property int maximumLineCount: 1
     readonly property bool iconShown: remote && text.length > 0
     readonly property bool split: maximumLineCount > 1 && before.length > 0
-                                  && lead.implicitWidth + markWidth + name.implicitWidth > width
-    readonly property bool wraps: maximumLineCount > 1 && before.length === 0 && name.implicitWidth > width
+                                  && lead.implicitWidth + markWidth + nameMetrics.advanceWidth > width
+    readonly property bool wraps: maximumLineCount > 1 && before.length === 0 && nameMetrics.advanceWidth > width
 
     readonly property real markWidth: iconShown ? icon.width + Theme.paddingSmall : 0
     readonly property real leadWidth: before.length > 0
@@ -31,6 +31,13 @@ Item {
     implicitWidth: lead.implicitWidth + markWidth + name.implicitWidth
     implicitHeight: split ? lead.implicitHeight + name.implicitHeight : name.implicitHeight
     height: implicitHeight
+
+    TextMetrics {
+        id: nameMetrics
+
+        font: name.font
+        text: line.text
+    }
 
     Label {
         id: lead
