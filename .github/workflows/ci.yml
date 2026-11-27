@@ -55,6 +55,8 @@ jobs:
         run: ./tools/ci/changes-test.sh
       - name: Apt mirror picker
         run: ./tools/ci/apt-install-selftest.sh
+      - name: verify-rpm usage
+        run: ./tools/ci/verify-rpm-test.sh
 
   mutation:
     name: Tests bite (mutation check, changed lines)
