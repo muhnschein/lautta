@@ -269,3 +269,44 @@ fn encrypted_documents_open_with_their_password() {
     let doc = PdfDocument::open_with_password(LOCKED_AES256.to_vec(), LOCKED_OWNER_PASSWORD).unwrap();
     assert_eq!(doc.page_count(), 2);
 }
+
+const BOUNDED_CHILD: &str = "LAUTTA_PDF_BOUNDED_CHILD";
+const BOUNDED_TEST: &str = "tests::a_tiling_pattern_with_huge_steps_is_drawn_in_bounded_memory";
+
+fn huge_step_tiling_pattern() -> Vec<u8> {
+    let mut doc = super::sample::Doc::new(vec![page(4000, 400, "/Pattern cs /P1 scn 50 50 3900 300 re f")]);
+    let cell = "1 0 0 rg 50 50 3850 250 re f";
+    let pattern = doc.object(&format!(
+        "<< /Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 3950 350] /XStep 90000 /YStep 90000 /Resources << >> /Length {} >>\nstream\n{cell}\nendstream",
+        cell.len()
+    ));
+    doc.page_resource(0, &format!("/Pattern << /P1 {pattern} >>"));
+    doc.build()
+}
+
+#[test]
+fn a_tiling_pattern_with_huge_steps_is_drawn_in_bounded_memory() {
+    if std::env::var_os(BOUNDED_CHILD).is_some() {
+        let doc = PdfDocument::open(huge_step_tiling_pattern()).unwrap();
+        let r = doc.render(0, 1000).unwrap();
+        assert_eq!((r.width, r.height), (1000, 100));
+        assert_eq!(pixel(&r, 500, 50), RED, "the pattern cell is drawn");
+        assert_eq!(pixel(&r, 5, 50), WHITE_PX, "the fill ends at 50 pt");
+        return;
+    }
+    let out = std::process::Command::new("sh")
+        .arg("-c")
+        .arg("ulimit -v 1048576 && exec \"$0\" --exact \"$1\" --test-threads 1")
+        .arg(std::env::current_exe().unwrap())
+        .arg(BOUNDED_TEST)
+        .env(BOUNDED_CHILD, "1")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success() && stdout.contains("test result: ok. 1 passed"),
+        "{:?}\n{stdout}\n{}",
+        out.status,
+        String::from_utf8_lossy(&out.stderr)
+    );
+}

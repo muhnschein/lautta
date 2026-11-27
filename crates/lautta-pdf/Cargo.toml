@@ -14,4 +14,4 @@ workspace = true
 sample = []
 
 [dependencies]
-hayro = { version = "0.8", default-features = false, features = ["embed-fonts", "embed-cmaps"] }
+hayro = { version = "0.9", default-features = false, features = ["embed-fonts", "embed-cmaps"] }
